@@ -104,6 +104,65 @@ test('a followed entity is retried until its layer has it', async () => {
   assert.deepEqual(steps.at(-1), { step: 'follow', ok: true });
 });
 
+test('a posted view without a photo point opens its photos where the camera looks over the ground', async () => {
+  const parent = { postMessage() {} };
+  const windowRef = new EventTarget();
+  windowRef.parent = parent;
+  windowRef.document = { body: { classList: new Set() } };
+  windowRef.document.body.classList.add = Set.prototype.add;
+  const shell = { initialRestorePromise: Promise.resolve(), setCleanView() {} };
+  const { calls, run } = recorder();
+  const asked = [];
+  // Denver: the ground is 1,590 m above the ellipsoid under a camera at 1,909 m.
+  const terrain = {
+    getHeights: async (points) => {
+      asked.push(points);
+      return points.map(() => ({ ellipsoid: 1590 }));
+    },
+  };
+  const remove = installViews({
+    shell,
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    terrain,
+    location: { search: '?embed=1', hash: '' },
+    windowRef,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const event = new Event('message');
+  Object.assign(event, {
+    source: parent,
+    origin: 'https://host.example',
+    data: {
+      type: 'gev:view',
+      id: 1,
+      view: {
+        camera: {
+          lat: 39.74,
+          lon: -104.99,
+          altitude_m: 1909,
+          pitch_deg: -30,
+          heading_deg: 0,
+        },
+        street_level: { provider: 'mapillary' },
+      },
+    },
+  });
+  windowRef.dispatchEvent(event);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  remove();
+  const [, args] = calls.find(([name]) => name === 'show_street_level');
+  // 319 m above the ground at -30° looks ~550 m ahead, not the ~3.3 km the
+  // ellipsoid altitude would give.
+  assert.deepEqual(asked, [[{ lat: 39.74, lon: -104.99 }]]);
+  assert.ok(
+    args.latitude > 39.744 && args.latitude < 39.746,
+    String(args.latitude),
+  );
+  assert.equal(args.longitude, -104.99);
+});
+
 test('an embedded page takes views only from its parent and answers it', async () => {
   const posted = [];
   const targets = [];

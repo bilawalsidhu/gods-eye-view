@@ -123,6 +123,30 @@ export function lookAtPoint(camera) {
   };
 }
 
+/**
+ * Where a tilted camera looks, measured from the ground under it: a view's
+ * altitude is above the ellipsoid, and a city a mile up would otherwise put
+ * the point kilometres too far ahead. `terrain` is a heights service
+ * (`getHeights`); null when it is missing or cannot say.
+ */
+export async function groundedLookAt(camera, terrain, signal) {
+  if (typeof terrain?.getHeights !== 'function') return null;
+  if (!Number.isFinite(camera?.altitude_m) || !(camera.pitch_deg > -89))
+    return null;
+  let heights;
+  try {
+    heights = await terrain.getHeights([{ lat: camera.lat, lon: camera.lon }], {
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
+  const ground = Number(heights?.[0]?.ellipsoid);
+  if (!Number.isFinite(ground)) return null;
+  return lookAtPoint({ ...camera, altitude_m: camera.altitude_m - ground });
+}
+
 /** Annotation kinds the app draws, as in its annotate_map action. */
 export const VIEW_ANNOTATION_TYPES = Object.freeze([
   'pin',

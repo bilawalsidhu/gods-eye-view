@@ -249,6 +249,7 @@ export function createApplicationTools({
       run: (name, args, options = {}) =>
         voiceCommands.runner(name, args, { ...options, signal }),
       signal,
+      terrain: operations.requests.terrain,
     }),
   );
   // An application's own tool takes the pointer as Draw does, and its own

@@ -3,7 +3,7 @@
 import {
   VIEW_PROPERTIES,
   createView,
-  lookAtPoint,
+  groundedLookAt,
   viewUrl,
 } from '../../view/index.js';
 import { defineTool, ToolError } from '../catalog.js';
@@ -39,30 +39,6 @@ async function followedAircraftPosition(follow, tools) {
   } catch {
     return null;
   }
-}
-
-/**
- * Where a tilted camera looks, measured from the ground under it: a view's
- * altitude is above the ellipsoid, and a city a mile up would otherwise put
- * the point kilometres too far ahead. Null when the terrain cannot say.
- */
-async function groundedLookAt(camera, services, signal) {
-  if (typeof services?.terrain?.getHeights !== 'function') return null;
-  if (!Number.isFinite(camera.altitude_m) || !(camera.pitch_deg > -89))
-    return null;
-  let heights;
-  try {
-    heights = await services.terrain.getHeights(
-      [{ lat: camera.lat, lon: camera.lon }],
-      { signal },
-    );
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    return null;
-  }
-  const ground = Number(heights?.[0]?.ellipsoid);
-  if (!Number.isFinite(ground)) return null;
-  return lookAtPoint({ ...camera, altitude_m: camera.altitude_m - ground });
 }
 
 /**
@@ -131,7 +107,7 @@ export async function resolveViewArguments(args, { services, signal, tools }) {
     streetLevel.lat === undefined &&
     streetLevel.lon === undefined
   ) {
-    const point = await groundedLookAt(camera, services, signal);
+    const point = await groundedLookAt(camera, services?.terrain, signal);
     if (point) streetLevel = { ...streetLevel, ...point };
   }
   let view;

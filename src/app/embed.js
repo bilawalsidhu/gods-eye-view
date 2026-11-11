@@ -19,6 +19,7 @@ import {
   annotationsFromParams,
   createView,
   followFromParams,
+  groundedLookAt,
   streetLevelFromParams,
 } from '../view/index.js';
 
@@ -329,6 +330,7 @@ export function installViews({
   dataManager,
   run,
   signal,
+  terrain = null,
   location = globalThis.location,
   windowRef = globalThis.window,
 }) {
@@ -477,8 +479,27 @@ export function installViews({
     // A panel's host can hand back old results on a remount: only one issued
     // just now may open a billed photo. A framing page's view is its own.
     const autoOpen = !isEmbeddedInline() || event.data.fresh === true;
+    // Photos asked for without a point open where the camera looks, measured
+    // from the ground under it, as show_in_gods_eye_view places them.
+    const asked = event.data.view?.street_level;
+    const unplaced =
+      asked &&
+      typeof asked === 'object' &&
+      asked.lat == null &&
+      asked.lon == null;
     queue = queue.then(async () => {
       if (signal?.aborted) return;
+      if (unplaced && view.street_level) {
+        const point = await groundedLookAt(view.camera, terrain, signal).catch(
+          () => null,
+        );
+        if (signal?.aborted) return;
+        if (point)
+          view = createView({
+            ...event.data.view,
+            street_level: { ...asked, ...point },
+          });
+      }
       const steps = await applyView(view, {
         viewer,
         dataManager,
