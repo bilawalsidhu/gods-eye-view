@@ -382,7 +382,7 @@ test('styles: 44 px corner eye, safe areas, fade, and the modes that own the scr
   // In normal mobile-shell view the eye must not cover the More dock tab.
   assert.match(
     css,
-    /@media \(min-height: 521px\) \{\s*body\.mobile-shell:not\(\.ui-clean-view\) #clean-view-eye\s*\{\s*bottom:\s*calc\(\s*var\(--mobile-tab-space\)\s*\+\s*var\(--world-timeline-lift, 0px\)\s*\+\s*8px\s*\)/,
+    /@media \(min-height: 521px\) \{\s*body\.mobile-shell:not\(\.ui-clean-view\) #clean-view-eye\s*\{\s*bottom:\s*calc\(\s*var\(--mobile-tab-space\)\s*\+\s*var\(--world-timeline-lift, 0px\)\s*\+\s*164px\s*\)/,
   );
   assert.match(
     css,
