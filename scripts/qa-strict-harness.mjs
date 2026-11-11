@@ -27,7 +27,12 @@ import {
   STRICT_TILE_HOSTS,
 } from './qa-map-policy.mjs';
 import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
-import { closeBrowser, diagnoseExit, exitAfterFlush } from './qa/browser.mjs';
+import {
+  closeBrowser,
+  diagnoseExit,
+  exitAfterFlush,
+  qaAngle,
+} from './qa/browser.mjs';
 import { DAYTIME, shiftTime } from './qa/time.mjs';
 import {
   PLANESPOTTERS_EMPTY_BODY,
@@ -78,7 +83,7 @@ export const RESERVED_PORTS = Object.freeze([
     .split(',').map((port) => port.trim()).filter(Boolean),
 ]);
 /** Chrome flags every scenario's browser starts with (the GPU path). */
-export const CHROME_ARGS = Object.freeze([`--use-angle=${process.env.QA_ANGLE || 'metal'}`, '--enable-gpu']);
+export const CHROME_ARGS = Object.freeze([`--use-angle=${qaAngle()}`, '--enable-gpu']);
 
 /** The values of --layers=a,b and --evidence=FILE (null when absent). */
 export function strictArguments(argv = process.argv) {

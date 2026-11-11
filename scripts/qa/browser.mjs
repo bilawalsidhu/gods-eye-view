@@ -1,6 +1,14 @@
 import { processTree, readProcesses } from './process.mjs';
 import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from '../qa-chrome.mjs';
+/**
+ * The ANGLE backend: QA_ANGLE, else Metal on macOS and SwiftShader elsewhere
+ * (CI's Linux runners have no GPU, and Metal does not exist there).
+ */
+export function qaAngle(env = process.env, platform = process.platform) {
+  return env.QA_ANGLE || (platform === 'darwin' ? 'metal' : 'swiftshader');
+}
+
 /** Keep every scenario on the same headless GPU path. */
 export function launchBrowser({ args = [], ...options } = {}) {
   return puppeteer.launch({
@@ -8,7 +16,7 @@ export function launchBrowser({ args = [], ...options } = {}) {
     ...options,
     headless: true,
     args: [
-      `--use-angle=${process.env.QA_ANGLE || 'metal'}`,
+      `--use-angle=${qaAngle()}`,
       '--enable-gpu',
       ...args,
     ],

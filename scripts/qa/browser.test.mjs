@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import puppeteer from 'puppeteer';
-import { launchBrowser } from './browser.mjs';
+import { launchBrowser, qaAngle } from './browser.mjs';
 
 test('scenario launch uses the selected ANGLE backend and stays headless', async (t) => {
   const prior = process.env.QA_ANGLE;
@@ -35,5 +35,11 @@ test('scenario launch uses the selected ANGLE backend and stays headless', async
   assert.equal(options.protocolTimeout, 120000);
   delete process.env.QA_ANGLE;
   await launchBrowser();
-  assert.equal(options.args[0], '--use-angle=metal');
+  assert.equal(options.args[0], `--use-angle=${qaAngle({})}`);
+});
+
+test('the default backend is Metal on macOS and SwiftShader elsewhere', () => {
+  assert.equal(qaAngle({}, 'darwin'), 'metal');
+  assert.equal(qaAngle({}, 'linux'), 'swiftshader');
+  assert.equal(qaAngle({ QA_ANGLE: 'vulkan' }, 'linux'), 'vulkan');
 });
