@@ -11,7 +11,7 @@ export interface Credit {
   text: string;
   /** Where the credit links to. */
   href?: string;
-  /** A logo drawn before the text. */
+  /** A logo, drawn in place of the text; the text names it. */
   logoUrl?: string;
   /** Shown on the map itself, rather than in the expanded list. */
   inline?: boolean;

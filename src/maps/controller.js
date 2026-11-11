@@ -244,11 +244,18 @@ export class MapSourceController {
       this._lastError = message;
       this._onError?.(message, stack);
       const recovery = this.getStack(this._registry.recoveryId);
-      if (
+      const recovers =
         recovery &&
         recovery.id !== stack.id &&
-        this.isStackAvailable(recovery.id)
-      ) {
+        this.isStackAvailable(recovery.id);
+      // A stack that stays after the failed switch still falls back on its
+      // tile failures, heard for this switch.
+      if (!recovers && this._imageryLayer && this._activeResolution) {
+        this._removeImageryErrorListener?.();
+        this._removeImageryErrorListener = null;
+        this._watchProvider(this._activeResolution, gen);
+      }
+      if (recovers) {
         // Whatever settles now is the controller's choice, not the caller's.
         this._switchOrigin = 'automatic';
         try {
@@ -302,23 +309,7 @@ export class MapSourceController {
     if (this._engine.tilesetReady) {
       this._showTileset(tileset);
       const ready = this._engine.tilesetReady(tileset);
-      if (ready)
-        try {
-          await ready;
-        } catch (error) {
-          // The stack before it stays: its tile failures still fall back,
-          // heard for this switch.
-          if (
-            gen === this._switchGen &&
-            this._imageryLayer &&
-            this._activeResolution
-          ) {
-            this._removeImageryErrorListener?.();
-            this._removeImageryErrorListener = null;
-            this._watchProvider(this._activeResolution, gen);
-          }
-          throw error;
-        }
+      if (ready) await ready;
       if (gen !== this._switchGen) return;
     }
     this._removeImageryLayer();

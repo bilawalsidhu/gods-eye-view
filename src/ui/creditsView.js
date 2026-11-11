@@ -25,7 +25,7 @@ function distinct(list) {
   });
 }
 
-/** One credit as DOM: its logo, then its text, linked when it has a link. */
+/** One credit as DOM: its logo or its text, linked when it has a link. */
 function creditElement(doc, credit) {
   const href = credit.href ? safeUrl(credit.href, LINK_SCHEMES) : null;
   const element = doc.createElement(href ? 'a' : 'span');
@@ -33,8 +33,9 @@ function creditElement(doc, credit) {
   if (href) {
     element.href = href;
     element.target = '_blank';
-    element.rel = 'noopener';
+    element.rel = 'noopener noreferrer';
   }
+  // A logo is drawn in place of the text, which names it (its alt text).
   const logo = credit.logoUrl ? safeUrl(credit.logoUrl, LOGO_SCHEMES) : null;
   if (logo) {
     const image = doc.createElement('img');
@@ -121,11 +122,17 @@ export function mountCreditsView(viewer, { root = document.body } = {}) {
       }),
     );
     expand.hidden = listed.length === 0;
-    if (expand.hidden && !panel.hidden) setOpen(false);
+    if (expand.hidden && !panel.hidden) {
+      // Focus in the list goes back to the line, not to the page.
+      const focused = panel.contains(doc.activeElement);
+      setOpen(false);
+      if (focused) line.querySelector('a')?.focus();
+    }
   };
 
   const onExpand = () => setOpen(panel.hidden);
   const onClose = () => setOpen(false, { focus: true });
+  // Escape in the open list closes it (it takes focus as it opens).
   const onKey = (event) => {
     if (event.key !== 'Escape' || panel.hidden) return;
     event.preventDefault();

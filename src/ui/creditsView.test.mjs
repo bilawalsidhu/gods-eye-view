@@ -58,9 +58,52 @@ test("the renderer's credits show on the line, and the rest in the list it opens
   assert.equal(document.getElementById('gev-credits-panel'), null);
 });
 
+test('a credit with a logo is drawn as the logo, named by its text', () => {
+  const { viewer, renderer } = scene();
+  renderer.credits.addStatic({
+    text: 'Google',
+    logoUrl: 'https://example.com/logo.png',
+    inline: true,
+  });
+  const off = mountCreditsView(viewer);
+  const credit = document.querySelector('#gev-credits .gev-credit');
+  const logo = credit.querySelector('img');
+  assert.equal(logo.src, 'https://example.com/logo.png');
+  assert.equal(logo.alt, 'Google', 'screen readers and copies keep the name');
+  assert.equal(credit.textContent, '', 'the logo stands in place of the text');
+  off();
+});
+
 test('a viewer with no renderer shows no credits line', () => {
   document.body.replaceChildren();
   const off = mountCreditsView({});
   assert.equal(document.getElementById('gev-credits'), null);
   off();
+});
+
+test('the credits line is placed wherever the renderer’s own display is', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const dir = new URL('./styles/', import.meta.url);
+  const missing = [];
+  for (const name of readdirSync(dir).filter((f) => f.endsWith('.css'))) {
+    const css = readFileSync(new URL(name, dir), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    const parts = [...css.matchAll(/([^{};]+)\{/g)]
+      .map((match) => match[1].replace(/\s+/g, ' ').trim())
+      .filter((selector) => !selector.startsWith('@'))
+      .flatMap((selector) =>
+        selector.split(/,(?![^(]*\))/).map((part) => part.trim()),
+      );
+    // The display's own selectors, without its inner parts, each with the
+    // line's counterpart in the same stylesheet.
+    for (const part of parts)
+      if (
+        /#cesium-credits$/.test(part) &&
+        !parts.includes(part.replace('#cesium-credits', '#gev-credits'))
+      )
+        missing.push(`${name}: ${part}`);
+  }
+  assert.deepEqual(missing, []);
 });
