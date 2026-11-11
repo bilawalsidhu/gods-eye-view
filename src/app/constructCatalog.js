@@ -68,6 +68,7 @@ export function createApplicationCatalog({
   signal,
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
+  newsOptions,
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
@@ -142,7 +143,7 @@ export function createApplicationCatalog({
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
-        createApplicationNews({ source: sources.news }),
+        createApplicationNews({ ...newsOptions, source: sources.news }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
