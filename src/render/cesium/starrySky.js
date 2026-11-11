@@ -3,6 +3,11 @@ import { loadBundledJson } from '../../data/bundledJson.js';
 import { governorRequestRender } from '../../renderGovernor.js';
 import { buildStarVertices, STAR_VERTEX_FLOATS } from '../../sky/stars.js';
 import { provideIcrfToFixed } from '../../sky/icrf.js';
+import {
+  MILKY_WAY_FACE_URLS,
+  MILKY_WAY_INTENSITY,
+  STAR_CATALOGUE_URL,
+} from '../../sky/assets.js';
 
 /**
  * Space background in the `Scene#skyBox` slot: catalogue stars as point
@@ -14,40 +19,9 @@ import { provideIcrfToFixed } from '../../sky/icrf.js';
 export const STARRY_SKY_CESIUM_VERSION = '1.138.0';
 
 /** Brightness of the Milky Way glow; the stars carry the sky. */
-export const MILKY_WAY_INTENSITY = 0.4;
+export { MILKY_WAY_INTENSITY };
 /** Clock change, in seconds, below which the sky rotation is reused. */
 export const SKY_ROTATION_EPSILON_SECONDS = 1;
-
-const STAR_PACK_URL = new URL(
-  '../../data/local_data/sky/bright_stars.json',
-  import.meta.url,
-);
-const MILKY_WAY_FACE_URLS = Object.freeze({
-  positiveX: new URL(
-    '../../data/local_data/sky/milkyway_px.webp',
-    import.meta.url,
-  ),
-  negativeX: new URL(
-    '../../data/local_data/sky/milkyway_nx.webp',
-    import.meta.url,
-  ),
-  positiveY: new URL(
-    '../../data/local_data/sky/milkyway_py.webp',
-    import.meta.url,
-  ),
-  negativeY: new URL(
-    '../../data/local_data/sky/milkyway_ny.webp',
-    import.meta.url,
-  ),
-  positiveZ: new URL(
-    '../../data/local_data/sky/milkyway_pz.webp',
-    import.meta.url,
-  ),
-  negativeZ: new URL(
-    '../../data/local_data/sky/milkyway_nz.webp',
-    import.meta.url,
-  ),
-});
 
 // Directions, not points: w = 0 drops the camera translation, and z just
 // under w keeps every fragment at the far plane, inside any frustum.
@@ -222,7 +196,7 @@ export class StarrySky {
   _load() {
     if (this._loading) return;
     this._loading = true;
-    loadBundledJson(STAR_PACK_URL)
+    loadBundledJson(STAR_CATALOGUE_URL)
       .then((pack) => {
         if (this._destroyed) return;
         this._starData = buildStarVertices(pack);

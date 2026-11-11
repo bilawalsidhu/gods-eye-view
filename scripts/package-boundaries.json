@@ -232,6 +232,7 @@
       "src/data/bundledJson.js",
       "src/renderGovernor.js",
       "src/sky/icrf.js",
+      "src/sky/assets.js",
       "src/globeInView.js",
       "src/render/cesium/imageryLookAhead.js",
       "src/cockpitOrbital.js"
@@ -2148,6 +2149,7 @@
       "src/renderGovernor.js",
       "src/sky/icrf.js",
       "src/sky/stars.js",
+      "src/sky/assets.js",
       "src/render/cesium/starrySky.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
@@ -4695,6 +4697,7 @@
       "src/maps/attribution.js",
       "src/render/cesium/mapEngine.js",
       "src/sky/icrf.js",
+      "src/sky/assets.js",
       "src/app/panelRendering.js",
       "src/render/cesium/application.js",
       "src/sources/osmFeatures.js",
@@ -7184,6 +7187,16 @@
       "src/geo/frames.js",
       "src/geo/celestial.js",
       "src/geo/quaternion.js"
+    ],
+    "external": []
+  },
+  "sky": {
+    "exports": ["./sky"],
+    "modules": [
+      "src/sky/index.js",
+      "src/sky/assets.js",
+      "src/sky/stars.js",
+      "src/sky/icrf.js"
     ],
     "external": []
   },
