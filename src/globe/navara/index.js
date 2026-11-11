@@ -43,10 +43,6 @@ import {
   resolveNavaraLook,
 } from './viewOptions.js';
 
-// Room for tiles in Navara's tile cache, over the screen-sized render
-// targets that its budget also counts (fixedGpuBytes).
-const TILE_CACHE_ROOM = 768 * 1024 * 1024;
-
 // Navara 0.2.1 has no preserveDrawingBuffer option but takes a canvas whose
 // WebGL2 context is already created; three then uses that context.
 function preservedCanvas(container) {
@@ -225,11 +221,14 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
           engine.render.request('navara-look');
       }),
     ];
-    // The tile cache keeps tiles that left the view until it reaches its
-    // budget, by default a quarter of device memory up to 2 GiB: a long
-    // session grew to about 1.4 GiB of GPU memory. The budget counts the
-    // screen-sized targets too, which Navara reports after it draws them, so
-    // it follows them (a fixed total coarsened the view on a 2x screen).
+    // Navara's tile budget counts the screen-sized render targets too, which
+    // it reports only after drawing them, so the budget follows them (a fixed
+    // total coarsened the view on a 2x screen). The room for tiles over them
+    // is Navara's device default: a quarter of device memory, at most 2 GiB
+    // (less on phones). An oblique view needs about 0.9 GiB of tiles at
+    // 960x640 and 1.2 GiB at 1440x900; over budget Navara stops refining, so
+    // a smaller room left the imagery about two levels coarse.
+    const tileRoom = view.cacheBytes;
     let fixedGpuBytes = 0;
     let budgetedAt = -Infinity;
     removers.push(
@@ -240,7 +239,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
         const fixed = view.memoryStats()?.fixedGpuBytes ?? 0;
         if (fixed <= 0 || fixed === fixedGpuBytes) return;
         fixedGpuBytes = fixed;
-        view.cacheBytes = fixed + TILE_CACHE_ROOM;
+        view.cacheBytes = fixed + tileRoom;
       }),
     );
     removeLook = () => removers.forEach((remove) => remove());

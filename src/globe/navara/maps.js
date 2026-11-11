@@ -5,7 +5,8 @@
 // src/globe/cesium/mapImagery.js and terrain.js, which import Cesium.
 //
 // - imagery: OSM and Esri as `raster-tile` layers; Cesium ion imagery (Bing)
-//   has no Navara path yet and rejects.
+//   has no Navara path yet and rejects. Esri's grey "no imagery" tiles are
+//   discarded, as on Cesium (missingTiles.js).
 // - terrain: the keyless Re:Earth quantized mesh, Cesium World Terrain through
 //   the ion endpoint with an explicit token (Navara sends it as a Bearer
 //   token), or none (the ellipsoid). Navara 0.2.1 panics on a quantized-mesh
@@ -23,14 +24,16 @@ import {
   SENTINEL2_URL,
 } from '../../maps/sentinel2.js';
 import { localTilesetPath } from '../../maps/qaTileset.js';
+import { ESRI_TILE_ROOT, discardMissingEsriTiles } from './missingTiles.js';
 
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+// The deepest level tile.openstreetmap.org serves.
+const OSM_MAX_ZOOM = 19;
 const OSM_CREDIT = {
   attribution: '© OpenStreetMap contributors',
   attributionUrl: 'https://www.openstreetmap.org/copyright',
 };
-const ESRI_URL =
-  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const ESRI_URL = `${ESRI_TILE_ROOT}{z}/{y}/{x}`;
 const ESRI_CREDIT = {
   attributionHtml:
     '<a href="https://www.esri.com" target="_blank" rel="noopener">Powered by Esri</a>',
@@ -38,6 +41,11 @@ const ESRI_CREDIT = {
 const KEYLESS_TERRAIN_URL =
   'https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain';
 const KEYLESS_TERRAIN_MAX_ZOOM = 14;
+// The globe drapes imagery on terrain tiles, about one level finer than the
+// tile, so terrain tiles that stop at the mesh's level 14 hold imagery at
+// level 15: blurry below a few kilometres. Splitting tiles past the mesh's
+// data, as Cesium does, lets the imagery refine to street level.
+const TERRAIN_OVERSCALED_MAX_ZOOM = 20;
 const ION_WORLD_TERRAIN_ENDPOINT =
   'https://api.cesium.com/v1/assets/1/endpoint?access_token=';
 const GOOGLE_TILES_ROOT = 'https://tile.googleapis.com/v1/3dtiles/root.json';
@@ -60,7 +68,11 @@ function imageryFor(source) {
         credit: { attributionHtml: SENTINEL2_CREDIT },
       };
     case 'osm':
-      return { url: OSM_URL, credit: credit ?? OSM_CREDIT };
+      return {
+        url: OSM_URL,
+        maxZoom: OSM_MAX_ZOOM,
+        credit: credit ?? OSM_CREDIT,
+      };
     case 'esri-imagery':
       return { url: ESRI_URL, credit: credit ?? ESRI_CREDIT };
     case 'ion':
@@ -92,6 +104,8 @@ export function createNavaraMaps(
     now = () => performance.now(),
   } = {},
 ) {
+  // Esri's "no imagery" tiles fail instead of drawing (missingTiles.js).
+  const stopDiscardingTiles = discardMissingEsriTiles();
   let settleTimer = null;
   let settleUntil = 0;
   const stopSettling = () => {
@@ -192,6 +206,7 @@ export function createNavaraMaps(
           type: 'quantized-mesh',
           url: KEYLESS_TERRAIN_URL,
           maxZoom: KEYLESS_TERRAIN_MAX_ZOOM,
+          overscaledMaxZoom: TERRAIN_OVERSCALED_MAX_ZOOM,
           requestVertexNormals: true,
           requestWaterMask: true,
         };
@@ -376,6 +391,7 @@ export function createNavaraMaps(
       if (destroyed) return;
       destroyed = true;
       stopSettling();
+      stopDiscardingTiles();
       for (const overlay of overlays) {
         overlay.layer.delete();
         overlay.source.delete();

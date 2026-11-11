@@ -70,6 +70,7 @@ test('setBaseImagery builds Navara raster layers for OSM and Esri, one at a time
     view.sources[0].desc.url,
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   );
+  assert.equal(view.sources[0].desc.maxZoom, 19);
   assert.equal(layer.desc.source, view.sources[0]);
   assert.ok(
     view.shown.some((item) => /OpenStreetMap/.test(JSON.stringify(item))),
@@ -148,6 +149,9 @@ test('setTerrain: keyless Re:Earth mesh, flat ellipsoid, and ion world terrain w
     'https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain',
   );
   assert.equal(terrain.desc.source.desc.type, 'quantized-mesh');
+  // Tiles split past the mesh's level 14, so imagery can refine beyond 15.
+  assert.equal(terrain.desc.source.desc.maxZoom, 14);
+  assert.equal(terrain.desc.source.desc.overscaledMaxZoom, 20);
   await maps.setTerrain({ kind: 'ellipsoid' });
   assert.equal(layersOf(view, 'terrain').length, 0);
   assert.equal(view.sources.length, 0);

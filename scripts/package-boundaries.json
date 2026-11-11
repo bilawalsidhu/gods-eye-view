@@ -2880,7 +2880,8 @@
       "src/ui/kit/UiSelect.js",
       "src/ui/news/NewsCard.vue",
       "src/ui/news/NewsFeed.vue",
-      "src/ui/newsPanel.js"
+      "src/ui/newsPanel.js",
+      "src/globe/navara/missingTiles.js"
     ],
     "external": [
       "hls.js",
