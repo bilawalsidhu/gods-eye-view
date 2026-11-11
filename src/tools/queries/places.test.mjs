@@ -283,7 +283,7 @@ test('a routing outage is reported as unavailable, not as invalid arguments', as
     assert.equal(result.structuredContent.error, 'unavailable');
     assert.doesNotMatch(result.content[0].text, /No walk route/);
   }
-  // Voice passes only the message on, so it names the outage itself.
+  // Voice receives only the message, so it must name the outage.
   const outage = createRouteService({
     fetchImpl: async () =>
       Response.json(

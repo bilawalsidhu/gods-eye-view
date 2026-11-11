@@ -21,7 +21,7 @@ export function createDirectionsSource({
         signal,
         headers: { Accept: 'application/json' },
       });
-      // A failure page in front of the proxy need not be JSON.
+      // Proxy error pages may not be JSON.
       let payload = null;
       try {
         payload = await response.json();
@@ -45,8 +45,7 @@ export function createDirectionsSource({
           { status: 429, refusal },
         );
       }
-      // A 5xx is a routing outage whatever its body says; only the proxy's
-      // refusals carry an error text worth showing.
+      // A 5xx body may mislabel an outage as a route refusal.
       if (response.status >= 500 || (!response.ok && !payload?.error))
         throw Object.assign(
           new Error(`Routing unavailable (HTTP ${response.status})`),

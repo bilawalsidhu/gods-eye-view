@@ -236,7 +236,6 @@ test('OSRM routing preserves aliases, cache, span guards and upstream failure be
     assert.equal((await request(route, url)).body.error, error);
   assert.equal(calls, 1);
   now += 600001;
-  // OSRM's own "no route" is a 400 with a JSON code, and stays one.
   t.mock.method(globalThis, 'fetch', async () =>
     Response.json(
       { code: 'NoRoute', message: 'Impossible route between points' },

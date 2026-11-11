@@ -189,8 +189,7 @@ export function createRouteService({
       } catch {
         /* the status below is authoritative */
       }
-      // A rate limit or an outage (5xx) is the routing service's failure, not
-      // a missing route, whatever the body says. Voice hears this message.
+      // Handle 429 and 5xx before route refusals, regardless of the body.
       if (response.status === 429) throw httpFailure(response, 'Routing');
       if (response.status >= 500)
         throw new ToolError(

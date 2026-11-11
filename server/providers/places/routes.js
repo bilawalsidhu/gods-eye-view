@@ -72,10 +72,7 @@ class UpstreamRateLimitError extends Error {
   }
 }
 
-/**
- * Thrown when the routing service failed, did not answer (timeout, network
- * error, refused redirect) or did not answer with JSON.
- */
+/** Thrown when the routing service failed or sent no JSON; answered as 502. */
 class UpstreamUnavailableError extends Error {
   constructor() {
     super('routing service unavailable');
@@ -178,14 +175,12 @@ async function fetchRoute({
     `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}` +
     `?overview=full&geometries=geojson&alternatives=false&steps=${withSteps ? 'true' : 'false'}`;
   const controller = new AbortController();
-  // One 12 s budget from arrival, queue wait included, so callers sized to it
-  // (the Directions layer gives up at 15 s) hear back in time.
+  // The 12 s budget includes queue wait, so Directions (15 s) hears back.
   const timer = setTimeout(() => controller.abort(), 12000);
   let osrm;
   try {
     const upstreamRes = await throughUpstreamGate(async () => {
-      // A budget spent waiting in our own queue is our backlog, not the
-      // routing service failing.
+      // Expiry before dispatch reflects our backlog, not an upstream outage.
       if (controller.signal.aborted)
         throw new RouteBusyError(_upstreamIntervalMs);
       try {
@@ -207,8 +202,7 @@ async function fetchRoute({
         Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5,
       );
     }
-    // OSRM answers 400 for a request it cannot route (NoRoute, NoSegment);
-    // any other failure status (a 5xx, a 403 block, a 404) is the service's.
+    // OSRM answers 400 for a route it cannot find; other failures are outages.
     if (upstreamRes.status === 400) {
       await cancelBody(upstreamRes);
       return { payload: null, error: 'no route found' };
@@ -222,9 +216,7 @@ async function fetchRoute({
       await cancelBody(upstreamRes);
       throw new UpstreamUnavailableError();
     }
-    // A body cut off by the timeout or the network, an oversized one and one
-    // that is not JSON are all the service's failure; an exception after this
-    // point is ours and stays a "route proxy error".
+    // Read and parse failures are outages; later ones stay "route proxy error".
     try {
       osrm = JSON.parse(
         await readResponseTextCapped(upstreamRes, ROUTE_MAX_RESPONSE_BYTES),
@@ -392,7 +384,6 @@ export function installRouteMiddleware(
           );
         }
         if (upstreamError instanceof UpstreamUnavailableError) {
-          // Same reason: an outage says nothing about whether a route exists.
           return unavailable(upstreamError.message);
         }
         throw upstreamError;

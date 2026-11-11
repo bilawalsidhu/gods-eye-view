@@ -5447,16 +5447,13 @@ service's usage policy states; past a bounded queue the answer is a 429 with a
 `Retry-After` rather than a queue that grows until everything times out. The
 upstream host is pinned and a redirect is refused rather than followed, and a
 rate limit from the routing service is reported as one instead of as "no route
-found". So is an outage: any failure status but 400 (a 5xx, a 403 block, a
-404), no answer (timeout, network error) or a body that is not JSON answers
-`502 routing service unavailable`. `plan_route` throws `Routing service
-unavailable (HTTP 502)`, which is what voice hears, and the layer shows
-`Routing unavailable (HTTP 502)`; only OSRM's own refusal (a 400, or a 200
-without a route) reads "no route found". The 12 s timeout runs from the
-request's arrival, queue wait included; a budget spent before the request
-leaves the queue answers 429 "routing busy". A request that waited in the
-queue gives OSRM the rest of the 12 s, so a slow answer then still reads as
-unavailable.
+found". Upstream failure statuses except 400 and 429, network failures, and
+unreadable, oversized or non-JSON bodies return `502 routing service unavailable`.
+Voice hears `Routing service unavailable (HTTP 502)`; Directions shows
+`Routing unavailable (HTTP 502)`. OSRM 400 responses or successful responses
+without a usable route return "no route found". The 12 s upstream budget includes
+queue time: expiry before dispatch returns 429 "routing busy" when the queue slot
+opens; expiry during the upstream request returns 502.
 `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
 road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at
@@ -6867,7 +6864,7 @@ apply to `public/` assets or built-preview serving.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
-- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; a routing-service outage answers 502 instead.
+- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; routing outages return 502.
 - `/api/flights`, `/api/military`, and `/api/route` answer `405 Method Not Allowed` with `Allow: GET` to anything but `GET`, before rate limiting and any upstream call.
 - `/api/flights` negotiates gzip. The cached global snapshot and the regional adsb.lol fallback are each gzipped once per refresh (about 860 KB becomes about 250 KB). Clients that offer gzip get that frame; other clients, and bodies under 1 KiB or that gzip cannot shrink, get identity bytes. Both answers carry `Vary: Accept-Encoding`. Uncached bodies, such as auth failures, are never sent under a cached frame's encoding.
 - Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (400 for an invalid hex, otherwise `503 history_unavailable` with `Retry-After: 1800` and `Cache-Control: no-store`, no upstream request; military tracking uses its locally accumulated trail).
