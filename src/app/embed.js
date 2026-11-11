@@ -117,8 +117,13 @@ export function keepPanelRendering(
       viewer.isDestroyed?.()
     )
       return;
-    viewer.resize();
-    viewer.render();
+    try {
+      viewer.resize();
+      viewer.render();
+    } catch {
+      // Raised as a render error by now (src/ui/renderFailure.js), which
+      // stops this timer; thrown on, it would only reach the host page.
+    }
   }, PANEL_FRAME_MS);
   return () => {
     windowRef.clearInterval(timer);

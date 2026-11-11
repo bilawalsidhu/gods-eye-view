@@ -90,7 +90,6 @@ test('a render error shows a notice that survives the failed frame', (t) => {
   const notice = f.store.renderFailure;
   assert.equal(notice.reason, 'render-error');
   assert.equal(notice.detail, 'Expected width to be greater than 0');
-  assert.equal(notice.shown, 1);
   assert.equal(typeof notice.retry, 'function');
   assert.equal(typeof notice.reset, 'function');
   assert.deepEqual(f.logged, [error]);
@@ -120,7 +119,7 @@ test('a loop restarted into the same error keeps one notice', (t) => {
   assert.equal(f.store.published.length, 1);
   f.frame(new Error('other'));
   assert.equal(f.store.renderFailure.detail, 'other');
-  assert.equal(f.store.renderFailure.shown, first.shown, 'no new appearance');
+  assert.ok(!f.store.published.includes(null), 'no new appearance');
 });
 
 test('a new failure after recovery is a new appearance', (t) => {
@@ -129,7 +128,18 @@ test('a new failure after recovery is a new appearance', (t) => {
   f.store.renderFailure.retry();
   f.frame();
   f.frame(new Error('boom'));
-  assert.equal(f.store.renderFailure.shown, 2);
+  assert.deepEqual(
+    f.store.published.map((notice) => notice?.reason ?? null),
+    ['render-error', null, 'render-error'],
+  );
+});
+
+test('a render error without a value shows no detail', (t) => {
+  const f = fixture(t);
+  f.viewer.useDefaultRenderLoop = false;
+  f.scene.renderError.raise(f.scene, undefined);
+  assert.equal(f.store.renderFailure.reason, 'render-error');
+  assert.equal(f.store.renderFailure.detail, '');
 });
 
 test('Reset opens the app root without the restored view', (t) => {
@@ -147,7 +157,7 @@ test('a lost context offers a reload and no frame clears it', (t) => {
   assert.equal(notice.detail, '');
   // Cesium's next frame then fails on the dead drawing buffer.
   f.frame(new Error('Expected width to be greater than 0'));
-  assert.equal(f.store.renderFailure.reason, 'context-lost');
+  assert.equal(f.store.renderFailure, notice, 'the notice keeps saying why');
   f.frame();
   assert.ok(f.store.renderFailure, 'a lost context never draws again');
   f.store.renderFailure.retry();
@@ -174,11 +184,4 @@ test('uninstall removes the listeners and the notice', (t) => {
   assert.equal(f.canvasListeners.size, 0);
   f.frame(new Error('later'));
   assert.equal(f.store.renderFailure, null);
-});
-
-test('a viewer without a scene installs nothing', () => {
-  const uninstall = installRenderFailureNotice(null, {
-    store: { publishRenderFailure: () => assert.fail('nothing to publish') },
-  });
-  uninstall();
 });

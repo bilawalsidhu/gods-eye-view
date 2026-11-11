@@ -8,15 +8,10 @@ import { appRootUrl } from '../share/shareLinkPath.js';
  * behind controls that still respond. Cesium stops its render loop after a
  * render error, and a page whose WebGL context was lost never draws again.
  *
- * The notice is published to the status store, which the scene chrome
- * renders. Retry restarts the render loop after an error, and the notice stays
- * until a frame renders without one; after a context loss it reloads the page,
- * whose address keeps the view. Reset opens the app's root address, without
- * the view restored from the address bar. Where the page must not reload
- * itself (`allowReload: false`), Reset is left out, and so is Retry after a
- * context loss.
- *
- * Returns a function that removes the listeners and the notice.
+ * Retry restarts the loop, and the notice stays until a frame renders without
+ * an error; after a context loss Retry reloads the page. Reset opens the app's
+ * root address. With `allowReload: false`, Reset is left out, and so is Retry
+ * after a context loss. Returns a function that removes the notice.
  */
 export function installRenderFailureNotice(
   viewer,
@@ -28,12 +23,13 @@ export function installRenderFailureNotice(
       console.error('[Render] The globe stopped drawing:', error),
   } = {},
 ) {
-  const scene = viewer?.scene;
-  if (!scene?.renderError) return () => {};
+  const { scene } = viewer;
   const canvas = viewer.canvas ?? scene.canvas;
   let notice = null;
-  let shown = 0;
   let contextLost = false;
+  // The error Scene raised as a render error and, with rethrowRenderErrors,
+  // throws on: the render() wrapper must not raise it a second time.
+  let raisedByScene = null;
   let frameFailed = false;
   let removeFrameListeners = null;
 
@@ -67,6 +63,7 @@ export function installRenderFailureNotice(
     if (removeFrameListeners || contextLost) return;
     const removeStart = scene.preUpdate.addEventListener(() => {
       frameFailed = false;
+      raisedByScene = null;
     });
     const removeEnd = scene.postRender.addEventListener(() => {
       if (!frameFailed) clear();
@@ -84,7 +81,6 @@ export function installRenderFailureNotice(
     notice = {
       reason,
       detail,
-      shown: notice ? notice.shown : ++shown,
       retry: contextLost && !allowReload ? null : retry,
       reset: allowReload ? reset : null,
     };
@@ -93,9 +89,12 @@ export function installRenderFailureNotice(
   }
 
   const onRenderError = (_scene, error) => {
+    raisedByScene = { error };
     frameFailed = true;
     logError(error);
-    present(describeError(error));
+    // A lost context fails every frame after it; the notice keeps saying why.
+    if (contextLost) return;
+    present(error ? describeError(error) : '');
   };
   const onContextLost = () => {
     contextLost = true;
@@ -110,23 +109,15 @@ export function installRenderFailureNotice(
   // render loop, but raises no renderError, and Cesium reports it only in the
   // panel the app turns off. Raise it as a render error, so Cesium's handler,
   // an inline panel's timer and this notice all see it. Such an error passes
-  // here before anything else runs, so finish the raises it cut short first:
-  // listeners added or removed while the loop is stopped then apply at once,
-  // in order.
+  // here before anything else runs, so finish the raises of frameEvents() it
+  // cut short first: listeners added or removed while the loop is stopped
+  // then apply at once, in order.
   const unguard = ['resize', 'render'].map((name) =>
     reportThrown(viewer.cesiumWidget, name, (error) => {
-      [
-        scene.preUpdate,
-        scene.postUpdate,
-        scene.preRender,
-        scene.postRender,
-        scene.camera?.changed,
-        scene.camera?.moveStart,
-        scene.camera?.moveEnd,
-        viewer.clock?.onTick,
-        viewer.clock?.onStop,
-      ].forEach(finishRaise);
-      scene.renderError.raiseEvent(scene, error);
+      frameEvents(viewer).forEach(finishRaise);
+      if (!raisedByScene || raisedByScene.error !== error)
+        scene.renderError.raiseEvent(scene, error);
+      raisedByScene = null;
     }),
   );
   canvas?.addEventListener?.('webglcontextlost', onContextLost);
@@ -136,6 +127,40 @@ export function installRenderFailureNotice(
     canvas?.removeEventListener?.('webglcontextlost', onContextLost);
     clear();
   };
+}
+
+/**
+ * The events Cesium raises in a frame outside Scene's own error handling, so
+ * that a listener's error cuts their raise short: Scene's frame events, the
+ * camera's and the clock's, and those raised after the frame renders, the
+ * globe's tile load progress and the load events of the scene's tilesets.
+ * Tilesets nested in a collection are not reached.
+ */
+function frameEvents(viewer) {
+  const { scene } = viewer;
+  const events = [
+    scene.preUpdate,
+    scene.postUpdate,
+    scene.preRender,
+    scene.postRender,
+    scene.camera?.changed,
+    scene.camera?.moveStart,
+    scene.camera?.moveEnd,
+    viewer.clock?.onTick,
+    viewer.clock?.onStop,
+    scene.globe?.tileLoadProgressEvent,
+  ];
+  const primitives = scene.primitives;
+  for (let i = 0; i < (primitives?.length ?? 0); i += 1) {
+    const tileset = primitives.get(i);
+    events.push(
+      tileset?.loadProgress,
+      tileset?.allTilesLoaded,
+      tileset?.initialTilesLoaded,
+      tileset?.tileLoad,
+    );
+  }
+  return events;
 }
 
 /**
@@ -162,9 +187,7 @@ function finishRaise(event) {
 }
 
 /**
- * Wrap the widget's `name` method so an error it throws is reported and
- * thrown on, for the caller to handle as before. Returns a function that
- * unwraps it.
+ * Report an error the widget's `name` method throws, and throw it on.
  *
  * A render error marks Cesium's render loop stopped, but a call made while
  * the loop ran leaves the loop's next animation frame queued: the loop queues

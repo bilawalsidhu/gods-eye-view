@@ -1,7 +1,7 @@
-// An error thrown in the render loop outside Scene's tryAndCatchError
-// (a preRender/postRender listener, clock.onTick, resize) must still reach
-// the render failure notice. Drives Cesium's real startRenderLoop through the
-// CesiumWidget.prototype.useDefaultRenderLoop setter.
+// Errors thrown in the render loop outside Scene's tryAndCatchError (a
+// preRender/postRender listener, clock.onTick, resize). Drives Cesium's real
+// startRenderLoop through the CesiumWidget.prototype.useDefaultRenderLoop
+// setter.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -10,7 +10,7 @@ import { installRenderFailureNotice } from './renderFailure.js';
 // What src/app/scene.js passes to the viewer (showRenderLoopErrors).
 const SHOW_RENDER_LOOP_ERRORS = false;
 
-test('an error thrown outside tryAndCatchError still shows the notice', () => {
+function runLoop(render) {
   const frames = [];
   const previousRaf = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (fn) => frames.push(fn);
@@ -21,16 +21,8 @@ test('an error thrown outside tryAndCatchError still shows the notice', () => {
       postRender: new Cesium.Event(),
       requestRender() {},
       initializeFrame() {},
-      // Scene.render raises preRender outside tryAndCatchError
-      // (Scene.js:4439), so a listener's exception propagates.
-      render() {
-        this.preUpdate.raiseEvent(this);
-        throw new TypeError(
-          "Cannot read properties of undefined (reading 'x')",
-        );
-      },
+      render,
     };
-    const panels = [];
     const widget = Object.create(Cesium.CesiumWidget.prototype);
     Object.assign(widget, {
       _scene: scene,
@@ -42,7 +34,7 @@ test('an error thrown outside tryAndCatchError still shows the notice', () => {
       _targetFrameRate: undefined,
       isDestroyed: () => false,
       resize() {},
-      showErrorPanel: (...args) => panels.push(args),
+      showErrorPanel() {},
     });
     const viewer = {
       scene,
@@ -54,8 +46,6 @@ test('an error thrown outside tryAndCatchError still shows the notice', () => {
       set useDefaultRenderLoop(value) {
         widget.useDefaultRenderLoop = value;
       },
-      render: () => widget.render(),
-      resize: () => widget.resize(),
     };
     const store = {
       renderFailure: null,
@@ -69,15 +59,35 @@ test('an error thrown outside tryAndCatchError still shows the notice', () => {
       locationRef: { href: 'https://gev.example/', reload() {}, assign() {} },
       logError: (error) => logged.push(error),
     });
-    viewer.useDefaultRenderLoop = true; // starts Cesium's loop
+    viewer.useDefaultRenderLoop = true;
     while (frames.length) frames.shift()(16);
-    // Cesium's catch stopped the loop.
-    assert.equal(widget.useDefaultRenderLoop, false);
-    // The user is told, and the error is logged.
-    assert.equal(store.renderFailure?.reason, 'render-error');
-    assert.equal(logged.length, 1);
-    uninstall();
+    return { widget, store, logged, uninstall };
   } finally {
     globalThis.requestAnimationFrame = previousRaf;
   }
+}
+
+test('an error thrown outside tryAndCatchError still shows the notice', () => {
+  // Scene.render raises preRender outside tryAndCatchError (Scene.js:4439),
+  // so a listener's exception propagates.
+  const { widget, store, logged, uninstall } = runLoop(function () {
+    this.preUpdate.raiseEvent(this);
+    throw new TypeError("Cannot read properties of undefined (reading 'x')");
+  });
+  assert.equal(widget.useDefaultRenderLoop, false);
+  assert.equal(store.renderFailure?.reason, 'render-error');
+  assert.equal(logged.length, 1);
+  uninstall();
+});
+
+test('an error Scene raised and threw on with rethrowRenderErrors is reported once', () => {
+  const { store, logged, uninstall } = runLoop(function () {
+    this.preUpdate.raiseEvent(this);
+    const error = new Error('boom');
+    this.renderError.raiseEvent(this, error);
+    throw error;
+  });
+  assert.equal(store.renderFailure?.detail, 'boom');
+  assert.equal(logged.length, 1);
+  uninstall();
 });

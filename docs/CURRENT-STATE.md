@@ -2077,7 +2077,10 @@ black globe behind controls that still respond. `installRenderFailureNotice()`
 (`src/ui/renderFailure.js`) listens for Cesium's `renderError`, after which
 Cesium stops its render loop, and for the canvas' `webglcontextlost`. It logs
 the error and publishes a notice to the status store, which
-`RenderFailure.vue` renders as an alert dialog that takes focus. The
+`RenderFailure.vue` renders as an alert dialog that takes focus. When the
+globe draws again, focus goes back to the element that had it, or to the map
+(`#cesiumContainer`, made focusable with `tabindex="-1"`) if that element is
+gone, unless the user has moved focus since. The
 application scene creates its viewer with `showRenderLoopErrors: false`, so
 Cesium's own "Rendering has stopped" panel, which offers no way back, no longer
 appears; `applicationViewerOptions()` and `createApplicationViewer()` keep
@@ -2085,15 +2088,22 @@ Cesium's panel by default for other callers. An error thrown outside Scene's
 own error handling (a `preRender` or `postRender` listener, the clock's
 `onTick`, a resize) also stops the loop without a `renderError`, so the notice
 wraps the widget's `render()` and `resize()` and raises such an error as a
-render error before Cesium's loop handles it as before.
+render error before Cesium's loop handles it as before; one Scene has raised
+already and throws on (`rethrowRenderErrors`) is not raised again. A lost
+context fails every later frame, and those errors are only logged, so the
+notice keeps saying why. The notice sits above floating panels such as the
+Québec camera viewer, and its buttons are 44 px tall on touch screens.
 
 - **Retry** after a render error restarts the render loop. The notice stays
   until a frame starts and ends without a render error (Cesium raises
   `postRender` after a failed frame too), and a loop that fails again keeps it.
   A listener that throws leaves its Cesium event mid-raise, with listeners
   added or removed since only queued, so the `render()` and `resize()` wrapper
-  finishes the frame and clock events it cut short (`finishRaise()`) before it
-  raises the render error: the notice's frame watchers start with the next
+  finishes the events it cut short (`finishRaise()`) before it raises the
+  render error. These are the events Cesium raises outside Scene's error
+  handling (`frameEvents()`): Scene's frame events, the camera's and the
+  clock's, the globe's tile load progress, and the load events of the scene's
+  top-level tilesets. So the notice's frame watchers start with the next
   frame, a listener removed while the loop is stopped, for a layer turned off,
   is not called again, and one turned off and on again keeps running.
 - **Reload** after a lost context reloads the page: Cesium cannot draw into a
@@ -2106,7 +2116,9 @@ An inline conversation panel never reloads or navigates its host's page, so it
 offers Retry after a render error only, and nothing after a lost context, where
 the panel runtime's own notice applies. The panel's timer
 (`keepPanelRendering()`) draws only while Cesium's render loop is on, so it
-stops after a render error and draws again after Retry.
+stops after a render error and draws again after Retry. An error a frame of
+the timer throws stops there: it has been raised as a render error, and
+thrown on it would only reach the host page.
 
 A render error marks Cesium's loop stopped, but a frame drawn while the loop
 ran leaves its next animation frame queued: an error Scene catches itself

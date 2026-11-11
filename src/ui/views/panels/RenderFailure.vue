@@ -18,13 +18,33 @@ const MESSAGES = {
   ),
 };
 // Focus moves to the first action each time the notice appears, so a
-// keyboard user can act on it at once.
+// keyboard user can act on it at once. When the globe draws again, it goes
+// back where it was, or to the map if that is gone, unless the user has moved
+// it since.
+let focusBefore;
 watch(
-  () => failure.value?.shown,
+  () => Boolean(failure.value),
   async (shown) => {
-    if (!shown) return;
+    if (shown) {
+      focusBefore = document.activeElement;
+      await nextTick();
+      panel.value?.querySelector('button')?.focus();
+      return;
+    }
+    if (focusBefore === undefined) return;
+    const previous = focusBefore;
+    focusBefore = undefined;
     await nextTick();
-    panel.value?.querySelector('button')?.focus();
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    if (previous?.isConnected && previous !== document.body) {
+      previous.focus();
+      return;
+    }
+    const map = document.getElementById('cesiumContainer');
+    if (!map) return;
+    if (!map.hasAttribute('tabindex')) map.tabIndex = -1;
+    map.focus();
   },
   { immediate: true },
 );

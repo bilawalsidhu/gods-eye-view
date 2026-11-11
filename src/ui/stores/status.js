@@ -35,10 +35,9 @@ export const useStatusStore = defineStore('gev-status', () => {
   const fps = shallowRef(null);
 
   /**
-   * The globe's render failure, `{reason, detail, shown, retry, reset}`; null
-   * while the globe draws. `reason` is 'render-error' or 'context-lost',
-   * `shown` changes each time the notice appears, and `retry` and `reset` are
-   * null where that action is not offered.
+   * The globe's render failure, `{reason, detail, retry, reset}`; null while
+   * the globe draws. `reason` is 'render-error' or 'context-lost', and `retry`
+   * and `reset` are null where that action is not offered.
    */
   const renderFailure = shallowRef(null);
 
