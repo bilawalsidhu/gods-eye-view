@@ -1137,7 +1137,7 @@ Voice controls bind to a protocol-independent session factory. The default WebRT
 
 The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. With no Gemini key the token route answers `503` with code `API_KEY_MISSING`, and the voice control says `Add a Gemini API key in Provider Settings` without the microphone-permission hint. Voice status and error messages keep the message as given on the session's `state` event (`sourceDetail`, English catalog text when it is the app's own, with `sourceParams` for its placeholders), beside the worded `detail`, so the voice control words them again after a language change. Typed-chat errors and the chat panel are worded once. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
-Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 35 tools using separate description-only metadata; a session is offered 34 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
 Voice areas live in a store owned by the action runner for the page (`src/data/areaStore.js`); the model gets an `areaId`, a rounded bounding box and a summary, never geometry. `resolve_area` (`src/voice/areaActions.js`, `src/data/areaResolver.js`) checks the store, bundled Natural Earth regions, then bundled countries and states by name — a name several prominent units share returns up to four candidates unless the view is inside exactly one — and then the annotation outline ladder (`resolveAnnotationTarget`: bundled counties, Census places and neighborhoods, the guarded `/api/geocode/outline`, and Overpass only when configured). Administrative geometry is stored only when its source identity agrees with the requested unit, by name or by a form the bundled matcher reads as that unit at its level ("State of Texas", "Province of Bagmati", "USA", "UK"; not "Great Britain" or "Korea"); stale, mismatched, synthesized or otherwise unverified administrative boundaries are refused rather than relabelled. Clarification IDs use the bounded `ne:<kind>:<slug>` grammar and are accepted only from the current resolver's candidate memory. A lookup past 8 s answers `AREA_TIMEOUT` and keeps filling the caches. `around=true` asks the same ladder for the grounds enclosing a landmark (Nominatim, then the OpenFreeMap area holding it) and otherwise stores a 250 m buffer marked approximate. `analyst_query` scopes add `area`, `drawn` (newest draw-tool outline) and `annotation` (newest or named outline); region scopes use the same resolver within 3 s. Drawn outlines are a simplified copy (≤1,200 vertices); counting reads the stored geometry (`src/data/areaGeometry.js`). `find_imagery` (`src/voice/imageryActions.js`) sets the Recent Imagery box from an area, the view or the turn's pointer snapshot and pins the best acquisition; any hand change to the panel or explicit layer OFF while it searches ends the request (`DISPLACED`) without pinning or success narration. `osm_query` asks `/api/osm/features` for one curated preset in a bounded box; the route answers `OVERPASS_NOT_CONFIGURED` without an operator Overpass. Results go to the session-only `osm-places` layer and become the analyst's last answer; a list capped at its limit stays incomplete in follow-ups, which keep its "listed the first N" caveat and report counts as floors. An explicit OSM Places OFF while the provider is pending aborts the work and prevents re-enable, result, credit and follow-up-memory commits. The voice answer deadline also aborts the client provider request, so the caller does not leave a timed-out request without a cancellation owner. The server's whole search (22 s across every configured endpoint, with Overpass told 20 s) ends before that 25 s deadline, because a browser that stops waiting cancels the upstream query and leaves nothing cached for a retry.
 
@@ -4883,7 +4883,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 ### Interface localization (October 2026)
 
 Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, **he**,
-**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and
+**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **sv**, **uk**, **zh-CN** and
 **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
@@ -5320,6 +5320,111 @@ the viewer draws the same picture again itself (`onReopen`), leaving the
 core's lookups alone. The MCP globe panel allows the meta-catalogue and the
 three biggest instances; a picture on another instance shows only in the
 app.
+
+**"Show me X on Street View."** `show_street_level` (voice and typed;
+`src/voice/gevActions.js`) is one call whose stages fail separately
+(`location`, `view`, `map`, `provider`, `layer`, `key`, `imagery`):
+
+- **Key first.** A keyless source explains itself and changes nothing, as a
+  chip does.
+- **Place.** A name, coordinates, a pointed spot or a numbered item: it flies
+  there at street framing and waits for arrival. With no place it looks at the
+  ground under the screen centre, as OPEN does (`aim: 'screen-centre'`,
+  `armed: false`: sky refuses, and a link's armed point is not used and is kept
+  until a photo opens). Coordinates off the globe are refused.
+- **Map and source.** It switches to the map the source needs (Google Street
+  View: Google 3D), lights the source through `setLayerParams`, one at a time
+  and kept like a chip click (origin `voice`; a link runs the action with
+  origin `programmatic`, so it never writes the recipient's saved layer state),
+  turns the layer on and calls `openNearest`. `provider` is `google` for
+  "Street View", `mapillary`, `kartaview` or `panoramax` by name, else the lit
+  source.
+- **Hidden panel.** Cockpit, clean view, recording or scene playback end it at
+  `view`, before the flight and after every await; embed mode's own clean view
+  is exempt, since the photo is lifted over the globe.
+- **Superseded.** After every await (flight, map switch, layer on, lookup) a
+  newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
+  its own flight lands) or a press or wheel on the globe stops it
+  (`superseded: true`). The same checks run before a found photo loads
+  (`proceed`), so nothing billed loads for a request that was given up. A
+  lookup given up leaves the panel as it was when the request kept the photo's
+  source; one that had switched the source off closes that source's photo with
+  it. A photo that opened after either is closed again.
+- **Replacing a photo.** An open photo stays up while the new request looks
+  (`openNearest` `replace: true`; the viewer is replaced, not closed, so EXPAND
+  stays, also across sources through `holdViewer`, which holds only the action's
+  own switch-off of the photo's source: a source switched by hand meanwhile
+  still stops the load) and closes if nothing opens, so a place with no imagery
+  shows its own error; a link that only arms closes it at once. A replacement
+  from another source drops the old photo's details, and the request's error or
+  armed OPEN outlives the old viewer. A replacement stops a playing Mapillary
+  sequence.
+- **Outcome.** `noImagery` marks an empty result, `imageryError` a source or
+  viewer failure and `aim: 'sky'` a sky centre (from `street.nearestOutcome`);
+  an empty result names a narrowing 360°/flat or SINCE filter the source
+  honours, as `filter`. Every photo the action opens reveals the panel, also
+  one the user had collapsed.
+- **Search.** A source without a coverage layer searches up to 250 m
+  (`NEAREST_RADIUS_MAX_M`; Google honours it); clicks keep 50 m. Mapillary
+  asks for 100 photos within 50 m, its API's most (the API returns them
+  unordered and cuts at the limit), and gives up after 12 s, body included
+  (`NEAREST_TIMEOUT_MS`).
+- **Phone.** The panel sits in the Cameras tab sheet: a photo that opens, or a
+  link that arms, opens the sheet and scrolls the panel into view
+  (`revealPanel`, which does nothing above 720px).
+
+The layer also exposes `requiredMapStack(id)` and `providerStatus(id)` for
+callers that decide before the panel lists a source, and `holdViewer()`. A
+caller's abort is honoured through the viewer's mount and
+load, and only the lookup that still owns the panel changes its spinner or
+error.
+
+Views carry the request as `street_level` (`src/view/index.js`): a source and
+a point, which defaults to where the camera looks (below 20 km, at a pitch
+steeper than -5° and within 10 km ahead; else the camera's own point); half a
+point is not mixed with the camera's: both coordinates come from that default. A `google` source brings `map: photoreal` and refuses
+another map; `street_level` does not combine with `follow`.
+`show_in_gods_eye_view`, and the embedded app for a posted view with no
+point, measure the view's altitude from the terrain under the camera
+(`groundedLookAt` with the terrain heights service) before taking the look-at
+point, and keep the view's own estimate without a terrain answer (the embedded
+app waits 2 s for one). Links carry
+`sl=<source>,<lat>,<lon>`; the globe panel applies views through the action,
+and a plain link runs it once restored (one shot: the rewritten hash drops
+`sl`). A link that follows an entity ignores `sl`.
+
+- **Billing gate.** A plain link never loads a photo from a source that bills
+  every load (`billedPerImage`; Google): the action runs with
+  `autoOpen: false` and arms the layer (`armNearest`: the link's point and
+  radius, for the next OPEN press only, and only while the ground under the
+  screen centre is within 1 km of it (`ARMED_REACH_M`) or cannot be picked; a
+  sky centre refuses; any other lookup, open, close, disable, the source
+  switched off or its map leaving drops it), opens the panel and shows a toast
+  pointing at OPEN GOOGLE STREET VIEW. A link whose source has no working
+  key here changes nothing and says so in a toast (not in a frame).
+- **Who may open.** Posted views, and the panel page's own link (inline embed)
+  for a tool result issued in the last 5 minutes, open the photo:
+  `show_in_gods_eye_view` stamps a street-level result `issued_at`, every
+  `gev:view` the panel posts carries `fresh`, and the inline app applies a
+  view without it with `autoOpen: false` (a framing page's posted views still
+  open). `?embed=1` on a published link only arms, without the panel nudge or
+  toast.
+- **Who owns the camera.** A link's photo step is skipped when a newer link
+  superseded its restore, when its restore flight never landed
+  (`share.camera !== 'applied'`: the visitor dragged or searched), or after
+  any navigation since the generation that flight owned (`navigationToken` on
+  the settled result), also while its layers still load. A link pasted into
+  the open tab runs its step after its restore settles
+  (`gev:share-navigation-restore-settled`).
+- **Embed.** The rail is hidden, so an open photo moves to an overlay on the
+  globe (`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in
+  full screen, Esc leaves full screen first). EXPAND stays under embed mode's
+  clean view; cockpit, recording and scene playback hide the overlay. Loading
+  errors render inside the overlay, and inside the viewer while EXPAND is on.
+  A posted view whose photo step fails before the imagery stage closes the
+  earlier photo before its camera flies; one the user overtook (a click on the
+  map, a newer request) leaves their photo and camera alone; one that found a
+  photo it could not load keeps that error.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
@@ -6376,7 +6481,7 @@ and unreachable upstream (502/504) separately from road geometry.
 
 - **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token. With no OpenAI key the token route answers `503` with code `API_KEY_MISSING`, and the voice control shows `Needs OPENAI_API_KEY — add it in Provider Settings` in the interface language, reworded on a language change, without the microphone-permission hint.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
-- **Thirty tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
+- **Thirty-five tools** (thirty-four in a session without `OVERPASS_UPSTREAMS`, which adds `osm_query`; argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `show_street_level`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_voice_inactivity_timeout`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `resolve_area`, `find_imagery`, `osm_query`, `next_iss_pass`, and `next_satellite_pass`.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
