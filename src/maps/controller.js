@@ -302,7 +302,23 @@ export class MapSourceController {
     if (this._engine.tilesetReady) {
       this._showTileset(tileset);
       const ready = this._engine.tilesetReady(tileset);
-      if (ready) await ready;
+      if (ready)
+        try {
+          await ready;
+        } catch (error) {
+          // The stack before it stays: its tile failures still fall back,
+          // heard for this switch.
+          if (
+            gen === this._switchGen &&
+            this._imageryLayer &&
+            this._activeResolution
+          ) {
+            this._removeImageryErrorListener?.();
+            this._removeImageryErrorListener = null;
+            this._watchProvider(this._activeResolution, gen);
+          }
+          throw error;
+        }
       if (gen !== this._switchGen) return;
     }
     this._removeImageryLayer();

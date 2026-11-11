@@ -14,6 +14,7 @@ import {
   bindFakeCesiumCamera,
   followEntity,
 } from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { createDependencies } from '../layers/awareness/dependencies.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
@@ -509,8 +510,10 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   await settle();
   assert.equal(cockpit.enter(), true);
   // NEXT hands the view to a military aircraft; Contacts turned its layer on.
-  // The follow's change adopts it as the ridden aircraft.
+  // The follow's change adopts it as the ridden aircraft: the Cockpit
+  // takes the camera from the follow.
   retrack({ layerId: 'military', info: MILITARY });
+  assert.equal(followedOf(cockpit.viewer), null, 'adopted');
   assert.equal(cockpit.readSubjectLayerId(), 'military');
   await manager.setEnabled('ais-live-vessels', false, { origin: 'user' });
   await settle();

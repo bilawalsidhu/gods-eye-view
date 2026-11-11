@@ -173,6 +173,23 @@ test('a photoreal stack that fails to come back leaves the stack before it in pl
     googleTileset: loaded.tileset,
     onError: (message) => errors.push(message),
   });
+  // The tile-failure listeners of the layers it adds, to fail their tiles.
+  const tileErrors = new Set();
+  const add = renderer.globe.imagery.add;
+  renderer.globe.imagery.add = (...args) => {
+    const layer = add(...args);
+    const on = layer.on;
+    layer.on = (event, listener) => {
+      const off = on(event, listener);
+      if (event !== 'tileError') return off;
+      tileErrors.add(listener);
+      return () => {
+        tileErrors.delete(listener);
+        off();
+      };
+    };
+    return layer;
+  };
   await controller.setStack('esri-imagery', { silent: true });
   assert.equal(renderer.globe.imagery.list().length, 1);
   renderer.globe.setPhotoreal = async (spec) => ({
@@ -190,5 +207,10 @@ test('a photoreal stack that fails to come back leaves the stack before it in pl
   assert.equal(renderer.globe.imagery.list().length, 1, 'its imagery stays');
   assert.equal(engine.globeShown(host), true, 'on the shown globe');
   assert.match(errors.at(-1), /refused/);
+  // Its tile failures still fall back, heard for the switch that kept it.
+  for (const listener of [...tileErrors]) listener({});
+  for (const listener of [...tileErrors]) listener({});
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.equal(controller.getState().activeId, 'osm');
   controller.destroy();
 });
