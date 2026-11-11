@@ -976,6 +976,15 @@ export function createCesiumDraw({
       ),
     };
     if (item.rotationMode === 'screen') look.rotation = item.rotation ?? 0;
+    // Its up turned along the axis on screen, as Cesium's own aligned
+    // billboards stand; an axis of zero length stands upright.
+    if (item.rotationMode === 'axis' && item.alignedAxis) {
+      const { x = 0, y = 0, z = 0 } = item.alignedAxis;
+      const axis = new Cesium.Cartesian3(x, y, z);
+      const length = Cesium.Cartesian3.magnitude(axis);
+      if (length > 0)
+        look.alignedAxis = Cesium.Cartesian3.divideByScalar(axis, length, axis);
+    }
     if (item.rotationMode === 'course') {
       const enu = Cesium.Transforms.eastNorthUpToFixedFrame(position);
       look.alignedAxis = Cesium.Matrix4.multiplyByPointAsVector(
@@ -1015,6 +1024,9 @@ export function createCesiumDraw({
       fadeByDistance: curve(item.fadeByDistance),
       rotationMode: item.rotationMode,
       rotation: item.rotation,
+      alignedAxis: item.alignedAxis
+        ? [item.alignedAxis.x, item.alignedAxis.y, item.alignedAxis.z]
+        : undefined,
       course: item.course,
       pixelOffset: item.pixelOffset
         ? [item.pixelOffset.x ?? 0, item.pixelOffset.y ?? 0]
@@ -1065,6 +1077,11 @@ export function createCesiumDraw({
       sameCurve(style.fadeByDistance, item.fadeByDistance) &&
       style.rotationMode === item.rotationMode &&
       (item.rotationMode === 'screen' || style.rotation === item.rotation) &&
+      (item.alignedAxis
+        ? style.alignedAxis?.[0] === item.alignedAxis.x &&
+          style.alignedAxis[1] === item.alignedAxis.y &&
+          style.alignedAxis[2] === item.alignedAxis.z
+        : style.alignedAxis === undefined) &&
       style.course === item.course &&
       (item.pixelOffset
         ? style.pixelOffset?.[0] === (item.pixelOffset.x ?? 0) &&

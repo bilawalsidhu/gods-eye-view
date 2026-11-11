@@ -3352,6 +3352,35 @@ test('an icon stands off its position by its pixel offset, and back when it has 
   set.dispose();
 });
 
+test('an icon turned about an axis stands along it, restyled in place when the axis changes', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.icons({ id: 'axis-pins' });
+  const icon = (alignedAxis) => ({
+    id: 'a',
+    pos: { lon: 0, lat: 0 },
+    image: 'pin.png',
+    size: [8, 8],
+    rotationMode: 'axis',
+    alignedAxis,
+  });
+  set.set([icon({ x: 0, y: 0, z: 2 })]);
+  const pin = () => scene.added[0].get(0);
+  const axis = () => [
+    pin().alignedAxis.x,
+    pin().alignedAxis.y,
+    pin().alignedAxis.z,
+  ];
+  assert.deepEqual(axis(), [0, 0, 1], 'normalised');
+  assert.equal(pin().rotation, 0);
+  const drawn = pin();
+  set.upsert([icon({ x: 0, y: 1, z: 0 })]);
+  assert.equal(pin(), drawn, 'the same billboard');
+  assert.deepEqual(axis(), [0, 1, 0]);
+  set.upsert([{ ...icon(undefined), rotationMode: 'screen' }]);
+  assert.deepEqual(axis(), [0, 0, 0], 'upright again');
+  set.dispose();
+});
+
 test('a wall stands up from the ellipsoid to its positions, with or without a fill', () => {
   const { scene, draw } = drawOver();
   const set = draw.shapes({ id: 'walls' });
