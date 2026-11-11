@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { WHITE, rgbaFromCss } from '../shared/color.js';
 
 /**
  * @file Street Traffic selects TomTom, OpenMapTiles or Hybrid motor roads,
@@ -108,14 +108,17 @@ export const SIZE_BY_TYPE = {
  * Live-flow bucket colors (thresholds live in `trafficFlowStyle.js`):
  * green free flow / amber slow / red jam, all at 0.9 alpha.
  * Roads without flow data (`road.flow == null`) keep the sim's white.
- * @const {Object<string, Cesium.Color>}
+ * @const {Object<string, import('../shared/color.js').Rgba>}
  */
 
 export const FLOW_BUCKET_COLORS = {
-  free: Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9),
-  slow: Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.9),
-  jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
+  free: rgbaFromCss('#2ecc71').withAlpha(0.9),
+  slow: rgbaFromCss('#f0b23e').withAlpha(0.9),
+  jam: rgbaFromCss('#e05252').withAlpha(0.9),
 };
+
+/** Simulated vehicles (and roads without flow data): white at 0.85. */
+export const SIM_DOT_COLOR = WHITE.withAlpha(0.85);
 
 // ─── Flow road lines (`lines` row toggle, live mode only) ────────────────
 /**
@@ -155,14 +158,21 @@ export const HEAT_JAM_BASE_ALPHA = 0.55;
 
 export const HEAT_JAM_PULSE_ALPHA = 0.2;
 
-/** @const {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
+/** @const {number} Ms — jam heat-line pulse period: sin(now / 260 ms), 2π × 260. */
 
-export const HEAT_JAM_COLOR = Cesium.Color.fromCssColorString('#e05252');
+export const HEAT_JAM_PULSE_PERIOD_MS = 2 * Math.PI * 260;
 
-/** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
+/** @const {number} Jam heat-line glow falloff (Cesium PolylineGlow glowPower). */
 
-export const HEAT_SLOW_COLOR =
-  Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.2);
+export const HEAT_JAM_GLOW_POWER = 0.25;
+
+/** @const {import('../shared/color.js').Rgba} Jam corridor color (bucket red, alpha pulsed live). */
+
+export const HEAT_JAM_COLOR = rgbaFromCss('#e05252');
+
+/** @const {import('../shared/color.js').Rgba} Slow corridor color (bucket amber, faint + static). */
+
+export const HEAT_SLOW_COLOR = rgbaFromCss('#f0b23e').withAlpha(0.2);
 
 /** @const {number} Far-distance scale floor for jam dots (shipped: 0.3). */
 

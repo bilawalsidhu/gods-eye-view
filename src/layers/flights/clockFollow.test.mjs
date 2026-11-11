@@ -183,7 +183,7 @@ test('a jump forgets how contacts moved; clearing drops every contact', () => {
     _drReconcileValid: true,
     _cachedDRFrame: 7,
     _billboards: new Map([['abc123', { id: 'abc123' }]]),
-    _billboardCollection: { remove: () => calls.push('remove') },
+    _renderer: { fleet: { remove: () => calls.push('remove') } },
     _cullPositions: new Map([['abc123', null]]),
     _detectionObjects: new Map([['abc123', {}]]),
     _trackedIcao: 'abc123',

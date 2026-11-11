@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { ISS_NORAD } from './policy.js';
 
@@ -67,11 +67,11 @@ export function createRecords({ state, parts }) {
     }
     const point = state._points.get(noradId);
     if (!point?.position) return null;
-    const carto = Cesium.Cartographic.fromCartesian(point.position);
+    const carto = geo.cartographic.fromCartesian(point.position);
     if (!carto) return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
       altitudeM: carto.height,
       speedMps: null,
     };

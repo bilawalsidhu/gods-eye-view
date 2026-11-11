@@ -1,22 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createFakeGroundHarness } from '../../testSupport/groundDisplayEngines.mjs';
 import { createAirQualityLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { STALE_AFTER_MS } from './model.js';
 
 function harness(source) {
-  const sources = [];
   const events = [];
-  const viewer = {
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
-    },
-  };
+  const ground = createFakeGroundHarness();
+  const { engine } = ground;
   const layer = createAirQualityLayer({
     source,
     overlayHost: {
@@ -27,9 +19,9 @@ function harness(source) {
       clearSource() {},
     },
   });
-  layer.init(viewer);
-  layer.enable(viewer);
-  return { layer, viewer, sources, events };
+  layer.init(null, { engine });
+  layer.enable();
+  return { layer, engine, ground, events };
 }
 
 const reading = (id, value, overrides = {}) => ({
@@ -61,12 +53,12 @@ test('a layer requires both a snapshot source and an overlay host', () => {
   );
 });
 
-test('initialization is single-use and owns exactly one data source', () => {
-  const { layer, viewer, sources } = harness(staticSource([]));
-  assert.equal(sources.length, 1);
-  assert.throws(() => layer.init(viewer), /already initialized/);
-  layer.destroy(viewer);
-  assert.equal(sources.length, 0);
+test('initialization is single-use and owns exactly one ground set', () => {
+  const { layer, engine, ground } = harness(staticSource([]));
+  assert.equal(ground.sets(), 1);
+  assert.throws(() => layer.init(null, { engine }), /already initialized/);
+  layer.destroy();
+  assert.equal(ground.sets(), 0);
 });
 
 test('a refresh renders readings and publishes an overlay cohort', async () => {
@@ -188,14 +180,14 @@ test('the readout reports an error rather than a silent empty card', async () =>
 });
 
 test('row-control listeners are notified on refresh and teardown-safe', async () => {
-  const { layer, viewer } = harness(staticSource([reading('A', 2)]));
+  const { layer } = harness(staticSource([reading('A', 2)]));
   let calls = 0;
   layer.setRowControlsListener(() => {
     calls += 1;
   });
   await layer.update();
   assert.ok(calls >= 1, 'a refresh notifies the card');
-  layer.destroy(viewer);
+  layer.destroy();
   const after = calls;
   layer.setRowControlsListener(() => {
     calls += 1;
@@ -272,4 +264,27 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
     'degraded',
     'showing old data after a failure is degraded',
   );
+});
+
+test('station data stays queryable and attaches to a fresh scene without polling', async () => {
+  let polls = 0;
+  const h = harness({
+    getSnapshot: async () => {
+      polls++;
+      return [reading('Toronto', 7)];
+    },
+  });
+  try {
+    h.layer.detachRenderer();
+    assert.equal(h.ground.sets(), 0);
+    assert.equal(await h.layer.update(), true);
+    assert.equal(h.events.length, 0);
+    assert.equal(h.layer.getAnalystRecords()[0].value, 7);
+    h.layer.attachRenderer({ engine: h.engine });
+    assert.equal(h.events.at(-1)[0], 'air-quality');
+    assert.equal(h.ground.set('air-quality').items.length, 1);
+    assert.equal(polls, 1);
+  } finally {
+    h.layer.destroy();
+  }
 });

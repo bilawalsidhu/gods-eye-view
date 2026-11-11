@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createFlightState } from './state.js';
 import { createRendering } from './rendering.js';
+import { fleetTickFixture } from '../../testSupport/fleetTickFixture.mjs';
 import {
   FLEET_DR_INTERVAL_MS,
   HIDDEN_CONTACT_DR_INTERVAL_MS,
@@ -44,84 +45,14 @@ test('a worldwide fleet is spread evenly enough that no tick carries a burst', (
   for (const count of perSlot) assert.ok(count < fair * 1.5, `${count} > 1.5×`);
 });
 
-/** Real fleet tick and horizon culling, with motion and presentation injected. */
-function fleetFixture() {
-  let now = 1000;
-  let reckonings = 0;
-  const services = {
-    groundSnap: { createGroundSnap: () => ({ clear() {} }) },
-    militaryRegistry: { isMilitaryIcao: () => false },
-    aircraftPresentation: { isTr3b: () => false },
-    camera: {},
-    focus: {
-      focusNowMs: () => now,
-      getFocusTarget: () => null,
-      nearFarScalarValueAtDistance: () => 1,
-      advanceProjectedSpriteFocus: () => ({ factor: 1 }),
-    },
-    recession: {
-      applyAircraftBillboardTreatment: () => ({
-        factors: { scale: 1 },
-        alpha: 1,
-      }),
-    },
-  };
-  const flightState = createFlightState({ services });
-  const camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 100),
-    positionCartographic: { height: 100 },
-    heading: 0,
-    pitch: 0,
-    roll: 0,
-    frustum: {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
-    },
-  };
-  const id = 'abc123';
-  // 111 km away at ground level is beyond a 100 m camera's horizon, but
-  // inside the model keep radius. No WebGL scene is needed for the culler.
-  const billboard = {
-    show: false,
-    position: Cesium.Cartesian3.fromDegrees(1, 0, 0),
-  };
-  flightState._viewer = { camera, scene: {} };
-  flightState._billboardCollection = { show: true };
-  flightState._billboards.set(id, billboard);
-  flightState.records.data.set(id, {});
-  flightState._models3dEnabled = false;
-  // Far cockpit contacts avoid glyph rasterization, keeping the fixture DOM-free.
-  flightState._cockpitContactMode = true;
-  const parts = {
-    tracking: { _refreshCockpitNearContacts() {} },
-    motion: {
-      _deadReckon() {
-        reckonings++;
-        return billboard.position;
-      },
-      _floorGroundedDisplayPosition(id, info, position) {
-        return position;
-      },
-    },
-  };
-  const rendering = createRendering({ flightState, services, parts });
-  return {
-    flightState,
-    camera,
-    billboard,
-    id,
-    reckonings: () => reckonings,
-    tick() {
-      now += FLEET_DR_INTERVAL_MS;
-      rendering._fleetTick();
-    },
-    offTurn() {
-      flightState._fleetTickSeq =
-        (hiddenContactDrPhase(id) + 1) % HIDDEN_CONTACT_DR_TICKS;
-    },
-  };
-}
+// The real fleet tick and horizon culling, with motion and presentation injected.
+const fleetFixture = () =>
+  fleetTickFixture({ createFlightState, createRendering });
+// The next tick is not this contact's turn in the hidden rotation.
+const offTurn = (f) => {
+  f.flightState._fleetTickSeq =
+    (hiddenContactDrPhase(f.id) + 1) % HIDDEN_CONTACT_DR_TICKS;
+};
 
 test('the fleet tick dead-reckons a hidden contact once per complete rotation', () => {
   const f = fleetFixture();
@@ -132,11 +63,11 @@ test('the fleet tick dead-reckons a hidden contact once per complete rotation', 
 
 test('a camera reveal bypasses the hidden rotation on the same fleet tick', () => {
   const f = fleetFixture();
-  f.offTurn();
+  offTurn(f);
   f.tick();
   assert.equal(f.reckonings(), 0);
   f.camera.positionWC = Cesium.Cartesian3.fromDegrees(1, 0, 100);
-  f.offTurn();
+  offTurn(f);
   f.tick();
   assert.equal(f.reckonings(), 1);
   assert.equal(f.billboard.show, true);
@@ -147,7 +78,7 @@ test('a hidden contact with a retained fleet model is never rotation-skipped', (
   f.flightState._models3dEnabled = true;
   const model = { ready: true, show: true };
   f.flightState._models.set(f.id, model);
-  f.offTurn();
+  offTurn(f);
   f.tick();
   assert.equal(f.reckonings(), 1);
   assert.equal(

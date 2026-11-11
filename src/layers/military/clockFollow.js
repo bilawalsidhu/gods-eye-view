@@ -26,7 +26,7 @@ export function createClockFollow({ flightState, parts }) {
       parts.tracking._clearTracking(false, { evicted: true });
     resetMotion();
     for (const [icao24, billboard] of flightState._billboards) {
-      flightState._billboardCollection?.remove(billboard);
+      flightState._renderer?.fleet.remove(billboard);
       parts.rendering._releaseModel(icao24);
     }
     flightState._billboards.clear();

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 import { createMotion } from './motion.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
@@ -14,9 +16,9 @@ function motionFixture({ info, fixes, nowMs, ground = () => null }) {
     records: { data: new Map([['00a003', info]]) },
     _positionHistory: new Map([['00a003', fixes]]),
     _scratchArc: {},
-    _scratchOffset: new Cesium.Cartesian3(),
-    _scratchEnu: new Cesium.Matrix4(),
-    _scratchRenderTime: new Cesium.JulianDate(),
+    _scratchOffset: geo.cartesian3.create(),
+    _scratchEnu: geo.matrix4.create(),
+
     now: () => nowMs,
   };
   const motion = createMotion({
@@ -33,9 +35,9 @@ function motionFixture({ info, fixes, nowMs, ground = () => null }) {
 
 function fix(timeMs, lat, lon, heightM, velocity, track) {
   return {
-    time: Cesium.JulianDate.fromDate(new Date(timeMs)),
+    timeMs,
     epochMs: timeMs,
-    position: Cesium.Cartesian3.fromDegrees(lon, lat, heightM),
+    position: geo.cartesian3.fromDegrees(lon, lat, heightM),
     velocity,
     track,
   };
@@ -64,8 +66,8 @@ test('a military contact stale after a low approach holds at its last report', (
       nowMs: t0 + 10 * SEC + RENDER_DELAY_SEC * SEC + afterSec * SEC,
       ground: () => ground,
     });
-    const drawn = motion._deadReckon('00a003', new Cesium.Cartesian3());
-    assert.ok(Cesium.Cartesian3.distance(drawn, fixes[1].position) < 0.01);
+    const drawn = motion._deadReckon('00a003', geo.cartesian3.create());
+    assert.ok(geo.cartesian3.distance(drawn, fixes[1].position) < 0.01);
   }
 });
 
@@ -90,8 +92,8 @@ test('a cruising military contact still heard after its last position coasts pas
       info,
       fixes,
       nowMs: t0 + 10 * SEC + RENDER_DELAY_SEC * SEC + afterSec * SEC,
-    })._deadReckon('00a003', new Cesium.Cartesian3());
-  const d = (p) => Cesium.Cartesian3.distance(p, fixes[1].position);
+    })._deadReckon('00a003', geo.cartesian3.create());
+  const d = (p) => geo.cartesian3.distance(p, fixes[1].position);
   const near = (got, want) => Math.abs(got - want) < want * 0.005 + 50;
   assert.ok(near(d(at(45)), 220 * 45));
   assert.ok(near(d(at(250)), 220 * 250), 'still moving at 250 s');
@@ -117,9 +119,9 @@ test('a bad military speed coasts no faster than the 1,500 kt continuity limit',
     info,
     fixes,
     nowMs: t0 + 10 * SEC + RENDER_DELAY_SEC * SEC + 300 * SEC,
-  })._deadReckon('00a003', new Cesium.Cartesian3());
+  })._deadReckon('00a003', geo.cartesian3.create());
   const limitMps = (TRAIL_CONTINUITY_MAX_SPEED_KT * 1852) / 3600;
-  const d = Cesium.Cartesian3.distance(drawn, fixes[1].position);
+  const d = geo.cartesian3.distance(drawn, fixes[1].position);
   assert.ok(Math.abs(d - limitMps * 300) < 1_500, `${d.toFixed(0)} m`);
 });
 
@@ -131,6 +133,7 @@ test('a holding military contact draws no head and its trail ends at the last re
   const svc = {
     ...Object.fromEntries(
       [
+        'selection',
         'picking',
         'sprites',
         'aircraftPresentation',
@@ -165,17 +168,19 @@ test('a holding military contact draws no head and its trail ends at the last re
   };
   const flightState = createFlightState({ services: svc, source: {} });
   const added = [];
-  flightState._viewer = {
-    isDestroyed: () => false,
-    entities: {
-      add: (definition) => (added.push(definition), definition),
-      remove() {},
+  flightState._renderer = recordingAircraftRenderer(createFakeEngine());
+  flightState._renderer.trails = {
+    create: svc.trails.createTrail,
+    createHead(definition) {
+      added.push(definition);
+      return definition;
     },
+    removeHead() {},
   };
   flightState._trackedIcao = '00a003';
   flightState.now = () => t0 + 20 * SEC + RENDER_DELAY_SEC * SEC + 120 * SEC;
   flightState._positionHistory.set('00a003', fixes);
-  const last = Cesium.Cartesian3.clone(fixes[2].position);
+  const last = geo.cartesian3.clone(fixes[2].position);
   const tracking = createTracking({
     flightState,
     services: svc,
@@ -195,5 +200,5 @@ test('a holding military contact draws no head and its trail ends at the last re
   const head = added.find((d) =>
     String(d.id).startsWith('gev-trail:mil-head-'),
   );
-  assert.deepEqual(head.polyline.positions.getValue(), []);
+  assert.deepEqual(head.positions(), []);
 });

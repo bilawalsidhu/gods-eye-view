@@ -1,11 +1,9 @@
 /** Session-local file controls, serial loading and application-owned navigation. */
-import {
-  GeoImportError,
-  MAX_IMPORTED_FILES,
-  loadGeoFile,
-} from '../data/geoFileImport.js';
+import { GeoImportError, loadGeoFile } from '../data/geoFileImport.js';
+import { MAX_IMPORTED_FILES } from '../data/geoImportLimits.js';
+import { drawImportedFile } from '../data/geoImportDisplay.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
-import { flyToDataSource } from './flyToDataSource.js';
+import { flyToFootprint } from './flyToDataSource.js';
 
 // One color per file, in import order, from the whiteboard palette.
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];
@@ -21,34 +19,45 @@ function localizedValues(values) {
 }
 
 /**
- * Run the Import control.
- * @param {{viewer: object, load?: Function, document?: Document,
+ * The Import control for the page session.
+ * @param {{load?: Function, drawFile?: Function, document?: Document,
  *   publish?: Function, connect?: Function}} deps
- *   `load(file, {viewer, color})` defaults to `loadGeoFile`; tests pass a double.
- *   `publish({rows, hint})` hands the file list and hint to the view that
- *   renders them. `connect(actions)` answers the view's pick and row buttons
- *   and returns their disconnect.
+ *   `load(file, {color, signal})` defaults to `loadGeoFile` (the file's
+ *   plain records) and `drawFile(engine, records, {visible, signal,
+ *   isCurrent})` to
+ *   `drawImportedFile` (their drawing: { report, setShow, refreshGround,
+ *   footprint, destroy }); tests pass doubles. `publish({rows, hint})` hands the file
+ *   list and hint to the view that renders them. `connect(actions)` answers
+ *   the view's pick and row buttons and returns their disconnect.
+ *
+ * The imported files belong to the session; their drawing belongs to the
+ * attached globe. `attachScene({ engine })` draws them on a globe engine,
+ * the same on every engine, and flies its camera to them. A file kept while
+ * no globe was attached is read again from its bytes; the control listens
+ * for drops and camera gestures on the attached globe. `detachScene()` takes
+ * the files off the globe and keeps the list. Without a globe the list
+ * stays, and import and fly-to wait for one.
  * @returns {{destroy: Function, importFiles: Function, list: Function,
  *   setVisible: Function, flyTo: Function, remove: Function,
- *   diagnostics: Function}|null}
+ *   diagnostics: Function, attachScene: Function, detachScene: Function}|null}
  */
-export function initGeoFileImport({
-  viewer,
+export function createGeoFileImport({
   load = loadGeoFile,
+  drawFile = drawImportedFile,
   document: doc = globalThis.document,
-  flyToSource = flyToDataSource,
+  flyToSource = flyToFootprint,
   navigation = null,
   ground = null,
   subscribeMapSource = null,
   publish = () => {},
   connect = () => () => {},
-}) {
+} = {}) {
   // A page without the Import control (the Utilities panel omitted, in
   // LayerPanelsView) has no file import.
-  if (!viewer || !doc?.getElementById('geo-import-button')) return null;
+  if (!doc?.getElementById('geo-import-button')) return null;
 
   const imports = [];
-  const listeners = [];
+  let listeners = [];
   let queue = Promise.resolve();
   let seq = 0;
   let colorAt = 0;
@@ -57,7 +66,9 @@ export function initGeoFileImport({
   let cameraIntent = 0;
   let hint = '';
   const lifetime = new AbortController();
-  let removeMapSource;
+  // The attached globe ({ engine, controller }); null while none is
+  // attached.
+  let scene = null;
 
   const listen = (target, type, listener, options) => {
     if (!target?.addEventListener) return;
@@ -68,13 +79,15 @@ export function initGeoFileImport({
     hint = text || '';
     present();
   };
-  const render = () => viewer.scene?.requestRender?.();
+  const render = () => scene?.engine?.render.request('geo-import');
   let groundTimer,
     groundQueued = false,
-    groundAgain = false;
-  const groundRemovers = [];
-  const scheduleGround = () => {
-    if (destroyed || !imports.length) return;
+    groundAgain = false,
+    // Refreshes left while the map's tiles are still loading.
+    groundWaits = 0;
+  let groundRemovers = [];
+  const scheduleGround = (delay = 200) => {
+    if (destroyed || !scene || !imports.length) return;
     if (groundQueued) {
       groundAgain = true;
       return;
@@ -82,17 +95,26 @@ export function initGeoFileImport({
     clearTimeout(groundTimer);
     groundTimer = setTimeout(() => {
       groundQueued = true;
+      const attached = scene;
+      let retry = false;
       queue = queue
         .catch(() => {})
         .then(async () => {
           try {
             for (const item of imports) {
-              if (destroyed) return;
-              if (item.visible) await item.refreshGround?.(lifetime.signal);
+              if (destroyed || scene !== attached) return;
+              if (item.visible)
+                await item.drawing?.refreshGround(attached.controller.signal);
             }
             render();
+            // The ground is read from the tiles drawn now: read it again
+            // once they have loaded.
+            retry =
+              attached.engine.surface.tilesLoaded?.() === false &&
+              groundWaits > 0;
+            groundWaits = retry ? groundWaits - 1 : 0;
           } catch {
-            if (!destroyed)
+            if (!destroyed && scene === attached)
               setHint(
                 t(
                   'Ground heights could not be refreshed. Try the file again when the map has loaded.',
@@ -103,20 +125,15 @@ export function initGeoFileImport({
             if (groundAgain) {
               groundAgain = false;
               scheduleGround();
-            }
+            } else if (retry) scheduleGround(1000);
           }
         });
-    }, 200);
+    }, delay);
   };
-  removeMapSource = subscribeMapSource?.(scheduleGround);
   const ownEvent = (event, listener) => {
     const remove = event?.addEventListener?.(listener);
     if (remove) groundRemovers.push(remove);
   };
-  ownEvent(viewer.camera?.moveEnd, scheduleGround);
-  ownEvent(viewer.scene?.globe?.tileLoadProgressEvent, (pending) => {
-    if (!pending) scheduleGround();
-  });
 
   /** Publish the file list and hint; the view renders them. */
   function present() {
@@ -124,8 +141,6 @@ export function initGeoFileImport({
       rows: imports.map((item) => ({
         id: item.id,
         name: item.name,
-        // KML and KMZ draw with their own styles; their swatch says so
-        // instead of claiming a color the globe does not show.
         ownStyles: item.ownStyles,
         color: item.color,
         title: `${item.name} — ${item.format.toUpperCase()}, ${tn(
@@ -166,18 +181,17 @@ export function initGeoFileImport({
     const item = find(id);
     if (!item) return false;
     item.visible = Boolean(visible);
-    item.dataSource.show = item.visible;
+    item.drawing?.setShow(item.visible);
     if (item.visible) scheduleGround();
     present();
     render();
     return true;
   }
 
-  // Not viewer.flyTo: it frames ground-clamped points underground until the
-  // destination's terrain has loaded (see ./flyToDataSource.js).
   const fly = (item) => {
+    if (!scene?.engine || !item.drawing) return false;
     if (!item.visible) setVisible(item.id, true);
-    flyToSource(viewer, item.dataSource, { ground });
+    flyToSource(scene.engine, item.drawing.footprint(), { ground });
     return true;
   };
 
@@ -187,7 +201,7 @@ export function initGeoFileImport({
    */
   function flyTo(id) {
     const item = find(id);
-    if (!item) return false;
+    if (!item || !scene || !item.drawing) return false;
     if (typeof navigation?.runImmediateNavigation === 'function')
       return (
         navigation.runImmediateNavigation('file', () => fly(item)) !== false
@@ -209,15 +223,48 @@ export function initGeoFileImport({
       : true;
   };
 
+  /** Take one file's drawing off the globe; the file stays in the list. */
+  function undraw(item) {
+    item.drawing?.destroy();
+    item.drawing = null;
+    item.revoke?.();
+    item.records = null;
+    item.revoke = null;
+  }
+
   /** Remove one imported file from the globe and the list. */
   function remove(id) {
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
     const [item] = imports.splice(at, 1);
-    viewer.dataSources?.remove?.(item.dataSource, true);
-    item.revoke?.();
+    undraw(item);
     present();
     render();
+    return true;
+  }
+
+  /** Draw a file read for the attached globe. False once that globe went. */
+  async function draw(item, attached, loaded) {
+    item.records = loaded.records;
+    item.revoke = loaded.revoke;
+    try {
+      item.drawing = await drawFile(attached.engine, loaded.records, {
+        visible: item.visible,
+        signal: attached.controller.signal,
+        isCurrent: () => !destroyed && scene === attached,
+      });
+    } catch (error) {
+      undraw(item);
+      // A draw cut short by a scene change is not a file error.
+      if (destroyed || scene !== attached) return false;
+      throw error;
+    }
+    if (destroyed || scene !== attached) {
+      undraw(item);
+      return false;
+    }
+    // What no engine draws of the file (walls, extruded polygons...).
+    item.undrawn = item.drawing?.report?.undrawn ?? 0;
     return true;
   }
 
@@ -230,20 +277,33 @@ export function initGeoFileImport({
   function importFiles(files) {
     const list = [...(files || [])];
     if (destroyed || !list.length) return Promise.resolve([]);
-    // Capture the user's intent when the files are chosen, including time
-    // spent waiting for an earlier batch. Later navigation must still win.
+    if (!scene) {
+      // Import draws on the attached globe; there is none.
+      const error = t('Action unavailable or cancelled');
+      setHint(error);
+      return Promise.resolve(
+        list.map((file) => ({
+          name: String(file?.name || 'file'),
+          ok: false,
+          error,
+        })),
+      );
+    }
     const generation = beginAutoFly();
     const intent = ++cameraIntent;
-    const run = queue.then(() => importBatch(list, generation, intent));
+    const attached = scene;
+    const run = queue.then(() =>
+      importBatch(list, generation, intent, attached),
+    );
     queue = run.catch(() => {});
     return run;
   }
 
-  async function importBatch(list, generation, intent) {
+  async function importBatch(list, generation, intent, attached) {
     const outcomes = [];
     if (destroyed || !list.length) return outcomes;
     for (const file of list) {
-      if (destroyed) break;
+      if (destroyed || scene !== attached) break;
       const fileName = String(file?.name || 'file');
       if (imports.length >= MAX_IMPORTED_FILES) {
         outcomes.push({
@@ -259,7 +319,10 @@ export function initGeoFileImport({
       const color = COLORS[colorAt % COLORS.length];
       let loaded;
       try {
-        loaded = await load(file, { viewer, color, signal: lifetime.signal });
+        loaded = await load(file, {
+          color,
+          signal: attached.controller.signal,
+        });
       } catch (error) {
         outcomes.push({
           name: fileName,
@@ -274,7 +337,7 @@ export function initGeoFileImport({
         });
         continue;
       }
-      if (destroyed) {
+      if (destroyed || scene !== attached) {
         loaded.revoke?.();
         break;
       }
@@ -289,17 +352,23 @@ export function initGeoFileImport({
         removed: loaded.removed || 0,
         color,
         visible: true,
-        dataSource: loaded.dataSource,
-        revoke: loaded.revoke,
-        refreshGround: loaded.refreshGround,
+        // The bytes, so a later globe can read the file again.
+        file,
+        records: null,
+        drawing: null,
+        undrawn: 0,
+        revoke: null,
       };
-      await viewer.dataSources.add(item.dataSource);
-      if (destroyed) {
-        viewer.dataSources.remove?.(item.dataSource, true);
-        item.revoke?.();
-        break;
+      try {
+        if (!(await draw(item, attached, loaded))) break;
+      } catch {
+        outcomes.push({
+          name: fileName,
+          ok: false,
+          error: t('That file could not be read.'),
+        });
+        continue;
       }
-      loaded.mount?.();
       imports.push(item);
       present();
       render();
@@ -308,9 +377,8 @@ export function initGeoFileImport({
         ok: true,
         id: item.id,
         removed: item.removed,
+        undrawn: item.undrawn,
       });
-      // Fly to the first file of a batch that lands, so a drop shows its
-      // result, unless something else took the camera meanwhile.
       if (
         outcomes.filter((o) => o.ok).length === 1 &&
         intent === cameraIntent &&
@@ -318,12 +386,40 @@ export function initGeoFileImport({
       )
         fly(item);
     }
-    if (!destroyed) setHint(summarize(outcomes));
+    if (!destroyed && scene === attached) setHint(summarize(outcomes));
     return outcomes;
   }
 
-  // ---- controls ----------------------------------------------------------
-  // The view opens the picker; its pick and the row buttons call these.
+  // Draw the files kept while no globe was attached, as they were.
+  async function redraw(attached) {
+    for (const item of [...imports]) {
+      if (destroyed || scene !== attached) return;
+      if (item.drawing || !imports.includes(item)) continue;
+      try {
+        const loaded = await load(item.file, {
+          color: item.color,
+          signal: attached.controller.signal,
+        });
+        if (destroyed || scene !== attached || !imports.includes(item)) {
+          loaded.revoke?.();
+          return;
+        }
+        await draw(item, attached, loaded);
+        if (!imports.includes(item)) undraw(item);
+      } catch {
+        if (destroyed || scene !== attached) return;
+        setHint(`${item.name}: ${t('That file could not be read.')}`);
+      }
+    }
+    if (!destroyed && scene === attached) {
+      // Say what this globe leaves out of the files it drew again.
+      const left = imports.filter((item) => item.undrawn);
+      if (left.length) setHint(undrawnHint(left));
+      present();
+      render();
+    }
+  }
+
   const disconnect = connect({
     importGeoFiles: (files) => void importFiles(files),
     toggleGeoImport: (id) => setVisible(id, !find(id)?.visible),
@@ -331,82 +427,118 @@ export function initGeoFileImport({
     removeGeoImport: remove,
   });
 
-  // ---- drop onto the globe ----------------------------------------------
-  const container = viewer.container;
   const gesture = () => {
     cameraIntent += 1;
   };
-  listen(viewer.scene?.canvas || container, 'pointerdown', gesture, {
-    passive: true,
-  });
-  listen(viewer.scene?.canvas || container, 'wheel', gesture, {
-    passive: true,
-  });
   const hasFiles = (event) =>
     [...(event.dataTransfer?.types || [])].includes('Files');
   const setDragging = (on) =>
     doc.body?.classList?.toggle('gev-geo-import-drag', on);
-  listen(container, 'dragenter', (event) => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    dragDepth += 1;
-    setDragging(true);
-  });
-  listen(doc, 'dragover', (event) => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-  });
-  listen(container, 'dragleave', (event) => {
-    if (!hasFiles(event)) return;
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (!dragDepth) setDragging(false);
-  });
-  listen(doc, 'drop', (event) => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
+
+  function detachScene() {
+    if (!scene) return;
+    const previous = scene;
+    scene = null;
+    previous.controller.abort();
+    clearTimeout(groundTimer);
+    for (const remove of groundRemovers.splice(0)) remove();
+    for (const [target, type, listener, options] of listeners.splice(0))
+      target.removeEventListener(type, listener, options);
     dragDepth = 0;
     setDragging(false);
-    const files = [...(event.dataTransfer?.files || [])];
-    if (files.length) void importFiles(files);
-  });
+    for (const item of imports) undraw(item);
+  }
+
+  function attachScene({
+    engine = null,
+    navigation: nextNavigation = navigation,
+    subscribeMapSource: nextMapSource = subscribeMapSource,
+  } = {}) {
+    if (destroyed) return;
+    detachScene();
+    if (!engine) return;
+    // The shell and the map sources of this attachment.
+    navigation = nextNavigation;
+    const ground = () => {
+      groundWaits = 10;
+      scheduleGround();
+    };
+    const offMapSource = nextMapSource?.(ground);
+    if (typeof offMapSource === 'function') groundRemovers.push(offMapSource);
+    const attached = (scene = {
+      engine,
+      controller: new AbortController(),
+    });
+    const container = engine.host.container;
+    const canvas = engine.host.canvas || container;
+    listen(canvas, 'pointerdown', gesture, { passive: true });
+    listen(canvas, 'wheel', gesture, { passive: true });
+    listen(container, 'dragenter', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      setDragging(true);
+    });
+    listen(doc, 'dragover', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    });
+    listen(container, 'dragleave', (event) => {
+      if (!hasFiles(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) setDragging(false);
+    });
+    listen(doc, 'drop', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setDragging(false);
+      const files = [...(event.dataTransfer?.files || [])];
+      if (files.length) void importFiles(files);
+    });
+    if (imports.some((item) => !item.drawing)) {
+      const run = queue.then(() => redraw(attached));
+      queue = run.catch(() => {});
+    }
+  }
 
   present();
 
   const handle = {
     importFiles,
     list: () =>
-      imports.map(({ id, name, format, entityCount, removed, visible }) => ({
-        id,
-        name,
-        format,
-        entityCount,
-        removed,
-        visible,
-      })),
+      imports.map(
+        ({ id, name, format, entityCount, removed, visible, undrawn }) => ({
+          id,
+          name,
+          format,
+          entityCount,
+          removed,
+          visible,
+          undrawn,
+        }),
+      ),
     setVisible,
     flyTo,
     remove,
+    attachScene,
+    detachScene,
     diagnostics: () => ({
       files: imports.length,
+      drawn: imports.filter((item) => item.drawing).length,
       entities: imports.reduce((n, item) => n + item.entityCount, 0),
       listeners: listeners.length,
+      attached: Boolean(scene),
       destroyed,
     }),
     destroy() {
       if (destroyed) return;
+      detachScene();
       destroyed = true;
       disconnect();
       lifetime.abort();
-      removeMapSource?.();
-      clearTimeout(groundTimer);
-      for (const remove of groundRemovers) remove();
-      for (const item of imports.splice(0)) {
-        viewer.dataSources?.remove?.(item.dataSource, true);
-        item.revoke?.();
-      }
-      for (const [target, type, listener, options] of listeners.splice(0))
-        target.removeEventListener(type, listener, options);
+      for (const item of imports.splice(0)) undraw(item);
       setDragging(false);
       setHint('');
       if (globalThis.window?.__gevGeoImport === handle)
@@ -449,5 +581,18 @@ export function summarize(outcomes) {
     0,
   );
   if (added && stripped) parts.push(t('Some KML content was left out.'));
+  const left = outcomes.filter((o) => o.ok && o.undrawn);
+  if (left.length) parts.push(undrawnHint(left));
   return parts.join(' ');
+}
+
+/**
+ * What the attached globe leaves out of the given files (each `{ name,
+ * undrawn }`): the first file's name and the total count.
+ */
+function undrawnHint(items) {
+  return t('Map objects this engine leaves out of {name}: {count}.', {
+    name: items[0].name,
+    count: formatNumber(items.reduce((n, item) => n + item.undrawn, 0)),
+  });
 }

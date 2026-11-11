@@ -1,21 +1,12 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
-  const {
-    clearOverlaySource,
-    hitTestWorldOverlay,
-    setOverlayEntries,
-    setOverlaySourceVisible,
-  } = services.overlays;
+  const { clearSource, hitTest, setEntries, setVisible } = services.overlays;
   const layerState = {};
 
   // ---------------------------------------------------------------------------
   // Module-scoped mutable state
   // ---------------------------------------------------------------------------
-
-  layerState._viewer = null;
-
-  layerState._billboards = null;
 
   layerState._records = [];
 
@@ -58,7 +49,7 @@ export function createState({ services }) {
 
   layerState._lastViewContext = '';
 
-  layerState._clickHandler = null;
+  layerState._removeClick = null;
 
   layerState._count = 0;
 
@@ -75,6 +66,7 @@ export function createState({ services }) {
   layerState._listeners = new Set();
 
   layerState._projectionRaf = 0;
+  layerState._projectionTimer = 0;
 
   layerState._removeFocusAppearListener = null;
 
@@ -84,11 +76,9 @@ export function createState({ services }) {
 
   layerState._activeFocusStyleCount = 0;
 
-  layerState._scratchFocusScreen = new Cesium.Cartesian2();
+  layerState._scratchFocusScreen = geo.cartesian2.create();
 
-  layerState._scratchViewScreen = new Cesium.Cartesian2();
-
-  layerState._scratchViewProjection = new Cesium.Matrix4();
+  layerState._scratchViewScreen = geo.cartesian2.create();
 
   // Counts view passes; a record shown by the latest pass carries its number.
 
@@ -179,8 +169,6 @@ export function createState({ services }) {
   // tilesLoaded flag so a coarse-LOD miss is never baked in. Cleared when the
   // tileset is destroyed / the layer tears down.
 
-  layerState._activeTileset = null;
-
   // Task 5: last surface regime the record geometry was recomputed for. The
   // map-stack change listener compares the CURRENT regime (derived live from
   // scene.globe.show) against this so bing→osm switches (same 'terrain-globe'
@@ -239,10 +227,10 @@ export function createState({ services }) {
   layerState._cardFetchMode = 'steady';
 
   layerState.DEFAULT_CCTV_OVERLAY_HOST = Object.freeze({
-    clearSource: clearOverlaySource,
-    hitTest: hitTestWorldOverlay,
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
+    clearSource: clearSource,
+    hitTest: hitTest,
+    setEntries: setEntries,
+    setVisible: setVisible,
   });
 
   layerState._cctvOverlayHost = layerState.DEFAULT_CCTV_OVERLAY_HOST;

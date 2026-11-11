@@ -1,5 +1,4 @@
 import { normalizeRoadMode, normalizeRoadModes } from './roadModes.js';
-import * as Cesium from 'cesium';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
 export function createState({ services, source }) {
@@ -17,15 +16,20 @@ export function createState({ services, source }) {
   layerState._roadModeUrlOverride = layerState._roadMode;
 
   // ─── Module State ──────────────────────────────────────────
-  /** @type {Cesium.Viewer|null} */
+  /** @type {import('../../globe/contract.js').GlobeEngine|null} */
 
-  layerState._viewer = null;
+  layerState._engine = null;
 
-  /** @type {Cesium.PointPrimitiveCollection|null} */
+  /** @type {ReturnType<typeof import('./render/display.js').createTrafficDisplay>|null} The engine's traffic display. */
 
-  layerState._pointCollection = null;
+  layerState._display = null;
 
-  /** @type {Array<{point:Cesium.PointPrimitive, waypoints:Cesium.Cartesian3[], segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>} Active animated dots */
+  /**
+   * Active animated dots. `point` is the dot's look as plain data (position,
+   * pixelSize, color, outlineColor, outlineWidth, show, scaleByDistance,
+   * translucencyByDistance), which the display draws every frame.
+   * @type {Array<{point:object, waypoints:object[], segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>}
+   */
 
   layerState._dots = [];
   layerState._nextDotId = 1;
@@ -37,7 +41,7 @@ export function createState({ services, source }) {
     recycled: 0,
   };
 
-  /** @type {Array<{coords:number[][], type:string, waypoints:Cesium.Cartesian3[], segmentDist:number[]}>} Parsed roads with pre-computed Cartesian3 waypoints */
+  /** @type {Array<{coords:number[][], type:string, waypoints:object[], segmentDist:number[]}>} Parsed roads with pre-computed Earth-fixed waypoints */
 
   layerState._roads = [];
 
@@ -178,25 +182,7 @@ export function createState({ services, source }) {
   layerState._showLines = false;
   layerState._showDots = true;
 
-  /**
-   * Congestion heat-lines are GroundPolylinePrimitive batches draped onto the
-   * rendered 3D tiles (ClassificationType.CESIUM_3D_TILE). One
-   * primitive per bucket so the jam batch can pulse via a single shared
-   * material uniform.
-   * @type {Cesium.GroundPolylinePrimitive|null}
-   */
-
-  layerState._heatJamPrim = null;
-
-  /** @type {Cesium.GroundPolylinePrimitive|null} Slow-bucket heat-line batch. */
-
-  layerState._heatSlowPrim = null;
-
-  /** @type {Cesium.GroundPolylinePrimitive|null} Free-flow road-line batch (`lines` only). */
-
-  layerState._heatFreePrim = null;
-
-  /** @type {Cesium.GroundPolylinePrimitive[]} Replaced lines kept until successors are ready. */
+  /** Replaced ground sets kept until successors are ready. */
 
   layerState._heatRetired = [];
 
@@ -207,10 +193,6 @@ export function createState({ services, source }) {
   /** @type {number} Heat-lines in the current render (stats). */
 
   layerState._heatLineCount = 0;
-
-  /** @type {boolean|null} GroundPolylinePrimitive.isSupported, checked once. */
-
-  layerState._heatSupported = null;
 
   /** @type {number} Altitude of the last render, for late-flow heat rebuilds. */
 
@@ -240,7 +222,7 @@ export function createState({ services, source }) {
    * Effective per-bucket dot colors: preset override when one applies, else
    * the shipped FLOW_BUCKET_COLORS. Rebuilt on style/param change only —
    * spawn/recolor/restyle all read from here, no per-dot allocation.
-   * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
+   * @type {{free:import('../shared/color.js').Rgba, slow:import('../shared/color.js').Rgba, jam:import('../shared/color.js').Rgba}}
    */
 
   layerState._activeBucketColors = { ...FLOW_BUCKET_COLORS };
@@ -313,7 +295,7 @@ export function createState({ services, source }) {
 
   /** Reusable scratch Cartesian3 to avoid per-frame allocation / GC pressure */
 
-  layerState._scratchLerp = new Cesium.Cartesian3();
+  layerState._scratchLerp = { x: 0, y: 0, z: 0 };
 
   // ─── Animation ─────────────────────────────────────────────
 

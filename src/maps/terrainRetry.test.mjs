@@ -12,7 +12,7 @@ import {
 import {
   KEYLESS_TERRAIN_URL,
   createKeylessTerrainResource,
-} from './terrain.js';
+} from '../globe/cesium/terrain.js';
 
 const START = 1_700_000_000_000;
 

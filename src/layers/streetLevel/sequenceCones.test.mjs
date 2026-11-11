@@ -1,26 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { resolveFilter } from './filter.js';
-import { createSequenceCones, thinImages } from './sequenceCones.js';
+import { CONE_SPRITE_ORDER } from './policy.js';
+import {
+  createSequenceCones,
+  IMAGE_CONE_SCALE_BY_DISTANCE,
+  thinImages,
+} from './sequenceCones.js';
+import {
+  STREET_LEVEL_MAPS,
+  streetLevelMap,
+} from '../../testSupport/streetLevelFakes.mjs';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-/** A billboard collection that remembers the cones on the globe. */
-function cones() {
-  const items = [];
-  return {
-    items,
-    show: true,
-    add(options) {
-      items.push(options);
-      return options;
-    },
-    removeAll() {
-      items.length = 0;
-    },
-  };
-}
+const SPRITES = 'street-level:test-cones';
 
 /** A source whose sequence lookups the test answers, one call at a time. */
 function deferredSource() {
@@ -49,13 +43,14 @@ function records(sequenceId, count = 2) {
   }));
 }
 
-function setup() {
+/** Cones on the display of `harness` (the fake engine over Sacramento). */
+function setup(harness = streetLevelMap({ view: true })) {
   const source = deferredSource();
   /** Every highlight asked of the coverage: a sequence id, or null for none. */
   const highlights = [];
   const state = {
     services: {},
-    viewer: {},
+    map: harness.map,
     filter: { pano: 'all', sinceDays: 0 },
     context: {
       getFilter: () => resolveFilter(state.filter),
@@ -64,7 +59,7 @@ function setup() {
     sequence: {
       selectedId: null,
       images: [],
-      collection: cones(),
+      collection: null,
       loading: false,
       error: null,
       abort: null,
@@ -87,13 +82,18 @@ function setup() {
     },
     colors: { coverage: '#05cb63' },
     pickPrefix: 'mly:img:',
-    spriteId: 'street-level:test-cones',
+    spriteId: SPRITES,
     renderKey: 'test-sequence',
     onHighlight: (id) => highlights.push(id),
   });
-  const drawn = () =>
-    state.sequence.collection.items.map((cone) => cone.id.split(':').at(-1));
-  return { state, source, sequences, highlights, drawn };
+  sequences.ensureCollections(harness.map);
+  /** The cones drawn after a frame, in drawing order. */
+  const shown = () => {
+    harness.frame();
+    return harness.spritesShown(SPRITES);
+  };
+  const drawn = () => shown().map((cone) => cone.pickId.split(':').at(-1));
+  return { state, source, sequences, highlights, drawn, shown, harness };
 }
 
 test('a failed sequence load leaves no stale cones and can be retried', async () => {
@@ -160,38 +160,61 @@ test('clearSelection cancels the lookup and drops the highlight', async () => {
   assert.deepEqual(drawn(), [], 'the late answer draws nothing');
 });
 
-test('cones are clamped to the ground and turned to their compass angle', async () => {
-  const { state, source, sequences } = setup();
-  sequences.select('A');
-  source.last('A').resolve(records('A', 2));
-  await settle();
-  const items = state.sequence.collection.items;
-  assert.equal(items.length, 2);
-  for (const cone of items) {
-    assert.equal(cone.heightReference, Cesium.HeightReference.CLAMP_TO_GROUND);
-    assert.equal(cone.rotation, -Cesium.Math.toRadians(90));
-  }
-});
+for (const create of STREET_LEVEL_MAPS) {
+  const name = create().name;
+
+  test(`cones sit on the ground, over the scene, turned to their compass angle (${name})`, async () => {
+    const harness = create();
+    const { source, sequences, shown } = setup(harness);
+    sequences.select('A');
+    source.last('A').resolve([
+      ...records('A', 2),
+      {
+        id: 'A-pano',
+        geometry: { coordinates: [-121.488, 38.58] },
+        compass_angle: 0,
+        captured_at: 1_800_000_000_000,
+        is_pano: true,
+      },
+    ]);
+    await settle();
+    const cones = shown();
+    assert.equal(cones.length, 3);
+    // Flat images and 360° rings: one sprite set each.
+    const sets = harness.moverSets(SPRITES);
+    assert.deepEqual(sets.map((set) => set.id).sort(), [
+      `${SPRITES}:flat`,
+      `${SPRITES}:pano`,
+    ]);
+    for (const set of sets) {
+      assert.equal(set.options.depthTest, 'always');
+      assert.equal(set.options.order, CONE_SPRITE_ORDER);
+      assert.equal(set.options.pickable, true);
+      assert.equal(set.options.sprite.sizePx, 26);
+      assert.deepEqual(
+        set.options.sprite.scaleByDistance,
+        IMAGE_CONE_SCALE_BY_DISTANCE,
+      );
+    }
+    const flat = cones.filter((cone) => !cone.pickId.endsWith('pano'));
+    for (const cone of flat) {
+      const height = geo.cartographic.fromCartesian(cone.position).height;
+      assert.ok(Math.abs(height) < 1e-6, 'on the terrain (0 m here)');
+      // Compass 90° from straight down, north up: a quarter turn clockwise.
+      assert.ok(Math.abs(cone.rotation + Math.PI / 2) < 1e-3);
+    }
+    sequences.setVisible(false);
+    assert.equal(shown().length, 0, 'hidden with the provider');
+    sequences.setVisible(true);
+    assert.equal(shown().length, 3);
+    sequences.releaseCollection();
+    assert.equal(harness.moverSets(SPRITES).length, 0, 'nothing left drawn');
+  });
+}
 
 test('cones behind the globe are hidden, and show again from the other side', async () => {
-  const { state, source, sequences } = setup();
-  const view = { lon: -121.49, lat: 38.58, height: 20_000_000 };
-  const preRender = new Set();
-  state.viewer = {
-    camera: {
-      get positionWC() {
-        return Cesium.Cartesian3.fromDegrees(view.lon, view.lat, view.height);
-      },
-    },
-    scene: {
-      preRender: {
-        addEventListener(listener) {
-          preRender.add(listener);
-          return () => preRender.delete(listener);
-        },
-      },
-    },
-  };
+  const harness = streetLevelMap({ view: true });
+  const { source, sequences, shown } = setup(harness);
   sequences.select('A');
   // One image under the camera, one near its antipode.
   source.last('A').resolve([
@@ -203,15 +226,63 @@ test('cones behind the globe are hidden, and show again from the other side', as
     },
   ]);
   await settle();
-  const [near, far] = state.sequence.collection.items;
-  assert.equal(near.show, true, 'the near side stays visible');
-  assert.equal(far.show, false, 'the far side does not show through');
+  const ids = () => shown().map((cone) => cone.pickId);
+  assert.deepEqual(
+    ids(),
+    ['mly:img:A-0'],
+    'the far side does not show through',
+  );
   // Fly round to the other hemisphere: the two swap.
-  view.lon = 58.51;
-  view.lat = -38.58;
-  for (const listener of [...preRender]) listener();
-  assert.equal(near.show, false);
-  assert.equal(far.show, true);
+  harness.engine.fake.setPose({
+    longitude: geo.math.toRadians(58.51),
+    latitude: geo.math.toRadians(-38.58),
+    height: 20_000_000,
+  });
+  assert.deepEqual(ids(), ['mly:img:A-far']);
   sequences.clearSelection();
-  assert.equal(preRender.size, 0, 'the cull listener is gone');
+  assert.deepEqual(ids(), []);
+});
+
+test('the cones paint once per camera move, not every frame', async () => {
+  const harness = streetLevelMap({ view: true });
+  const { source, sequences, shown } = setup(harness);
+  sequences.select('A');
+  source.last('A').resolve(records('A', 2));
+  await settle();
+  assert.equal(shown().length, 2);
+  const commits = () =>
+    harness.moverSets(SPRITES).reduce((sum, set) => sum + set.commits, 0);
+  const before = commits();
+  harness.engine.fake.frames(5);
+  assert.equal(commits(), before, 'a still camera repaints nothing');
+  // Turned where it stands.
+  harness.engine.fake.setPose({
+    position: harness.engine.camera.pose().position,
+    heading: 1,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
+  harness.frame();
+  assert.equal(commits(), before + 1, 'a moved camera repaints once');
+  harness.engine.fake.frames(3);
+  assert.equal(commits(), before + 1, 'and then rests again');
+});
+
+test('without a display the cones draw nothing and do not throw', async () => {
+  const { state, source, sequences } = setup({
+    map: null,
+    frame() {},
+    spritesShown: () => [],
+  });
+  state.map = null;
+  sequences.ensureCollections(null);
+  state.context.viewReady = () => false;
+  sequences.select('A');
+  source.last('A').resolve(records('A'));
+  await settle();
+  assert.equal(state.sequence.selectedId, 'A');
+  sequences.rerender();
+  sequences.setVisible(true);
+  sequences.destroy();
+  assert.equal(state.sequence.collection, null);
 });

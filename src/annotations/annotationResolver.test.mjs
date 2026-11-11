@@ -19,6 +19,7 @@ import {
   refineScope,
   isGroundsLikeAsk,
 } from './annotationResolver.js';
+import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 // Build a square way of ~`areaM2` centred `dLatM`/`dLonM` metres from an anchor,
 // in Overpass `out geom` element shape ({ tags, geometry: [{lat,lon}...] }).
@@ -157,7 +158,7 @@ test('refineScope: entityKind refines only an unresolved (auto) scope', () => {
 });
 
 function closeViewportViewer() {
-  return {
+  return cameraOnlyEngine({
     camera: {
       positionCartographic: {
         latitude: 30.2672 * Math.PI / 180,
@@ -165,7 +166,7 @@ function closeViewportViewer() {
         height: 1000,
       },
     },
-  };
+  });
 }
 
 function geocodePayload({ lat, lon, types, label }) {
@@ -221,7 +222,7 @@ test('ask-side admin bypass: "the Texas Capitol" recovers near-view despite a fa
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: closeViewportViewer(),
+    engine: closeViewportViewer(),
     target: 'the Texas Capitol',
   });
 
@@ -245,7 +246,7 @@ test('ask-side admin bypass: explicit "state of Texas" skips recovery and proxim
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: closeViewportViewer(),
+    engine: closeViewportViewer(),
     target: 'state of Texas',
   });
 
@@ -286,7 +287,7 @@ for (const fixture of [
     });
 
     const resolved = await resolveAnnotationTarget({
-      viewer: closeViewportViewer(),
+      engine: closeViewportViewer(),
       target: fixture.target,
     });
 
@@ -312,7 +313,7 @@ test('ask-side admin bypass: bare "Texas" remains on the guarded recovery path',
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: closeViewportViewer(),
+    engine: closeViewportViewer(),
     target: 'Texas',
   });
 
@@ -351,7 +352,7 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
 
   for (const target of fixtures.keys()) {
     const resolved = await resolveAnnotationTarget({
-      viewer: closeViewportViewer(),
+      engine: closeViewportViewer(),
       target,
     });
     assert.ok(resolved);
@@ -369,11 +370,11 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
 // Synthetic footprints reproduce the real Capitol/YOTEL selection without live APIs.
 const CAPITOL_ANCHOR = { lat: 38.8899389, lon: -77.0090505 };
 function capitolViewer() {
-  return { camera: { positionCartographic: {
+  return cameraOnlyEngine({ camera: { positionCartographic: {
     latitude: CAPITOL_ANCHOR.lat * Math.PI / 180,
     longitude: CAPITOL_ANCHOR.lon * Math.PI / 180,
     height: 1000,
-  } } };
+  } } });
 }
 function installCapitolMocks(t, elements, components = [
   { long_name: 'Washington', types: ['locality', 'political'] },
@@ -401,7 +402,7 @@ for (const [target, deferFootprint] of [
     const capitol = squareWay(CAPITOL_ANCHOR, 0, 0, 20000, { building: 'yes', name: 'United States Capitol' });
     const hotel = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', tourism: 'hotel', name: 'YOTEL Washington DC' });
     installCapitolMocks(t, [hotel, capitol]);
-    const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target, entityKind: 'building', footprint: true, deferFootprint });
+    const result = await resolveAnnotationTarget({ engine: capitolViewer(), target, entityKind: 'building', footprint: true, deferFootprint });
     assert.ok(result);
     const outline = deferFootprint ? await result.resolveOutline() : result;
     assert.deepEqual(outline.ring, capitol.geometry.map(p => [p.lon, p.lat]));
@@ -412,7 +413,7 @@ for (const [target, deferFootprint] of [
 test('address-only landmark without a matching outline keeps its geocoded point', async t => {
   const hotel = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', tourism: 'hotel', name: 'YOTEL Washington DC' });
   installCapitolMocks(t, [hotel]);
-  const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'US Capitol building, Washington', entityKind: 'building', footprint: true, deferFootprint: true });
+  const result = await resolveAnnotationTarget({ engine: capitolViewer(), target: 'US Capitol building, Washington', entityKind: 'building', footprint: true, deferFootprint: true });
   assert.ok(result);
   assert.deepEqual([result.lat, result.lon], [CAPITOL_ANCHOR.lat, CAPITOL_ANCHOR.lon]);
   assert.equal(await result.resolveOutline(), null);
@@ -422,7 +423,7 @@ test('missing address components do not turn a formatted city address into the l
   const capitol = squareWay(CAPITOL_ANCHOR, 0, 0, 20000, { building: 'yes', name: 'United States Capitol' });
   const hotel = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', name: 'YOTEL Washington DC' });
   installCapitolMocks(t, [hotel, capitol], []);
-  const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'United States Capitol building', footprint: true });
+  const result = await resolveAnnotationTarget({ engine: capitolViewer(), target: 'United States Capitol building', footprint: true });
   assert.deepEqual(result.ring, capitol.geometry.map(p => [p.lon, p.lat]));
 });
 
@@ -430,7 +431,7 @@ test('a genuine geocoded feature name still canonicalizes an alternate user name
   const capitol = squareWay(CAPITOL_ANCHOR, 0, 0, 20000, { building: 'yes', name: 'United States Capitol' });
   const decoy = squareWay(CAPITOL_ANCHOR, 620, -140, 3000, { building: 'yes', name: 'Congress meeting building' });
   installCapitolMocks(t, [decoy, capitol], [{ long_name: 'United States Capitol', types: ['landmark'] }]);
-  const result = await resolveAnnotationTarget({ viewer: capitolViewer(), target: 'Congress meeting building', footprint: true });
+  const result = await resolveAnnotationTarget({ engine: capitolViewer(), target: 'Congress meeting building', footprint: true });
   assert.deepEqual(result.ring, capitol.geometry.map(p => [p.lon, p.lat]));
 });
 
@@ -479,7 +480,7 @@ test('keyless: a key that geocodes to nothing still anchors the annotation', asy
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: closeViewportViewer(),
+    engine: closeViewportViewer(),
     target: 'Lady Bird Lake',
   });
 
@@ -534,7 +535,7 @@ test('keyless: OSM matching uses the feature\'s canonical name, not the user\'s 
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: closeViewportViewer(),
+    engine: closeViewportViewer(),
     target: 'the monument near the Texas Capitol, Austin',
     footprint: true,
   });
@@ -581,11 +582,11 @@ test('keyless: a Photon outage is not remembered as "no such place"', async (t) 
   });
 
   const target = 'Waller Creek';
-  assert.equal(await resolveAnnotationTarget({ viewer: closeViewportViewer(), target }), null);
+  assert.equal(await resolveAnnotationTarget({ engine: closeViewportViewer(), target }), null);
   const duringOutage = requests.length;
 
   photonReachable = true;
-  const retried = await resolveAnnotationTarget({ viewer: closeViewportViewer(), target });
+  const retried = await resolveAnnotationTarget({ engine: closeViewportViewer(), target });
 
   assert.ok(retried, 'the same target must resolve once the network is back');
   assert.deepEqual([retried.lat, retried.lon], [30.2665, -97.7385]);

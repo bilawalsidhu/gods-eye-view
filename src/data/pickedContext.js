@@ -97,16 +97,20 @@ function descriptorLabel(found, fallback) {
  * @param {object|null} picked Result of `scene.pick()`.
  * @param {object} [options]
  * @param {object} [options.dataManager] Layer lifecycle (enabled state, modules).
+ * @param {object} [options.engine] Engine of the scene that supplied the pick.
  * @returns {{layerId: string, id: string, label: string, kind: string, lat: number|null, lon: number|null, altitudeM?: number|null}|null}
  */
-export function resolvePickedContext(picked, { dataManager = null } = {}) {
+export function resolvePickedContext(
+  picked,
+  { dataManager = null, engine = dataManager?.engine } = {},
+) {
   if (!picked) return null;
   const record = contextCarrierRecord(picked, dataManager);
   if (record) return fromRecord(record);
 
   const pickId = resolvePickId(picked);
   if (!pickId) return null;
-  const layerId = findPickOwner(pickId);
+  const layerId = findPickOwner(pickId, engine);
   if (!layerId || IGNORED_OWNERS.has(layerId)) return null;
   if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return null;
   const layer = dataManager?.layers?.get?.(layerId);

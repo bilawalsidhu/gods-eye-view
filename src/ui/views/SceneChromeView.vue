@@ -61,9 +61,6 @@ const vToastText = {
 
 <template>
   <div id="cesiumContainer"></div>
-  <div id="world-overlay-root" aria-hidden="true">
-    <canvas id="world-overlay-canvas"></canvas>
-  </div>
   <div id="world-overlay-actions" class="world-overlay-accessibility" role="region" :aria-label="t('Visible map targets')">
     <div id="world-overlay-action-list"><UiButton v-for="item in targets?.items ?? []" :key="item.key" :aria-label="item.label" :pressed="Boolean(item.selected)" :data-overlay-action-key="item.key" :onClick="onOverlayAction(targets.owner, item.key)">{{ item.label }}</UiButton></div>
     <div id="world-overlay-status" v-overlay-status="targets" role="status" aria-live="polite" aria-atomic="true"></div>

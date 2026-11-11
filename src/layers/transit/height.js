@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   FLOOR_REREAD_ATTEMPTS,
   FLOOR_REREAD_MS,
@@ -18,13 +17,10 @@ export function createHeight({ state, services, parts }) {
     coarseFloorCoord,
     GROUND_FLOOR_LIFT_M,
   } = services.ground;
-  // The application's rendered-mesh sampler. Optional so a layer built on a
-  // bare floor stub still runs; the application always supplies it.
-  const sampleMeshFloorCells = services.mesh?.sampleMeshFloorCells || null;
 
   /** The camera's subpoint in degrees, for the sampler's proximity gate. */
   function viewerSubpoint() {
-    const carto = state._viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     if (!carto) return { viewerLat: undefined, viewerLon: undefined };
     return {
       viewerLat: (carto.latitude * 180) / Math.PI,
@@ -33,7 +29,7 @@ export function createHeight({ state, services, parts }) {
   }
 
   function cameraAltitude() {
-    const carto = state._viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
   }
 
@@ -53,7 +49,6 @@ export function createHeight({ state, services, parts }) {
    * @param {number} lon
    * @returns {{cell: string, height: number|null, prior: number|null}}
    */
-  const terrainPoint = new Cesium.Cartographic();
   function requestHeight(lat, lon, entry = null) {
     const coarse = coarseFloorCoord(lat, lon);
     const cell = `${coarse.lat},${coarse.lon}`;
@@ -63,20 +58,9 @@ export function createHeight({ state, services, parts }) {
       return { cell, height: fixtureFloor, prior: null };
     // On a terrain globe, use the loaded surface under the marker. This is
     // synchronous cache work and does not launch a terrain request.
-    const globe = state._viewer?.scene?.globe;
-    if (globe?.show === true) {
-      Cesium.Cartographic.fromDegrees(lon, lat, 0, terrainPoint);
-      const rendered = globe.getHeight?.(terrainPoint);
-      const flat =
-        state._viewer?.terrainProvider instanceof
-        Cesium.EllipsoidTerrainProvider;
-      if (Number.isFinite(rendered) || flat)
-        return {
-          cell,
-          height: (flat ? 0 : rendered) + GROUND_FLOOR_LIFT_M,
-          prior: null,
-        };
-    }
+    const rendered = parts.renderer?.terrainHeight(lat, lon);
+    if (Number.isFinite(rendered))
+      return { cell, height: rendered + GROUND_FLOOR_LIFT_M, prior: null };
     const floor = cachedGroundFloor(lat, lon);
     if (Number.isFinite(floor)) {
       return { cell, height: floor + GROUND_FLOOR_LIFT_M, prior: null };
@@ -218,7 +202,7 @@ export function createHeight({ state, services, parts }) {
     for (let i = 0; i < dem.length; i += 8)
       warmGroundFloor(dem.slice(i, i + 8));
     for (let i = 0; i < mesh.length; i += 8)
-      sampleMeshFloorCells?.(state._viewer?.scene, mesh.slice(i, i + 8), {
+      parts.renderer?.sampleMeshFloorCells(mesh.slice(i, i + 8), {
         excludeObjects: markers,
         ...viewerSubpoint(),
       });
@@ -226,7 +210,7 @@ export function createHeight({ state, services, parts }) {
     // adopted by the next bounded reread.
     for (const entry of entries) parts.trails.prepareEntry(entry);
     parts.rendering.requestVisibility();
-    governorRequestRender('transit-floor');
+    governorRequestRender('transit-floor', parts.renderer?.engine);
     if (state._floorAttempts++ < FLOOR_REREAD_ATTEMPTS)
       state._floorTimer = setTimeout(rereadFloors, FLOOR_REREAD_MS);
   }

@@ -3,7 +3,7 @@ import { createMapillaryProvider } from '../../layers/streetLevel/providers/mapi
 import { createGoogleProvider } from '../../layers/streetLevel/providers/google/index.js';
 import { createKartaViewProvider } from '../../layers/streetLevel/providers/kartaview/index.js';
 import { createPanoramaxProvider } from '../../layers/streetLevel/providers/panoramax/index.js';
-import * as sprites from '../../data/spriteOrder.js';
+import { rendererFor } from './renderers.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as input from '../../data/inputOwnership.js';
 import * as scenePick from '../../data/scenePick.js';
@@ -29,14 +29,22 @@ function defaultProviders(sources) {
 /**
  * Inject providers, or use the defaults. An explicit provider list replaces
  * them; an unused sources.mapillary is neither constructed nor validated,
- * including when the list is empty.
+ * including when the list is empty. The layer draws with the engine's
+ * renderer from the manifest (render/display.js on every engine).
  */
 export function createApplicationStreetLevel({
   sources = {},
+  nativeRenderer = (engine) => rendererFor('street-level', engine),
   providers = defaultProviders(sources),
 }) {
   return createStreetLevelLayer({
     providers,
-    services: { sprites, picking, input, scenePick, render },
+    services: {
+      picking,
+      input,
+      scenePick,
+      render,
+      createDisplay: nativeRenderer,
+    },
   });
 }

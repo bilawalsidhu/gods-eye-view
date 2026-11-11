@@ -1,19 +1,18 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createPhotoSlots } from './photos.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 
-/** Compose recent wildlife observations without acquiring data at construction. */
+/** Compose recent wildlife observations without acquiring data at construction.
+ * The layer draws on the globe engine it is attached to (attachRenderer) and
+ * keeps its observations, filters and selection while detached. */
 export function createWildlifeSightingsLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
-  sprites = null,
   badgeSprites = null,
   render = null,
   context = null,
@@ -26,15 +25,11 @@ export function createWildlifeSightingsLayer({
   cancelIdleCallback,
   imageFactory,
   eventTarget = globalThis.window,
-  cesium = Cesium,
-  project = (scene, position) =>
-    Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
-  occluderFactory = horizonOccluder,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Wildlife sightings require a snapshot source');
   const state = {
-    viewer: null,
+    engine: null,
     enabled: false,
     destroyed: false,
     manager: null,
@@ -43,15 +38,14 @@ export function createWildlifeSightingsLayer({
     cameraTimer: null,
     removeCamera: null,
     removeContext: null,
-    clickHandler: null,
+    removeClick: null,
     rows: new Map(),
     renderedRows: [],
     rowById: new Map(),
-    points: null,
+    badges: null,
     pointById: new Map(),
     positions: new Map(),
     cells: [],
-    staging: null,
     selectedId: null,
     selectedRow: null,
     carriers: new Map(),
@@ -80,14 +74,14 @@ export function createWildlifeSightingsLayer({
     retryAt: 0,
     failures: 0,
   };
+  context = bindOverlayHost(context, () => state.engine);
+  overlayHost = bindOverlayHost(overlayHost, () => state.engine);
   const parts = {};
   const services = {
     source,
     overlayHost,
-    screenSpaceEventHandlerFactory,
     picking,
     pointer,
-    sprites,
     badgeSprites,
     render,
     context,
@@ -99,9 +93,6 @@ export function createWildlifeSightingsLayer({
     requestIdleCallback,
     cancelIdleCallback,
     eventTarget,
-    cesium,
-    project,
-    occluderFactory,
   };
   const owner = { state, services, parts };
   parts.photos = createPhotoSlots({

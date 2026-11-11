@@ -19,12 +19,48 @@ import {
 } from './groundFloor.js';
 import { _resetFireAnchorsForTest } from './fireAnchors.js';
 import {
-  _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
-  installRenderGovernor,
+  renderGovernorFor,
 } from '../renderGovernor.js';
 import * as Cesium from 'cesium';
-import { registerEntityContext, selectEntityContext, getSelectedEntityContext, clearSelectedEntityContextForLayer } from './contextStore.js';
+import { getContextStore, registerEntityContext, selectEntityContext, getSelectedEntityContext, clearSelectedEntityContextForLayer } from './contextStore.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
+
+const LAYER_ID = 'military-installations';
+
+/** A fake engine looking at `box` (degrees). */
+function engineOver(box) {
+  const engine = createFakeEngine();
+  engine.fake.script('viewRectangle', () => box && {
+    south: Cesium.Math.toRadians(box.south),
+    west: Cesium.Math.toRadians(box.west),
+    north: Cesium.Math.toRadians(box.north),
+    east: Cesium.Math.toRadians(box.east),
+  });
+  return engine;
+}
+
+/** The context handles of the drawn sites, in drawing order. */
+const drawnHandles = () =>
+  [...getContextStore().entities.values()]
+    .filter((record) => record.layerId === LAYER_ID)
+    .map((record) => record.entity);
+
+/** The drawn disc size of a site: 13 px selected, 9 px otherwise. */
+function discSize(engine, id) {
+  const drawn = (setId) => {
+    const set = engine.fake.moverSet(setId);
+    return set.store.pickIds.slice(0, set.store.count).includes(id);
+  };
+  if (drawn(`${LAYER_ID}-selected`)) return 13;
+  if (drawn(LAYER_ID)) return 9;
+  return null;
+}
 
 test('clicking a selected installation again or empty map clears it through refresh', async () => {
   const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
@@ -37,7 +73,7 @@ test('clicking a selected installation again or empty map clears it through refr
       assert.equal(getSelectedEntityContext(), null);
       await militaryInstallationsLayer.update();
       assert.equal(getSelectedEntityContext(), null, 'refresh must not resurrect selection');
-      assert.equal(run.entities()[0].point.pixelSize.getValue(), 9);
+      assert.equal(run.discSize(run.entities()[0].id), 9);
     }
   } finally { run.restore(); }
 });
@@ -55,7 +91,7 @@ test('background installation paints neither reopen Contacts nor resurrect a cle
     await militaryInstallationsLayer.update();
     assert.equal(getSelectedEntityContext(),null);
     assert.equal(selected(),1,'an external clear must survive the next paint');
-    assert.equal(run.entities()[0].point.pixelSize.getValue(),9);
+    assert.equal(run.discSize(run.entities()[0].id),9);
   } finally { run.restore(); }
 });
 
@@ -87,8 +123,8 @@ test('switching sites keeps the new selection through refresh and disable clears
     assert.equal(getSelectedEntityContext()?.id, 'osm:node:43');
     await militaryInstallationsLayer.update();
     assert.equal(getSelectedEntityContext()?.id, 'osm:node:43');
-    assert.equal(run.entities().find(e => e.id === 'osm:node:42').point.pixelSize.getValue(), 9);
-    assert.equal(run.entities().find(e => e.id === 'osm:node:43').point.pixelSize.getValue(), 13);
+    assert.equal(run.discSize('osm:node:42'), 9);
+    assert.equal(run.discSize('osm:node:43'), 13);
     militaryInstallationsLayer.disable();
     run.click('osm:node:42');
     assert.equal(getSelectedEntityContext(), null, 'disabled layer ignores clicks');
@@ -134,10 +170,6 @@ test('real enabled installation entities carry no native label graphics', async 
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
-  const canvas = {
-    addEventListener() {},
-    removeEventListener() {},
-  };
   globalThis.document = {
     addEventListener() {},
     removeEventListener() {},
@@ -163,49 +195,22 @@ test('real enabled installation entities carry no native label graphics', async 
       }),
     };
   };
-  const moveEndListeners = new Set();
-  const dataSources = [];
-  const viewer = {
-    camera: {
-      moveEnd: {
-        addEventListener(listener) {
-          moveEndListeners.add(listener);
-          return () => moveEndListeners.delete(listener);
-        },
-      },
-      computeViewRectangle() {
-        return {
-          south: Cesium.Math.toRadians(30),
-          west: Cesium.Math.toRadians(-98),
-          north: Cesium.Math.toRadians(31),
-          east: Cesium.Math.toRadians(-97),
-        };
-      },
-    },
-    scene: {
-      canvas,
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
-    },
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
-    },
-  };
+  const engine = engineOver({ south: 30, west: -98, north: 31, east: -97 });
 
   try {
-    militaryInstallationsLayer.init(viewer);
+    militaryInstallationsLayer.init(null, { engine });
     militaryInstallationsLayer.enable();
     await militaryInstallationsLayer.update();
-    const entities = dataSources[0].entities.values;
+    const entities = drawnHandles();
     assert.ok(entities.length > 0, 'runtime guard requires rendered installation records');
     assert.ok(entities.every((entity) => entity.label === undefined));
+    assert.ok(
+      engine.movers.list().every(({ kind }) => kind === 'point'),
+      'the titles are the shared overlay, not label primitives',
+    );
   } finally {
-    militaryInstallationsLayer.destroy(viewer);
+    militaryInstallationsLayer.destroy();
+    engine.destroy();
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
@@ -277,7 +282,6 @@ async function runInstallationLoad({
   const originalFetch = globalThis.fetch;
   const requests = [];
   const contextEvents = [];
-  _resetRenderGovernorForTest();
   globalThis.document = { addEventListener() {}, removeEventListener() {} };
   globalThis.window = {
     dispatchEvent(event) {
@@ -305,69 +309,29 @@ async function runInstallationLoad({
     if (!legacyPayload) payload.saturated = exact ? exactSaturated : saturated;
     return { ok: true, status: 200, json: async () => payload };
   };
-  const dataSources = [];
-  const cameraFlights = [];
-  let picked = null;
-  let clickAction;
-  const viewer = {
-    camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
-      flyToBoundingSphere(sphere, options) { cameraFlights.push({ sphere, options }); },
-      computeViewRectangle() {
-        return {
-          south: Cesium.Math.toRadians(VIEWPORT.south),
-          west: Cesium.Math.toRadians(VIEWPORT.west),
-          north: Cesium.Math.toRadians(VIEWPORT.north),
-          east: Cesium.Math.toRadians(VIEWPORT.east),
-        };
-      },
-    },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return picked; },
-      // Enough surface for the real render governor to drive this viewer, so
-      // one-shot render requests are observable.
-      requestRenderMode: false,
-      maximumRenderTimeChange: 0,
-      requestRender() {},
-    },
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
-    },
-  };
-
-  const originalSetInputAction = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
-  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (action, type, modifier) {
-    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) clickAction = action;
-    return originalSetInputAction.call(this, action, type, modifier);
-  };
-  try { militaryInstallationsLayer.init(viewer); }
-  finally { Cesium.ScreenSpaceEventHandler.prototype.setInputAction = originalSetInputAction; }
-  installRenderGovernor(viewer);
+  const engine = engineOver(VIEWPORT);
+  militaryInstallationsLayer.init(null, { engine });
+  renderGovernorFor(engine).install();
   militaryInstallationsLayer.enable();
   await militaryInstallationsLayer.update();
 
   return {
     requests,
-    cameraFlights,
-    entities: () => dataSources[0]?.entities?.values || [],
+    engine,
+    entities: drawnHandles,
+    discSize: (id) => discSize(engine, id),
     contextLabels: () => contextEvents,
     stats: () => militaryInstallationsLayer.getStats(),
     click(target) {
-      const entity = typeof target === 'string' ? dataSources[0].entities.getById(target) : target;
-      picked = entity ? { id: entity } : undefined;
-      clickAction({ position: { x: 0, y: 0 } });
+      engine.fake.script('pick', target ? { id: target } : undefined);
+      engine.fake.input('click', { position: { x: 0, y: 0 } });
+      engine.fake.unscript('pick');
     },
-    renderRequests: () => getRenderGovernorDiagnostics().recentRequests.map((item) => item.reason),
+    renderRequests: () => getRenderGovernorDiagnostics(engine).recentRequests.map((item) => item.reason),
     restore() {
-      militaryInstallationsLayer.destroy(viewer);
-      _resetRenderGovernorForTest();
+      militaryInstallationsLayer.destroy();
+      renderGovernorFor(engine).destroy();
+      engine.destroy();
       globalThis.fetch = originalFetch;
       if (originalDocument === undefined) delete globalThis.document;
       else globalThis.document = originalDocument;
@@ -603,44 +567,18 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
       }),
     };
   };
-  const dataSources = [];
-  const viewer = {
-    camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
-      computeViewRectangle() {
-        return {
-          south: Cesium.Math.toRadians(44),
-          west: Cesium.Math.toRadians(-111),
-          north: Cesium.Math.toRadians(45),
-          east: Cesium.Math.toRadians(-110),
-        };
-      },
-    },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
-    },
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
-    },
-  };
+  const engine = engineOver({ south: 44, west: -111, north: 45, east: -110 });
 
   const heightOf = (entity) => Cesium.Cartographic.fromCartesian(
-    entity.position.getValue(Cesium.JulianDate.now()),
+    entity.gevDisplayPosition(),
   ).height;
 
   try {
-    militaryInstallationsLayer.init(viewer);
+    militaryInstallationsLayer.init(null, { engine });
     militaryInstallationsLayer.enable();
     await militaryInstallationsLayer.update();
 
-    const buried = dataSources[0].entities.values[0];
+    const buried = drawnHandles()[0];
     assert.ok(buried, 'the cold-floor pass still renders the record');
     assert.ok(Math.abs(heightOf(buried)) < 1, 'a cold floor anchors at the ellipsoid, as before');
 
@@ -650,13 +588,14 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
     }
     assert.equal(cachedGroundFloor(lat, lon), 2400, 'the late floor landed in the shared cache');
 
-    const lifted = dataSources[0].entities.values[0];
+    const lifted = drawnHandles()[0];
     assert.ok(
       Math.abs(heightOf(lifted) - 2401.5) < 0.5,
       `re-render must lift the dot onto the resolved floor, got ${heightOf(lifted)}`,
     );
   } finally {
-    militaryInstallationsLayer.destroy(viewer);
+    militaryInstallationsLayer.destroy();
+    engine.destroy();
     _resetFireAnchorsForTest();
     setMeshFloorPreferred(true);
     globalThis.fetch = originalFetch;
@@ -681,28 +620,10 @@ test('reports bounded installation requests as loading and clears on settlement'
     }
     return installationsResponse;
   };
-  const viewer = {
-    camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
-      computeViewRectangle() {
-        return {
-          south: Cesium.Math.toRadians(30),
-          west: Cesium.Math.toRadians(-98),
-          north: Cesium.Math.toRadians(31),
-          east: Cesium.Math.toRadians(-97),
-        };
-      },
-    },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
-    },
-    dataSources: { add(value) { return value; }, remove() { return true; } },
-  };
+  const engine = engineOver({ south: 30, west: -98, north: 31, east: -97 });
 
   try {
-    militaryInstallationsLayer.init(viewer);
+    militaryInstallationsLayer.init(null, { engine });
     militaryInstallationsLayer.enable();
     const update = militaryInstallationsLayer.update();
     assert.equal(militaryInstallationsLayer.getStats().loading, true);
@@ -718,7 +639,8 @@ test('reports bounded installation requests as loading and clears on settlement'
     await update;
     assert.equal(militaryInstallationsLayer.getStats().loading, false);
   } finally {
-    militaryInstallationsLayer.destroy(viewer);
+    militaryInstallationsLayer.destroy();
+    engine.destroy();
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
@@ -745,28 +667,16 @@ test('zoom-out aborts an active installation request and returns non-loading gui
       }, { once: true });
     });
   };
-  const viewer = {
-    camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
-      computeViewRectangle() {
-        return globalView ? null : {
-          south: Cesium.Math.toRadians(30),
-          west: Cesium.Math.toRadians(-98),
-          north: Cesium.Math.toRadians(31),
-          east: Cesium.Math.toRadians(-97),
-        };
-      },
-    },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
-    },
-    dataSources: { add(value) { return value; }, remove() { return true; } },
-  };
+  const engine = engineOver({ south: 30, west: -98, north: 31, east: -97 });
+  engine.fake.script('viewRectangle', () => globalView ? null : {
+    south: Cesium.Math.toRadians(30),
+    west: Cesium.Math.toRadians(-98),
+    north: Cesium.Math.toRadians(31),
+    east: Cesium.Math.toRadians(-97),
+  });
 
   try {
-    militaryInstallationsLayer.init(viewer);
+    militaryInstallationsLayer.init(null, { engine });
     militaryInstallationsLayer.enable();
     const pending = militaryInstallationsLayer.update();
     assert.equal(militaryInstallationsLayer.getStats().loading, true);
@@ -779,7 +689,8 @@ test('zoom-out aborts an active installation request and returns non-loading gui
     assert.equal(militaryInstallationsLayer.getStats().error, null, 'guidance is not a fault');
     assert.match(militaryInstallationsLayer.getStats().statusMessage, /zoom in/i);
   } finally {
-    militaryInstallationsLayer.destroy(viewer);
+    militaryInstallationsLayer.destroy();
+    engine.destroy();
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
@@ -794,7 +705,7 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 // sat healthy — observed in the field as a layer stuck reporting unavailable
 // while its own endpoint served hundreds of features. The backoff progression
 // is a pure exported helper so it pins without booting the layer (the full
-// layer needs a Cesium viewer and interaction handlers); the wiring is pinned
+// layer needs a globe engine and interaction handlers); the wiring is pinned
 // by source probes against the shipped file, the same technique the HUD datum
 // tests use where a full boot is impractical.
 import { installationRetryDelayMs } from './militaryInstallations.js';

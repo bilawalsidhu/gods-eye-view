@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { limitZoomOut, zoomOutLimit } from './viewer.js';
+import { limitZoomOut, zoomOutLimit } from '../globe/cesium/viewer.js';
 
 // The share of the screen's height the globe spans from `altitude`.
 function globeShare(altitude, fovy) {

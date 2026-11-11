@@ -19,9 +19,9 @@ import { createControls } from './controls.js';
 function makeLayer() {
   const services = {
     overlays: {
-      setOverlayEntries() {},
-      setOverlaySourceVisible() {},
-      clearOverlaySource() {},
+      setEntries() {},
+      setVisible() {},
+      clearSource() {},
     },
   };
   const state = createState({ services });
@@ -83,13 +83,12 @@ test('a recovered city clears its own failure', () => {
 // drive the real proximity check, status poll and lifecycle against a fake
 // GBFS source, so the failure state they read is the state the layer builds.
 
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { CITY_BY_ID } from './registry.js';
 import { createIngestion } from './ingestion.js';
 import { createModel } from './model.js';
-import { createViewport } from './viewport.js';
-import { createRendering } from './rendering.js';
-import { createLifecycle } from './lifecycle.js';
+import { createBikeshareDisplay } from './render/display.js';
 
 const TORONTO = 'toronto-bike-share';
 const BUFFALO = 'buffalo-reddy';
@@ -100,12 +99,6 @@ const TORONTO_ONLY = { lat: 43.7, lon: -79.6 };
 // Within range of Buffalo only.
 const BUFFALO_ONLY = { lat: 42.5, lon: -78.0 };
 const LOW_M = 10_000;
-
-// disable() detaches a keydown listener; node has no document.
-globalThis.document ??= {
-  addEventListener() {},
-  removeEventListener() {},
-};
 
 /** A GBFS source whose per-city answers each test can change. */
 function makeSource() {
@@ -171,11 +164,10 @@ function makeLiveLayer() {
   const services = {
     render: { governorRequestRender() {} },
     overlays: {
-      setOverlayEntries() {},
-      setOverlaySourceVisible() {},
-      clearOverlaySource() {},
+      setEntries() {},
+      setVisible() {},
+      clearSource() {},
     },
-    sprites: { registerSpriteCollection() {}, restoreSpriteOrder() {} },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
   const state = createState({ services });
@@ -183,48 +175,36 @@ function makeLiveLayer() {
   const context = { state, services, parts, source };
   parts.ingestion = createIngestion(context);
   parts.model = createModel(context);
-  parts.viewport = createViewport(context);
-  parts.rendering = createRendering(context);
-  // Selection owns a DOM click handler; nothing here selects a station.
-  parts.selection = {
-    _installClickHandler() {},
-    _clearSelection() {},
-    _onKeyDown() {},
-  };
+  // The display's parts on a fake globe the test moves; nothing here
+  // clicks a station.
+  const engine = createFakeEngine();
+  // The view centre is the point under the camera.
+  engine.fake.script('viewRectangle', undefined);
+  const display = createBikeshareDisplay(engine, context);
+  parts.display = display;
   parts.queries = { collectDetectableStations: () => [] };
-  parts.lifecycle = createLifecycle(context);
   const { methods: controls } = createControls(context);
 
-  const camera = { ...BETWEEN, height: LOW_M };
-  const viewer = {
-    camera: {
-      get positionCartographic() {
-        return Cesium.Cartographic.fromDegrees(
-          camera.lon,
-          camera.lat,
-          camera.height,
-        );
-      },
-      computeViewRectangle: () => undefined,
-      changed: { addEventListener() {}, removeEventListener() {} },
-    },
-    scene: { globe: {}, primitives: { add() {}, remove() {} } },
-  };
-  parts.lifecycle.methods.init(viewer);
+  const place = (where, height) =>
+    engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(where.lon, where.lat, height),
+    });
+  place(BETWEEN, LOW_M);
+  parts.display.init();
 
   return {
     state,
     source,
     stats: () => controls.getStats(),
-    moveTo(place, height = LOW_M) {
-      Object.assign(camera, place, { height });
-      return parts.viewport.runProximityCheck();
+    moveTo(where, height = LOW_M) {
+      place(where, height);
+      return parts.display.runProximityCheck();
     },
     async enable() {
-      parts.lifecycle.methods.enable(viewer);
+      parts.display.enable();
       await settle();
     },
-    disable: () => parts.lifecycle.methods.disable(viewer),
+    disable: () => parts.display.disable(),
     poll: () => parts.ingestion.methods.update(),
   };
 }
@@ -373,4 +353,43 @@ test('every status poll failing over cached points reads STALE, not fresh', asyn
   assert.equal(stats.degraded, true);
   assert.equal(stats.stale, true);
   assert.equal(stats.lastUpdate, loadedAt, 'a failed poll advanced freshness');
+});
+
+test('a city that leaves range and comes back during a status outage keeps its last stations, STALE', async () => {
+  const layer = makeLiveLayer();
+  await layer.moveTo(TORONTO_ONLY);
+  await layer.enable();
+  const loadedAt = layer.stats().lastUpdate;
+  assert.equal(layer.stats().count, 1);
+
+  layer.source.deadStatus.add(TORONTO);
+  await layer.moveTo(BUFFALO_ONLY);
+  const beforeReturn = layer.stats().lastUpdate;
+  await layer.moveTo(TORONTO_ONLY);
+
+  const stats = layer.stats();
+  assert.equal(stats.count, 1, 'the last known stations stay drawn');
+  assert.equal(stats.error, undefined);
+  assert.equal(stats.stale, true, 'they are marked stale');
+  assert.equal(stats.lastUpdate, beforeReturn, 'the outage advanced freshness');
+  assert.ok(layer.state._activeCityIds.has(TORONTO), 'the city stays active');
+  const [station] = layer.state._stationRenderMap.values();
+  assert.equal(station.cityId, TORONTO);
+  assert.equal(station.bikesAvailable, 3, 'the last known status stays');
+
+  // The next poll that reaches the source clears the outage.
+  layer.source.deadStatus.delete(TORONTO);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await layer.poll();
+  assert.equal(layer.stats().stale, undefined);
+  assert.ok(layer.stats().lastUpdate > loadedAt);
+});
+
+test('a city whose status never loaded is still removed when its status fails', async () => {
+  const layer = makeLiveLayer();
+  layer.source.deadStatus.add(TORONTO);
+  await layer.moveTo(TORONTO_ONLY);
+  await layer.enable();
+  assert.equal(layer.stats().count, 0, 'no status ever seen: nothing to keep');
+  assert.equal(layer.stats().error, 'GBFS fetch error');
 });

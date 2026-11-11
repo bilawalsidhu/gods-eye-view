@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { julianAt } from '../../time/julian.js';
+import * as geo from '../../geo/index.js';
 import {
   lerpAngleDeg,
   speedRamp,
@@ -69,28 +68,18 @@ export function createMotion({
       return null;
     }
 
-    const out = result || new Cesium.Cartesian3();
+    const out = result || geo.cartesian3.create();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
-    const renderTime = Cesium.JulianDate.addSeconds(
-      julianAt(flightState.now()),
-      -displayDelayMs(flightState) / 1000,
-      flightState._scratchRenderTime,
-    );
+    const renderTimeMs = flightState.now() - displayDelayMs(flightState);
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
       const a = history[i - 1];
       const b = history[i];
-      if (
-        Cesium.JulianDate.lessThanOrEquals(a.time, renderTime) &&
-        Cesium.JulianDate.lessThanOrEquals(renderTime, b.time)
-      ) {
-        const span = Cesium.JulianDate.secondsDifference(b.time, a.time);
-        const t =
-          span > 0
-            ? Cesium.JulianDate.secondsDifference(renderTime, a.time) / span
-            : 1.0;
+      if (a.timeMs <= renderTimeMs && renderTimeMs <= b.timeMs) {
+        const span = (b.timeMs - a.timeMs) / 1000;
+        const t = span > 0 ? (renderTimeMs - a.timeMs) / 1000 / span : 1.0;
         // Course of the DISPLAYED motion. The chord is only trustworthy when the
         // segment covers real ground (at hover its direction is GPS jitter; on a
         // slow tight turn it STEPS the whole per-segment turn at each boundary),
@@ -99,7 +88,7 @@ export function createMotion({
         // a slow turner's nose advances continuously through the segment instead
         // of snapping once per poll. Helicopters always use the reported track
         // (rotorcraft chords are noise-dominated at their typical speeds).
-        const chordLenM = Cesium.Cartesian3.distance(a.position, b.position);
+        const chordLenM = geo.cartesian3.distance(a.position, b.position);
         const segSpeed =
           span > 0 ? chordLenM / span : (info && info.speedMps) || 0;
         const fallbackTrack = (info && info.track) || 0;
@@ -115,15 +104,12 @@ export function createMotion({
             : trackCourse;
         flightState._drSpeedMps = segSpeed;
         flightState._drCourseHold = segSpeed < COURSE_HOLD_SPEED_MPS;
-        return Cesium.Cartesian3.lerp(a.position, b.position, t, out);
+        return geo.cartesian3.lerp(a.position, b.position, t, out);
       }
     }
 
     const newest = history[history.length - 1];
-    const elapsedSec = Cesium.JulianDate.secondsDifference(
-      renderTime,
-      newest.time,
-    );
+    const elapsedSec = (renderTimeMs - newest.timeMs) / 1000;
     if (elapsedSec <= 0) {
       // Warm-up: renderTime predates ALL history (freshly seen / just-started-tracking
       // aircraft, before RENDER_DELAY_SEC of history has accumulated, so no bracketing
@@ -133,10 +119,7 @@ export function createMotion({
       // the bracketing interpolation above with NO freeze and NO backward snap. (Holding
       // the oldest fix froze the icon until enough history accrued, then jumped.)
       const oldest = history[0];
-      const lookbackSec = Cesium.JulianDate.secondsDifference(
-        oldest.time,
-        renderTime,
-      ); // ≥ 0
+      const lookbackSec = (oldest.timeMs - renderTimeMs) / 1000; // ≥ 0
       return _extrapolateFix(
         oldest,
         info,
@@ -177,7 +160,7 @@ export function createMotion({
       // a Date per aircraft on every fleet tick.
       fixEpochMs: Number.isFinite(newest.epochMs)
         ? newest.epochMs
-        : Cesium.JulianDate.toDate(newest.time).getTime(),
+        : newest.timeMs,
       lastContactEpochMs: info?.lastContactEpochMs,
       // Five minutes of flight after the last report, as flights.
       minimumSec: 300,
@@ -210,7 +193,7 @@ export function createMotion({
     if (!newest) return null;
     const newestMs = Number.isFinite(newest.epochMs)
       ? newest.epochMs
-      : Cesium.JulianDate.toDate(newest.time).getTime();
+      : newest.timeMs;
     const elapsedSec =
       (flightState.now() - displayDelayMs(flightState) - newestMs) / 1000;
     if (!(elapsedSec > 0)) return null;
@@ -253,24 +236,24 @@ export function createMotion({
     flightState._drCourseHold = speed < COURSE_HOLD_SPEED_MPS;
     if (speed === 0 || dt === 0) {
       flightState._drCourseDeg = heading;
-      return Cesium.Cartesian3.clone(fix.position, out);
+      return geo.cartesian3.clone(fix.position, out);
     }
     // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) — a plane in a
     // standard-rate turn is ~90° of arc wrong per 30 s if extrapolated straight.
     arcOffsetEnu(speed, heading, turnRateDps, dt, flightState._scratchArc);
     flightState._drCourseDeg = flightState._scratchArc.endCourseDeg;
-    Cesium.Cartesian3.fromElements(
+    geo.cartesian3.fromElements(
       flightState._scratchArc.east,
       flightState._scratchArc.north,
       0,
       flightState._scratchOffset,
     );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+    const enu = geo.transforms.eastNorthUpToFixedFrame(
       fix.position,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       flightState._scratchEnu,
     );
-    return Cesium.Matrix4.multiplyByPoint(enu, flightState._scratchOffset, out);
+    return geo.matrix4.multiplyByPoint(enu, flightState._scratchOffset, out);
   }
 
   /**
@@ -284,21 +267,17 @@ export function createMotion({
     if (!flightState._trackedIcao) return false;
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
-    const renderTime = Cesium.JulianDate.addSeconds(
-      julianAt(flightState.now()),
-      -displayDelayMs(flightState) / 1000,
-      flightState._scratchWarmupTime,
-    );
-    return Cesium.JulianDate.lessThan(renderTime, history[0].time);
+    return flightState.now() - displayDelayMs(flightState) < history[0].timeMs;
   }
 
   /** Resolve the selected aircraft's actual rendered square extent this frame. */
 
   function _trackedFocusSizePx(icao24, position) {
-    const camera = flightState._viewer?.camera;
-    const scene = flightState._viewer?.scene;
+    const view = flightState._renderer?.view;
+    const camera = view?.camera;
+    const scene = view?.scene;
     if (!camera?.positionWC || !position || !scene) return 28;
-    const rangeM = Cesium.Cartesian3.distance(camera.positionWC, position);
+    const rangeM = geo.cartesian3.distance(camera.positionWC, position);
     if (parts.rendering._modelOwnsVisual(icao24)) {
       const spec = parts.rendering._modelSpec(
         flightState.records.data.get(icao24)?.klass,
@@ -307,12 +286,12 @@ export function createMotion({
         baseScale: spec.scale,
         nativeRadiusM: spec.nativeRadiusM,
         rangeM,
-        viewportHeightPx: scene.canvas.clientHeight,
+        viewportHeightPx: view.viewportHeightPx(),
         fovyRad: camera.frustum.fovy,
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
       const focalLengthPx =
-        scene.canvas.clientHeight / (2 * Math.tan(camera.frustum.fovy / 2));
+        view.viewportHeightPx() / (2 * Math.tan(camera.frustum.fovy / 2));
       const projectedDiameterPx =
         (2 * spec.nativeRadiusM * scale * focalLengthPx) / rangeM;
       return Math.max(
@@ -321,17 +300,17 @@ export function createMotion({
       );
     }
 
-    const billboard = flightState._trackedEntity?.billboard;
-    const time = flightState._viewer.clock.currentTime;
-    const width = billboard?.width?.getValue(time) ?? 28;
-    const height = billboard?.height?.getValue(time) ?? 28;
+    const billboard = flightState._renderer.tracked.billboardSize(
+      flightState._trackedEntity,
+    );
+    const width = billboard?.width ?? 28;
+    const height = billboard?.height ?? 28;
     const scale =
-      billboard?.scale?.getValue(time) ??
+      billboard?.scale ??
       BILLBOARD_SCALE *
         (CLASS_SCALE_2D[flightState.records.data.get(icao24)?.klass] || 1);
     const scaleByDistance =
-      billboard?.scaleByDistance?.getValue(time) ??
-      TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
+      billboard?.scaleByDistance ?? TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
     const distanceScale = nearFarScalarValueAtDistance(scaleByDistance, rangeM);
     return Math.max(width, height) * scale * distanceScale;
   }
@@ -346,7 +325,7 @@ export function createMotion({
    */
 
   function _trackedDisplayPosition(icao24) {
-    const frame = flightState._viewer?.scene?.frameState?.frameNumber ?? -1;
+    const frame = flightState._renderer?.view.frameNumber() ?? -1;
     if (
       frame === flightState._cachedDRFrame &&
       icao24 === flightState._drReconcileIcao
@@ -383,9 +362,9 @@ export function createMotion({
       const speed = (info && info.speedMps) || 0;
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
-      if (Cesium.Cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
+      if (geo.cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
         // Discontinuity — re-anchor so the DISPLAYED position stays continuous, then decay.
-        Cesium.Cartesian3.subtract(
+        geo.cartesian3.subtract(
           flightState._drPrevDisplay,
           raw,
           flightState._drCorrection,
@@ -393,22 +372,22 @@ export function createMotion({
         flightState._drCorrectionStartMs = nowMs;
       }
     } else {
-      Cesium.Cartesian3.fromElements(0, 0, 0, flightState._drCorrection);
+      geo.cartesian3.fromElements(0, 0, 0, flightState._drCorrection);
       flightState._drCorrectionStartMs = nowMs - DR_CORRECTION_MS; // fully decayed
     }
 
     const elapsed = nowMs - flightState._drCorrectionStartMs;
     const factor =
       elapsed >= DR_CORRECTION_MS ? 0 : 1 - elapsed / DR_CORRECTION_MS;
-    const display = Cesium.Cartesian3.multiplyByScalar(
+    const display = geo.cartesian3.multiplyByScalar(
       flightState._drCorrection,
       factor,
       flightState._trackedPosHolder,
     );
-    Cesium.Cartesian3.add(raw, display, display);
+    geo.cartesian3.add(raw, display, display);
 
-    Cesium.Cartesian3.clone(raw, flightState._drPrevRaw);
-    Cesium.Cartesian3.clone(display, flightState._drPrevDisplay);
+    geo.cartesian3.clone(raw, flightState._drPrevRaw);
+    geo.cartesian3.clone(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;
     flightState._drPrevWorldMs = worldMs;
     flightState._drReconcileValid = true;
@@ -423,8 +402,8 @@ export function createMotion({
     publishFocusTargetFromCachedPosition({
       ownerLayer: 'militaryFlights',
       id: icao24,
-      scene: flightState._viewer?.scene,
-      camera: flightState._viewer?.camera,
+      scene: flightState._renderer?.view.scene,
+      camera: flightState._renderer?.view.camera,
       displayPosition: flightState._cachedDRPosition,
       widthPx: focusSizePx,
       heightPx: focusSizePx,
@@ -488,7 +467,7 @@ export function createMotion({
       !parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     )
       return null;
-    return Cesium.Matrix4.getTranslation(
+    return geo.matrix4.getTranslation(
       flightState._trackedModel.modelMatrix,
       flightState._scratchTrailClip,
     );

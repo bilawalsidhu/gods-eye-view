@@ -5,6 +5,9 @@ import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+import { navaraChunkFileNames, navaraWorkerAssets } from './navaraAssets.js';
+import { initialChunkGuard } from './initialChunkGuard.js';
+import { navaraOnlyPackages, packagePattern } from './navaraDependencies.js';
 
 /**
  * The repository root (this file lives at `<root>/build/vite.js`), as a
@@ -183,7 +186,9 @@ export function createBrowserViteConfig({
       apiResponseHeadersPlugin(),
       // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
-      cesium(),
+      // Keep the SDK asset serving/copying and external imports, but let the
+      // scene load the script and stylesheet only when Cesium is requested.
+      { ...cesium(), transformIndexHtml: undefined },
       // Application views are Vue single-file components.
       vue(VUE_PLUGIN_OPTIONS),
       ...plugins,
@@ -194,6 +199,20 @@ export function createBrowserViteConfig({
     // A production build must not clean the dependency cache a running dev
     // server is still serving optimized module URLs from.
     ...(command === 'build' ? { cacheDir: 'node_modules/.vite-build' } : {}),
+    resolve: {
+      dedupe: ['three'],
+      alias: [
+        {
+          find: /^three$/,
+          replacement: fileURLToPath(
+            new URL(
+              '../node_modules/three/build/three.module.js',
+              import.meta.url,
+            ),
+          ),
+        },
+      ],
+    },
     optimizeDeps: {
       // First reached through the SDR worker or a dynamic import. Pre-bundle
       // them at startup so first use cannot invalidate already-transformed
@@ -205,6 +224,18 @@ export function createBrowserViteConfig({
         'egm96-universal',
         // Loaded on demand when the first street-level image opens.
         'mapillary-js',
+      ],
+      // Navara's wasm-bindgen glue loads new URL('x_bg.wasm', import.meta.url)
+      // and its workers by URL; both must resolve next to the package's own
+      // files, not inside .vite/deps. Dev server only: the experimental
+      // Navara engine is a dynamic import outside the Cesium-mode bundle.
+      exclude: [
+        '@navaramap/three',
+        '@navaramap/three-default-plugin',
+        '@navaramap/engine',
+        '@navaramap/engine-api',
+        '@navaramap/engine-worker',
+        '@navaramap/engine-font-worker',
       ],
     },
     server: {
@@ -258,6 +289,23 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      // Build only: the wasm Navara's workers load by name (the Navara
+      // engine is a separate chunk loaded on ?engine=navara).
+      // The lazy chunk with the Navara engine is named navara-engine.
+      rollupOptions: {
+        // initialChunkGuard: no three/Navara module in the initial chunks.
+        plugins: [
+          navaraWorkerAssets(),
+          initialChunkGuard({
+            pattern: packagePattern(
+              navaraOnlyPackages(fileURLToPath(new URL('..', import.meta.url))),
+            ),
+          }),
+        ],
+        output: { chunkFileNames: navaraChunkFileNames },
+      },
+    },
   };
 }

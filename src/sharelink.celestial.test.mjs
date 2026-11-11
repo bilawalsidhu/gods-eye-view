@@ -1,3 +1,28 @@
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
+/**
+ * A globe engine standing in for the viewer double this test used to build:
+ * the camera pose comes from `camera.positionCartographic`/heading/pitch/roll,
+ * and `camera.flyTo`/`setView` and `scene.requestRender` replace the engine's.
+ */
+function engineViewer({ camera = {}, scene = {} } = {}) {
+  const engine = createFakeEngine();
+  const carto = camera.positionCartographic;
+  if (carto)
+    engine.fake.setPose({
+      longitude: carto.longitude,
+      latitude: carto.latitude,
+      height: carto.height,
+      heading: camera.heading ?? 0,
+      pitch: camera.pitch ?? -Math.PI / 2,
+      roll: camera.roll ?? 0,
+    });
+  if (camera.flyTo) engine.camera.flyTo = camera.flyTo;
+  if (camera.setView) engine.camera.setView = camera.setView;
+  if (scene.requestRender) engine.render.request = () => scene.requestRender();
+  return engine;
+}
+
+
 import { DisplayBindings } from './ui/displayBindings.js';
 import { LocationNavigation } from './ui/locationNavigation.js';
 import { VisualSettings } from './ui/visualSettings.js';
@@ -51,7 +76,7 @@ function makeManager(hash = '') {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(engineViewer(viewer));
 }
 
 function installClipboard(writeText) {
@@ -443,7 +468,7 @@ test('share-link restore forces a final stationary render for Google 3D Tiles', 
     },
     scene: { requestRender() { calls.renders += 1; } },
   };
-  const manager = new ShareLinkManager(viewer);
+  const manager = new ShareLinkManager(engineViewer(viewer));
   manager.applyState({
     lat: 40.7669,
     lon: -73.9909,
@@ -472,7 +497,7 @@ test('newer navigation suppresses delayed share camera while non-camera state st
       flyTo() { flights += 1; },
     },
   };
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(engineViewer(viewer), {
     onRestore: (state) => { restored = state; },
     isNavigationCurrent: () => false,
   });
@@ -702,7 +727,7 @@ test('share apply completion waits for both callback work and camera settlement'
     },
     scene: { requestRender() {} },
   };
-  const manager = new ShareLinkManager(viewer, { onRestore: () => restoreGate });
+  const manager = new ShareLinkManager(engineViewer(viewer), { onRestore: () => restoreGate });
   let settled = false;
   const applying = manager.applyState({
     lat: 40, lon: -74, alt: 500, heading: 0, pitch: -30, roll: 0,
@@ -731,7 +756,7 @@ test('a later navigation prevents share completion from resetting the final pose
     },
     scene: { requestRender() {} },
   };
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(engineViewer(viewer), {
     isNavigationCurrent: (token) => token === generation,
   });
   manager.applyState({
@@ -755,7 +780,7 @@ test('destroy cancels only a still-owned share flight and ignores delayed comple
     },
     scene: { requestRender() {} },
   };
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(engineViewer(viewer), {
     isNavigationCurrent: (token) => token === generation,
     cancelOwnedNavigation: () => { cancellations += 1; flight?.cancel?.(); },
   });
@@ -767,7 +792,7 @@ test('destroy cancels only a still-owned share flight and ignores delayed comple
   assert.equal(cancellations, 1);
   assert.equal(setViews, 0);
 
-  const newerManager = new ShareLinkManager(viewer, {
+  const newerManager = new ShareLinkManager(engineViewer(viewer), {
     isNavigationCurrent: (token) => token === generation,
     cancelOwnedNavigation: () => { cancellations += 1; },
   });
@@ -781,7 +806,7 @@ test('destroy cancels only a still-owned share flight and ignores delayed comple
 
 
 test('visual input listeners are revoked before asynchronous UI teardown', () => {
-  const disposal = uiSource.slice(uiSource.indexOf('  async dispose() {'));
+  const disposal = uiSource.slice(uiSource.indexOf('  async dispose('));
   const firstAwait = disposal.indexOf('await ');
   assert.ok(firstAwait > 0);
   const synchronous = disposal.slice(0, firstAwait);

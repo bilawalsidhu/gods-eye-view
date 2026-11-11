@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive positions provide the Cesium floor oracle.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
 /**
  * scripts/qa-floor-hold.mjs — a grounded contact holds its floor through a
  * terrain-proxy outage (owner incident, 2026-08-21).
@@ -25,13 +28,13 @@
  * under Metal — a backend comparison at one point, not to be confused with the
  * same-backend run-to-run spread (122.1 m vs 20.6 m on a cell centre) that
  * retired the hold chain's unvalidated tier. The
- * default is Metal on macOS and SwiftShader elsewhere; `--angle` overrides it.
+ * default is Metal; QA_ANGLE overrides it.
  * Mesh samples describe the selected backend, not another GPU's rendered LOD.
  * An unavailable rendered-mesh oracle remains a failed check, even if the
  * separate bare-earth DEM check passes. Software evidence does not establish
  * real-GPU visual correctness.
  */
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -39,7 +42,7 @@ const APP_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = Object.fromEntries(process.argv.slice(2)
   .map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? true]));
 // Metal is a macOS-only ANGLE backend; defaulting to it off-Mac fails WebGL init.
-const ANGLE = String(argv.angle || (process.platform === 'darwin' ? 'metal' : 'swiftshader'));
+const ANGLE = process.env.QA_ANGLE || 'metal';
 const HEADFUL = !!argv.headful;
 // Austin airport apron by default — the site qa-floor-verify pins, where the
 // mesh sits ~150 m above the geoid and burial is unmistakable.
@@ -48,7 +51,7 @@ const SITE = {
   lon: Number.isFinite(Number(argv.lon)) ? Number(argv.lon) : -97.6660,
 };
 const ICAO = 'aa0f01';
-const OUT_DIR = 'qa-shots/floorhold';
+const OUT_DIR = new URL(APP_URL).searchParams.get('engine') === 'navara' ? 'qa-shots/floorhold/navara' : 'qa-shots/floorhold';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const results = [];
@@ -58,12 +61,9 @@ function record(name, ok, detail) {
 }
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-const chrome = await puppeteer.executablePath().catch(() => undefined);
-const browser = await puppeteer.launch({
-  headless: HEADFUL ? false : 'new',
-  executablePath: chrome,
-  args: ['--use-gl=angle', `--use-angle=${ANGLE}`, '--enable-webgl',
-    '--ignore-gpu-blocklist', '--no-sandbox'],
+const browser = await launchBrowser({
+  headless: true,
+  args: ['--enable-webgl', '--ignore-gpu-blocklist', '--no-sandbox'],
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 900 });
@@ -107,26 +107,36 @@ await page.evaluateOnNewDocument((site, icao) => {
 
 console.log(`\nFloor hold through a terrain outage\n  App  : ${APP_URL}\n  GPU  : ANGLE/${ANGLE}\n  Site : ${SITE.lat}, ${SITE.lon}\n`);
 await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
-await page.waitForFunction(() => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+await page.waitForFunction(() => window.__godsEyeView?.layers && window.__godsEyeView?.dataManager,
   { timeout: 150000 });
-await sleep(12000); // let the boot fly-to settle before pinning
+await whenSettled(page); // let the boot fly-to settle before pinning
 await page.evaluate(() => {
   document.querySelector('#first-run-launcher:not([hidden]) [data-first-run-choice="explore"]')?.click();
 });
-await sleep(600); // let the launcher dismissal finish before taking evidence
+await whenSettled(page); // let the launcher dismissal finish before taking evidence
 
 await page.evaluate((site) => { window.__SITE = site; }, SITE);
-const pin = () => page.evaluate(() => {
-  const v = window.__godsEyeView.viewer;
-  const C = v.camera.positionCartographic.constructor;
-  v.camera.cancelFlight();
-  v.camera.setView({
-    destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+const pin = () => evaluateWithGeo(page, async (qaGeo) => {
+  const app = window.__godsEyeView;
+  if (!app.viewer) {
+    const geo = await import('/src/geo/index.js');
+    app.engine.camera.cancelFlight();
+    app.engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(window.__SITE.lon, window.__SITE.lat - 0.008, 900),
+      orientation: { heading: 0, pitch: -0.45, roll: 0 },
+    });
+    app.engine.camera.moveEnd.raiseEvent();
+    return;
+  }
+  const C = qaGeo.cartographic;
+  window.__godsEyeView.engine.camera.cancelFlight();
+  window.__godsEyeView.engine.camera.setView({
+    destination: qaGeo.cartographic.toCartesian(
       C.fromDegrees(window.__SITE.lon, window.__SITE.lat - 0.008, 900),
     ),
     orientation: { heading: 0, pitch: -0.45, roll: 0 },
   });
-  v.camera.moveEnd.raiseEvent();
+  window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
 });
 await pin();
 const billboardMode = await page.evaluate(async () => {
@@ -141,22 +151,44 @@ const billboardMode = await page.evaluate(async () => {
 record('the billboard floor test is explicitly in 2D aircraft mode', billboardMode);
 
 /** Reads the contact's rendered height and the rendered mesh beneath it. */
-const measure = () => page.evaluate(async (icao) => {
-  const v = window.__godsEyeView.viewer;
-  const C = v.camera.positionCartographic.constructor;
-  const sprites = []; const models = []; let bb = null;
+const measure = () => evaluateWithGeo(page, async (qaGeo, icao) => {
+  const app = window.__godsEyeView;
+  if (!app.viewer) {
+    const geo = await import('/src/geo/index.js');
+    const bb = app.layers.drawn('flights').find((row) => row.id === icao && !row.trackedModel);
+    if (!bb?.position) return { error: 'contact billboard not found' };
+    const carto = geo.cartographic.fromCartesian(bb.position);
+    let mesh = null;
+    for (let attempt = 0; attempt < 10 && mesh == null; attempt++) {
+      app.engine.render.request('floor-hold');
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const height = app.engine.surface.sampleHeight(carto);
+      if (Number.isFinite(height)) mesh = height;
+      else await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    return { spriteH: carto.height, meshH: mesh, shown: bb.show === true,
+      lat: +(carto.latitude * 180 / Math.PI).toFixed(5), lon: +(carto.longitude * 180 / Math.PI).toFixed(5), terrain: { ...window.__TERRAIN } };
+  }
+  const v = app.viewer;
+  const C = qaGeo.cartographic;
+  // The contact as the layer draws it (the probe's drawn rows: the layer owns
+  // no Cesium billboard of its own any more; the engine's batched billboards
+  // keep a hidden spare's old id, so an id match there can be stale).
+  const bb = app.layers.drawn('flights').find((row) => row.id === icao && !row.trackedModel);
+  if (!bb?.position) return { error: 'contact billboard not found' };
+  // Every billboard and model in the scene (the engine's mover batches
+  // included) stays out of the mesh probes.
+  const sprites = []; const models = [];
   const walk = (coll) => {
     for (let i = 0; i < coll.length; i++) {
       let p; try { p = coll.get(i); } catch { continue; }
       if (!p) continue;
       if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-      if (p.image !== undefined && p.alignedAxis !== undefined) {
-        sprites.push(p); if (p.id === icao) bb = p;
-      } else if (p.boundingSphere && p.modelMatrix) models.push(p);
+      if (p.image !== undefined && p.alignedAxis !== undefined) sprites.push(p);
+      else if (p.boundingSphere && p.modelMatrix) models.push(p);
     }
   };
   try { walk(v.scene.primitives); } catch { /* mid-teardown */ }
-  if (!bb?.position) return { error: 'contact billboard not found' };
   const carto = C.fromCartesian(bb.position);
   const lat = carto.latitude * 180 / Math.PI;
   const lon = carto.longitude * 180 / Math.PI;
@@ -168,7 +200,7 @@ const measure = () => page.evaluate(async (icao) => {
   // harness does, and accept the coarse cell centre as a fallback point.
   const pump = () => new Promise((resolve) => {
     try { window.__godsEyeView.requestRender?.(); } catch { /* no governor */ }
-    try { v.scene.requestRender(); } catch { /* explicit-render off */ }
+    try { window.__godsEyeView.engine.render.request(); } catch { /* explicit-render off */ }
     requestAnimationFrame(() => requestAnimationFrame(resolve));
   });
   let mesh = null;
@@ -177,7 +209,7 @@ const measure = () => page.evaluate(async (icao) => {
     for (const [pLat, pLon] of [[lat, lon], [+lat.toFixed(3), +lon.toFixed(3)]]) {
       for (const exclude of [[...sprites, ...models], []]) {
         try {
-          const h = v.scene.sampleHeight(C.fromDegrees(pLon, pLat, 0), exclude);
+          const h = window.__godsEyeView.engine.surface.sampleHeight(C.fromDegrees(pLon, pLat, 0), exclude);
           if (Number.isFinite(h)) { mesh = h; break; }
         } catch { /* mid-stream */ }
       }
@@ -201,7 +233,9 @@ async function demTruth(lat, lon) {
   if (truth.has(key)) return truth.get(key);
   let h = null;
   try {
-    const res = await fetch(`${APP_URL}/api/terrain/heights?points=${lon.toFixed(5)},${lat.toFixed(5)}`);
+    const url = new URL('/api/terrain/heights', APP_URL);
+    url.searchParams.set('points', `${lon.toFixed(5)},${lat.toFixed(5)}`);
+    const res = await fetch(url);
     if (res.ok) {
       const v = Number((await res.json())?.results?.[0]?.ellipsoid);
       if (Number.isFinite(v)) h = v;
@@ -243,7 +277,7 @@ for (let i = 1; i <= 4; i++) {
   await sample('B', `poll+${i}`);
 }
 fs.writeFileSync(path.join(OUT_DIR, `hold-B-outage-${ANGLE}.png`), await page.screenshot({ type: 'png' }));
-await browser.close();
+await closeBrowser(browser);
 
 console.log('');
 const outage = samples.filter((s) => s.phase === 'B');

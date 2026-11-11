@@ -6,12 +6,13 @@
  * native dispatch/disabled/teardown without providers or world calibration writes.
  * Real Scene authoring/playback remains covered by qa-scene-controls.mjs.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-gl=angle', '--use-angle=swiftshader'],
+  args: [],
 });
 const page = await browser.newPage();
 const errors = [];
@@ -34,11 +35,10 @@ try {
     { waitUntil: 'domcontentloaded' },
   );
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._cctvControls &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._cctvControls,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   const inventory = await page.evaluate(() => {
     const ids = [
       'scene-new-btn',
@@ -304,11 +304,10 @@ try {
   localized.searchParams.set('lang', 'ru');
   await page.goto(localized.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._cctvControls &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._cctvControls,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   for (const panel of ['scene-panel', 'cctv-panel']) {
     await page.evaluate((panel) => {
       window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
@@ -329,7 +328,7 @@ try {
   }
   check('no uncaught browser errors', errors.length === 0, errors);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures} failures`);
 process.exitCode = failures ? 1 : 0;

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { chromeExecutablePath } from './qa-chrome.mjs';
+// Cesium-only probes: native entity, DataSource and primitive counts independently audit Cesium ownership.
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * Phase 0 world-overlay baseline harness.
  *
@@ -15,14 +18,23 @@
  *   node scripts/qa-overlay-baseline.mjs --screenshots-dir /tmp/overlay-shots
  *   node scripts/qa-overlay-baseline.mjs --hardware-gpu --headful
  *   node scripts/qa-overlay-baseline.mjs --dist-dir /tmp/gev-dist
+ *   node scripts/qa-overlay-baseline.mjs --engine=navara
+ *
+ * Engine-neutral: the camera and frames go through the globe engine and the
+ * layers through the public engine and data manager surfaces.
+ * A scene whose layers the engine does not have is SKIPPED. The inventory
+ * counts the globe contract's sets (movers, lines, ground, imagery) on both
+ * engines; on Cesium it also counts what is left of Entities, LabelGraphics
+ * and primitives (none of them a layer's own any more).
  */
 
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
+import { fromDegrees } from '../src/geo/cartesian3.js';
 
-const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_EXECUTABLE = chromeExecutablePath();
 const DEFAULT_URL = 'http://localhost:4176';
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const SAMPLE_MS = 5_000;
@@ -227,14 +239,21 @@ function numericDelta(after, before, key) {
 
 function inventoryDelta(before, after) {
   return {
-    entities: numericDelta(after, before, 'entities'),
-    labelGraphics: numericDelta(after, before, 'labelGraphics'),
-    nonemptyLabelText: numericDelta(after, before, 'nonemptyLabelText'),
-    emptyLabelText: numericDelta(after, before, 'emptyLabelText'),
-    shownLabelGraphics: numericDelta(after, before, 'shownLabelGraphics'),
-    primitiveLabels: numericDelta(after, before, 'primitiveLabels'),
-    primitiveBillboards: numericDelta(after, before, 'primitiveBillboards'),
-    primitivePoints: numericDelta(after, before, 'primitivePoints'),
+    moverInstances: numericDelta(after, before, 'moverInstances'),
+    lines: numericDelta(after, before, 'lines'),
+    groundItems: numericDelta(after, before, 'groundItems'),
+    imageryLayers: numericDelta(after, before, 'imageryLayers'),
+    // Cesium only: what is left of Entities and primitives.
+    ...(after?.totals?.entities === undefined ? {} : {
+      entities: numericDelta(after, before, 'entities'),
+      labelGraphics: numericDelta(after, before, 'labelGraphics'),
+      nonemptyLabelText: numericDelta(after, before, 'nonemptyLabelText'),
+      emptyLabelText: numericDelta(after, before, 'emptyLabelText'),
+      shownLabelGraphics: numericDelta(after, before, 'shownLabelGraphics'),
+      primitiveLabels: numericDelta(after, before, 'primitiveLabels'),
+      primitiveBillboards: numericDelta(after, before, 'primitiveBillboards'),
+      primitivePoints: numericDelta(after, before, 'primitivePoints'),
+    }),
   };
 }
 
@@ -259,11 +278,13 @@ function printScene(result) {
   if (result.reason) console.log(`  reason      : ${result.reason}`);
   for (const activation of result.layerActivations || []) {
     const delta = activation.delta;
-    console.log(`  toggle ${activation.layerId.padEnd(31)} entities ${String(delta.entities).padStart(6)} · LabelGraphics ${String(delta.labelGraphics).padStart(6)} · primitive labels ${String(delta.primitiveLabels).padStart(6)}`);
+    console.log(`  toggle ${activation.layerId.padEnd(31)} movers ${String(delta.moverInstances).padStart(6)} · lines ${String(delta.lines).padStart(5)} · ground ${String(delta.groundItems).padStart(6)} · imagery ${String(delta.imageryLayers).padStart(2)}${delta.entities === undefined ? '' : ` · entities ${String(delta.entities).padStart(6)} · LabelGraphics ${String(delta.labelGraphics).padStart(6)}`}`);
   }
   if (result.entityInventory) {
     const totals = result.entityInventory.totals;
-    console.log(`  scene total : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
+    console.log(`  scene total : mover sets ${totals.moverSets} · instances ${totals.moverInstances} · lines ${totals.lines} · ground sets ${totals.groundSets} (${totals.groundItems} items) · imagery ${totals.imageryLayers}`);
+    if (totals.entities !== undefined)
+      console.log(`  Cesium      : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
   }
   for (const phaseName of ['motion', 'rest']) {
     const phase = result.samples?.[phaseName];
@@ -345,34 +366,28 @@ async function installPageInstrumentation(page) {
 async function waitForApp(page) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager),
+    () => Boolean(window.__godsEyeView?.engine && window.__godsEyeView?.dataManager),
     { timeout: 60_000 },
   );
+  await whenSettled(page);
   await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    try { viewer.camera.cancelFlight(); } catch { /* no flight */ }
-    try { viewer.scene.tweens?.removeAll?.(); } catch { /* no tween collection */ }
+    const { engine } = window.__godsEyeView;
+    try { engine.camera.cancelFlight(); } catch { /* no flight */ }
   });
-  await sleep(1_250);
+  await whenFramesDrawn(page);
 }
 
 async function setCamera(page, camera) {
   if (!camera) return;
-  await page.evaluate(([lon, lat, height, heading, pitch]) => {
-    const viewer = window.__godsEyeView.viewer;
-    const ellipsoid = viewer.scene.globe.ellipsoid;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: ellipsoid.cartographicToCartesian({
-        longitude: lon * Math.PI / 180,
-        latitude: lat * Math.PI / 180,
-        height,
-      }),
+  await page.evaluate(([destination, heading, pitch]) => {
+    const { engine } = window.__godsEyeView;
+    engine.camera.cancelFlight();
+    engine.camera.setView({
+      destination,
       orientation: { heading, pitch, roll: 0 },
     });
-    viewer.scene.requestRender?.();
-  }, camera);
+    engine.render.request('qa-overlay-baseline');
+  }, [fromDegrees(...camera.slice(0, 3)), ...camera.slice(3)]);
 }
 
 async function readLayerState(page, layerId) {
@@ -411,10 +426,38 @@ async function waitForLayer(page, layerId) {
 
 async function readEntityInventory(page) {
   return page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
+    const { viewer, engine } = window.__godsEyeView;
+    // What the layers draw, on either engine: the globe contract's sets
+    // (layers own no Cesium Entities, DataSources or primitives any more).
+    const movers = engine.movers.list();
+    const lines = engine.lines.list();
+    const ground = engine.ground.list();
+    const imagery = engine.imagery.list();
+    const contract = {
+      moverSets: movers.length,
+      moverInstances: movers.reduce((sum, set) => sum + set.count, 0),
+      lines: lines.filter((line) => line.shown).length,
+      groundSets: ground.length,
+      groundItems: ground.reduce((sum, set) => sum + (set.shown ? set.count : 0), 0),
+      imageryLayers: imagery.filter((layer) => layer.shown).length,
+    };
+    const contractCollections = [
+      ...movers.map((set) => ({ scope: 'movers', ...set })),
+      ...ground.map((set) => ({ scope: 'ground', ...set })),
+      ...imagery.map((layer) => ({ scope: 'imagery', ...layer })),
+    ];
+    // Without a Cesium viewer (Navara): the contract sets only.
+    if (!viewer) {
+      return {
+        totals: contract,
+        collections: contractCollections,
+        primitiveTypes: {},
+      };
+    }
     const time = viewer.clock.currentTime;
-    const collections = [];
+    const collections = [...contractCollections];
     const totals = {
+      ...contract,
       entities: 0,
       labelGraphics: 0,
       shownLabelGraphics: 0,
@@ -546,7 +589,7 @@ async function prepareCctv(page, heightM) {
   }, heightM);
   if (!camera) return 'CCTV catalog did not expose a geolocated camera';
   await setCamera(page, camera);
-  await sleep(7_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -559,14 +602,14 @@ async function prepareFirms(page) {
   });
   if (!result.fire) return `FIRMS unavailable (${result.stats.error || 'no detections'})`;
   await setCamera(page, [result.fire.longitude, result.fire.latitude, 60_000, 0, -1.45]);
-  await sleep(4_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
 async function prepareVessels(page) {
   const state = await readLayerState(page, 'ais-live-vessels');
   if (!(state?.stats?.count > 0)) return `AIS unavailable (${state?.stats?.error || 'no live vessels'})`;
-  await sleep(2_500);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -580,7 +623,7 @@ async function prepareDetection(page, densityPct) {
     densityPct: density,
   }), densityPct);
   if (!control?.ok) return `Detection control failed (${control?.error || 'unknown error'})`;
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -605,11 +648,11 @@ async function prepareTrackedFlight(page, cockpit) {
   });
   if (!tracked.ok) return `Civil tracking unavailable (${tracked.reason})`;
   try {
-    await page.waitForFunction(() => Boolean(window.__godsEyeView.viewer.trackedEntity?.position), { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(window.__godsEyeView.engine.camera.following()), { timeout: 10_000 });
   } catch {
     return 'Civil tracking did not create a tracked entity';
   }
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   if (!cockpit) return null;
   const entryAvailable = await page.evaluate(() => {
     const button = document.getElementById('cockpit-entry');
@@ -623,7 +666,7 @@ async function prepareTrackedFlight(page, cockpit) {
   } catch {
     return 'Cockpit entry control did not enter cockpit mode';
   }
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -638,15 +681,21 @@ async function prepareMission(page) {
   });
   if (!selected) return 'Mission roster did not expose a selectable mission';
   try {
-    await page.waitForFunction(() => String(window.__godsEyeView.viewer.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(window.__godsEyeView.dataManager.layers.get('rocket-launches')?.module?.qaDrawn?.()?.selected), { timeout: 10_000 });
   } catch {
-    return 'Mission selection did not reach the Cesium selected entity';
+    return 'Mission selection did not reach the layer probe';
   }
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
 async function prepareScene(page, scene) {
+  const missing = await page.evaluate(
+    (ids) => ids.filter((id) => !window.__godsEyeView.dataManager.layers.has(id)),
+    scene.layers,
+  );
+  if (missing.length)
+    return { layerActivations: [], skipReason: `no ${missing.join(', ')} on ${ENGINE}` };
   if (scene.camera) await setCamera(page, scene.camera);
   const layerActivations = await activateLayers(page, scene.layers);
   let skipReason = null;
@@ -656,7 +705,7 @@ async function prepareScene(page, scene) {
   if (!skipReason && scene.detectionDensity) skipReason = await prepareDetection(page, scene.detectionDensity);
   if (!skipReason && scene.trackedFlight) skipReason = await prepareTrackedFlight(page, scene.cockpit);
   if (!skipReason && scene.missionSelected) skipReason = await prepareMission(page);
-  await sleep(DEFAULT_SETTLE_MS);
+  await whenFramesDrawn(page);
   return { layerActivations, skipReason };
 }
 
@@ -678,7 +727,28 @@ async function readCanvasSummary(page) {
 
 async function samplePhase(page, moving) {
   const raw = await page.evaluate(async ({ durationMs, movingCamera }) => {
-    const viewer = window.__godsEyeView.viewer;
+    const { engine } = window.__godsEyeView;
+    // Cesium's rotateRight / rotateUp: the camera turned about the axis
+    // through the globe centre along its up (right) vector.
+    const rotate = (axis, angle) => {
+      const pose = engine.camera.pose();
+      const len = Math.hypot(axis.x, axis.y, axis.z);
+      const [ux, uy, uz] = [axis.x / len, axis.y / len, axis.z / len];
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const turn = (v) => {
+        const dot = ux * v.x + uy * v.y + uz * v.z;
+        return {
+          x: v.x * cos + (uy * v.z - uz * v.y) * sin + ux * dot * (1 - cos),
+          y: v.y * cos + (uz * v.x - ux * v.z) * sin + uy * dot * (1 - cos),
+          z: v.z * cos + (ux * v.y - uy * v.x) * sin + uz * dot * (1 - cos),
+        };
+      };
+      engine.camera.setView({
+        destination: turn(pose.position),
+        orientation: { direction: turn(pose.direction), up: turn(pose.up) },
+      });
+    };
     const instrumentation = window.__overlayBaselineInstrumentation;
     instrumentation?.reset?.();
     const intervals = [];
@@ -690,10 +760,11 @@ async function samplePhase(page, moving) {
         lastFrameAt = now;
         const elapsed = now - startedAt;
         if (movingCamera) {
-          viewer.camera.rotateRight(0.00035);
-          viewer.camera.rotateUp(0.00008 * Math.sin(elapsed / 600));
+          const pose = engine.camera.pose();
+          rotate(pose.up, -0.00035);
+          rotate(engine.camera.pose().right, 0.00008 * Math.sin(elapsed / 600));
         }
-        viewer.scene.requestRender?.();
+        engine.render.request('qa-overlay-baseline');
         if (elapsed >= durationMs) resolve();
         else requestAnimationFrame(step);
       };
@@ -799,7 +870,7 @@ async function runScene(browser, scene, shotsDir) {
     const motion = await samplePhase(page, true);
     const afterMotionShot = await captureShot(page, shotsDir, scene.id, 'after-motion');
     if (afterMotionShot) result.screenshots.push(afterMotionShot);
-    await sleep(BETWEEN_PHASE_SETTLE_MS);
+    await whenFramesDrawn(page);
     const rest = await samplePhase(page, false);
     result.samples = { motion, rest };
     result.entityInventoryAfter = await readEntityInventory(page);
@@ -813,7 +884,12 @@ async function runScene(browser, scene, shotsDir) {
   }
 }
 
-const APP_URL = getOpt('--url', DEFAULT_URL);
+const ENGINE = process.argv.find((value) => value.startsWith('--engine='))?.slice(9) ?? 'cesium';
+const APP_URL = (() => {
+  const url = new URL(getOpt('--url', DEFAULT_URL));
+  url.searchParams.set('engine', ENGINE);
+  return url.href;
+})();
 const DPR = Number(getOpt('--dpr', '1'));
 const JSON_PATH = getOpt('--json');
 const SCREENSHOTS_DIR = getOpt('--screenshots-dir');
@@ -830,9 +906,6 @@ function unavailableRenderer(renderer) {
 }
 
 async function main() {
-  if (!fs.existsSync(CHROME_EXECUTABLE)) {
-    throw new Error(`Required Chrome executable not found: ${CHROME_EXECUTABLE}`);
-  }
   if (!Number.isFinite(DPR) || DPR <= 0) throw new Error(`Invalid --dpr value: ${DPR}`);
   const scenes = selectedScenes();
   if (DIST_DIR && (!fs.existsSync(DIST_DIR) || !fs.statSync(DIST_DIR).isDirectory())) {
@@ -843,18 +916,9 @@ async function main() {
     if (!response.ok) throw new Error(`Dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`);
   }
 
-  const browser = await puppeteer.launch({
-    executablePath: CHROME_EXECUTABLE,
-    headless: HEADFUL ? false : 'new',
-    args: [
-      ...(HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: [...(process.env.QA_ANGLE ? [] : HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader']), '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', `--window-size=${VIEWPORT.width},${VIEWPORT.height}`],
   });
 
   const run = { generatedAt: new Date().toISOString(), context: null, scenes: [] };
@@ -900,11 +964,9 @@ async function main() {
         webglRenderer: browserContext.webglRenderer,
       },
       viewport: { ...VIEWPORT, dpr: browserContext.dpr },
-      gpuMode: HARDWARE_GPU ? 'hardware' : 'swiftshader',
+      gpuMode: process.env.QA_ANGLE || 'metal',
       chromeExecutable: CHROME_EXECUTABLE,
-      chromeArgs: HARDWARE_GPU
-        ? ['--no-sandbox']
-        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader', '--no-sandbox'],
+      chromeArgs: browser.process()?.spawnargs.slice(1),
       sampleMs: SAMPLE_MS,
       captureMode: DIST_DIR ? `static-dist:${path.resolve(DIST_DIR)}` : 'dev-server',
     };
@@ -916,7 +978,7 @@ async function main() {
       printScene(result);
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   run.summary = {

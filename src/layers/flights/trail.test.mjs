@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
 import { TRAIL_MAX_POINTS } from './policy.js';
@@ -12,6 +14,7 @@ const NM = 1852;
 
 function services({ trails, floor = () => null } = {}) {
   const names = [
+    'selection',
     'picking',
     'sprites',
     'aircraftPresentation',
@@ -67,21 +70,6 @@ function recordingTrail() {
   };
 }
 
-function viewer() {
-  const added = [];
-  return {
-    added,
-    isDestroyed: () => false,
-    entities: {
-      add(definition) {
-        added.push(definition);
-        return definition;
-      },
-      remove() {},
-    },
-  };
-}
-
 /**
  * A tracked aircraft whose live history holds `liveFixes` ({timeMs, lat, lon}),
  * with a track endpoint answering `waypoints`.
@@ -105,16 +93,24 @@ function trackedHarness({
       },
     },
   });
-  const v = viewer();
-  flightState._viewer = v;
+  const added = [];
+  flightState._renderer = recordingAircraftRenderer(createFakeEngine());
+  flightState._renderer.trails = {
+    create: svc.trails.createTrail,
+    createHead(definition) {
+      added.push(definition);
+      return definition;
+    },
+    removeHead() {},
+  };
   flightState._trackedIcao = 'abc123';
   flightState.now = () => nowMs;
   flightState._positionHistory.set(
     'abc123',
     liveFixes.map((fix) => ({
-      time: Cesium.JulianDate.fromDate(new Date(fix.timeMs)),
+      timeMs: fix.timeMs,
       epochMs: fix.timeMs,
-      position: Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 10_000),
+      position: geo.cartesian3.fromDegrees(fix.lon, fix.lat, 10_000),
     })),
   );
   const tracking = createTracking({
@@ -131,7 +127,7 @@ function trackedHarness({
     },
     layer: {},
   });
-  return { trail, tracking, flightState, viewer: v };
+  return { trail, tracking, flightState, renderer: { added } };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -151,7 +147,7 @@ function headPositions(v) {
   const entity = v.added.find((definition) =>
     String(definition.id).startsWith('gev-trail:fl-head-'),
   );
-  return entity.polyline.positions.getValue();
+  return entity.positions();
 }
 
 test('a pair 40 minutes and 300 km apart stays joined', () => {
@@ -223,11 +219,11 @@ test('a backfill with gaps of 10 h, 2 h, 1.2 h and 6.5 h draws five segments and
   assert.equal(bodyCount, waypoints.length + 3);
   for (const [index, segment] of segments.entries()) {
     const expected = legs[index].map((point) =>
-      Cesium.Cartesian3.fromDegrees(point.longitude, point.latitude, 10_000),
+      geo.cartesian3.fromDegrees(point.longitude, point.latitude, 10_000),
     );
     for (const position of segment.slice(0, expected.length)) {
       assert.ok(
-        expected.some((e) => Cesium.Cartesian3.distance(e, position) < 1),
+        expected.some((e) => geo.cartesian3.distance(e, position) < 1),
         `segment ${index} holds a point from another leg`,
       );
     }
@@ -259,7 +255,7 @@ test('a null-altitude waypoint breaks the line, and nothing is drawn at 10 km', 
   );
   for (const segment of segments) {
     for (const position of segment) {
-      const height = Cesium.Cartographic.fromCartesian(position).height;
+      const height = geo.cartographic.fromCartesian(position).height;
       assert.ok(Math.abs(height - 10_000) < 1, 'only real altitudes drawn');
     }
   }
@@ -280,7 +276,7 @@ test('a null-altitude waypoint breaks the line, and nothing is drawn at 10 km', 
   );
   const kept = grounded.flightState._trailFixes[3];
   assert.ok(
-    Math.abs(Cesium.Cartographic.fromCartesian(kept.position).height - 121) < 1,
+    Math.abs(geo.cartographic.fromCartesian(kept.position).height - 121) < 1,
   );
 });
 
@@ -314,30 +310,30 @@ test('the head is drawn to a nearby aircraft and not to one more than 150 km awa
     lat: 50,
     lon: 1 + i * 0.12,
   }));
-  const near = Cesium.Cartesian3.fromDegrees(1.3, 50, 10_000);
+  const near = geo.cartesian3.fromDegrees(1.3, 50, 10_000);
   const joined = trackedHarness({
     liveFixes,
     nowMs: t0 + 3 * MINUTE,
     head: near,
   });
   joined.tracking._startTrail('abc123');
-  const drawn = headPositions(joined.viewer);
+  const drawn = headPositions(joined.renderer);
   assert.equal(drawn.length, 2);
-  assert.ok(Cesium.Cartesian3.distance(drawn[1], near) < 1e-6);
+  assert.ok(geo.cartesian3.distance(drawn[1], near) < 1e-6);
 
-  const far = Cesium.Cartesian3.fromDegrees(4, 50, 10_000);
+  const far = geo.cartesian3.fromDegrees(4, 50, 10_000);
   const detached = trackedHarness({
     liveFixes,
     nowMs: t0 + 3 * MINUTE,
     head: far,
   });
   detached.tracking._startTrail('abc123');
-  assert.deepEqual(headPositions(detached.viewer), []);
+  assert.deepEqual(headPositions(detached.renderer), []);
 
   // An hour without a fix: the head no longer joins the last body point.
   const stale = trackedHarness({ liveFixes, nowMs: t0 + HOUR, head: near });
   stale.tracking._startTrail('abc123');
-  assert.deepEqual(headPositions(stale.viewer), []);
+  assert.deepEqual(headPositions(stale.renderer), []);
 });
 
 test('a live fix after a one-hour feed gap starts a new segment', () => {
@@ -361,7 +357,7 @@ test('a live fix after a one-hour feed gap starts a new segment', () => {
   flightState.now = () => later + 3 * MINUTE;
   for (const [i, lon] of [3, 3.12, 3.24].entries()) {
     tracking._appendTrailFix(
-      Cesium.Cartesian3.fromDegrees(lon, 50, 10_000),
+      geo.cartesian3.fromDegrees(lon, 50, 10_000),
       later + i * MINUTE,
     );
   }

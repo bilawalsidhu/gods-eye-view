@@ -1,3 +1,4 @@
+import { ShellScene } from '../ui/shellScene.js';
 import { ShellFacade } from '../ui/shellFacade.js';
 import { AircraftDisplay } from '../ui/aircraftDisplay.js';
 import { LayerBindings } from '../ui/layerBindings.js';
@@ -24,6 +25,7 @@ export function readShellSource() {
     'layerBindings',
     'displayBindings',
     'shellFacade',
+    'shellScene',
     'applicationShell',
   ]
     .map((name) =>
@@ -45,6 +47,7 @@ export function shellMethod(name) {
     LayerBindings,
     DisplayBindings,
     StyleManager,
+    ShellScene,
     ShellFacade,
   ]) {
     const method = Object.getOwnPropertyDescriptor(

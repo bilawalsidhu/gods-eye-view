@@ -8,6 +8,12 @@ import {
   _trackedFrameCartesianForTest,
 } from './satellites.js';
 import { setLocale } from '../i18n/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';
@@ -18,7 +24,7 @@ function run(locale) {
   setLocale(locale);
   const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
   const point = { position: new Cesium.Cartesian3() };
-  const viewer = { camera: null, scene: { frameState: { frameNumber: 1 } } };
+  const engine = createFakeEngine();
   let nowMs = Date.UTC(2008, 8, 20, 12, 30);
   const near = (metres) => ({
     get position() {
@@ -32,7 +38,7 @@ function run(locale) {
     satrec: twoline2satrec(L1, L2),
     entity,
     point,
-    viewer,
+    engine,
     now: () => nowMs,
     neighbours: [
       { noradId: 55555, name: 'PROGRESS-MS 34', point: near(120) },
@@ -41,7 +47,7 @@ function run(locale) {
   });
   _runSatellitePreRenderForTest();
   nowMs += 2000;
-  viewer.scene.frameState.frameNumber = 2;
+  engine.fake.frame();
   _runSatellitePreRenderForTest();
   const details = entity.gevLabelModel.details;
   setLocale('en');

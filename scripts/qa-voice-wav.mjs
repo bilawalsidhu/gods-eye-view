@@ -4,11 +4,12 @@
  *
  * Run: node scripts/qa-voice-wav.mjs http://localhost:4189 [--push-to-talk]
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pushToTalk = process.argv.includes('--push-to-talk');
@@ -33,20 +34,9 @@ if (fixtureSha256 !== expectedFixtureSha256) {
 }
 
 const appOrigin = new URL(appUrl).origin;
-const browser = await puppeteer.launch({
-  headless: 'new',
-  executablePath: await puppeteer.executablePath(),
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--use-fake-device-for-media-stream',
-    `--use-file-for-fake-audio-capture=${wavPath}%noloop`,
-    '--autoplay-policy=no-user-gesture-required',
-    '--window-size=1440,900',
-  ],
+const browser = await launchBrowser({
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${wavPath}%noloop`, '--autoplay-policy=no-user-gesture-required', '--window-size=1440,900'],
 });
 
 try {
@@ -65,15 +55,14 @@ try {
   await page.waitForFunction(() => (
     window.__godsEyeView?.voiceCommands
     && document.getElementById('gev-voice-button')
-    && document.getElementById('loading-screen')?.classList.contains('hidden')
   ), { timeout: 30_000 });
+  await whenSettled(page);
 
   const readState = () => page.evaluate(() => {
     const voice = window.__godsEyeView?.voiceCommands;
     const radio = window.__godsEyeView?.dataManager?.layers?.get('radio')?.module;
     const radioState = radio?.getUIState?.() || null;
-    const camera = window.__godsEyeView?.viewer?.camera;
-    const cartographic = camera?.positionCartographic;
+    const cartographic = window.__godsEyeView.engine.camera.pose().cartographic;
     return {
       at: Date.now(),
       voiceStatus: voice?.status || null,
@@ -157,5 +146,5 @@ try {
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = result.ok ? 0 : 1;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

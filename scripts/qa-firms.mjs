@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: entity sentinels and native flight interception verify the Cesium selection path.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * qa-firms.mjs — headless proof for the LIVE NASA FIRMS fires layer.
  *
@@ -29,44 +32,39 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
+import {
+  isExpectedPreviewSetupError,
+  redact,
+} from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
-const SHOTS_DIR = path.join(REPO_ROOT, 'qa-shots');
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
-const APP_URL = getOpt('--url', 'http://localhost:4420');
+const appUrl = new URL(getOpt('--url', 'http://localhost:4420'));
+const ENGINE = getOpt('--engine', appUrl.searchParams.get('engine') || 'cesium');
+if (!['cesium', 'navara'].includes(ENGINE)) throw new Error('Unknown engine');
+appUrl.searchParams.set('engine', ENGINE);
+const APP_URL = appUrl.href;
 const HEADFUL = argv.includes('--headful');
 const FIXTURES = argv.includes('--fixtures');
+const PREVIEW = argv.includes('--preview');
+const ANGLE = process.env.QA_ANGLE || 'metal';
+const OUT = getOpt('--out', null);
+const SHOTS_DIR = OUT ? path.resolve(OUT).replace(/\.json$/, '') + '-shots' : path.join(REPO_ROOT, 'qa-shots');
+if (!['metal', 'swiftshader'].includes(ANGLE)) throw new Error('Unknown ANGLE backend');
+const runtimeErrors = [];
+const expectedSourceErrors = [];
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* ignore */ }
-  }
-  return null;
-}
 
 const results = [];
 function record(name, ok, detail) {
@@ -112,7 +110,7 @@ async function waitForCardCanvasInk(page, { timeoutMs = 12000 } = {}) {
   let consecutive = 0;
   let sample = null;
   while (Date.now() < deadline) {
-    await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
+    await page.evaluate(() => window.__godsEyeView.engine.render.request?.());
     await sleep(150);
     sample = await cardCanvasInk(page);
     if (sample.present && sample.entries > 0 && sample.painted > 0 && sample.ink > 500) {
@@ -146,7 +144,7 @@ async function waitForFirmsActionCount(page, expected, { timeoutMs = 12000 } = {
   const deadline = Date.now() + timeoutMs;
   let snapshot = await firmsActionSnapshot(page);
   while (Date.now() < deadline && snapshot.count !== expected) {
-    await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
+    await page.evaluate(() => window.__godsEyeView.engine.render.request?.());
     await sleep(175);
     snapshot = await firmsActionSnapshot(page);
   }
@@ -157,10 +155,13 @@ async function waitForFirmsActionCount(page, expected, { timeoutMs = 12000 } = {
 async function bootAndEnable(page, { timeoutS = 45 } = {}) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: 60000 },
   );
-  await sleep(5000);
+  await whenSettled(page);
+  const actualEngine = await page.evaluate(() => window.__godsEyeView.engine.kind);
+  if (actualEngine !== ENGINE) throw new Error('Requested FIRMS engine did not load');
+  await whenSettled(page);
   await page.keyboard.press('Escape');
   return page.evaluate(async (tS) => {
     const dm = window.__godsEyeView.dataManager;
@@ -178,17 +179,23 @@ async function bootAndEnable(page, { timeoutS = 45 } = {}) {
 
 /** Teleport the camera (duck-typed cartographic — no Cesium global). */
 async function setView(page, lon, lat, height) {
-  await page.evaluate((lo, la, h) => {
+  await evaluateWithGeo(page, async (qaGeo, lo, la, h) => {
     const gev = window.__godsEyeView;
-    const ell = gev.viewer.scene.globe.ellipsoid;
+    if (!gev.viewer) {
+      const geo = await import('/src/geo/index.js');
+      gev.engine.camera.cancelFlight();
+      gev.engine.camera.setView({destination:geo.cartesian3.fromDegrees(lo,la,h),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});
+      gev.engine.render.request('firms-legacy-view');
+      return;
+    }
     const d2r = Math.PI / 180;
     // The app's intro flyTo animation clobbers a setView issued mid-flight.
-    try { gev.viewer.camera.cancelFlight(); } catch { /* no flight active */ }
-    gev.viewer.camera.setView({
-      destination: ell.cartographicToCartesian({ longitude: lo * d2r, latitude: la * d2r, height: h }),
+    try { window.__godsEyeView.engine.camera.cancelFlight(); } catch { /* no flight active */ }
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({ longitude: lo * d2r, latitude: la * d2r, height: h }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
-    gev.viewer.scene.requestRender?.();
+    window.__godsEyeView.engine.render.request?.();
   }, lon, lat, height);
 }
 
@@ -247,15 +254,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
-      '--disable-dev-shm-usage', '--disable-web-security',
-      '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-      '--window-size=1440,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900'],
   });
 
   let exitCode = 0;
@@ -265,6 +266,23 @@ async function main() {
 
     await page.setRequestInterception(true);
     let interceptMode = FIXTURES ? 'fixture' : 'live';
+    page.on('pageerror', error => runtimeErrors.push(redact(error.message)));
+    page.on('error', error => runtimeErrors.push(redact(error.message)));
+    page.on('console', message => {
+      if (message.type() !== 'error') return;
+      if (isExpectedPreviewSetupError(message, { preview: PREVIEW, baseUrl: APP_URL })) {
+        expectedSourceErrors.push('/api/setup/status: 404');
+        return;
+      }
+      let expected = false;
+      try {
+        const url = new URL(message.location()?.url);
+        expected = interceptMode === 'keyless' && url.origin === new URL(APP_URL).origin
+          && url.pathname === '/api/firms' && /^Failed to load resource:.*\b503\b/.test(message.text());
+      } catch { /* an unknown location is never waived */ }
+      if (expected) expectedSourceErrors.push('/api/firms: intentional keyless fixture503');
+      else runtimeErrors.push(redact(message.text()));
+    });
     const stableStalePayload = stalePayload();
     page.on('request', (req) => {
       const url = req.url();
@@ -386,17 +404,22 @@ async function main() {
         const target = mod.getDetectableObjects({ maxCount: 1 })[0];
         if (!target?.position) return null;
 
-        const sentinel = gev.viewer.entities.add({
+        const native = Boolean(gev.viewer);
+        const sentinel = native ? gev.viewer.entities.add({
           id: 'qa-firms-prior-camera-owner',
           position: target.position,
-        });
-        gev.viewer.trackedEntity = sentinel;
+        }) : gev.engine.camera.follow({position:()=>target.position,viewFrom:{x:0,y:-5000,z:8000},
+          label:{id:'qa-firms-prior-camera-owner',model:{title:'QA prior camera owner'},position:()=>target.position}});
+        if (native) gev.viewer.trackedEntity = sentinel;
 
-        const camera = gev.viewer.camera;
-        const originalFly = camera.flyToBoundingSphere;
+        const camera = native ? gev.viewer.camera : gev.engine.camera;
+        const flightMethod = native ? 'flyToBoundingSphere' : 'flyToSphere';
+        const originalFly = camera[flightMethod];
         const proof = {
           sentinel,
           originalFly,
+          flightMethod,
+          native,
           flightCount: 0,
           trackedAtFlight: 'not-called',
           request: null,
@@ -409,9 +432,9 @@ async function main() {
           };
         };
         window.addEventListener('gev:world-request-focus', proof.onRequest);
-        camera.flyToBoundingSphere = function qaFirmsObservedFlight(...args) {
+        camera[flightMethod] = function qaFirmsObservedFlight(...args) {
           proof.flightCount += 1;
-          proof.trackedAtFlight = gev.viewer.trackedEntity?.id || null;
+          proof.trackedAtFlight = native ? gev.viewer.trackedEntity?.id || null : gev.engine.camera.following()?.label?.id || null;
           return originalFly.apply(this, args);
         };
         window.__qaFirmsActionProof = proof;
@@ -433,13 +456,13 @@ async function main() {
 
         for (let i = 0; i < 30; i += 1) {
           const settled = await page.evaluate(() => {
-            window.__godsEyeView?.viewer?.scene?.requestRender?.();
+            window.__godsEyeView?.engine?.render?.request?.('firms-legacy');
             return (window.__qaFirmsActionProof?.flightCount || 0) > 0;
           });
           if (settled) break;
           await sleep(100);
         }
-        await sleep(250);
+        await whenFramesDrawn(page);
 
         const proof = await page.evaluate(() => {
           const gev = window.__godsEyeView;
@@ -451,7 +474,7 @@ async function main() {
           const result = {
             flightCount: state?.flightCount || 0,
             trackedAtFlight: state?.trackedAtFlight,
-            trackingReleased: gev.viewer.trackedEntity == null,
+            trackingReleased: gev.viewer ? gev.viewer.trackedEntity == null : gev.engine.camera.following() == null,
             generationBefore: state?.generationBefore,
             generationAfter: gev.styleManager._navigationGeneration,
             request: state?.request || null,
@@ -461,9 +484,12 @@ async function main() {
             ).length,
           };
           if (state) {
-            gev.viewer.camera.flyToBoundingSphere = state.originalFly;
+            (state.native ? gev.viewer.camera : gev.engine.camera)[state.flightMethod] = state.originalFly;
             window.removeEventListener('gev:world-request-focus', state.onRequest);
-            if (state.sentinel) gev.viewer.entities.remove(state.sentinel);
+            if (state.sentinel) {
+              if (state.native) gev.viewer.entities.remove(state.sentinel);
+              else state.sentinel.stop();
+            }
           }
           delete window.__qaFirmsActionProof;
           return result;
@@ -510,15 +536,24 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
+  record('RUNTIME: no unexpected browser errors', runtimeErrors.length === 0,
+    runtimeErrors.length ? JSON.stringify(runtimeErrors) : `expected source errors=${expectedSourceErrors.length}`);
+  if (runtimeErrors.length) exitCode = 1;
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   console.log('\n' + '─'.repeat(60));
   console.log(`  RESULT: ${pass} passed, ${fail} failed`);
   console.log(`  Shots : ${SHOTS_DIR}/firms-*.png`);
   console.log('─'.repeat(60) + '\n');
+  if (OUT) {
+    const file = path.resolve(OUT);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ pass:exitCode === 0 && fail === 0, fixture:FIXTURES, angle:ANGLE, engine:ENGINE,
+      shots:SHOTS_DIR, results, browserErrors:runtimeErrors, expectedSourceErrors }, null, 2) + '\n');
+  }
   process.exit(exitCode || (fail > 0 ? 1 : 0));
 }
 

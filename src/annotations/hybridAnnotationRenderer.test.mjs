@@ -1,3 +1,5 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { installDomClasses } from '../testSupport/domClasses.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -5,11 +7,18 @@ import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
+
+/** The engine fakeViewer built for each viewer double (its credits). */
+const enginesOf = new WeakMap();
 
 /** A hybrid renderer whose screen board is presented to its own store. */
 function hybridWithBoard(viewer) {
   const store = useScreenAnnotationsStore(createPinia());
-  const renderer = createHybridAnnotationRenderer(viewer, { screen: { store } });
+  const renderer = createHybridAnnotationRenderer(viewer, {
+    screen: { store },
+    engine: enginesOf.get(viewer),
+  });
   return { store, renderer };
 }
 
@@ -68,24 +77,14 @@ function cameraLookingAt(lon, lat) {
 function installBrowserGlobals(t) {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalWindow = globalThis.window;
-  const originalBrowserConstructors = new Map([
-    ['HTMLCanvasElement', globalThis.HTMLCanvasElement],
-    ['HTMLImageElement', globalThis.HTMLImageElement],
-    ['ImageBitmap', globalThis.ImageBitmap],
-    ['OffscreenCanvas', globalThis.OffscreenCanvas],
-  ]);
+  installDomClasses(t);
   globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
   globalThis.window = { setTimeout: (fn) => { fn(); return 1; } };
-  for (const name of originalBrowserConstructors.keys()) globalThis[name] = class {};
   t.after(() => {
     if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
-    for (const [name, original] of originalBrowserConstructors) {
-      if (original === undefined) delete globalThis[name];
-      else globalThis[name] = original;
-    }
   });
 }
 
@@ -107,10 +106,7 @@ function fakeViewer(lon, lat) {
       scene.renderRequests += 1;
     },
   };
-  return {
-    dataSources,
-    frames,
-    viewer: {
+  const viewer = {
       credits,
       creditDisplay: {
         addStaticCredit: (credit) => credits.add(credit),
@@ -130,8 +126,13 @@ function fakeViewer(lon, lat) {
           return index >= 0;
         },
       },
-    },
-  };
+    };
+  // The Cesium engine's credits over the viewer's credit display.
+  const engine = createFakeEngine();
+  engine.credits = createCesiumCredits(viewer).credits;
+  engine.render.request = () => scene.requestRender();
+  enginesOf.set(viewer, engine);
+  return { dataSources, frames, viewer, engine };
 }
 
 function controlledFrames() {
@@ -172,23 +173,13 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalWindow = globalThis.window;
   globalThis.window = { setTimeout: (fn) => { fn(); return 1; } };
-  const originalBrowserConstructors = new Map([
-    ['HTMLCanvasElement', globalThis.HTMLCanvasElement],
-    ['HTMLImageElement', globalThis.HTMLImageElement],
-    ['ImageBitmap', globalThis.ImageBitmap],
-    ['OffscreenCanvas', globalThis.OffscreenCanvas],
-  ]);
+  installDomClasses(t);
   globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
-  for (const name of originalBrowserConstructors.keys()) globalThis[name] = class {};
   t.after(() => {
     if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
-    for (const [name, original] of originalBrowserConstructors) {
-      if (original === undefined) delete globalThis[name];
-      else globalThis[name] = original;
-    }
   });
 
   const camera = cameraLookingAt(-99, 31);
@@ -475,14 +466,14 @@ function workTrace() {
 
 test('buildings share one probe per frame and preserve probe geometry, filtering and fallback', async (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources, frames } = fakeViewer(-99, 31);
-  const renderer = createHybridAnnotationRenderer(viewer);
+  const { viewer, engine, dataSources, frames } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer, { engine });
   t.after(() => renderer.destroy());
   const first = buildingAnnotation('sampled-building');
   const second = buildingAnnotation('fallback-building', 0.01);
   second.outlineCredit = 'osm';
   const otherOwner = {};
-  showOsmCredit(viewer, otherOwner);
+  showOsmCredit(engine, otherOwner);
   const probes = [];
   const outcomes = [-500, 120, 30, null, new Error('tile unavailable'), 60, 9001, 90];
   viewer.scene.clampToHeight = (position) => {
@@ -583,7 +574,7 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
     'removing the last tile proxy retains the OSM building and other owner');
   renderer.remove(second);
   assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 1);
-  hideOsmCredit(viewer, otherOwner);
+  hideOsmCredit(engine, otherOwner);
   assert.equal(viewer.credits.size, 0);
 });
 

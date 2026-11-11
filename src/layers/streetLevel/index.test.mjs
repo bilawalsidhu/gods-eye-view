@@ -1,21 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
 import { createKartaViewProvider } from './providers/kartaview/index.js';
 import {
-  fakeCesiumViewer,
   fakeMapillarySource,
   fakePhotoViewer,
   fakeStreetLevelProvider as fakeProvider,
+  streetLevelMap,
 } from '../../testSupport/streetLevelFakes.mjs';
 import { setLocale } from '../../i18n/index.js';
 
 /**
- * A layer over `source` and `photoViewer`, initialised on a stand-in viewer
- * and (unless `enable` is false) enabled.
+ * A layer drawing on `harness` (the display on the fake engine,
+ * streetLevelMap), initialised on its engine.
+ */
+function mountLayer(harness, providers, services = {}) {
+  const layer = createStreetLevelLayer({
+    providers,
+    services: { createDisplay: () => harness.map, ...services },
+  });
+  layer.init(null, { engine: harness.engine });
+  return layer;
+}
+
+/**
+ * A layer over `source` and `photoViewer`, initialised on the display of a
+ * fake engine and (unless `enable` is false) enabled.
  */
 async function startLayer(
   t,
@@ -30,22 +43,15 @@ async function startLayer(
   const saved = globalThis.document;
   // The click handler listens for Esc on the document.
   globalThis.document = new EventTarget();
-  // Skip Cesium's one-time terrain table download for draped lines.
-  t.mock.method(
-    Cesium.GroundPolylinePrimitive,
-    'initializeTerrainHeights',
-    async () => {},
-  );
-  const viewer = fakeCesiumViewer({ view });
-  const layer = createStreetLevelLayer({ providers });
-  layer.init(viewer);
-  if (enable) layer.enable(viewer);
+  const harness = streetLevelMap({ view });
+  const layer = mountLayer(harness, providers);
+  if (enable) layer.enable();
   t.after(() => {
     layer.destroy();
     globalThis.document = saved;
   });
   await settle();
-  return { layer, viewer, source, photoViewer };
+  return { layer, harness, source, photoViewer };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -65,8 +71,8 @@ const posingViewer = () =>
   fakePhotoViewer({ pose: { position: { lon: -121.49, lat: 38.58 } } });
 
 test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
-  const { layer, viewer } = await startLayer(t);
-  const shown = () => viewer.credits.map((credit) => credit.html);
+  const { layer, harness } = await startLayer(t);
+  const shown = () => harness.credits();
   assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML], 'shown on enable');
   assert.match(shown()[0], /CC BY-SA 4\.0/);
   layer.setParams({ mapillary: false });
@@ -114,19 +120,19 @@ test('a key status that failed is asked again on the next switch-on', async (t) 
       return { configured: true };
     },
   });
-  const { layer, viewer } = await startLayer(t, { source, view: true });
+  const { layer, harness } = await startLayer(t, { source, view: true });
   assert.equal(asked, 1, 'one check for init and the first switch-on');
   assert.equal(layer.getUIState().keyRequired, true);
   up = true; // the server is reachable again
   layer.disable();
-  layer.enable(viewer);
+  layer.enable();
   await settle();
   assert.equal(asked, 2);
   assert.equal(layer.getUIState().keyRequired, false);
   assert.ok(source.calls.tiles.length > 0, 'coverage loads');
   // A known key is not asked again.
   layer.disable();
-  layer.enable(viewer);
+  layer.enable();
   await settle();
   assert.equal(asked, 2);
 });
@@ -148,7 +154,7 @@ test('a key status that never answers gives up, so the next switch-on asks again
         signal?.addEventListener('abort', () => reject(signal.reason));
       }),
   });
-  const { layer, viewer } = await startLayer(t, { source, view: true });
+  const { layer, harness } = await startLayer(t, { source, view: true });
   assert.equal(asked, 1);
   assert.equal(timeouts[0].ms, 10_000, 'the check can be cut short');
   assert.equal(layer.getUIState().coverage.loading, true, 'LOADING meanwhile');
@@ -157,7 +163,7 @@ test('a key status that never answers gives up, so the next switch-on asks again
   assert.equal(layer.getUIState().coverage.loading, false);
   assert.equal(layer.getUIState().keyRequired, true, 'no token: KEY REQUIRED');
   layer.disable();
-  layer.enable(viewer);
+  layer.enable();
   assert.equal(asked, 2, 'asked again, not stuck on the first');
 });
 
@@ -170,7 +176,7 @@ test('a rejected key gates the layer as KEY REJECTED until it goes off', async (
       throw rejected;
     },
   });
-  const { layer, viewer } = await startLayer(t, { source, view: true });
+  const { layer, harness } = await startLayer(t, { source, view: true });
   await settle();
   const stats = layer.getStats();
   assert.equal(stats.keyRequired, true);
@@ -179,7 +185,7 @@ test('a rejected key gates the layer as KEY REJECTED until it goes off', async (
   const ui = layer.getUIState();
   assert.deepEqual([ui.keyRequired, ui.keyRejected], [true, true]);
   layer.disable();
-  layer.enable(viewer);
+  layer.enable();
   assert.equal(layer.getUIState().keyRejected, false, 'asked again once on');
 });
 
@@ -218,23 +224,23 @@ test('a sequence that fails to load reports it apart from the photo, and the err
 });
 
 test('closing the photo, switching the layer off or destroying it stops the framing flight', async (t) => {
-  const { layer, viewer } = await startLayer(t, {
+  const { layer, harness } = await startLayer(t, {
     photoViewer: posingViewer(),
   });
   layer.attachViewerHost({});
   assert.equal(await layer.openImage('mapillary', 'img1'), true);
-  assert.equal(viewer.flights.started, 1, 'the photo is framed');
+  assert.equal(harness.flights.started, 1, 'the photo is framed');
   layer.closeViewer();
-  assert.equal(viewer.flights.cancelled, 1, 'closed');
+  assert.equal(harness.flights.cancelled, 1, 'closed');
 
   await layer.openImage('mapillary', 'img2');
   layer.disable();
-  assert.equal(viewer.flights.cancelled, 2, 'layer off');
+  assert.equal(harness.flights.cancelled, 2, 'layer off');
 
-  layer.enable(viewer);
+  layer.enable();
   await layer.openImage('mapillary', 'img3');
   layer.destroy();
-  assert.equal(viewer.flights.cancelled, 3, 'destroyed');
+  assert.equal(harness.flights.cancelled, 3, 'destroyed');
 });
 
 test('setParams takes "any date" (0 days) and the switch over the current values (share-link defaults)', async (t) => {
@@ -270,7 +276,7 @@ test('setParams ignores unknown keys and malformed values', async (t) => {
 });
 
 test('switching Mapillary on while the layer is off draws nothing', async (t) => {
-  const { layer, viewer, source, photoViewer } = await startLayer(t, {
+  const { layer, harness, source, photoViewer } = await startLayer(t, {
     view: true,
     enable: false,
   });
@@ -279,18 +285,18 @@ test('switching Mapillary on while the layer is off draws nothing', async (t) =>
   layer.setParams({ mapillary: true });
   await settle();
   assert.equal(source.calls.tiles.length, 0, 'no coverage drawn');
-  assert.deepEqual(viewer.credits, [], 'no credit shown');
+  assert.deepEqual(harness.credits(), [], 'no credit shown');
   assert.equal(photoViewer.calls.mount, 0, 'no viewer stood up');
   assert.equal(layer.getUIState().providers[0].on, true, 'the switch is kept');
   // Enabling the layer is what draws it.
-  layer.enable(viewer);
+  layer.enable();
   await settle();
   assert.ok(source.calls.tiles.length > 0);
-  assert.equal(viewer.credits.length, 1);
+  assert.equal(harness.credits().length, 1);
 });
 
 test('an empty provider composition enables and tears down without acquiring imagery', async (t) => {
-  const { layer, viewer } = await startLayer(t, { providers: [] });
+  const { layer, harness } = await startLayer(t, { providers: [] });
   assert.deepEqual(layer.providerIds, []);
   assert.deepEqual(layer.getUIState().providers, []);
   assert.equal(layer.getUIState().keyRequired, false);
@@ -299,69 +305,13 @@ test('an empty provider composition enables and tears down without acquiring ima
     /No street-level imagery providers/,
   );
   layer.disable();
-  layer.enable(viewer);
+  layer.enable();
   assert.deepEqual(layer.getUIState().providers, []);
 });
 
 // ── Several providers: one source at a time, Google 3D, nearest lookups ──
 
-/**
- * A stand-in Cesium viewer the layer can be enabled on: a canvas for the
- * click handler, camera events, a primitive list and a credit display.
- */
-function fakeViewer() {
-  const credits = [];
-  /** Cesium's flight bookkeeping: a new flight cancels the current one. */
-  let flight = null;
-  const flights = { started: 0, cancelled: 0 };
-  const stopFlight = () => {
-    const current = flight;
-    flight = null;
-    current?.cancel?.();
-    return Boolean(current);
-  };
-  const canvas = Object.assign(new EventTarget(), {
-    style: {},
-    // Keep Cesium's handler on the canvas; there is no real document here.
-    disableRootEvents: true,
-    onwheel: null,
-  });
-  return {
-    credits,
-    flights,
-    scene: {
-      canvas,
-      primitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-    },
-    camera: {
-      changed: new Cesium.Event(),
-      moveStart: new Cesium.Event(),
-      moveEnd: new Cesium.Event(),
-      flyToBoundingSphere(sphere, options = {}) {
-        stopFlight();
-        flight = options;
-        flights.started++;
-      },
-      cancelFlight() {
-        if (stopFlight()) flights.cancelled++;
-      },
-    },
-    creditDisplay: {
-      addStaticCredit: (credit) => credits.push(credit),
-      removeStaticCredit: (credit) => {
-        // Cesium ignores a credit it does not hold.
-        const at = credits.indexOf(credit);
-        if (at !== -1) credits.splice(at, 1);
-      },
-    },
-  };
-}
-
-/** A layer over `providers`, initialised and enabled on a stand-in viewer. */
+/** A layer over `providers`, initialised and enabled on the fake engine. */
 async function enabledLayer(t, providers = [fakeProvider()]) {
   const saved = globalThis.document;
   // A pose moves the position marker, whose glyph is drawn on a canvas.
@@ -369,16 +319,15 @@ async function enabledLayer(t, providers = [fakeProvider()]) {
   globalThis.document = Object.assign(new EventTarget(), {
     createElement: () => ({ getContext: () => drawing }),
   });
-  const viewer = fakeViewer();
-  const layer = createStreetLevelLayer({ providers });
-  layer.init(viewer);
-  layer.enable(viewer);
+  const harness = streetLevelMap();
+  const layer = mountLayer(harness, providers);
+  layer.enable();
   t.after(() => {
     layer.destroy();
     globalThis.document = saved;
   });
   await settle();
-  return { layer, viewer };
+  return { layer, harness };
 }
 
 function posingProvider(options) {
@@ -536,7 +485,7 @@ test('an image picked during a nearest lookup wins over its late answer', async 
 test('closing the viewer or switching the layer off retires a nearest lookup', async (t) => {
   const { lookups, nearestImage } = slowLookups();
   const provider = fakeProvider({ nearestImage });
-  const { layer, viewer } = await enabledLayer(t, [provider]);
+  const { layer, harness } = await enabledLayer(t, [provider]);
   layer.attachViewerHost({});
 
   const closed = layer.openNearest({ lat: 38.58, lon: -121.49 });
@@ -553,7 +502,7 @@ test('closing the viewer or switching the layer off retires a nearest lookup', a
 
   const disabled = layer.openNearest({ lat: 38.58, lon: -121.49 });
   layer.disable();
-  layer.enable(viewer);
+  layer.enable();
   lookups[1].answer.resolve('img1');
   assert.equal(await disabled, false, 'nor does it open once back on');
   assert.deepEqual(provider.calls.open, []);
@@ -571,14 +520,13 @@ function initialisedLayer(t, providers) {
   globalThis.document = Object.assign(new EventTarget(), {
     createElement: () => ({ getContext: () => drawing }),
   });
-  const viewer = fakeViewer();
-  const layer = createStreetLevelLayer({ providers });
-  layer.init(viewer);
+  const harness = streetLevelMap();
+  const layer = mountLayer(harness, providers);
   t.after(() => {
     layer.destroy();
     globalThis.document = saved;
   });
-  return { layer, viewer };
+  return { layer, harness };
 }
 
 test('switching a provider on while the layer is off activates nothing (M01)', async (t) => {
@@ -590,7 +538,7 @@ test('switching a provider on while the layer is off activates nothing (M01)', a
     instance.viewer.prewarm = async (host) => prewarmed.push(host);
     return instance;
   };
-  const { layer, viewer } = initialisedLayer(t, [provider]);
+  const { layer, harness } = initialisedLayer(t, [provider]);
   layer.attachViewerHost({});
   layer.setProviderEnabled('mapillary', false);
   layer.setProviderEnabled('mapillary', true);
@@ -598,13 +546,13 @@ test('switching a provider on while the layer is off activates nothing (M01)', a
   layer.setParams({ mapillary: true });
   await new Promise((resolve) => setTimeout(resolve, 40)); // past whenIdle
   assert.equal(provider.calls.activate, 0, 'no coverage drawn');
-  assert.deepEqual(viewer.credits, [], 'no credit shown');
+  assert.deepEqual(harness.credits(), [], 'no credit shown');
   assert.deepEqual(prewarmed, [], 'no viewer stood up');
   assert.equal(layer.getUIState().providers[0].on, true, 'the switch is kept');
   // Enabling the layer is what activates it, once.
-  layer.enable(viewer);
+  layer.enable();
   assert.equal(provider.calls.activate, 1);
-  assert.equal(viewer.credits.length, 1);
+  assert.equal(harness.credits().length, 1);
 });
 
 /** The real Google provider over the Street View fakes, beside a Mapillary stand-in. */
@@ -642,11 +590,11 @@ async function withStreetView(
     getApiKey: () => 'browser-key',
     loader,
   });
-  const { layer, viewer } = await enabledLayer(t, [mapillary, google]);
+  const { layer, harness } = await enabledLayer(t, [mapillary, google]);
   const stack = fakeMapStack(mapStack);
   layer.attachMapStackController(stack);
   layer.attachViewerHost(fakeHost());
-  return { layer, viewer, stack, fake, loader, mapillaryLookups };
+  return { layer, harness, stack, fake, loader, mapillaryLookups };
 }
 
 test('Street View starts off, and the layer row names the key of the providers that are on', async (t) => {
@@ -758,7 +706,7 @@ test('one imagery source at a time: lighting one darkens the other, either way',
 });
 
 test('Street View appears only on the Google 3D map: chip, credit, source and images', async (t) => {
-  const { layer, viewer, stack } = await withStreetView(t, {
+  const { layer, harness, stack } = await withStreetView(t, {
     mapStack: 'esri-imagery',
   });
   layer.setProviderEnabled('google', true);
@@ -766,7 +714,7 @@ test('Street View appears only on the Google 3D map: chip, credit, source and im
   const ui = () => layer.getUIState();
   const listed = () => ui().providers.map((p) => p.id);
   const credited = () =>
-    viewer.credits.some((credit) => /Street View imagery/.test(credit.html));
+    harness.credits().some((html) => /Street View imagery/.test(html));
   assert.deepEqual(listed(), ['mapillary'], 'no Street View chip');
   assert.equal(credited(), false, 'no Google credit on another map');
   assert.equal(layer.source, 'Mapillary');
@@ -795,17 +743,16 @@ test('under Google 3D the ground is measured again once its tiles load, without 
   t.after(() => {
     globalThis.document = saved;
   });
+  const harness = streetLevelMap();
+  // Google 3D (the globe hidden), 4 km up the ellipsoid, 2 km over a city
+  // whose tiles are still loading.
+  await harness.engine.maps.setPhotorealTiles({ kind: 'photoreal' });
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const viewer = fakeViewer();
-  // 4 km up the ellipsoid, 2 km over a city whose tiles are still loading.
   let ground;
-  viewer.camera.positionCartographic = { height: 4000 };
-  viewer.scene.globe = { show: false };
-  viewer.scene.sampleHeightSupported = true;
-  viewer.scene.sampleHeight = () => ground;
-  const layer = createStreetLevelLayer({ providers: [fakeProvider()] });
-  layer.init(viewer);
-  layer.enable(viewer);
+  harness.engine.fake.setPose({ height: 4000 });
+  harness.engine.fake.script('sampleHeight', () => ground);
+  const layer = mountLayer(harness, [fakeProvider()]);
+  layer.enable();
   t.after(() => layer.destroy());
   assert.equal(layer.getUIState().groundClickReady, false);
 
@@ -814,31 +761,29 @@ test('under Google 3D the ground is measured again once its tiles load, without 
   assert.equal(layer.getUIState().groundClickReady, true);
 });
 
-test('an unknown ground is measured only a few times, and not after the layer is off', (t) => {
+test('an unknown ground is measured only a few times, and not after the layer is off', async (t) => {
   const saved = globalThis.document;
   globalThis.document = new EventTarget();
   t.after(() => {
     globalThis.document = saved;
   });
+  const harness = streetLevelMap();
+  await harness.engine.maps.setPhotorealTiles({ kind: 'photoreal' });
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const viewer = fakeViewer();
   let samples = 0;
-  viewer.camera.positionCartographic = { height: 4000 };
-  viewer.scene.globe = { show: false };
-  viewer.scene.sampleHeightSupported = true;
-  viewer.scene.sampleHeight = () => {
+  harness.engine.fake.setPose({ height: 4000 });
+  harness.engine.fake.script('sampleHeight', () => {
     samples++;
     return undefined;
-  };
-  const layer = createStreetLevelLayer({ providers: [fakeProvider()] });
-  layer.init(viewer);
-  layer.enable(viewer);
+  });
+  const layer = mountLayer(harness, [fakeProvider()]);
+  layer.enable();
   t.after(() => layer.destroy());
   t.mock.timers.tick(60_000);
   const measured = samples;
   assert.ok(measured > 1 && measured <= 12, `measured ${measured} times`);
 
-  viewer.camera.moveEnd.raiseEvent();
+  harness.engine.fake.emit('camera.moveEnd');
   layer.disable();
   const atDisable = samples;
   t.mock.timers.tick(60_000);
@@ -887,7 +832,7 @@ test('the nearest-image refusal is written in the language of the page', async (
 });
 
 test('an image opened from a ground click leaves the camera where it is', async (t) => {
-  const { layer, viewer } = await withStreetView(t);
+  const { layer, harness } = await withStreetView(t);
   layer.setProviderEnabled('google', true);
   await settle();
   await layer.openNearest(
@@ -895,7 +840,7 @@ test('an image opened from a ground click leaves the camera where it is', async 
     { providerIds: ['google'], frame: false },
   );
   assert.equal(layer.getUIState().street.imageId, 'pano-a');
-  assert.equal(viewer.flights.started, 0, 'no framing flight');
+  assert.equal(harness.flights.started, 0, 'no framing flight');
 });
 
 test('off Google 3D not even Google\u2019s script is loaded for Street View', async (t) => {
@@ -923,17 +868,18 @@ test('the button’s “centre of the view” is the ground under the middle of 
   globalThis.document = Object.assign(new EventTarget(), {
     createElement: () => ({ getContext: () => drawing }),
   });
-  const viewer = fakeViewer();
-  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
-  Object.assign(viewer.scene, {
-    pickPositionSupported: true,
-    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
+  const harness = streetLevelMap();
+  const centre = geo.cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  harness.engine.fake.script('pickPosition', (at) =>
+    at.x === 500 && at.y === 300 ? centre : undefined,
+  );
+  harness.engine.fake.setSize(1000, 600);
+  const layer = create({
+    providers: [provider],
+    services: { scenePick, createDisplay: () => harness.map },
   });
-  viewer.scene.canvas.clientWidth = 1000;
-  viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
-  layer.init(viewer);
-  layer.enable(viewer);
+  layer.init(null, { engine: harness.engine });
+  layer.enable();
   t.after(() => {
     layer.destroy();
     globalThis.document = saved;
@@ -959,18 +905,17 @@ test('the button aimed at the sky opens nothing, and says to aim at a street', a
   globalThis.document = Object.assign(new EventTarget(), {
     createElement: () => ({ getContext: () => drawing }),
   });
-  const viewer = fakeViewer();
+  const harness = streetLevelMap();
   // Every ground pick misses: the middle of the screen is sky.
-  Object.assign(viewer.scene, {
-    pickPositionSupported: true,
-    pickPosition: () => undefined,
+  harness.engine.fake.script('pickPosition', undefined);
+  harness.engine.fake.script('pickEllipsoid', undefined);
+  harness.engine.fake.setSize(1000, 600);
+  const layer = create({
+    providers: [provider],
+    services: { scenePick, createDisplay: () => harness.map },
   });
-  viewer.camera.pickEllipsoid = () => undefined;
-  viewer.scene.canvas.clientWidth = 1000;
-  viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
-  layer.init(viewer);
-  layer.enable(viewer);
+  layer.init(null, { engine: harness.engine });
+  layer.enable();
   t.after(() => {
     layer.destroy();
     globalThis.document = saved;
@@ -1009,7 +954,7 @@ test('a failed lookup’s error goes when another source is lit; a provider can 
     },
   });
   const other = fakeProvider({ id: 'other', pickPrefix: 'oth:' });
-  const { layer, viewer } = await enabledLayer(t, [failing, other]);
+  const { layer, harness } = await enabledLayer(t, [failing, other]);
   layer.attachViewerHost({});
   await layer.openNearest({ lat: 1, lon: 1 });
   assert.match(layer.getUIState().street.error, /did not answer/);
@@ -1019,18 +964,18 @@ test('a failed lookup’s error goes when another source is lit; a provider can 
   // A provider's own open (KartaView's ‹ ›) can leave the camera alone.
   await other.context().actions.openImage('img-1', { frame: false });
   assert.deepEqual(other.calls.open, ['img-1']);
-  assert.equal(viewer.flights.started, 0);
+  assert.equal(harness.flights.started, 0);
 });
 
 test('a provider’s own open can leave the camera where it is; a default open frames', async (t) => {
   const provider = posingProvider();
-  const { layer, viewer } = await enabledLayer(t, [provider]);
+  const { layer, harness } = await enabledLayer(t, [provider]);
   layer.attachViewerHost({});
   await provider.context().actions.openImage('img-1', { frame: false });
   assert.deepEqual(provider.calls.open, ['img-1']);
-  assert.equal(viewer.flights.started, 0, 'frame: false keeps the camera');
+  assert.equal(harness.flights.started, 0, 'frame: false keeps the camera');
   await provider.context().actions.openImage('img-2');
-  assert.equal(viewer.flights.started, 1, 'a default open frames the image');
+  assert.equal(harness.flights.started, 1, 'a default open frames the image');
 });
 
 test('a provider’s openNearest (a line click) asks only that provider and leaves the camera', async (t) => {
@@ -1040,7 +985,7 @@ test('a provider’s openNearest (a line click) asks only that provider and leav
     pickPrefix: 'oth:',
     nearestImage: async () => 'other-near',
   });
-  const { layer, viewer } = await enabledLayer(t, [lit, other]);
+  const { layer, harness } = await enabledLayer(t, [lit, other]);
   layer.attachViewerHost({});
   const point = { lat: 38.58, lon: -121.49 };
   // The other source is off: its click asks nobody else.
@@ -1050,7 +995,7 @@ test('a provider’s openNearest (a line click) asks only that provider and leav
   assert.deepEqual(other.calls.open, []);
   await lit.context().actions.openNearest(point);
   assert.deepEqual(lit.calls.open, ['lit-near']);
-  assert.equal(viewer.flights.started, 0, 'the user picked the spot');
+  assert.equal(harness.flights.started, 0, 'the user picked the spot');
 });
 
 test('KartaView through the core: its lines counted as streets', async (t) => {
@@ -1182,4 +1127,93 @@ test('filter-only updates keep the lit source, even a chosen keyless Mapillary',
       JSON.stringify(params),
     );
   }
+});
+
+// ── The whole layer on the Cesium engine ────────────────────────────────
+
+test('on the Cesium engine the layer drapes coverage, selects a line on a click and draws its cones', async (t) => {
+  const { encodeCoverageTile } =
+    await import('./providers/mapillary/coverageFixture.mjs');
+  const { tileBounds } = await import('./tileMath.js');
+  const { cesiumStreetLevelMap } =
+    await import('../../testSupport/streetLevelFakes.mjs');
+  const saved = globalThis.document;
+  globalThis.document = new EventTarget();
+  const harness = cesiumStreetLevelMap();
+  // One sequence across the middle of every tile asked for.
+  const source = fakeMapillarySource({
+    getTile: async (_layer, z, x, y) => {
+      const { west, east, south, north } = tileBounds(x, y, z);
+      const lat = (south + north) / 2;
+      return encodeCoverageTile(
+        { x, y, z },
+        {
+          sequences: [
+            {
+              id: 'seq-1',
+              parts: [
+                [
+                  [west + (east - west) * 0.25, lat],
+                  [west + (east - west) * 0.75, lat],
+                ],
+              ],
+            },
+          ],
+        },
+      );
+    },
+    getSequenceImages: async () => [
+      {
+        id: 'img-1',
+        geometry: { coordinates: [-121.4944, 38.5816] },
+        compass_angle: 90,
+        captured_at: 1_700_000_000_000,
+      },
+    ],
+  });
+  const layer = mountLayer(harness, [
+    createMapillaryProvider({ source, photoViewer: fakePhotoViewer() }),
+  ]);
+  layer.enable();
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  await settle();
+  await settle();
+  const lines = harness.groundSets('mapillary-coverage:');
+  assert.ok(lines.length > 0, 'coverage drawn');
+  assert.ok(
+    harness.engine.ground
+      .list()
+      .some((entry) => entry.id === lines[0].id && entry.count > 0),
+    'through the engine’s ground sets',
+  );
+  assert.equal(lines[0].options.drape, 'both');
+  assert.ok(lines[0].items.every((item) => item.pickId === 'mly:seq:seq-1'));
+  // Cesium answers the click's pick in a 9 px window.
+  const windows = [];
+  const pick = harness.viewer.scene.pick;
+  harness.viewer.scene.pick = (position, width, height) => {
+    windows.push([width, height]);
+    return pick(position, width, height);
+  };
+  harness.click({ id: 'mly:seq:seq-1', primitive: {} });
+  assert.deepEqual(windows, [[9, 9]]);
+  await settle();
+  assert.equal(layer.getUIState().sequence.selectedId, 'seq-1');
+  assert.ok(
+    harness.groundSets('mapillary-coverage:selected').length > 0,
+    'highlighted',
+  );
+  harness.frame();
+  assert.deepEqual(
+    harness.spritesShown('street-level:mapillary-cones').map((s) => s.pickId),
+    ['mly:img:img-1'],
+    'its cone drawn',
+  );
+  layer.disable();
+  assert.equal(harness.groundSets('mapillary-coverage:').length, 0);
+  harness.frame();
+  assert.equal(harness.spritesShown('street-level:').length, 0);
 });

@@ -1,9 +1,3 @@
-import {
-  bindTrackingClickGesture,
-  isTrackingClickGesture,
-} from '../../data/trackingClickGesture.js';
-import * as Cesium from 'cesium';
-
 export function createSelection({
   state: layerState,
   services,
@@ -31,27 +25,6 @@ export function createSelection({
       layerState._activeCameraId = fallback.camera.id;
     }
     return fallback;
-  }
-
-  /**
-   * Bind CCTV activation to clean taps while preserving the layer's hover-move
-   * callback on the shared Cesium handler. Drag-like and long-press gestures do
-   * not reach camera activation or focus dispatch.
-   * @param {Cesium.ScreenSpaceEventHandler|Object} handler - Input handler.
-   * @param {(click: Object) => void} onClick - Accepted CCTV click callback.
-   * @param {Object} [options] - Gesture test seams and optional onMouseMove hook.
-   * @returns {void}
-   */
-
-  function bindCctvWorldClickGesture(handler, onClick, options = {}) {
-    bindTrackingClickGesture(
-      handler,
-      (click, gesture) => {
-        if (!isTrackingClickGesture(gesture)) return;
-        onClick(click);
-      },
-      options,
-    );
   }
 
   /**
@@ -221,54 +194,10 @@ export function createSelection({
    */
 
   function extractPickedCameraId(picked) {
-    if (!picked) return null;
-
-    const entity = picked.id?.properties
-      ? picked.id
-      : picked.primitive?.id?.properties
-        ? picked.primitive.id
-        : null;
-    const maybeProp = entity?.properties?.cctvCameraId;
-    if (maybeProp) {
-      const value =
-        typeof maybeProp.getValue === 'function'
-          ? maybeProp.getValue(Cesium.JulianDate.now())
-          : maybeProp;
-      const record =
-        typeof value === 'string' ? layerState._recordById.get(value) : null;
-      const ownsCoverageEntity = Boolean(
-        record?.coverageEntities?.includes(entity),
-      );
-      const ownsProjectionEntity =
-        record?.projection?.planeEntity === entity ||
-        layerState._projectionEntities.some(
-          (runtime) =>
-            runtime?.cameraId === value && runtime.planeEntity === entity,
-        );
-      if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
-    }
-
-    // Camera billboard IDs are intentionally the upstream camera ID, so a
-    // sibling may legitimately use the same string. A bare ID match is not
-    // ownership proof: require this layer's billboard collection or the exact
-    // billboard stored on the record.
-    const directId =
-      typeof picked.id === 'string'
-        ? picked.id
-        : typeof picked.primitive?.id === 'string'
-          ? picked.primitive.id
-          : null;
-    const record =
-      directId === null ? null : layerState._recordById.get(directId);
-    if (!record) return null;
-    return picked.primitive === layerState._billboards ||
-      picked.primitive === record.billboard
-      ? directId
-      : null;
+    return parts.renderer?.extractPickedCameraId(picked) ?? null;
   }
   return {
     getActiveRecord,
-    bindCctvWorldClickGesture,
     setActiveCamera,
     deactivateActiveCamera,
     cctvEmptyClickDeselects,

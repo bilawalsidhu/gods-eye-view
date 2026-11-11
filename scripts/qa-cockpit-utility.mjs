@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+// Cesium-only probes: tracked-entity and local-frame coordinates verify the native cockpit handoff.
 /** Focused rendered proof for adaptive Cockpit Display/Radio layout. */
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,24 +15,12 @@ const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const headful = process.argv.includes('--headful');
 fs.mkdirSync(shotsDir, { recursive: true });
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
-const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
-const browser = await puppeteer.launch({
-  headless: headful ? false : 'new',
-  ...(executablePath ? { executablePath } : {}),
-  // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
-  args: [
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
-    '--no-sandbox',
-  ],
+const browser = await launchBrowser({
+  headless: true,
+  args: [...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--no-sandbox'],
 });
 const page = await browser.newPage();
+await blockPaidQaMaps(page);
 await stubPlanespotters(page);
 const failures = [];
 const consoleErrors = [];
@@ -169,10 +160,7 @@ try {
   page.on('request', routeQaRequest);
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
-  await page.waitForFunction(
-    () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60_000 },
-  );
+  await whenSettled(page);
   await page.waitForFunction(() => (
     typeof window.__gevQaRegisterLayer === 'function'
     && typeof window.__gevQaUnregisterLayer === 'function'
@@ -673,6 +661,7 @@ try {
     () => Boolean(window.__godsEyeView.viewer.trackedEntity?.position),
     { timeout: 10_000 },
   );
+  await whenSettled(page);
   const preselectedContactAdoption = await page.evaluate(async () => {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const flights = dataManager.layers.get('flights')?.module;
@@ -765,7 +754,7 @@ try {
         } : null,
         navigation: snapshot?.navigation || null,
         afterId: trackedInfo?.icao24 || null,
-        viewerTrackedId: viewer.trackedEntity?.gevTrackedId || null,
+        viewerTrackedId: window.__godsEyeView.engine.camera.following()?.label?.id || null,
         contextVisible: !document.getElementById('military-awareness-panel')?.hidden,
         entryAvailableAfterSettlement: Boolean(entry && !entry.hidden),
         blockerStillRegistered: dataManager.layers.has(blockerId),
@@ -830,6 +819,7 @@ try {
   await stubPlanespotters(readinessPage);
   let deferredInstallationReadiness;
   try {
+    await blockPaidQaMaps(readinessPage);
     await readinessPage.setViewport({ width: 1440, height: 900 });
     readinessPage.on('pageerror', (error) => consoleErrors.push(error.message));
     await readinessPage.setRequestInterception(true);
@@ -851,8 +841,8 @@ try {
     const readinessUrl = new URL(appUrl);
     readinessUrl.searchParams.set('welcome', '0');
     await readinessPage.goto(readinessUrl.href, { waitUntil: 'domcontentloaded' });
-    await readinessPage.waitForFunction(() => window.__godsEyeView?.dataManager
-      && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 60000 });
+    await readinessPage.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60000 });
+    await whenSettled(readinessPage);
     await readinessPage.evaluate(async () => {
       const manager = window.__godsEyeView.dataManager;
       await manager.setEnabled('flights', true, { origin: 'user' });
@@ -1097,7 +1087,7 @@ try {
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const before = awareness?.getContextSnapshot?.()?.subject || null;
     const entityBefore = viewer.trackedEntity;
-    viewer.camera.zoomOut(1_500_000);
+    window.__godsEyeView.engine.camera.zoomOut(1_500_000);
     const cameraRange = () => Math.hypot(
       viewer.camera.position.x,
       viewer.camera.position.y,
@@ -1153,6 +1143,14 @@ try {
     },
     { timeout: 10_000 },
   );
+  const startsClear = await page.evaluate(() => {
+    const hidden = ['left-panel-stack', 'intel-hud', 'corner-actions',
+      'cockpit-context', 'cockpit-signal-stream', 'cockpit-utility-controls'];
+    return hidden.every((id) => document.getElementById(id)?.getClientRects().length === 0)
+      && document.getElementById('cockpit-speed-value').getClientRects().length > 0;
+  });
+  check('Cockpit starts with flight instruments and hides the map panels', startsClear);
+  await page.click('#cockpit-panels-toggle');
   const firstCockpitContact = await page.evaluate(() => {
     const awareness = window.__godsEyeView.dataManager.layers
       .get('military-awareness')?.module;
@@ -1454,7 +1452,7 @@ try {
         remove();
         reject(new Error('Cockpit camera ownership check did not render a frame'));
       }, 5000);
-      const remove = viewer.scene.postRender.addEventListener(() => {
+      const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
         remove();
         clearTimeout(timer);
         resolve();
@@ -1462,10 +1460,10 @@ try {
     });
     // Let revoked listeners retire before comparing ownership across exit.
     await nextFrame();
-    const listenersBeforeExit = viewer.scene.preUpdate.numberOfListeners;
+    const listenersBeforeExit = window.__godsEyeView.engine.frames.preUpdate.numberOfListeners;
     const exited = styleManager.cockpitView.exit() === true;
     await nextFrame();
-    const listenersAfterExit = viewer.scene.preUpdate.numberOfListeners;
+    const listenersAfterExit = window.__godsEyeView.engine.frames.preUpdate.numberOfListeners;
     const refocused = awareness?.focusCurrent?.() === true;
     await nextFrame();
     return {
@@ -1474,7 +1472,7 @@ try {
       sameEntity: viewer.trackedEntity === entity,
       listenersBeforeExit,
       listenersAfterExit,
-      listenersAfterFocus: viewer.scene.preUpdate.numberOfListeners,
+      listenersAfterFocus: window.__godsEyeView.engine.frames.preUpdate.numberOfListeners,
     };
   });
   check(
@@ -1514,6 +1512,9 @@ try {
     const before = read();
     document.getElementById('cockpit-entry')?.click();
     await new Promise((resolve) => setTimeout(resolve, 120));
+    const startsClear = document.getElementById('cockpit-panels-toggle').getAttribute('aria-pressed') === 'false';
+    document.getElementById('cockpit-panels-toggle').click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const during = read();
     manager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false });
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1534,6 +1535,7 @@ try {
       before,
       during,
       after: read(),
+      startsClear,
       exited,
       clearancePx,
       contactAutoCollapsed,
@@ -1543,7 +1545,7 @@ try {
   });
   check(
     'Cockpit temporarily collapses standard panels and restores the exact map layout on exit',
-    cockpitPanelRoundTrip.exited
+    cockpitPanelRoundTrip.exited && cockpitPanelRoundTrip.startsClear
       && Object.values(cockpitPanelRoundTrip.during).every(Boolean)
       && JSON.stringify(cockpitPanelRoundTrip.after)
         === JSON.stringify(cockpitPanelRoundTrip.before)
@@ -1608,6 +1610,7 @@ try {
     const states = [read()];
     for (let index = 0; index < 6; index += 1) {
       current.click();
+      await Promise.resolve();
       states.push(read());
     }
     const originalStyle = manager.activeStyle;
@@ -1619,8 +1622,10 @@ try {
     const enteredOnNoir = await reenter();
     const entryNoir = read();
     cockpit.setVisionMode('optical');
+    await Promise.resolve();
     const normalInsideNoir = read();
     cockpit.setVisionMode('crt');
+    await Promise.resolve();
     const cockpitOnlyCrt = read();
     const exitedNoir = cockpit.exit({ restoreTracking: true }) === true;
     await settle();
@@ -1695,6 +1700,9 @@ try {
   await page.screenshot({ path: path.join(shotsDir, 'vision-noir.png') });
   await page.evaluate(() => window.__godsEyeView.styleManager.cockpitView.setVisionMode('optical'));
 
+  await page.$eval('#cockpit-panels-toggle', button => {
+    if (button.getAttribute('aria-pressed') === 'false') button.click();
+  });
   const desktopState = async (variant, openKind) => page.evaluate(async ({ variantName, kind }) => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
@@ -1880,7 +1888,7 @@ try {
     // the wall Cockpit actually solves against — not by injecting an anchor.
     // The card is bottom-anchored, so an explicit height moves its top edge.
     const minTop = Math.max(96, window.innerHeight * 0.12);
-    const moveSignalTopTo = (wantTop) => {
+    const moveSignalTopTo = async (wantTop) => {
       for (let pass = 0; pass < 8; pass += 1) {
         const rect = signal.getBoundingClientRect();
         const delta = wantTop - rect.top;
@@ -1893,9 +1901,11 @@ try {
       // the now-shorter strip, so idempotence is asserted where the strip's
       // composition is unchanged.)
       manager.cockpitView.syncSignalLayout();
+      await Promise.resolve();
       const firstPassTop = hud.style.getPropertyValue('--cockpit-utility-top');
       const firstPassPrimaryOnly = utility.classList.contains('layout-primary-only');
       manager.cockpitView.syncSignalLayout();
+      await Promise.resolve();
       return {
         firstPassTop,
         firstPassPrimaryOnly,
@@ -1906,6 +1916,7 @@ try {
     signal.style.maxHeight = 'none';
     signal.style.height = '150px';
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
     const expandedHeight = Math.max(displayControl.scrollHeight, displayControl.getBoundingClientRect().height);
     const collapsedHeight = Math.max(50, radioControl.scrollHeight);
     const stripHeight = expandedHeight + collapsedHeight + 7;
@@ -1930,11 +1941,11 @@ try {
     // because 150 px of card leaves a corridor sized for the OLD strip. Seed from
     // the measured requirement instead, which holds for any future panel height,
     // and assert the precondition rather than assuming it.
-    const roomySeed = moveSignalTopTo(exactSignalTop + 80);
+    const roomySeed = await moveSignalTopTo(exactSignalTop + 80);
     const roomySeedExpanded = !utility.classList.contains('layout-primary-only')
       && roomySeed.firstPassPrimaryOnly === false;
     const exact = {
-      ...moveSignalTopTo(exactSignalTop),
+      ...await moveSignalTopTo(exactSignalTop),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingVisible: getComputedStyle(radioControl).display !== 'none',
@@ -1944,7 +1955,7 @@ try {
     const constrained = {
       // One pixel on the far side of the same fit (`exactSignalTop` already sits
       // one pixel inside it), so this is still the one-pixel constraint it claims.
-      ...moveSignalTopTo(exactSignalTop - 2 * BOUNDARY_EPSILON_PX),
+      ...await moveSignalTopTo(exactSignalTop - 2 * BOUNDARY_EPSILON_PX),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingDisplay: getComputedStyle(radioControl).display,
@@ -1955,7 +1966,7 @@ try {
         <= signal.getBoundingClientRect().top - 7,
     };
     const restored = {
-      ...moveSignalTopTo(exactSignalTop + 80),
+      ...await moveSignalTopTo(exactSignalTop + 80),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingVisible: getComputedStyle(radioControl).display !== 'none',
@@ -2064,7 +2075,7 @@ try {
     JSON.stringify(cyberStyleStates));
   for (const height of [987, 720, 640, 900]) {
     await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await whenUiSettled(page);
     const geometry = await page.evaluate(() => {
       const signal = document.getElementById('cockpit-signal-stream');
       const utility = document.getElementById('cockpit-utility-controls');
@@ -2355,7 +2366,7 @@ try {
   await page.waitForFunction(() => {
     const viewer = window.__godsEyeView.viewer;
     if (!viewer) return false;
-    const height = viewer.camera.positionCartographic?.height;
+    const height = window.__godsEyeView.engine.camera.pose().cartographic?.height;
     return Math.abs(height - 18_000_000) < 150_000;
   }, { timeout: 6_000 });
   const resetState = await page.evaluate(() => {
@@ -2363,7 +2374,7 @@ try {
     const qa = window.__qaCockpitReset;
     const awareness = gev.dataManager.layers.get('military-awareness')?.module;
     const subjectId = awareness?.getContextSnapshot?.()?.subject?.id || null;
-    const height = gev.viewer.camera.positionCartographic?.height;
+    const height = window.__godsEyeView.engine.camera.pose().cartographic?.height;
     gev.styleManager._locationNavigation.resetToGlobeView = qa.original;
     delete window.__qaCockpitReset;
     return {
@@ -2416,7 +2427,7 @@ try {
     else hud.style.removeProperty('--cockpit-utility-top');
     if (!prior.cockpit) document.body.classList.remove('cockpit-mode');
   }).catch(() => {});
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 console.log(`RESULT: ${failures.length ? 'NOT_READY' : 'READY'} (${failures.length} failures)`);

@@ -38,14 +38,14 @@ test('wide-view counts report visible points rather than retained off-screen can
     services: {},
     source: {},
     parts: {
-      namedMarkers: {
+      display: { namedMarkers: {
         stats: () => ({
           namedMarkers: 8,
           pointsOnScreen: 3,
           labelsOnScreen: 2,
           labelCap: 24,
         }),
-      },
+      } },
     },
   });
   const stats = methods.getStats();

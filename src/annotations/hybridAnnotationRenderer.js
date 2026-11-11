@@ -1,6 +1,6 @@
 import { recordWorkSlice } from '../sources/phaseTiming.js';
-import { createWorldAnnotationRenderer } from './worldAnnotationRenderer.js';
-import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
+import { createWorldAnnotationRenderer } from '../globe/cesium/annotations/worldAnnotationRenderer.js';
+import { createScreenAnnotationRenderer } from '../globe/cesium/annotations/screenAnnotationRenderer.js';
 
 /**
  * Hybrid annotation renderer (Direction C — the recommended production blend).
@@ -18,14 +18,20 @@ import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
  *
  * The hybrid surface honors add/update/remove/sync/destroy; update coordinates the
  * one route change that spans both sub-renderers. `screen` passes options to the
- * screen renderer (its store, in tests).
+ * screen renderer (its store, in tests). On a globe without a Cesium viewer
+ * (Navara), `world` is that globe's world renderer and `screenScene` the
+ * screen scene the board is drawn over (src/annotations/screenScene.js).
  */
 export function createHybridAnnotationRenderer(
   viewer,
-  { screen: screenOptions } = {},
+  { screen: screenOptions, world: worldRenderer, screenScene, engine } = {},
 ) {
-  const world = createWorldAnnotationRenderer(viewer);
-  const screen = createScreenAnnotationRenderer(viewer, screenOptions);
+  const world =
+    worldRenderer ?? createWorldAnnotationRenderer(viewer, { engine });
+  const screen = createScreenAnnotationRenderer(screenScene ?? viewer, {
+    engine,
+    ...screenOptions,
+  });
   // anno.id -> { worldProxy?, screenProxy? } — proxies own the sub-renderer state.
   const routed = new Map();
 

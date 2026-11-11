@@ -42,6 +42,30 @@ import {
   setScopeMaskFeather,
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
+/**
+ * A globe engine standing in for the viewer double this test used to build:
+ * the camera pose comes from `camera.positionCartographic`/heading/pitch/roll,
+ * and `camera.flyTo`/`setView` and `scene.requestRender` replace the engine's.
+ */
+function engineViewer({ camera = {}, scene = {} } = {}) {
+  const engine = createFakeEngine();
+  const carto = camera.positionCartographic;
+  if (carto)
+    engine.fake.setPose({
+      longitude: carto.longitude,
+      latitude: carto.latitude,
+      height: carto.height,
+      heading: camera.heading ?? 0,
+      pitch: camera.pitch ?? -Math.PI / 2,
+      roll: camera.roll ?? 0,
+    });
+  if (camera.flyTo) engine.camera.flyTo = camera.flyTo;
+  if (camera.setView) engine.camera.setView = camera.setView;
+  if (scene.requestRender) engine.render.request = () => scene.requestRender();
+  return engine;
+}
+
 
 // Follow the UI wiring and its extracted preset definitions.
 const uiSource = readShellSource()
@@ -71,7 +95,7 @@ function managerForHash(hash) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(engineViewer(viewer));
 }
 
 // ---------------------------------------------------------------------------

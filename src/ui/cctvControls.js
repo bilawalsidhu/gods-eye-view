@@ -35,7 +35,7 @@ export class CctvControls {
   constructor({
     elements,
     cctv,
-    viewer = null,
+    engine = null,
     actions,
     store = useCctvStore(applicationPinia()),
     statusStore = useStatusStore(applicationPinia()),
@@ -44,7 +44,7 @@ export class CctvControls {
     this.store = store;
     this.statusStore = statusStore;
     this.cctv = cctv;
-    this._quebecCctvOverlay = createQuebecCctvOverlay(viewer);
+    this._quebecCctvOverlay = createQuebecCctvOverlay(engine);
     this.actions = actions;
     this.destroyed = false;
     this.listeners = new AbortController();
@@ -103,6 +103,12 @@ export class CctvControls {
       this._renderCctvState(state),
     );
     if (this.cctv.getUIState) this._renderCctvState(this.cctv.getUIState());
+  }
+  attachEngine(engine) {
+    this._quebecCctvOverlay?.dispose();
+    this._quebecCctvOverlay = createQuebecCctvOverlay(engine);
+    this._lastQuebecSelectionRevision = null;
+    if (engine && this._cctvState) this._renderCctvState(this._cctvState);
   }
   _clearCctvFrame(...args) {
     return _clearCctvFrame.call(this, ...args);

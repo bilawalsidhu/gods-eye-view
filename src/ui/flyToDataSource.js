@@ -1,93 +1,40 @@
 /** Frame the complete finite footprint of a session-local file. */
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { fromPoints } from '../geo/boundingSphere.js';
 import { guardCameraAboveGround } from '../cameraGroundGuard.js';
 import { rangeForBoundingSphere } from '../data/cameraFraming.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 
-/** All visible positions, path vertices, polygon rings, walls and overlay bounds. */
-export function dataSourcePoints(dataSource, time = Cesium.JulianDate.now()) {
-  const points = [];
-  const add = (position, grounded = false) => {
-    if (
-      !position ||
-      ![position.x, position.y, position.z].every(Number.isFinite)
-    )
-      return;
-    const c = Cesium.Cartographic.fromCartesian(position);
-    if (c && Number.isFinite(c.longitude) && Number.isFinite(c.latitude))
-      points.push([
-        Cesium.Math.toDegrees(c.longitude),
-        Cesium.Math.toDegrees(c.latitude),
-        grounded ? 0 : c.height,
-      ]);
-  };
-  if (dataSource?.show === false) return points;
-  for (const entity of dataSource?.importedEntities ??
-    dataSource?.entities?.values ??
-    []) {
-    if (entity.isShowing === false) continue;
-    add(
-      entity.position?.getValue?.(time),
-      entity.billboard?.heightReference?.getValue?.(time) ===
-        Cesium.HeightReference.CLAMP_TO_GROUND,
-    );
-    for (const graphic of [entity.polyline, entity.wall])
-      for (const position of graphic?.positions?.getValue?.(time) || [])
-        add(position, graphic.clampToGround?.getValue?.(time) === true);
-    const rings = [entity.polygon?.hierarchy?.getValue?.(time)];
-    while (rings.length) {
-      const ring = rings.pop();
-      for (const position of ring?.positions || [])
-        add(
-          position,
-          entity.polygon?.perPositionHeight?.getValue?.(time) !== true,
-        );
-      for (const hole of ring?.holes || []) rings.push(hole);
-    }
-    const rectangle = entity.rectangle?.coordinates?.getValue?.(time);
-    if (rectangle) {
-      const bounds = Cesium.RectangleGeometry.computeRectangle({
-        rectangle,
-        rotation: entity.rectangle.rotation?.getValue?.(time) || 0,
-      });
-      for (const corner of [
-        'southwest',
-        'southeast',
-        'northwest',
-        'northeast',
-      ]) {
-        const c = Cesium.Rectangle[corner](bounds);
-        if (Number.isFinite(c.longitude) && Number.isFinite(c.latitude))
-          points.push([
-            Cesium.Math.toDegrees(c.longitude),
-            Cesium.Math.toDegrees(c.latitude),
-            entity.rectangle.height?.getValue?.(time) || 0,
-          ]);
-      }
-    }
-  }
-  return points;
-}
-
-/** Fly synchronously to the footprint; later navigation always owns its camera. */
-export function flyToDataSource(
-  viewer,
-  dataSource,
+/**
+ * Fly synchronously to a footprint: `points` as [lon, lat, height]
+ * (src/data/geoImportRecords.js recordFootprint), straight down at the
+ * ground under its centre; later navigation always owns its camera.
+ * `engine` is the globe engine (Cesium or Navara), which flies the sphere
+ * through the contract's flyToSphere. False for an empty footprint.
+ */
+export function flyToFootprint(
+  engine,
+  points,
   { duration = 1.5, ground = null } = {},
 ) {
-  const points = dataSourcePoints(dataSource);
-  if (!points.length) return false;
-  cancelCameraArrival(viewer);
-  const positions = points.map(([lon, lat, height]) =>
-    Cesium.Cartesian3.fromDegrees(lon, lat, height),
+  const finite = (points ?? []).filter(
+    ([lon, lat, height = 0]) =>
+      Number.isFinite(lon) && Number.isFinite(lat) && Number.isFinite(height),
   );
-  const sphere = Cesium.BoundingSphere.fromPoints(positions);
+  if (!finite.length) return false;
+  cancelCameraArrival(engine);
+  const positions = finite.map(([lon, lat, height = 0]) =>
+    geo.cartesian3.fromDegrees(lon, lat, height),
+  );
+  const sphere = fromPoints(positions);
   const center =
-    Cesium.Cartographic.fromCartesian(sphere.center) ||
-    Cesium.Cartographic.fromDegrees(points[0][0], points[0][1]);
-  const lat = Cesium.Math.toDegrees(center.latitude),
-    lon = Cesium.Math.toDegrees(center.longitude);
-  const terrain = viewer.scene?.globe?.getHeight?.(center);
+    geo.cartographic.fromCartesian(sphere.center) ||
+    geo.cartographic.fromDegrees(finite[0][0], finite[0][1], 0);
+  const lat = geo.math.toDegrees(center.latitude),
+    lon = geo.math.toDegrees(center.longitude);
+  const terrain = engine.surface.terrainHeightSupported
+    ? engine.surface.terrainHeight(center)
+    : undefined;
   const cached = ground?.cachedGroundFloor?.(lat, lon);
   const height =
     Number.isFinite(terrain) && terrain > 0
@@ -98,7 +45,7 @@ export function flyToDataSource(
           ? terrain
           : 0;
   ground?.warmGroundFloor?.([{ lat, lon }]);
-  sphere.center = Cesium.Cartesian3.fromRadians(
+  sphere.center = geo.cartesian3.fromRadians(
     center.longitude,
     center.latitude,
     Math.max(0, height, center.height),
@@ -107,16 +54,28 @@ export function flyToDataSource(
   for (const position of positions)
     sphere.radius = Math.max(
       sphere.radius,
-      Cesium.Cartesian3.distance(sphere.center, position),
+      geo.cartesian3.distance(sphere.center, position),
     );
-  viewer.camera?.flyToBoundingSphere?.(sphere, {
-    offset: new Cesium.HeadingPitchRange(
-      viewer.camera.heading || 0,
-      -Math.PI / 2,
-      Math.max(800, rangeForBoundingSphere(viewer, sphere.radius)),
-    ),
-    duration,
-    complete: () => guardCameraAboveGround(viewer, { lat, lon }),
-  });
+  const pose = engine.camera.pose();
+  const aspect = pose.aspectRatio ?? 1;
+  // Cesium's frustum fov: the wider side's angle.
+  const fov =
+    aspect > 1 ? 2 * Math.atan(Math.tan(pose.fovy / 2) * aspect) : pose.fovy;
+  engine.camera.flyToSphere(
+    { center: sphere.center, radius: sphere.radius },
+    {
+      heading: pose.heading || 0,
+      pitch: -Math.PI / 2,
+      range: Math.max(
+        800,
+        rangeForBoundingSphere(
+          { camera: { frustum: { fov, aspectRatio: aspect } } },
+          sphere.radius,
+        ),
+      ),
+      duration,
+      complete: () => guardCameraAboveGround(engine, { lat, lon }),
+    },
+  );
   return true;
 }

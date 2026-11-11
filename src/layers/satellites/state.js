@@ -1,16 +1,19 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+import * as geo from '../../geo/index.js';
 import { DEFAULT_SATELLITE_CLASSES } from './classes.js';
 import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+  const { setEntries, setVisible, clearSource } = bindOverlayHost(
+    services.overlays,
+    () => state._engine,
+  );
   const state = {};
 
   state.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
   });
 
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
@@ -30,8 +33,8 @@ export function createState({ services }) {
   state._detectionObjects = new Map();
 
   // noradId → { primitive, gmstAtBake }
-  // primitive is a one-instance Cesium.Primitive holding the ring baked in ECEF
-  // at gmstAtBake; the preRender tick re-aligns it to current GMST by updating
+  // primitive is the display's orbit ring holding the ring baked in ECEF at
+  // gmstAtBake; the preRender tick re-aligns it to current GMST by updating
   // its modelMatrix (rigid Z-rotation — no geometry rebuild, WS-D1).
 
   state._orbitPaths = new Map();
@@ -58,7 +61,9 @@ export function createState({ services }) {
 
   state._denseLoadController = null;
 
-  state._viewer = null;
+  /** The engine's display (render/display.js) while the layer draws. */
+  state._renderer = null;
+  state._engine = null;
 
   state._preRenderListener = null;
 
@@ -72,7 +77,7 @@ export function createState({ services }) {
 
   state._activeFocusCount = 0;
 
-  state._scratchFocusScreen = new Cesium.Cartesian2();
+  state._scratchFocusScreen = geo.cartesian2.create();
 
   state._enabled = false;
 
@@ -96,7 +101,7 @@ export function createState({ services }) {
 
   state._clickHandler = null;
 
-  /** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
+  /** @type {(() => void)|null} follow-changed listener disposer (cross-layer untrack) */
 
   state._trackedEntityChangedRemove = null;
 
@@ -164,14 +169,14 @@ export function createState({ services }) {
 
   // Per-frame cache for the tracked satellite (WS-D2): dot, host readout, camera, and
   // getTrackedInfo all read one SGP4 sample per rendered frame, keyed on
-  // scene.frameState.frameNumber, so they never diverge in epoch.
+  // the display's frame number, so they never diverge in epoch.
 
   state._trackedFrameNumber = -1;
 
   state._trackedFrameGeo = null;
   // { longitude, latitude, altitude } or null
 
-  state._trackedFrameCartesian = new Cesium.Cartesian3();
+  state._trackedFrameCartesian = geo.cartesian3.create();
 
   /** Optional deterministic clock used only by the production-frame test seam. */
 
@@ -198,9 +203,9 @@ export function createState({ services }) {
 
   // Scratch variables
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  state._scratchCartesian = geo.cartesian3.create();
 
-  state._scratchRingRotation = new Cesium.Matrix3();
+  state._scratchRingRotation = geo.matrix3.create();
 
   /** Update the explicit model only when the rounded altitude line changes. */
   /** Epoch of the last shared-context refresh for the tracked satellite. */

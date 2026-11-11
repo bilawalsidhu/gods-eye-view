@@ -33,7 +33,7 @@
  * Every read of renderer internals is in `readSceneDepthSource` below; the
  * rest of the file is plain WebGL on the handles that function returns.
  */
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { DepthSnapshot, projectContact } from './detectionOcclusion.js';
 
 /**
@@ -97,7 +97,8 @@ export const SYNC_READ_INTERVAL_MS = 125;
  */
 export function readSceneDepthSource(scene, viewScratch) {
   try {
-    if (!scene || scene.mode !== Cesium.SceneMode.SCENE3D) return null;
+    // The native depth ranges describe only Cesium's 3D scene mode.
+    if (!scene || scene.mode !== 3) return null;
     if (scene.useDepthPicking !== true) return null;
     const context = scene.context;
     const gl = context?._gl;
@@ -151,6 +152,7 @@ export function readSceneDepthSource(scene, viewScratch) {
     if (typeof logDepth !== 'boolean') return null;
 
     const tanHalfFovY = Math.tan(fovy / 2);
+
     return {
       gl,
       webgl2: context.webgl2 === true,
@@ -160,7 +162,7 @@ export function readSceneDepthSource(scene, viewScratch) {
       textures,
       frustums,
       logDepth,
-      view: Cesium.Matrix4.toArray(
+      view: geo.matrix4.clone(
         camera.viewMatrix,
         viewScratch || new Float64Array(16),
       ),

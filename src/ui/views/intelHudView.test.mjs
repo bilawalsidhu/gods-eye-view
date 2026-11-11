@@ -1,3 +1,5 @@
+import '../../testSupport/stubMgrs.mjs';
+import { viewerEngine } from '../../testSupport/viewerEngine.mjs';
 // src/ui/views/intelHudView.test.mjs — the Intel HUD view renders what
 // IntelHUD publishes: its readouts, visibility, layout variant and colors.
 //
@@ -9,29 +11,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
-import { registerHooks } from 'node:module';
 import { presentSelectedVessel } from '../../hudReadouts.js';
 import { useHudStore } from '../stores/hud.js';
 import IntelHudView from './IntelHudView.vue';
-
-const MGRS_STUB_URL = 'gev-test-stub:mgrs';
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier === 'mgrs') return { url: MGRS_STUB_URL, shortCircuit: true };
-    return next(specifier, context);
-  },
-  load(url, context, next) {
-    if (url === MGRS_STUB_URL) {
-      return {
-        format: 'module',
-        shortCircuit: true,
-        source:
-          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
-      };
-    }
-    return next(url, context);
-  },
-});
 
 const { IntelHUD } = await import('../../hud.js');
 
@@ -44,7 +26,7 @@ function mount(t) {
   const app = createApp(IntelHudView).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   const hud = new IntelHUD(
-    {
+    viewerEngine({
       camera: {
         pitch: -Math.PI / 2,
         positionCartographic: { latitude: 0.7, longitude: -1.2, height: 500 },
@@ -52,7 +34,7 @@ function mount(t) {
         moveStart: listeners(),
         moveEnd: listeners(),
       },
-    },
+    }),
     {
       // No AI summary: the readouts are what this test renders.
       summaryService: { configured: async () => false },

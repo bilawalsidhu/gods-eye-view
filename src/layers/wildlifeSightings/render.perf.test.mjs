@@ -32,11 +32,11 @@ function activeMs(slice, collections) {
 }
 
 test(
-  'dense continental production moveEnd pipeline yields every 4ms, including cold tiles and real Cesium billboard updates',
+  'dense continental production moveEnd pipeline yields every 4ms, including cold tiles and real engine sprite updates',
   perfBudgetTestOptions(),
   async (t) => {
     // Settle CPU-triggered runtime startup before creating the cold layer;
-    // cells, coordinates and billboard collections remain unwarmed.
+    // cells, coordinates and mover sets remain unwarmed.
     const calibrationStart = performance.now();
     let calibrationChecksum = 0;
     for (;;) {

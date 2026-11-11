@@ -1,6 +1,6 @@
 # KNOWN ISSUES
 
-Updated: November 5, 2026
+Updated: November 10, 2026
 
 This file tracks active runtime issues only.
 
@@ -9,6 +9,68 @@ For the roadmap and open backlog, see the repository issue tracker.
 ---
 
 ## Open
+
+### Supplied decoded weather tiles require Cesium on globe surfaces
+
+Status: Open (Cesium only)
+
+Custom sources supplying individual decoded radar, regional infrared or
+lightning tiles use Cesium's imagery provider scheduler
+(`src/globe/cesium/weatherFrames.js`). Navara hides these controls on globe
+surfaces and requests no supplied tiles there. Full-extent cloud images and
+raised weather shells remain available on both engines. A full port needs
+decoded tile callbacks in the imagery contract and the Navara adapter.
+
+### Street-vehicle label depth occlusion requires Cesium
+
+Status: Open (Cesium only)
+
+GPU depth occlusion for street-vehicle brackets and callouts uses Cesium's
+depth probe (`src/data/detection.js`). Navara retains the existing geometric
+visibility checks, without the GPU depth result. The contract needs an
+asynchronous depth-probe operation before this can run on both engines.
+
+### Large raised KML polygons omit their fill
+
+Status: Open (bounded triangulation)
+
+On both engines, raised polygons with more than 32,768 vertices draw only
+their outlines. Those with more than 128 rings draw neither fill nor
+outlines. These limits bound main-thread triangulation and outline work;
+the omitted geometry is counted as undrawn in the import result.
+
+### Navara terrain tokens are not refreshed while the page stays open
+
+Status: Open (reload required)
+
+An expired terrain token is not refreshed during an open Navara session.
+Reload the page to request a new terrain token.
+
+### Navara does not fall back when a map source fails
+
+Status: Open (manual map selection)
+
+Navara does not report tile errors, so a failing map source does not trigger
+fallback to another map. Select another map manually when tiles fail to load.
+
+### Orbital imagery look-ahead is unavailable on Navara
+
+Status: Open (Cesium only)
+
+The orbital cockpit works on both engines. On Navara it loads imagery for
+its current view but does not prefetch imagery ahead of the ground track.
+At high optical zoom, imagery can arrive later than on Cesium. Navara's
+package does not expose a raster prefetch operation sharing its tile cache
+and request priorities.
+
+### Ship bridge waterline uses loaded geometry on Navara
+
+Status: Open (terrain fallback)
+
+Navara's ship bridge samples loaded mesh geometry and detailed terrain for
+the waterline. It does not request the finest mesh detail around the ship,
+so the bridge height can differ while nearby tiles load. Cesium retains its
+finest-detail mesh sampling.
 
 ### Wildlife grid relies on the iNaturalist UTFGrid cell schema
 

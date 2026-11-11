@@ -23,6 +23,74 @@ export function redact(text) {
     .replace(/AIza[\w-]{30,}/g, 'AIza…REDACTED');
 }
 
+/** The standalone Vite preview has no setup API; opt in explicitly. */
+export function isExpectedPreviewSetupError(
+  message,
+  { preview = false, baseUrl } = {},
+) {
+  if (
+    !preview ||
+    message.type() !== 'error' ||
+    !/^Failed to load resource: .*\b404\b/.test(message.text())
+  )
+    return false;
+  try {
+    const url = new URL(message.location()?.url);
+    return (
+      url.origin === new URL(baseUrl).origin &&
+      url.pathname === '/api/setup/status'
+    );
+  } catch {
+    return false;
+  }
+}
+
+// The runtime evidence gate shares one strict runtime verdict across its main page and
+// every share-link page. Response diagnostics never retain query credentials.
+export function watchBrowserPage(
+  page,
+  report,
+  { name, preview = false, baseUrl },
+) {
+  const errors = (report.browserErrors ??= []);
+  report.expectedPreviewErrors ??= [];
+  report.failedResponses ??= [];
+  (report.runtimePages ??= []).push(name);
+  const resourcePath = (value) => {
+    try {
+      const url = new URL(value);
+      return redact(url.origin + url.pathname);
+    } catch {
+      return '(location unavailable)';
+    }
+  };
+  page.on('console', (message) => {
+    if (isExpectedPreviewSetupError(message, { preview, baseUrl })) {
+      report.expectedPreviewErrors.push('/api/setup/status: 404');
+      return;
+    }
+    if (message.type() === 'error')
+      errors.push(
+        `[${name}] ${redact(message.text())} — ${resourcePath(message.location()?.url)}`,
+      );
+  });
+  for (const event of ['pageerror', 'error'])
+    page.on(event, (error) =>
+      errors.push(`[${name}] ${redact(error.message)}`),
+    );
+  page.on('response', (response) => {
+    if (
+      response.status() >= 400 &&
+      report.failedResponses.length < EVIDENCE_LIMIT
+    )
+      report.failedResponses.push({
+        page: name,
+        status: response.status(),
+        resource: resourcePath(response.url()),
+      });
+  });
+}
+
 function push(list, entry) {
   list.push(entry);
   if (list.length > EVIDENCE_LIMIT)
@@ -37,6 +105,8 @@ export function hookRenderErrors(page) {
   return page.evaluateOnNewDocument(() => {
     window.__qaRenderErrors = [];
     const hook = () => {
+      // Cesium-only: its render loop catches errors before pageerror sees them.
+      if (window.__godsEyeView?.engine?.kind === 'navara') return true;
       const scene = window.__godsEyeView?.viewer?.scene;
       if (!scene?.renderError) return false;
       scene.renderError.addEventListener((_, error) =>

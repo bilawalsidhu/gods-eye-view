@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as C from 'cesium';
-import { createNamedMarkers } from './namedMarkers.js';
-import { createLifecycle } from './lifecycle.js';
 import { createLocalInfrastructureOverlayEntry } from '../../data/localGeojsonCore.js';
+import { createDisplayHarness } from './render/displayHarness.mjs';
+import { GROUND_HARNESSES } from '../../testSupport/groundDisplayEngines.mjs';
 
+// The named-area markers on the fake engine: its camera events, frames and
+// window projection (scripted per test) drive the discs.
 function setup(t) {
   let labels = [], options, publications = 0, visible = false;
   const overlayHost = {
@@ -17,25 +18,38 @@ function setup(t) {
   };
   let x = -100;
   const projections = new Set();
-  t.mock.method(C.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => { projections.add(scratch); scratch.x = x; scratch.y = 300; return scratch; });
-  const camera = { changed: new C.Event(), moveEnd: new C.Event(), positionWC: C.Cartesian3.fromDegrees(0, 0, 1e6), viewMatrix: C.Matrix4.clone(C.Matrix4.IDENTITY) };
-  const state = { viewer: { camera, dataSources: { add() {}, remove() {} }, scene: { canvas: { clientWidth: 1280, clientHeight: 800 }, preRender: new C.Event(), primitives: { add: (p) => p, remove() {} } } }, enabled: true, contextAnchor: { latitude: 0, longitude: 0 } };
-  const services = { render: { governorRequestRender() {} }, picking: { registerPickOwner() {}, unregisterPickOwner() {} }, context: { clearSelectedEntityContextForLayer() {} } };
-  let loads = 0;
-  const parts = { model: { colorFor: () => C.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
-  const ctx = { state, services, parts, source: {}, overlayHost };
-  parts.namedMarkers = createNamedMarkers(ctx);
-  const lifecycle = createLifecycle(ctx).methods;
-  lifecycle.init(state.viewer); lifecycle.enable();
+  const h = createDisplayHarness(GROUND_HARNESSES[0], { overlayHost });
+  const { engine } = h;
+  engine.fake.script('worldToWindow', (_point, scratch) => { projections.add(scratch); scratch.x = x; scratch.y = 300; return scratch; });
+  engine.fake.setSize(1280, 800);
+  const base = {
+    changed: engine.camera.changed.numberOfListeners,
+    moveEnd: engine.camera.moveEnd.numberOfListeners,
+    preRender: engine.frames.preRender.numberOfListeners,
+  };
+  h.state.contextAnchor = { latitude: 0, longitude: 0 };
+  h.start();
+  let height = 1e7;
   const records = [1, 2].map((n) => ({ id: `osm:military:w${n}`, name: `Site ${n}`, namedArea: true, areaM2: 100 / n, latitude: 0, longitude: 0, pointOnly: true }));
-  return { state, camera, get labels() { return labels; }, get options() { return options; }, get visible() { return visible; }, projections, records, markers: parts.namedMarkers, lifecycle, setX: (value) => { x = value; }, publications: () => publications, loads: () => loads };
+  t.after(() => h.destroy());
+  return {
+    state: h.state, engine, base,
+    get labels() { return labels; }, get options() { return options; }, get visible() { return visible; },
+    projections, records, markers: h.parts.display?.namedMarkers, lifecycle: h.parts.display,
+    setX: (value) => { x = value; },
+    /** A pose change too small for a camera event. */
+    nudge() { height += 1; engine.fake.setPose({ height }); },
+    frame: () => engine.fake.emit('frames.preRender', 0),
+    cameraChanged() { engine.fake.emit('camera.changed'); engine.fake.emit('camera.moveEnd'); },
+    publications: () => publications, loads: h.loads,
+  };
 }
 
 test('Contacts camera motion reprojects and declutters existing labels without source loads or primitive replacement', (t) => {
   const h = setup(t);
   h.markers.sync(h.records);
   assert.equal(h.markers.stats().pointsOnScreen, 0);
-  h.setX(600); h.camera.changed.raiseEvent(); h.camera.moveEnd.raiseEvent();
+  h.setX(600); h.cameraChanged();
   assert.equal(h.markers.stats().pointsOnScreen, 2);
   assert.equal(h.labels.length, 2);
   assert.equal(h.options.collisionCapacity, 24);
@@ -44,21 +58,21 @@ test('Contacts camera motion reprojects and declutters existing labels without s
   assert.equal(h.loads(), 0);
   assert.equal(h.publications(), 3);
   assert.equal(h.projections.size, 1);
-  h.setX(1400); h.camera.viewMatrix[12] = 1; h.state.viewer.scene.preRender.raiseEvent();
+  h.setX(1400); h.nudge(); h.frame();
   assert.equal(h.markers.stats().pointsOnScreen, 0, 'small pose changes refresh before render');
   h.lifecycle.disable();
-  assert.equal(h.camera.changed.numberOfListeners, 1, 'only the viewport listener remains');
-  assert.equal(h.state.viewer.scene.preRender.numberOfListeners, 0);
+  assert.equal(h.engine.camera.changed.numberOfListeners, h.base.changed + 1, 'only the viewport listener remains');
+  assert.equal(h.engine.frames.preRender.numberOfListeners, h.base.preRender);
   assert.equal(h.labels.length, 0);
   assert.equal(h.visible, false);
   h.state.records = h.records;
   h.setX(600); h.lifecycle.enable();
   assert.equal(h.labels.length, 2);
   assert.equal(h.publications(), 5);
-  h.lifecycle.destroy(h.state.viewer);
-  assert.equal(h.camera.changed.numberOfListeners, 0);
-  assert.equal(h.camera.moveEnd.numberOfListeners, 0);
-  assert.equal(h.state.viewer.scene.preRender.numberOfListeners, 0);
+  h.lifecycle.destroy();
+  assert.equal(h.engine.camera.changed.numberOfListeners, h.base.changed);
+  assert.equal(h.engine.camera.moveEnd.numberOfListeners, h.base.moveEnd);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, h.base.preRender);
 });
 
 test('wide named markers retain primitives until close polygons publish with the same identity', async (t) => {
@@ -80,7 +94,6 @@ test('wide named markers retain primitives until close polygons publish with the
   assert.equal(first.title, 'Site 1');
   assert.equal(h.labels.length, 2, 'no duplicate title at handoff');
   assert.equal(retainNamedHandoff(h.records, [], { west: 1, east: 2, south: 1, north: 2 }).length, 0);
-  h.lifecycle.destroy(h.state.viewer);
 });
 
 test('canonical aliases transfer named marker ownership without replacing primitives', (t) => {
@@ -107,7 +120,6 @@ test('canonical aliases transfer named marker ownership without replacing primit
     });
   }
   assert.equal(h.labels.length, 1);
-  h.lifecycle.destroy(h.state.viewer);
 });
 
 
@@ -124,13 +136,13 @@ test('the bounded host cohort ranks wide points and polygon titles by area', (t)
   const first = h.labels[0];
   const publications = h.publications();
   for (let i = 0; i < 100; i++) {
-    h.camera.viewMatrix[12] += 0.01;
-    h.state.viewer.scene.preRender.raiseEvent();
+    h.nudge();
+    h.frame();
   }
   assert.equal(h.labels[0], first);
   assert.equal(h.publications(), publications, 'camera frames never rebuild host entries');
   assert.equal(h.projections.size, 1, 'point projection reuses scratch storage');
-  h.lifecycle.destroy(h.state.viewer);
+  h.lifecycle.destroy();
   assert.equal(h.labels.length, 0);
 });
 
@@ -145,7 +157,6 @@ test('wide and polygon titles use the Data Centers entry contract and persistent
     const reference = createLocalInfrastructureOverlayEntry({ id: entry.id, layerId: 'military-installations', position: entry.position, properties: { name: entry.title }, priority: entry.priority, accent: entry.accent });
     assert.deepEqual(entry, { ...reference, selected: false });
   }
-  h.lifecycle.destroy(h.state.viewer);
 });
 
 
@@ -166,7 +177,6 @@ test('selection promotes exactly one entry and deselection restores that same la
   assert.equal(original.variant, 'card');
   assert.equal(original.selected, false);
   assert.deepEqual(original.details, []);
-  h.lifecycle.destroy(h.state.viewer);
 });
 
 test('Contacts can select a point outside the normal title cap or an unnamed polygon', (t) => {
@@ -181,5 +191,17 @@ test('Contacts can select a point outside the normal title cap or an unnamed pol
     assert.equal(h.labels.filter(e => e.selected).length, 1);
     assert.equal(h.labels.length, 512);
   }
-  h.lifecycle.destroy(h.state.viewer);
+});
+
+test('selected markers without an explicit namedArea flag stay hidden safely', (t) => {
+  const h = setup(t);
+  const record = {
+    id: 'google:places-qa-01',
+    name: 'Candidate',
+    latitude: 0,
+    longitude: 0,
+  };
+  h.state.selectedId = record.id;
+  assert.doesNotThrow(() => h.markers.sync([record]));
+  h.markers.visit((_id, point) => assert.equal(point.show, false));
 });

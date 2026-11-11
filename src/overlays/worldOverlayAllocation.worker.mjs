@@ -1,11 +1,14 @@
+import { worldOverlayFor } from './worldOverlay.js';
+let overlayEngine;
 import * as Cesium from 'cesium';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
+import * as geo from '../geo/index.js';
 import {
-  AMBIENT_CARD_COLLISION_CAPACITY,
-  destroyWorldOverlay,
-  getWorldOverlayDiagnostics,
-  initWorldOverlay,
-  setOverlayEntries,
-} from './worldOverlay.js';
+  horizonVisible as navaraHorizonVisible,
+  projectToWindow as navaraProjectToWindow,
+  viewProjection as navaraViewProjection,
+} from '../globe/cameraMath.js';
+import { AMBIENT_CARD_COLLISION_CAPACITY } from './worldOverlay.js';
 import {
   LOCAL_OVERLAY_COHORT_LIMIT,
   createLocalInfrastructureOverlayEntry,
@@ -308,6 +311,7 @@ function installMockEnvironment({ width, height, dpr }) {
   const viewer = {
     container,
     canvas: { clientWidth: width, clientHeight: height },
+    clock: { onTick: new MockEvent() },
     camera: {
       positionWC: new Cesium.Cartesian3(0, 0, 10_000_000),
       positionCartographic: { height: 1000 },
@@ -322,9 +326,12 @@ function installMockEnvironment({ width, height, dpr }) {
 
   return {
     viewer,
+    // Shell modules take the globe engine; the Cesium engine runs on the mock.
+    engine: createCesiumEngine(viewer),
     postRender,
     advanceTime(ms) {
       currentTime += ms;
+      viewer.clock.onTick.raise();
     },
   };
 }
@@ -1235,6 +1242,63 @@ function buildPhase6DetectionWorkload(count) {
   };
 }
 
+/**
+ * The Navara engine's projector (its camera maths, src/globe/cameraMath.js,
+ * as createNavaraEngine wires it) over a real WGS84 camera
+ * 2 000 km over (0°, 0°), and labels on a lon/lat grid under it with the
+ * horizon test ON: the per-label horizon test and the per-frame matrix of
+ * the engine-neutral host path, not the Cesium mock's.
+ */
+const NAVARA_CAMERA = (() => {
+  const position = geo.cartesian3.fromDegrees(0, 0, 2_000_000);
+  const direction = geo.cartesian3.normalize(
+    geo.cartesian3.negate(position, geo.cartesian3.create()),
+    geo.cartesian3.create(),
+  );
+  return {
+    position,
+    direction,
+    up: geo.cartesian3.create(0, 0, 1),
+    fovy: Math.PI / 3,
+    width: VIEWPORT_WIDTH,
+    height: VIEWPORT_HEIGHT,
+  };
+})();
+
+function navaraProjector() {
+  return {
+    worldToWindow: (position, result) =>
+      navaraProjectToWindow(NAVARA_CAMERA, position, result),
+    viewProjection: (result) => navaraViewProjection(NAVARA_CAMERA, result),
+    horizonVisible: (position) =>
+      navaraHorizonVisible(NAVARA_CAMERA.position, position),
+  };
+}
+
+function buildNavaraProjectorWorkload(count) {
+  const workload = buildWorkload(count);
+  const columns = Math.max(1, Math.ceil(Math.sqrt((count * 16) / 9)));
+  for (let index = 0; index < count; index++) {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    // ±12° east-west, ±8° north-south under the camera (on screen).
+    const place = geo.cartesian3.fromDegrees(
+      -12 + (24 * column) / Math.max(1, columns - 1),
+      -8 + (16 * row) / Math.max(1, Math.ceil(count / columns) - 1),
+      0,
+    );
+    workload.positions[index].x = place.x;
+    workload.positions[index].y = place.y;
+    workload.positions[index].z = place.z;
+    workload.drifts[index].baseX = place.x;
+    workload.drifts[index].baseY = place.y;
+    // Moving by up to 3 km each way.
+    workload.drifts[index].amplitude = 3_000;
+    workload.entries[index].horizonCull = true;
+  }
+  return workload;
+}
+
 function advanceWorkload(positions, drifts, frame) {
   for (let index = 0; index < positions.length; index++) {
     const drift = drifts[index];
@@ -1255,7 +1319,10 @@ function main() {
     height: VIEWPORT_HEIGHT,
     dpr: 2,
   });
-  initWorldOverlay(env.viewer);
+  // The Navara projector profile swaps the engine's projector before the
+  // host reads it.
+  if (PROFILE === 'navara-projector') env.engine.projector = navaraProjector();
+  worldOverlayFor((overlayEngine = env.engine))?.init();
   const workload =
     PROFILE === 'phase6-detection'
       ? buildPhase6DetectionWorkload(ENTRY_COUNT)
@@ -1287,13 +1354,15 @@ function main() {
                                 ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
                                 : PROFILE === 'all-live-radio'
                                   ? buildAllLiveRadioWorkload(ENTRY_COUNT)
-                                  : PROFILE === 'air-quality'
-                                    ? buildAirQualityWorkload(ENTRY_COUNT)
-                                    : PROFILE === 'submarine-cables'
-                                      ? buildSubmarineCablesWorkload(
+                                  : PROFILE === 'submarine-cables'
+                                    ? buildSubmarineCablesWorkload(ENTRY_COUNT)
+                                    : PROFILE === 'navara-projector'
+                                      ? buildNavaraProjectorWorkload(
                                           ENTRY_COUNT,
                                         )
-                                      : buildWorkload(ENTRY_COUNT);
+                                      : PROFILE === 'air-quality'
+                                        ? buildAirQualityWorkload(ENTRY_COUNT)
+                                        : buildWorkload(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;
   const solveIntervalMs = Number(process.env.GEV_ALLOC_SOLVE_MS) || 125;
   const detectionActive = !!workload.detectionLayer;
@@ -1303,21 +1372,25 @@ function main() {
     env.viewer.camera.viewMatrix[0] = 1 / 800_000;
     env.viewer.camera.viewMatrix[5] = 1 / 600_000;
     env.viewer.camera.positionCartographic.height = 2_500_000;
-    initDetection(env.viewer, [workload.detectionLayer], () => {});
+    initDetection(env.engine, [workload.detectionLayer], () => {});
     setDetectionTuning({ densityPct: 100, allocationStrategy: 'ELASTIC' });
     setDetectionMode('DENSE');
   } else if (workload.registrations) {
     for (const registration of workload.registrations) {
-      setOverlayEntries(registration.sourceId, registration.entries, {
-        ...registration.options,
-        // Exercise the stricter moving-source solve cadence while retaining
-        // the production source ids, entries, caps, and bounded cohorts.
-        moving: true,
-        solveIntervalMs,
-      });
+      worldOverlayFor(overlayEngine)?.setEntries(
+        registration.sourceId,
+        registration.entries,
+        {
+          ...registration.options,
+          // Exercise the stricter moving-source solve cadence while retaining
+          // the production source ids, entries, caps, and bounded cohorts.
+          moving: true,
+          solveIntervalMs,
+        },
+      );
     }
   } else {
-    setOverlayEntries('alloc-probe', entries, {
+    worldOverlayFor(overlayEngine)?.setEntries('alloc-probe', entries, {
       collisionCapacity: 96,
       cohortLimit: 256,
       moving: true,
@@ -1343,7 +1416,7 @@ function main() {
     globalThis.gc();
     for (let i = 0; i < CHUNK_FRAMES; i++) tick();
   }
-  const warm = getWorldOverlayDiagnostics();
+  const warm = worldOverlayFor(overlayEngine)?.getDiagnostics();
   const detectionWarm = detectionActive ? getDetectionDiagnostics() : null;
   const painted = detectionActive
     ? detectionWarm.visibleCount
@@ -1366,7 +1439,7 @@ function main() {
   }
   const solveRevisionAfter = detectionActive
     ? getDetectionDiagnostics().solveRevision
-    : getWorldOverlayDiagnostics().solveRevision;
+    : worldOverlayFor(overlayEngine)?.getDiagnostics().solveRevision;
   const sorted = chunkRates.slice().sort((a, b) => a - b);
   const maxBytesPerFrame = sorted[sorted.length - 1];
   const medianBytesPerFrame = sorted[Math.floor(sorted.length / 2)];
@@ -1402,7 +1475,8 @@ function main() {
   );
 
   if (detectionActive) destroyDetection();
-  destroyWorldOverlay();
+  worldOverlayFor(overlayEngine)?.destroy();
+  env.engine.destroy();
 }
 
 main();

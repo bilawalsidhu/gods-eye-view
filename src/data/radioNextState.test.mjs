@@ -5,6 +5,11 @@ import { radioLayer } from './radio.js';
 import { setLocale } from '../i18n/index.js';
 import { renderRadioState } from '../ui/radioPresentation.js';
 import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const READY = 'Ready — playback starts only from your action';
 const ids = [1, 2, 3].map((n) => `00000000-0000-4000-8000-00000000009${n}`);

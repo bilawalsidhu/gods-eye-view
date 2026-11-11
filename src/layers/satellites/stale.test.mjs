@@ -1,8 +1,9 @@
+import { satelliteServices } from '../../testSupport/satelliteServices.mjs';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createSatelliteSource } from './source.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
@@ -72,36 +73,21 @@ async function fixture(t) {
     fetchImpl: (path, options) =>
       fetch(`http://127.0.0.1:${server.address().port}${path}`, options),
   });
-  // Application host services and native EventTargets; actual Cesium collections,
-  // input handler, events, SGP4, ingestion and lifecycle run without a WebGL scene.
-  const noop = () => {};
-  const services = {
-    overlays: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
-    },
-    layerState: { isExplicitLayerStateOrigin: () => false },
-    focus: {
-      clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
-      getFocusTarget: () => null,
-    },
-    context: {
-      clearTrackedSubjectContext: noop,
-      getContextStore: () => ({ entities: new Map() }),
-      refreshTrackedSubjectContext: noop,
-      selectTrackedSubjectContext: noop,
-    },
-    readout: { refreshTrackedReadout: noop },
-    render: { holdContinuousRender: noop, releaseContinuousRender: noop },
-    picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-  };
+  // Application host services and native EventTargets; the display on the
+  // fake engine, its input, events, SGP4, ingestion and lifecycle run without
+  // a WebGL scene.
+  const services = satelliteServices();
   const previousDocument = globalThis.document;
   globalThis.document = new EventTarget();
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = {
+    state,
+    services,
+    parts,
+    source,
+    getRenderer: () => state._renderer,
+  };
   for (const [name, factory] of Object.entries({
     controls: createControls,
     orbits: createOrbits,
@@ -115,18 +101,11 @@ async function fixture(t) {
   })) {
     parts[name] = factory(context);
   }
-  const viewer = {
-    scene: {
-      canvas: new EventTarget(),
-      primitives: new Cesium.PrimitiveCollection(),
-      preRender: new Cesium.Event(),
-    },
-    trackedEntityChanged: new Cesium.Event(),
-  };
-  await parts.lifecycle.methods.init(viewer);
+  const engine = createFakeEngine();
+  await parts.lifecycle.methods.init(null, { engine });
   t.after(async () => {
-    if (state._pointCollection) parts.lifecycle.methods.destroy(viewer);
-    viewer.scene.primitives.destroy();
+    if (state._pointCollection) parts.lifecycle.methods.destroy();
+    engine.destroy();
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
     server.closeAllConnections();
@@ -135,9 +114,9 @@ async function fixture(t) {
   return {
     state,
     parts,
-    viewer,
+    engine,
     policy,
-    update: (options) => parts.ingestion.methods.update(viewer, options),
+    update: (options) => parts.ingestion.methods.update(null, options),
     stats: () => parts.controls.methods.getStats(),
     feed: () => layerFeedState(parts.controls.methods.getStats()),
     async waitHeld(count) {
@@ -287,10 +266,10 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   const work = f.update();
   await f.waitHeld(CORE.length);
   const rejected = assert.rejects(work, { name: 'AbortError' });
-  f.parts.lifecycle.methods.destroy(f.viewer);
+  f.parts.lifecycle.methods.destroy();
   assert.equal(f.stats().count, 0);
   assert.equal(f.stats().stale, false);
-  await f.parts.lifecycle.methods.init(f.viewer);
+  await f.parts.lifecycle.methods.init(null, { engine: f.engine });
   await rejected;
   assert.equal(f.stats().stale, false);
   f.policy.hold = false;

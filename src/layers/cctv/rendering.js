@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
@@ -58,27 +58,26 @@ export function createRendering({
     const target = getFocusTarget();
     if (
       !layerState._enabled ||
-      !layerState._viewer ||
+      !parts.renderer?.ready ||
       !focusPassIsNeeded(target, layerState._activeFocusStyleCount)
     )
       return;
     if (nowMs - layerState._lastFocusStyleAt < 80) return;
     layerState._lastFocusStyleAt = nowMs;
-    const scene = layerState._viewer.scene;
-    const camera = layerState._viewer.camera;
     const result = applyCctvFocusDeemphasis({
       records: layerState._records,
       target,
       previousActiveCount: layerState._activeFocusStyleCount,
       nowMs,
+      // prettier-ignore
       screenPositionFor: (position) =>
-        Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
+        parts.renderer.project(
           position,
           layerState._scratchFocusScreen,
         ),
+      // prettier-ignore
       cameraDistanceFor: (position) =>
-        Cesium.Cartesian3.distance(camera.positionWC, position),
+        parts.renderer.distance(position),
       baseColorFor: cameraColorFor,
     });
     layerState._activeFocusStyleCount = result.activeCount;
@@ -167,65 +166,42 @@ export function createRendering({
   function refreshHorizonCulling() {
     if (
       !layerState._enabled ||
-      !layerState._viewer ||
-      layerState._viewer.isDestroyed() ||
+      !parts.renderer?.ready ||
       !layerState._records.length
     )
       return false;
-    const { camera, scene } = layerState._viewer;
-    const width = scene.canvas.clientWidth || scene.canvas.width || 0;
-    const height = scene.canvas.clientHeight || scene.canvas.height || 0;
+    const { width, height } = parts.renderer.viewport();
     const minX = -width * VIEW_ICON_MARGIN;
     const maxX = width * (1 + VIEW_ICON_MARGIN);
     const minY = -height * VIEW_ICON_MARGIN;
     const maxY = height * (1 + VIEW_ICON_MARGIN);
     // Ground metres one pixel covers per metre of distance from the viewer.
-    const fovy = Number.isFinite(camera.frustum?.fovy)
-      ? camera.frustum.fovy
-      : Math.PI / 3;
+    const fovy = parts.renderer.cameraPose()?.fovy || Math.PI / 3;
     const metresPerPixelPerMetre =
       (2 * Math.tan(fovy / 2)) / Math.max(1, height);
-    const viewer = camera.positionWC;
-    // The horizon test of Cesium's EllipsoidalOccluder, inlined: this loop
-    // visits every camera in the catalog.
-    const inverseRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
-    const cx = viewer.x * inverseRadii.x;
-    const cy = viewer.y * inverseRadii.y;
-    const cz = viewer.z * inverseRadii.z;
-    const limbSquared = cx * cx + cy * cy + cz * cz - 1;
     const activeId = layerState._activeCameraId;
-    const project = screenProjector(scene, camera, width, height);
+    const horizonVisible = parts.renderer.horizonTest();
     const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
     const shown = [];
     const cells = new Map();
     for (const record of layerState._records) {
       const position = record.billboard?.position;
       if (!position) continue;
-      const vx = position.x * inverseRadii.x - cx;
-      const vy = position.y * inverseRadii.y - cy;
-      const vz = position.z * inverseRadii.z - cz;
-      const vtDotVc = -(vx * cx + vy * cy + vz * cz);
-      if (
-        limbSquared < 0
-          ? vtDotVc > 0
-          : vtDotVc > limbSquared &&
-            (vtDotVc * vtDotVc) / (vx * vx + vy * vy + vz * vz) > limbSquared
-      )
-        continue;
-      const screen = project(position);
+      if (!horizonVisible(position)) continue;
+      const screen = parts.renderer.project(
+        position,
+        layerState._scratchViewScreen,
+      );
       if (
         !screen ||
         !(screen.x >= minX && screen.x <= maxX) ||
         !(screen.y >= minY && screen.y <= maxY)
       )
         continue;
-      const dx = position.x - viewer.x;
-      const dy = position.y - viewer.y;
-      const dz = position.z - viewer.z;
       const cellM =
         VIEW_CELL_PX *
         metresPerPixelPerMetre *
-        Math.sqrt(dx * dx + dy * dy + dz * dz);
+        parts.renderer.distance(position);
       if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
         record.viewPass = pass;
         shown.push(record);
@@ -254,46 +230,6 @@ export function createRendering({
     return changed;
   }
 
-  /**
-   * Canvas coordinates for world positions. In 3D the pass multiplies by one
-   * view-projection matrix per call instead of Cesium's per-point
-   * cartesianToCanvasCoordinates, which dominated the pass on a large
-   * catalog; other scene modes keep Cesium's projection.
-   * @returns {(position: Cesium.Cartesian3) => ({x: number, y: number}|null)}
-   */
-  function screenProjector(scene, camera, width, height) {
-    const out = layerState._scratchViewScreen;
-    const projection = camera.frustum?.projectionMatrix;
-    if (
-      scene.mode !== Cesium.SceneMode.SCENE3D ||
-      !projection ||
-      !camera.viewMatrix
-    )
-      return (position) => scene.cartesianToCanvasCoordinates(position, out);
-    const m = Cesium.Matrix4.multiply(
-      projection,
-      camera.viewMatrix,
-      layerState._scratchViewProjection,
-    );
-    return (p) => {
-      const w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
-      const z = m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14];
-      // Behind the eye or before the near plane: Cesium does not draw it.
-      if (!(w > 0) || z < 0) return null;
-      out.x =
-        ((m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w + 1) * 0.5 * width;
-      out.y =
-        (1 - (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w) * 0.5 * height;
-      return out;
-    };
-  }
-
-  /**
-   * A grid cell fixed to the ground: `cellM` rounded up to a power of two
-   * metres, so the cell (and its winner) only changes when the camera's
-   * distance crosses a doubling: a level pan keeps it, a tilted pan or a zoom
-   * can move cameras near the edge of a step to the next one.
-   */
   function worldCellKey(record, cellM) {
     const level = Math.ceil(Math.log2(cellM));
     const { lat, lon } = record.camera;
@@ -307,7 +243,7 @@ export function createRendering({
       return record.viewCellKey;
     const latStep = 2 ** level / 111_320;
     const row = Math.floor(lat / latStep);
-    const rowLat = Cesium.Math.toRadians((row + 0.5) * latStep);
+    const rowLat = geo.math.toRadians((row + 0.5) * latStep);
     const lonStep = latStep / Math.max(0.05, Math.cos(rowLat));
     record.viewCellLevel = level;
     record.viewCellLat = lat;
@@ -353,8 +289,10 @@ export function createRendering({
       }
       for (const entity of record?.coverageEntities || []) entity.show = false;
       if (record?.viewshedPrimitive) destroyVolume?.(record);
-      if (record?.projection?.planeEntity)
+      if (record?.projection?.planeEntity) {
         record.projection.planeEntity.show = false;
+        record.projection.planeVisible = false;
+      }
     }
   }
 
@@ -365,13 +303,14 @@ export function createRendering({
       layerState._activeCameraId,
     );
     parts.projection.clearProjectionOverlay();
-    if (layerState._billboards) layerState._billboards.show = false;
+    parts.renderer?.setMarkersVisible(false);
     parts.projection.pauseInactiveProjectionFeeds(null);
   }
 
   /** Applies coverage visibility/style state and lazily builds eligible sets. */
 
   function refreshCoverageStyles() {
+    if (!parts.renderer?.ready) return;
     const activeRecord = parts.selection.getActiveRecord();
     parts.geometry.ensureActiveCoverageEntities(activeRecord);
     const activeId = activeRecord?.camera.id || null;
@@ -393,12 +332,12 @@ export function createRendering({
         // Unchanged writes still dirty the collection, which then rewrites
         // every icon's vertices: across a large catalog, write only changes.
         const color = cameraColorFor(record);
-        if (!Cesium.Color.equals(record.billboard.color, color))
+        if (!color.equals(record.billboard.color))
           record.billboard.color = color;
         const scale = isActive ? 1.25 : 1.0;
         if (record.billboard.scale !== scale) record.billboard.scale = scale;
-        // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
-        // (set at creation) — see the field-test far-zoom submerge fix there.
+        // Every marker draws over the scene (the marker set's depth test is
+        // 'always') — see the field-test far-zoom submerge fix there.
       }
 
       if (
@@ -426,56 +365,40 @@ export function createRendering({
       // rather than rendering identically to a surveyed one (#639). Colors,
       // widths, and the active/idle emphasis are unchanged.
       const bearingEstimated = isHeadingEstimated(record.camera);
-      const lineMaterial = (color) =>
-        bearingEstimated
-          ? new Cesium.PolylineDashMaterialProperty({ color })
-          : color;
       for (const entity of record.coverageEntities || []) {
-        // The frustum wireframe is part of the projection representation —
-        // force it on for the active camera and let it read through geometry
-        // via depthFailMaterial (polylines have no disableDepthTestDistance).
-        entity.show = !!(
+        const visible = !!(
           layerState._enabled &&
           ((coverageOn && inVisibleSet) || planeShowing)
         );
-        if (!entity.polyline) continue;
-        // Viewshed mode swaps the cyan/green scheme for the camera's own hue so
-        // adjacent cones read as distinct coverage claims (design §3b); the
-        // active camera keeps its width/alpha emphasis in both schemes.
         const hue = viewshedOn ? record.viewshedColors : null;
-        if (entity._coverageRole === 'cap') {
-          entity.polyline.material = lineMaterial(
-            hue
-              ? isActive
-                ? hue.lineActive
-                : hue.line
-              : isActive
-                ? ACTIVE_COVERAGE_CENTER
-                : IDLE_COVERAGE_CENTER_MUTED,
-          );
-          entity.polyline.width = isActive ? 2.2 : 1.0;
-          entity.polyline.depthFailMaterial = planeShowing
-            ? hue
-              ? hue.line.withAlpha(0.26)
-              : ACTIVE_COVERAGE_CENTER_DEPTHFAIL
-            : undefined;
-        } else {
-          entity.polyline.material = lineMaterial(
-            hue
-              ? isActive
-                ? hue.lineActive
-                : hue.line.withAlpha(0.6)
-              : isActive
-                ? ACTIVE_COVERAGE_EDGE
-                : IDLE_COVERAGE_EDGE_MUTED,
-          );
-          entity.polyline.width = isActive ? 1.8 : 0.9;
-          entity.polyline.depthFailMaterial = planeShowing
-            ? hue
-              ? hue.line.withAlpha(0.18)
-              : ACTIVE_COVERAGE_EDGE_DEPTHFAIL
-            : undefined;
-        }
+        const cap = entity._coverageRole === 'cap';
+        const tint = hue
+          ? isActive
+            ? hue.lineActive
+            : cap
+              ? hue.line
+              : hue.line.withAlpha(0.6)
+          : cap
+            ? isActive
+              ? ACTIVE_COVERAGE_CENTER
+              : IDLE_COVERAGE_CENTER_MUTED
+            : isActive
+              ? ACTIVE_COVERAGE_EDGE
+              : IDLE_COVERAGE_EDGE_MUTED;
+        const depthFail = !planeShowing
+          ? undefined
+          : hue
+            ? hue.line.withAlpha(cap ? 0.26 : 0.18)
+            : cap
+              ? ACTIVE_COVERAGE_CENTER_DEPTHFAIL
+              : ACTIVE_COVERAGE_EDGE_DEPTHFAIL;
+        parts.renderer.styleLine(entity, {
+          visible,
+          width: cap ? (isActive ? 2.2 : 1.0) : isActive ? 1.8 : 0.9,
+          tint,
+          dashed: bearingEstimated,
+          depthFail,
+        });
       }
 
       // Viewshed volume lifecycle: exists iff enabled + viewshed mode + in the
@@ -503,8 +426,8 @@ export function createRendering({
       }
     }
 
-    if (layerState._billboards)
-      layerState._billboards.show = !!layerState._enabled;
+    parts.geometry.releaseInactiveGeometry(activeId, coverageVisible);
+    parts.renderer?.setMarkersVisible(!!layerState._enabled);
     parts.projection.pauseInactiveProjectionFeeds(activeId);
   }
   return {

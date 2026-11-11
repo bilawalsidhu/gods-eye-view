@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+// Source errors stay English until the layer panel presents them.
+const msg = (text) => text;
+import * as geo from '../../geo/index.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -8,25 +11,47 @@ import {
   selectEarthquakeOverlayCohort,
   mapAnalystRecord,
 } from './model.js';
+import { createEarthquakesDisplay } from './render/display.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
 
-// A portable package (no i18n): the error stays English data and the layer
-// panel shows it translated.
-const msg = (text) => text;
-
-/** Own one earthquake display and its refresh lifecycle. */
-export function createEarthquakesLayer({ source, overlayHost } = {}) {
+/**
+ * Own one earthquake display and its refresh lifecycle.
+ * rendererFactory({ engine }) owns drawing (render/display.js by default)
+ * and returns: setVisible(boolean), replace(discs), destroy().
+ * Discs are degrees, metre radii and Rgba colours; renderers keep source
+ * order. The layer retains observations for queries while detached.
+ */
+export function createEarthquakesLayer({
+  source,
+  overlayHost,
+  rendererFactory = ({ engine }) => createEarthquakesDisplay(engine),
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Earthquakes require a snapshot source');
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
-  let _viewer = null;
+  if (typeof rendererFactory !== 'function')
+    throw new TypeError('Earthquakes require a renderer factory');
+  let sceneEngine = null;
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
+  let initialized = false;
+  let observations = [];
+  let discs = [];
+  let labels = [];
   let _request = null;
-  let _dataSource = null;
+  let _renderer = null;
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
+
+  function publishLabels() {
+    overlayHost.setEntries(EARTHQUAKE_OVERLAY_SOURCE_ID, labels, {
+      cohortLimit: EARTHQUAKE_OVERLAY_COHORT_LIMIT,
+      collisionCapacity: EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
+      moving: false,
+    });
+  }
 
   const layer = {
     id: 'earthquakes',
@@ -35,39 +60,65 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
     source: 'USGS',
     updateInterval: 60000,
 
-    init(viewer) {
-      if (_viewer) throw new Error('Earthquake layer is already initialized');
-      _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('earthquakes');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
-      _count = 0;
-      _lastUpdate = null;
-      _lastError = null;
-      _enabled = false;
-      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
+    init(viewer, { engine = null } = {}) {
+      if (initialized)
+        throw new Error('Earthquake layer is already initialized');
+      initialized = true;
+      try {
+        if (engine) this.attachRenderer({ engine });
+      } catch (error) {
+        this.destroy();
+        throw error;
+      }
       console.log('[Data:Earthquakes] Initialized');
     },
 
-    enable(viewer) {
+    show(enabled) {
+      _renderer?.setVisible(enabled);
+      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
+      if (!initialized || _renderer)
+        throw new Error('Invalid earthquake scene attachment');
+      sceneEngine = engine;
+      _renderer = rendererFactory({ engine });
+      if (!_renderer) throw new Error('Earthquake renderer unavailable');
+      this.show(_enabled);
+      if (discs.length) _renderer.replace(discs);
+      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, _enabled);
+      if (_enabled) publishLabels();
+    },
+
+    detachRenderer() {
+      overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
+      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
+      _renderer?.destroy();
+      _renderer = null;
+      sceneEngine = null;
+    },
+
+    enable() {
       _enabled = true;
       // No continuous-render hold: the discs are static geometry now, so the
       // layer has no per-frame animator to keep the render loop alive for.
-      if (_dataSource) _dataSource.show = true;
-      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
+      _renderer?.setVisible(true);
+      if (_renderer) {
+        overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
+        if (labels.length) publishLabels();
+      }
     },
 
-    disable(viewer) {
+    disable() {
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      _renderer?.setVisible(false);
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
     },
 
-    async update(viewer) {
-      if (!_enabled || !_dataSource) return false;
+    async update() {
+      if (!_enabled) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -76,55 +127,18 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
 
-        const nextEntities = [];
+        const nextDiscs = [];
         let count = 0;
         const overlayEntries = [];
 
-        for (const {
-          stableId,
-          usgsId,
-          lon,
-          lat,
-          depthKm,
-          mag,
-          place,
-          time,
-        } of rows) {
+        for (const { stableId, lon, lat, depthKm, mag } of rows) {
           count++;
           const baseRadius = Math.pow(2, mag) * 1000;
           const color = depthColor(depthKm || 0);
-          const isSignificant = mag >= 5.0;
-          const fillAlpha = isSignificant ? 0.4 : 0.3;
-          const outlineAlpha = isSignificant ? 1.0 : 0.8;
+          const fillAlpha = mag >= 5.0 ? 0.4 : 0.3;
 
-          const position = Cesium.Cartesian3.fromDegrees(lon, lat);
-          nextEntities.push(
-            new Cesium.Entity({
-              id: `earthquake:${stableId}`,
-              position,
-              ellipse: {
-                // Static axes — see the module header. A CallbackProperty here
-                // re-tessellates the clamped ground geometry every frame.
-                semiMajorAxis: baseRadius,
-                semiMinorAxis: baseRadius,
-                material: new Cesium.ColorMaterialProperty(
-                  color.withAlpha(fillAlpha),
-                ),
-                outline: true,
-                outlineColor: color.withAlpha(outlineAlpha),
-                outlineWidth: isSignificant ? 3 : 2,
-                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-              },
-              properties: {
-                // Analyst seam (additive): the USGS event id (e.g. "us7000abcd").
-                usgsId,
-                mag,
-                place,
-                time,
-                depth: depthKm,
-              },
-            }),
-          );
+          const position = geo.cartesian3.fromDegrees(lon, lat);
+          nextDiscs.push({ stableId, lon, lat, baseRadius, color, fillAlpha });
           overlayEntries.push(
             createEarthquakeOverlayEntry({
               id: String(stableId),
@@ -135,18 +149,12 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           );
         }
 
-        _dataSource.entities.removeAll();
-        for (const entity of nextEntities) _dataSource.entities.add(entity);
-        if (_enabled) {
-          overlayHost.setEntries(
-            EARTHQUAKE_OVERLAY_SOURCE_ID,
-            selectEarthquakeOverlayCohort(overlayEntries),
-            {
-              cohortLimit: EARTHQUAKE_OVERLAY_COHORT_LIMIT,
-              collisionCapacity: EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
-              moving: false,
-            },
-          );
+        observations = rows;
+        discs = nextDiscs;
+        labels = selectEarthquakeOverlayCohort(overlayEntries);
+        if (_renderer) {
+          _renderer.replace(discs);
+          publishLabels();
         }
 
         _count = count;
@@ -165,17 +173,15 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
-      _viewer = null;
+      initialized = false;
       _enabled = false;
-      overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
-      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
-      if (_dataSource) {
-        viewer.dataSources.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      this.detachRenderer();
+      observations = [];
+      discs = [];
+      labels = [];
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -190,39 +196,18 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (!_dataSource || !_dataSource.show) return [];
-      const entities = _dataSource.entities.values;
-      if (!entities.length) return [];
+      if (!_enabled) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
-      const now = Cesium.JulianDate.now();
-      const result = [];
-      for (const entity of entities) {
-        if (result.length >= limit) break;
-        const cartesian = entity.position
-          ? entity.position.getValue(now)
-          : null;
-        const carto = cartesian
-          ? Cesium.Cartographic.fromCartesian(cartesian)
-          : null;
-        const p = entity.properties;
-        result.push(
+      return observations
+        .slice(0, limit)
+        .map((row, index) =>
           mapAnalystRecord(
-            {
-              id: p?.usgsId?.getValue(now) ?? null,
-              mag: p?.mag?.getValue(now),
-              place: p?.place?.getValue(now),
-              time: p?.time?.getValue(now),
-              depth: p?.depth?.getValue(now),
-              lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
-              lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
-            },
-            result.length,
+            { ...row, id: row.usgsId, depth: row.depthKm },
+            index,
           ),
         );
-      }
-      return result;
     },
 
     getStats() {

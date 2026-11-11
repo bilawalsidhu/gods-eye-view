@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
   DEFAULT_RADIO_FILTER,
@@ -8,13 +8,9 @@ import {
 export function createState({ services }) {
   const layerState = {};
 
-  layerState._radioEarthScreenCenter = new Cesium.Cartesian2();
+  layerState._radioEarthScreenCenter = geo.cartesian2.create();
 
-  layerState._radioEarthToCenter = new Cesium.Cartesian3();
-
-  layerState._viewer = null;
-
-  layerState._dataSource = null;
+  layerState._radioEarthToCenter = geo.cartesian3.create();
 
   layerState._enabled = false;
 
@@ -46,7 +42,7 @@ export function createState({ services }) {
 
   layerState._selectedId = null;
 
-  layerState._selectedEntity = null;
+  layerState._selectedPosition = null;
 
   layerState._selectionGeneration = 0;
 
@@ -135,8 +131,6 @@ export function createState({ services }) {
   layerState._requestGeneration = 0;
 
   layerState._sessionGeneration = 0;
-
-  layerState._removeClusterListener = null;
 
   layerState._overlayPublishTimer = null;
 

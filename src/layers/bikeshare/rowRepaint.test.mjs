@@ -6,15 +6,10 @@
 // row text (LayerPanel._buildMetaText) at every refreshLayerStats() call.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { CITY_BY_ID, GBFS_CITY_REGISTRY } from './registry.js';
-import { createState } from './state.js';
-import { createControls } from './controls.js';
-import { createIngestion } from './ingestion.js';
-import { createModel } from './model.js';
-import { createViewport } from './viewport.js';
-import { createRendering } from './rendering.js';
-import { createLifecycle } from './lifecycle.js';
+import { createBikeshareLayer } from './index.js';
+import { createBikeshareDisplay } from './render/display.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { LayerPanel, layerFeedState } from '../../ui/layerPanel.js';
 
 const BOSTON_ID = 'boston-bluebikes';
@@ -120,50 +115,41 @@ const rowText = (raw) => {
   return `${layerFeedState(stats)} | ${stats.count || '—'} | ${meta}`;
 };
 
-function makeLiveLayer() {
+function makeLiveLayer(t) {
   const source = makeSource();
   const services = {
     render: { governorRequestRender() {} },
     overlays: {
-      setOverlayEntries() {},
-      setOverlaySourceVisible() {},
-      clearOverlaySource() {},
+      setEntries() {},
+      setVisible() {},
+      clearSource() {},
     },
     sprites: { registerSpriteCollection() {}, restoreSpriteOrder() {} },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
-  const state = createState({ services });
-  const parts = {};
-  const context = { state, services, parts, source };
-  parts.ingestion = createIngestion(context);
-  parts.model = createModel(context);
-  parts.viewport = createViewport(context);
-  parts.rendering = createRendering(context);
-  parts.selection = {
-    _installClickHandler() {},
-    _clearSelection() {},
-    _onKeyDown() {},
-  };
-  parts.queries = { collectDetectableStations: () => [] };
-  parts.lifecycle = createLifecycle(context);
-  const { methods: controls } = createControls(context);
-
-  const camera = { ...LONDON, height: LOW_M };
-  const viewer = {
-    camera: {
-      get positionCartographic() {
-        return Cesium.Cartographic.fromDegrees(
-          camera.lon,
-          camera.lat,
-          camera.height,
-        );
-      },
-      computeViewRectangle: () => undefined,
-      changed: { addEventListener() {}, removeEventListener() {} },
+  const engine = createFakeEngine();
+  engine.fake.setPose({
+    longitude: (LONDON.lon * Math.PI) / 180,
+    latitude: (LONDON.lat * Math.PI) / 180,
+    height: LOW_M,
+  });
+  engine.fake.script('viewRectangle', undefined);
+  let state, display, ingestion;
+  const controls = createBikeshareLayer({
+    services,
+    source,
+    rendererFactory(context) {
+      state = context.state;
+      ingestion = context.parts.ingestion;
+      display = createBikeshareDisplay(engine, context);
+      return display;
     },
-    scene: { globe: {}, primitives: { add() {}, remove() {} } },
-  };
-  parts.lifecycle.methods.init(viewer);
+  });
+  controls.init(null, { engine });
+  t.after(() => {
+    controls.destroy();
+    engine.destroy();
+  });
 
   const painted = [];
   controls.attachDataManager({
@@ -178,13 +164,19 @@ function makeLiveLayer() {
     painted,
     lastPainted: () => painted.at(-1),
     stats: () => controls.getStats(),
+    loadInfo: (cityId) =>
+      ingestion.loadCityStationInfo(cityId, state._proximityGeneration),
     live: () => rowText(controls.getStats()),
     moveTo(place, height = LOW_M) {
-      Object.assign(camera, place, { height });
-      return parts.viewport.runProximityCheck();
+      engine.fake.setPose({
+        longitude: (place.lon * Math.PI) / 180,
+        latitude: (place.lat * Math.PI) / 180,
+        height,
+      });
+      return display.runProximityCheck();
     },
     async enable() {
-      parts.lifecycle.methods.enable(viewer);
+      controls.enable();
       await settle();
     },
   };
@@ -195,8 +187,8 @@ async function settle() {
     await new Promise((resolve) => setTimeout(resolve, 2));
 }
 
-test('entering a city paints the loading row, not "never"', async () => {
-  const layer = makeLiveLayer();
+test('entering a city paints the loading row, not "never"', async (t) => {
+  const layer = makeLiveLayer(t);
   const info = deferred();
   layer.source.gates.set(`${BOSTON_ID}:info`, info);
   await layer.enable();
@@ -212,8 +204,8 @@ test('entering a city paints the loading row, not "never"', async () => {
   assert.match(atEntry, /^loading \|/, 'the entry repaint reads loading');
   assert.doesNotMatch(atEntry, /never/);
 });
-test('re-entering a city with cached station info paints loading', async () => {
-  const layer = makeLiveLayer();
+test('re-entering a city with cached station info paints loading', async (t) => {
+  const layer = makeLiveLayer(t);
   await layer.enable();
   await layer.moveTo(BOSTON);
   await settle();
@@ -234,8 +226,8 @@ test('re-entering a city with cached station info paints loading', async () => {
   assert.doesNotMatch(atEntry, /never/);
 });
 
-test('leaving a city mid-load does not leave the row on LOADING', async () => {
-  const layer = makeLiveLayer();
+test('leaving a city mid-load does not leave the row on LOADING', async (t) => {
+  const layer = makeLiveLayer(t);
   layer.source.gates.set(`${BOSTON_ID}:info`, deferred());
   await layer.enable();
   const entering = layer.moveTo(BOSTON);
@@ -250,8 +242,8 @@ test('leaving a city mid-load does not leave the row on LOADING', async () => {
   assert.equal(layer.lastPainted(), layer.live());
 });
 
-test('a camera nudge during the first load still repaints the drawn stations', async () => {
-  const layer = makeLiveLayer();
+test('a camera nudge during the first load still repaints the drawn stations', async (t) => {
+  const layer = makeLiveLayer(t);
   const status = deferred();
   layer.source.gates.set(`${BOSTON_ID}:status`, status);
   await layer.enable();
@@ -267,8 +259,8 @@ test('a camera nudge during the first load still repaints the drawn stations', a
   assert.equal(layer.lastPainted(), layer.live());
 });
 
-test('leaving a city whose load failed repaints the error away', async () => {
-  const layer = makeLiveLayer();
+test('leaving a city whose load failed repaints the error away', async (t) => {
+  const layer = makeLiveLayer(t);
   layer.source.dead.add(BOSTON_ID);
   await layer.enable();
   await layer.moveTo(BOSTON);
@@ -281,8 +273,8 @@ test('leaving a city whose load failed repaints the error away', async () => {
   assert.equal(layer.lastPainted(), layer.live());
 });
 
-test('leaving the failed city of two repaints DEGRADED away', async () => {
-  const layer = makeLiveLayer();
+test('leaving the failed city of two repaints DEGRADED away', async (t) => {
+  const layer = makeLiveLayer(t);
   layer.source.dead.add(BUFFALO_ID);
   await layer.enable();
   await layer.moveTo(BETWEEN);
@@ -295,8 +287,8 @@ test('leaving the failed city of two repaints DEGRADED away', async () => {
   assert.equal(layer.lastPainted(), layer.live());
 });
 
-test('above the altitude gate the row says how low to fly', async () => {
-  const layer = makeLiveLayer();
+test('above the altitude gate the row says how low to fly', async (t) => {
+  const layer = makeLiveLayer(t);
   await layer.enable();
   await layer.moveTo(LONDON, 2_000_000);
   const stats = layer.stats();
@@ -305,8 +297,8 @@ test('above the altitude gate the row says how low to fly', async () => {
   assert.equal(stats.error, undefined);
 });
 
-test('a city with no system says so and counts the ones there are', async () => {
-  const layer = makeLiveLayer();
+test('a city with no system says so and counts the ones there are', async (t) => {
+  const layer = makeLiveLayer(t);
   await layer.enable();
   const stats = layer.stats();
   assert.equal(stats.status, 'zoom-in');
@@ -317,8 +309,8 @@ test('a city with no system says so and counts the ones there are', async () => 
   assert.equal(stats.count, 0);
 });
 
-test('a city in range, loading, failed or a disabled layer gets no prompt', async () => {
-  const layer = makeLiveLayer();
+test('a city in range, loading, failed or a disabled layer gets no prompt', async (t) => {
+  const layer = makeLiveLayer(t);
   assert.equal(layer.stats().status, undefined, 'disabled');
 
   const info = deferred();
@@ -331,19 +323,23 @@ test('a city in range, loading, failed or a disabled layer gets no prompt', asyn
   await settle();
   assert.equal(layer.stats().status, undefined, 'loaded');
 
-  // Left mid-load: range is empty, but the aborted load still owns the row.
-  const leaving = makeLiveLayer();
+  // An outstanding request still owns loading after the last city leaves.
+  const leaving = makeLiveLayer(t);
   leaving.source.gates.set(`${BOSTON_ID}:info`, deferred());
   await leaving.enable();
   const loading = leaving.moveTo(BOSTON);
   await settle();
+  const otherInfo = deferred();
+  leaving.source.gates.set(`${TORONTO_ID}:info`, otherInfo);
+  const pending = leaving.loadInfo(TORONTO_ID);
   const left = leaving.moveTo(LONDON);
   assert.equal(leaving.state._activeCityIds.size, 0);
   assert.equal(leaving.stats().loading, true);
   assert.equal(leaving.stats().status, undefined, 'leaving mid-load');
-  await Promise.all([loading, left]);
+  otherInfo.resolve();
+  await Promise.all([loading, left, pending]);
 
-  const failed = makeLiveLayer();
+  const failed = makeLiveLayer(t);
   failed.source.dead.add(BOSTON_ID);
   await failed.enable();
   await failed.moveTo(BOSTON);
@@ -352,9 +348,9 @@ test('a city in range, loading, failed or a disabled layer gets no prompt', asyn
   assert.equal(failed.stats().error, 'GBFS fetch error');
 });
 
-test('leaving every system behind drops the date of the data it drew', async () => {
+test('leaving every system behind drops the date of the data it drew', async (t) => {
   for (const height of [LOW_M, 2_000_000]) {
-    const layer = makeLiveLayer();
+    const layer = makeLiveLayer(t);
     await layer.enable();
     await layer.moveTo(BOSTON);
     await settle();

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createLaunchesDisplay } from './render/display.js';
 import { createLaunchSource } from './source.js';
 import { createState } from './state.js';
 import { createModel } from './model.js';
@@ -59,26 +60,19 @@ async function fixture({ legacySource = false } = {}) {
     : launchSource;
   const services = {
     overlays: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
+      setEntries: noop,
+      setVisible: noop,
+      clearSource: noop,
     },
     render: { holdContinuousRender: noop, releaseContinuousRender: noop },
+  };
+  services.renderer = {
+    create: ({ engine }) => createLaunchesDisplay(engine),
   };
   const state = createState({ services });
   state._enabled = true;
   state._lifecycleToken = 1;
-  state._dataSource = new Cesium.CustomDataSource('owned-qualification');
-  const canvas = Object.assign(new EventTarget(), {
-    disableRootEvents: true,
-    onwheel: null,
-    style: {},
-  });
-  const viewer = {
-    dataSources: new Cesium.DataSourceCollection(),
-    scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
-  };
-  await viewer.dataSources.add(state._dataSource);
+  const engine = createFakeEngine();
   // Only presentation boundaries are inert. Source, normalization, state,
   // ingestion, lifecycle, stats and feed-state policy execute unchanged.
   const parts = {
@@ -92,6 +86,7 @@ async function fixture({ legacySource = false } = {}) {
     replay: { stopMissionReplay: noop },
     selection: {
       setSelectedMission: noop,
+      showSelectedMission: noop,
       focusMission: noop,
       stopMissionZoomAnchor: noop,
     },
@@ -112,26 +107,30 @@ async function fixture({ legacySource = false } = {}) {
     },
     rendering: {
       updateMissionFrame: noop,
-      addLaunchEntity(record) {
-        state._dataSource.entities.add({
-          id: record.id,
-          name: record.name,
-          position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
-        });
+      addLaunchElements(record) {
+        state._missionElements.set(record.id, { id: record.id });
       },
+      removeMissionElements: () => state._missionElements.clear(),
     },
   };
-  const context = { state, services, parts, source };
+  const context = {
+    state,
+    services,
+    parts,
+    source,
+    getRenderer: () => state._renderer,
+  };
   parts.model = createModel(context);
   parts.ingestion = createIngestion(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
+  parts.lifecycle.methods.init(null, { engine });
   const current = () => {
     const stats = parts.controls.methods.getStats();
     return {
       stats,
       feed: layerFeedState(stats),
-      rendered: state._dataSource?.entities.values.map((x) => x.id) || [],
+      rendered: [...state._missionElements.keys()],
       enabled: state._enabled,
     };
   };
@@ -140,18 +139,19 @@ async function fixture({ legacySource = false } = {}) {
     state,
     source,
     current,
-    viewer,
-    init: () => parts.lifecycle.methods.init(viewer),
+    engine,
+    init: () => parts.lifecycle.methods.init(null, { engine }),
     update: () => parts.ingestion.methods.update(),
     disable: () => parts.lifecycle.methods.disable(),
-    destroy: () => parts.lifecycle.methods.destroy(viewer),
+    destroy: () => parts.lifecycle.methods.destroy(),
     holdArrival: () =>
       new Promise((resolve) => {
         arrival = resolve;
       }),
     release: () => release?.(),
     async close() {
-      await parts.lifecycle.methods.destroy(viewer);
+      await parts.lifecycle.methods.destroy();
+      engine.destroy();
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));
     },
@@ -295,21 +295,18 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(value.stats.lastUpdate, null);
     assert.equal(value.stats.error, null);
     assert.equal(value.enabled, false);
-    assert.equal(f.viewer.dataSources.length, 1);
-    assert.equal(f.viewer.scene.preRender.numberOfListeners, 1);
+    assert.equal(typeof f.state._renderer?.addPoint, 'function');
+    assert.ok(f.engine.frames.preRender.numberOfListeners > 0);
     const click = f.state._clickHandler;
     const move = f.state._moveHandler;
-    assert.ok(click instanceof Cesium.ScreenSpaceEventHandler);
-    assert.ok(move instanceof Cesium.ScreenSpaceEventHandler);
-    assert.equal(
-      typeof click.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK),
-      'function',
-    );
+    assert.equal(typeof click.destroy, 'function');
+    assert.equal(typeof move.destroy, 'function');
     await f.destroy();
-    assert.equal(click.isDestroyed(), true);
-    assert.equal(move.isDestroyed(), true);
-    assert.equal(f.viewer.dataSources.length, 0);
-    assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);
+    assert.equal(f.state._clickHandler, null);
+    assert.equal(f.state._moveHandler, null);
+    assert.equal(f.state._renderer, null);
+    assert.equal(f.engine.frames.preRender.numberOfListeners, 0);
+    assert.equal(f.engine.frames.preUpdate.numberOfListeners, 0);
   } finally {
     await f.close();
   }

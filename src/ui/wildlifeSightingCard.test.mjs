@@ -1,8 +1,9 @@
 import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { nextTick } from 'vue';
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { readFileSync } from 'node:fs';
 import { getLocale, setLocale, t } from '../i18n/index.js';
 import { LOCALES } from '../i18n/locale.js';
@@ -12,6 +13,7 @@ import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import {
   panWildlifeSighting,
   placeWildlifeSightingCard,
+  projectWildlifeSighting,
   readWildlifeCardSafeArea,
 } from './wildlifeSightingPlacement.js';
 import { createUiRuntime } from './vueRuntime.js';
@@ -47,19 +49,6 @@ const rect = (left, top, width, height) => ({
   right: left + width,
   bottom: top + height,
 });
-const events = () => {
-  const listeners = new Set();
-  return {
-    addEventListener(fn) {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    emit() {
-      for (const fn of listeners) fn();
-    },
-    size: () => listeners.size,
-  };
-};
 const settle = async () => {
   await nextTick();
   await Promise.resolve();
@@ -92,13 +81,14 @@ function fixture(
   };
   const ui = createUiRuntime();
   const overlays = new Map();
-  const moveStart = events();
-  const moveEnd = events();
-  const changed = events();
-  const preRender = events();
-  const viewer = {
-    scene: { canvas, preRender, pick: () => picked },
-    camera: { moveStart, moveEnd, changed },
+  const engine = createFakeEngine({ width: 1200, height: 900, canvas });
+  engine.fake.script('pick', () => picked ?? undefined);
+  const raise = (name) => ({ emit: () => engine.fake.emit(name) });
+  const moveStart = raise('camera.moveStart');
+  const moveEnd = raise('camera.moveEnd');
+  const preRender = {
+    ...raise('frames.preRender'),
+    size: () => engine.frames.preRender.numberOfListeners,
   };
   const state = {
     enabled: true,
@@ -109,11 +99,10 @@ function fixture(
     rowById: new Map([[initialRow.stableId, initialRow]]),
     positions: new Map([[initialRow.stableId, { x: 1, y: 2, z: 3 }]]),
     contextIds: new Set(),
-    viewer,
+    engine,
   };
   let picked = null;
   let hit = null;
-  let onClick;
   let clears = 0;
   let staleListener;
   const subscriptions = new Set();
@@ -123,18 +112,11 @@ function fixture(
     state,
     services: {
       now: () => NOW,
-      cesium: { ScreenSpaceEventType: { LEFT_CLICK: 0 } },
       overlayHost: {
         setEntries: (id, entries) => overlays.set(id, entries),
         hitTest: (_x, _y, { sourceId }) =>
           hit?.sourceId === sourceId ? hit : null,
       },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction(fn) {
-          onClick = fn;
-        },
-        destroy() {},
-      }),
       focus: { requestWorldFocus: (value) => flights.push(value) },
     },
     parts: {
@@ -162,7 +144,7 @@ function fixture(
   const card = createWildlifeSightingCard({
     layer,
     ui,
-    viewer,
+    engine,
     documentRef: document,
     windowRef,
     now: () => NOW,
@@ -170,7 +152,7 @@ function fixture(
       projections++;
       return currentPoint;
     },
-    pan: (_viewer, from, to, reduced) => {
+    pan: (_engine, from, to, reduced) => {
       pans.push({ from, to, reduced });
       currentPoint = to;
       return true;
@@ -187,7 +169,7 @@ function fixture(
     selection,
     layer,
     card,
-    viewer,
+    engine,
     windowRef,
     overlays,
     flights,
@@ -204,9 +186,14 @@ function fixture(
     staleListener: () => staleListener,
     clears: () => clears,
     async click(kind = 'dot', target = initialRow) {
+      // An icon pick names the badge's mover set and instance as well.
       picked =
         kind === 'icon'
-          ? { primitive: { id: `wildlife:${target.stableId}` } }
+          ? {
+              id: `wildlife:${target.stableId}`,
+              owner: 'wildlife-sightings',
+              instance: 0,
+            }
           : { id: `wildlife:${target.stableId}` };
       hit =
         kind === 'ambient photo card'
@@ -217,7 +204,7 @@ function fixture(
               }),
             }
           : null;
-      onClick({ position: { x: 50, y: 50 } });
+      engine.fake.input('click', { position: { x: 50, y: 50 } });
       await settle();
     },
     async publish(next) {
@@ -459,7 +446,7 @@ test('a selected dot flies to its true position and its card pans clear of chrom
   );
   const safe = readWildlifeCardSafeArea({
     documentRef: document,
-    viewer: f.viewer,
+    engine: f.engine,
     windowRef: f.windowRef,
   });
   assert.equal(
@@ -481,40 +468,66 @@ test('a selected dot flies to its true position and its card pans clear of chrom
 
 test('the camera correction preserves altitude and orientation and honors reduced motion', () => {
   const flights = [];
-  const camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 250_000),
-    positionCartographic: { height: 250_000 },
+  const engine = createFakeEngine({
+    canvas: { getBoundingClientRect: () => rect(0, 0, 1200, 900) },
+  });
+  engine.fake.setPose({
+    position: geo.cartesian3.fromDegrees(0, 0, 250_000),
     heading: 0.2,
     pitch: -1.2,
     roll: 0.1,
-    pickEllipsoid: (p) => Cesium.Cartesian3.fromDegrees(p.x / 100, p.y / 100),
-    flyTo: (value) => flights.push(value),
-  };
-  const viewer = {
-    camera,
-    scene: {
-      canvas: { getBoundingClientRect: () => rect(0, 0, 1200, 900) },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-    },
-  };
+  });
+  const pose = engine.camera.pose();
+  engine.fake.script('pickEllipsoid', (p) =>
+    geo.cartesian3.fromDegrees(p.x / 100, p.y / 100),
+  );
+  engine.camera.flyTo = (value) => flights.push(value);
   for (const reduced of [false, true]) {
     assert.equal(
-      panWildlifeSighting(viewer, { x: 10, y: 10 }, { x: 30, y: 50 }, reduced),
+      panWildlifeSighting(engine, { x: 10, y: 10 }, { x: 30, y: 50 }, reduced),
       true,
     );
     const flight = flights.at(-1);
     assert.ok(
       Math.abs(
-        Cesium.Cartographic.fromCartesian(flight.destination).height - 250_000,
+        geo.cartographic.fromCartesian(flight.destination).height - 250_000,
       ) < 0.001,
     );
     assert.deepEqual(flight.orientation, {
+      heading: pose.heading,
+      pitch: pose.pitch,
+      roll: pose.roll,
+    });
+    for (const [angle, value] of Object.entries({
       heading: 0.2,
       pitch: -1.2,
       roll: 0.1,
-    });
+    }))
+      assert.ok(Math.abs(flight.orientation[angle] - value) < 1e-9, angle);
     assert.equal(flight.duration, reduced ? 0 : 0.22);
   }
+});
+
+test('a sighting projects through the engine onto the page, and not from behind the globe', () => {
+  const engine = createFakeEngine({
+    canvas: { getBoundingClientRect: () => rect(30, 40, 1024, 768) },
+  });
+  engine.fake.setPose({ position: geo.cartesian3.fromDegrees(0, 0, 250_000) });
+  const centre = projectWildlifeSighting(engine, row, null);
+  assert.ok(Math.abs(centre.x - (30 + 512)) < 1e-6);
+  assert.ok(Math.abs(centre.y - (40 + 384)) < 1e-6);
+  const anchored = { x: 1, y: 2, z: 3 };
+  engine.fake.script('worldToWindow', () => ({ x: 10, y: 20 }));
+  engine.projector.horizonVisible = (position) => position === anchored;
+  assert.deepEqual(
+    projectWildlifeSighting(engine, row, {
+      getSightingPosition: () => anchored,
+    }),
+    { x: 40, y: 60 },
+    'the layer anchor wins over the row coordinates',
+  );
+  assert.equal(projectWildlifeSighting(engine, row, null), null);
+  assert.equal(projectWildlifeSighting(null, row, null), null);
 });
 
 test('the browser click that follows a globe selection does not close the card it opened', async (context) => {
@@ -526,8 +539,8 @@ test('the browser click that follows a globe selection does not close the card i
     f.cardElement(),
     'focus lands on the card, not as a ring on its close button',
   );
-  // Cesium selects on pointer-up; the DOM click event lands on the canvas
-  // afterwards and must not count as an outside click.
+  // The engine reports the globe click on pointer-up; the DOM click event
+  // lands on the canvas afterwards and must not count as an outside click.
   f.canvas.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await settle();
   assert.ok(f.cardElement(), 'the card stays open');
@@ -793,5 +806,65 @@ test('newly mounted chrome repositions the open card without camera events or id
     structural.targets.length,
     0,
     'closing disconnects structural observation',
+  );
+});
+
+test('remounting a selected sighting does not pan the new engine', async (context) => {
+  const f = fixture(context);
+  await f.click();
+  f.card.destroy();
+  f.obstacle('.hud-top-left', rect(0, 0, 260, 160));
+  const ui = createUiRuntime();
+  let pans = 0;
+  const card = createWildlifeSightingCard({
+    layer: f.layer,
+    ui,
+    engine: f.engine,
+    documentRef: document,
+    windowRef: f.windowRef,
+    now: () => NOW,
+    project: () => ({ x: 100, y: 100 }),
+    pan: () => {
+      pans++;
+      return true;
+    },
+  });
+  context.after(() => {
+    card.destroy();
+    ui.destroy();
+  });
+  await settle();
+  assert.equal(pans, 0);
+});
+
+test('remounting a selected sighting leaves keyboard focus where it is', async (context) => {
+  const f = fixture(context);
+  await f.click();
+  f.card.destroy();
+  // The engine switch is made from the Globe Engine picker.
+  const picker = document.body.appendChild(document.createElement('select'));
+  picker.focus();
+  const ui = createUiRuntime();
+  const card = createWildlifeSightingCard({
+    layer: f.layer,
+    ui,
+    engine: f.engine,
+    documentRef: document,
+    windowRef: f.windowRef,
+    now: () => NOW,
+    project: () => ({ x: 100, y: 100 }),
+    pan: () => true,
+  });
+  context.after(() => {
+    card.destroy();
+    ui.destroy();
+  });
+  await settle();
+  assert.ok(f.cardElement(), 'the carried selection opens the card');
+  // A primitive: the reporter would print two DOM elements very slowly.
+  assert.equal(
+    document.activeElement === picker,
+    true,
+    `focus moved to ${document.activeElement?.tagName}`,
   );
 });

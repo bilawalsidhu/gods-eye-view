@@ -93,10 +93,10 @@ test('estimateTurnRateDps: 2°/s ramp detected; noise floored; clamped', () => {
   assert.equal(estimateTurnRateDps(wild), -4); // clamped
 });
 
-test('turnRateFromFixHistory adapts JulianDate history', () => {
-  const t0 = Cesium.JulianDate.now();
+test('turnRateFromFixHistory adapts the fix history (ms timestamps)', () => {
+  const t0 = Date.now();
   const h = [0, 30, 60].map((s, i) => ({
-    time: Cesium.JulianDate.addSeconds(t0, s, new Cesium.JulianDate()),
+    timeMs: t0 + s * 1000,
     track: i * 60,
   }));
   assert.ok(Math.abs(turnRateFromFixHistory(h) - 2) < 1e-9);
@@ -142,9 +142,9 @@ test('courseSlewCapDps: COURSE_MIN_DPS at low speed easing to the fleet cap at c
 });
 
 test('turn-rate guard: hover fix-track jitter manufactures NO turn rate; a real slow turn still does', () => {
-  const t0 = Cesium.JulianDate.now();
+  const t0 = Date.now();
   const mk = (specs) => specs.map(([s, track, velocity]) => ({
-    time: Cesium.JulianDate.addSeconds(t0, s, new Cesium.JulianDate()),
+    timeMs: t0 + s * 1000,
     track, velocity,
   }));
   // Hovering heli: 1 m/s drift, reported track flipping ±45° — used to yield ±°/s
@@ -180,7 +180,7 @@ test('repeated kinematics apply only from a forward synthetic fix', () => {
   const epochMs = 1_800_000_000_000;
   const originalPosition = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 9000);
   const newest = {
-    time: Cesium.JulianDate.fromDate(new Date(epochMs)),
+    timeMs: epochMs,
     epochMs,
     position: Cesium.Cartesian3.clone(originalPosition),
     velocity: 100,
@@ -195,6 +195,7 @@ test('repeated kinematics apply only from a forward synthetic fix', () => {
   assert.equal(newest.velocity, 100);
   assert.equal(newest.track, 90);
   assert.ok(Cesium.Cartesian3.equals(newest.position, originalPosition));
+  assert.equal(synthetic.timeMs, epochMs + 10_000);
   assert.equal(synthetic.velocity, 220);
   assert.equal(synthetic.track, 15);
   assert.ok(Math.abs(Cesium.Cartesian3.distance(newest.position, synthetic.position) - 1000) < 0.5);
@@ -202,7 +203,7 @@ test('repeated kinematics apply only from a forward synthetic fix', () => {
 
 test('liftRepeatedGroundFix raises only grounded history and preserves the stored coordinates', () => {
   const newest = {
-    time: Cesium.JulianDate.now(),
+    timeMs: Date.now(),
     epochMs: 123,
     position: Cesium.Cartesian3.fromDegrees(-98.04, 29.71, -30),
     velocity: 0,

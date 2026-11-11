@@ -2,9 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import * as Cesium from 'cesium';
 import { createInfrastructureLayers } from 'gods-eye-view/infrastructure';
-import { createLocalGeoJsonLayer } from 'gods-eye-view/infrastructure/geojson';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 function services() {
   const records = new Map();
@@ -13,7 +12,7 @@ function services() {
   return {
     records,
     credited,
-    showOsmCredit: (viewer) => credited.push(viewer),
+    showOsmCredit: (engine) => credited.push(engine),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     registerEntityContext(entity, metadata) {
       records.set(metadata.id, { entity, ...metadata });
@@ -95,7 +94,7 @@ test('dataset URLs still name the complete bundled sources', () => {
   }
 });
 
-test('two viewers use their supplied contexts and dispose independently', async (t) => {
+test('two engines use their supplied contexts and dispose independently', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => ({
     ok: true,
     text: async () =>
@@ -118,57 +117,42 @@ test('two viewers use their supplied contexts and dispose independently', async 
   }));
   const hosts = [services(), services()];
   const instances = hosts.map((host) => {
-    const sources = new Cesium.DataSourceCollection();
-    let click;
-    const layer = createLocalGeoJsonLayer(
-      {
-        id: 'local-dams',
-        name: 'Dams',
-        osmDerived: true,
-        color: '#0088ff',
-        url: '/dams.geojsonl',
-        screenSpaceEventHandlerFactory: () => ({
-          setInputAction(fn) {
-            click = fn;
-          },
-          destroy() {},
-        }),
-      },
-      host,
-    );
-    const viewer = {
-      dataSources: sources,
-      scene: {
-        canvas: {},
-        preRender: new Cesium.Event(),
-        requestRender() {},
-        screenSpaceCameraController: { enableInputs: true },
-        pick: () => ({ id: sources.get(0).entities.values[0] }),
-      },
-      camera: { moveEnd: new Cesium.Event(), flyTo() {} },
-    };
-    return { layer, viewer, click: () => click({ position: {} }) };
+    const engine = createFakeEngine();
+    const [, layer] = createInfrastructureLayers(host);
+    layer.init(null, { engine });
+    return { layer, engine };
   });
   t.after(() =>
-    instances.forEach(({ layer, viewer }) => layer.destroy(viewer)),
+    instances.forEach(({ layer, engine }) => {
+      layer.destroy();
+      engine.destroy();
+    }),
   );
-  await Promise.all(instances.map(({ layer, viewer }) => layer.enable(viewer)));
+  await Promise.all(instances.map(({ layer }) => layer.enable()));
   assert.equal(hosts[0].records.size, 1);
   assert.deepEqual(
     hosts.map((host) => host.credited),
-    instances.map(({ viewer }) => [viewer]),
+    instances.map(({ engine }) => [engine]),
   );
   assert.equal(hosts[1].records.size, 1);
-  instances[0].click();
+  // A click on the first engine's footprint selects only its own record.
+  const { engine } = instances[0];
+  engine.camera.flyTo = () => {};
+  engine.fake.script('pick', {
+    id: 'local-dams:same-id',
+    owner: 'local-dams-footprints',
+    instance: 0,
+  });
+  engine.fake.input('click', { position: { x: 1, y: 1 } });
   assert.ok(hosts[0].selection());
   assert.equal(hosts[1].selection(), undefined);
-  instances[0].layer.destroy(instances[0].viewer);
+  instances[0].layer.destroy();
   assert.equal(hosts[0].records.size, 0);
   assert.equal(hosts[1].records.size, 1);
-  assert.equal(instances[1].viewer.dataSources.length, 1);
+  assert.equal(instances[1].engine.ground.list().length, 2);
 });
 
-test('consumer build includes only infrastructure code and resolves assets under a non-root base', async () => {
+test('consumer build includes only infrastructure code and engine-free geometry, and resolves assets under a non-root base', async () => {
   const { build } = await import('vite');
   const { fileURLToPath } = await import('node:url');
   const result = await build({
@@ -189,18 +173,41 @@ test('consumer build includes only infrastructure code and resolves assets under
   });
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
-  const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
-  assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
-    'infrastructure.js',
-    'infrastructureData.js',
-    'infrastructureOverlayEntry.js',
-    'localGeojsonCore.js',
-    'localGeojsonLod.js',
+  const sources = Object.keys(entry.modules)
+    .filter((id) => id.endsWith('.js'))
+    .map((id) => id.slice(id.lastIndexOf('/src/') + 1));
+  assert.deepEqual(sources.sort(), [
+    'src/data/infrastructure.js',
+    'src/data/infrastructureOverlayEntry.js',
+    'src/data/localGeojsonCore.js',
+    'src/data/localGeojsonLod.js',
+    ...[
+      'boundingSphere',
+      'cartesian2',
+      'cartesian3',
+      'cartographic',
+      'ellipsoid',
+      'ellipsoidGeodesic',
+      'julianDate',
+      'math',
+      'matrix4',
+      'quaternion',
+      'scaleToGeodeticSurface',
+      'simon1994',
+    ].map((name) => `src/geo/${name}.js`),
+    'src/globe/surfaceDetail.js',
+    'src/globe/surfacePlacement.js',
+    'src/layers/infrastructure/index.js',
+    'src/layers/infrastructure/render/display.js',
+    'src/layers/shared/color.js',
+    'src/overlays/bindOverlayHost.js',
+    'src/sources/infrastructureData.js',
+    'src/sources/requestDeadline.js',
   ]);
   assert.deepEqual(
     entry.imports,
-    ['cesium'],
-    'the viewer supplies the same Cesium dependency',
+    [],
+    'the layers draw through the engine they are given',
   );
   for (const name of ['datacenters', 'dams']) {
     const asset = output.find(

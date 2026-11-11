@@ -1,8 +1,10 @@
 <script setup>
 import { storeToRefs } from 'pinia';
+import { ENGINE_NAMES } from '../../app/engineChoice.js';
 import { msg, t } from '../../i18n/index.js';
 import { vPanelState } from '../rail/panelState.js';
 import UiButton from '../kit/UiButton.vue';
+import UiSelect from '../kit/UiSelect.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
 import { computed } from 'vue';
@@ -17,7 +19,7 @@ import VoiceControl from './panels/VoiceControl.vue';
 // their chip row; until they do, the dock shows its initial markup. A style
 // button calls the Display controls' owner, a chip the map source controls.
 const display = useDisplayStore();
-const { style, mapSource, mapSourceControls } = storeToRefs(display);
+const { style, mapSource, mapSourceControls, globeEngine } = storeToRefs(display);
 // LocationControls publishes the location tray; pills call the controls,
 // and the search field keeps their listeners.
 const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
@@ -111,6 +113,16 @@ function selectMapSource(chip) {
           <span class="btn-label">{{ t('Noir') }}</span>
           <span class="btn-key">6</span>
         </button>
+      </div>
+      <div v-if="globeEngine" id="globe-engine-control">
+        <label class="map-source-heading" for="globe-engine">
+          {{ t('Globe Engine') }}
+          <UiSelect id="globe-engine" class="gev-field gev-field--compact" translate="no" :model-value="globeEngine.kind" :aria-disabled="String(globeEngine.busy)" :aria-busy="String(globeEngine.busy)"
+            @update:model-value="!globeEngine.busy && globeEngine.select($event)">
+            <option v-for="(name, kind) in ENGINE_NAMES" :key="kind" :value="kind">{{ name }}</option>
+          </UiSelect>
+        </label>
+        <span id="globe-engine-status" role="status">{{ globeEngine.busy ? t('Initializing systems...') : ENGINE_NAMES[globeEngine.kind] }}</span>
       </div>
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">

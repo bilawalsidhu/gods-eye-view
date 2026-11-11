@@ -1,5 +1,5 @@
 /** Route Cockpit keys while preserving the active disclosure and form-control owner. */
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { lookKeyStep } from '../cockpitLook.js';
 import { isPointerFree } from '../data/inputOwnership.js';
 
@@ -33,11 +33,8 @@ export const DOUBLE_CLICK_MEMORY_MS = 700;
 /** Where the track `kind` would ride is drawn now, as a world position. */
 function subjectWorldPosition(kind) {
   if (kind === 'aircraft') {
-    return (
-      this.viewer.trackedEntity?.position?.getValue?.(
-        this.viewer.clock?.currentTime,
-      ) ?? null
-    );
+    const target = this.host.current();
+    return target ? (this.host.position(target) ?? null) : null;
   }
   if (kind === 'satellite')
     return this.services.satellitesLayer?.getCockpitPosition?.() ?? null;
@@ -51,19 +48,14 @@ function subjectWorldPosition(kind) {
     : Number.isFinite(info.seaSurfaceHeightM)
       ? info.seaSurfaceHeightM
       : 0;
-  return Cesium.Cartesian3.fromDegrees(info.longitude, info.latitude, heightM);
+  return geo.cartesian3.fromDegrees(info.longitude, info.latitude, heightM);
 }
 
 /** The followed track's canvas position now, or null off screen. */
 function subjectCanvasPosition() {
   const kind = this.resolveEntryKind();
   const world = kind ? subjectWorldPosition.call(this, kind) : null;
-  const scene = this.viewer.scene;
-  if (!world || typeof scene?.cartesianToCanvasCoordinates !== 'function')
-    return null;
-  return (
-    scene.cartesianToCanvasCoordinates(world, new Cesium.Cartesian2()) ?? null
-  );
+  return world ? this.host.canvasPosition(world) : null;
 }
 
 /**
@@ -121,34 +113,17 @@ export function onSceneDoubleClick(position, nowMs = performance.now()) {
 }
 
 /**
- * Take the scene's double-click through the Cockpit first. Cesium's Viewer
- * installs its own (pickAndTrackObject), which untracks whenever the pick is
- * not an Entity: on a followed aircraft's model, a primitive, it would drop
- * the very track the double-click means to ride. A double-click on the
- * followed track is the Cockpit's, as is one on a mapped ground point in
- * orbit (a focus); any other goes on to Cesium's.
- * @returns {() => void} Puts Cesium's handler back, unless another owner
- *   (the draw tool borrows it) has replaced ours since.
+ * Take the scene's double-click through the Cockpit first: one on the
+ * followed track is the Cockpit's, any other goes on to the engine's own
+ * (cockpitHost.routeDoubleClick).
+ * @returns {() => void} Stops routing.
  */
 export function routeSceneDoubleClick() {
-  const handler = this.viewer.screenSpaceEventHandler;
-  if (typeof handler?.setInputAction !== 'function') return () => {};
-  const type = Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
-  const stock = handler.getInputAction?.(type) ?? null;
-  const routed = (event) => {
-    if (this.onSceneDoubleClick(event?.position)) return;
-    // In orbit, a double-click on a mapped ground point is a focus, never a
-    // retarget that would end the view.
-    if (this.onOrbitalDoubleClick?.(event?.position)) return;
-    stock?.(event);
-  };
-  handler.setInputAction(routed, type);
-  return () => {
-    if (handler.isDestroyed?.() || handler.getInputAction?.(type) !== routed)
-      return;
-    if (stock) handler.setInputAction(stock, type);
-    else handler.removeInputAction(type);
-  };
+  return this.host.routeDoubleClick(
+    (position) =>
+      this.onSceneDoubleClick(position) ||
+      this.onOrbitalDoubleClick?.(position),
+  );
 }
 
 /**

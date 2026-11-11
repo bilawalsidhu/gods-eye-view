@@ -1,12 +1,10 @@
-import * as Cesium from 'cesium';
-import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
+import * as geo from '../../geo/index.js';
 import {
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
   PROBE_CLEARANCE_M,
   COVERAGE_NEIGHBOR_RADIUS_KM,
   COVERAGE_NEIGHBOR_LIMIT,
-  IDLE_COVERAGE_COLOR,
   PLANE_FOOTPRINT_LIFT_CAP_M,
 } from './policy.js';
 
@@ -18,7 +16,6 @@ import {
 
 export function createGeometry({ state: layerState, services, parts, source }) {
   const { warmGroundFloor, cachedGroundFloor } = services.ground;
-  const { sampleMeshFloorCells } = services.mesh;
 
   /**
    * Ground measured under the plane's support points for the record's
@@ -271,7 +268,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function frustumCartesians(geometry) {
-    const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt);
+    const at = (p) => geo.cartesian3.fromDegrees(p.lon, p.lat, p.alt);
     return {
       mount: at(geometry.mount),
       capCenter: at(geometry.capCenter),
@@ -279,7 +276,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       tr: at(geometry.corners.tr),
       br: at(geometry.corners.br),
       bl: at(geometry.corners.bl),
-      label: Cesium.Cartesian3.fromDegrees(
+      label: geo.cartesian3.fromDegrees(
         geometry.topCenter.lon,
         geometry.topCenter.lat,
         geometry.topCenter.alt + 1.2,
@@ -300,26 +297,22 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   function frustumFrameEcef(camera, atPos) {
     const h = parts.model.toRad(camera.headingDeg);
     const p = parts.model.toRad(camera.pitchDeg);
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(atPos);
-    const rot = Cesium.Matrix4.getMatrix3(enu, new Cesium.Matrix3());
+    const enu = geo.transforms.eastNorthUpToFixedFrame(atPos);
+    const rot = geo.matrix4.getMatrix3(enu, geo.matrix3.create());
     // ENU components: view axis + the perpendicular "up" of the pitched cap.
-    const dirEnu = new Cesium.Cartesian3(
+    const dirEnu = geo.cartesian3.create(
       Math.sin(h) * Math.cos(p),
       Math.cos(h) * Math.cos(p),
       Math.sin(p),
     );
-    const upEnu = new Cesium.Cartesian3(
+    const upEnu = geo.cartesian3.create(
       -Math.sin(p) * Math.sin(h),
       -Math.sin(p) * Math.cos(h),
       Math.cos(p),
     );
     return {
-      dir: Cesium.Matrix3.multiplyByVector(
-        rot,
-        dirEnu,
-        new Cesium.Cartesian3(),
-      ),
-      up: Cesium.Matrix3.multiplyByVector(rot, upEnu, new Cesium.Cartesian3()),
+      dir: geo.matrix3.multiplyByVector(rot, dirEnu, geo.cartesian3.create()),
+      up: geo.matrix3.multiplyByVector(rot, upEnu, geo.cartesian3.create()),
     };
   }
 
@@ -348,31 +341,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (record.billboard) {
       record.billboard.position = positions.mount;
     }
-    if (record.coverageEntities?.length >= 5) {
-      record.coverageEntities[0].polyline.positions = [
-        positions.mount,
-        positions.tl,
-      ];
-      record.coverageEntities[1].polyline.positions = [
-        positions.mount,
-        positions.tr,
-      ];
-      record.coverageEntities[2].polyline.positions = [
-        positions.mount,
-        positions.br,
-      ];
-      record.coverageEntities[3].polyline.positions = [
-        positions.mount,
-        positions.bl,
-      ];
-      record.coverageEntities[4].polyline.positions = [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ];
-    }
+    parts.renderer?.updateCoverage(record, positions);
     // A live viewshed volume tracks its wireframe: rebuild from the SAME fresh
     // positions (weld invariant). Only records currently showing a volume pay
     // this (6 triangles, synchronous — trivial even during slider/gizmo drags).
@@ -453,18 +422,18 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (sampleGround && parts.model.projectionTilesReady()) {
       record.groundMeshSampleRequestCount =
         (record.groundMeshSampleRequestCount || 0) + 1;
-      const viewerCarto = layerState._viewer?.camera?.positionCartographic;
+      const viewerCarto = parts.renderer?.cameraCartographic();
       const excludeObjects = [...(record.coverageEntities || [])];
       if (record.billboard) excludeObjects.push(record.billboard);
       if (record.projection?.planeEntity)
         excludeObjects.push(record.projection.planeEntity);
-      sampleMeshFloorCells(layerState._viewer?.scene, [point], {
+      parts.renderer.sampleMeshFloorCells([point], {
         excludeObjects: excludeObjects.filter(Boolean),
         viewerLat: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.latitude)
+          ? geo.math.toDegrees(viewerCarto.latitude)
           : undefined,
         viewerLon: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.longitude)
+          ? geo.math.toDegrees(viewerCarto.longitude)
           : undefined,
       });
     }
@@ -532,9 +501,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function destroyViewshedVolume(record) {
     if (!record) return;
-    if (record.viewshedPrimitive && layerState._viewer) {
-      layerState._viewer.scene.primitives.remove(record.viewshedPrimitive);
-    }
+    if (record.viewshedPrimitive)
+      parts.renderer?.removeVolume(record.viewshedPrimitive);
     record.viewshedPrimitive = null;
   }
 
@@ -552,7 +520,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   function rebuildViewshedVolume(record, isActive) {
     destroyViewshedVolume(record);
     if (
-      !layerState._viewer ||
+      !parts.renderer?.ready ||
       !record?.frustumPositions ||
       !record.viewshedColors
     )
@@ -560,14 +528,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     const color = isActive
       ? record.viewshedColors.fillActive
       : record.viewshedColors.fill;
-    const primitive = createFrustumVolumePrimitive(
-      record.frustumPositions,
-      color,
-    );
-    // QA tag: the harness counts viewshed volumes by this marker.
-    primitive._gevViewshed = record.camera.id;
-    record.viewshedPrimitive =
-      layerState._viewer.scene.primitives.add(primitive);
+    record.viewshedPrimitive = parts.renderer.createVolume(record, color);
     record.viewshedActiveTint = !!isActive;
   }
 
@@ -625,8 +586,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function runActivationObstructionProbe(record) {
     record.probeClampRangeM = null;
-    const scene = layerState._viewer?.scene;
-    if (!scene || typeof scene.pickFromRay !== 'function') return;
+    if (!parts.renderer?.ready) return;
     const camera = record.camera;
     const rangeScale = parts.calibration.normalizeCalibration(
       camera.calibration,
@@ -634,7 +594,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (Math.abs(rangeScale - 1) > 0.0001) return; // slider overrides the clamp
     try {
       const mountAlt = parts.ground.groundAltFor(record) + camera.mountHeightM;
-      const mountPos = Cesium.Cartesian3.fromDegrees(
+      const mountPos = geo.cartesian3.fromDegrees(
         camera.lon,
         camera.lat,
         mountAlt,
@@ -642,13 +602,21 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       const { dir } = frustumFrameEcef(camera, mountPos);
       // Exclude everything the layer itself draws so the probe can only hit the
       // world (3D tiles), not our own billboards/polylines/planes.
-      const exclude = [layerState._billboards, ...layerState._coverageEntities];
+      const exclude = [...layerState._coverageEntities];
       for (const runtime of layerState._projectionEntities) {
         if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
       }
-      const hit = scene.pickFromRay(new Cesium.Ray(mountPos, dir), exclude);
+      for (const other of layerState._records) {
+        if (other.viewshedPrimitive) exclude.push(other.viewshedPrimitive);
+      }
+      const hit = parts.renderer.obstructionRay(
+        mountPos,
+        dir,
+        exclude,
+        camera.rangeM,
+      );
       if (!hit?.position) return;
-      const dist = Cesium.Cartesian3.distance(mountPos, hit.position);
+      const dist = geo.cartesian3.distance(mountPos, hit.position);
       record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
     } catch {
       // probe failure → keep the unclamped range
@@ -698,37 +666,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.position = positions.mount;
     }
 
-    const addPolyline = (role, linePositions) =>
-      layerState._viewer.entities.add({
-        id: `cctv-${camera.id}-${role}`,
-        properties: { cctvCameraId: camera.id },
-        polyline: {
-          positions: linePositions,
-          width: 1.2,
-          material: IDLE_COVERAGE_COLOR,
-        },
-      });
-
-    const entities = [
-      addPolyline('ray-tl', [positions.mount, positions.tl]),
-      addPolyline('ray-tr', [positions.mount, positions.tr]),
-      addPolyline('ray-br', [positions.mount, positions.br]),
-      addPolyline('ray-bl', [positions.mount, positions.bl]),
-      addPolyline('cap', [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ]),
-    ];
-
-    entities[0]._coverageRole = 'edge';
-    entities[1]._coverageRole = 'edge';
-    entities[2]._coverageRole = 'edge';
-    entities[3]._coverageRole = 'edge';
-    entities[4]._coverageRole = 'cap';
-    return entities;
+    return parts.renderer.createCoverage(camera.id, positions);
   }
 
   /**
@@ -806,14 +744,39 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     );
   }
 
+  function releaseInactiveGeometry(activeId, visibleIds) {
+    const removed = new Set();
+    for (const record of layerState._records) {
+      if (record.camera.id === activeId) continue;
+      if (!visibleIds.has(record.camera.id)) {
+        for (const entity of record.coverageEntities || []) {
+          parts.renderer.removeCoverageEntity(entity);
+          removed.add(entity);
+        }
+        record.coverageEntities = [];
+      }
+      const runtime = record.projection;
+      if (runtime?.planeEntity) {
+        // Keep decoded media for reselection, but only the active plane draws.
+        parts.renderer.removePlane(runtime);
+        runtime.planeEntity = runtime.planeMaterial = null;
+        runtime.planeVisible = false;
+        runtime.needsPlane = true;
+      }
+    }
+    if (removed.size)
+      layerState._coverageEntities = layerState._coverageEntities.filter(
+        (entity) => !removed.has(entity),
+      );
+  }
+
   /**
    * Removes all coverage entities and projection runtimes from the scene.
    */
 
-  function destroyCoverageEntities() {
-    if (!layerState._viewer) return;
+  function destroyCoverageEntities({ retainMedia = false } = {}) {
     for (const entity of layerState._coverageEntities) {
-      layerState._viewer.entities.remove(entity);
+      parts.renderer?.removeCoverageEntity(entity);
     }
     layerState._coverageEntities = [];
 
@@ -822,9 +785,14 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     }
 
     for (const runtime of layerState._projectionEntities) {
-      parts.projection.destroyProjectionRuntime(runtime);
+      if (retainMedia) {
+        if (runtime.planeEntity) parts.renderer.removePlane(runtime);
+        runtime.planeEntity = runtime.planeMaterial = null;
+        runtime.planeVisible = false;
+        runtime.needsPlane = true;
+      } else parts.projection.destroyProjectionRuntime(runtime);
     }
-    layerState._projectionEntities = [];
+    if (!retainMedia) layerState._projectionEntities = [];
   }
   return {
     computeFrustumGeometry,
@@ -848,6 +816,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     registerCoverageEntities,
     ensureActiveCoverageEntities,
     ensureVisibleCoverageEntities,
+    releaseInactiveGeometry,
     destroyCoverageEntities,
   };
 }

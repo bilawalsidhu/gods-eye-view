@@ -1,20 +1,18 @@
 #!/usr/bin/env node
+import { whenSettled, until } from './qa/ready.mjs';
 // Deterministic city-navigation exercise; road/flow responses are fixtures.
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
-import puppeteer from 'puppeteer';
 import { trafficFixtureResponse } from './traffic-fixtures.mjs';
 
 const args = process.argv.slice(2);
 const url = args[args.indexOf('--url') + 1] || 'http://localhost:4173';
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   protocolTimeout: 120000,
   args: [
     '--no-sandbox',
     '--disable-dev-shm-usage',
-    '--use-gl=angle',
-    '--use-angle=swiftshader',
     '--disable-background-timer-throttling',
   ],
 });
@@ -44,15 +42,15 @@ try {
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
       timeout: 60000,
     });
-    await sleep(5000);
+    await whenSettled(page);
     await page.keyboard.press('Escape');
     await page.evaluate(async (withCctv) => {
-      const { viewer, dataManager } = window.__godsEyeView;
+      const { dataManager } = window.__godsEyeView;
       const C = await import('/node_modules/.vite/deps/cesium.js');
       for (const id of ['satellites', 'flights', 'military'])
         await dataManager.setEnabled(id, false);
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
         destination: C.Cartesian3.fromDegrees(-97.744, 30.267, 3200),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
@@ -71,27 +69,28 @@ try {
       console.log(
         'Traffic timeout state',
         await page.evaluate(() => {
-          const { viewer, dataManager } = window.__godsEyeView;
+          const { dataManager } = window.__godsEyeView;
           return {
             stats: dataManager.layers.get('traffic').module.getStats(),
-            camera: viewer.camera.positionCartographic,
+            camera: window.__godsEyeView.engine.camera.pose().cartographic,
           };
         }),
       );
       throw error;
     }
-    await sleep(2500);
+    await whenSettled(page);
     await page.evaluate(async () => {
-      const { viewer } = window.__godsEyeView;
       const C = await import('/node_modules/.vite/deps/cesium.js');
-      viewer.camera.flyTo({
+      window.__godsEyeView.engine.camera.flyTo({
         destination: C.Cartesian3.fromDegrees(-0.1276, 51.5072, 3200),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         duration: 4,
       });
     });
-    const deadline = Date.now() + 45000;
-    while (londonRequests < 2 && Date.now() < deadline) await sleep(500);
+    await until(() => londonRequests >= 2, {
+      timeoutMs: 45000,
+      label: 'London retry',
+    });
     assert.ok(
       londonRequests >= 2,
       'London must recover its failed request without a toggle',
@@ -121,5 +120,5 @@ try {
     await page.close();
   }
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

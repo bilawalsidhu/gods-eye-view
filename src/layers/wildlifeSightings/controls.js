@@ -230,8 +230,7 @@ export function createControls({ state, services, parts }) {
       if (
         !state.error &&
         !state.query &&
-        state.viewer?.camera?.positionCartographic?.height >
-          WILDLIFE_GRID_HEIGHT_METERS
+        state.engine?.camera.height() > WILDLIFE_GRID_HEIGHT_METERS
       ) {
         // i18n-ignore: feed-state protocol value
         stats.status = 'zoom-in';

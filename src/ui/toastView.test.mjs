@@ -7,6 +7,8 @@ import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useStatusStore } from './stores/status.js';
 import { createToast } from './toast.js';
+import { ShellFeedback } from './shellFeedback.js';
+import { ShellFacade } from './shellFacade.js';
 import SceneChromeView from './views/SceneChromeView.vue';
 
 function fixture(t) {
@@ -76,4 +78,22 @@ test('a repeated message is written again so the live region announces it', asyn
   assert.equal(toast().textContent, 'Fly to a POI first');
   assert.ok(toast().firstChild !== first, 'the repeat is a new text node');
   assert.equal(toast().classList.contains('visible'), true);
+});
+
+test('an engine failure can stay readable longer than an ordinary shell toast', async (t) => {
+  const { store, toast } = fixture(t);
+  const feedback = new ShellFeedback({ readLayers: () => [], store });
+  t.after(() => feedback.destroy());
+  const shell = { _feedback: feedback };
+  ShellFacade.prototype._showToast.call(shell, 'Engine failed', 6000);
+  t.mock.timers.tick(2000);
+  await nextTick();
+  assert.equal(toast().classList.contains('visible'), true);
+  t.mock.timers.tick(4000);
+  await nextTick();
+  assert.equal(toast().classList.contains('visible'), false);
+  ShellFacade.prototype._showToast.call(shell, 'Link copied');
+  t.mock.timers.tick(2000);
+  await nextTick();
+  assert.equal(toast().classList.contains('visible'), false);
 });

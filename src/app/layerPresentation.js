@@ -8,7 +8,7 @@ export class LayerPresentation {
     manager,
     {
       weatherClock,
-      requestRender = governorRequestRender,
+      requestRender = (reason) => governorRequestRender(reason, manager.engine),
       invalidateDetection = markDetectionSourcesChanged,
     } = {},
   ) {
@@ -17,6 +17,7 @@ export class LayerPresentation {
     this._panel = null;
     this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
+      if (this.suspended && change.type !== 'destroy-all') return;
       if (change.type === 'status') this.refresh();
       else if (change.type === 'destroy-all') this.destroy();
       else {
@@ -67,8 +68,15 @@ export class LayerPresentation {
       });
     return this._panel;
   }
-  mount(container) {
+  mount(container, weatherClock = this.weatherClock) {
+    this.weatherClock = weatherClock;
+    this.panel.weatherClock = weatherClock;
+    this.suspended = false;
     this.panel.mount(container);
+  }
+  suspend() {
+    this.suspended = true;
+    this._panel?.suspend();
   }
   /** Hand the Recent Imagery readout factory to the panel (see LayerPanel). */
   attachRecentImagery(factory) {

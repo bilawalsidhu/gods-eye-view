@@ -7,11 +7,13 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
   const noop = () => {};
   const layerState = {
     _enabled: false,
-    _viewer: {},
-    _dataSource: {},
+    _view: {},
+    _renderer: {},
     _fires: [],
     _loading: true,
     _pickIndexById: new Map(),
+    // The layer's renderer on the current globe (render/cesium.js).
+    _renderer: { setVisible: noop, onEnable: noop },
     _heatImagery: {
       setShow(v) {
         shown = v;
@@ -27,18 +29,18 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
     },
     config: { id: 'local-firms', overlayHost: { setVisible: noop } },
     components: {
-      rendering: { applyHandoffFade: noop },
+      rendering: { applyHandoffFade: noop, renderCurrentLod: noop },
       viewport: { installLodWatcher: noop, installMoveEndWatcher: noop },
       selection: { installClickHandler: noop },
     },
   });
-  await lifecycle.methods.enable(layerState._viewer);
+  await lifecycle.methods.enable(layerState._view);
   assert.equal(
     shown,
     false,
     'empty current set must keep the old raster hidden while refresh is pending',
   );
   layerState._fires = [{ frp: null, confidence: null }];
-  await lifecycle.methods.enable(layerState._viewer);
+  await lifecycle.methods.enable(layerState._view);
   assert.equal(shown, true, 'nonempty sets still resume their raster');
 });

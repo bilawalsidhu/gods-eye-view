@@ -1,24 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createCameraFraming } from './cameraFraming.js';
-import { fakeCesiumViewer } from '../../testSupport/streetLevelFakes.mjs';
+import { streetLevelMap } from '../../testSupport/streetLevelFakes.mjs';
 
 /** Height (m) of a Cartesian above the WGS84 ellipsoid. */
 const heightOf = (cartesian) =>
-  Cesium.Cartographic.fromCartesian(cartesian).height;
+  geo.cartographic.fromCartesian(cartesian).height;
 
 /**
- * A viewer whose scene sample is `sampled` (e.g. −14,886 m before the tiles
- * under the photo load) and whose globe terrain is `globe`.
+ * A display whose surface sample is `sampled` (e.g. −14,886 m before the
+ * tiles under the photo load) and whose terrain is `globe`.
  */
 function setup({ sampled, globe = null, altitude = 149 }) {
-  const viewer = fakeCesiumViewer();
-  Object.assign(viewer.scene, {
-    sampleHeightSupported: true,
-    sampleHeight: () => sampled,
-    globe: { getHeight: () => globe },
-  });
+  const harness = streetLevelMap();
+  harness.engine.fake.script('sampleHeight', () => sampled);
+  harness.engine.fake.script('terrainHeight', () => globe ?? undefined);
   const state = {
     services: {},
     street: {
@@ -26,13 +23,15 @@ function setup({ sampled, globe = null, altitude = 149 }) {
       bearing: 105,
       altitude,
     },
-    viewer,
+    map: harness.map,
+    /** What the camera follows (an aircraft), released by a reassert. */
+    tracked: undefined,
   };
   return {
     framing: createCameraFraming({ state }),
     state,
-    viewer,
-    flights: viewer.flights.list,
+    harness,
+    flights: harness.flights.list,
   };
 }
 
@@ -41,6 +40,11 @@ test('framing a photo stands the sphere on a plausible scene sample', () => {
   framing.frame(framing.begin());
   assert.equal(flights.length, 1);
   assert.ok(Math.abs(heightOf(flights[0].sphere.center) - 123) < 0.01);
+  assert.equal(flights[0].sphere.radius, 4);
+  const { heading, pitch, range, duration } = flights[0].options;
+  assert.ok(Math.abs(heading - geo.math.toRadians(105)) < 1e-12);
+  assert.ok(Math.abs(pitch - geo.math.toRadians(-32)) < 1e-12);
+  assert.deepEqual([range, duration], [140, 1.6]);
 });
 
 test('a sample kilometres underground falls back to the globe, then the image altitude', () => {
@@ -57,7 +61,8 @@ test('a sample kilometres underground falls back to the globe, then the image al
 });
 
 test('cancel stops the framing flight while it is still ours', () => {
-  const { framing, viewer } = setup({ sampled: 121 });
+  const { framing, harness } = setup({ sampled: 121 });
+  const viewer = harness;
   framing.frame(framing.begin());
   framing.cancel();
   assert.equal(
@@ -76,18 +81,21 @@ test('cancel stops the framing flight while it is still ours', () => {
 });
 
 test('cancel leaves a landed flight and a newer navigation flight alone', () => {
-  const { framing, viewer, flights } = setup({ sampled: 121 });
+  const { framing, harness, flights } = setup({ sampled: 121 });
   framing.frame(framing.begin());
-  viewer.flights.land();
+  harness.flights.land();
   framing.cancel();
-  assert.equal(viewer.flights.cancelled, 0, 'landed: nothing to stop');
+  assert.equal(harness.flights.cancelled, 0, 'landed: nothing to stop');
 
   framing.frame(framing.begin());
-  // A search result flies the globe elsewhere; Cesium cancels ours first.
-  viewer.camera.flyToBoundingSphere(null, {});
+  // A search result flies the globe elsewhere; the engine cancels ours first.
+  harness.engine.camera.flyToSphere(
+    { center: geo.cartesian3.fromDegrees(0, 0), radius: 1 },
+    {},
+  );
   assert.equal(flights.length, 3);
   framing.cancel();
-  assert.equal(viewer.flights.cancelled, 0, 'the newer flight keeps going');
+  assert.equal(harness.flights.cancelled, 0, 'the newer flight keeps going');
 });
 
 /**
@@ -107,7 +115,7 @@ function navigationFor(state, { refuse = false } = {}) {
     },
     reassert(ticket) {
       if (ticket !== generation) return false;
-      state.viewer.trackedEntity = undefined;
+      state.tracked = undefined;
       return true;
     },
     /** Another feature takes the camera. */
@@ -118,14 +126,14 @@ function navigationFor(state, { refuse = false } = {}) {
 
 test('a photo claims the camera when it starts opening and frames once loaded, releasing tracking', () => {
   const { framing, state, flights } = setup({ sampled: 160 });
-  state.viewer.trackedEntity = { id: 'aircraft' };
+  state.tracked = { id: 'aircraft' };
   const nav = navigationFor(state);
   framing.attachNavigation(nav);
   const ticket = framing.begin();
   assert.deepEqual(nav.begins, ['photo']);
-  assert.ok(state.viewer.trackedEntity, 'nothing is released while it loads');
+  assert.ok(state.tracked, 'nothing is released while it loads');
   framing.frame(ticket);
-  assert.equal(state.viewer.trackedEntity, undefined);
+  assert.equal(state.tracked, undefined);
   assert.equal(flights.length, 1);
 });
 
@@ -136,10 +144,10 @@ test('a photo that finishes loading after newer navigation does not frame', () =
   const ticket = framing.begin();
   // The user flies to Sacramento, and then tracks an aircraft, while it loads.
   nav.handOff();
-  state.viewer.trackedEntity = { id: 'aircraft' };
+  state.tracked = { id: 'aircraft' };
   framing.frame(ticket);
   assert.equal(flights.length, 0, 'no flight back to the photo');
-  assert.deepEqual(state.viewer.trackedEntity, { id: 'aircraft' });
+  assert.deepEqual(state.tracked, { id: 'aircraft' });
 });
 
 test('a refused claim (cockpit) does not frame the photo', () => {

@@ -13,6 +13,7 @@ import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
 export class LayerBindings {
   constructor({
     viewer,
+    engine,
     services,
     readControls,
     operations,
@@ -23,6 +24,7 @@ export class LayerBindings {
       this,
       {
         viewer,
+        engine,
         services,
         readControls,
         _feedback: feedback,
@@ -74,18 +76,22 @@ export class LayerBindings {
       routeWorldFocusRequest(
         event,
         (detail, fly) => this._runExplicitWorldFocus(detail, fly),
-        (detail) => flyToWorldTarget(this.viewer, detail),
+        (detail) => flyToWorldTarget(this.engine, detail),
       );
     this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
       window,
       this._worldRequestFocusHandler,
     );
+    // A new follow announces navigation through this event.
     this._navigationOwnerChangedRemover =
-      this.viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
+      this.engine?.camera.followChanged.addEventListener((handle) => {
+        // Rebinding the session's subject (a resumed renderer, a share
+        // restore) is part of the pending restoration, not a new navigation
+        // that supersedes it. The mark lasts only while the follow starts.
+        if (handle && !this._disposed && !handle.native?.gevRestoring)
           this._stampNavigation({ cancelPendingSelection: false });
-      });
-    // Vessel/installation focus flies without ever assigning a tracked entity,
+      }) ?? null;
+    // Vessel/installation focus flies without ever starting a follow,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =
       registerNavigationAuthorityListener(window, (event) => {
@@ -137,15 +143,8 @@ export class LayerBindings {
       layer.attachShellServices({
         runNavigation: (navigate) =>
           this.runImmediateNavigation(noun, navigate),
-        imageryHost: this.services.imageryHost,
       });
       this._weatherShellModules.push(layer);
-    }
-    // Active Fires drapes its far-zoom heatmap on the same imagery host.
-    const fires = this._dataManager?.layers?.get('local-firms')?.module;
-    if (typeof fires?.attachShellServices === 'function') {
-      fires.attachShellServices({ imageryHost: this.services.imageryHost });
-      this._weatherShellModules.push(fires);
     }
     // News flies to a chosen report or hotspot through the same release.
     const news = this._dataManager?.layers?.get('news')?.module;

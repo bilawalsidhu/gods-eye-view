@@ -50,7 +50,7 @@ export function createIngestion({
 
   async function loadPositions(viewer, { atMs, replace = false, signal } = {}) {
     const timed = atMs !== undefined;
-    if (!viewer || feed.loading) return false;
+    if (!feed.enabled || feed.loading) return false;
     feed.loading = true;
     feed.loadingLabel = feed.loaded ? 'refreshing...' : 'loading...';
     const requestController = new AbortController();
@@ -69,7 +69,7 @@ export function createIngestion({
             ])
           : requestController.signal;
       // Ask for the vessels in view; a wide view asks for every vessel.
-      const area = readArea(viewer);
+      const area = viewer ? readArea(viewer) : feed.lastArea;
       feed.lastArea = area;
       const snapshot = await readSource().getSnapshot(
         {
@@ -85,7 +85,7 @@ export function createIngestion({
       if (!timed && followsClock()) return false;
       setSourceLabel(snapshot.source);
       // Map observations into the existing display store; source fields stop here.
-      applyAisFeedSnapshot(viewer, {
+      applyAisFeedSnapshot(readViewer(), {
         rows: snapshot.records.map(vesselDisplayRow),
         observedAtMs: snapshot.observedAtMs,
         freshness: snapshot.freshness,

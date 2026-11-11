@@ -19,6 +19,12 @@ import {
 } from './radio.js';
 import { RADIO_REJECTED_STATION_COUNT_MAX as SERVER_REJECTED_MAX } from '../../server/providers/radio/constants.js';
 import { RADIO_REJECTED_STATION_COUNT_MAX as CLIENT_REJECTED_MAX } from '../layers/radio/policy.js';
+import { radioTestEngine } from '../testSupport/radioTestEngine.mjs';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const UUID = '12345678-1234-4234-8234-123456789abc';
 const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];
@@ -760,8 +766,6 @@ test('server structural rejections reach the client diagnostic without discardin
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   radioLayer.destroy();
   try {
@@ -769,7 +773,7 @@ test('server structural rejections reach the client diagnostic without discardin
       status: response.status,
       headers: { 'Content-Type': 'application/json' },
     });
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     await radioLayer.update();
     const state = getRadioUIState();

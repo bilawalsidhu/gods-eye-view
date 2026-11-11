@@ -149,34 +149,31 @@ const cancelledResult = () => ({
 /**
  * Build the runner's area services.
  * @param {object} options
- * @param {object} options.viewer
+ * @param {object} options.engine The globe engine (view centre, credits).
  * @param {object|null} options.annotations Annotation engine.
  * @param {object} [options.placeSearch]
  * @param {object} [options.annotationResolver] The annotation outline ladder.
  */
 export function createVoiceAreas({
-  viewer,
+  engine = null,
   annotations = null,
   placeSearch = unavailablePlaceSearch,
   annotationResolver = null,
   findRegion = findNaturalRegion,
   findAdminCandidates = findBundledAdminCandidates,
   aroundOutlineMs = AROUND_OUTLINE_MS,
-} = {}) {
-  // An area an outline on the map still refers to is never evicted: its
-  // counting geometry must outlive the display copy drawn from it.
-  const store = createAreaStore({
+  store = createAreaStore({
     isPinned: (areaId) =>
       typeof annotations?.list === 'function' &&
       annotations.list().some((anno) => anno?.areaId === areaId),
-  });
-
+  }),
+} = {}) {
   /** The ground at the centre of the view, else the camera's position. */
   function viewCenter() {
-    const picked = annotationResolver?.pickWorldFromScreen?.(viewer, 0.5, 0.5);
+    const picked = annotationResolver?.pickWorldFromScreen?.(engine, 0.5, 0.5);
     if (Number.isFinite(picked?.lat) && Number.isFinite(picked?.lon))
       return picked;
-    const carto = viewer?.camera?.positionCartographic;
+    const carto = engine?.camera.pose().cartographic;
     return carto
       ? {
           lat: (carto.latitude * 180) / Math.PI,
@@ -223,7 +220,7 @@ export function createVoiceAreas({
     try {
       resolved = await annotationResolver.resolveAnnotationTarget({
         placeSearch,
-        viewer,
+        engine,
         target: query,
         footprint: true,
         deferFootprint: true,
@@ -405,7 +402,7 @@ export function createVoiceAreas({
         'us-census': US_CENSUS_CREDIT,
         wof: WOF_CREDIT,
       }[source];
-      if (credit) registerDynamicCredit(viewer, credit);
+      if (credit) registerDynamicCredit(engine, credit);
     },
   });
 
@@ -632,7 +629,7 @@ export function createVoiceAreas({
       // OpenFreeMap area holding it) is a bounded extra.
       resolved = await annotationResolver.resolveAnnotationTarget({
         placeSearch,
-        viewer,
+        engine,
         target,
         footprint: true,
         deferFootprint: true,

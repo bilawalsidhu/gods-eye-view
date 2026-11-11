@@ -1,3 +1,5 @@
+// Cesium-only probes: the native credit registry and lightbox are the attribution oracle.
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
 /**
  * qa-attribution-b12.mjs — visual + state proof for Batch 12 (data attribution).
  *
@@ -16,7 +18,7 @@
  *
  * Run:  node scripts/qa-attribution-b12.mjs --url http://localhost:4300
  */
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -32,19 +34,7 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 const SHOT_DIR = resolve(__dirname, '..', 'qa-shots', 'b12');
 mkdirSync(SHOT_DIR, { recursive: true });
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  return CHROME_EXECUTABLE_CANDIDATES.find((candidate) => {
-    try { return existsSync(candidate); } catch { return false; }
-  }) || null;
-}
 
 let passed = 0;
 let failed = 0;
@@ -70,10 +60,8 @@ const REQUIRED_CREDIT_SUBSTRINGS = [
 ];
 
 async function main() {
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
+  const browser = await launchBrowser({
+    headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   const page = await browser.newPage();
@@ -122,8 +110,9 @@ async function main() {
     () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.viewer.creditDisplay,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   // Give Cesium a few frames to render the on-screen credit line (logo + link).
-  await new Promise((r) => setTimeout(r, 2500));
+  await whenUiSettled(page);
 
   // ── (i) H11: static credits registered ────────────────────────────
   console.log('H11 — per-layer credits registered in viewer.creditDisplay');
@@ -147,11 +136,11 @@ async function main() {
   // Force a render frame so the credit display flushes, then open the lightbox.
   const lightboxState = await page.evaluate(async () => {
     const viewer = window.__godsEyeView.viewer;
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const cd = viewer.creditDisplay;
     cd.showLightbox();
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const box = document.querySelector('.cesium-credit-lightbox');
     const list = box?.querySelector(':scope > ul');
@@ -263,7 +252,7 @@ async function main() {
   await page.evaluate(async () => {
     const viewer = window.__godsEyeView.viewer;
     viewer.resize();
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
   const mobileLightbox = await page.evaluate(() => {
@@ -311,7 +300,7 @@ async function main() {
   check('found datacenter + cable layer ids', !!dcId && !!cableId, `dc=${dcId} cable=${cableId}`);
   if (dcId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), dcId);
   if (cableId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), cableId);
-  await new Promise((r) => setTimeout(r, 800));
+  await whenUiSettled(page);
   const afterEnableHtml = await page.evaluate(() =>
     (window.__godsEyeView.viewer.creditDisplay._staticCredits || []).map((c) => c.html),
   );
@@ -348,7 +337,7 @@ async function main() {
   // ── (iii) clean-view: credit line STILL visible ───────────────────
   console.log('\nH10 — clean-view keeps the credit line visible');
   await page.evaluate(() => document.body.classList.add('ui-clean-view'));
-  await new Promise((r) => setTimeout(r, 400));
+  await whenUiSettled(page);
   const cleanVis = await creditVisibility();
   await page.screenshot({ path: resolve(SHOT_DIR, 'clean-view.png') });
   check(
@@ -366,7 +355,7 @@ async function main() {
   // ── (iv) recording-mode: credit line STILL visible ────────────────
   console.log('\nH10 — recording-mode keeps the credit line visible');
   await page.evaluate(() => document.body.classList.add('recording-mode'));
-  await new Promise((r) => setTimeout(r, 400));
+  await whenUiSettled(page);
   const recVis = await creditVisibility();
   await page.screenshot({ path: resolve(SHOT_DIR, 'recording-mode.png') });
   check(
@@ -377,7 +366,7 @@ async function main() {
   await page.evaluate(() => document.body.classList.remove('recording-mode'));
 
   // baseline (normal) screenshot for comparison
-  await new Promise((r) => setTimeout(r, 300));
+  await whenUiSettled(page);
   await page.screenshot({ path: resolve(SHOT_DIR, 'normal.png') });
 
   check(
@@ -391,7 +380,7 @@ async function main() {
     failedResponses.slice(0, 3).join(' | ') || 'clean',
   );
 
-  await browser.close();
+  await closeBrowser(browser);
 
   console.log('\n────────────────────────────────────────────────────────────');
   console.log(`  RESULT: ${passed} passed, ${failed} failed`);

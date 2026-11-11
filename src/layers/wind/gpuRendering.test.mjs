@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWindGpuRendering } from './gpuRendering.js';
+import { createWindGpuRendering } from '../../globe/cesium/windGpuRendering.js';
 import {
   BoundingSphere,
   Cartesian3,

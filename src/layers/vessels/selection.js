@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
@@ -16,110 +16,156 @@ export function createSelection({
     selectEntityContext,
     registerEntityContext,
     clearSelectedEntityContextForLayer,
-  } = services.context;
+  } = bindOverlayHost(
+    services.context,
+    () => vesselState.state.renderer?.engine,
+  );
   const aisLiveVesselsLayer = layer;
 
-  function installInteraction(viewer) {
-    if (state.clickHandler || !viewer) return;
-    const handler = state.interactionHandlerFactory
-      ? state.interactionHandlerFactory(viewer)
-      : new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    bindVesselInteraction(
-      viewer,
-      handler,
-      state.interactionKeyTarget || document,
+  /**
+   * Join the engine's selection dispatcher with this layer's own click rule
+   * (`onClick`: every click with its top pick, no gesture rule, as its old
+   * LEFT_CLICK handler), plus Escape and the "another layer took the camera"
+   * signal. The test seam (interactionHandlerFactory) gives a handler-like
+   * click source over a test viewer's scene.pick instead.
+   * @param {object|null} scene The viewer, or the renderer's view.
+   */
+  function installInteraction(scene) {
+    if (state.clickHandler || state.selectionRemove || !scene) return;
+    const keyTarget = state.interactionKeyTarget || document;
+    if (state.interactionHandlerFactory) {
+      bindVesselInteraction(
+        scene,
+        state.interactionHandlerFactory(scene),
+        keyTarget,
+      );
+      return;
+    }
+    const renderer = state.renderer;
+    const dispatcher = services.selection?.selectionDispatcherFor?.(
+      renderer?.engine,
     );
+    if (!dispatcher) return;
+    state.selectionRemove = dispatcher.register('ais-live-vessels', {
+      // Owned while enabled (the lifecycle registers the same predicate on
+      // enable and drops it on disable).
+      owns: (id) => state.feed.enabled && state.records.byId.has(id),
+      onClick: (ctx) => handleClick(ctx),
+    });
+    bindKeysAndFollow(renderer, keyTarget);
   }
 
+  /** Test seam: a handler-like click source over `viewer.scene.pick`. */
   function bindVesselInteraction(viewer, handler, keyTarget) {
     state.clickHandler = handler;
-    handler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
-      if (!state.feed.enabled) return;
-      // The bridge view owns the selection: a click on open water must not
-      // deselect the vessel the camera is riding.
-      if (state.cockpitSubjectId) return;
-      const picked = pickContact
-        ? pickContact(viewer.scene, click.position)
-        : viewer.scene.pick(click.position);
-      const pickedId = resolvePickId(picked);
-      let record = pickedId ? state.records.byId.get(pickedId) : null;
-      const rawId = picked?.id ?? picked?.primitive?.id;
-      // Every vessel record carries an `mmsi` field ('' when unknown); its
-      // key is `id`.
-      const ownRecordPick =
-        rawId && typeof rawId === 'object' && Object.hasOwn(rawId, 'mmsi');
+    handler.setInputAction((click) =>
+      handleClick({
+        position: click.position,
+        picked: pickContact(
+          viewer.scene,
+          click.position,
+          state.renderer?.engine,
+        ),
+      }),
+    );
+    // The follow signal of the layer's renderer.
+    bindKeysAndFollow(state.renderer, keyTarget);
+  }
 
-      // An own-layer record without a live map key is a strict no-op (FB-1
-      // residual). Trails carry no layer identity and hug their contacts, so any
-      // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
-      // unowned scene picks dismiss the current vessel inspection.
-      if (ownRecordPick && (!pickedId || !record)) return;
-      if (pickedId && !record && String(pickedId).startsWith('gev-trail:'))
-        return;
-
-      // A sibling layer already owns this click. Preserve the current vessel
-      // selection and do not compete with its camera command.
-      const siblingOwned =
-        pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId);
-      // Cyclone geometry is ambient context behind painted cards. Its handler
-      // yields to the same foreground AIS hit. Keep moving-contact precedence
-      // unchanged: those handlers may issue their own camera command.
-      const cycloneBackground =
-        siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
-      if (siblingOwned && !cycloneBackground) return;
-
-      // Cards are painted on a pointer-events:none canvas, so the scene pick is
-      // usually terrain behind the card. Resolve against the host's current
-      // actionable hit rectangles before treating the click as empty space.
-      const cardHit = !record
-        ? vesselState._vesselOverlayHost.hitTest?.(
-            click.position?.x,
-            click.position?.y,
-            {
-              ...(cycloneBackground
-                ? {}
-                : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
-            },
-          )
-        : null;
-      if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
-        return;
-      if (!record && cardHit) {
-        const id = String(cardHit.entryId || '').startsWith('vessel:')
-          ? cardHit.entryId.slice('vessel:'.length)
-          : null;
-        record = id ? state.records.byId.get(id) || null : null;
-        // A stale card id is not empty terrain and must not clear a newer
-        // selection. The next paint will evict its hit rectangle.
-        if (!record) return;
-      }
-
-      if (record) {
-        // A valid sprite or card click always transfers the camera exactly once,
-        // including a second click on the already-selected vessel.
-        selectAndFocusVessel(record);
-      } else {
-        const transition = components.queries.reduceVesselSelection({
-          selectedId: state.selectedRecord?.id,
-          pickedId: null,
-          gesture: 'click',
-        });
-        if (transition.action === 'deselect') clearVesselInspection();
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  function bindKeysAndFollow(renderer, keyTarget) {
     state.keyTarget = keyTarget;
     state.keydownHandler = onVesselKeyDown;
     keyTarget.addEventListener('keydown', state.keydownHandler);
-    // Vessels never set viewer.trackedEntity, so any new tracked entity belongs
-    // to another layer and takes interaction ownership of the scene.
-    state.trackedEntityRemover = viewer.trackedEntityChanged.addEventListener(
-      () => {
-        if (viewer.trackedEntity && state.selectedRecord)
-          clearVesselInspection();
-      },
-    );
+    // Vessels never follow, so any new follow belongs to another layer and
+    // takes interaction ownership of the scene.
+    const follow = renderer?.follow;
+    state.trackedEntityRemover =
+      follow?.onChanged(() => {
+        if (follow.active() && state.selectedRecord) clearVesselInspection();
+      }) ?? null;
+  }
+
+  /** The vessel click rule (the old LEFT_CLICK handler's, as is). */
+  function handleClick(click) {
+    // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
+    if (!isPointerFree()) return;
+    if (!state.feed.enabled) return;
+    // The bridge view owns the selection: a click on open water must not
+    // deselect the vessel the camera is riding.
+    if (state.cockpitSubjectId) return;
+    const picked = click.picked;
+    const pickedId = resolvePickId(picked);
+    let record = pickedId ? state.records.byId.get(pickedId) : null;
+    const ownRecordPick = Boolean(pickedRecordOf(picked));
+
+    // An own-layer record without a live map key is a strict no-op (FB-1
+    // residual). Trails carry no layer identity and hug their contacts, so any
+    // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
+    // unowned scene picks dismiss the current vessel inspection.
+    if (ownRecordPick && (!pickedId || !record)) return;
+    if (pickedId && !record && String(pickedId).startsWith('gev-trail:'))
+      return;
+
+    // A sibling layer already owns this click. Preserve the current vessel
+    // selection and do not compete with its camera command.
+    const siblingOwned =
+      pickedId &&
+      isOwnedByOtherLayer('ais-live-vessels', pickedId, state.renderer?.engine);
+    // Cyclone geometry is ambient context behind painted cards. Its handler
+    // yields to the same foreground AIS hit. Keep moving-contact precedence
+    // unchanged: those handlers may issue their own camera command.
+    const cycloneBackground =
+      siblingOwned &&
+      !isOwnedByOtherLayer(
+        'weather-cyclones',
+        pickedId,
+        state.renderer?.engine,
+      );
+    if (siblingOwned && !cycloneBackground) return;
+
+    // Cards are painted on a pointer-events:none canvas, so the scene pick is
+    // usually terrain behind the card. Resolve against the host's current
+    // actionable hit rectangles before treating the click as empty space.
+    const cardHit = !record
+      ? vesselState._vesselOverlayHost.hitTest?.(
+          click.position?.x,
+          click.position?.y,
+          {
+            ...(cycloneBackground
+              ? {}
+              : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
+          },
+        )
+      : null;
+    if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
+      return;
+    if (!record && cardHit) {
+      const mmsi = String(cardHit.entryId || '').startsWith('vessel:')
+        ? cardHit.entryId.slice('vessel:'.length)
+        : null;
+      record = mmsi ? state.records.byId.get(mmsi) || null : null;
+      // A stale card id is not empty terrain and must not clear a newer
+      // selection. The next paint will evict its hit rectangle.
+      if (!record) return;
+    }
+
+    if (record) {
+      // A valid sprite or card click always transfers the camera exactly once,
+      // including a second click on the already-selected vessel.
+      selectAndFocusVessel(record);
+    } else {
+      const transition = components.queries.reduceVesselSelection({
+        selectedId: state.selectedRecord?.id,
+        pickedId: null,
+        gesture: 'click',
+      });
+      if (transition.action === 'deselect') clearVesselInspection();
+    }
+  }
+
+  /** The vessel record a pick is of (keyed or not), through the renderer. */
+  function pickedRecordOf(picked) {
+    return state.renderer?.pickedRecord(picked) ?? null;
   }
 
   /** Select one live vessel and request one UI-owned camera transfer. */
@@ -148,6 +194,8 @@ export function createSelection({
       state.clickHandler.destroy();
       state.clickHandler = null;
     }
+    state.selectionRemove?.();
+    state.selectionRemove = null;
     if (state.keyTarget && state.keydownHandler) {
       state.keyTarget.removeEventListener('keydown', state.keydownHandler);
     }

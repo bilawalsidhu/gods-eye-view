@@ -6,15 +6,19 @@
  *   `<dir>/clip.mp4` through ffmpeg's concat demuxer with per-frame
  *   durations, so held frames last as long as they did on screen.
  * - `installFrameProbe(page)` measures every animation frame in the page:
- *   the requestAnimationFrame interval and, for frames Cesium rendered, the
- *   CPU time between `scene.preUpdate` and `scene.postRender`.
+ *   the requestAnimationFrame interval and, for rendered frames, the
+ *   CPU time between engine preUpdate and postRender events.
  * - `frameStats(frames)` reduces a probe window to count / mean / p50 / p95.
  * - `moveCamera(page, view, seconds)` eases the camera like a drag or wheel
  *   zoom rather than teleporting it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { evaluateWithGeo } from './qa/geometry.mjs';
+
+const execFileAsync = promisify(execFile);
 
 /** Percentile of a numeric list (nearest rank); NaN for an empty list. */
 export function percentile(values, p) {
@@ -25,7 +29,7 @@ export function percentile(values, p) {
   ];
 }
 
-/** Summarize probe frames: rAF interval and Cesium render CPU time (ms). */
+/** Summarize probe frames: rAF interval and engine render CPU time (ms). */
 export function frameStats(frames) {
   const intervals = frames.map((f) => f.dt).filter(Number.isFinite);
   const renders = frames.map((f) => f.renderMs).filter(Number.isFinite);
@@ -49,16 +53,17 @@ export function frameStats(frames) {
 export async function installFrameProbe(page) {
   await page.evaluate(() => {
     if (window.__gevFrameProbe) return;
-    const { viewer } = window.__godsEyeView;
+    const { engine } = window.__godsEyeView;
+    const events = engine.frames;
     const probe = { frames: [], started: 0 };
     window.__gevFrameProbe = probe;
     let last = performance.now();
     let renderStart = null;
     let pendingRender = null;
-    viewer.scene.preUpdate.addEventListener(() => {
+    events.preUpdate.addEventListener(() => {
       renderStart = performance.now();
     });
-    viewer.scene.postRender.addEventListener(() => {
+    events.postRender.addEventListener(() => {
       if (renderStart !== null) pendingRender = performance.now() - renderStart;
       renderStart = null;
     });
@@ -98,30 +103,25 @@ export function pageNow(page) {
  * @param {number} seconds Flight duration; 0 jumps.
  */
 export async function moveCamera(page, view, seconds) {
-  await page.evaluate(
-    (v, duration) =>
-      new Promise((resolve) => {
-        const { viewer } = window.__godsEyeView;
-        const C = viewer.camera;
-        C.cancelFlight();
-        C.flyTo({
-          destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-            latitude: (v.lat * Math.PI) / 180,
-            longitude: (v.lon * Math.PI) / 180,
-            height: v.height,
-          }),
+  await evaluateWithGeo(
+    page,
+    async (geo, v, duration) => {
+      const camera = window.__godsEyeView.engine.camera;
+      camera.cancelFlight();
+      await new Promise((resolve) =>
+        camera.flyTo({
+          destination: geo.cartesian3.fromDegrees(v.lon, v.lat, v.height),
           orientation: {
             heading: ((v.heading ?? 0) * Math.PI) / 180,
             pitch: ((v.pitch ?? -45) * Math.PI) / 180,
             roll: 0,
           },
           duration,
-          // Straight, eased motion like a drag or wheel zoom, not an arc.
-          maximumHeight: Math.max(v.height, C.positionCartographic.height),
           complete: resolve,
           cancel: resolve,
-        });
-      }),
+        }),
+      );
+    },
     view,
     seconds,
   );
@@ -191,7 +191,8 @@ export async function createScreencast(page, dir, options = {}) {
       const list = path.join(dir, 'frames.txt');
       fs.writeFileSync(list, `${lines.join('\n')}\n`);
       const clip = path.join(dir, 'clip.mp4');
-      execFileSync('ffmpeg', [
+      // Keep servicing Puppeteer's request interception while encoding.
+      await execFileAsync('ffmpeg', [
         '-y',
         '-loglevel',
         'error',

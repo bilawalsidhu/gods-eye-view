@@ -92,7 +92,9 @@ export function resolveCatalogSources(supplied = {}) {
   return {
     sources,
     isConfigured: (name) => !missing.has(name),
-    createAvailabilityLookup(layers) {
+    /** `omitted`: layer ids the catalog leaves out on purpose (another
+     *  engine's layers); any other missing consumer is a wiring error. */
+    createAvailabilityLookup(layers, { omitted = new Set() } = {}) {
       const byId = new Map(layers.map((layer) => [layer.id, layer]));
       const availability = new Map();
       for (const [name, { layers: ids }] of Object.entries(
@@ -100,7 +102,10 @@ export function resolveCatalogSources(supplied = {}) {
       )) {
         for (const id of ids) {
           const layer = byId.get(id);
-          if (!layer) throw new Error(`Missing source consumer: ${id}`);
+          if (!layer) {
+            if (omitted.has(id)) continue;
+            throw new Error(`Missing source consumer: ${id}`);
+          }
           availability.set(
             id,
             Object.freeze({

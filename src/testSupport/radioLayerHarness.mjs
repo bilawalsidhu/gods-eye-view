@@ -1,4 +1,5 @@
 import { radioLayer } from '../data/radio.js';
+import { radioTestEngine } from './radioTestEngine.mjs';
 
 export function radioStationRow(overrides = {}) {
   return {
@@ -76,17 +77,10 @@ export async function withRadioLayer({ stations, failingUrls = [] }, body) {
         removeEventListener() {},
       },
     },
-    dataSources: { add() {}, remove() {} },
-    entities: {
-      add(entity) {
-        return entity;
-      },
-      remove() {},
-    },
   };
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     await radioLayer.update();
     await body({ playUrls, catalog });

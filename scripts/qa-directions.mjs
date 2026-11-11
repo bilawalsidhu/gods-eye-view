@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive inspection independently verifies the Cesium route geometry.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenUiSettled, pollPage } from './qa/ready.mjs';
 /**
  * Browser proof of the Directions layer: real chip clicks, real globe clicks,
  * a real route from the real proxy, a real camera flight.
@@ -6,10 +9,10 @@
  * Usage: node scripts/qa-directions.mjs [--url http://localhost:4173]
  *        [--shots qa-shots/directions] [--label keyed] [--skip denver]
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,9 +37,8 @@ const check = (name, passed, detail = '') => {
   if (!passed) failures += 1;
 };
 
-const browser = await puppeteer.launch({
-  headless: false,
-  executablePath: chromeExecutablePath(),
+const browser = await launchBrowser({
+  headless: true,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
@@ -62,12 +64,12 @@ const shot = async (name) => {
 
 /** Put the camera over a place, instantly, and let the scene settle. */
 async function lookAt(lat, lon, height) {
-  await page.evaluate(
-    (la, lo, h) => {
-      const viewer = window.__godsEyeView.viewer;
-      const Cartesian3 = viewer.camera.positionWC.constructor;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, la, lo, h) => {
+      const Cartesian3 = qaGeo.cartesian3;
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
         destination: Cartesian3.fromDegrees(lo, la, h),
         orientation: { heading: 0, pitch: -Math.PI / 2.2, roll: 0 },
       });
@@ -80,17 +82,16 @@ async function lookAt(lat, lon, height) {
 
 /** Canvas position of a lon/lat on the rendered surface, or null. */
 const screenAt = (lat, lon) =>
-  page.evaluate(
-    (la, lo) => {
-      const viewer = window.__godsEyeView.viewer;
-      const scene = viewer.scene;
-      const Cartesian3 = viewer.camera.positionWC.constructor;
-      const Cartographic = viewer.camera.positionCartographic.constructor;
+  evaluateWithGeo(
+    page,
+    async (qaGeo, la, lo) => {
+      const Cartesian3 = qaGeo.cartesian3;
+      const Cartographic = qaGeo.cartographic;
       const carto = Cartographic.fromDegrees(lo, la);
-      let ground = scene.globe?.getHeight?.(carto);
+      let ground = window.__godsEyeView.engine.surface.terrainHeight?.(carto);
       if (!Number.isFinite(ground)) ground = 0;
       const world = Cartesian3.fromDegrees(lo, la, ground);
-      const win = scene.cartesianToCanvasCoordinates(world);
+      const win = window.__godsEyeView.engine.projector.worldToWindow(world);
       if (!win || !Number.isFinite(win.x)) return null;
       const x = Math.round(win.x);
       const y = Math.round(win.y);
@@ -110,11 +111,7 @@ const layerState = () =>
       '#utilities-toggles [data-layer-id="directions"]',
     );
     const controls = module.getRowControls();
-    const viewer = gev.viewer;
-    const entities = [...viewer.entities.values];
-    const routeEntities = entities.filter(
-      (entity) => String(entity.id) === 'directions:route',
-    );
+    const drawn = window.__gevQaDirections.drawn();
     const listNodes = row
       ? [...row.querySelectorAll('.data-row-list-item')]
       : [];
@@ -136,14 +133,9 @@ const layerState = () =>
       domCurrent: listNodes.findIndex((node) =>
         node.classList.contains('current'),
       ),
-      routeEntities: routeEntities.length,
-      routePositions:
-        routeEntities[0]?.polyline?.positions?.getValue?.(
-          viewer.clock.currentTime,
-        )?.length || 0,
-      markerCount: entities.filter((entity) =>
-        String(entity.id).startsWith('directions:marker:'),
-      ).length,
+      routeEntities: drawn.routeSets,
+      routePositions: drawn.routeVertices,
+      markerCount: drawn.markersShown,
       pointerOwner: window.__gevQa.pointerOwner(),
       cameraMotion: window.__gevQa.getActiveCameraMotion(),
     };
@@ -159,13 +151,35 @@ const clickChip = async (chipId) => {
     button.click();
     return true;
   }, chipId);
-  await sleep(150);
+  await whenUiSettled(page);
   return clicked;
 };
 
 const setMode = async (mode) => {
   await clickChip(`mode-${mode}`);
 };
+
+const waitForFlight = (before) =>
+  pollPage(
+    page,
+    (origin) => {
+      const { engine, dataManager } = window.__godsEyeView;
+      const motion = dataManager.layers
+        .get('directions')
+        .module.getFlightProgress();
+      const position = engine.camera.pose().position;
+      return (
+        motion?.kind === 'route' &&
+        motion.traveledM > 0 &&
+        Math.hypot(
+          position.x - origin.x,
+          position.y - origin.y,
+          position.z - origin.z,
+        ) > 50
+      );
+    },
+    { timeoutMs: 15000, intervalMs: 50, args: [before] },
+  );
 
 const waitForRoute = () =>
   page.waitForFunction(
@@ -189,7 +203,7 @@ const waitForMode = (word) =>
 
 const cameraPose = () =>
   page.evaluate(() => {
-    const c = window.__godsEyeView.viewer.camera.positionWC;
+    const c = window.__godsEyeView.engine.camera.pose().position;
     return { x: c.x, y: c.y, z: c.z };
   });
 const poseDelta = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -200,7 +214,7 @@ async function placeEndpoints(a, b) {
   const atA = await screenAt(a.lat, a.lon);
   if (!atA) return false;
   await page.mouse.click(atA.x, atA.y);
-  await sleep(700);
+  await whenUiSettled(page);
   await clickChip('set-b');
   const atB = await screenAt(b.lat, b.lon);
   if (!atB) return false;
@@ -216,6 +230,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
     timeout: 90000,
   });
+  await whenSettled(page);
   // Two module reads the assertions need. Both are the app's OWN module
   // instances (Vite serves one copy), so this observes rather than simulates.
   await page.evaluate(async () => {
@@ -229,8 +244,98 @@ try {
       releasePointer: own.releasePointer,
       getActiveCameraMotion: verbs.getActiveCameraMotion,
     };
+    // What Directions draws, read through the globe contract
+    // (src/layers/directions/render/display.js): the route is the
+    // `directions-route` ground corridor set, cut into dash pieces; the A/B
+    // discs and the maneuver dots are the `directions-markers` and
+    // `directions-steps` point mover sets. The route's pieces are seen as the
+    // display hands them to engine.ground; which instances are shown is read
+    // from the Cesium engine's own point collection for the set (this gate
+    // drives the Cesium camera).
+    const engine = window.__godsEyeView.engine;
+    let routePieces = null;
+    const createGroundSet = engine.ground.createSet.bind(engine.ground);
+    engine.ground.createSet = (options) => {
+      const set = createGroundSet(options);
+      if (options?.id === 'directions-route') {
+        const replace = set.replace.bind(set);
+        set.replace = (items) => {
+          routePieces = items.map((item) => item.positions.length);
+          return replace(items);
+        };
+      }
+      return set;
+    };
+    const moverPrimitive = (id) => {
+      const walk = (collection) => {
+        for (let i = 0; i < collection.length; i += 1) {
+          const primitive = collection.get(i);
+          if (!primitive) continue;
+          if (primitive.gevMoverSet === id) return primitive;
+          if (
+            primitive.gevMoverSet === undefined &&
+            typeof primitive.get === 'function' &&
+            typeof primitive.length === 'number'
+          ) {
+            const found = walk(primitive);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(window.__godsEyeView.viewer.scene.primitives);
+    };
+    const moverCount = (id) =>
+      engine.movers.list().find((set) => set.id === id)?.count ?? 0;
+    const shownInstances = (id) => {
+      const primitive = moverPrimitive(id);
+      if (!primitive || primitive.show === false) return [];
+      const shown = [];
+      const count = Math.min(moverCount(id), primitive.length);
+      for (let i = 0; i < count; i += 1) {
+        const instance = primitive.get(i);
+        if (instance.show) shown.push(instance);
+      }
+      return shown;
+    };
+    window.__gevQaDirections = {
+      drawn() {
+        const route = engine.ground
+          .list()
+          .filter((set) => set.id === 'directions-route');
+        // Every original vertex is kept, and each piece adds its two ends,
+        // which are the next piece's start: vertices = total - 2·pieces + 2.
+        const routeVertices =
+          route.length && routePieces?.length
+            ? routePieces.reduce((sum, n) => sum + n, 0) -
+              2 * routePieces.length +
+              2
+            : 0;
+        return {
+          routeSets: route.filter((set) => set.shown && set.count > 0).length,
+          routeVertices,
+          markersShown: shownInstances('directions-markers').length,
+          stepCount: moverCount('directions-steps'),
+          stepsShown: shownInstances('directions-steps').map((point) =>
+            point.position.clone(),
+          ),
+        };
+      },
+      // Every other layer's contract sets, to prove a disable touches only
+      // the Directions ones.
+      others() {
+        const mine = (id) => String(id).startsWith('directions');
+        return [
+          ...engine.movers.list().map((set) => `movers:${set.id}`),
+          ...engine.lines.list().map((line) => `lines:${line.id}`),
+          ...engine.ground.list().map((set) => `ground:${set.id}`),
+        ]
+          .filter((key) => !mine(key.split(':').slice(1).join(':')))
+          .sort();
+      },
+    };
   });
-  await sleep(3000);
+  await whenSettled(page);
 
   // ── 1. Open the UTILITIES panel, then toggle the row on. ────────────────
   const opened = await page.evaluate(() => {
@@ -247,7 +352,7 @@ try {
       .getElementById('utilities-panel')
       .classList.contains('collapsed');
   });
-  await sleep(700);
+  await whenUiSettled(page);
   check('the UTILITIES panel opens from its own header control', opened);
   const toggled = await page.evaluate(() => {
     const row = document.querySelector(
@@ -259,7 +364,7 @@ try {
     button.click();
     return true;
   });
-  await sleep(1200);
+  await whenUiSettled(page);
   check(
     'the Directions row is in the Data Layers panel and toggles on',
     toggled,
@@ -307,13 +412,13 @@ try {
     );
     close?.click();
   });
-  await sleep(500);
+  await whenUiSettled(page);
 
   // ── 2. Place A on the Ferry Building, B in Golden Gate Park. ─────────────
   const FERRY = { lat: 37.7955, lon: -122.3937 };
   const GGPARK = { lat: 37.7694, lon: -122.4862 };
   await lookAt(37.782, -122.44, 16000);
-  await sleep(5000);
+  await whenSettled(page);
 
   await clickChip('set-a');
   state = await layerState();
@@ -330,7 +435,7 @@ try {
   let at = await screenAt(FERRY.lat, FERRY.lon);
   check('the Ferry Building is on screen', !!at, JSON.stringify(at));
   await page.mouse.click(at.x, at.y);
-  await sleep(800);
+  await whenUiSettled(page);
   state = await layerState();
   check(
     'placing A releases the pointer claim',
@@ -344,7 +449,7 @@ try {
   // used to place B and deselect whatever was under it in the same gesture.
   await page.evaluate(() => {
     window.__gevQaLateHandler = [];
-    const canvas = window.__godsEyeView.viewer.scene.canvas;
+    const canvas = window.__godsEyeView.engine.host.canvas;
     canvas.addEventListener('pointerup', () => {
       window.__gevQaLateHandler.push(window.__gevQa.pointerOwner());
     });
@@ -362,7 +467,7 @@ try {
     `saw ${JSON.stringify(lateOwners)}`,
   );
   await waitForRoute();
-  await sleep(2000);
+  await whenSettled(page);
   state = await layerState();
   check(
     'once that click is over, the pointer claim is returned',
@@ -407,7 +512,7 @@ try {
     items[2]?.click();
     return { active, tabIndex: items[2]?.tabIndex };
   });
-  await sleep(600);
+  await whenUiSettled(page);
   const afterListClick = await layerState();
   check(
     'a list row takes keyboard focus and selects its maneuver',
@@ -444,7 +549,7 @@ try {
   // ── 4. Swap endpoints. ──────────────────────────────────────────────────
   const beforeSwap = await layerState();
   await clickChip('swap');
-  await sleep(3500);
+  await waitForRoute();
   const afterSwap = await layerState();
   check(
     'SWAP reverses the route',
@@ -453,7 +558,7 @@ try {
     `"${beforeSwap.listText[0]}" -> "${afterSwap.listText[0]}"`,
   );
   await clickChip('swap');
-  await sleep(3500);
+  await waitForRoute();
 
   // ── 5. Three rapid reroutes leave exactly one route. ─────────────────────
   await page.evaluate(() => {
@@ -462,7 +567,7 @@ try {
     manager.setLayerParams('directions', { mode: 'bike' }, { origin: 'user' });
     manager.setLayerParams('directions', { mode: 'car' }, { origin: 'user' });
   });
-  await sleep(6000);
+  await waitForRoute();
   const rapid = await layerState();
   check(
     'three rapid reroutes leave exactly one route',
@@ -575,19 +680,19 @@ try {
       ),
     );
     await waitForRoute();
-    await sleep(1200);
+    await whenUiSettled(page);
   }
   await cdp.send('Fetch.disable').catch(() => {});
 
   // ── 7. FLY, a mid-flight frame, and a cancel that actually stops it. ─────
   const beforeFly = await cameraPose();
   check('the FLY chip is offered once a route exists', await clickChip('fly'));
-  await sleep(3000);
+  const flightStarted = await waitForFlight(beforeFly);
   const flying = await layerState();
   const midFly = await cameraPose();
   check(
     'FLY starts a route flight',
-    flying.cameraMotion?.kind === 'route',
+    flightStarted && flying.cameraMotion?.kind === 'route',
     JSON.stringify(flying.cameraMotion),
   );
   check(
@@ -605,7 +710,7 @@ try {
   // A reroute replaces the route the dolly is flying; the dolly has to land
   // first rather than keep flying a route that no longer exists.
   await setMode('foot');
-  await sleep(1200);
+  await whenUiSettled(page);
   const afterReroute = await layerState();
   check(
     'changing profile mid-flight lands the flight it replaced',
@@ -615,9 +720,10 @@ try {
   await waitForMode('Walk');
   await setMode('car');
   await waitForMode('Drive');
-  await sleep(800);
+  await whenUiSettled(page);
+  const beforeRefly = await cameraPose();
   check('FLY is offered again after the reroute', await clickChip('fly'));
-  await sleep(2000);
+  check('the second FLY starts before CLEAR', await waitForFlight(beforeRefly));
 
   await clickChip('clear');
   await sleep(500);
@@ -687,7 +793,7 @@ try {
   // ── 9. Denver: maneuver dots sit on the ground, not at sea level. ────────
   if (!SKIP.has('denver')) {
     await lookAt(39.744, -104.999, 7000);
-    await sleep(6000);
+    await whenSettled(page);
     const placed = await placeEndpoints(
       { lat: 39.7392, lon: -104.9903 },
       { lat: 39.7487, lon: -105.0077 },
@@ -696,32 +802,21 @@ try {
     if (placed) {
       await waitForRoute();
       // Let the shared ground-floor cells warm and the dots re-anchor.
-      await sleep(9000);
-      const denver = await page.evaluate(() => {
-        const viewer = window.__godsEyeView.viewer;
-        const Cartographic = viewer.camera.positionCartographic.constructor;
-        const scene = viewer.scene;
-        let collection = null;
-        for (let i = 0; i < scene.primitives.length; i += 1) {
-          const primitive = scene.primitives.get(i);
-          if (
-            primitive &&
-            typeof primitive.get === 'function' &&
-            primitive.length > 0 &&
-            String(primitive.get(0)?.id || '').startsWith('directions:step:')
-          ) {
-            collection = primitive;
-            break;
-          }
-        }
-        if (!collection) return { dots: 0, shown: 0, heights: [] };
-        const heights = [];
-        for (let i = 0; i < collection.length; i += 1) {
-          const point = collection.get(i);
-          if (!point.show) continue;
-          heights.push(Cartographic.fromCartesian(point.position).height);
-        }
-        return { dots: collection.length, shown: heights.length, heights };
+      await pollPage(
+        page,
+        () => {
+          const { stepCount, stepsShown } = window.__gevQaDirections.drawn();
+          return stepCount > 0 && stepsShown.length === stepCount;
+        },
+        { timeoutMs: 60_000 },
+      );
+      const denver = await evaluateWithGeo(page, async (qaGeo) => {
+        const Cartographic = qaGeo.cartographic;
+        const { stepCount, stepsShown } = window.__gevQaDirections.drawn();
+        const heights = stepsShown.map(
+          (position) => Cartographic.fromCartesian(position).height,
+        );
+        return { dots: stepCount, shown: heights.length, heights };
       });
       check('Denver has maneuver dots', denver.dots > 0, `${denver.dots} dots`);
       check(
@@ -744,55 +839,34 @@ try {
   }
 
   // ── 10. Disable: nothing is left behind. ────────────────────────────────
-  const { beforeDisable, directionsBeforeDisable } = await page.evaluate(() => {
-    const entities = [...window.__godsEyeView.viewer.entities.values];
-    return {
-      beforeDisable: entities.length,
-      directionsBeforeDisable: entities.filter((entity) =>
-        String(entity.id).startsWith('directions:'),
-      ).length,
-    };
-  });
+  const { othersBefore, drawnBefore } = await page.evaluate(() => ({
+    othersBefore: window.__gevQaDirections.others(),
+    drawnBefore: window.__gevQaDirections.drawn(),
+  }));
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('directions', false, {
       origin: 'user',
     }),
   );
-  await sleep(1500);
+  await whenSettled(page);
   const off = await page.evaluate(() => {
-    const gev = window.__godsEyeView;
-    const viewer = gev.viewer;
-    const left = [...viewer.entities.values].filter((entity) =>
-      String(entity.id).startsWith('directions:'),
-    );
-    let shownDots = 0;
-    for (let i = 0; i < viewer.scene.primitives.length; i += 1) {
-      const primitive = viewer.scene.primitives.get(i);
-      if (
-        primitive &&
-        typeof primitive.get === 'function' &&
-        primitive.length > 0 &&
-        String(primitive.get(0)?.id || '').startsWith('directions:step:')
-      ) {
-        shownDots = primitive.show ? primitive.length : 0;
-      }
-    }
+    const drawn = window.__gevQaDirections.drawn();
     const row = document.querySelector(
       '#utilities-toggles [data-layer-id="directions"]',
     );
     return {
-      entities: left.length,
-      shownDots,
+      entities: drawn.routeSets + drawn.markersShown,
+      shownDots: drawn.stepsShown.length,
       controlsHidden:
         row?.querySelector('.data-toggle-controls')?.hidden === true,
       listHidden: row?.querySelector('.data-row-list')?.hidden === true,
       pointerOwner: window.__gevQa.pointerOwner(),
       motion: window.__gevQa.getActiveCameraMotion(),
-      totalEntities: viewer.entities.values.length,
+      others: window.__gevQaDirections.others(),
     };
   });
   check(
-    'disabling removes every Directions entity',
+    'disabling removes the route and hides both markers',
     off.entities === 0,
     `${off.entities} left`,
   );
@@ -809,9 +883,9 @@ try {
   );
   check('disabling leaves no camera motion running', off.motion === null);
   check(
-    'exactly the Directions entities went away, and nothing else did',
-    off.totalEntities === beforeDisable - directionsBeforeDisable,
-    `${beforeDisable} total (${directionsBeforeDisable} ours) -> ${off.totalEntities}`,
+    "only the Directions drawing went away: every other layer's sets stay",
+    JSON.stringify(off.others) === JSON.stringify(othersBefore),
+    `ours before: route ${drawnBefore.routeSets}, markers ${drawnBefore.markersShown}, dots ${drawnBefore.stepsShown.length}; others ${othersBefore.length} -> ${off.others.length}`,
   );
 
   check(
@@ -834,7 +908,7 @@ try {
   check('harness completed', false, error?.stack || String(error));
   await shot(`99-${LABEL}-failure.jpg`).catch(() => {});
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
   await fs.writeFile(
     path.join(SHOTS, `qa-directions-${LABEL}.log`),
     `${lines.join('\n')}\n${failures} failure(s)\n`,

@@ -1,6 +1,11 @@
+import { createCesiumMaps } from '../../globe/cesium/maps.js';
+import { createCesiumCredits } from '../../globe/cesium/credits.js';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createRecentImageryDisplay } from './render/display.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../shared/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
 import { createDefaultMapSources } from '../../maps/defaultSources.js';
@@ -114,19 +119,24 @@ function fixture({
   viirs = true,
 } = {}) {
   const renderer = fakeRenderer();
+  const engine = createFakeEngine();
+  engine.camera.viewRectangle = () => undefined;
+  const display = createRecentImageryDisplay(engine);
+  renderer.viewCentre = display.viewCentre;
+  renderer.zoomToFit = display.zoomToFit;
   const thumbnails = fakeThumbnails();
   const catalog = fakeCatalog();
   const timers = manualTimers();
   const hostState = { kind: hostKind };
   const collections = { none: null, globe: {}, tileset: {} };
+  renderer.resolveHost = () => ({
+    collection: collections[hostState.kind],
+    kind: hostState.kind,
+  });
   const layer = createRecentImageryLayer({
     catalog,
     renderer,
     thumbnails,
-    host: () => ({
-      collection: collections[hostState.kind],
-      kind: hostState.kind,
-    }),
     now: () => NOW,
     setTimeoutImpl: timers.setTimeoutImpl,
     clearTimeoutImpl: timers.clearTimeoutImpl,
@@ -135,7 +145,7 @@ function fixture({
   const viewer = { camera: {} };
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
-  layer.init(viewer);
+  layer.init(null, { engine });
   if (controller) layer.attachMapStackController(controller);
   const dataManager = fakeDataManager({ layer });
   layer.attachDataManager(dataManager);
@@ -166,6 +176,7 @@ function fixture({
     dataManager,
     hostState,
     viewer,
+    engine,
     reasons,
     timers,
     toolCalls,
@@ -709,14 +720,20 @@ function failingMapController() {
           removeStaticCredit() {},
         },
       },
-      primitives: { add() {}, remove() {} },
+      primitives: { contains: () => false, add() {}, remove() {} },
     },
     imageryLayers: { add() {}, remove() {} },
   };
-  const controller = new MapSourceController(viewer, {
+  viewer.creditDisplay = viewer.scene.frameState.creditDisplay;
+  const controller = new MapSourceController({
     registry,
     initialStack: 'photoreal',
-    createImageryLayer: (provider) => ({ provider }),
+    engine: Object.assign(createFakeEngine(), {
+      maps: createCesiumMaps(viewer, {
+        credits: createCesiumCredits(viewer).credits,
+        createImageryLayer: (provider) => ({ provider }),
+      }).maps,
+    }),
     onError: () => {},
   });
   const calls = [];
@@ -953,10 +970,10 @@ test('USE VIEW takes the camera rectangle and refuses a view over the cap instea
     east: rad(east),
     north: rad(north),
   });
-  f.viewer.camera.computeViewRectangle = view(-97.8, 30.2, -97.7, 30.3);
+  f.engine.camera.viewRectangle = view(-97.8, 30.2, -97.7, 30.3);
   assert.equal(f.layer.useCurrentView(), true);
   assert.ok(Math.abs(f.snap().box.west + 97.8) < 1e-9);
-  f.viewer.camera.computeViewRectangle = view(-108, 20, -88, 40);
+  f.engine.camera.viewRectangle = view(-108, 20, -88, 40);
   assert.equal(f.layer.useCurrentView(), false);
   assert.match(f.snap().boxError, /^View is 2,2\d\d km wide · limit 1,000 km$/);
   assert.equal(f.catalog.searches.length, 1, 'nothing searched');
@@ -972,23 +989,21 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   const fovy = 2 * Math.atan(Math.tan(Math.PI / 6) / 2);
   const expected = 400_000 / (2 * Math.tan(Math.PI / 6));
   let centreHit = null;
-  Object.assign(f.viewer, {
-    scene: {
-      canvas: { clientWidth: 1000, clientHeight: 500 },
-      ellipsoid: {
-        cartographicToCartesian: (c) => ({ ...c, cartesian: true }),
-        cartesianToCartographic: (c) => c && { ...c },
-      },
-    },
-  });
-  Object.assign(f.viewer.camera, {
-    frustum: { fovy },
-    flyTo: (options) => flights.push(options),
-    pickEllipsoid: (position) => {
-      assert.deepEqual(position, { x: 500, y: 250 }, 'the canvas centre');
-      return centreHit;
-    },
-  });
+  f.engine.host.size = () => ({ width: 1000, height: 500 });
+  const pose = f.engine.camera.pose();
+  f.engine.camera.pose = () => ({ ...pose, fovy });
+  f.engine.camera.flyTo = (options) =>
+    flights.push({
+      ...options,
+      destination: geo.cartographic.fromCartesian(options.destination),
+    });
+  f.engine.camera.pickEllipsoid = (position) => {
+    assert.deepEqual(position, { x: 500, y: 250 }, 'the canvas centre');
+    return (
+      centreHit &&
+      geo.cartesian3.fromRadians(centreHit.longitude, centreHit.latitude, 0)
+    );
+  };
   f.layer.enable();
   assert.equal(f.snap().zoomToFit, false);
   assert.equal(f.layer.zoomToFit(), null, 'nothing refused, nothing to fit');
@@ -1001,7 +1016,7 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   const [flight] = flights;
   assert.ok(Math.abs(deg(flight.destination.longitude) - 10) < 1e-9);
   assert.ok(Math.abs(deg(flight.destination.latitude) - 10) < 1e-9);
-  assert.equal(flight.destination.height, height);
+  assert.ok(Math.abs(flight.destination.height - height) < 1e-6);
   assert.deepEqual(flight.orientation, {
     heading: 0,
     pitch: -Math.PI / 2,
@@ -1009,7 +1024,7 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   });
   assert.equal(flight.duration, 1.2);
   // A view over the cap: the ground under the canvas centre.
-  f.viewer.camera.computeViewRectangle = () => ({
+  f.engine.camera.viewRectangle = () => ({
     west: rad(-108),
     south: rad(20),
     east: rad(-88),
@@ -1364,8 +1379,7 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   const fakes = boxToolFakes();
   const cancels = [];
   const tool = initImageryBoxTool({
-    viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    engine: fakes.engine,
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => f.layer.setBox(box),

@@ -220,13 +220,18 @@ test('live chips toggle each control without touching the other', async () => {
   );
 });
 
-test('hiding dots hides the point collection of an enabled layer', async () => {
+test('hiding dots hides the display of an enabled layer', async () => {
   const { createState } = await import('./state.js');
   const { createControls } = await import('./controls.js');
   const state = createState({ services: {}, source: {} });
   let demand = 0;
   state._enabled = true;
-  state._pointCollection = { show: true };
+  let shown = true;
+  state._display = {
+    show: (value) => {
+      shown = value;
+    },
+  };
   const controls = createControls({
     state,
     services: {},
@@ -234,9 +239,9 @@ test('hiding dots hides the point collection of an enabled layer', async () => {
     parts: { animation: { syncRenderDemand: () => demand++ } },
   }).methods;
   controls.setParams({ dots: false });
-  assert.equal(state._pointCollection.show, false);
+  assert.equal(shown, false);
   controls.setParams({ dots: true });
-  assert.equal(state._pointCollection.show, true);
+  assert.equal(shown, true);
   assert.equal(demand, 2);
 });
 
@@ -262,11 +267,11 @@ test('rebuilt lines keep the old ones drawn until the new geometry is ready', as
   const { createRendering } = await import('./rendering.js');
   const removed = [];
   const state = {
-    _viewer: {
-      scene: { groundPrimitives: { remove: (p) => removed.push(p) } },
+    _display: {
+      takeHeat: () => [{ destroy: () => removed.push({ id: 'old' }) }],
+      heatBuilding: () => false,
     },
     _liveMode: false,
-    _heatFreePrim: { ready: true, id: 'old' },
     _heatRetired: [],
   };
   const parts = {
@@ -282,8 +287,8 @@ test('rebuilt lines keep the old ones drawn until the new geometry is ready', as
   );
   // A pending successor holds the retired line until it is ready.
   const next = { ready: false, id: 'new' };
-  state._heatRetired = [{ id: 'older' }];
-  state._heatJamPrim = next;
+  state._heatRetired = [{ destroy: () => removed.push({ id: 'older' }) }];
+  state._display.heatBuilding = () => !next.ready;
   rendering.retireHeatLines();
   assert.equal(state._heatRetired.length, 1);
   next.ready = true;
@@ -305,6 +310,7 @@ test('lines hold frames only while building; hidden dots hold none', async () =>
     _showLines: true,
     _motion: { rebuilds: 0 },
   };
+  let building = false;
   const animation = createAnimation({
     state,
     services: {
@@ -313,14 +319,14 @@ test('lines hold frames only while building; hidden dots hold none', async () =>
         releaseContinuousRender: () => calls.push('release'),
       },
     },
-    parts: {},
+    parts: { rendering: { linesBuilding: () => building } },
   });
   animation.syncRenderDemand();
   assert.deepEqual(calls, []);
-  state._heatFreePrim = { ready: false };
+  building = true;
   animation.syncRenderDemand();
   assert.deepEqual(calls, ['hold']);
-  state._heatFreePrim.ready = true;
+  building = false;
   animation.syncRenderDemand();
   assert.deepEqual(calls, ['hold', 'release']);
 });

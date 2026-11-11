@@ -211,6 +211,22 @@ test('missing rails are inert without browser globals', () => {
   layoutRightPanelRail({});
 });
 
+test('repeated mobile layout does not rewrite absent left rail classes', () => {
+  const f = fixture('left', { mobile: true });
+  f.stack.classList.add('layout-focus', 'layout-tail');
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-focus'), false);
+  assert.equal(f.stack.classList.contains('layout-tail'), false);
+  let removals = 0;
+  const remove = f.stack.classList.remove;
+  f.stack.classList.remove = (...names) => {
+    removals += 1;
+    remove(...names);
+  };
+  f.run();
+  assert.equal(removals, 0, 'no redundant class mutation can retrigger layout');
+});
+
 test('left layout records collapsed heights and aligns the right rail without changing disclosure', () => {
   const f = fixture('left');
   f.run();

@@ -6,11 +6,12 @@
  * Use a short spoken reply request with three seconds of leading silence.
  * Saves only usage, transport metadata, and screenshots; never credentials.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const url = new URL(process.argv[2] || 'http://127.0.0.1:4189');
@@ -27,14 +28,8 @@ url.searchParams.set('welcome', '0');
 url.searchParams.set('setup', '1');
 const output = path.join(root, '.gev-logs', 'voice-auth');
 fs.mkdirSync(output, { recursive: true });
-const executablePath =
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
-    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-    : puppeteer.executablePath());
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  executablePath,
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -149,12 +144,10 @@ try {
     };
   });
   await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.voiceCommands &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 45_000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.voiceCommands, {
+    timeout: 45_000,
+  });
+  await whenSettled(page);
   await page.waitForSelector('[data-cloud-voice-auth-toggle]', {
     visible: true,
   });
@@ -281,7 +274,7 @@ try {
   await page
     ?.evaluate(() => window.__godsEyeView?.voiceCommands?.session?.stop())
     .catch(() => {});
-  await browser.close();
+  await closeBrowser(browser);
   fs.writeFileSync(
     path.join(output, `${auth}-result.json`),
     `${JSON.stringify(result, null, 2)}\n`,

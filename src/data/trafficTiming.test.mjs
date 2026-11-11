@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -141,7 +142,6 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
   let server;
   const cacheDir = mkdtempSync(path.join(tmpdir(), 'gev-traffic-timing-vite-'));
   let trafficLayer;
-  let viewer;
 
   const pendingDebounce = () => {
     const matches = [...timeouts].filter(([, timer]) => timer.delay === 320);
@@ -182,6 +182,10 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       }],
     });
     const traffic = await server.ssrLoadModule('/src/data/traffic.js');
+    // The layer draws with the manifest's display, which loads through
+    // import() (src/app/layers/renderers.js), in this server's module graph.
+    const renderers = await server.ssrLoadModule('/src/app/layers/renderers.js');
+    await renderers.loadLayerRenderers('cesium');
     trafficLayer = traffic.default;
 
     globalThis.document = { documentElement: { dataset: {} } };
@@ -206,48 +210,53 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
 
     const preRender = eventChannel();
     const postRender = eventChannel();
+    const preUpdate = eventChannel();
     const moveEnd = eventChannel();
     const changed = eventChannel();
     let longitude = -97.74;
-    const camera = {
-      moveEnd,
-      changed,
-      percentageChanged: 0.5,
-      positionCartographic: { latitude: Math.PI / 6, longitude: 0, height: 5000 },
-      computeViewRectangle() {
-        const west = longitude * Math.PI / 180;
-        return {
-          south: 30 * Math.PI / 180,
-          west,
-          north: 30.02 * Math.PI / 180,
-          east: west + 0.02 * Math.PI / 180,
-        };
-      },
-    };
+    const cartographic = { latitude: Math.PI / 6, longitude: 0, height: 5000 };
+    // A zero-size canvas has no reticle footprint; the view rectangle bounds the fetch.
+    const engine = createFakeEngine({
+      width: 0,
+      height: 0,
+      canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
+    });
+    engine.camera.moveEnd = moveEnd;
+    engine.camera.changed = changed;
+    engine.camera.pose = () => ({ cartographic: { ...cartographic }, heading: 0, pitch: -Math.PI / 2 });
+    engine.fake.script('viewRectangle', () => {
+      const west = longitude * Math.PI / 180;
+      return {
+        south: 30 * Math.PI / 180,
+        west,
+        north: 30.02 * Math.PI / 180,
+        east: west + 0.02 * Math.PI / 180,
+      };
+    });
+    engine.fake.script('pickEllipsoid', undefined);
+    engine.fake.script('worldToWindow', undefined);
+    engine.frames.preUpdate = preUpdate;
+    engine.frames.preRender = preRender;
+    engine.frames.postRender = postRender;
+    engine.projector.viewProjection = (result = new Array(16).fill(0)) => result;
+    engine.projector.horizonVisible = () => true;
+    engine.picker.pickPositionSupported = false;
+    engine.surface.supported = false;
     const setLongitude = (next) => {
       longitude = next;
-      camera.positionCartographic.longitude = next * Math.PI / 180;
+      cartographic.longitude = next * Math.PI / 180;
     };
     setLongitude(longitude);
-    viewer = {
-      camera,
-      scene: {
-        canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
-        preRender,
-        postRender,
-        primitives: { add: (primitive) => primitive, remove: () => true },
-      },
-    };
 
     performance.clearMarks();
     performance.clearMeasures();
-    trafficLayer.init(viewer);
+    trafficLayer.init(null, { engine });
     performance.mark('traffic:stale:mark');
     performance.measure('traffic:stale:measure', {
       start: 'traffic:stale:mark',
       end: 'traffic:stale:mark',
     });
-    trafficLayer.enable(viewer);
+    trafficLayer.enable();
     assert.equal(traffic.getTrafficTimingDiagnostics().marksInstalled, 1);
     assert.equal(moveEnd.listenerCount(), 2, 'one timing listener plus the production arrival check');
     assert.equal(performance.getEntriesByName('traffic:stale:mark').length, 0);
@@ -325,7 +334,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       entry.detail?.interactionId !== anchorB.interactionId
     )), 'the canceled/stale B load must never emit a correlated trace');
   } finally {
-    trafficLayer?.disable(viewer);
+    trafficLayer?.disable();
     await server?.close();
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;

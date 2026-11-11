@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /** Real pointer/keyboard acceptance using a synthetic, self-authored feature pack. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 const output = 'qa-shots/director-interactions';
 fs.mkdirSync(output, { recursive: true });
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -47,15 +48,15 @@ const load = () =>
 try {
   await page.setViewport({ width: 1440, height: 900 });
   await page.goto(
-    `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
+    // A view in the link: the app starts there instead of flying to a city
+    // after the shot has placed the camera.
+    `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0#v=2&lat=30.2672&lon=-97.742&alt=4000&heading=0&pitch=-90&l=`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+    timeout: 60000,
+  });
+  await whenSettled(page);
   await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
     const camera = {
@@ -105,7 +106,7 @@ try {
                 from: { ...camera, alt: 4100, altitudeReference: 'ellipsoid' },
                 easing: 'linear',
               },
-              visual: { style: 'normal', mapStack: 'photoreal' },
+              visual: { style: 'normal', mapStack: 'sentinel2' },
               layers: { traffic: false },
               dataPackIds: ['data'],
               interactions: [
@@ -161,22 +162,24 @@ try {
         window.__godsEyeView.sceneDirector.getInteractionState().count === 4,
     ),
   );
-  await page.waitForFunction(
-    () => window.__godsEyeView.tileset?.tilesLoaded === true,
-    { timeout: 60000 },
-  );
-  await new Promise((r) => setTimeout(r, 2000));
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
+  await whenSettled(page);
   const point = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
-    const entity = d.viewer.entities.values.find(
-      (e) => e.name === 'data / point',
-    );
-    const pos = entity.position.getValue(d.viewer.clock.currentTime);
-    const screen = d.viewer.scene.cartesianToCanvasCoordinates(pos);
-    const rect = d.viewer.scene.canvas.getBoundingClientRect();
+    const { cartesian3 } = await import('/src/geo/index.js');
+    const pos = cartesian3.fromDegrees(-97.742, 30.2672, 600);
+    const screen = d.engine.projector.worldToWindow(pos);
+    const rect = d.engine.host.canvas.getBoundingClientRect();
     return { x: screen.x + rect.left, y: screen.y + rect.top };
   });
   await page.mouse.click(point.x, point.y);
+  // The click's pick answers asynchronously; the focus follows it.
+  await page
+    .waitForFunction(
+      () => document.activeElement?.dataset.directorAction === 'card',
+      { timeout: 10000 },
+    )
+    .catch(() => {});
   check(
     'real globe pick selects the feature and focuses its keyboard action',
     await page.evaluate(
@@ -204,7 +207,8 @@ try {
     `${output}/report.json`,
     JSON.stringify(
       await page.evaluate(() => ({
-        tilesSettled: window.__godsEyeView.tileset?.tilesLoaded === true,
+        tilesSettled:
+          window.__godsEyeView.sceneDirector.engine.surface.tilesLoaded(),
       })),
       null,
       2,
@@ -217,8 +221,7 @@ try {
     await page.evaluate(
       () =>
         Math.abs(
-          window.__godsEyeView.sceneDirector.viewer.camera.positionCartographic
-            .height - 5000,
+          window.__godsEyeView.sceneDirector.engine.camera.height() - 5000,
         ) < 1,
     ),
   );
@@ -359,6 +362,6 @@ try {
   );
   check('no uncaught browser errors', errors.length === 0);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failures ? 1 : 0;

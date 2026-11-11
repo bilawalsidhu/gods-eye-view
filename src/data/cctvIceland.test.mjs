@@ -1,3 +1,4 @@
+import { withEnv } from '../testSupport/environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -19,17 +20,6 @@ import {
 } from '../../server/providers/cctv/sources.js';
 
 /** Set (or, for `undefined`, delete) environment variables for one test. */
-function withEnv(t, env) {
-  for (const [name, value] of Object.entries(env)) {
-    const previous = process.env[name];
-    t.after(() => {
-      if (previous === undefined) delete process.env[name];
-      else process.env[name] = previous;
-    });
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
-}
 
 /** One row shaped like the live `vefmyndavelar2014_1` payload. */
 const row = (over = {}) => ({

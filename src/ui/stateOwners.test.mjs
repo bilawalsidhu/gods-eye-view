@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NavigationController } from './navigationController.js';
@@ -69,7 +70,7 @@ test('share teardown settles its promise, removes gestures and rejects a retaine
   let stamps = 0;
   let applies = 0;
   const owner = new ShareRestoration({
-    viewer: { canvas },
+    engine: createFakeEngine({ canvas }),
     navigation: {
       _beginDeferredNavigation: () => 1,
       _reassertNavigationHandoff: () => true,
@@ -138,5 +139,64 @@ test('visual teardown restores owned fog and aircraft sensor state once', async 
     ['military', { irBoost: false }],
   ]);
   assert.equal(owner._irBoostActive, false);
+  owner.destroy();
+});
+
+test('on Navara, presets set the Sharpen slider to 80 % and the engine draws it', async (t) => {
+  const { VisualSettings } = await import('./visualSettings.js');
+  const priorDocument = globalThis.document;
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    getElementById: () => null,
+  };
+  t.after(() => {
+    globalThis.document = priorDocument;
+  });
+  const sharpen = [];
+  const classList = { toggle() {} };
+  const element = (value) => ({ value, textContent: '', classList });
+  const elements = {
+    _bloomBtn: element(),
+    _bloomSlider: element('0'),
+    _bloomSliderRow: element(),
+    _bloomSliderValue: element(),
+    _sharpenBtn: element(),
+    _sharpenSlider: element('49'),
+    _sharpenSliderRow: element(),
+    _sharpenSliderValue: element(),
+  };
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.render.setSharpen = (options) => sharpen.push(options);
+  const owner = new VisualSettings({
+    viewer: null,
+    engine: engine,
+    elements,
+    operations: {
+      _syncShareState() {},
+      _layoutRightPanels() {},
+      _setHudVariant() {},
+      _updateHudButtonState() {},
+    },
+    services: {
+      governorRequestRender() {},
+      holdContinuousRender() {},
+      releaseContinuousRender() {},
+      setKeyholeFadeTuning() {},
+    },
+    readHud: () => ({ getVariant: () => 'tactical', setMode() {} }),
+  });
+  owner._detectionUserOverridden = true;
+  owner._applyStylePresetDefaults('retro');
+  assert.equal(owner._sharpenPct, 80);
+  // _setSharpenEnabled applies the slider again; the engine skips repeats.
+  assert.deepEqual(sharpen, [
+    { amount: 1.7000000000000002 },
+    { enabled: true },
+    { amount: 1.7000000000000002 },
+  ]);
+  // A share link carries an explicit value: 49 stays 49 on Navara.
+  await owner.restoreShareState({ sharpenIntensity: 49, sharpen: true });
+  assert.equal(owner._sharpenPct, 49);
+  assert.deepEqual(sharpen.at(-1), { amount: 1.08 });
   owner.destroy();
 });

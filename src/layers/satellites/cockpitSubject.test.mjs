@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createLayerSceneContext } from '../../data/layerSceneBinding.js';
+import { satelliteServices } from '../../testSupport/satelliteServices.mjs';
+import { constantRgba } from '../shared/color.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
 import { createOrbits } from './orbits.js';
@@ -21,6 +25,7 @@ import { groundTrackBearingDeg } from './orbits.js';
 import { indexImagingSensors } from './sensors.js';
 import { ISS_NORAD } from './policy.js';
 
+const YELLOW = constantRgba(1, 1, 0);
 const COMPANION = 25545;
 const GPS = 32711;
 
@@ -41,7 +46,7 @@ const GROUP_TEXT = {
 /** Whether the tracked entity draws its dot (an unset show is shown). */
 function dotShown(f) {
   const show = f.state._trackedEntity.point.show;
-  return show === undefined ? true : show.getValue();
+  return show ?? true;
 }
 
 const SATCAT_HEADER =
@@ -94,35 +99,20 @@ async function fixture(t) {
     readSensors: async () => SENSORS,
   };
   const noop = () => {};
-  const services = {
-    overlays: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
-    },
-    layerState: { isExplicitLayerStateOrigin: () => false },
-    focus: {
-      clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
-      getFocusTarget: () => null,
-      focusNowMs: (now) => now,
-      focusPassIsNeeded: () => false,
-    },
-    context: {
-      clearTrackedSubjectContext: noop,
-      getContextStore: () => ({ entities: new Map() }),
-      refreshTrackedSubjectContext: noop,
-      selectTrackedSubjectContext: noop,
-    },
-    readout: { refreshTrackedReadout: noop },
-    render: { holdContinuousRender: noop, releaseContinuousRender: noop },
-    picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-  };
+  const services = satelliteServices();
+  services.focus.focusNowMs = (now) => now;
+  services.focus.focusPassIsNeeded = () => false;
   const previousDocument = globalThis.document;
   globalThis.document = new EventTarget();
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = {
+    state,
+    services,
+    parts,
+    source,
+    getRenderer: () => state._renderer,
+  };
   for (const [name, factory] of Object.entries({
     controls: createControls,
     orbits: createOrbits,
@@ -137,31 +127,21 @@ async function fixture(t) {
   })) {
     parts[name] = factory(context);
   }
-  const viewer = {
-    trackedEntity: undefined,
-    entities: new Cesium.EntityCollection(),
-    scene: {
-      canvas: new EventTarget(),
-      primitives: new Cesium.PrimitiveCollection(),
-      preRender: new Cesium.Event(),
-      frameState: { frameNumber: 1 },
-    },
-    trackedEntityChanged: new Cesium.Event(),
-  };
+  const engine = createFakeEngine();
   const { log, warn } = console;
   console.log = noop;
   console.warn = noop;
-  await parts.lifecycle.methods.init(viewer);
-  await parts.ingestion.methods.update(viewer);
-  parts.lifecycle.methods.enable(viewer);
+  await parts.lifecycle.methods.init(null, { engine });
+  await parts.ingestion.methods.update();
+  parts.lifecycle.methods.enable();
   // GPS is TELECOM; these tests need its point on screen whatever the default.
   parts.controls.methods.setParams({ classes: { telecom: true } });
   Object.assign(console, { log, warn });
   t.after(() => {
     console.log = noop;
-    if (state._pointCollection) parts.lifecycle.methods.destroy(viewer);
+    if (state._pointCollection) parts.lifecycle.methods.destroy();
     console.log = log;
-    viewer.scene.primitives.destroy();
+    engine.destroy();
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
   });
@@ -169,7 +149,7 @@ async function fixture(t) {
   return {
     state,
     parts,
-    viewer,
+    engine,
     methods,
     track(id) {
       const log = console.log;
@@ -181,8 +161,7 @@ async function fixture(t) {
       }
     },
     nextFrame() {
-      viewer.scene.frameState.frameNumber += 1;
-      parts.rendering._preRenderTick();
+      engine.fake.frame();
     },
     ring: (id) => state._orbitPaths.get(id)?.primitive,
     detected: () =>
@@ -209,7 +188,7 @@ test('the tracked satellite is a subject read from the per-frame sample', async 
     propagations += 1;
     return propagate(...args);
   };
-  f.viewer.scene.frameState.frameNumber += 1;
+  f.engine.fake.emit('frames.preUpdate');
   const subject = f.methods.getCockpitSubject();
   const position = f.methods.getCockpitPosition();
   f.methods.getCockpitSubject();
@@ -227,14 +206,13 @@ test('the tracked satellite is a subject read from the per-frame sample', async 
 
   // The same point the tracked dot and follow camera use, as a copy.
   const cached = f.state._trackedFrameCartesian;
-  assert.ok(Cesium.Cartesian3.equals(position, cached));
+  assert.ok(geo.cartesian3.equals(position, cached));
   assert.notEqual(position, cached);
-  const target = new Cesium.Cartesian3();
+  const target = geo.cartesian3.create();
   assert.equal(f.methods.getCockpitPosition(target), target);
-  const geodetic = Cesium.Cartographic.fromCartesian(position);
+  const geodetic = geo.cartographic.fromCartesian(position);
   assert.ok(
-    Math.abs(Cesium.Math.toDegrees(geodetic.latitude) - subject.latitude) <
-      1e-6,
+    Math.abs(geo.math.toDegrees(geodetic.latitude) - subject.latitude) < 1e-6,
   );
   f.parts.orbits.propagatePosition = propagate;
 });
@@ -385,7 +363,7 @@ test('a catalog refresh while held keeps the subject and its companions hidden',
   const log = console.log;
   console.log = () => {};
   try {
-    await f.parts.ingestion.methods.update(f.viewer);
+    await f.parts.ingestion.methods.update();
   } finally {
     console.log = log;
   }
@@ -420,43 +398,51 @@ test('tracking without a Cockpit subject keeps its marks', async (t) => {
   assert.equal(f.state._cockpitHiddenPath, null);
 });
 
-/**
- * Give a ring the per-instance attributes Cesium creates on its first
- * update, starting from the colours it was built with. Rings in this
- * fixture are never rendered, so the test stands in for that update.
- */
-function readyRing(f, id) {
+/** The contract line's normal and depth-fail colours, as drawn. */
+function ringColors(f, id) {
   const path = f.state._orbitPaths.get(id);
-  const attributes = {
-    color: Cesium.ColorGeometryInstanceAttribute.toValue(path.baseColor),
-    depthFailColor: Cesium.ColorGeometryInstanceAttribute.toValue(
-      path.baseDepthFailColor,
-    ),
+  const first = path.basePositions[0];
+  const entry = f.engine.lines.list().find(({ id }) => {
+    const { positions } = f.engine.fake.line(id);
+    return (
+      positions[0] === first.x &&
+      positions[1] === first.y &&
+      positions[2] === first.z
+    );
+  });
+  assert.ok(entry, 'the orbit has a contract line');
+  const line = f.engine.fake.line(entry.id);
+  return {
+    get color() {
+      return line.color;
+    },
+    get depthFailColor() {
+      return [
+        ...line.color.slice(0, 3),
+        line.color[3] * line.options.depthFailAlpha,
+      ];
+    },
   };
-  path.primitive.getGeometryInstanceAttributes = (instanceId) =>
-    instanceId === path.instanceId ? attributes : undefined;
-  return attributes;
 }
 
-/** A colour attribute's alpha byte. */
-const alphaByte = (value) => value[3];
+const alpha = (value) => value[3];
 
 test('a Cockpit subject dims every other orbit ring and restores it exactly', async (t) => {
   const f = await fixture(t);
   f.track(GPS);
   f.nextFrame();
   assert.ok(f.ring(ISS_NORAD), 'the ISS ring is drawn beside the tracked one');
-  const iss = readyRing(f, ISS_NORAD);
-  const gps = readyRing(f, GPS);
+  const iss = ringColors(f, ISS_NORAD);
+  const gps = ringColors(f, GPS);
   const builtColor = [...iss.color];
   const builtDepthFail = [...iss.depthFailColor];
   const gpsBuilt = [...gps.color];
 
   f.methods.setCockpitSubject(GPS);
-  const dimmed = (byte) => Math.round(byte * COCKPIT_ORBIT_DIM_FACTOR);
-  assert.ok(Math.abs(alphaByte(iss.color) - dimmed(builtColor[3])) <= 1);
+  const dimmed = (value) => value * COCKPIT_ORBIT_DIM_FACTOR;
+  assert.ok(Math.abs(alpha(iss.color) - dimmed(builtColor[3])) < 1e-12);
   assert.ok(
-    Math.abs(alphaByte(iss.depthFailColor) - dimmed(builtDepthFail[3])) <= 1,
+    Math.abs(alpha(iss.depthFailColor) - dimmed(builtDepthFail[3])) < 1e-12,
   );
   assert.deepEqual([...iss.color].slice(0, 3), builtColor.slice(0, 3));
   assert.equal(f.ring(ISS_NORAD).show, true, 'other rings stay visible');
@@ -467,48 +453,36 @@ test('a Cockpit subject dims every other orbit ring and restores it exactly', as
 
   // A rebuilt ring arrives at full alpha and is dimmed again on the tick.
   f.parts.rendering._hideOrbitPath(ISS_NORAD);
-  f.parts.rendering._showOrbitPath(ISS_NORAD, Cesium.Color.YELLOW);
-  const rebuilt = readyRing(f, ISS_NORAD);
+  f.parts.rendering._showOrbitPath(ISS_NORAD, YELLOW);
+  const rebuilt = ringColors(f, ISS_NORAD);
+  const rebuiltColor = [...rebuilt.color];
+  const rebuiltDepthFail = [...rebuilt.depthFailColor];
   f.nextFrame();
-  assert.ok(alphaByte(rebuilt.color) < builtColor[3]);
+  assert.ok(alpha(rebuilt.color) < builtColor[3]);
 
   f.methods.setCockpitSubject(null);
   assert.deepEqual(
     [...rebuilt.color],
-    [
-      ...Cesium.ColorGeometryInstanceAttribute.toValue(
-        f.state._orbitPaths.get(ISS_NORAD).baseColor,
-      ),
-    ],
+    rebuiltColor,
     'released rings get their built colours back exactly',
   );
-  assert.deepEqual(
-    [...rebuilt.depthFailColor],
-    [
-      ...Cesium.ColorGeometryInstanceAttribute.toValue(
-        f.state._orbitPaths.get(ISS_NORAD).baseDepthFailColor,
-      ),
-    ],
-  );
+  assert.deepEqual([...rebuilt.depthFailColor], rebuiltDepthFail);
   assert.equal(f.ring(GPS).show, true);
   assert.deepEqual([...gps.color], gpsBuilt);
 });
 
-test('a ring not yet updated by Cesium is dimmed once it is', async (t) => {
+test('a ring dimmed before its first frame retains that colour when drawn', async (t) => {
   const f = await fixture(t);
   f.track(GPS);
   f.methods.setCockpitSubject(GPS);
   const path = f.state._orbitPaths.get(ISS_NORAD);
-  assert.equal(path.alphaFactor, 1, 'nothing written before the first update');
-  const iss = readyRing(f, ISS_NORAD);
+  assert.equal(path.alphaFactor, COCKPIT_ORBIT_DIM_FACTOR);
+  const iss = ringColors(f, ISS_NORAD);
   f.nextFrame();
   assert.equal(path.alphaFactor, COCKPIT_ORBIT_DIM_FACTOR);
-  assert.ok(alphaByte(iss.color) < 100);
+  assert.ok(alpha(iss.color) < 0.2);
   assert.equal(applyOrbitPathAlpha(path, 1), true);
-  assert.deepEqual(
-    [...iss.color],
-    [...Cesium.ColorGeometryInstanceAttribute.toValue(path.baseColor)],
-  );
+  assert.deepEqual([...iss.color], path.baseColor.rgba());
 });
 
 test('a held subject ignores the layer Escape; refocus restores the follow', async (t) => {
@@ -520,17 +494,68 @@ test('a held subject ignores the layer Escape; refocus restores the follow', asy
   assert.equal(f.state._trackedNorad, ISS_NORAD, 'the Cockpit owns Escape');
 
   // The Cockpit took the follow camera off the entity; refocus puts it back.
-  f.viewer.trackedEntity = undefined;
+  f.engine.camera.following().stop();
+  assert.equal(
+    f.state._trackedNorad,
+    ISS_NORAD,
+    'held subject survives camera release',
+  );
   f.methods.setCockpitSubject(null);
   assert.equal(f.methods.refocusTrackedById(GPS), false, 'not the tracked one');
-  assert.equal(f.viewer.trackedEntity, undefined);
+  assert.equal(f.engine.camera.following(), null);
   assert.equal(f.methods.refocusTrackedById(String(ISS_NORAD)), true);
-  assert.equal(f.viewer.trackedEntity, f.state._trackedEntity);
+  assert.equal(f.engine.camera.following().native, f.state._trackedEntity);
   assert.equal(f.state._trackedNorad, ISS_NORAD);
 
   f.parts.interaction._onKeyDown({ key: 'Escape' });
   assert.equal(f.state._trackedNorad, null, 'released, Escape untracks again');
   assert.equal(f.methods.refocusTrackedById(ISS_NORAD), false);
+});
+
+test('an engine switch retains the held subject and dims the replacement rings', async (t) => {
+  const f = await fixture(t);
+  f.track(GPS);
+  f.methods.setCockpitSubject(GPS);
+  f.parts.lifecycle.methods.detachRenderer();
+  assert.doesNotThrow(() => f.parts.cockpit._syncCockpitSubjectVisuals());
+  assert.doesNotThrow(() =>
+    f.methods.setParams({ classes: { stations: false } }),
+  );
+
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  let restoreView;
+  const context = createLayerSceneContext({
+    engine,
+    viewRestored: new Promise((resolve) => {
+      restoreView = resolve;
+    }),
+  });
+  f.parts.lifecycle.methods.attachRenderer(context);
+  assert.equal(f.methods.trackById(GPS, { origin: 'share-restore' }), true);
+  assert.equal(
+    engine.camera.following(),
+    null,
+    'retained tracking waits for the view',
+  );
+  const issPath = f.state._orbitPaths.get(ISS_NORAD);
+  assert.equal(f.ring(ISS_NORAD).show, false, 'the hidden class stays hidden');
+  assert.equal(f.ring(GPS).show, false, 'the held ring stays hidden');
+  assert.equal(issPath.alphaFactor, COCKPIT_ORBIT_DIM_FACTOR);
+  assert.equal(
+    ringColors({ ...f, engine }, ISS_NORAD).color[3],
+    issPath.baseColor.alpha * COCKPIT_ORBIT_DIM_FACTOR,
+  );
+  restoreView();
+  await context.viewRestored;
+  f.parts.lifecycle.methods.resumeViewport();
+  assert.equal(engine.camera.following().native, f.state._trackedEntity);
+  engine.fake.frame();
+  assert.equal(dotShown(f), false);
+  f.methods.setCockpitSubject(null);
+  assert.equal(dotShown(f), true);
+  assert.equal(f.ring(ISS_NORAD).show, false);
+  assert.equal(issPath.alphaFactor, 1);
 });
 
 test('the ground track bearing comes from the SGP4 velocity, less the Earth turning', () => {

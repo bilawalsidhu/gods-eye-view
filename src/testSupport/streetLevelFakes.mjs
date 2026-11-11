@@ -1,5 +1,15 @@
-/** Shared Street Level test stand-ins: provider snapshot and provider, Mapillary source, photo viewer, Cesium viewer, ray-casting camera. */
+/**
+ * Shared Street Level test stand-ins: provider snapshot and provider,
+ * Mapillary source, photo viewer, and the layer's display on the fake
+ * engine or on the Cesium engine over a stub scene, with what each drew.
+ */
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { normalizeGroundSetOptions } from '../globe/ground.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createFakeEventHandlers } from '../globe/cesium/testing/fakeViewer.mjs';
+import { createCesiumMoversEngine } from './cesiumMoversEngine.mjs';
+import { createStreetLevelDisplay } from '../layers/streetLevel/render/display.js';
 import { MAPILLARY_CREDIT_HTML } from '../layers/streetLevel/providers/mapillary/policy.js';
 import {
   latToTileY,
@@ -131,19 +141,144 @@ export function fakePhotoViewer({ pose = null } = {}) {
 }
 
 /**
- * A stand-in Cesium viewer a layer can be enabled on: a canvas for the click
- * handler, camera events with Cesium's flight bookkeeping (`flights` counts
- * them, lists them and can `land` the current one), primitive lists and a
- * credit display. With `view`, the camera looks straight down on Sacramento
- * from 900 m, so coverage asks for tiles.
+ * What an engine's ground sets and mover sets were given, by id: the
+ * options (with the contract's defaults), a ground set's committed items, a
+ * mover set's committed instances (the fields of every set() before its
+ * last commit), and whether each is still live.
  */
-export function fakeCesiumViewer({ view = false } = {}) {
-  const credits = [];
+export function watchDrawing(engine) {
+  const ground = new Map();
+  const createGround = engine.ground.createSet.bind(engine.ground);
+  engine.ground.createSet = (options) => {
+    const set = createGround(options);
+    const record = {
+      id: options.id,
+      options: normalizeGroundSetOptions(options),
+      pending: [],
+      items: [],
+      commits: 0,
+      live: true,
+    };
+    const { replace, commit, destroy } = set;
+    set.replace = (items) => {
+      replace(items);
+      record.pending = items;
+    };
+    set.commit = () => {
+      commit();
+      record.items = record.pending;
+      record.commits++;
+    };
+    set.destroy = () => {
+      destroy();
+      record.live = false;
+    };
+    ground.set(options.id, record);
+    return set;
+  };
+  const movers = new Map();
+  const createMovers = engine.movers.createSet.bind(engine.movers);
+  engine.movers.createSet = (options) => {
+    const set = createMovers(options);
+    const record = {
+      id: options.id,
+      options,
+      pending: [],
+      count: 0,
+      instances: [],
+      commits: 0,
+      live: true,
+    };
+    const { commit, destroy } = set;
+    const write = set.set;
+    const setCount = set.setCount;
+    set.set = (index, fields) => {
+      write(index, fields);
+      record.pending[index] = { ...record.pending[index], ...fields };
+    };
+    set.setCount = (count) => {
+      setCount(count);
+      record.count = count;
+    };
+    set.commit = () => {
+      commit();
+      record.instances = record.pending.slice(0, record.count);
+      record.commits++;
+    };
+    set.destroy = () => {
+      destroy();
+      record.live = false;
+    };
+    movers.set(options.id, record);
+    return set;
+  };
+  const live = (records, prefix) =>
+    [...records.values()].filter(
+      (record) => record.live && record.id.startsWith(prefix),
+    );
+  return {
+    /** Live ground sets whose id starts with `prefix`, in creation order. */
+    groundSets: (prefix = '') => live(ground, prefix),
+    /** Live mover sets whose id starts with `prefix`, in creation order. */
+    moverSets: (prefix = '') => live(movers, prefix),
+    /** Every corridor item drawn by live sets under `prefix`. */
+    corridors: (prefix = '') =>
+      live(ground, prefix).flatMap((record) => record.items),
+    /** Every shown sprite instance drawn by live sets under `prefix`. */
+    spritesShown: (prefix = '') =>
+      live(movers, prefix).flatMap((record) =>
+        record.instances.filter((instance) => instance.show !== false),
+      ),
+  };
+}
+
+/**
+ * The fake engine as a pinhole camera `altitude` m above WGS84 at
+ * `lon`/`lat`, turned to `heading` and `pitch` (degrees, negative down),
+ * with a vertical field of view of `fovY` degrees.
+ */
+export function cameraEngine({
+  lon,
+  lat,
+  altitude,
+  heading = 0,
+  pitch = -90,
+  width = 1600,
+  height = 900,
+  fovY = 60,
+}) {
+  const engine = createFakeEngine({ width, height, fovy: fovY * RAD });
+  engine.fake.setPose({
+    longitude: lon * RAD,
+    latitude: lat * RAD,
+    height: altitude,
+    heading: heading * RAD,
+    pitch: pitch * RAD,
+    roll: 0,
+  });
+  return engine;
+}
+
+/** Sacramento from 900 m, looking straight down, on a 100 px canvas. */
+export const SACRAMENTO_VIEW = Object.freeze({
+  lon: -121.4944,
+  lat: 38.5816,
+  altitude: 900,
+  width: 100,
+  height: 100,
+});
+
+/**
+ * Cesium's flight bookkeeping on an engine: `started` counts framing
+ * flights, `cancelled` the cancelFlight calls that stopped one, `list`
+ * holds every flight asked for (`{ sphere, options }`), `land()` completes
+ * the current one.
+ */
+function watchFlights(engine) {
   let flight = null;
   const flights = {
     started: 0,
     cancelled: 0,
-    /** Every flight asked for, oldest first: `{ sphere, options }`. */
     list: [],
     land() {
       const current = flight;
@@ -151,126 +286,137 @@ export function fakeCesiumViewer({ view = false } = {}) {
       current?.options.complete?.();
     },
   };
-  const stopFlight = () => {
+  const stop = () => {
     const current = flight;
     flight = null;
     current?.options.cancel?.();
     return Boolean(current);
   };
-  const canvas = Object.assign(new EventTarget(), {
-    style: {},
-    // Keep Cesium's handler on the canvas; there is no real document here.
-    disableRootEvents: true,
-    onwheel: null,
-    ...(view ? { clientWidth: 100, clientHeight: 100 } : {}),
-  });
-  const camera = Object.assign(
-    view
-      ? rayCamera({
-          lon: -121.4944,
-          lat: 38.5816,
-          altitude: 900,
-          pitch: -90,
-          width: 100,
-          height: 100,
-        })
-      : {},
-    {
-      changed: new Cesium.Event(),
-      moveStart: new Cesium.Event(),
-      moveEnd: new Cesium.Event(),
-      flyToBoundingSphere(sphere, options = {}) {
-        stopFlight();
-        flight = { sphere, options };
-        flights.list.push(flight);
-        flights.started++;
-      },
-      cancelFlight() {
-        if (stopFlight()) flights.cancelled++;
-      },
-    },
-  );
+  engine.camera.flyToSphere = (sphere, options = {}) => {
+    stop();
+    flight = { sphere, options };
+    flights.list.push(flight);
+    flights.started++;
+  };
+  engine.camera.cancelFlight = () => {
+    if (stop()) flights.cancelled++;
+  };
+  return flights;
+}
+
+/**
+ * The Street Level display on the fake engine (`view`: over Sacramento, so
+ * coverage asks for tiles), with what it drew (watchDrawing), its credits'
+ * HTML, flight bookkeeping and `frame()` (one engine frame: sprites paint
+ * on preRender). `engine` replaces the fake one.
+ */
+export function streetLevelMap({ view = false, engine = null } = {}) {
+  const globe =
+    engine ?? (view ? cameraEngine(SACRAMENTO_VIEW) : createFakeEngine());
+  const drawing = watchDrawing(globe);
+  const flights = watchFlights(globe);
+  const map = createStreetLevelDisplay(globe);
   return {
-    credits,
+    engine: globe,
+    map,
     flights,
-    scene: {
-      canvas,
-      primitives: { add: (p) => p, remove() {} },
-      groundPrimitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-    },
-    camera,
-    creditDisplay: {
-      addStaticCredit: (credit) => credits.push(credit),
-      removeStaticCredit: (credit) => {
-        // Cesium ignores a credit it does not hold.
-        const at = credits.indexOf(credit);
-        if (at !== -1) credits.splice(at, 1);
-      },
+    ...drawing,
+    credits: () => (globe.fake?.credits ?? []).map((credit) => credit.html),
+    frame: () => globe.fake.frame(),
+    /** A click at `position`, with `picked` under it (undefined: the map). */
+    click(picked, position = { x: 50, y: 50 }) {
+      globe.fake.script('pick', picked);
+      globe.fake.input('click', { position });
+      globe.fake.unscript('pick');
     },
   };
 }
 
 /**
- * A pinhole camera `altitude` m above WGS84, at `heading` (deg from north) and
- * `pitch` (deg, negative down); `pickEllipsoid` hits whatever ellipsoid it gets.
+ * The Cesium engine over a real Cesium camera on a stub scene, with fake
+ * ground primitives (they draw nothing) and fake billboards' atlas crops:
+ * `frame()` runs a turn of Cesium's loop, `click(picked)` a left click with
+ * `scene.pick` answering `picked` (a Cesium pick result or undefined).
  */
-export function rayCamera({
-  lon,
-  lat,
-  altitude,
-  heading = 0,
-  pitch,
-  width = 1600,
-  height = 900,
-  fovY = 60,
-  fovX = null,
-}) {
-  const position = Cesium.Cartesian3.fromDegrees(lon, lat, altitude);
-  const frame = Cesium.Transforms.eastNorthUpToFixedFrame(position);
-  const h = heading * RAD;
-  const p = pitch * RAD;
-  // East-north-up axes of the view: forward, right and up.
-  const forward = [
-    Math.sin(h) * Math.cos(p),
-    Math.cos(h) * Math.cos(p),
-    Math.sin(p),
-  ];
-  const right = [Math.cos(h), -Math.sin(h), 0];
-  const up = [
-    -Math.sin(h) * Math.sin(p),
-    -Math.cos(h) * Math.sin(p),
-    Math.cos(p),
-  ];
-  const halfY = Math.tan((fovY / 2) * RAD);
-  const halfX =
-    fovX == null ? halfY * (width / height) : Math.tan((fovX / 2) * RAD);
+export function cesiumStreetLevelEngine({ width = 100, height = 100 } = {}) {
+  const handlers = createFakeEventHandlers();
+  const primitive = (type) => (options) => {
+    const value = {
+      type,
+      options,
+      ready: false,
+      show: true,
+      destroyed: false,
+      destroy() {
+        value.destroyed = true;
+      },
+      isDestroyed: () => value.destroyed,
+    };
+    return value;
+  };
+  const { engine, viewer, frame } = createCesiumMoversEngine({
+    engineOptions: {
+      createEventHandler: handlers.create,
+      scheduleFrame: (run) => run(),
+      groundFactories: { fills: primitive('fills'), lines: primitive('lines') },
+    },
+  });
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
+  viewer.scene.canvas.clientWidth = width;
+  viewer.scene.canvas.clientHeight = height;
+  let native;
+  viewer.scene.pick = () => native;
+  viewer.scene.drillPick = () => (native ? [native] : []);
   return {
-    positionWC: position,
-    positionCartographic: Cesium.Cartographic.fromDegrees(lon, lat, altitude),
-    pickEllipsoid(point, ellipsoid = Cesium.Ellipsoid.WGS84) {
-      const sx = ((2 * point.x) / width - 1) * halfX;
-      const sy = (1 - (2 * point.y) / height) * halfY;
-      const local = [0, 1, 2].map(
-        (i) => forward[i] + sx * right[i] + sy * up[i],
-      );
-      const direction = Cesium.Cartesian3.normalize(
-        Cesium.Matrix4.multiplyByPointAsVector(
-          frame,
-          new Cesium.Cartesian3(...local),
-          new Cesium.Cartesian3(),
-        ),
-        new Cesium.Cartesian3(),
-      );
-      const ray = new Cesium.Ray(position, direction);
-      const hit = Cesium.IntersectionTests.rayEllipsoid(ray, ellipsoid);
-      return hit ? Cesium.Ray.getPoint(ray, hit.start) : undefined;
+    engine,
+    viewer,
+    frame,
+    /** Poses the camera over `lon`/`lat` (degrees), looking straight down. */
+    lookDown({ lon, lat, altitude }) {
+      engine.camera.setView({
+        destination: geo.cartesian3.fromDegrees(lon, lat, altitude),
+      });
+    },
+    click(picked, position = { x: 50, y: 50 }) {
+      native = picked;
+      for (const handler of handlers.handlers)
+        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
+          position: new Cesium.Cartesian2(position.x, position.y),
+        });
+      native = undefined;
     },
   };
 }
+
+/**
+ * The Street Level display on the Cesium engine over a stub scene
+ * (cesiumStreetLevelEngine), shaped as streetLevelMap's: over Sacramento
+ * when `view`, the terrain at `terrain` m.
+ */
+export function cesiumStreetLevelMap({ view = true, terrain = 0 } = {}) {
+  const cesium = cesiumStreetLevelEngine();
+  cesium.viewer.scene.globe.getHeight = () => terrain;
+  if (view) cesium.lookDown(SACRAMENTO_VIEW);
+  const drawing = watchDrawing(cesium.engine);
+  const flights = watchFlights(cesium.engine);
+  const map = createStreetLevelDisplay(cesium.engine);
+  return {
+    name: 'the Cesium engine',
+    engine: cesium.engine,
+    viewer: cesium.viewer,
+    map,
+    flights,
+    ...drawing,
+    credits: () => [],
+    frame: cesium.frame,
+    click: cesium.click,
+  };
+}
+
+/** The display on the fake engine over Sacramento. */
+export const STREET_LEVEL_MAPS = Object.freeze([
+  () => ({ name: 'the fake engine', ...streetLevelMap({ view: true }) }),
+]);
 
 /** The centre of the tile holding a point at zoom `z`, so a small view is one tile. */
 export function tileCentre(lon, lat, z = 14) {
@@ -284,79 +430,49 @@ export function tileCentre(lon, lat, z = 14) {
   };
 }
 
-/** A scene collection that remembers what is on the globe. */
-function sceneCollection() {
-  const items = new Set();
-  return {
-    items,
-    add(primitive) {
-      items.add(primitive);
-      return primitive;
-    },
-    remove(primitive) {
-      return items.delete(primitive);
-    },
-  };
-}
-
 /**
- * A viewer looking straight down on a 0.004° square around `view`
- * (`{lon, lat, height}`, mutable), enough for line coverage to attach,
- * refresh and draw. Cesium's one-time terrain-height download is skipped.
+ * The display on a fake engine looking straight down on a 0.004° square
+ * around `view` (`{lon, lat, height}`, mutable: a change moves the camera),
+ * enough for line coverage to attach, refresh and draw: its screen rays
+ * land on that square at any height, as the old stand-in camera's did.
+ * `moveEnd()` ends a camera move.
  */
-export function coverageViewer(view, t) {
-  const initialize = Cesium.GroundPolylinePrimitive.initializeTerrainHeights;
-  Cesium.GroundPolylinePrimitive.initializeTerrainHeights = () =>
-    Promise.resolve();
-  t?.after(() => {
-    Cesium.GroundPolylinePrimitive.initializeTerrainHeights = initialize;
+export function coverageMap(start) {
+  const engine = createFakeEngine({ width: 100, height: 100 });
+  const at = { ...start };
+  const pose = () =>
+    engine.fake.setPose({
+      longitude: at.lon * RAD,
+      latitude: at.lat * RAD,
+      height: at.height,
+      heading: 0,
+      pitch: -Math.PI / 2,
+      roll: 0,
+    });
+  const view = new Proxy(at, {
+    set(target, key, value) {
+      target[key] = value;
+      pose();
+      return true;
+    },
   });
-  // Node has no WebGL context to report line-width limits.
-  Cesium.ContextLimits._minimumAliasedLineWidth = 1;
-  Cesium.ContextLimits._maximumAliasedLineWidth = 10;
-  const listeners = () => {
-    const set = new Set();
-    return {
-      set,
-      addEventListener(listener) {
-        set.add(listener);
-        return () => set.delete(listener);
-      },
-    };
+  pose();
+  engine.camera.pickRay = (point) => {
+    const origin = geo.cartesian3.fromDegrees(at.lon, at.lat, at.height);
+    const target = geo.cartesian3.fromDegrees(
+      at.lon - 0.002 + (point.x / 100) * 0.004,
+      at.lat + 0.002 - (point.y / 100) * 0.004,
+    );
+    const direction = geo.cartesian3.normalize(
+      geo.cartesian3.subtract(target, origin, geo.cartesian3.create()),
+      geo.cartesian3.create(),
+    );
+    return { origin, direction };
   };
+  const harness = streetLevelMap({ engine });
   return {
+    ...harness,
     view,
-    scene: {
-      canvas: { clientWidth: 100, clientHeight: 100 },
-      globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      groundPrimitives: sceneCollection(),
-      primitives: sceneCollection(),
-      postRender: listeners(),
-      preRender: listeners(),
-    },
-    camera: {
-      changed: new Cesium.Event(),
-      moveEnd: new Cesium.Event(),
-      get positionWC() {
-        return Cesium.Cartesian3.fromDegrees(view.lon, view.lat, view.height);
-      },
-      get positionCartographic() {
-        return {
-          longitude: view.lon * RAD,
-          latitude: view.lat * RAD,
-          height: view.height,
-        };
-      },
-      pickEllipsoid(point) {
-        return Cesium.Cartesian3.fromDegrees(
-          view.lon - 0.002 + (point.x / 100) * 0.004,
-          view.lat + 0.002 - (point.y / 100) * 0.004,
-        );
-      },
-      computeViewRectangle: () => undefined,
-    },
+    moveEnd: () => engine.fake.emit('camera.moveEnd'),
   };
 }

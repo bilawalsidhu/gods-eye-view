@@ -3,7 +3,7 @@ import { storeToRefs } from 'pinia';
 import { useScreenAnnotationsStore } from '../../stores/screenAnnotations.js';
 
 // The screen-space annotation board over the page, as the screen annotation
-// renderer (src/annotations/screenAnnotationRenderer.js) presents it.
+// renderer (src/globe/cesium/annotations/screenAnnotationRenderer.js) presents it.
 const { board, controls } = storeToRefs(useScreenAnnotationsStore());
 
 // Each element goes to the renderer it was rendered for, which measures it.

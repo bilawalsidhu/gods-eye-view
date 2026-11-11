@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { NO_IMAGERY_HOST, resolveImageryHost } from '../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../layers/shared/imageryHost.js';
 
 /**
  * @file Open-data raster overlays: OpenSeaMap sea marks and OpenSnowMap ski
@@ -16,10 +15,13 @@ import { NO_IMAGERY_HOST, resolveImageryHost } from '../maps/imageryHost.js';
  *  - OpenInfraMap serves MapLibre vector tiles, not raster XYZ tiles. That
  *    needs a vector-tile rendering pipeline, not an imagery-layer drop-in.
  *
- * The overlays drape on whatever surface the active map stack offers (see
- * `maps/imageryHost.js`): the globe on the OSM and Bing stacks, the Google
- * Photorealistic tileset's own `imageryLayers` on Google 3D. Only a stack with
- * neither leaves them hidden, and the row says so.
+ * The overlays drape through the globe engine on whatever surface the
+ * active map stack offers: `engine.imagery` (on Cesium the globe on the OSM
+ * and Bing stacks, the Google Photorealistic tileset's own imagery on Google
+ * 3D; the engine follows stack switches), or Navara's own raster overlay
+ * (`engine.maps.addOverlay`, per-tile levels on its terrain) where the
+ * engine has one. Only a surface with neither leaves them hidden, and the
+ * row says so.
  * @module data/osmOverlays
  */
 
@@ -54,76 +56,66 @@ export function osmOverlayHiddenReason(enabled, hostKind) {
   return enabled && hostKind === 'none' ? NO_IMAGERY_HOST : null;
 }
 
+// Over the heat rasters, under event imagery and the weather.
+const OVERLAY_ORDER = 10;
+const HOST_KIND = Object.freeze({ globe: 'globe', tiles: 'tileset' });
+
 /**
  * Create the layer for one overlay descriptor. Each application catalog gets
- * its own instances; the Cesium factories are injectable so tests run without
- * WebGL.
+ * its own instances.
  */
-export function createOsmOverlayLayer(
-  overlay,
-  {
-    host = resolveImageryHost,
-    createProvider = (descriptor) =>
-      new Cesium.UrlTemplateImageryProvider({
-        url: descriptor.urlTemplate,
-        credit: descriptor.credit,
-        maximumLevel: descriptor.maximumLevel,
-      }),
-    createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
-  } = {},
-) {
+export function createOsmOverlayLayer(overlay) {
   if (!OSM_OVERLAYS.includes(overlay))
     throw new TypeError(`Unknown open map overlay: ${overlay?.id}`);
-  let viewer = null;
-  let mapStack = null;
-  let unsubscribeMap = null;
+  let engine = null;
   let enabled = false;
-  let hostInfo = { collection: null, kind: 'none' };
-  /** The imagery layer this instance owns while enabled, and where it sits. */
+  /** The drape this instance owns while enabled: an imagery layer or a removal. */
   let owned = null;
 
-  const usable = (collection) => collection && !collection.isDestroyed?.();
+  /** Where the drape lies now: 'globe', 'tileset' or 'none'. */
+  function hostKind() {
+    if (!owned) return 'none';
+    if (owned.remove) return 'globe';
+    return HOST_KIND[engine?.imagery?.surface?.()] ?? 'none';
+  }
 
-  function detach(destroy) {
+  function release() {
     if (!owned) return;
-    const { collection, layer } = owned;
-    if (usable(collection) && collection.contains(layer))
-      collection.remove(layer, destroy);
-    else if (destroy && !layer.isDestroyed?.()) layer.destroy?.();
-    owned.collection = null;
-    if (destroy) owned = null;
+    const { layer, remove } = owned;
+    owned = null;
+    if (remove) remove();
+    else layer.destroy();
   }
 
-  function resolveHost() {
-    return (
-      host({ viewer, tileset: mapStack?.getImageryHostTileset?.() }) || {
-        collection: null,
-        kind: 'none',
-      }
-    );
-  }
-
-  /** Create, move or drop the owned imagery layer to match the state. */
+  /** Create or drop the owned drape to match the state. */
   function sync() {
-    if (!viewer) return;
-    hostInfo = enabled ? resolveHost() : { collection: null, kind: 'none' };
-    if (!enabled) {
-      detach(true);
-    } else {
-      owned ||= {
-        layer: createImageryLayer(createProvider(overlay)),
-        collection: null,
-      };
-      if (owned.collection !== hostInfo.collection) {
-        detach(false);
-        if (usable(hostInfo.collection)) {
-          // Appended, so it draws above the map stack's base imagery.
-          hostInfo.collection.add(owned.layer);
-          owned.collection = hostInfo.collection;
-        }
-      }
+    if (!engine || !enabled) {
+      release();
+      return;
     }
-    viewer.scene?.requestRender?.();
+    if (owned) return;
+    const remove = engine.maps?.addOverlay?.({
+      url: overlay.urlTemplate,
+      maxZoom: overlay.maximumLevel,
+      credit: overlay.credit,
+    });
+    if (typeof remove === 'function') {
+      owned = { remove };
+      return;
+    }
+    if (!engine.imagery) return;
+    owned = {
+      layer: engine.imagery.createLayer({
+        id: `osm-overlay-${overlay.id}`,
+        source: {
+          kind: 'tiles',
+          url: overlay.urlTemplate,
+          maxLevel: overlay.maximumLevel,
+          credit: overlay.credit,
+        },
+        order: OVERLAY_ORDER,
+      }),
+    };
   }
 
   return {
@@ -132,18 +124,19 @@ export function createOsmOverlayLayer(
     icon: overlay.icon,
     source: overlay.source,
     updateInterval: 0,
-    init(nextViewer) {
-      viewer = nextViewer;
+    init(viewer, options) {
+      this.attachRenderer(options);
     },
-    /** Follow map-stack switches so the drape moves with the surface. */
-    attachMapStackController(controller) {
-      unsubscribeMap?.();
-      unsubscribeMap = null;
-      mapStack = controller || null;
-      const off = controller?.subscribe?.(() => {
-        if (enabled) sync();
-      });
-      unsubscribeMap = typeof off === 'function' ? off : null;
+    /** Drape on a globe engine's imagery. */
+    attachRenderer({ engine: nextEngine = null } = {}) {
+      release();
+      engine = nextEngine;
+      sync();
+    },
+    /** Leave the globe; the enabled state stays for the next one. */
+    detachRenderer() {
+      release();
+      engine = null;
     },
     enable() {
       enabled = true;
@@ -157,29 +150,19 @@ export function createOsmOverlayLayer(
       return true;
     },
     getStats() {
-      // Without a controller subscription the stats poll doubles as the
-      // map-stack watch.
-      if (enabled && !unsubscribeMap) {
-        const next = resolveHost();
-        if (next.collection !== hostInfo.collection) sync();
-      }
       return {
         count: enabled ? 1 : 0,
-        error: osmOverlayHiddenReason(enabled, hostInfo.kind),
+        error: osmOverlayHiddenReason(enabled, hostKind()),
       };
     },
-    /** Owned layer count and host kind, for tests and live gates. */
+    /** Owned drape count and host kind, for tests and live gates. */
     diagnostics() {
-      return { host: hostInfo.kind, ownedCount: owned ? 1 : 0 };
+      return { host: hostKind(), ownedCount: owned ? 1 : 0 };
     },
     destroy() {
       enabled = false;
-      detach(true);
-      unsubscribeMap?.();
-      unsubscribeMap = null;
-      mapStack = null;
-      viewer = null;
-      hostInfo = { collection: null, kind: 'none' };
+      release();
+      engine = null;
     },
   };
 }

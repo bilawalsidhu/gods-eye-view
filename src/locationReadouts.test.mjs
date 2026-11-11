@@ -1,3 +1,4 @@
+import { NavigationController } from './ui/navigationController.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -95,14 +96,20 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
     /stamp: \(\) =>\s*this\._stampNavigation\(\{\s*cancelPendingSelection,\s*clearSearchedLocation: false,?\s*\}\)/,
   );
 
-  const reassert = ui.indexOf(
-    "  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {",
-  );
-  assert.ok(reassert > 0, '_reassertNavigationHandoff is missing');
-  assert.match(
-    ui.slice(reassert, reassert + 900),
-    /release: \(\) => \{[\s\S]{0,320}?this\.clearLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\{ trackingOrigin \}\)/,
-  );
+  const calls = [];
+  const state = {
+    _navigationGeneration: 2,
+    isCockpitActive: () => false,
+    clearLocation: () => calls.push('clear'),
+    _releaseFollowCamera: ({ trackingOrigin }) => calls.push(trackingOrigin),
+  };
+  const reassert = NavigationController.prototype._reassertNavigationHandoff.bind(state);
+  assert.equal(reassert(1), false);
+  assert.deepEqual(calls, []);
+  assert.equal(reassert(2, { keepTracking: true }), true);
+  assert.deepEqual(calls, ['clear']);
+  assert.equal(reassert(2), true);
+  assert.deepEqual(calls, ['clear', 'clear', 'tool']);
 
   // …and the policy only reaches `release` after its authority checks pass.
   const policy = fs.readFileSync(path.join(ROOT, 'src', 'navigationPolicy.js'), 'utf8');

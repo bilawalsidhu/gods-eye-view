@@ -8,8 +8,7 @@ import {
   CCTV_FRAME_CANVAS_H,
   applyFrameResult,
 } from '../../data/cctvCards.js';
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import * as geo from '../../geo/index.js';
 import { selectCctvLod, applyEvictionGrace } from '../../data/cctvLod.js';
 import {
   CCTV_OVERLAY_SOURCE_OPTIONS,
@@ -35,7 +34,7 @@ export function createCards({ state: layerState, services, parts, source }) {
   } = {}) {
     layerState._activeCameraCardEnabled = activeCameraCardEnabled === true;
     if (layerState._enabled) pushAmbientCardEntries();
-    layerState._viewer?.scene?.requestRender?.();
+    parts.renderer?.request();
 
     return { activeCameraCardEnabled: layerState._activeCameraCardEnabled };
   }
@@ -72,8 +71,7 @@ export function createCards({ state: layerState, services, parts, source }) {
   function refreshAmbientCards() {
     if (
       !layerState._enabled ||
-      !layerState._viewer ||
-      layerState._viewer.isDestroyed() ||
+      !parts.renderer?.ready ||
       !layerState._records.length
     ) {
       layerState._cctvOverlayHost.setEntries(
@@ -83,17 +81,15 @@ export function createCards({ state: layerState, services, parts, source }) {
       );
       return;
     }
-    const scene = layerState._viewer.scene;
-    const carto = layerState._viewer.camera.positionCartographic;
-    const viewerLat = carto ? Cesium.Math.toDegrees(carto.latitude) : 0;
-    const viewerLon = carto ? Cesium.Math.toDegrees(carto.longitude) : 0;
+    const carto = parts.renderer.cameraCartographic();
+    const viewerLat = carto ? geo.math.toDegrees(carto.latitude) : 0;
+    const viewerLon = carto ? geo.math.toDegrees(carto.longitude) : 0;
     // The active camera is excluded from ambient selection ALWAYS (not just
     // after its async activation settles). It is published separately in the
     // protected lane below, and grace never applies to it.
     const activeId = layerState._activeCameraId;
-    const occluder = horizonOccluder(layerState._viewer.camera);
-    const width = scene.canvas.clientWidth || scene.canvas.width || 0;
-    const height = scene.canvas.clientHeight || scene.canvas.height || 0;
+    const horizonVisible = parts.renderer.horizonTest();
+    const { width, height } = parts.renderer.viewport();
     const marginX = width * CARD_VIEW_MARGIN;
     const marginY = height * CARD_VIEW_MARGIN;
 
@@ -106,8 +102,8 @@ export function createCards({ state: layerState, services, parts, source }) {
       let inView = false;
       let sx = NaN;
       let sy = NaN;
-      if (occluder.isPointVisible(record.position)) {
-        const screen = scene.cartesianToCanvasCoordinates(record.position);
+      if (horizonVisible(record.position)) {
+        const screen = parts.renderer.project(record.position);
         if (
           screen &&
           Number.isFinite(screen.x) &&
@@ -335,7 +331,7 @@ export function createCards({ state: layerState, services, parts, source }) {
         slot,
         applyFrameResult(slot, { ok: !!frame, frame }, Date.now()),
       );
-      layerState._viewer?.scene?.requestRender?.();
+      parts.renderer?.request();
     };
     image.onload = () => settle(true);
     image.onerror = () => settle(false);

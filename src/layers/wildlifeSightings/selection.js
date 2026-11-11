@@ -156,7 +156,7 @@ export function createSelection({ state, services, parts }) {
     const selected = selectionRow();
     if (
       selected &&
-      (state.viewer.camera?.positionCartographic?.height ?? 0) <
+      (state.engine?.camera.height() ?? 0) <
         WILDLIFE_SELECTED_LABEL_FADE_HIGH_METERS
     )
       remember(selected);
@@ -196,11 +196,10 @@ export function createSelection({ state, services, parts }) {
   }
 
   function refreshLabels() {
-    if (!state.enabled || !overlay) return;
-    const scene = state.viewer.scene;
+    const engine = state.engine;
+    if (!state.enabled || !overlay || !engine) return;
     const horizon = parts.rendering.occluder();
-    const width = scene.canvas?.clientWidth || 0;
-    const height = scene.canvas?.clientHeight || 0;
+    const { width, height } = engine.host.size();
     // Rank during camera/data passes; the host handles pixel collisions.
     const nowMs = services.now();
     const candidates = [];
@@ -212,7 +211,7 @@ export function createSelection({ state, services, parts }) {
       const position = state.positions.get(row.stableId);
       if (!position || (horizon && horizon.isPointVisible(position) !== true))
         continue;
-      const screen = services.project(scene, position);
+      const screen = engine.projector.worldToWindow(position);
       if (
         !screen ||
         screen.x < 0 ||
@@ -236,10 +235,12 @@ export function createSelection({ state, services, parts }) {
   }
 
   function ambientCandidates(rows) {
-    const scene = state.viewer.scene;
+    const engine = state.engine;
     const horizon = parts.rendering.occluder();
-    const width = scene.canvas?.clientWidth ?? Infinity;
-    const height = scene.canvas?.clientHeight ?? Infinity;
+    const { width, height } = engine?.host.size() ?? {
+      width: Infinity,
+      height: Infinity,
+    };
     const screens = new Map();
     const nowMs = services.now();
     const taxa = state.drawnParams?.taxa ?? state.taxa;
@@ -251,9 +252,13 @@ export function createSelection({ state, services, parts }) {
       )
         return false;
       const position = state.positions.get(row.stableId);
-      if (!position || (horizon && horizon.isPointVisible(position) !== true))
+      if (
+        !engine ||
+        !position ||
+        (horizon && horizon.isPointVisible(position) !== true)
+      )
         return false;
-      const screen = services.project(scene, position);
+      const screen = engine.projector.worldToWindow(position);
       if (
         !screen ||
         screen.x < 0 ||
@@ -272,8 +277,7 @@ export function createSelection({ state, services, parts }) {
    * photos survive; acquisition also checks the observation window/params. */
   function retainedAmbientRows() {
     if (!state.enabled) return [];
-    const height =
-      state.viewer?.camera?.positionCartographic?.height ?? Infinity;
+    const height = state.engine?.camera.height() ?? Infinity;
     if (height >= WILDLIFE_CARD_HIDE_MAX_METERS) return [];
     return ambientCandidates(state.ambientRows).eligible;
   }
@@ -281,8 +285,7 @@ export function createSelection({ state, services, parts }) {
   function refreshAmbient() {
     if (!state.enabled) return;
     refreshLabels();
-    const height =
-      state.viewer?.camera?.positionCartographic?.height ?? Infinity;
+    const height = state.engine?.camera.height() ?? Infinity;
     if (state.ambientActive) {
       if (height >= WILDLIFE_CARD_HIDE_MAX_METERS) state.ambientActive = false;
     } else if (height <= WILDLIFE_CARD_SHOW_MAX_METERS)
@@ -317,8 +320,11 @@ export function createSelection({ state, services, parts }) {
   // iNaturalist is static; Acartia enters the attribution popover on first use.
   function syncCredits() {
     if (!state.enabled) return;
-    if (state.renderedRows.some((row) => row.origin === 'acartia'))
-      registerDynamicCredit(state.viewer, ACARTIA_CREDIT);
+    if (
+      state.engine &&
+      state.renderedRows.some((row) => row.origin === 'acartia')
+    )
+      registerDynamicCredit(state.engine, ACARTIA_CREDIT);
   }
 
   function registerContext(row) {
@@ -366,8 +372,11 @@ export function createSelection({ state, services, parts }) {
       const store = services.context.getContextStore?.();
       for (const id of state.contextIds) {
         if (!next.has(id)) {
-          if (store?.entities?.get(id)?.layerId === 'wildlife-sightings')
-            store.entities.delete(id);
+          if (store?.entities?.get(id)?.layerId === 'wildlife-sightings') {
+            if (services.context.removeEntityContext)
+              services.context.removeEntityContext(id);
+            else store.entities.delete(id);
+          }
           state.carriers.delete(id);
         }
       }
@@ -469,50 +478,73 @@ export function createSelection({ state, services, parts }) {
         'gev:entity-selected',
         onContext,
       );
-    if (typeof services.screenSpaceEventHandlerFactory !== 'function') return;
-    state.clickHandler = services.screenSpaceEventHandlerFactory(state.viewer);
-    state.clickHandler.setInputAction((click) => {
-      if (!state.enabled || services.pointer?.isPointerFree?.() === false)
-        return;
-      const hit =
-        overlay?.hitTest?.(click.position?.x, click.position?.y, {
-          sourceId: WILDLIFE_SELECTED_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(click.position?.x, click.position?.y, {
-          sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(click.position?.x, click.position?.y, {
-          sourceId: WILDLIFE_LABEL_SOURCE_ID,
-        });
-      if (hit) {
-        hit.entry?.activate?.();
-        return;
-      }
-      const picked = state.viewer.scene.pick(click.position);
-      const id =
-        services.picking?.resolvePickId?.(picked) ??
-        picked?.id ??
-        picked?.primitive?.id;
-      if (
-        typeof id === 'string' &&
-        id.startsWith('wildlife:') &&
-        selectAndFocus(id.slice(9))
+    const engine = state.engine;
+    if (!engine) return;
+    state.removeClick = engine.input.on('click', onClick, { pick: true });
+  }
+
+  function onClick(click) {
+    if (!state.enabled || services.pointer?.isPointerFree?.() === false) return;
+    const hit =
+      overlay?.hitTest?.(click.position?.x, click.position?.y, {
+        sourceId: WILDLIFE_SELECTED_SOURCE_ID,
+      }) ||
+      overlay?.hitTest?.(click.position?.x, click.position?.y, {
+        sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
+      }) ||
+      overlay?.hitTest?.(click.position?.x, click.position?.y, {
+        sourceId: WILDLIFE_LABEL_SOURCE_ID,
+      });
+    if (hit) {
+      hit.entry?.activate?.();
+      return;
+    }
+    const picked = click.picked;
+    const id = services.picking?.resolvePickId?.(picked) ?? picked?.id;
+    if (
+      typeof id === 'string' &&
+      id.startsWith('wildlife:') &&
+      selectAndFocus(id.slice(9))
+    )
+      return;
+    if (
+      id &&
+      services.picking?.isOwnedByOtherLayer?.(
+        'wildlife-sightings',
+        id,
+        state.engine,
       )
-        return;
-      if (
-        id &&
-        services.picking?.isOwnedByOtherLayer?.('wildlife-sightings', id)
-      )
-        return;
-      clearAndRebuild();
-    }, services.cesium.ScreenSpaceEventType.LEFT_CLICK);
+    )
+      return;
+    clearAndRebuild();
+  }
+
+  /** Stop listening to clicks and context selections. */
+  function uninstall() {
+    state.removeClick?.();
+    state.removeClick = null;
+    state.removeContext?.();
+    state.removeContext = null;
+  }
+
+  function clearOverlays() {
+    labelScreens.clear();
+    for (const id of sourceIds) {
+      overlay?.clearSource?.(id);
+      overlay?.setVisible?.(id, false);
+    }
+  }
+
+  /** Leave the engine: the selection stays for the next one. */
+  function detach() {
+    uninstall();
+    state.ambientRows = [];
+    state.labelRows = [];
+    clearOverlays();
   }
 
   function remove() {
-    state.clickHandler?.destroy();
-    state.clickHandler = null;
-    state.removeContext?.();
-    state.removeContext = null;
+    uninstall();
     clear();
     try {
       services.context?.removeEntityContextsForLayer?.('wildlife-sightings');
@@ -525,11 +557,7 @@ export function createSelection({ state, services, parts }) {
     state.ambientRows = [];
     state.ambientActive = false;
     state.labelRows = [];
-    labelScreens.clear();
-    for (const id of sourceIds) {
-      overlay?.clearSource?.(id);
-      overlay?.setVisible?.(id, false);
-    }
+    clearOverlays();
   }
 
   return {
@@ -542,6 +570,8 @@ export function createSelection({ state, services, parts }) {
       listeners.clear();
     },
     install,
+    uninstall,
+    detach,
     remove,
     refreshAmbient,
     retainedAmbientRows,

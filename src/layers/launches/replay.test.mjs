@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createState } from './state.js';
@@ -10,9 +11,9 @@ function replayRig() {
   const state = createState({
     services: {
       overlays: {
-        setOverlayEntries: noop,
-        setOverlaySourceVisible: noop,
-        clearOverlaySource: noop,
+        setEntries: noop,
+        setVisible: noop,
+        clearSource: noop,
       },
     },
   });
@@ -44,4 +45,24 @@ test('changing replay speed during the countdown keeps its real-time liftoff', (
   assert.equal(countdown.countdownSeconds, 8);
   // Mission time already flown is still preserved across the change.
   assert.equal(state._animationStarts.get('flying'), 960_000);
+});
+
+test('resuming a replay restores its retained chase heading', () => {
+  const { state } = replayRig();
+  state._engine = createFakeEngine();
+  state._launches = [{ id: 'mission' }];
+  state._replayCameraLaunchId = 'mission';
+  state._replayCameraHeading = 1.2;
+  const track = { ascentPath: [], ascentDurationSec: 10 };
+  state._replayTracks.set('mission', track);
+  const replay = createReplay({
+    state,
+    parts: {
+      camera: { replayInitialCameraHeading: () => 2.3 },
+      panel: { publishPanel: noop },
+      overlays: { syncMissionOverlayEntries: noop },
+    },
+  });
+  assert.equal(replay.startMissionReplay('mission', { resuming: true }), true);
+  assert.equal(track.lastCameraHeading, 1.2);
 });

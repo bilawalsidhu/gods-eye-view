@@ -29,7 +29,7 @@ export function createMilitaryFlightLayer({
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);
   parts.clockFollow = createClockFollow(context);
-  const applySnapshot = createMilitarySnapshotRenderer({
+  parts.snapshots = createMilitarySnapshotRenderer({
     flightState,
     records: flightState.records,
     groundFloor: services.groundFloor,
@@ -42,9 +42,9 @@ export function createMilitaryFlightLayer({
   });
   parts.ingestion = createIngestion({
     feed: flightState.feed,
-    applySnapshot: (snapshot, viewer, options) => {
+    applySnapshot: (snapshot, _view, options) => {
       if (options?.replace) parts.clockFollow.resetMotion();
-      return applySnapshot(snapshot, viewer, options);
+      return parts.snapshots.applySnapshot(snapshot, options);
     },
     followsClock: () => flightState.timeline.active(),
     setSourceLabel: (source) => {
@@ -63,7 +63,7 @@ export function createMilitaryFlightLayer({
       parts.ingestion.methods.loadAt(atMs, { signal, replace }),
     clear: () => parts.clockFollow.clear(),
     resumeLive: () => {
-      layer.update(flightState._viewer).catch(() => {});
+      layer.update(flightState._renderer?.view).catch(() => {});
     },
   });
 

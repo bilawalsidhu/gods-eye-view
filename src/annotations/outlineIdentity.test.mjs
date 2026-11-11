@@ -52,7 +52,7 @@ test('outlines sharing an outer ring but not their holes stay two marks', async 
     footprintKind: 'area',
   });
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget,
   });
@@ -108,7 +108,7 @@ test('the engine resolves a bare street highlight with its footprint', async (t)
     };
   };
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget,
   });
@@ -138,7 +138,7 @@ test('a duplicate that fails to clean up never costs the new outline', async (t)
   const stuck = new Set();
   const outcomes = [];
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: {
       ...renderer,
       add(anno) {

@@ -454,6 +454,28 @@ test('without the Utilities list, Directions stays in Data Layers under Utilitie
   }
 });
 
+test('a globe switch remount keeps the Utilities and Data Layers rows mounted', async () => {
+  const { container, utilities, panel, restore } = await utilitiesFixture();
+  try {
+    const directions = utilities.querySelector('[data-layer-id="directions"]');
+    const flights = container.querySelector('[data-layer-id="flights"]');
+    assert.ok(directions && flights);
+    panel.suspend();
+    panel.mount(container);
+    // Compared by identity: a failing equal would inspect the whole DOM.
+    assert.ok(
+      utilities.querySelector('[data-layer-id="directions"]') === directions,
+      'the Directions row is the same element',
+    );
+    assert.ok(
+      container.querySelector('[data-layer-id="flights"]') === flights,
+      'the Flights row is the same element',
+    );
+  } finally {
+    restore();
+  }
+});
+
 test('a layer with no feed in view says why instead of "never"', async () => {
   const { LayerPanel, presentLayerCount, presentLayerToggle } =
     await import('./layerPanel.js');

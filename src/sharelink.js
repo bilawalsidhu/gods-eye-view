@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
+import { cesiumHeading, cesiumRoll } from './cameraAngles.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
   migrateDetectionState,
@@ -11,6 +12,7 @@ import {
   decodeLayerStateParams,
   encodeLayerStateParams,
 } from './data/layerState.js';
+import { ENGINE_SHARPEN_DEFAULT } from './ui/visualPresets.js';
 import { STYLE_URL_NAMES } from './view/index.js';
 import {
   SHARE_VIEW_PANELS,
@@ -62,8 +64,11 @@ const URL_TO_STYLE = Object.fromEntries(
 const SHARE_STYLE_PARAM_REGISTRY = SHARE_VIEW_STYLE_PARAMS;
 
 export class ShareLinkManager {
+  /**
+   * @param {import('./globe/contract.js').GlobeEngine | null} engine
+   */
   constructor(
-    viewer,
+    engine,
     {
       onRestore,
       isNavigationCurrent,
@@ -72,7 +77,7 @@ export class ShareLinkManager {
       worldClock = pageWorldClock,
     } = {},
   ) {
-    this.viewer = viewer;
+    this.engine = engine ?? null;
     this._worldClock = worldClock;
     // A host may hand over the share code to open instead of the address.
     this._initialShareCode =
@@ -117,7 +122,13 @@ export class ShareLinkManager {
     // The hash this page last read or wrote. A location change back to it is
     // the app's own state, never an incoming share.
     this._knownHash = null;
+    // The hash last written from the live camera, with that camera's exact
+    // pose: the address rounds it (1e-4°, whole metres and degrees).
+    this._writtenView = null;
     this._unwatchNavigation = null;
+    this._onNavigate = null;
+    // Held while the page leaves this engine for another (holdNavigation).
+    this._navigationHeld = false;
     this._restoreAuthority = {
       visual: 0,
       map: 0,
@@ -136,10 +147,32 @@ export class ShareLinkManager {
         : null;
 
     // Listen for camera changes
-    this._removeCameraChanged = this.viewer.camera.changed.addEventListener(
+    this._removeCameraChanged = this.engine.camera.changed.addEventListener(
       () => {
         this._scheduleUpdate();
       },
+    );
+  }
+
+  /**
+   * Follow another globe engine's camera (an engine switch), or none (null)
+   * between two engines. The link's state, listeners and holds stay; a
+   * restore flight still owned on the outgoing camera is settled.
+   */
+  attachEngine(engine) {
+    if (this._destroyed) return;
+    this._removeCameraChanged?.();
+    this._removeCameraChanged = null;
+    if (this._activeCameraFlight) {
+      const flight = this._activeCameraFlight;
+      this._restoreGeneration += 1;
+      this._activeCameraFlight = null;
+      flight.settle?.('superseded');
+    }
+    this.engine = engine ?? null;
+    if (!this.engine) return;
+    this._removeCameraChanged = this.engine.camera.changed.addEventListener(
+      () => this._scheduleUpdate(),
     );
   }
 
@@ -152,6 +185,8 @@ export class ShareLinkManager {
   parseInitialHash() {
     const hash = window.location.hash.slice(1);
     this._knownHash = hash;
+    const written = this._writtenView;
+    this._writtenView = null;
     const code =
       this._initialShareCode ??
       parseSharePath(window.location.pathname)?.code ??
@@ -160,6 +195,9 @@ export class ShareLinkManager {
     const state =
       code === null ? this._parseShareHash(hash) : this._parseShareCode(code);
     if (!state) return null;
+    // Another engine reopening the address this manager wrote (an engine
+    // switch) takes the live view it was written from.
+    if (code === null && written?.hash === hash) state.liveView = written.view;
     this._beginIncomingRestore(state);
     return state;
   }
@@ -222,7 +260,10 @@ export class ShareLinkManager {
       sharpen: params.get('sharpen') === '1',
       bloomIntensity: parseOr(params.get('bi'), LEGACY_BLOOM_FALLBACK),
       bloomVersion: parseOr(params.get('bv'), 1),
-      sharpenIntensity: parseOr(params.get('si'), 49),
+      sharpenIntensity:
+        params.get('siAuto') === '1'
+          ? ENGINE_SHARPEN_DEFAULT
+          : parseOr(params.get('si'), 49),
       hudVariant: params.get('hud') || 'tactical',
       hudVisible: params.get('hv') === '1',
       detectionMode: restoredDetection.enabled
@@ -303,6 +344,7 @@ export class ShareLinkManager {
     if (this._destroyed || typeof onNavigate !== 'function') return;
     const target = globalThis.window;
     if (typeof target?.addEventListener !== 'function') return;
+    this._onNavigate = onNavigate;
     const handler = () => this._handleLocationChange(onNavigate);
     target.addEventListener('hashchange', handler);
     target.addEventListener('popstate', handler);
@@ -313,8 +355,31 @@ export class ShareLinkManager {
     };
   }
 
-  _handleLocationChange(onNavigate) {
+  /**
+   * The page is leaving this engine: a history visit asked for another one.
+   * The address now belongs to the visited entry, so this manager neither
+   * writes its view there (a pending debounced write included) nor restores
+   * that entry itself; the incoming engine reads it as it starts.
+   */
+  holdNavigation() {
+    this._navigationHeld = true;
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = null;
+  }
+
+  /**
+   * Take the address back (the engine was kept after all, or it has just
+   * started): end a hold and restore an entry visited while this manager was
+   * held or not yet watching.
+   */
+  resumeNavigation() {
     if (this._destroyed) return;
+    this._navigationHeld = false;
+    if (this._onNavigate) this._handleLocationChange(this._onNavigate);
+  }
+
+  _handleLocationChange(onNavigate) {
+    if (this._destroyed || this._navigationHeld) return;
     const hash = window.location.hash.slice(1);
     // Back/Forward fires both popstate and hashchange for one entry.
     if (hash === this._knownHash) return;
@@ -326,27 +391,30 @@ export class ShareLinkManager {
   }
 
   /**
-   * Apply a parsed state to the viewer + style manager.
+   * Apply a parsed state to the camera + style manager.
    */
-  async applyState(state, { applyCamera = true, navigationToken = null } = {}) {
-    if (this._destroyed || !state)
+  async applyState(
+    state,
+    { applyCamera = true, instant = false, navigationToken = null } = {},
+  ) {
+    if (this._destroyed || !state || !this.engine)
       return { succeeded: false, reason: 'unavailable' };
     const view = {
-      destination: Cesium.Cartesian3.fromDegrees(
-        state.lon,
-        state.lat,
-        state.alt,
-      ),
+      destination: geo.cartesian3.fromDegrees(state.lon, state.lat, state.alt),
       orientation: {
-        heading: Cesium.Math.toRadians(state.heading),
-        pitch: Cesium.Math.toRadians(state.pitch),
-        roll: Cesium.Math.toRadians(state.roll),
+        heading: geo.math.toRadians(state.heading),
+        pitch: geo.math.toRadians(state.pitch),
+        roll: geo.math.toRadians(state.roll),
       },
     };
     let cameraPromise = Promise.resolve({
       status: applyCamera ? 'superseded' : 'skipped',
     });
-    if (applyCamera && this._isNavigationCurrent(navigationToken)) {
+    if (applyCamera && instant && this._isNavigationCurrent(navigationToken)) {
+      this.engine.camera.setView(state.liveView ?? view);
+      this.engine.render.request('engine-switch');
+      cameraPromise = Promise.resolve({ status: 'applied' });
+    } else if (applyCamera && this._isNavigationCurrent(navigationToken)) {
       const restoreGeneration = ++this._restoreGeneration;
       let settleCamera;
       cameraPromise = new Promise((resolve) => {
@@ -365,10 +433,10 @@ export class ShareLinkManager {
       };
       // Re-apply the final pose only while this share restoration still owns
       // navigation. A later user or voice command wins over delayed restore.
-      this.viewer.camera.flyTo({
+      this.engine.camera.flyTo({
         ...view,
         duration: 3.0,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        easing: 'cubicInOut',
         complete: () => {
           if (
             this._destroyed ||
@@ -378,8 +446,8 @@ export class ShareLinkManager {
             releaseOwnedFlight('superseded');
             return;
           }
-          this.viewer.camera.setView(view);
-          this.viewer.scene?.requestRender?.();
+          this.engine.camera.setView(view);
+          this.engine.render.request('share-restore');
           releaseOwnedFlight('applied');
         },
         cancel: () => releaseOwnedFlight('cancelled'),
@@ -475,6 +543,11 @@ export class ShareLinkManager {
     this._layerStateProvider = typeof provider === 'function' ? provider : null;
   }
 
+  /** The durable layer state this address carries, or null without one. */
+  currentLayerState() {
+    return this._layerStateProvider?.() ?? null;
+  }
+
   /**
    * Install the source of the entity the camera follows, used for share links:
    * `({ nowMs }) => ({ kind, id, offset, lastKnown }) | null`, in the share
@@ -543,8 +616,10 @@ export class ShareLinkManager {
       this._bloomIntensity = extras.bloomIntensity;
     if (typeof extras.bloomVersion === 'number')
       this._bloomVersion = extras.bloomVersion;
-    if (typeof extras.sharpenIntensity === 'number')
+    if (typeof extras.sharpenIntensity === 'number') {
       this._sharpenIntensity = extras.sharpenIntensity;
+      this._sharpenFollowsEngine = extras.sharpenFollowsEngine === true;
+    }
     if (typeof extras.hudVariant === 'string')
       this._hudVariant = extras.hudVariant;
     if (typeof extras.hudVisible === 'boolean')
@@ -630,14 +705,27 @@ export class ShareLinkManager {
     }
   }
 
+  /** Save the current view before leaving the page. */
+  flush() {
+    clearTimeout(this._debounceTimer);
+    this._updateHash();
+  }
+
   _scheduleUpdate() {
-    if (this._destroyed || this._initialRestorePending) return;
+    if (this._destroyed || this._initialRestorePending || this._navigationHeld)
+      return;
     clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this._updateHash(), DEBOUNCE_MS);
   }
 
   _updateHash() {
-    if (this._destroyed || this._initialRestorePending) return;
+    if (
+      this._destroyed ||
+      !this.engine ||
+      this._initialRestorePending ||
+      this._navigationHeld
+    )
+      return;
     const params = this._buildHashParams();
     if (!params) return;
     // The hash belongs to this page's address, not the document base the
@@ -647,35 +735,43 @@ export class ShareLinkManager {
     const url = parseSharePath(new URL(window.location.href).pathname)
       ? appRootUrl(window.location.href)
       : new URL(window.location.href);
+    // The live URL follows the active engine's preset. Copied shares keep
+    // the rendered numeric value from _buildHashParams.
+    if (this._sharpenFollowsEngine) params.set('siAuto', '1');
     url.hash = params.toString();
     this._knownHash = url.hash.slice(1);
+    const pose = this.engine.camera.pose();
+    this._writtenView = {
+      hash: this._knownHash,
+      view: {
+        destination: geo.cartesian3.clone(pose.position),
+        orientation: {
+          direction: geo.cartesian3.clone(pose.direction),
+          up: geo.cartesian3.clone(pose.up),
+        },
+      },
+    };
     history.replaceState(null, '', url.href);
   }
 
   /** Build a deterministic snapshot without mutating history. */
   _buildHashParams() {
-    if (this._destroyed) return null;
-    const camera = this.viewer.camera;
-    const carto = camera.positionCartographic;
+    if (this._destroyed || !this.engine) return null;
+    const pose = this.engine.camera.pose();
+    const carto = pose.cartographic;
     if (!carto) return null;
 
     const params = new URLSearchParams();
     params.set('v', '2');
-    params.set('lat', Cesium.Math.toDegrees(carto.latitude).toFixed(4));
-    params.set('lon', Cesium.Math.toDegrees(carto.longitude).toFixed(4));
+    params.set('lat', geo.math.toDegrees(carto.latitude).toFixed(4));
+    params.set('lon', geo.math.toDegrees(carto.longitude).toFixed(4));
     params.set('alt', Math.round(carto.height).toString());
-    params.set(
-      'heading',
-      Math.round(Cesium.Math.toDegrees(camera.heading)).toString(),
-    );
-    params.set(
-      'pitch',
-      Math.round(Cesium.Math.toDegrees(camera.pitch)).toString(),
-    );
-    params.set(
-      'roll',
-      Math.round(Cesium.Math.toDegrees(camera.roll)).toString(),
-    );
+    // Heading and roll as Cesium reports them, so `heading=360` and
+    // `roll=360` read the same on every engine (src/cameraAngles.js).
+    const degrees = (angle) => Math.round(geo.math.toDegrees(angle)).toString();
+    params.set('heading', degrees(cesiumHeading(pose)));
+    params.set('pitch', degrees(pose.pitch));
+    params.set('roll', degrees(cesiumRoll(pose)));
     params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');

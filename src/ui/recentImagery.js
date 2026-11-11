@@ -201,12 +201,16 @@ export function createRecentImageryPanel({
   container,
   layer,
   viewer = null,
+  engine = null,
   tool = null,
   createSplit = createImagerySplit,
   fetchImpl = globalThis.fetch?.bind(globalThis),
   createObjectUrl = (blob) => URL.createObjectURL(blob),
   revokeObjectUrl = (url) => URL.revokeObjectURL(url),
-  requestRender = () => viewer?.scene?.requestRender?.(),
+  requestRender = () =>
+    engine
+      ? engine.render.request('recent-imagery-panel')
+      : viewer?.scene?.requestRender?.(),
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement || !layer) return null;
@@ -292,7 +296,7 @@ export function createRecentImageryPanel({
             title: t('Use the current view as the box'),
             onClick: () => {
               exportError = null;
-              layer.useCurrentView(viewer);
+              layer.useCurrentView();
             },
           },
           {
@@ -723,6 +727,7 @@ export function createRecentImageryPanel({
           right: rightPercent,
         }),
       getViewportWidth: () =>
+        Number(engine?.host.size().width) ||
         Number(viewer?.scene?.canvas?.clientWidth) ||
         Number(document.documentElement?.clientWidth) ||
         0,

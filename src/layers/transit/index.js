@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createTransitSource } from './source.js';
 import { createTrails } from './trails.js';
 import { createState } from './state.js';
@@ -15,11 +16,10 @@ import { TRANSIT_POLL_MS } from './policy.js';
 /**
  * Construct one Transit layer with its own scene state and supplied services.
  *
- * Nothing here is module-global: the viewer, the point collection, the vehicle
+ * Nothing here is module-global: the renderer, the marker sets, the vehicle
  * and height maps, the in-flight requests, the manager handle and the overlay
  * host all live on the instance this returns, and `destroy()` releases every
- * shared registration it took (sprite collection, pick owner, render hold,
- * camera sensitivity).
+ * shared registration it took (pick owner, render hold, camera sensitivity).
  *
  * @param {{services: object}} options
  * @returns {object} The data-layer module the manager registers.
@@ -27,11 +27,10 @@ import { TRANSIT_POLL_MS } from './policy.js';
 export function createTransitLayer({
   services,
   source = createTransitSource(),
+  rendererFactory,
 }) {
-  if (!services?.overlays || !services?.render || !services?.sprites) {
-    throw new TypeError(
-      'A transit layer needs overlay, render and sprite services',
-    );
+  if (!services?.overlays || !services?.render) {
+    throw new TypeError('A transit layer needs overlay and render services');
   }
   if (
     typeof source?.requestSnapshot !== 'function' ||
@@ -41,9 +40,13 @@ export function createTransitLayer({
       'A transit source needs snapshot and history operations',
     );
   }
-  const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => parts.renderer?.engine),
+  };
+  const state = createState({ services });
+  const context = { state, services, parts, source, rendererFactory };
   parts.trails = createTrails(context);
   parts.height = createHeight(context);
   parts.selection = createSelection(context);

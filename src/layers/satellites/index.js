@@ -1,3 +1,4 @@
+import * as geo from '../../geo/index.js';
 import { createControls } from './controls.js';
 import { createCatalog } from './catalog.js';
 import { createCockpitSubject } from './cockpitSubject.js';
@@ -18,7 +19,9 @@ export function createSatellitesLayer({ services, source }) {
     throw new TypeError('A satellites source is required');
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  // The engine's display while the layer draws (render/display.js), else null.
+  const getRenderer = () => state._renderer;
+  const context = { state, services, parts, source, getRenderer };
   parts.controls = createControls(context);
   parts.catalog = createCatalog(context);
   parts.labels = createLabels(context);
@@ -38,6 +41,36 @@ export function createSatellitesLayer({ services, source }) {
     parts.lifecycle.methods,
     parts.ingestion.methods,
     {
+      qaDrawn() {
+        if (!state._renderer) return null;
+        const plain = (p) => (p ? { x: p.x, y: p.y, z: p.z } : null);
+        return {
+          enabled: state._enabled,
+          points: [...state._points].map(([id, point]) => ({
+            id,
+            position: plain(point.position),
+            show: state._enabled && state._params.showPoints && point.show,
+            size: point.pixelSize,
+            alpha: point.color.alpha,
+          })),
+          tracked: plain(getRenderer().trackedPosition?.(state._trackedEntity)),
+          rings: [...state._orbitPaths].map(([id, path]) => ({
+            id,
+            show: path.primitive.show,
+            anchors: Array.from({ length: 8 }, (_, i) =>
+              plain(
+                geo.matrix4.multiplyByPoint(
+                  path.primitive.modelMatrix,
+                  path.basePositions[
+                    Math.floor((i * (path.basePositions.length - 1)) / 8)
+                  ],
+                  geo.cartesian3.create(),
+                ),
+              ),
+            ),
+          })),
+        };
+      },
       satelliteVisualsVisible: parts.controls.satelliteVisualsVisible,
       satelliteCatalogModeChanged: parts.controls.satelliteCatalogModeChanged,
       createIssOverlayEntry: parts.labels.createIssOverlayEntry,

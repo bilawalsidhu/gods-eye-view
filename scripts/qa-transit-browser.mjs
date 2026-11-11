@@ -1,3 +1,14 @@
+import { whenFramesDrawn } from './qa/ready.mjs';
+export function transitQaBase(value) {
+  if (!value) throw new Error('Transit QA requires an explicit QA_BASE_URL');
+  const url = new URL(value);
+  if (
+    ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(url.port)
+  )
+    throw new Error('Transit QA may not use a reserved port');
+  return url.href.replace(/\/$/, '');
+}
+
 /** Bound page promises as well as CDP itself; labels identify a stalled section. */
 export function boundPageEvaluations(page, defaultTimeoutMs = 30000) {
   const evaluate = page.evaluate.bind(page);
@@ -11,12 +22,15 @@ export function boundPageEvaluations(page, defaultTimeoutMs = 30000) {
     );
     const label = String(fn).slice(0, 120).replace(/\s+/g, ' ');
     return evaluate(
-      async (source, values, timeoutMs, label) => {
+      async (source, values, timeoutMs, label, isFunction) => {
         let timer;
         try {
           return await Promise.race([
             // Puppeteer callbacks are standalone functions, just as in evaluate.
-            Promise.resolve().then(() => (0, eval)(`(${source})`)(...values)),
+            Promise.resolve().then(() => {
+              const result = (0, eval)(`(${source})`);
+              return isFunction ? result(...values) : result;
+            }),
             new Promise((_, reject) => {
               timer = setTimeout(
                 () =>
@@ -37,6 +51,7 @@ export function boundPageEvaluations(page, defaultTimeoutMs = 30000) {
       args,
       timeoutMs,
       label,
+      typeof fn === 'function',
     );
   };
 }
@@ -52,8 +67,8 @@ export async function reportTransitVisibility(page, label) {
       visible: state._visible.size,
       moving: state._moving.size,
       held: state._renderHeld,
-      requestRenderMode: app.viewer.scene.requestRenderMode,
-      renderLoop: app.viewer.useDefaultRenderLoop,
+      requestRenderMode: !app.engine.render.isContinuous(),
+      renderLoop: !app.engine.isDestroyed(),
       renderErrors: window.__transitRenderErrors || [],
       bounds: state._viewBounds,
       hidden: layer._transitVisibilityForTest().filter((e) => !e.shown),
@@ -66,13 +81,14 @@ export async function reportTransitVisibility(page, label) {
     );
   if (result.renderLoop === false || result.renderErrors.length)
     throw new Error(
-      `${label}: Cesium render loop stopped or raised an error: ${JSON.stringify(result.renderErrors)}`,
+      `${label}: render loop stopped or raised an error: ${JSON.stringify(result.renderErrors)}`,
     );
+  await whenFramesDrawn(page);
   return result;
 }
 
 /** Intersect primed histories with the new snapshot; disappearance is availability. */
-export async function restoreRetainedTransit(retained) {
+export async function restoreRetainedTransit(qaGeo, retained) {
   if (!retained.length)
     return {
       error: 'No multi-fix history observed during the probe',
@@ -107,9 +123,8 @@ export async function restoreRetainedTransit(retained) {
   const entry = state._vehicles.get(
     `${history.feedId || 'mbta'}:${history.vehicleId}`,
   );
-  const camera = app.viewer.camera,
-    C = camera.positionCartographic.constructor;
-  camera.setView({
+  const C = qaGeo.cartographic;
+  window.__godsEyeView.engine.camera.setView({
     destination: C.toCartesian(
       C.fromDegrees(entry.record.lon, entry.record.lat, 600),
     ),
@@ -127,7 +142,9 @@ export async function sampleTransitPixels(page, palette) {
       .module._transitStateForTest();
     // Decode the actual billboard rasters before the paint being judged.
     const overlay = window.location
-      ? await import('/src/overlays/worldOverlay.js')
+      ? (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(
+          window.__godsEyeView.engine,
+        )
       : null;
     const rasters = new Map();
     await Promise.all(
@@ -161,14 +178,12 @@ export async function sampleTransitPixels(page, palette) {
         );
       }, 5000);
       const remove =
-        window.__godsEyeView.viewer.scene.postRender.addEventListener(() => {
+        window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           const app = window.__godsEyeView;
           const layer = app.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();
-          const scene = app.viewer.scene;
-          const canvas = scene.canvas;
-          const view = scene.camera.viewMatrix;
-          const proj = scene.camera.frustum.projectionMatrix;
+          const { engine } = app;
+          const canvas = window.__godsEyeView.engine.host.canvas;
           const mul = (m, v) => [
             m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12] * v[3],
             m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13] * v[3],
@@ -189,7 +204,7 @@ export async function sampleTransitPixels(page, palette) {
               ?.getDetectionDiagnostics?.()
               ?.calloutRects?.filter((r) => r.alpha > 0.01) || [];
           if (state._selectedKey) {
-            const card = overlay?.getOverlayPaintRect(
+            const card = overlay?.getPaintRect(
               'transit-selected',
               state._selectedKey,
             );
@@ -257,9 +272,12 @@ export async function sampleTransitPixels(page, palette) {
           for (const entry of state._vehicles.values()) {
             if (!entry.marker || entry.marker.show === false) continue;
             const p = entry.marker.position;
-            const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
+            const clip = mul(
+              window.__godsEyeView.engine.projector.viewProjection(),
+              [p.x, p.y, p.z, 1],
+            );
             if (!(clip[3] > 0)) continue;
-            const screen = entry.marker.computeScreenSpacePosition?.(scene) || {
+            const screen = {
               x: ((clip[0] / clip[3]) * 0.5 + 0.5) * width,
               y: (1 - ((clip[1] / clip[3]) * 0.5 + 0.5)) * height,
             };
@@ -480,7 +498,7 @@ export async function sampleTransitPixels(page, palette) {
             // label or sprite must not masquerade as a dim sensor signature.
             // Check the whole sampled core, not just its centre pick.
             let coreOwned = true;
-            if (scene.pick) {
+            {
               const framebuffer = gl.getParameter?.(gl.FRAMEBUFFER_BINDING);
               for (const core of corePoints) {
                 let u = core.x / width,
@@ -507,13 +525,12 @@ export async function sampleTransitPixels(page, palette) {
                       v) *
                     intensity;
                 }
-                const picked = scene.pick(
+                const picked = engine.picker.pick(
                   { x: u * width, y: (1 - v) * height },
                   1,
                   1,
                 );
-                if (picked?.id !== s.key && picked?.primitive?.id !== s.key)
-                  coreOwned = false;
+                if (picked?.id !== s.key) coreOwned = false;
               }
               if (gl.bindFramebuffer)
                 gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
@@ -645,7 +662,7 @@ export async function sampleTransitPixels(page, palette) {
           );
           resolve(out);
         });
-      window.__godsEyeView.viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
   }, palette);
 }

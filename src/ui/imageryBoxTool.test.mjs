@@ -18,47 +18,44 @@ function fixture(options = {}) {
   const boxes = [];
   const cancels = [];
   const actives = [];
+  const previews = [];
   const tool = initImageryBoxTool({
-    viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    engine: fakes.engine,
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => boxes.push(box),
+    onPreview: (box) => previews.push(box),
     onCancel: (reason, message) => cancels.push([reason, message]),
     onActive: (active) => actives.push(active),
     ...options,
   });
-  const camera = fakes.viewer.scene.screenSpaceCameraController;
-  const stockAction = (type) =>
-    fakes.viewer.screenSpaceEventHandler.getInputAction(fakes.types[type]);
-  const preview = () =>
-    fakes.viewer.dataSources.sources[0]?.entities.values.every((e) => e.show);
-  return {
-    ...fakes,
-    tool,
-    boxes,
-    cancels,
-    actives,
-    camera,
-    stockAction,
-    preview,
-  };
+  return { ...fakes, tool, boxes, cancels, actives, previews };
 }
 
-test('a session claims the pointer, borrows the stock clicks, freezes the camera only mid-drag and returns everything with the box', async () => {
+const listenerCount = (f) =>
+  f.canvas.listeners.length +
+  f.documentRef.listeners.length +
+  f.windowRef.listeners.length;
+
+test('a session claims the pointer, keeps the drag from the engine, freezes the camera only mid-drag and returns everything with the box', () => {
   const f = fixture();
   assert.equal(f.tool.start(), true);
   assert.equal(pointerOwner(), IMAGERY_BOX_POINTER_OWNER);
-  assert.equal(f.stockAction('LEFT_CLICK'), undefined);
-  assert.equal(f.stockAction('LEFT_DOUBLE_CLICK'), undefined);
   assert.ok(f.documentRef.classes.has('gev-imagery-box'));
-  assert.equal(f.camera.enableInputs, true, 'not frozen before the press');
-  f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
-  assert.equal(f.camera.enableInputs, false);
-  assert.equal(f.preview(), true);
-  f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 250 } });
-  f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 10 } }); // sky: ignored
-  f.fire('LEFT_UP', { position: { x: 500, y: 250 } });
+  assert.equal(f.camera.inputs, true, 'not frozen before the press');
+  const press = f.down({ x: 250, y: 125 });
+  assert.equal(
+    press.prevented && press.stopped,
+    true,
+    'the press reaches no other handler (camera, clicks)',
+  );
+  assert.equal(f.camera.inputs, false);
+  assert.ok(f.captured.has(1), 'the drag holds the pointer capture');
+  assert.ok(f.previews.at(-1), 'the preview shows');
+  const drag = f.move({ x: 500, y: 250 });
+  assert.equal(drag.stopped, true);
+  f.move({ x: 500, y: 10 }); // sky: the corner stays
+  f.up({ x: 500, y: 250 });
   assert.equal(f.boxes.length, 1);
   const { west, south, east, north } = f.boxes[0];
   assert.deepEqual(
@@ -68,37 +65,49 @@ test('a session claims the pointer, borrows the stock clicks, freezes the camera
   assert.deepEqual(f.cancels, []);
   assert.equal(f.tool.isActive(), false);
   assert.equal(pointerOwner(), null);
-  assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
-  assert.equal(f.stockAction('LEFT_DOUBLE_CLICK'), f.originalDouble);
-  assert.equal(f.camera.enableInputs, true);
-  assert.equal(f.preview(), false);
+  assert.equal(f.camera.inputs, true);
+  assert.equal(f.captured.size, 0);
+  assert.equal(f.previews.at(-1), null, 'the preview goes with the drag');
   assert.equal(f.documentRef.classes.has('gev-imagery-box'), false);
-  assert.equal(f.documentRef.listeners.length, 0);
-  assert.equal(f.handler(), null);
+  assert.equal(listenerCount(f), 0);
   assert.deepEqual(f.actives, [true, false]);
-  await f.tool.destroy();
+  f.tool.destroy();
 });
 
-test('a sky press, a click without a drag and Escape each say why', async () => {
+test('presses with a modifier or another button, and moves outside a drag, pass through', () => {
   const f = fixture();
   f.tool.start();
-  f.fire('LEFT_DOWN', { position: { x: 250, y: 10 } });
+  for (const fields of [{ shiftKey: true }, { ctrlKey: true }, { button: 2 }]) {
+    const press = f.down({ x: 250, y: 125 }, fields);
+    assert.equal(press.stopped, false, JSON.stringify(fields));
+  }
+  assert.equal(f.camera.inputs, true);
+  assert.equal(f.move({ x: 300, y: 200 }).stopped, false, 'a hover');
+  assert.equal(f.tool.isActive(), true);
+  f.tool.destroy();
+});
+
+test('a sky press, a click without a drag and Escape each say why', () => {
+  const f = fixture();
+  f.tool.start();
+  f.down({ x: 250, y: 10 });
   assert.deepEqual(f.cancels.at(-1), [
     'sky',
     'Press on the ground, not the sky',
   ]);
   assert.equal(f.tool.isActive(), true, 'a sky press keeps the session');
-  f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
-  f.fire('LEFT_UP', { position: { x: 250, y: 125 } });
+  assert.equal(f.camera.inputs, true, 'and freezes nothing');
+  f.down({ x: 250, y: 125 });
+  f.up({ x: 250, y: 125 });
   assert.deepEqual(f.cancels.at(-1), ['degenerate', 'Drag to size the box']);
   f.tool.start();
   assert.equal(f.key('Escape').prevented, true);
   assert.deepEqual(f.cancels.at(-1), ['escape', undefined]);
   assert.equal(pointerOwner(), null);
-  await f.tool.destroy();
+  f.tool.destroy();
 });
 
-test('an Escape interceptor that claims the key leaves the tool armed; the next Escape cancels', async () => {
+test('an Escape interceptor that claims the key leaves the tool armed; the next Escape cancels', () => {
   let claim = true;
   let asked = 0;
   const f = fixture({
@@ -122,33 +131,54 @@ test('an Escape interceptor that claims the key leaves the tool armed; the next 
   f.tool.start();
   f.key('Enter');
   assert.equal(asked, 2, 'other keys never reach the interceptor');
-  await f.tool.destroy();
+  f.tool.destroy();
 });
 
-test('a held pointer refuses the session and nothing is borrowed', async () => {
+test('a held pointer refuses the session and nothing is bound', () => {
   const f = fixture();
   const lease = claimPointer('draw');
   assert.equal(f.tool.start(), false);
   assert.deepEqual(f.cancels, [
     ['pointer-busy', 'draw is using the pointer — close it first'],
   ]);
-  assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
-  assert.equal(f.handler(), null);
+  assert.equal(listenerCount(f), 0);
   releasePointer(lease);
   assert.equal(f.tool.start(), true);
-  await f.tool.destroy();
+  f.tool.destroy();
 });
 
-test('destroy mid-drag restores the camera, releases the claim and detaches the preview', async () => {
+test('destroy mid-drag restores the camera, releases the claim and clears the preview', () => {
   const f = fixture();
   f.tool.start();
-  f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
-  assert.equal(f.viewer.dataSources.sources.length, 1);
-  await f.tool.destroy();
-  assert.equal(f.camera.enableInputs, true);
+  f.down({ x: 250, y: 125 });
+  assert.equal(f.camera.inputs, false);
+  f.tool.destroy();
+  f.tool.destroy();
+  assert.equal(f.camera.inputs, true);
   assert.equal(pointerOwner(), null);
-  assert.equal(f.viewer.dataSources.sources.length, 0);
-  assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
+  assert.equal(f.previews.at(-1), null);
+  assert.equal(listenerCount(f), 0);
   assert.equal(f.tool.start(), false);
-  assert.equal(initImageryBoxTool({ viewer: null, onBox() {} }), null);
+  assert.equal(initImageryBoxTool({ engine: null, onBox() {} }), null);
+});
+
+test('blur and a cancelled pointer during a drag return the camera, the preview and the pointer', () => {
+  const f = fixture();
+  f.tool.start();
+  f.down({ x: 250, y: 125 });
+  assert.equal(f.camera.suspended, 1, "the engine's counted suspension");
+  assert.equal(f.camera.choice, true, 'the app choice is left alone');
+  f.windowRef.dispatch('blur', {});
+  assert.equal(f.camera.suspended, 0);
+  assert.equal(f.previews.at(-1), null);
+  assert.equal(pointerOwner(), null);
+  assert.equal(f.tool.isActive(), false);
+  assert.deepEqual(f.cancels.at(-1), ['blur', undefined]);
+  f.tool.start();
+  f.down({ x: 250, y: 125 });
+  f.documentRef.dispatch('pointercancel', { pointerId: 1 });
+  assert.equal(f.camera.suspended, 0);
+  assert.deepEqual(f.cancels.at(-1), ['pointer-cancel', undefined]);
+  assert.equal(listenerCount(f), 0);
+  f.tool.destroy();
 });

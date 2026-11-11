@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { constantRgba } from '../shared/color.js';
+const RED = constantRgba(1, 0, 0);
+const ORANGE = constantRgba(1, 165 / 255, 0);
+const YELLOW = constantRgba(1, 1, 0);
 export const EARTHQUAKE_OVERLAY_SOURCE_ID = 'earthquakes';
 export const EARTHQUAKE_OVERLAY_COHORT_LIMIT = 96;
 export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
@@ -10,9 +13,9 @@ export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
  *  - Deep (>300km): Yellow
  */
 export function depthColor(depthKm) {
-  if (depthKm < 70) return Cesium.Color.RED;
-  if (depthKm < 300) return Cesium.Color.ORANGE;
-  return Cesium.Color.YELLOW;
+  if (depthKm < 70) return RED;
+  if (depthKm < 300) return ORANGE;
+  return YELLOW;
 }
 
 /**
@@ -21,7 +24,7 @@ export function depthColor(depthKm) {
  * shared renderer.
  * @param {object} input
  * @param {string} input.id Stable USGS or deterministic fallback id.
- * @param {Cesium.Cartesian3} input.position Ground anchor shared with the pulse.
+ * @param {object} input.position Ground anchor shared with the pulse.
  * @param {number} input.magnitude USGS magnitude.
  * @param {string} input.accent Source-owned depth-band color.
  * @returns {object}

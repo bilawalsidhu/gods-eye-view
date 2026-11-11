@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { COLOR_NEUTRAL } from '../layers/bikeshare/policy.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
   _clearBikeshareSelectionForTest,
@@ -8,6 +10,11 @@ import {
   _setBikeshareSelectionStateForTest,
   createBikeshareSelectedOverlayEntry,
 } from './bikeshare.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 function makeRecord() {
   return {
@@ -20,7 +27,9 @@ function makeRecord() {
     isRenting: false,
     isReturning: true,
     point: {
-      position: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 2),
+      position: geo.cartesian3.fromDegrees(-97.7431, 30.2672, 2),
+      pixelSize: 8,
+      color: COLOR_NEUTRAL,
       show: true,
     },
   };
@@ -41,10 +50,10 @@ test('selected bikeshare entry preserves source copy and protected-lane policy',
   assert.equal(entry.paintLane, 'selected');
   assert.equal(entry.collisionGroup, 'ambient-card');
   assert.equal(entry.edgeFade, 'keyhole');
-  assert.equal(entry.horizonCull, true);
+  assert.equal(entry.horizonCull, false);
 });
 
-test('real station select/clear path publishes one card and creates no native label graphic', () => {
+test('real station select/clear path publishes one card and draws the highlight as a point', () => {
   const calls = [];
   const overlayHost = {
     setEntries: (...args) => calls.push(['entries', ...args]),
@@ -53,14 +62,18 @@ test('real station select/clear path publishes one card and creates no native la
   };
   const key = 'austin-capmetro:3790';
   const record = makeRecord();
-  const viewer = { entities: new Cesium.EntityCollection() };
-  _setBikeshareSelectionStateForTest({ viewer, key, record, overlayHost });
+  const engine = createFakeEngine();
+  const highlight = () => engine.fake.moverSet('bikeshare-selected');
+  _setBikeshareSelectionStateForTest({ engine, key, record, overlayHost });
   try {
     _selectBikeshareStationForTest(key);
     assert.equal(record.point.show, false);
-    assert.equal(viewer.entities.values.length, 1, 'runtime guard requires a real selected entity');
-    assert.equal(viewer.entities.values[0].label, undefined);
-    assert.ok(viewer.entities.values[0].point, 'selected point highlight remains native');
+    assert.equal(
+      highlight().options.kind,
+      'point',
+      'the selected highlight is a native point, its label the card',
+    );
+    assert.equal(highlight().store.pickIds[0], key);
 
     const publication = calls.find(([type]) => type === 'entries');
     assert.ok(publication);
@@ -71,7 +84,7 @@ test('real station select/clear path publishes one card and creates no native la
 
     _clearBikeshareSelectionForTest();
     assert.equal(record.point.show, true);
-    assert.equal(viewer.entities.values.length, 0);
+    assert.equal(highlight().store.count, 0);
     assert.deepEqual(calls.at(-1), ['clear', 'bikeshare-selected']);
   } finally {
     _clearBikeshareSelectionForTest();

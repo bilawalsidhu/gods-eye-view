@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CockpitViewController } from './cockpitController.js';
+import { COCKPIT_MIN_GROUND_CLEARANCE_M } from './cockpitPresentation.js';
+import * as geo from '../geo/index.js';
+import { createCockpitEngine } from '../testSupport/cockpitEngine.mjs';
 
 function environment() {
   const original = { document: globalThis.document, window: globalThis.window };
@@ -12,25 +15,18 @@ function environment() {
   const window = Object.assign(new EventTarget(), { clearTimeout, setTimeout });
   globalThis.document = document;
   globalThis.window = window;
-  const callbacks = new Set();
-  const event = {
-    addEventListener(fn) {
-      callbacks.add(fn);
-      return () => callbacks.delete(fn);
-    },
-  };
-  const viewer = {
-    scene: {
-      preUpdate: event,
-      screenSpaceCameraController: { enableInputs: false },
-    },
-    trackedEntityChanged: event,
-    entities: { contains: () => false },
-  };
+  const cockpit = createCockpitEngine();
+  const { engine } = cockpit;
+  // The Cockpit's frame and follow subscriptions.
+  const subscriptions = () =>
+    engine.frames.preUpdate.numberOfListeners +
+    engine.camera.followChanged.numberOfListeners;
   return {
-    viewer,
-    callbacks,
+    engine,
+    cockpit,
+    subscriptions,
     restore() {
+      engine.destroy();
       Object.assign(globalThis, original);
     },
   };
@@ -39,11 +35,20 @@ function environment() {
 test('Cockpit subscriptions are released once and retained actions cannot restart it', () => {
   const env = environment();
   try {
-    const owner = new CockpitViewController(env.viewer, { services: {} });
-    assert.equal(env.callbacks.size, 2);
+    const before = env.subscriptions();
+    const owner = new CockpitViewController(env.engine, { services: {} });
+    assert.equal(env.subscriptions(), before + 2);
+    let doubleClicks = 0;
+    owner.onSceneDoubleClick = () => {
+      doubleClicks++;
+    };
+    env.engine.fake.input('doubleClick', { position: { x: 1, y: 1 } });
+    assert.equal(doubleClicks, 1);
     owner.dispose();
     owner.dispose();
-    assert.equal(env.callbacks.size, 0);
+    assert.equal(env.subscriptions(), before);
+    env.engine.fake.input('doubleClick', { position: { x: 1, y: 1 } });
+    assert.equal(doubleClicks, 1, 'the double-click route is released');
     assert.equal(owner.enter(), false);
     assert.equal(owner.navigateContext(1), false);
     assert.equal(owner.toggleTrackedTr3b(), false);
@@ -54,22 +59,49 @@ test('Cockpit subscriptions are released once and retained actions cannot restar
   }
 });
 
+test('orbital entry is offered through the engine without a native viewer', () => {
+  const env = environment();
+  try {
+    const owner = new CockpitViewController(env.engine, {
+      services: {
+        flightsLayer: { getTrackedInfo: () => null },
+        militaryFlightsLayer: { getTrackedInfo: () => null },
+        satellitesLayer: {
+          getCockpitSubject: () => ({ noradId: 25544, layerId: 'satellites' }),
+          setCockpitSubject: () => true,
+        },
+        isTr3b: () => false,
+      },
+      isOrbitEntryAllowed: () => true,
+    });
+    owner.syncEntry();
+    assert.equal(owner.presence.entryAvailable, true);
+    assert.equal(owner.presence.entryKind, 'satellite');
+    assert.equal(owner.orbital, null);
+    assert.equal(env.engine.input.cameraInputsEnabled(), true);
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});
+
 test('disposing an active Cockpit releases the supplied render owner without retracking', () => {
   const env = environment();
   try {
     const released = [];
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: { releaseContinuousRender: (reason) => released.push(reason) },
     });
-    owner.active = true;
+    const ridden = env.cockpit.aircraft();
+    owner.host.inputs(false);
+    ridden.show = false;
+    Object.assign(owner, { active: true, trackedEntity: ridden });
     owner.dispose();
     owner.dispose();
     assert.deepEqual(released, ['cockpit']);
-    assert.equal(
-      env.viewer.scene.screenSpaceCameraController.enableInputs,
-      true,
-    );
-    assert.equal(env.viewer.trackedEntity, undefined);
+    assert.equal(env.engine.fake.cameraInputsEnabled, true);
+    assert.equal(ridden.show, true, 'the ridden glyph is shown again');
+    assert.equal(env.engine.camera.following(), null, 'and not followed');
     assert.equal(owner.active, false);
   } finally {
     env.restore();
@@ -89,15 +121,17 @@ test('aircraft identity is read from the supplied layer instances', () => {
       layerId: 'military',
       callsign: 'MILITARY',
     };
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {
         flightsLayer: { getTrackedInfo: () => civilian },
         militaryFlightsLayer: { getTrackedInfo: () => military },
+        // A follow change syncs the entry and its TR-3B chip.
+        isTr3b: () => false,
       },
     });
-    env.viewer.trackedEntity = { gevTrackedId: 'military:def456' };
+    env.cockpit.ride(env.cockpit.aircraft({ gevTrackedId: 'military:def456' }));
     assert.deepEqual(owner.readAircraftInfo(), military);
-    env.viewer.trackedEntity = { gevTrackedId: 'flights:abc123' };
+    env.cockpit.ride(env.cockpit.aircraft({ gevTrackedId: 'flights:abc123' }));
     assert.deepEqual(owner.readAircraftInfo(), civilian);
     owner.dispose();
   } finally {
@@ -110,7 +144,7 @@ test('an obsolete regional briefing cannot publish after Cockpit disposal', asyn
   try {
     let finish;
     let signal;
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {
         regionalDistanceM: () => Infinity,
         fetchRegionalBrief: (_lat, _lon, options) => {
@@ -146,14 +180,15 @@ test('stopping Cockpit revokes camera actions before deferred disposal releases 
   const env = environment();
   try {
     const released = [];
-    const owner = new CockpitViewController(env.viewer, {
+    const before = env.subscriptions();
+    const owner = new CockpitViewController(env.engine, {
       services: {
         releaseContinuousRender: (reason) => released.push(reason),
       },
     });
     owner.active = true;
     owner.stop();
-    assert.equal(env.callbacks.size, 0);
+    assert.equal(env.subscriptions(), before);
     assert.equal(owner.update(), false);
     assert.equal(owner.navigateContext(1), false);
     assert.deepEqual(released, []);
@@ -172,13 +207,12 @@ test('stopped Cockpit cannot rearm briefing rotation or request a fresh region',
     let next = 0;
     let fetches = 0;
     let paints = 0;
-    env.viewer.scene.screenSpaceCameraController.enableInputs = true;
     window.setTimeout = (callback) => {
       frames.set(++next, callback);
       return next;
     };
     window.clearTimeout = (id) => frames.delete(id);
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {
         regionalDistanceM: () => Infinity,
         fetchRegionalBrief: () => {
@@ -221,7 +255,7 @@ test('the weather toggle flips from its own state, however fast it is pressed', 
       requested.push(event.detail.enabled),
     );
     const published = [];
-    const owner = new CockpitViewController(env.viewer, {
+    const owner = new CockpitViewController(env.engine, {
       services: {},
       publish: { context: (view) => published.push(view.weather) },
     });
@@ -241,6 +275,80 @@ test('the weather toggle flips from its own state, however fast it is pressed', 
     assert.deepEqual(published, [true, false, true, false]);
     owner.dispose();
   } finally {
+    env.restore();
+  }
+});
+
+test('the cockpit eye stays above the engine surface when the aircraft reads below it', () => {
+  const env = environment();
+  try {
+    // A landing contact whose reported height is 13 m under the terrain, on
+    // a cell the ground floors have not sampled yet. Cesium lifts a camera
+    // under its globe every frame, between the cockpit's 20 Hz updates, so
+    // an eye below the surface jumped up and down.
+    const SURFACE_M = 120;
+    const place = { longitude: -1.7047, latitude: 0.5268 };
+    const aircraft = geo.cartesian3.fromRadians(
+      place.longitude,
+      place.latitude,
+      107,
+    );
+    env.engine.fake.script('terrainHeight', SURFACE_M);
+    const entity = env.cockpit.aircraft({ position: aircraft });
+    const owner = new CockpitViewController(env.engine, {
+      services: {
+        cachedGroundFloor: () => undefined,
+        GROUND_FLOOR_LIFT_M: 1.5,
+      },
+    });
+    Object.assign(owner, {
+      active: true,
+      trackedEntity: entity,
+      readAircraftInfo: () => ({
+        latitude: geo.math.toDegrees(place.latitude),
+        longitude: geo.math.toDegrees(place.longitude),
+        track: 180,
+        velocityMps: 70,
+        onGround: false,
+      }),
+      _adoptTrackedEntity() {},
+      updateHud() {},
+    });
+    owner.update();
+    const views = env.engine.fake
+      .callsOf('camera.setView')
+      .map(
+        ({ args: [{ destination }] }) =>
+          geo.cartographic.fromCartesian(destination).height,
+      );
+    assert.equal(views.length, 1);
+    assert.ok(
+      views[0] >= SURFACE_M + COCKPIT_MIN_GROUND_CLEARANCE_M - 1e-6,
+      `eye at ${views[0]} m, surface at ${SURFACE_M} m`,
+    );
+    owner.active = false;
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});
+
+test('locale changes relocalize the cockpit until it is disposed', async () => {
+  const { getLocale, setLocale } = await import('../i18n/index.js');
+  const locale = getLocale();
+  const env = environment();
+  const owner = new CockpitViewController(env.engine, { services: {} });
+  let updates = 0;
+  owner.relocalize = () => updates++;
+  try {
+    setLocale(locale === 'de' ? 'en' : 'de');
+    assert.equal(updates, 1);
+    owner.dispose();
+    setLocale(locale);
+    assert.equal(updates, 1);
+  } finally {
+    owner.dispose();
+    setLocale(locale);
     env.restore();
   }
 });

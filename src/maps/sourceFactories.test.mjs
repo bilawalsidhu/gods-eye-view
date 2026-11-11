@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createIonImagery } from './imagery.js';
-import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
+import {
+  createEsriImagery,
+  createIonImagery,
+  createOsmImagery,
+  imageryFactoryFor,
+} from '../globe/cesium/mapImagery.js';
+import {
+  applyTerrain,
+  createWorldTerrain,
+  createKeylessTerrain,
+  terrainSourceFor,
+} from '../globe/cesium/terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
 
 test('Esri uses Re:Earth without keys and preserves ion terrain when configured', async () => {
@@ -316,6 +326,122 @@ test('both Google 3D routes keep tiles drawing while draped imagery loads', asyn
   assert.equal(calls[1][0].accessToken, 'token');
   assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
   assert.equal(calls[1][1].enableCollision, true);
+});
+
+test('imageryFactoryFor picks the factory a stack descriptor names', async () => {
+  assert.equal(imageryFactoryFor({ id: 'osm', kind: 'osm' }), createOsmImagery);
+  assert.equal(
+    imageryFactoryFor({ id: 'esri-imagery', kind: 'esri-imagery' }),
+    createEsriImagery,
+  );
+  const original = Cesium.IonImageryProvider.fromAssetId;
+  try {
+    Cesium.IonImageryProvider.fromAssetId = async (style, options) => ({
+      style,
+      token: options.accessToken,
+    });
+    const ion = imageryFactoryFor(
+      { id: 'ion-test', kind: 'ion', style: 42 },
+      'ion-token',
+    );
+    assert.deepEqual(await ion(), { style: 42, token: 'ion-token' });
+  } finally {
+    Cesium.IonImageryProvider.fromAssetId = original;
+  }
+});
+
+test('terrainSourceFor chooses world terrain only with an ion token', () => {
+  assert.deepEqual(terrainSourceFor(''), {
+    id: 'keyless',
+    create: createKeylessTerrain,
+  });
+  const world = terrainSourceFor(' token ');
+  assert.equal(world.id, 'world');
+  assert.equal(typeof world.create, 'function');
+});
+
+test('applyTerrain installs a terrain object or a provider', () => {
+  const calls = [];
+  const viewer = {
+    terrainProvider: null,
+    scene: { setTerrain: (terrain) => calls.push(terrain) },
+  };
+  applyTerrain(viewer, { provider: 'provider' });
+  assert.equal(viewer.terrainProvider, 'provider');
+  applyTerrain(viewer, { terrain: 'terrain' });
+  assert.deepEqual(calls, ['terrain']);
+  assert.equal(viewer.terrainProvider, 'provider');
+});
+
+test('default sources carry engine-neutral descriptions beside their Cesium factories', () => {
+  const sources = createDefaultMapSources({
+    cesiumToken: 'ion-test',
+    googleApiKey: 'google-test',
+    googleTileset: { show: true },
+  }).sources;
+  const byId = (id) => sources.find(({ descriptor }) => descriptor.id === id);
+  assert.equal(byId('bing-aerial').accessToken, 'ion-test');
+  assert.equal(
+    byId('osm').accessToken,
+    undefined,
+    'only ion imagery needs the token',
+  );
+  assert.equal(byId('osm').terrain.kind, 'world');
+  assert.equal(byId('osm').terrain.accessToken, 'ion-test');
+  assert.equal(byId('photoreal').googleApiKey, 'google-test');
+  assert.equal(byId('photoreal').cesiumToken, 'ion-test');
+  const keyless = createDefaultMapSources().sources;
+  const osm = keyless.find(({ descriptor }) => descriptor.id === 'osm');
+  assert.equal(osm.terrain.kind, 'keyless');
+  assert.equal(osm.terrain.accessToken, undefined);
+});
+
+test('on the Navara engine photoreal keys on the browser key and ion imagery is unavailable', () => {
+  const byId = (registry, id) =>
+    registry.sources.find(({ descriptor }) => descriptor.id === id);
+  // Navara builds Google tiles from the browser key alone; no Cesium tileset.
+  const keyed = createDefaultMapSources({
+    engineKind: 'navara',
+    googleApiKey: 'google-test',
+  });
+  assert.equal(keyed.defaultId, 'photoreal');
+  assert.equal(keyed.recoveryId, 'photoreal');
+  assert.equal(byId(keyed, 'photoreal').available, true);
+  assert.equal(byId(keyed, 'photoreal').googleApiKey, 'google-test');
+  assert.equal(byId(keyed, 'photoreal').tileset, null);
+  // Bing (Cesium ion imagery) has no Navara path, with or without a token.
+  for (const registry of [
+    keyed,
+    createDefaultMapSources({ engineKind: 'navara', cesiumToken: 'ion-test' }),
+  ]) {
+    for (const id of ['bing-aerial', 'bing-labels']) {
+      assert.equal(byId(registry, id).available, false);
+      assert.match(byId(registry, id).unavailableReason(), /Navara/);
+    }
+    assert.equal(byId(registry, 'esri-imagery').available, true);
+    assert.equal(byId(registry, 'osm').available, true);
+  }
+  // The ion route to Google tiles is Cesium's; a token alone is not enough.
+  const ionOnly = createDefaultMapSources({
+    engineKind: 'navara',
+    cesiumToken: 'ion-test',
+  });
+  assert.equal(byId(ionOnly, 'photoreal').available, false);
+  assert.equal(ionOnly.defaultId, 'esri-imagery');
+  assert.equal(byId(ionOnly, 'osm').terrain.kind, 'world');
+  // No key: base imagery over keyless terrain.
+  const keyless = createDefaultMapSources({ engineKind: 'navara' });
+  assert.equal(keyless.defaultId, 'esri-imagery');
+  assert.equal(keyless.recoveryId, null);
+  assert.equal(byId(keyless, 'photoreal').available, false);
+  assert.equal(byId(keyless, 'esri-imagery').terrain.kind, 'keyless');
+});
+
+test('default sources reject an unknown engine', () => {
+  assert.throws(
+    () => createDefaultMapSources({ engineKind: 'unreal' }),
+    /Unknown globe engine/,
+  );
 });
 
 test('unreachable keyless terrain falls back to flat terrain marked as a fallback', async (t) => {

@@ -1,5 +1,7 @@
-import * as Cesium from 'cesium';
-import { governorRequestRender } from './renderGovernor.js';
+import * as geo from './geo/index.js';
+import { cesiumIcrfToFixed } from './globe/cesium/celestial.js';
+import { createCelestialEphemeris } from './celestialRing/ephemeris.js';
+import { celestialHost } from './globe/cesium/celestialHost.js';
 import { worldClock, worldTimeFor } from './time/worldClock.js';
 
 // The ring shows the sun and moon at the time the sky is drawn.
@@ -38,7 +40,7 @@ const EPHEMERIS_WORLD_STEP_MS = 60_000;
 const RING_INSET_PX = 11;
 const MARKER_INSET_PX = 36;
 const COLLIDING_MARKER_EXTRA_INSET_PX = 32;
-const MARKER_COLLISION_ANGLE = Cesium.Math.toRadians(6);
+const MARKER_COLLISION_ANGLE = geo.math.toRadians(6);
 const FULL_GLOBE_RADIUS_RATIO = 0.61;
 const TAU = Math.PI * 2;
 // This overlay is a secondary HUD treatment. Keep it smooth while reserving
@@ -147,8 +149,8 @@ export function isCelestialRingStyleSupported(styleName) {
  * is inverted. When the celestial vector points almost directly into/out of the
  * camera, retain the prior stable bearing and fade the marker.
  *
- * @param {number} rightComponent - Dot(direction, camera.rightWC).
- * @param {number} upComponent - Dot(direction, camera.upWC).
+ * @param {number} rightComponent - Dot(direction, camera.right).
+ * @param {number} upComponent - Dot(direction, camera.up).
  * @param {number} lastAngle - Previous stable angle in radians.
  * @returns {{angle:number, opacity:number, stable:boolean}}
  */
@@ -218,7 +220,7 @@ export function isFullGlobeInsideKeyhole(geometry, wasVisible = false) {
 
 /** Return the Earth-disc radius in CSS pixels for a perspective camera. */
 export function earthDiscScreenRadius(cameraDistance, viewportHeight, fovy) {
-  const earthRadiusM = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const earthRadiusM = geo.ellipsoid.WGS84.maximumRadius;
   if (
     !Number.isFinite(cameraDistance) ||
     cameraDistance <= earthRadiusM ||
@@ -238,50 +240,49 @@ export function earthDiscScreenRadius(cameraDistance, viewportHeight, fovy) {
  * Project the visible Earth disc into viewport coordinates.
  * Shared by full-globe UI treatments that must agree on visual containment.
  *
- * @param {object} viewer - Cesium Viewer-like object.
+ * @param {object} engine - Globe engine or legacy scene host.
  * @param {number} width - Viewport width in CSS pixels.
  * @param {number} height - Viewport height in CSS pixels.
- * @param {object} [scratchCenter] - Reusable Cesium Cartesian2 result.
- * @param {object} [scratchToCenter] - Reusable Cesium Cartesian3 result.
+ * @param {object} [scratchCenter] - Reusable Cartesian2 result.
+ * @param {object} [scratchToCenter] - Reusable Cartesian3 result.
+ * @param {import('./globe/contract.js').GlobeProjector | null} [projector] -
+ *   The globe engine's projector; without one, Cesium's SceneTransforms
+ *   (the same projection on a Cesium scene).
  * @returns {object|null}
  */
 export function projectEarthDiscToViewport(
-  viewer,
+  engine,
   width,
   height,
   scratchCenter = undefined,
   scratchToCenter = undefined,
+  projector = null,
 ) {
-  const camera = viewer?.camera;
-  const scene = viewer?.scene;
-  if (!camera || !scene || !(width > 0) || !(height > 0)) return null;
+  if (!engine?.camera || !(width > 0) || !(height > 0)) return null;
+  const host = engine.camera.pose ? engine : celestialHost(engine);
+  const camera = host.camera.pose();
 
-  const distance = Cesium.Cartesian3.magnitude(camera.positionWC);
+  const distance = geo.cartesian3.magnitude(camera.position);
   if (
     !Number.isFinite(distance) ||
-    distance <= Cesium.Ellipsoid.WGS84.maximumRadius
+    distance <= geo.ellipsoid.WGS84.maximumRadius
   )
     return null;
 
-  const toCenter = Cesium.Cartesian3.negate(
-    camera.positionWC,
-    scratchToCenter || new Cesium.Cartesian3(),
+  const toCenter = geo.cartesian3.negate(
+    camera.position,
+    scratchToCenter || geo.cartesian3.create(),
   );
-  if (Cesium.Cartesian3.dot(camera.directionWC, toCenter) <= 0) return null;
+  if (geo.cartesian3.dot(camera.direction, toCenter) <= 0) return null;
 
-  const center = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    Cesium.Cartesian3.ZERO,
+  const center = (projector ?? host.projector).worldToWindow(
+    geo.cartesian3.ZERO,
     scratchCenter,
   );
   if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y))
     return null;
 
-  const earthRadius = earthDiscScreenRadius(
-    distance,
-    height,
-    camera.frustum?.fovy,
-  );
+  const earthRadius = earthDiscScreenRadius(distance, height, camera.fovy);
   if (!earthRadius) return null;
 
   const keyhole = getKeyholeGeometry(width, height);
@@ -392,18 +393,22 @@ let rings = 0;
 /**
  * Screen-space ring and celestial direction overlay for the full-globe view.
  * The overlay is presented to the celestial ring store, whose view renders it
- * inside the viewer's container and hands back the two canvases this paints.
+ * inside the engine's container and hands back the two canvases this paints.
  */
 export class CelestialRing {
   /**
    * @param {Cesium.Viewer} viewer
-   * @param {{enabled?:boolean,onAutoDisable?:Function,store:object}} options
+   * @param {{enabled?:boolean,onAutoDisable?:Function,store:object,
+   *   engine?:object}} options
    *   `store` is the celestial ring store (src/ui/stores/celestialRing.js);
    *   the keyhole helpers here stay free of Vue for the packages that use
-   *   them.
+   *   them. `engine`: the globe engine, whose projector places the Earth disc.
    */
-  constructor(viewer, { enabled = true, onAutoDisable = null, store }) {
-    this.viewer = viewer;
+  constructor(
+    viewer,
+    { enabled = true, onAutoDisable = null, store, engine = null } = {},
+  ) {
+    this._engine = engine ?? (viewer?.kind ? viewer : celestialHost(viewer));
     this.enabled = !!enabled;
     this.visible = false;
     this._onAutoDisable =
@@ -426,17 +431,18 @@ export class CelestialRing {
     this._moonCanvas = null;
     this._moonCtx = null;
 
-    this._sunInertial = new Cesium.Cartesian3();
-    this._moonInertial = new Cesium.Cartesian3();
-    this._sunFixed = new Cesium.Cartesian3();
-    this._moonFixed = new Cesium.Cartesian3();
-    this._toCenter = new Cesium.Cartesian3();
-    this._screenCenter = new Cesium.Cartesian2();
-    this._fixedMatrix = new Cesium.Matrix3();
+    this._sunFixed = geo.cartesian3.create();
+    this._moonFixed = geo.cartesian3.create();
+    this._toCenter = geo.cartesian3.create();
+    this._screenCenter = geo.cartesian2.create();
+    // A Cesium viewer's ICRF rotation; an engine (Navara) takes the TEME one.
+    this._ephemeris = createCelestialEphemeris(
+      viewer?.kind ? {} : { icrfToFixed: cesiumIcrfToFixed },
+    );
 
     this._initView(store);
-    this._removePostRender = viewer.scene.postRender.addEventListener(() =>
-      this._draw(),
+    this._removePostRender = this._engine.frames.postRender.addEventListener(
+      () => this._draw(),
     );
     // Pre-existing staleness fix (perf wave 2 review): the ephemeris was
     // sampled once per visible-enable from the FROZEN app clock, so the
@@ -450,11 +456,9 @@ export class CelestialRing {
       // dirty flag up immediately. (review finding)
       this._ephemerisDirty = true;
       if (typeof document !== 'undefined' && document.hidden) return;
-      governorRequestRender('celestial-ephemeris');
+      this._engine.render.request('celestial-ephemeris');
     }, 60_000);
     // A jump in the world time moves the sun and moon at once.
-    this._skyDate = new Date();
-    this._skyTime = new Cesium.JulianDate();
     // Played through, the sky moves on each minute of world time it passes.
     this._ephemerisWorldMs = null;
     this._unsubscribeWorldTime = worldClock.subscribe(({ timeMs }) => {
@@ -477,7 +481,7 @@ export class CelestialRing {
     this._view = {
       id: ++rings,
       owner,
-      container: this.viewer.container,
+      container: this._engine.host.container,
       enabled: this.enabled,
       visible: false,
       globeVisible: null,
@@ -530,7 +534,7 @@ export class CelestialRing {
       this._moonCtx = ctx;
       this._moonRenderKey = '';
     } else return;
-    if (canvas && this.enabled) governorRequestRender('celestial-ring');
+    if (canvas && this.enabled) this._engine.render.request('celestial-ring');
   }
 
   /** Enable or disable the user preference for the effect. */
@@ -543,7 +547,8 @@ export class CelestialRing {
     // clearing disable) must request its frame or the ring never draws at
     // all. Camera motion covers every later repaint; the 60 s ephemeris
     // timer requests its own. (perf wave 2 fix — owner playtest finding)
-    if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
+    if (this.enabled !== wasEnabled)
+      this._engine.render.request('celestial-ring');
     if (!this.enabled) {
       this.visible = false;
       this._clear();
@@ -556,7 +561,7 @@ export class CelestialRing {
 
   /** Whether the current camera already frames the complete globe inside the keyhole. */
   isGlobeFullyVisible() {
-    const canvas = this.viewer.scene.canvas;
+    const canvas = this._engine.host.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     if (!(width > 0 && height > 0)) return false;
@@ -571,10 +576,10 @@ export class CelestialRing {
    * @returns {boolean} Whether a valid camera flight was started.
    */
   focusFullGlobe({ duration = 2.4 } = {}) {
-    const canvas = this.viewer.scene.canvas;
+    const canvas = this._engine.host.canvas;
     const height = canvas.clientHeight || canvas.height;
-    const cartographic = this.viewer.camera.positionCartographic;
-    const fovy = this.viewer.camera.frustum?.fovy;
+    const pose = this._engine.camera.pose();
+    const { cartographic, fovy } = pose;
     if (
       !(height > 0) ||
       !cartographic ||
@@ -585,7 +590,7 @@ export class CelestialRing {
       return false;
     }
 
-    const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
+    const earthRadius = geo.ellipsoid.WGS84.maximumRadius;
     const keyholeRadius = getKeyholeGeometry(
       canvas.clientWidth || canvas.width,
       height,
@@ -600,27 +605,27 @@ export class CelestialRing {
     this._focusInProgress = true;
     const finishFocus = () => {
       this._focusInProgress = false;
-      this.viewer.scene.requestRender?.();
+      this._engine.render.request('celestial-ring');
     };
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(
+    const flight = {
+      destination: geo.cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
         altitude,
       ),
       orientation: {
-        heading: this.viewer.camera.heading,
-        pitch: -Cesium.Math.PI_OVER_TWO,
+        heading: pose.heading,
+        pitch: -geo.math.PI_OVER_TWO,
         roll: 0,
       },
       duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
       complete: finishFocus,
       cancel: () => {
         finishFocus();
         if (!this.isGlobeFullyVisible()) this._autoDisable();
       },
-    });
+    };
+    this._engine.camera.flyTo({ ...flight, easing: 'cubicInOut' });
     return true;
   }
 
@@ -675,27 +680,7 @@ export class CelestialRing {
   _updateEphemeris(time) {
     if (!this._ephemerisDirty) return true;
 
-    Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
-      time,
-      this._sunInertial,
-    );
-    Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
-      time,
-      this._moonInertial,
-    );
-    const matrix =
-      Cesium.Transforms.computeIcrfToFixedMatrix(time, this._fixedMatrix) ||
-      Cesium.Transforms.computeTemeToPseudoFixedMatrix(time, this._fixedMatrix);
-    if (!matrix) return false;
-
-    Cesium.Matrix3.multiplyByVector(matrix, this._sunInertial, this._sunFixed);
-    Cesium.Matrix3.multiplyByVector(
-      matrix,
-      this._moonInertial,
-      this._moonFixed,
-    );
-    Cesium.Cartesian3.normalize(this._sunFixed, this._sunFixed);
-    Cesium.Cartesian3.normalize(this._moonFixed, this._moonFixed);
+    if (!this._ephemeris(time, this._sunFixed, this._moonFixed)) return false;
     this._ephemerisDirty = false;
     this._ephemerisUpdateCount += 1;
     return true;
@@ -711,7 +696,7 @@ export class CelestialRing {
   /** Return the projected Earth disc used for the full-globe gate. */
   _projectedEarthDisc(width, height) {
     return projectEarthDiscToViewport(
-      this.viewer,
+      this._engine,
       width,
       height,
       this._screenCenter,
@@ -792,7 +777,7 @@ export class CelestialRing {
     const now = performance.now();
     if (now < this._nextDrawAt) return;
     this._nextDrawAt = now + 1000 / CELESTIAL_MAX_FRAME_RATE;
-    const canvas = this.viewer.scene.canvas;
+    const canvas = this._engine.host.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     if (!(width > 0 && height > 0)) return;
@@ -822,19 +807,18 @@ export class CelestialRing {
       return;
     }
 
-    this._skyDate.setTime(skyTime());
-    const time = Cesium.JulianDate.fromDate(this._skyDate, this._skyTime);
+    const time = skyTime();
     if (!this._updateEphemeris(time)) return;
     this._present({ ephemerisUpdates: String(this._ephemerisUpdateCount) });
-    const camera = this.viewer.camera;
+    const camera = this._engine.camera.pose();
     const sunProjection = celestialScreenAngle(
-      Cesium.Cartesian3.dot(this._sunFixed, camera.rightWC),
-      Cesium.Cartesian3.dot(this._sunFixed, camera.upWC),
+      geo.cartesian3.dot(this._sunFixed, camera.right),
+      geo.cartesian3.dot(this._sunFixed, camera.up),
       this._sunAngle,
     );
     const moonProjection = celestialScreenAngle(
-      Cesium.Cartesian3.dot(this._moonFixed, camera.rightWC),
-      Cesium.Cartesian3.dot(this._moonFixed, camera.upWC),
+      geo.cartesian3.dot(this._moonFixed, camera.right),
+      geo.cartesian3.dot(this._moonFixed, camera.up),
       this._moonAngle,
     );
     if (sunProjection.stable) this._sunAngle = sunProjection.angle;

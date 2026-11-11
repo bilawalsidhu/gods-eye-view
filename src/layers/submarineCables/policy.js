@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export const BASE_CABLE_COLOR = '#39d5ff';
 
 export const BASE_LANDING_COLOR = '#8fffd2';
@@ -53,8 +51,8 @@ export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
  * layer alone cost ~9.5 ms/frame during camera motion. The depth cue this
  * trades away (photoreal tiles occluding label TEXT at low, city-level
  * cameras) matches the sibling dams/datacenters sources, which shipped
- * host-composited under the same ruling; the anchor points/stems remain
- * Cesium-native and depth-tested. See
+ * host-composited under the same ruling; the anchor points and stems stay
+ * depth-tested on the globe. See
  * the world-overlay consolidation design notes ("Depth-testing
  * decision") for both dated decisions.
  */
@@ -67,7 +65,7 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
 });
 
 /**
- * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion
+ * `MAP_STACKS` ids that render imagery on the SHOWN globe (the ion
  * Bing stacks + OSM). Deliberately an explicit allowlist, not "anything that
  * is not photoreal": an id this module has never heard of is UNKNOWN, and
  * unknown must reach the documented BOTH fallback rather than being asserted
@@ -78,21 +76,8 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
  */
 
 export const CABLE_GLOBE_STACK_IDS = Object.freeze(
-  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
+  new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'sentinel2']),
 );
-
-/** EntityCluster's private marker collections and their required types. */
-
-export const MARKER_COLLECTION_EXPECTATIONS = Object.freeze([
-  Object.freeze({
-    key: '_billboardCollection',
-    type: Cesium.BillboardCollection,
-  }),
-  Object.freeze({
-    key: '_pointCollection',
-    type: Cesium.PointPrimitiveCollection,
-  }),
-]);
 
 /**
  * Monotonic clock for the sweep gate's motion probe. A hoisted declaration:

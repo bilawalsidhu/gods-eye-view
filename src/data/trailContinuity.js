@@ -16,7 +16,7 @@
  *
  * Civil and military flight tracking share these rules.
  */
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 /** @constant {number} A gap longer than this is a coverage hole or a separate flight. */
 export const TRAIL_CONTINUITY_MAX_GAP_MS = 48 * 60_000;
@@ -81,7 +81,7 @@ export function trailHeadJoins(deltaMs, distanceM) {
  * @returns {number}
  */
 export function trailDistanceM(a, b) {
-  return Cesium.Cartesian3.angleBetween(a, b) * EARTH_MEAN_RADIUS_M;
+  return geo.cartesian3.angleBetween(a, b) * EARTH_MEAN_RADIUS_M;
 }
 
 /**
@@ -181,8 +181,7 @@ export function trailBodyCountOutsideModel(
   while (
     count > 0 &&
     fixes[count - 1].drawn &&
-    Cesium.Cartesian3.distance(fixes[count - 1].position, modelCenter) <
-      envelopeM
+    geo.cartesian3.distance(fixes[count - 1].position, modelCenter) < envelopeM
   )
     count -= 1;
   return count;
@@ -235,7 +234,7 @@ export function trailHeadStartFix(fixes, head, nowMs, count) {
   if (count < 1 || !head) return null;
   const last = fixes[count - 1];
   if (!last.position) return null;
-  if (Cesium.Cartesian3.distance(last.position, head) < TRAIL_HEAD_MIN_M)
+  if (geo.cartesian3.distance(last.position, head) < TRAIL_HEAD_MIN_M)
     return null;
   return trailHeadJoins(
     nowMs - last.timeMs,
@@ -252,7 +251,7 @@ export function trailHeadStartFix(fixes, head, nowMs, count) {
  */
 export function historyFixEpochMs(fix) {
   if (Number.isFinite(fix?.epochMs)) return fix.epochMs;
-  return fix?.time ? Cesium.JulianDate.toDate(fix.time).getTime() : NaN;
+  return Number.isFinite(fix?.timeMs) ? fix.timeMs : NaN;
 }
 
 /** @constant {number} The tracked icon's drawn position is recorded at least this often (ms of display time)... */
@@ -279,20 +278,20 @@ export const TRAIL_SPUR_MAX_STEP_M = 500;
 /** @constant {number} A recorded point closer than this (m) to the previous one is not kept: the aircraft is holding. */
 const TRAIL_RECORD_MIN_STEP_M = 1;
 
-const _u = new Cesium.Cartesian3();
-const _v = new Cesium.Cartesian3();
+const _u = geo.cartesian3.create();
+const _v = geo.cartesian3.create();
 
 /** Cosine of the turn at `b` on the way a → b → c, or NaN for a zero step. */
 function turnCos(a, b, c) {
-  Cesium.Cartesian3.subtract(b, a, _u);
-  Cesium.Cartesian3.subtract(c, b, _v);
-  const lu = Cesium.Cartesian3.magnitude(_u);
-  const lv = Cesium.Cartesian3.magnitude(_v);
+  geo.cartesian3.subtract(b, a, _u);
+  geo.cartesian3.subtract(c, b, _v);
+  const lu = geo.cartesian3.magnitude(_u);
+  const lv = geo.cartesian3.magnitude(_v);
   if (!(lu > 0 && lv > 0)) return NaN;
-  return Cesium.Cartesian3.dot(_u, _v) / (lu * lv);
+  return geo.cartesian3.dot(_u, _v) / (lu * lv);
 }
 
-const SPUR_COS = Math.cos(Cesium.Math.toRadians(TRAIL_SPUR_TURN_DEG));
+const SPUR_COS = Math.cos(geo.math.toRadians(TRAIL_SPUR_TURN_DEG));
 
 /** Whether entry `i` and its neighbours are one drawn piece of line. */
 function joinedAt(fixes, i) {
@@ -315,10 +314,8 @@ function spurAt(fixes, i) {
   const b = fixes[i].position;
   const c = fixes[i + 1].position;
   if (
-    Math.min(
-      Cesium.Cartesian3.distance(a, b),
-      Cesium.Cartesian3.distance(b, c),
-    ) > TRAIL_SPUR_MAX_STEP_M
+    Math.min(geo.cartesian3.distance(a, b), geo.cartesian3.distance(b, c)) >
+    TRAIL_SPUR_MAX_STEP_M
   )
     return false;
   return turnCos(a, b, c) < SPUR_COS;
@@ -351,26 +348,26 @@ function keepTrailLimit(fixes, maxPoints) {
   return fixes;
 }
 
-const _ab = new Cesium.Cartesian3();
-const _ap = new Cesium.Cartesian3();
-const _off = new Cesium.Cartesian3();
-const _up = new Cesium.Cartesian3();
+const _ab = geo.cartesian3.create();
+const _ap = geo.cartesian3.create();
+const _off = geo.cartesian3.create();
+const _up = geo.cartesian3.create();
 
 /** Whether `p` lies within the thinning tolerance of segment a → b, across the track and in height. */
 function nearSegment(p, a, b) {
-  Cesium.Cartesian3.subtract(b, a, _ab);
-  Cesium.Cartesian3.subtract(p, a, _ap);
-  const len2 = Cesium.Cartesian3.magnitudeSquared(_ab);
+  geo.cartesian3.subtract(b, a, _ab);
+  geo.cartesian3.subtract(p, a, _ap);
+  const len2 = geo.cartesian3.magnitudeSquared(_ab);
   const t =
     len2 > 0
-      ? Math.max(0, Math.min(1, Cesium.Cartesian3.dot(_ap, _ab) / len2))
+      ? Math.max(0, Math.min(1, geo.cartesian3.dot(_ap, _ab) / len2))
       : 0;
-  Cesium.Cartesian3.multiplyByScalar(_ab, t, _off);
-  Cesium.Cartesian3.subtract(_ap, _off, _off);
-  Cesium.Cartesian3.normalize(p, _up);
-  const vertical = Cesium.Cartesian3.dot(_off, _up);
+  geo.cartesian3.multiplyByScalar(_ab, t, _off);
+  geo.cartesian3.subtract(_ap, _off, _off);
+  geo.cartesian3.normalize(p, _up);
+  const vertical = geo.cartesian3.dot(_off, _up);
   const across = Math.sqrt(
-    Math.max(0, Cesium.Cartesian3.magnitudeSquared(_off) - vertical * vertical),
+    Math.max(0, geo.cartesian3.magnitudeSquared(_off) - vertical * vertical),
   );
   return (
     Math.abs(vertical) <= TRAIL_THIN_TOLERANCE_M &&
@@ -392,7 +389,7 @@ function thinAt(fixes, i) {
   const next = fixes[i + 1];
   if (next.sealed) return false;
   const b = next.position;
-  if (Cesium.Cartesian3.distance(a, b) > TRAIL_THIN_MAX_SPAN_M) return false;
+  if (geo.cartesian3.distance(a, b) > TRAIL_THIN_MAX_SPAN_M) return false;
   const stood = entry.absorbed ?? [];
   const nextStood = next.absorbed ?? [];
   if (stood.length + nextStood.length + 1 > TRAIL_THIN_MAX_ABSORBED)
@@ -560,8 +557,7 @@ export function recordTrailPoint(fixes, position, timeMs, maxPoints) {
   const prev = fixes[i - 1];
   if (
     prev?.position &&
-    Cesium.Cartesian3.distance(prev.position, position) <
-      TRAIL_RECORD_MIN_STEP_M
+    geo.cartesian3.distance(prev.position, position) < TRAIL_RECORD_MIN_STEP_M
   )
     return false;
   const entry = {

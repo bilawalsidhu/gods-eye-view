@@ -1,3 +1,4 @@
+import { installDomClasses } from '../testSupport/domClasses.mjs';
 // A mark hidden from Draw's list leaves the globe whole: every entity it put
 // there is taken out on sync and comes back when shown, and the line's
 // flowing stroke, which keeps its own colour, follows the mark's alpha.
@@ -7,15 +8,11 @@ import * as C from 'cesium';
 import {
   FlowMaterialProperty,
   createWorldAnnotationRenderer,
-} from './worldAnnotationRenderer.js';
+} from '../globe/cesium/annotations/worldAnnotationRenderer.js';
 
 const noop = () => {};
 function viewer(t) {
-  for (const name of ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas']) {
-    const original = globalThis[name];
-    globalThis[name] = class {};
-    t.after(() => { if (original === undefined) delete globalThis[name]; else globalThis[name] = original; });
-  }
+  installDomClasses(t);
   const before = globalThis.document;
   globalThis.document = { addEventListener: noop, removeEventListener: noop };
   t.after(() => { if (before === undefined) delete globalThis.document; else globalThis.document = before; });

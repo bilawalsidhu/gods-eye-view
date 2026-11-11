@@ -1,7 +1,7 @@
 /**
  * One-click camera transfer for layer-owned world targets.
  */
-import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -32,10 +32,10 @@ export function isValidWorldFocusTarget(detail) {
   // These targets are surface-anchored Earth positions. Merely
   // finite coordinates near the ECEF origin cannot be flown to, and must be
   // rejected before the camera policy releases a current follow owner.
-  const magnitude = Cesium.Cartesian3.magnitude(position);
+  const magnitude = geo.cartesian3.magnitude(position);
   return (
     Number.isFinite(magnitude) &&
-    magnitude >= Cesium.Ellipsoid.WGS84.minimumRadius * 0.95
+    magnitude >= geo.ellipsoid.WGS84.minimumRadius * 0.95
   );
 }
 
@@ -75,27 +75,29 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
   return runExplicitFocus(detail, () => fly(detail));
 }
 
-/** Fly to a world target after ownership has been released. */
-export function flyToWorldTarget(viewer, target = {}) {
-  const camera = viewer?.camera;
+/**
+ * Fly to a world target after ownership has been released.
+ * @param {import('./globe/contract.js').GlobeEngine | null} engine
+ */
+export function flyToWorldTarget(engine, target = {}) {
+  const camera = engine?.camera;
   const framing = WORLD_FOCUS_FRAMING[target.kind];
   if (!camera || !framing || !isValidWorldFocusTarget(target)) return false;
-  const heading = Number.isFinite(camera.heading) ? camera.heading : 0;
+  const { heading: current } = camera.pose();
+  const heading = Number.isFinite(current) ? current : 0;
   const duration =
     target.durationSec > 0
       ? target.durationSec
       : WORLD_CLICK_FOCUS_DURATION_SEC;
-  camera.cancelFlight?.();
-  camera.flyToBoundingSphere(
-    new Cesium.BoundingSphere(target.position, framing.radiusM),
+  camera.cancelFlight();
+  camera.flyToSphere(
+    { center: target.position, radius: framing.radiusM },
     {
-      offset: new Cesium.HeadingPitchRange(
-        heading,
-        Cesium.Math.toRadians(framing.pitchDeg),
-        framing.rangeM,
-      ),
+      heading,
+      pitch: geo.math.toRadians(framing.pitchDeg),
+      range: framing.rangeM,
       duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      easing: 'cubicInOut',
     },
   );
   return true;

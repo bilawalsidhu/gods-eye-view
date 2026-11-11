@@ -2,7 +2,8 @@
 // stubbed /api/launches, so a failed first load takes the browser's path.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { DataLayerManager } from '../../data/manager.js';
 import { ContextControls } from '../../ui/contextControls.js';
 import { spaceMissionsIndexFailure } from '../../ui/contextActions.js';
@@ -15,6 +16,7 @@ import { createPanel } from './panel.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createReplay } from './replay.js';
+import { createLaunchesDisplay } from './render/display.js';
 
 const noop = () => {};
 
@@ -47,47 +49,25 @@ function plainLayer(id, name, params = {}) {
   };
 }
 
-function fakeCamera() {
-  const camera = {
-    position: new Cesium.Cartesian3(1, 2, 3),
-    heading: 0.1,
-    pitch: -0.5,
-    roll: 0,
-    flights: 0,
-    cancelled: 0,
-    flight: null,
-    get positionWC() {
-      return camera.position;
+// The fake engine's camera, counted and steered as the tests need: flights
+// run on its frames (land() runs them to the end), a new flight cancels the
+// one in progress.
+function cameraOf(engine) {
+  const calls = (method) => engine.fake.callsOf(method).length;
+  return {
+    get flights() {
+      return calls('camera.flyTo');
     },
-    // Like Cesium, a new flight cancels the one in progress.
-    flyTo({ destination, complete, cancel }) {
-      camera.flight?.cancel?.();
-      camera.flight = { complete, cancel };
-      camera.flights += 1;
-      camera.position = Cesium.Cartesian3.clone(destination);
-      camera.heading = 0;
-      camera.pitch = -Math.PI / 2;
+    get cancelled() {
+      return calls('camera.cancelFlight');
     },
-    land() {
-      const flight = camera.flight;
-      camera.flight = null;
-      flight?.complete?.();
+    get flying() {
+      return engine.camera.flightActive();
     },
-    cancelFlight() {
-      camera.cancelled += 1;
-      const flight = camera.flight;
-      camera.flight = null;
-      flight?.cancel?.();
-    },
-    lookAtTransform: noop,
-    setView({ destination, orientation }) {
-      camera.position = Cesium.Cartesian3.clone(destination);
-      camera.heading = orientation.heading;
-      camera.pitch = orientation.pitch;
-      camera.roll = orientation.roll;
-    },
+    land: () => engine.fake.frames(400),
+    flyTo: (options) => engine.camera.flyTo(options),
+    setView: (view) => engine.camera.setView(view),
   };
-  return camera;
 }
 
 async function fixture(t) {
@@ -105,26 +85,23 @@ async function fixture(t) {
 
   const services = {
     overlays: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
+      setEntries: noop,
+      setVisible: noop,
+      clearSource: noop,
     },
     render: { holdContinuousRender: noop, releaseContinuousRender: noop },
+    renderer: { create: ({ engine }) => createLaunchesDisplay(engine) },
   };
   const state = createState({ services });
-  const camera = fakeCamera();
-  const canvas = Object.assign(new EventTarget(), {
-    disableRootEvents: true,
-    onwheel: null,
-    style: {},
-    clientWidth: 1200,
-    clientHeight: 800,
+  const engine = createFakeEngine({ width: 1200, height: 800 });
+  // An oblique view the full-globe flight changes.
+  engine.fake.setPose({
+    position: geo.cartesian3.fromDegrees(10, 20, 3_000_000),
+    heading: 0.1,
+    pitch: -0.5,
+    roll: 0,
   });
-  const viewer = {
-    camera,
-    dataSources: new Cesium.DataSourceCollection(),
-    scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
-  };
+  const camera = cameraOf(engine);
   // Scene presentation is stubbed; ingestion, lifecycle and panel are real.
   const parts = {
     overlays: {
@@ -138,7 +115,8 @@ async function fixture(t) {
     selection: {
       focusFullGlobe(target, flight) {
         target.camera.flyTo({
-          destination: new Cesium.Cartesian3(9, 9, 9),
+          destination: geo.cartesian3.fromDegrees(30, 40, 20_000_000),
+          duration: 2.4,
           ...flight,
         });
         return true;
@@ -159,15 +137,14 @@ async function fixture(t) {
     },
     rendering: {
       updateMissionFrame: noop,
-      addLaunchEntity(record) {
-        state._dataSource.entities.add({
-          id: record.id,
-          position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
-        });
+      addLaunchElements(record) {
+        state._missionElements.set(record.id, { id: record.id });
       },
+      removeMissionElements: () => state._missionElements.clear(),
     },
   };
-  const context = { state, services, parts, source };
+  const getRenderer = () => state._renderer;
+  const context = { state, services, parts, source, getRenderer };
   parts.policyHelpers = createPolicyHelpers(context);
   parts.model = createModel(context);
   parts.panel = createPanel(context);
@@ -184,7 +161,7 @@ async function fixture(t) {
   const rosters = [];
   parts.panel.subscribePanel((view) => rosters.push(view.roster));
 
-  const manager = new DataLayerManager(viewer);
+  const manager = new DataLayerManager(null, { engine });
   manager.register(plainLayer('earthquakes', 'Earthquakes (24h)'));
   manager.register(plainLayer('satellites', 'Satellites'));
   manager.register(plainLayer('wind', 'Wind'));
@@ -213,17 +190,19 @@ async function fixture(t) {
     controls.disconnect();
     for (const id of ['rocket-launches', 'satellites', 'earthquakes', 'wind'])
       await manager.setEnabled(id, false);
-    await missions.destroy(viewer);
+    await missions.destroy();
+    engine.destroy();
   });
 
   const enabledIds = () => [...manager.getEnabledLayerIds()].sort();
-  const view = () => ({
-    x: camera.position.x,
-    y: camera.position.y,
-    z: camera.position.z,
-    heading: camera.heading,
-    pitch: camera.pitch,
-  });
+  const view = () => {
+    const pose = engine.camera.pose();
+    return {
+      position: pose.position,
+      heading: pose.heading,
+      pitch: pose.pitch,
+    };
+  };
   const settle = async () => {
     await controls._waitForContextLayerSettlement();
     for (const id of ['rocket-launches', 'satellites', 'earthquakes'])
@@ -243,6 +222,16 @@ async function fixture(t) {
     view,
     settle,
   };
+}
+
+// The same view, to a millimetre and a microradian.
+function assertSameView(actual, expected, message) {
+  assert.ok(
+    geo.cartesian3.distance(actual.position, expected.position) < 1e-3 &&
+      Math.abs(actual.heading - expected.heading) < 1e-6 &&
+      Math.abs(actual.pitch - expected.pitch) < 1e-6,
+    `${message ?? 'the same view'}: ${JSON.stringify(actual)} vs ${JSON.stringify(expected)}`,
+  );
 }
 
 const entries = {
@@ -270,7 +259,7 @@ for (const [path, enter] of Object.entries(entries))
     assert.equal(f.controls.getContextModeState().mode, null);
     assert.equal(f.controls.getContextModeState().active, false);
     assert.equal(f.missions.getStats().error, 'HTTP 429');
-    assert.deepEqual(f.view(), before, 'the pre-entry view comes back');
+    assertSameView(f.view(), before, 'the pre-entry view comes back');
     assert.ok(f.camera.cancelled > 0, 'the full-globe flight is cancelled');
 
     assert.equal(
@@ -313,7 +302,7 @@ test('a landed entry flight still gives the view back after a failed first load'
   release();
   assert.equal(await entering, false);
   await f.settle();
-  assert.deepEqual(f.view(), before);
+  assertSameView(f.view(), before);
 });
 
 test('a camera move after the entry flight survives a failed first load', async (t) => {
@@ -328,7 +317,7 @@ test('a camera move after the entry flight survives a failed first load', async 
   f.camera.land();
   // The user drags the globe while the mission index is still loading.
   f.camera.setView({
-    destination: new Cesium.Cartesian3(7, 7, 7),
+    destination: geo.cartesian3.fromDegrees(-50, 10, 5_000_000),
     orientation: { heading: 0.3, pitch: -0.2, roll: 0 },
   });
   const moved = f.view();
@@ -336,7 +325,7 @@ test('a camera move after the entry flight survives a failed first load', async 
   release();
   assert.equal(await entering, false);
   await f.settle();
-  assert.deepEqual(f.view(), moved);
+  assertSameView(f.view(), moved);
 });
 
 test('a navigation during a failed first load is not cancelled by the rollback', async (t) => {
@@ -352,7 +341,7 @@ test('a navigation during a failed first load is not cancelled by the rollback',
   f.missions.releaseCameraOwnership();
   let navigationCancelled = false;
   f.camera.flyTo({
-    destination: new Cesium.Cartesian3(5, 5, 5),
+    destination: geo.cartesian3.fromDegrees(5, 5, 5_000_000),
     cancel: () => {
       navigationCancelled = true;
     },
@@ -369,7 +358,7 @@ test('a navigation during a failed first load is not cancelled by the rollback',
     'the rollback does not cancel the Search/Home flight',
   );
   assert.equal(f.camera.cancelled, cancelled);
-  assert.deepEqual(f.view(), navigated);
+  assertSameView(f.view(), navigated);
 });
 
 test('the roster reports a failed mission index instead of loading forever', async (t) => {
@@ -432,7 +421,7 @@ test('a refresh failure after a loaded index keeps the mode and its records', as
   // Leaving a loaded mode does not restore the pre-entry view.
   await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
   await f.settle();
-  assert.deepEqual(f.view(), framed);
+  assertSameView(f.view(), framed);
 });
 test('exiting during a successful entry flight cancels the mission-owned flight', async (t) => {
   const f = await fixture(t);
@@ -442,13 +431,13 @@ test('exiting during a successful entry flight cancels the mission-owned flight'
     true,
   );
   await f.settle();
-  assert.ok(f.camera.flight, 'the 2.4 s entry flight is still in progress');
+  assert.ok(f.camera.flying, 'the 2.4 s entry flight is still in progress');
 
   await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
   await f.settle();
   assert.equal(
-    f.camera.flight,
-    null,
+    f.camera.flying,
+    false,
     'leaving Space Missions stops the flight it started (main cancels it)',
   );
 });
@@ -473,17 +462,24 @@ test('navigation taking the camera keeps a mission flight it asked to preserve',
   f.upstream.status = 200;
   await f.manager.setEnabled('rocket-launches', true, { origin: 'user' });
   await f.settle();
-  const flight = f.camera.flight;
-  assert.ok(flight, 'the entry flight is in progress');
+  assert.ok(f.camera.flying, 'the entry flight is in progress');
+  const cancelled = f.camera.cancelled;
   f.missions.releaseCameraOwnership();
-  assert.equal(f.camera.flight, flight, 'navigation decides about the flight');
+  assert.ok(f.camera.flying, 'navigation decides about the flight');
+  assert.equal(f.camera.cancelled, cancelled);
   // After exit an inactive layer never cancels another owner's flight.
   await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
   await f.settle();
-  f.camera.flyTo({ destination: new Cesium.Cartesian3(1, 1, 1) });
-  const other = f.camera.flight;
+  let otherCancelled = false;
+  f.camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(1, 1, 1_000_000),
+    cancel: () => {
+      otherCancelled = true;
+    },
+  });
   f.missions.releaseCameraOwnership();
-  assert.equal(f.camera.flight, other);
+  assert.ok(f.camera.flying);
+  assert.equal(otherCancelled, false);
 });
 
 test("an earlier attempt's index error is not blamed for a later failure", async (t) => {

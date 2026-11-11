@@ -1,8 +1,8 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
 } from '../../data/firmsLabels.js';
-import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { CONTEXT_TOP_N } from './policy.js';
 import { t } from '../../i18n/index.js';
@@ -20,26 +20,24 @@ export function createSelection({
     selectEntityContext,
     clearSelectedEntityContextForLayer,
     getContextStore,
+    removeEntityContext = (id) => getContextStore()?.entities.delete(id),
     registerEntityContext,
-  } = services.context;
-  const { id, name, overlayHost, screenSpaceEventHandlerFactory } = config;
+  } = bindOverlayHost(services.context, () => layerState._renderer?.engine);
+  const { id, name, overlayHost } = config;
 
   /**
-   * Install the LEFT_CLICK handler for fire selection (enable-time only,
+   * Install the click handler for fire selection (enable-time only,
    * mirroring the flight layers). Clicking a fire sprite selects it and
    * surfaces it in the shared context store; clicking empty space clears
    * the selection. Picks owned by sibling layers are left alone.
    */
 
   function installClickHandler() {
-    if (layerState._clickHandler || !layerState._viewer) return;
-    layerState._clickHandler = screenSpaceEventHandlerFactory(
-      layerState._viewer,
-    );
-    layerState._clickHandler.setInputAction((click) => {
+    if (layerState._clickHandler || !layerState._renderer) return;
+    layerState._clickHandler = layerState._renderer.onClick((click) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
-      const picked = layerState._viewer.scene.pick(click.position);
+      const picked = click.picked;
       const fire = pickedFire(picked);
       if (fire) {
         selectAndFocusFire(fire);
@@ -49,7 +47,11 @@ export function createSelection({
       // "empty space" — leave the selection alone and let that layer handle it.
       if (picked) {
         const pickedId = resolvePickId(picked);
-        if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
+        if (
+          pickedId &&
+          isOwnedByOtherLayer(id, pickedId, layerState._renderer?.engine)
+        )
+          return;
       }
       const cardHit = overlayHost.hitTest?.(
         click.position?.x,
@@ -64,14 +66,12 @@ export function createSelection({
         return;
       }
       clearFireSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    if (layerState._clickHandler) {
-      layerState._clickHandler.destroy();
-      layerState._clickHandler = null;
-    }
+    layerState._clickHandler?.();
+    layerState._clickHandler = null;
   }
 
   /** Select one stable detection and request one UI-owned camera transfer. */
@@ -145,9 +145,8 @@ export function createSelection({
    */
 
   function refreshContextRegistrations(fires) {
-    let store = null;
     try {
-      store = getContextStore();
+      if (!getContextStore()) return;
     } catch {
       return;
     }
@@ -163,7 +162,7 @@ export function createSelection({
     }
 
     for (const staleId of layerState._contextIds) {
-      if (!nextIds.has(staleId)) store.entities.delete(staleId);
+      if (!nextIds.has(staleId)) removeEntityContext(staleId);
     }
     layerState._contextIds = nextIds;
   }
@@ -192,7 +191,7 @@ export function createSelection({
       layerId: id,
       layerName: name,
       source: 'NASA FIRMS',
-      dataSource: layerState._dataSource,
+      isVisible: () => layerState._renderer?.visible() ?? false,
       // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
       label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
       latitude: fire.lat,
@@ -213,9 +212,8 @@ export function createSelection({
   function clearContextRegistrations() {
     if (!layerState._contextIds.size) return;
     try {
-      const store = getContextStore();
       for (const recordId of layerState._contextIds)
-        store.entities.delete(recordId);
+        removeEntityContext(recordId);
     } catch {
       // store unavailable — nothing to clean
     }

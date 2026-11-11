@@ -2158,8 +2158,13 @@ async function main() {
       await mil.update(v);
       return {
         groundSnap, milGroundSnap, detectable, airSnap, groundAgainSnap,
-        droppedGone: !snap('aaa066'),
-        milDroppedGone: !snap('bbb166'),
+        // Removed contacts can leave hidden slots in an engine's sprite pool.
+        droppedGone: !window.__godsEyeView.layers
+          .drawn('flights')
+          .some((row) => row.id === 'aaa066'),
+        milDroppedGone: !window.__godsEyeView.layers
+          .drawn('military')
+          .some((row) => row.id === 'bbb166'),
       };
     });
     const fmtSnap = (s) => (s ? `show=${s.show} scale=${s.scale.toFixed(3)} rgba=(${s.red.toFixed(2)},${s.green.toFixed(2)},${s.blue.toFixed(2)},${s.alpha.toFixed(2)})` : 'missing');
@@ -2440,11 +2445,27 @@ async function main() {
               try { p = coll.get(i); } catch { continue; }
               if (!p) continue;
               if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === id) found = p;
+              // A hidden pool slot can keep a removed contact's id: prefer
+              // the model shown.
+              if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === id && (!found || !found.show)) found = p;
             }
           };
           walk(v.scene.primitives);
           return found;
+        };
+        window.__g3dCountModels = function (id) {
+          let n = 0;
+          const walk = (coll) => {
+            for (let i = 0; i < coll.length; i++) {
+              let p;
+              try { p = coll.get(i); } catch { continue; }
+              if (!p) continue;
+              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
+              if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === id) n++;
+            }
+          };
+          walk(window.__godsEyeView.viewer.scene.primitives);
+          return n;
         };
       });
 
@@ -2460,8 +2481,19 @@ async function main() {
         skip('ground-3d: grounded planes are model-eligible and modeled (both layers)',
           `independent GLB control unavailable (${glbControlDetail}); grounded GLB readiness is not observable`);
       } else {
+        // On a miss, say what each layer's own model handle holds.
+        const g3dWhy = g3dModelsUp ? null : await evalPage(() => {
+          const dm = window.__godsEyeView.dataManager;
+          const of = (layerId, id) => {
+            const { model } = dm.layers.get(layerId).module.testing._aircraftHandlesForTest(id);
+            return model
+              ? `${id}: handle ready=${model.ready} show=${model.show} failed=${model.failed}, engine model ready=${window.__g3dFindModel(id)?.ready} show=${window.__g3dFindModel(id)?.show} (${window.__g3dCountModels?.(id)} with this id)`
+              : `${id}: no model handle`;
+          };
+          return `${of('flights', 'aaa077')}; ${of('military', 'bbb177')}`;
+        });
         record('ground-3d: grounded planes are model-eligible and modeled (both layers)', g3dModelsUp,
-          g3dModelsUp ? 'fleet models up (ready+shown)' : 'models never became ready+shown');
+          g3dModelsUp ? 'fleet models up (ready+shown)' : `models never became ready+shown (${g3dWhy})`);
       }
 
       if (g3dModelsUp) {
@@ -2911,8 +2943,10 @@ async function main() {
       });
       await nextFrames(3);
       const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-      const probe = async (id, course) => {
-        const bb = findBB(id);
+      const probe = async (layerId, id, course) => {
+        // Tamper with the layer's own glyph handle: a write to the engine's
+        // billboard bypasses the layer's sprite cache, so no pass rewrites it.
+        const bb = dm.layers.get(layerId).module.testing._aircraftHandlesForTest(id).sprite;
         if (!bb || !bb.show) return { error: `${id} missing/hidden` };
         const r0 = bb.rotation; // settled tamper origin; correctness uses a fresh projection below
         const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
@@ -2957,8 +2991,8 @@ async function main() {
       const flightCourse = window.__SYNTH.flights.find((f) => f.icao === 'aaa002')?.track ?? 0;
       const militaryCourse = window.__SYNTH.military.find((m) => m.hex === 'bbb101')?.track ?? 0;
       return {
-        flights: await probe('aaa002', flightCourse),
-        military: await probe('bbb101', militaryCourse),
+        flights: await probe('flights', 'aaa002', flightCourse),
+        military: await probe('military', 'bbb101', militaryCourse),
       };
     });
     const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; ${arrivalAngleViolated(a) ? 'angle violation (not retried); ' : ''}${Number.isFinite(a.dMoveEnd) ? `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° ` : ''}${Number.isFinite(a.dReveal) ? `reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° ` : ''}elapsed=${Number(a.elapsedMs).toFixed(1)} ms attempts=${a.attempts}`
@@ -3924,24 +3958,13 @@ async function main() {
 
         // (a) FLEET: retain the adversarial flags until this contact has passed
         // through its installed fleet update and that frame has completed.
-        const findFleetModel = (id) => {
-          let found = null;
-          const walk = (coll) => {
-            const len = coll.length;
-            for (let i = 0; i < len; i++) {
-              let p; try { p = coll.get(i); } catch { continue; }
-              if (!p) continue;
-              if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-              if (p.activeAnimations !== undefined && p.minimumPixelSize !== undefined && p.id === id) found = p;
-            }
-          };
-          walk(v.scene.primitives);
-          return found;
-        };
+        // The layer's own model handle: the engine's Model is drawn from it,
+        // and a flag planted on the engine's object never reaches the layer.
+        const fleetModelOf = (id) => fl.testing._aircraftHandlesForTest(id).model;
         fl.setParams({ models3d: true });
         const fleetDeadline = Date.now() + 20000;
         let fleetModel = null;
-        while (Date.now() < fleetDeadline && !(fleetModel = findFleetModel('aaa097'))) {
+        while (Date.now() < fleetDeadline && !(fleetModel = fleetModelOf('aaa097'))) {
           await window.__dfSettle(500);
         }
         if (!fleetModel) {
@@ -3993,7 +4016,7 @@ async function main() {
             return;
           }
           const currentBb = window.__dfFindBB('aaa097');
-          const currentModel = findFleetModel('aaa097');
+          const currentModel = fleetModelOf('aaa097');
           sample = {
             fleetTickCompleted: true,
             fleetFrame: v.scene.frameState.frameNumber,
@@ -4003,7 +4026,7 @@ async function main() {
             fleetSeeded: seededFleet,
             fleetH: currentBb ? window.__dfCarto(currentBb.position).h : null,
           };
-          if (currentBb !== bb || currentModel !== fleetModel || fleetModel.isDestroyed()
+          if (currentBb !== bb || currentModel !== fleetModel
             || fl.getTrackedInfo()) sample.error = 'fleet loading fixture changed before its completed frame';
         });
         armed = true;
@@ -4176,13 +4199,17 @@ async function main() {
         const taxiMeshM = gfns?.cachedMeshFloor?.(taxiCarto.lat, taxiCarto.lon) ?? null;
         const heldOwns = ns._driveFleetModelHandoffForTest({ icao24: holdIcao, position: taxiPos, course: 90 });
         const heldH = window.__dfModelHeight(holdIcao);
-        const heldBb = !!window.__dfFindBB(holdIcao)?.show;
+        const heldBb = !!window.__godsEyeView.layers
+          .drawn('flights')
+          .find((row) => row.id === holdIcao && !row.trackedModel)?.show;
 
         // 3. ~385 m out the memory stops describing anywhere this contact has
         //    been. It is released rather than stretched, and the gate takes over.
         const farPos = Cesium.Cartesian3.fromDegrees(base.lon + 0.004, base.lat, base.h);
         const releasedOwns = ns._driveFleetModelHandoffForTest({ icao24: holdIcao, position: farPos, course: 90 });
-        const releasedBb = !!window.__dfFindBB(holdIcao)?.show;
+        const releasedBb = !!window.__godsEyeView.layers
+          .drawn('flights')
+          .find((row) => row.id === holdIcao && !row.trackedModel)?.show;
 
         fl.setParams({ models3d: false });
         await window.__dfSettle(300);

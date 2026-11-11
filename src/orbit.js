@@ -1,51 +1,53 @@
-import * as Cesium from 'cesium';
-import {
-  holdContinuousRender,
-  releaseContinuousRender,
-} from './renderGovernor.js';
+import * as geo from './geo/index.js';
+import { renderGovernorFor } from './renderGovernor.js';
 
 /**
  * OrbitController — smooth orbit around a target point.
- * Uses scene.preRender for frame-rate-independent 60fps updates.
+ * Uses the engine's preRender frames for frame-rate-independent updates.
  * Toggle with O key; auto-stops on POI/city change.
  */
 export class OrbitController {
-  constructor(viewer) {
-    this.viewer = viewer;
+  /**
+   * @param {import('./globe/contract.js').GlobeEngine | null} engine
+   */
+  constructor(engine) {
+    this.engine = engine ?? null;
     this.active = false;
     this.target = null;
     this.radius = 500;
     this.pitch = -30;
-    this.speed = Cesium.Math.toRadians(6); // ~6°/sec → full rotation in ~60s
+    this.speed = geo.math.toRadians(6); // ~6°/sec → full rotation in ~60s
     this.angle = 0;
     this._removeListener = null;
   }
 
   /**
    * Start orbiting around a target position.
-   * @param {Cesium.Cartesian3} targetCartesian - The point to orbit around
+   * @param {{x: number, y: number, z: number}} targetCartesian - The point to orbit around
    * @param {object} options
    * @param {number} options.radius - Distance from target in meters
    * @param {number} options.pitch - Tilt angle in degrees (negative = looking down)
    * @param {number} options.speed - Degrees per second (default 6)
    */
   start(targetCartesian, options = {}) {
-    if (!targetCartesian) return;
+    if (!targetCartesian || !this.engine) return;
+    const { camera, frames } = this.engine;
 
     this.target = targetCartesian;
     this.radius = options.radius || this.radius;
     this.pitch = options.pitch || this.pitch;
-    this.speed = Cesium.Math.toRadians(options.speed || 6);
+    this.speed = geo.math.toRadians(options.speed || 6);
     this.active = true;
     // Orbit mutates the camera from preRender — without a hold the loop
     // starves after its first idle frame. (perf wave 2)
-    holdContinuousRender('camera-orbit');
+    this._renderGovernor = renderGovernorFor(this.engine);
+    this._renderGovernor?.holdContinuousRender('camera-orbit');
 
     // Start from the camera's current heading for seamless transition
-    this.angle = this.viewer.camera.heading;
+    this.angle = camera.pose().heading;
 
     let lastTime = Date.now();
-    this._removeListener = this.viewer.scene.preRender.addEventListener(() => {
+    this._removeListener = frames.preRender.addEventListener(() => {
       if (!this.active) return;
 
       const now = Date.now();
@@ -54,12 +56,11 @@ export class OrbitController {
 
       this.angle += this.speed * dt;
 
-      const hpr = new Cesium.HeadingPitchRange(
-        this.angle,
-        Cesium.Math.toRadians(this.pitch),
-        this.radius,
-      );
-      this.viewer.camera.lookAt(this.target, hpr);
+      camera.lookAt(this.target, {
+        heading: this.angle,
+        pitch: geo.math.toRadians(this.pitch),
+        range: this.radius,
+      });
     });
   }
 
@@ -68,18 +69,32 @@ export class OrbitController {
    */
   stop() {
     this.active = false;
-    releaseContinuousRender('camera-orbit');
+    this._renderGovernor?.releaseContinuousRender('camera-orbit');
     if (this._removeListener) {
       this._removeListener();
       this._removeListener = null;
     }
     // Unlock camera for free interaction
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    this.engine?.camera.release();
+  }
+
+  /**
+   * Orbit on another globe engine's camera (an engine switch), or none
+   * (null). A running orbit stops: its frames belonged to the outgoing one.
+   */
+  attachEngine(engine) {
+    if (this.active || this._removeListener) {
+      this.active = false;
+      this._renderGovernor?.releaseContinuousRender('camera-orbit');
+      this._removeListener?.();
+      this._removeListener = null;
+    }
+    this.engine = engine ?? null;
   }
 
   /**
    * Toggle orbit on/off.
-   * @param {Cesium.Cartesian3} targetCartesian - Required when starting
+   * @param {{x: number, y: number, z: number}} targetCartesian - Required when starting
    * @param {object} options - Passed to start()
    * @returns {boolean} Whether orbit is now active
    */

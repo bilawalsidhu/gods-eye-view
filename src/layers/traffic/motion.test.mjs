@@ -10,6 +10,33 @@ import {
   DOT_CHANGE_BUDGET,
   roadIdentity,
 } from './retention.js';
+import { createTrafficDisplay, TRAFFIC_SET_IDS } from './render/display.js';
+import { observeTrafficSurface } from './surface.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+
+/**
+ * A fake engine with the camera `altitude` metres over (0, 0). A zero-size
+ * canvas projects nothing, so screen-space limits stay out of a test unless
+ * it sizes the canvas. One rendered frame of the still camera certifies its
+ * surface, as a completed render does.
+ */
+function engineAt(altitude, { width = 0, height = 0 } = {}) {
+  const engine = createFakeEngine({ width, height, altitude });
+  observeTrafficSurface(engine);
+  engine.fake.frame();
+  return engine;
+}
+/**
+ * A surface pass's engine: a sized canvas looking straight down, whose
+ * rendered depth answers nothing (heights come from the scripted terrain).
+ */
+function flowEngineAt(altitude) {
+  const engine = engineAt(altitude, { width: 400, height: 300 });
+  engine.fake.script('pickPosition', undefined);
+  return engine;
+}
+const fillCount = (engine) =>
+  engine.fake.moverSet(TRAFFIC_SET_IDS.fill).store.count;
 
 function setup(t) {
   const frames = [];
@@ -28,8 +55,9 @@ function setup(t) {
   const state = createState({ services: {} });
   state._enabled = true;
   state._liveMode = true;
-  state._pointCollection = new C.PointPrimitiveCollection();
-  state._viewer = { scene: {} };
+  const engine = engineAt(450);
+  state._engine = engine;
+  state._display = createTrafficDisplay(engine);
   const parts = {
     rendering: {
       removeHeatLines() {},
@@ -78,15 +106,17 @@ function setup(t) {
     const fn = frames.shift();
     fn?.();
     parts.animation.animate();
+    parts.animation.drawDots();
   };
   const settle = () => {
     for (let i = 0; i < 100 && frames.length; i++) frame();
   };
   t.after(() => {
     parts.animation.clearDots();
-    state._pointCollection.destroy();
+    state._display.destroy();
+    engine.destroy();
   });
-  return { state, parts, roads, frame, settle, frames };
+  return { state, parts, roads, frame, settle, frames, engine };
 }
 
 test('incremental tiles, reordered snapshots and flow changes retain existing dot identities and progress', (t) => {
@@ -126,6 +156,13 @@ test('incremental tiles, reordered snapshots and flow changes retain existing do
   assert.equal(target.point.show, true);
   assert.equal(target.id, before[0].id);
   assert.equal(h.state._motion.rebuilds, 0);
+  h.frame();
+  assert.ok(fillCount(h.engine) > 0);
+  assert.equal(
+    fillCount(h.engine),
+    h.state._dots.filter((d) => d.point.show && d.point.pixelSize > 0).length,
+    'the display draws every shown dot',
+  );
 });
 
 test('height refinement eases retained waypoints vertically without changing road or dot progress', (t) => {
@@ -171,8 +208,9 @@ test('density and replacement changes are bounded; removed roads fade out and te
   assert.ok(h.state._dots.every((d) => !oldIds.has(d.id)));
   assert.equal(new Set(h.state._dots.map((d) => d.id)).size, 3000);
   h.parts.animation.clearDots();
+  assert.equal(fillCount(h.engine), 0, 'a clear is drawn without a frame');
   h.frame();
-  assert.equal(h.state._pointCollection.length, 0);
+  assert.equal(fillCount(h.engine), 0);
   assert.equal(h.state._dots.length, 0);
   assert.equal(h.frames.length, 0);
 });
@@ -276,16 +314,11 @@ test('major previews merge and never retry missing mesh ahead of the detail pass
   for (const measured of [true, false]) {
     let samples = 0;
     const paints = [];
-    const scene = {
-      globe: {
-        show: true,
-        tilesLoaded: true,
-        getHeight: () => {
-          samples++;
-          return measured ? 100 : undefined;
-        },
-      },
-    };
+    const engine = flowEngineAt(450);
+    engine.fake.script('terrainHeight', () => {
+      samples++;
+      return measured ? 100 : undefined;
+    });
     const coords = [
       [0, 0],
       [0.001, 0],
@@ -301,7 +334,7 @@ test('major previews merge and never retry missing mesh ahead of the detail pass
       _dots: [],
       _detailRoadsReady: true,
       _motion: { added: 0 },
-      _viewer: { scene },
+      _engine: engine,
       _enabled: true,
       _loadGeneration: 1,
       _roadSource: 'OpenStreetMap',
@@ -431,12 +464,11 @@ test('measured preview heights select elevated detail roads before surface admis
     ],
     segmentDist: [111],
   });
-  const scene = {
-    globe: { show: true, tilesLoaded: true, getHeight: () => 750 },
-  };
+  const engine = flowEngineAt(1250);
+  engine.fake.script('terrainHeight', 750);
   const state = {
     _dots: [],
-    _viewer: { scene },
+    _engine: engine,
     _enabled: true,
     _loadGeneration: 1,
     _roadSource: 'OpenStreetMap',
@@ -510,16 +542,14 @@ test('provisional opposite-direction heights cannot overwrite a measured sibling
     segmentDist: [111],
   });
   const selections = [];
-  const scene = {
-    globe: {
-      show: true,
-      tilesLoaded: true,
-      getHeight: (c) => 750 + C.Math.toDegrees(c.longitude) * 10000,
-    },
-  };
+  const engine = flowEngineAt(1250);
+  engine.fake.script(
+    'terrainHeight',
+    (c) => 750 + C.Math.toDegrees(c.longitude) * 10000,
+  );
   const state = {
     _dots: [],
-    _viewer: { scene },
+    _engine: engine,
     _enabled: true,
     _loadGeneration: 1,
     _roadSource: 'OpenStreetMap',
@@ -581,7 +611,8 @@ test('a closure that empties the population mid-correction settles heights and c
   corrected[0].flow = { level: 0, closure: true };
   for (let i = 0; i < 20 && h.state._dots.length; i++) h.frame();
   assert.equal(h.state._dots.length, 0);
-  assert.equal(h.state._heatJamPrim, null);
+  assert.equal(fillCount(h.engine), 0, 'the last removal is drawn');
+  assert.equal(h.state._heatLineCount, 0);
   assert.equal(h.state._renderHeld, false);
   assert.equal(h.state._heightPending, false);
   assert.equal(h.state._populationPending, false);
@@ -598,22 +629,14 @@ test('a closure that empties the population mid-correction settles heights and c
 
 test('large height corrections obey a screen-pixel bound and reuse projection scratch objects', (t) => {
   const h = setup(t);
-  h.state._viewer.scene = {
-    canvas: { clientWidth: 1280, clientHeight: 2000 },
-    camera: {},
-    frameState: {},
-  };
+  h.engine.fake.setSize(1280, 2000);
   const scratch = new Set();
-  t.mock.method(
-    C.SceneTransforms,
-    'worldToWindowCoordinates',
-    (_scene, point, result) => {
-      scratch.add(result);
-      result.x = 0;
-      result.y = C.Cartographic.fromCartesian(point).height * 10;
-      return result;
-    },
-  );
+  h.engine.fake.script('worldToWindow', (point, result) => {
+    scratch.add(result);
+    result.x = 0;
+    result.y = C.Cartographic.fromCartesian(point).height * 10;
+    return result;
+  });
   h.parts.retention.reconcile(h.roads(), 450, true);
   h.settle();
   const dot = h.state._dots[0],
@@ -640,10 +663,24 @@ test('grounded vehicles respect mesh occlusion even after live congestion change
   h.parts.retention.reconcile(roads, 450, true);
   h.settle();
   assert.ok(h.state._dots.length > 0);
-  assert.ok(h.state._dots.every((d) => d.point.disableDepthTestDistance === 0));
+  // The vehicle sets are depth-tested against the scene (Cesium's
+  // disableDepthTestDistance 0); no dot carries an override of its own.
+  const depthTests = () =>
+    Object.values({
+      outline: TRAFFIC_SET_IDS.outline,
+      fill: TRAFFIC_SET_IDS.fill,
+    }).map((id) => h.engine.fake.moverSet(id).options.depthTest);
+  assert.deepEqual(depthTests(), ['normal', 'normal']);
+  assert.ok(
+    h.state._dots.every((d) => !('disableDepthTestDistance' in d.point)),
+  );
   for (const road of roads) road.flow = { level: 0.01, closure: false };
   h.parts.model.recolorDotsInPlace('late jam');
-  assert.ok(h.state._dots.every((d) => d.point.disableDepthTestDistance === 0));
+  h.frame();
+  assert.deepEqual(depthTests(), ['normal', 'normal']);
+  assert.ok(
+    h.state._dots.every((d) => !('disableDepthTestDistance' in d.point)),
+  );
 });
 
 test('retained road density follows the settled view without requiring a toggle', (t) => {
@@ -670,4 +707,29 @@ test('retained road density follows the settled view without requiring a toggle'
     count,
     'fresh toggle and retained view have the same budget',
   );
+});
+
+test('flow that lands after a publication re-allocates the retained population', (t) => {
+  const h = setup(t);
+  const [road] = h.roads();
+  // A refresh clears the road's flow before it is published again.
+  road.flow = null;
+  h.parts.retention.reconcile([road], 450, true);
+  h.settle();
+  const uncongested = h.state._count;
+  const ids = new Set(h.state._dots.map((dot) => dot.id));
+  assert.ok(uncongested > 1);
+  road.flow = { level: 0.4, closure: false };
+  h.parts.model.recolorDotsInPlace('late flow');
+  h.parts.retention.retarget();
+  h.settle();
+  assert.ok(
+    h.state._count > 2 * uncongested,
+    `slow flow carries more vehicles: ${uncongested} -> ${h.state._count}`,
+  );
+  assert.ok(
+    [...ids].every((id) => h.state._dots.some((dot) => dot.id === id)),
+    'the vehicles already on the road keep moving',
+  );
+  assert.equal(h.state._motion.rebuilds, 0);
 });

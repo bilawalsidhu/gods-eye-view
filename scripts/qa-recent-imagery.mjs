@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native imagery stacks and split position verify the Cesium imagery adapter.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenUiSettled, whenSettled } from './qa/ready.mjs';
 /**
  * Rendered acceptance for DATA ▸ Recent Imagery against the real NASA
  * endpoints (CMR catalog, GIBS tiles, Worldview snapshots): the rail panel,
@@ -17,9 +20,9 @@
  * 4 s ZOOM IN wait and 0.8 s height-stability tail (defaults: 2 s / 1.2 s).
  * Every wait is bounded. Without NASA access the run skips with code 0.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
@@ -51,21 +54,14 @@ if (!(await networkAvailable())) {
   process.exit(0);
 }
 
-const browser = await puppeteer.launch({
-  headless: !HEADFUL,
-  ...(HEADFUL
-    ? {
-        executablePath: chromeExecutablePath(),
-      }
-    : {}),
+const browser = await launchBrowser({
+  headless: true,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     ...(HEADFUL ? ['--window-size=1280,860'] : []),
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -200,7 +196,7 @@ const state = () =>
         : null,
       splitLeft: split ? split.getBoundingClientRect().left : null,
       splitPosition: gev.viewer.scene.splitPosition,
-      canvasWidth: gev.viewer.scene.canvas.clientWidth,
+      canvasWidth: window.__godsEyeView.engine.host.canvas.clientWidth,
       activeStack: qa.activeStack(),
       gibsOnGlobe: hosts.globe,
       gibsOnTileset: hosts.tileset,
@@ -212,25 +208,27 @@ const hostsDetail = (s) =>
 
 /** Put the camera straight down over a point at a height, no flight. */
 const setView = (view) =>
-  page.evaluate((target) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (target.lon * Math.PI) / 180,
-        latitude: (target.lat * Math.PI) / 180,
-        height: target.height,
-      }),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-    });
-    viewer.scene.requestRender();
-  }, view);
+  evaluateWithGeo(
+    page,
+    async (qaGeo, target) => {
+      window.__godsEyeView.engine.camera.cancelFlight?.();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
+          longitude: (target.lon * Math.PI) / 180,
+          latitude: (target.lat * Math.PI) / 180,
+          height: target.height,
+        }),
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      window.__godsEyeView.engine.render.request();
+    },
+    view,
+  );
 
 /** Ground width of the camera's view rectangle, in km (0 without one). */
 const viewWidthKm = () =>
   page.evaluate(() => {
-    const rect = window.__godsEyeView.viewer.camera.computeViewRectangle?.();
+    const rect = window.__godsEyeView.engine.camera.viewRectangle?.();
     if (!rect) return 0;
     const lat = (rect.south + rect.north) / 2;
     return Math.abs(rect.east - rect.west) * 6371 * Math.cos(lat);
@@ -279,8 +277,9 @@ async function probe() {
 const tilesSettled = () =>
   until(() => {
     const gev = window.__godsEyeView;
-    if (gev.viewer.scene.globe.show) return gev.viewer.scene.globe.tilesLoaded;
-    return !gev.tileset || gev.tileset.tilesLoaded;
+    if (gev.viewer.scene.globe.show)
+      return window.__godsEyeView.engine.surface.tilesLoaded();
+    return !gev.tileset || window.__godsEyeView.engine.surface.tilesLoaded();
   });
 const backOnPhotoreal = () =>
   until(() => window.__riQa.activeStack() === 'photoreal');
@@ -334,7 +333,7 @@ const measure = () =>
 let layoutBaseline = null;
 /** Every control's rect matches the baseline within 1 px. */
 async function checkLayout(label) {
-  await wait(150);
+  await whenUiSettled(page);
   const now = await measure();
   if (!layoutBaseline) {
     layoutBaseline = now;
@@ -370,12 +369,13 @@ try {
     () =>
       window.__gevRecentImagery &&
       window.__godsEyeView &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+      window.__godsEyeView.engine,
     null,
     90_000,
   );
   check('the app boots with the Recent Imagery handle', booted);
   if (!booted) throw new Error('boot timeout');
+  await whenSettled(page);
   await page.evaluate(installPageHelpers);
 
   await setView(AUSTIN);
@@ -586,10 +586,8 @@ try {
       changedColour = colour;
       break;
     }
-    await page.evaluate(() =>
-      window.__godsEyeView.viewer.scene.requestRender(),
-    );
-    await wait(1000);
+    await page.evaluate(() => window.__godsEyeView.engine.render.request());
+    await whenUiSettled(page);
   }
   check(
     'the rendered frame inside the box changes once the preview drapes',
@@ -681,7 +679,7 @@ try {
   );
   await checkLayout('pinned');
   await page.keyboard.press(targetIndex > 0 ? 'ArrowLeft' : 'ArrowRight');
-  await wait(700);
+  await whenUiSettled(page);
   current = await state();
   check(
     'with the image pinned, focus moves without changing the map',
@@ -981,7 +979,7 @@ try {
   let refusalWidth = 0;
   for (const height of [400_000, 900_000, 1_800_000]) {
     await setView({ ...AUSTIN, height });
-    await wait(300);
+    await whenUiSettled(page);
     refusalWidth = await viewWidthKm();
     if (refusalWidth > 1_100) break;
   }
@@ -1041,10 +1039,9 @@ try {
   await panelShot('05-refused-panel');
   // ZOOM IN: straight down to the height whose view is 400 km wide.
   const fitHeight = await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    const canvas = viewer.scene.canvas;
+    const canvas = window.__godsEyeView.engine.host.canvas;
     const halfWidth =
-      Math.tan(viewer.camera.frustum.fovy / 2) *
+      Math.tan(window.__godsEyeView.engine.camera.pose().fovy / 2) *
       (canvas.clientWidth / canvas.clientHeight);
     return Math.min(400, Math.max(5, 400 / (2 * halfWidth))) * 1000;
   });
@@ -1052,14 +1049,14 @@ try {
   const zoomed = await until(
     (target) =>
       Math.abs(
-        window.__godsEyeView.viewer.camera.positionCartographic.height - target,
+        window.__godsEyeView.engine.camera.pose().cartographic.height - target,
       ) <=
       target * 0.01,
     fitHeight,
     ZOOM_TIMEOUT_MS,
   );
   const zoomedHeight = await page.evaluate(
-    () => window.__godsEyeView.viewer.camera.positionCartographic.height,
+    () => window.__godsEyeView.engine.camera.pose().cartographic.height,
   );
   check(
     `ZOOM IN reaches target within ${ZOOM_TIMEOUT_MS / 1_000} s`,
@@ -1235,7 +1232,7 @@ try {
     }, id);
   const imageryPanel = 'recent-imagery-panel';
   const collapsedNow = (await togglePanel(imageryPanel)) === false;
-  await wait(400);
+  await whenUiSettled(page);
   const headerOnly = await page.evaluate(() => ({
     panel: document.getElementById('recent-imagery-panel')?.offsetHeight,
     body: document.getElementById('recent-imagery-panel-body')?.offsetHeight,
@@ -1249,7 +1246,7 @@ try {
     JSON.stringify(headerOnly),
   );
   const expandedAgain = await togglePanel(imageryPanel);
-  await wait(400);
+  await whenUiSettled(page);
   const bodyBack = await page.evaluate(
     () => document.getElementById('recent-imagery-panel-body')?.offsetHeight,
   );
@@ -1270,7 +1267,7 @@ try {
           cctv: document.getElementById('cctv-panel')?.offsetHeight,
         })),
       );
-      await wait(100);
+      await whenUiSettled(page);
     }
     const tail = (key) =>
       new Set(samples.slice(-HEIGHT_TAIL_SAMPLES).map((s) => s[key]));
@@ -1315,7 +1312,7 @@ try {
   for (const height of [900, 700]) {
     const at = `(${height} px viewport)`;
     await page.setViewport({ width: 1280, height });
-    await wait(600);
+    await whenUiSettled(page);
     check(
       `the CCTV panel expands from its launcher ${at}`,
       (await togglePanel('cctv-panel')) === true,
@@ -1372,7 +1369,7 @@ try {
           ?.classList.contains('collapsed'),
     );
     if (imageryExpanded) await togglePanel(imageryPanel);
-    await wait(400);
+    await whenUiSettled(page);
     const onScreen = await page.evaluate(() =>
       Object.fromEntries(
         [
@@ -1389,7 +1386,7 @@ try {
       JSON.stringify(onScreen),
     );
     await togglePanel(imageryPanel);
-    await wait(400);
+    await whenUiSettled(page);
   }
 
   // ── scroll preservation (700 px viewport, body scrollable) ───────────────
@@ -1397,7 +1394,7 @@ try {
     const header = document.querySelector('#ri-details .rail-card-header');
     if (header?.getAttribute('aria-expanded') !== 'true') header?.click();
   });
-  await wait(300);
+  await whenUiSettled(page);
   const bodyScroll = () =>
     page.evaluate(() => {
       const body = document.getElementById('recent-imagery-panel-body');
@@ -1424,7 +1421,7 @@ try {
       layer.setToolActive(true);
       layer.setToolActive(false);
     });
-    await wait(300);
+    await whenUiSettled(page);
     const afterNotify = await bodyScroll();
     check(
       'the body scroll position survives alpha and state notifications',
@@ -1434,7 +1431,7 @@ try {
     await focusStrip();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
-    await wait(600);
+    await whenUiSettled(page);
     const afterArrows = await bodyScroll();
     check(
       'the body scroll position survives arrow navigation',
@@ -1488,7 +1485,7 @@ try {
     error?.stack || error?.message || String(error),
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`shots: ${shots.join(', ')}`);
 console.log(`RESULT: ${checks} checks, ${failures} failures`);

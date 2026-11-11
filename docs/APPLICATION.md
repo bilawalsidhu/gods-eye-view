@@ -195,6 +195,10 @@ signal })` returns one tile or null for a transparent tile, each as an
 `ImageBitmap`, `ImageData`, canvas or `VideoFrame` of exactly the requested
 size, which the layer draws once and closes. Without them the layers read the
 image and tile routes (`WeatherFrameFeed` in `src/layers/weather/source.js`).
+On globe surfaces, a source with `getFrameTile` currently requires Cesium for
+radar, regional infrared and lightning. Navara pauses those products with
+`This weather source requires Cesium`; decoded global infrared images and
+the whole-frame images used over 3D tiles draw through the shared display.
 
 `application/services` accepts boundary, terrain, regional-context, weather and
 summary services; its weather service supplies cockpit local conditions, not the

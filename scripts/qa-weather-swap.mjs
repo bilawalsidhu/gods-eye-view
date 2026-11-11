@@ -1,3 +1,5 @@
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
 /**
  * Weather history-swap probe: does the scene keep drawing while a draped
  * weather frame is replaced? Runs against a live dev server, turns on one
@@ -8,9 +10,9 @@
  *   node scripts/qa-weather-swap.mjs --url http://localhost:4173 --label google
  *     [--layer weather-satellite] [--product clouds] [--headless]
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -32,17 +34,11 @@ const product = arg(
 );
 const outDir = path.resolve(arg('--out', 'qa-shots/weather-swap'), label);
 mkdirSync(outDir, { recursive: true });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Globe disc in CSS pixels for the 1400×920 viewport at the Earth view.
 const DISC = { cx: 700, cy: 460, r: 300 };
 
-const browser = await puppeteer.launch({
-  headless: flag('--headless') ? 'new' : false,
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((p) =>
-      existsSync(p),
-    ),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   defaultViewport: null,
   args: [
@@ -59,20 +55,20 @@ try {
   await page.setViewport({ width: 1400, height: 920, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, {
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, {
     timeout: 120_000,
   });
-  await sleep(12_000);
-  await page.evaluate(
-    async ({ layerId, product }) => {
+  await whenSettled(page);
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, { layerId, product }) => {
       const gev = window.__godsEyeView;
       const dm = gev.dataManager;
       for (const [id, e] of dm.layers)
         if (e.enabled) await dm.setEnabled(id, false, { origin: 'user' });
-      const v = gev.viewer;
       const d = Math.PI / 180;
-      v.camera.setView({
-        destination: v.scene.ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -80 * d,
           latitude: 25 * d,
           height: 17_368_000,
@@ -96,7 +92,7 @@ try {
       { layerId, product },
     )
     .catch(() => console.log('  !! first frame not ready'));
-  await sleep(3000);
+  await whenSettled(page);
   const diag = () =>
     page.evaluate((layerId) => {
       const d = window.__godsEyeView.dataManager.layers
@@ -126,13 +122,15 @@ try {
       { layerId, params },
     );
   await step({ step: -1 });
+  // Sample the replacement over six seconds, including frames still loading.
   for (let i = 1; i <= 15; i++) {
-    await sleep(400);
+    await new Promise((resolve) => setTimeout(resolve, 400));
     await capture(`earlier-${String(i).padStart(2, '0')}`);
   }
   await step({ play: true });
+  // History playback is observed over ten seconds.
   for (let i = 1; i <= 20; i++) {
-    await sleep(500);
+    await new Promise((resolve) => setTimeout(resolve, 500));
     if (i % 2 === 0) await capture(`play-${String(i).padStart(2, '0')}`);
   }
   await step({ play: true });
@@ -193,5 +191,5 @@ try {
     `frames=${frames.length} black(>15%)=${blackFrames} max=${(summary.maxBlack * 100).toFixed(1)}% distinctTimes=${distinctTimes}`,
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

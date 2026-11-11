@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createSelection } from './selection.js';
 import { createPickRouter } from './pickRouter.js';
+import { CLICK_PICK_WINDOW_PX } from './policy.js';
+import { STREET_LEVEL_MAPS } from '../../testSupport/streetLevelFakes.mjs';
 
-/** The selection installed on a stand-in viewer, with what its clicks reach. */
-function harness({ selected = false, services = {}, providers = [] } = {}) {
+/**
+ * The selection installed on the display of `map` (a STREET_LEVEL_MAPS
+ * harness, the fake engine's by default), with what its clicks reach.
+ */
+function harness({
+  selected = false,
+  services = {},
+  providers = [],
+  map = STREET_LEVEL_MAPS[0](),
+} = {}) {
   const saved = globalThis.document;
   globalThis.document = new EventTarget();
   // The document's keydown listeners, so a test can hand them any target.
@@ -29,16 +39,8 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
   const groundClicks = [];
   /** What the pointer is over: a pick id, or nothing. */
   const scene = { under: null };
-  const canvas = Object.assign(new EventTarget(), {
-    // Keep Cesium's handler on the canvas; there is no real document here.
-    disableRootEvents: true,
-    onwheel: null,
-  });
-  const viewer = {
-    scene: { canvas, pick: () => scene.under && { id: scene.under } },
-  };
   const state = {
-    viewer,
+    map: map.map,
     enabled: true,
     clickHandler: null,
     services: { picking: null, input: null, ...services },
@@ -72,16 +74,19 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
     },
   };
   const selection = createSelection({ state, parts });
-  selection.install(viewer);
-  const action = (type) =>
-    state.clickHandler.getInputAction(Cesium.ScreenSpaceEventType[type]);
+  selection.install(map.map);
   return {
     state,
+    map,
     sequences,
     opened,
     groundClicks,
     scene,
-    click: (x = 10) => action('LEFT_CLICK')({ position: { x, y: 10 } }),
+    click: (x = 10) =>
+      map.click(scene.under ? { id: scene.under, primitive: {} } : undefined, {
+        x,
+        y: 10,
+      }),
     /** A keydown reaching the document from `target`; the event as handled. */
     key(key, target, { defaultPrevented = false } = {}) {
       const event = {
@@ -102,25 +107,73 @@ function harness({ selected = false, services = {}, providers = [] } = {}) {
   };
 }
 
-test('a click on a line selects its sequence, on a cone opens its image, elsewhere does nothing', () => {
+for (const create of STREET_LEVEL_MAPS) {
+  const name = create().name;
+  test(`a click on a line selects its sequence, on a cone opens its image, elsewhere does nothing (${name})`, () => {
+    const h = harness({ map: create() });
+    try {
+      h.scene.under = 'mly:seq:abc';
+      h.click();
+      assert.deepEqual(h.sequences.selects, ['abc']);
+      h.scene.under = 'mly:img:42';
+      h.click();
+      assert.deepEqual(h.opened, ['42']);
+      for (const under of [null, 'cctv:7', 'sl:pos']) {
+        h.scene.under = under;
+        h.click();
+      }
+      assert.deepEqual([h.sequences.selects, h.opened], [['abc'], ['42']]);
+      // The marker is ours; nothing and another layer's pick go to the ground.
+      assert.deepEqual(
+        h.groundClicks.map(({ picked }) => picked?.id),
+        [undefined, 'cctv:7'],
+      );
+    } finally {
+      h.restore();
+    }
+  });
+}
+
+test('a click picks in a window a few pixels wide, through engine.input and engine.picker', () => {
   const h = harness();
+  try {
+    const { fake } = h.map.engine;
+    assert.deepEqual(
+      fake.callsOf('input.on').map(({ args }) => args),
+      [['click', { pick: true, pickWindow: { width: 9, height: 9 } }]],
+      'one click listener with its pick window',
+    );
+    h.scene.under = 'mly:seq:abc';
+    h.click(30);
+    assert.deepEqual(fake.callsOf('picker.pick').at(-1).args, [
+      { x: 30, y: 10 },
+      CLICK_PICK_WINDOW_PX,
+      CLICK_PICK_WINDOW_PX,
+    ]);
+    assert.deepEqual(h.sequences.selects, ['abc']);
+    h.restore();
+    h.scene.under = 'mly:seq:def';
+    h.click();
+    assert.deepEqual(h.sequences.selects, ['abc'], 'uninstalled: no clicks');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a tool that owns the pointer, or a layer that is off, takes no click', () => {
+  let free = false;
+  const h = harness({ services: { input: { isPointerFree: () => free } } });
   try {
     h.scene.under = 'mly:seq:abc';
     h.click();
-    assert.deepEqual(h.sequences.selects, ['abc']);
-    h.scene.under = 'mly:img:42';
+    assert.deepEqual(h.sequences.selects, [], 'the tool keeps it');
+    free = true;
+    h.state.enabled = false;
     h.click();
-    assert.deepEqual(h.opened, ['42']);
-    for (const under of [null, 'cctv:7', 'sl:pos']) {
-      h.scene.under = under;
-      h.click();
-    }
-    assert.deepEqual([h.sequences.selects, h.opened], [['abc'], ['42']]);
-    // The marker is ours; nothing and another layer's pick go to the ground.
-    assert.deepEqual(
-      h.groundClicks.map(({ picked }) => picked?.id),
-      [undefined, 'cctv:7'],
-    );
+    assert.deepEqual(h.sequences.selects, [], 'the layer is off');
+    h.state.enabled = true;
+    h.click();
+    assert.deepEqual(h.sequences.selects, ['abc']);
   } finally {
     h.restore();
   }
@@ -228,9 +281,9 @@ test('a click on a provider line hands it the ground under the click, measured o
     ],
     services: {
       scenePick: {
-        pickGroundPosition: (viewer, position) => {
-          groundPicks.push(position);
-          return Cesium.Cartesian3.fromDegrees(-83.0458, 42.3314, 190);
+        pickGroundPosition: (engine, position) => {
+          groundPicks.push({ engine, position });
+          return geo.cartesian3.fromDegrees(-83.0458, 42.3314, 190);
         },
       },
     },
@@ -248,7 +301,11 @@ test('a click on a provider line hands it the ground under the click, measured o
     const point = handled[0].click.groundPoint();
     assert.ok(Math.abs(point.lon + 83.0458) < 1e-9);
     assert.ok(Math.abs(point.lat - 42.3314) < 1e-9);
-    assert.deepEqual(groundPicks, [{ x: 40, y: 10 }]);
+    assert.deepEqual(
+      groundPicks.map(({ position }) => position),
+      [{ x: 40, y: 10 }],
+    );
+    assert.equal(groundPicks[0].engine, h.map.engine, 'on the display engine');
   } finally {
     h.restore();
   }

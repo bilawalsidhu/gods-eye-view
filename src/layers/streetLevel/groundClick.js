@@ -1,11 +1,11 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { GROUND_CLICK_MAX_HEIGHT_M } from './policy.js';
-import { cameraHeightAboveGround } from './view.js';
+import { cameraHeightAboveGround, cameraLocation } from './view.js';
 
 /** Whether the camera is low enough for a click on the ground to mean a street. */
-export function groundClickHeightOk(viewer) {
-  if (!viewer?.camera?.positionCartographic) return false;
-  return cameraHeightAboveGround(viewer) <= GROUND_CLICK_MAX_HEIGHT_M;
+export function groundClickHeightOk(map) {
+  if (!cameraLocation(map)) return false;
+  return cameraHeightAboveGround(map) <= GROUND_CLICK_MAX_HEIGHT_M;
 }
 
 /**
@@ -18,9 +18,9 @@ export function groundClickHeightOk(viewer) {
 export function createGroundClick({ state, openNearest, isAvailable }) {
   return function openAtGround(screenPosition, picked) {
     const scenePick = state.services.scenePick;
-    if (!state.enabled || !state.viewer || !scenePick?.pickGroundPosition)
+    if (!state.enabled || !state.map || !scenePick?.pickGroundPosition)
       return false;
-    if (!scenePick.isSurfacePick(picked) || !groundClickHeightOk(state.viewer))
+    if (!scenePick.isSurfacePick(picked) || !groundClickHeightOk(state.map))
       return false;
     const providerIds = [...state.providers.values()]
       .filter(
@@ -32,13 +32,16 @@ export function createGroundClick({ state, openNearest, isAvailable }) {
       )
       .map((entry) => entry.def.id);
     if (!providerIds.length) return false;
-    const position = scenePick.pickGroundPosition(state.viewer, screenPosition);
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
+    const position = scenePick.pickGroundPosition(
+      state.map.engine,
+      screenPosition,
+    );
+    const carto = position && geo.cartographic.fromCartesian(position);
     if (!carto) return false;
     return openNearest(
       {
-        lon: Cesium.Math.toDegrees(carto.longitude),
-        lat: Cesium.Math.toDegrees(carto.latitude),
+        lon: geo.math.toDegrees(carto.longitude),
+        lat: geo.math.toDegrees(carto.latitude),
       },
       { providerIds, frame: false },
     );

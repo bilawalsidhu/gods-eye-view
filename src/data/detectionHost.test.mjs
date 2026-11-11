@@ -1,8 +1,11 @@
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
+let overlayEngine;
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import {
   countFadingRenderEntries,
   destroyDetection,
@@ -18,12 +21,6 @@ import {
   setMode,
   suspendDetection,
 } from './detection.js';
-import {
-  destroyWorldOverlay,
-  getOverlayPaintRect,
-  initWorldOverlay,
-  setOverlayEntries,
-} from '../overlays/worldOverlay.js';
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
 import {
   getKeyholeFadeTuning,
@@ -244,12 +241,6 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
   const container = new MockElement('div');
   container.id = 'cesiumContainer';
   body.appendChild(container);
-  const root = new MockElement('div');
-  root.id = 'world-overlay-root';
-  body.appendChild(root);
-  const canvas = new MockElement('canvas');
-  canvas.id = 'world-overlay-canvas';
-  root.appendChild(canvas);
 
   const postRender = new MockEvent();
   const viewer = {
@@ -265,8 +256,13 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
     scene: { postRender, requestRender() {} },
   };
 
+  // Shell modules take the globe engine; the Cesium engine runs on the mock.
+  viewer.clock = { onTick: new Cesium.Event() };
+  const engine = createCesiumEngine(viewer);
+  overlayEngine = engine;
   return {
     viewer,
+    engine,
     postRender,
     document,
     ctx,
@@ -276,7 +272,8 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
     setPerformanceStep(ms) { performanceStep = ms; },
     cleanup() {
       destroyDetection();
-      destroyWorldOverlay();
+      worldOverlayFor(overlayEngine)?.destroy();
+      engine.destroy();
       Date.now = originalDateNow;
       if (originalPath2D === undefined) delete globalThis.Path2D;
       else globalThis.Path2D = originalPath2D;
@@ -371,8 +368,8 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
   const env = installEnvironment({ search: '?detectDebug=1' });
   const modes = [];
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [detectableLayer()], (mode) => modes.push(mode));
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [detectableLayer()], (mode) => modes.push(mode));
     assert.equal(env.postRender.listeners.size, 1);
     assert.equal(env.document.getElementById('detection-overlay'), null);
     assert.ok(env.document.getElementById('world-overlay-canvas'));
@@ -501,7 +498,7 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     setMode('DENSE');
     env.postRender.raise();
     assert.equal(env.document.getElementById('detection-overlay'), null);
-    destroyWorldOverlay();
+    worldOverlayFor(overlayEngine)?.destroy();
     assert.equal(env.postRender.listeners.size, 0);
     assert.equal(env.document.getElementById('world-overlay-canvas'), null);
     assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
@@ -525,8 +522,8 @@ test('callouts stop painting the moment the last detectable object goes away', (
     type: 'AIR',
   }];
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
     setMode('DENSE');
     env.advance(250);
     env.postRender.raise();
@@ -561,8 +558,8 @@ test('every style paints its OWN plate token through the production callout path
   // path once per style and reads the fill style the shared canvas received.
   const env = installEnvironment();
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [mixedTierLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [mixedTierLayer()], () => {});
     setMode('DENSE');
     settleFrame(env);
     settleFrame(env);
@@ -628,16 +625,16 @@ test('a callout stays readable when its own card is faded out at the keyhole rim
   const position = new Cesium.Cartesian3(270 / (width / 2) - 1, 1 - 460 / (height / 2), 6_356_752);
   const ship = shipWithCard('200', position);
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
     setMode('DENSE');
     for (let i = 0; i < 4; i++) settleFrame(env);
     const [alone] = getDetectionDiagnostics().calloutRects;
     assert.ok(alone && alone.alpha >= 0.5, 'without a card the callout is clearly visible');
 
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', position)]);
+    worldOverlayFor(overlayEngine)?.setEntries('ais-live-vessels', [ambientVesselCard('200', position)]);
     for (let i = 0; i < 4; i++) settleFrame(env);
-    const rect = getOverlayPaintRect('ais-live-vessels', 'vessel:200');
+    const rect = worldOverlayFor(overlayEngine)?.getPaintRect('ais-live-vessels', 'vessel:200');
     assert.ok(rect, 'the host paints the card (at the outside opacity)');
     const cardAlpha = keyholeLabelAlphaFromGeometry(rect.x + rect.w / 2, rect.y + rect.h / 2, keyhole);
     assert.ok(cardAlpha <= 0.05, `the card is invisible at the rim (keyhole alpha ${cardAlpha})`);
@@ -647,7 +644,7 @@ test('a callout stays readable when its own card is faded out at the keyhole rim
     assert.ok(callouts[0].alpha >= 0.4, 'and stays readable');
   } finally {
     destroyDetection();
-    destroyWorldOverlay();
+    worldOverlayFor(overlayEngine)?.destroy();
     env.cleanup();
   }
 });
@@ -663,19 +660,19 @@ test('a callout stays hidden while its card fades out after leaving the publishe
     env.postRender.raise();
   };
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
     setMode('DENSE');
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    worldOverlayFor(overlayEngine)?.setEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
     for (let i = 0; i < 6; i++) frame(250);
     frame(16);
     assert.ok(painted('CARD-200') && !painted('SHIP-200'), 'steady state: card only');
 
     // The vessel layer republishes its screen-grid cohort after a camera move:
     // this vessel's card is replaced by another one, the vessel stays detectable.
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('300', at(-0.5, -0.4))]);
+    worldOverlayFor(overlayEngine)?.setEntries('ais-live-vessels', [ambientVesselCard('300', at(-0.5, -0.4))]);
     frame(16);
-    assert.ok(getOverlayPaintRect('ais-live-vessels', 'vessel:200'), 'the dropped card is still fading out');
+    assert.ok(worldOverlayFor(overlayEngine)?.getPaintRect('ais-live-vessels', 'vessel:200'), 'the dropped card is still fading out');
     assert.ok(painted('CARD-200'), 'and its text still paints');
     assert.ok(!painted('SHIP-200'), 'no full callout under the fading card');
 
@@ -684,7 +681,7 @@ test('a callout stays hidden while its card fades out after leaving the publishe
     assert.ok(painted('SHIP-200'), 'and the callout is back');
   } finally {
     destroyDetection();
-    destroyWorldOverlay();
+    worldOverlayFor(overlayEngine)?.destroy();
     env.cleanup();
   }
 });
@@ -698,9 +695,9 @@ test('a vessel whose ambient card loses the collision keeps its callout', () => 
   );
   const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
-    setOverlayEntries(
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
+    worldOverlayFor(overlayEngine)?.setEntries(
       'ais-live-vessels',
       ships.map((ship) => ambientVesselCard(ship.sourceId, ship.position)),
     );
@@ -709,7 +706,7 @@ test('a vessel whose ambient card loses the collision keeps its callout', () => 
     env.ctx.calls.length = 0;
     settleFrame(env);
 
-    const winners = ships.filter((ship) => getOverlayPaintRect('ais-live-vessels', ship.cardEntryId));
+    const winners = ships.filter((ship) => worldOverlayFor(overlayEngine)?.getPaintRect('ais-live-vessels', ship.cardEntryId));
     assert.ok(
       winners.length >= 1 && winners.length < ships.length,
       `the colliding cards leave some unpainted (${winners.length} of ${ships.length} painted)`,
@@ -729,7 +726,7 @@ test('a vessel whose ambient card loses the collision keeps its callout', () => 
     );
   } finally {
     destroyDetection();
-    destroyWorldOverlay();
+    worldOverlayFor(overlayEngine)?.destroy();
     env.cleanup();
   }
 });
@@ -738,14 +735,14 @@ test('a callout fades out while its card fades in instead of vanishing at once',
   const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
   const ship = shipWithCard('200', new Cesium.Cartesian3(0.1, 0.1, 6_356_752));
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
     setMode('DENSE');
     for (let i = 0; i < 4; i++) settleFrame(env);
     const [alone] = getDetectionDiagnostics().calloutRects;
     assert.ok(alone.alpha >= 0.9, 'the callout starts fully visible');
 
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    worldOverlayFor(overlayEngine)?.setEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
     const alphas = [];
     for (let i = 0; i < 30; i++) {
       env.advance(16);
@@ -759,7 +756,7 @@ test('a callout fades out while its card fades in instead of vanishing at once',
     assert.equal(alphas.at(-1), 0, 'and is gone once the card is fully in');
   } finally {
     destroyDetection();
-    destroyWorldOverlay();
+    worldOverlayFor(overlayEngine)?.destroy();
     env.cleanup();
   }
 });
@@ -771,8 +768,8 @@ test('space-tier callouts take the heavier plate while air contacts keep the lig
   // tiers at once can show it.
   const env = installEnvironment();
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [mixedTierLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [mixedTierLayer()], () => {});
     setDetectionStyle('surveillance');
     setMode('DENSE');
     settleFrame(env);
@@ -799,8 +796,8 @@ test('space-tier callouts take the heavier plate while air contacts keep the lig
 test('surveillance military tier reaches the dedicated render target as shipped red', () => {
   const env = installEnvironment();
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [militaryLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [militaryLayer()], () => {});
     setDetectionStyle('surveillance');
     setMode('DENSE');
     env.advance(250);
@@ -839,8 +836,8 @@ test('Global Context echo brackets reach the canvas in the detection style colou
       pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
       echo,
     });
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [militaryLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [militaryLayer()], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
@@ -885,8 +882,8 @@ test('a Global Context echo bracket is drawn outside its contact bracket and dim
       echo,
       level: () => 0.5,
     });
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [militaryLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [militaryLayer()], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
@@ -957,8 +954,8 @@ test('under the Cyber sonar sweep an echo is never brighter than its own bracket
       echo,
       level: () => 1,
     });
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [contact], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [contact], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
@@ -1019,8 +1016,8 @@ test('resting Global Context pulses skip echo work for the whole frame, not per 
         return 0;
       },
     });
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [layer], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [layer], () => {});
     setMode('DENSE');
     settleFrame(env);
     levelCalls = 0;
@@ -1046,9 +1043,9 @@ test('pathological detection paint holds alternate frames without freezing share
   // Opts into the telemetry banner: the held-frame assertions count banner paints.
   const env = installEnvironment({ search: '?detectDebug=1' });
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [detectableLayer()], () => {});
-    setOverlayEntries('valve-card', [{
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [detectableLayer()], () => {});
+    worldOverlayFor(overlayEngine)?.setEntries('valve-card', [{
       id: 'ambient-card',
       position: new Cesium.Cartesian3(0, 0, 0),
       variant: 'label',
@@ -1109,7 +1106,7 @@ test('detection cannot resurrect a private canvas, listener, matrix, resize, cle
   assert.match(source, /const LABEL_SOLVE_INTERVAL_MS = 125;/);
   assert.match(source, /const _labelArbiter = new LabelArbiter\(\);/);
   assert.match(source, /const clipW = vp3 \* px \+ vp7 \* py \+ vp11 \* pz \+ vp15;/);
-  assert.match(source, /registerWorldOverlayPaintLane\('detection', _paintDetectionLane/);
+  assert.match(source, /worldOverlayFor\(engine\)\?\.registerPaintLane\(\s*'detection',\s*_paintDetectionLane/);
   assert.match(source, /target: 'detection'/);
   assert.match(source, /shouldPaint: _shouldPaintDetectionLane/);
   // The three military styles used to carry three copies of these numbers.
@@ -1153,8 +1150,8 @@ test('the mode banner is absent by default and present behind the flag', () => {
   const painted = (search) => {
     const env = installEnvironment({ search });
     try {
-      initWorldOverlay(env.viewer);
-      initDetection(env.viewer, [detectableLayer()], () => {});
+      worldOverlayFor(overlayEngine = env.engine)?.init();
+      initDetection(env.engine, [detectableLayer()], () => {});
       setMode('DENSE');
       env.advance(250);
       env.postRender.raise();
@@ -1166,7 +1163,7 @@ test('the mode banner is absent by default and present behind the flag', () => {
       return bannerPaints(env);
     } finally {
       destroyDetection();
-      destroyWorldOverlay();
+      worldOverlayFor(overlayEngine)?.destroy();
       env.cleanup();
     }
   };
@@ -1180,8 +1177,8 @@ test('detection telemetry stays reachable programmatically with the banner hidde
   // is the supported way to read them, and is what the QA harnesses use.
   const env = installEnvironment();
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [detectableLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [detectableLayer()], () => {});
     setMode('DENSE');
     env.advance(250);
     env.postRender.raise();
@@ -1192,7 +1189,7 @@ test('detection telemetry stays reachable programmatically with the banner hidde
     assert.equal(typeof diagnostics.densityPct, 'number');
   } finally {
     destroyDetection();
-    destroyWorldOverlay();
+    worldOverlayFor(overlayEngine)?.destroy();
     env.cleanup();
   }
 });
@@ -1208,8 +1205,8 @@ test('civilian and military AIR brackets cover front, left, and right at Sparse 
         metric: 'FL120',
         type: 'AIR',
       }));
-      initWorldOverlay(env.viewer);
-      initDetection(env.viewer, [{ id: layerId, getDetectableObjects: () => objects }], () => {});
+      worldOverlayFor(overlayEngine = env.engine)?.init();
+      initDetection(env.engine, [{ id: layerId, getDetectableObjects: () => objects }], () => {});
       setDetectionTuning({ densityPct: 25 });
       setMode('SPARSE');
       settleFrame(env);
@@ -1226,7 +1223,7 @@ test('civilian and military AIR brackets cover front, left, and right at Sparse 
         'Sparse keeps its documented budget instead of silently becoming Dense');
     } finally {
       destroyDetection();
-      destroyWorldOverlay();
+      worldOverlayFor(overlayEngine)?.destroy();
       env.cleanup();
     }
   }
@@ -1266,8 +1263,8 @@ test('the backdrop feather reaches the canvas as a lighter plate against sky', (
   // the shared canvas actually received for each plate.
   const env = installEnvironment();
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [backdropLayer()], () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, [backdropLayer()], () => {});
     setDetectionStyle('normal');
     setMode('DENSE');
     settleFrame(env);
@@ -1324,9 +1321,9 @@ test('a transit vehicle is a contact: box, route, mode and operator on the share
     },
   ];
   try {
-    initWorldOverlay(env.viewer);
+    worldOverlayFor(overlayEngine = env.engine)?.init();
     initDetection(
-      env.viewer,
+      env.engine,
       [{ id: 'transit', getDetectableObjects: () => objects }],
       () => {},
     );
@@ -1439,8 +1436,8 @@ test('a depth-tested contact behind drawn geometry loses its bracket and callout
   let surface = 3_000_000;
   const depth = installDepthScene(env, () => surface);
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, occlusionLayers(), () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, occlusionLayers(), () => {});
     setMode('DENSE');
     settleFrame(env);
     let diagnostics = getDetectionDiagnostics();
@@ -1523,8 +1520,8 @@ test('a labelled contact that goes behind something loses its callout at once, a
     }
   };
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, layers, () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, layers, () => {});
     setMode('DENSE');
     answerAndSolve(6);
     assert.ok(getDetectionDiagnostics().labeledKeys.includes('traffic:VEH-0001'));
@@ -1561,8 +1558,8 @@ test('a labelled contact that goes behind something loses its callout at once, a
 test('without scene depth every contact keeps its bracket and callout', () => {
   const env = installEnvironment();
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, occlusionLayers(), () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, occlusionLayers(), () => {});
     setMode('DENSE');
     settleFrame(env);
     settleFrame(env);
@@ -1582,8 +1579,8 @@ test('scene depth that goes away puts hidden contacts back', () => {
   const env = installEnvironment();
   const depth = installDepthScene(env, () => 3_000_000);
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, occlusionLayers(), () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, occlusionLayers(), () => {});
     setMode('DENSE');
     settleFrame(env);
     depth.gl.finishGpu();
@@ -1608,8 +1605,8 @@ test('turning detection off drops every test in flight; tearing it down frees th
   const env = installEnvironment();
   const depth = installDepthScene(env, () => 3_000_000);
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, occlusionLayers(), () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, occlusionLayers(), () => {});
     setMode('DENSE');
     settleFrame(env);
     assert.equal(depth.gl.liveQueries.size, 3);
@@ -1642,8 +1639,8 @@ test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
   const reported = [];
   console.info = (...args) => reported.push(args.join(' '));
   try {
-    initWorldOverlay(env.viewer);
-    initDetection(env.viewer, occlusionLayers(), () => {});
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, occlusionLayers(), () => {});
     setMode('DENSE');
     for (let i = 0; i < 30; i++) nextFrame(env);
     settleFrame(env);
@@ -1660,4 +1657,22 @@ test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
     console.info = originalInfo;
     env.cleanup();
   }
+});
+
+
+test('an engine without native depth leaves opted-in contacts visible', () => {
+  const env = installEnvironment();
+  delete env.engine.extensions;
+  try {
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    initDetection(env.engine, occlusionLayers(), () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    settleFrame(env);
+    const diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceDepthMode, 'off');
+    assert.equal(diagnostics.surfaceHiddenCount, 0);
+    assert.equal(diagnostics.visibleCount, 3);
+    assert.ok(paintedText(env).includes('VEH-0001'));
+  } finally { env.cleanup(); }
 });

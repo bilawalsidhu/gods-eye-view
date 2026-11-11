@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { createQuebecCctvOverlay } from './quebecCctvOverlay.js';
 
 const MEDIA_URL =
@@ -46,24 +46,16 @@ function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
   };
   window.clearInterval = (id) => intervals.delete(id);
   const renderListeners = new Set();
-  const viewer = {
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(-73.5502, 45.51651, 1000),
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      cartesianToCanvasCoordinates: () => null,
-      postRender: {
-        addEventListener(fn) {
-          renderListeners.add(fn);
-          return () => renderListeners.delete(fn);
-        },
-      },
-    },
+  const engine = createFakeEngine();
+  engine.projector.worldToWindow = () => null;
+  engine.frames.postRender.addEventListener = (fn) => {
+    renderListeners.add(fn);
+    return () => renderListeners.delete(fn);
   };
-  const overlay = createQuebecCctvOverlay(viewer);
+  const overlay = createQuebecCctvOverlay(engine);
   t.after(() => {
     overlay?.dispose();
+    engine.destroy();
     globalThis.window = previousWindow;
     globalThis.document = previousDocument;
     window.close();
@@ -72,6 +64,7 @@ function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
   return {
     window,
     overlay,
+    engine,
     loads,
     intervals,
     renderListeners,
@@ -112,6 +105,26 @@ test('selecting a Québec camera contacts Québec 511 only after Play', (t) => {
 
   ui.overlay.setCamera(null);
   assert.equal(ui.renderListeners.size, 0, 'deselect drops the per-frame listener');
+});
+
+test('the map preview uses engine projection and disappears behind the horizon', (t) => {
+  const ui = mountOverlay(t);
+  Object.assign(ui.engine.host.canvas, {
+    clientWidth: 800,
+    clientHeight: 600,
+    getBoundingClientRect: () => ({ left: 10, top: 20 }),
+  });
+  ui.engine.projector.worldToWindow = () => ({ x: 200, y: 300 });
+  ui.engine.projector.horizonVisible = () => true;
+  ui.overlay.setCamera(CAMERA);
+  const marker = ui.window.document.querySelector('.qci-marker');
+  assert.equal(marker.hidden, false);
+  assert.equal(marker.style.left, '210px');
+  assert.equal(marker.style.top, '320px');
+  ui.engine.projector.horizonVisible = () => false;
+  for (const render of ui.renderListeners) render();
+  assert.equal(marker.hidden, true);
+  assert.deepEqual(ui.loads, []);
 });
 
 test('a camera without browser media shows only its provider link', (t) => {

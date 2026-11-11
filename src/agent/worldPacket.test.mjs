@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -60,13 +61,15 @@ function harness() {
     getCockpitState: () => null,
     getControlState: () => ({ hud: { visible: 'auto' } }),
   };
-  return { viewer, dataManager, styleManager };
+  const engine = createFakeEngine();
+  engine.camera.setView({ destination: position });
+  return { viewer, engine, dataManager, styleManager };
 }
 
 test('World Packet preserves get_current_view_state parity', async () => {
-  const { viewer, dataManager, styleManager } = harness();
-  const packet = getWorldPacket({ viewer, dataManager, styleManager });
-  const runner = createGevActionRunner({ viewer, dataManager, styleManager });
+  const { viewer, engine, dataManager, styleManager } = harness();
+  const packet = getWorldPacket({ engine, dataManager, styleManager });
+  const runner = createGevActionRunner({ engine, dataManager, styleManager });
   const voice = await runner('get_current_view_state');
 
   assert.deepEqual(withoutVoicePresentation(voice), packet);
@@ -77,7 +80,7 @@ test('World Packet preserves get_current_view_state parity', async () => {
 });
 
 test('World Packet keeps stale/unavailable feed semantics distinct from empty', () => {
-  const { viewer, dataManager, styleManager } = harness();
+  const { viewer, engine, dataManager, styleManager } = harness();
   dataManager.getAll = () => [
     {
       id: 'traffic',
@@ -92,7 +95,7 @@ test('World Packet keeps stale/unavailable feed semantics distinct from empty', 
     },
   ];
 
-  const packet = getWorldPacket({ viewer, dataManager, styleManager });
+  const packet = getWorldPacket({ engine, dataManager, styleManager });
   assert.equal(packet.layers[0].count, 0);
   assert.notEqual(packet.layers[0].feedState, 'nominal');
   assert.notEqual(packet.feedProvenance.overall, 'nominal');
@@ -101,7 +104,7 @@ test('World Packet keeps stale/unavailable feed semantics distinct from empty', 
 
 // The 2026-10 main voice contract omits disabled layers from the model payload.
 test('World Packet and voice preserve enabled-only payload and count disabled layers', async () => {
-  const { viewer, dataManager, styleManager } = harness();
+  const { viewer, engine, dataManager, styleManager } = harness();
   const rows = dataManager.getAll();
   rows.push({
     id: 'earthquakes',
@@ -114,7 +117,7 @@ test('World Packet and voice preserve enabled-only payload and count disabled la
     reads += 1;
     return rows;
   };
-  const packet = getWorldPacket({ viewer, dataManager, styleManager });
+  const packet = getWorldPacket({ engine, dataManager, styleManager });
   assert.equal(reads, 1, 'collect the roster once rather than repeatedly');
   assert.equal(packet.disabledLayerCount, 1);
   assert.deepEqual(
@@ -123,7 +126,7 @@ test('World Packet and voice preserve enabled-only payload and count disabled la
   );
   assert.equal(packet.feedProvenance.overall, 'nominal');
 
-  const runner = createGevActionRunner({ viewer, dataManager, styleManager });
+  const runner = createGevActionRunner({ engine, dataManager, styleManager });
   const voice = await runner('get_current_view_state');
   assert.deepEqual(withoutVoicePresentation(voice), packet);
 });
@@ -134,7 +137,7 @@ const PINNED_NOW = Date.UTC(2026, 9, 17, 12, 0, 0);
 // cockpit, controls, scene playback, tracked families (one not ready),
 // enabled and disabled layers, and an aged and an unavailable feed.
 function pinnedHarness() {
-  const { viewer } = harness();
+  const { viewer, engine } = harness();
   const rows = [
     {
       id: 'flights',
@@ -209,7 +212,7 @@ function pinnedHarness() {
   const sceneDirector = {
     getPlaybackStatus: () => ({ playing: false, sceneId: 'fixture' }),
   };
-  return { viewer, dataManager, styleManager, sceneDirector };
+  return { viewer, engine, dataManager, styleManager, sceneDirector };
 }
 
 // Captured from main's get_current_view_state before the extraction
@@ -331,5 +334,5 @@ test('World Packet ages feeds against the clock when now is not a finite number'
 });
 
 test('World Packet rejects null options with the camera requirement', () => {
-  assert.throws(() => getWorldPacket(null), /requires a viewer camera/);
+  assert.throws(() => getWorldPacket(null), /requires a globe engine/);
 });

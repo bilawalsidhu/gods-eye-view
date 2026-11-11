@@ -13,9 +13,10 @@ function cameraHeadingDeg(camera) {
 }
 
 export function readAircraftInfo() {
-  // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
-  // (see update()), so the cockpit's own handle is the tracked identity there.
-  const trackedEntity = this.viewer?.trackedEntity || this.trackedEntity;
+  // In cockpit mode the controller releases the engine's follow of the
+  // aircraft (see enter()), so the cockpit's own handle is the tracked
+  // identity there.
+  const trackedEntity = this.host.followed() || this.trackedEntity;
   return resolveTrackedAircraftInfo({
     civilian: this.services.flightsLayer.getTrackedInfo?.() || null,
     military: this.services.militaryFlightsLayer.getTrackedInfo?.() || null,
@@ -51,14 +52,13 @@ export function readSubjectLayerId() {
 }
 
 /**
- * The subject entry would take: a Cesium-tracked aircraft first, then the
- * tracked satellite, else the selected vessel. Vessels never take Cesium
+ * The subject entry would take: an engine-followed aircraft first, then the
+ * tracked satellite, else the selected vessel. Vessels never take engine
  * tracking, so an aircraft and a vessel cannot be live through the same owner.
  * @returns {'aircraft'|'satellite'|'vessel'|null}
  */
 export function resolveEntryKind() {
-  if (this.readAircraftInfo() && this.viewer.trackedEntity?.position)
-    return 'aircraft';
+  if (this.readAircraftInfo() && this.host.current()) return 'aircraft';
   if (this.readSatelliteInfo()) return 'satellite';
   return this.readVesselInfo() ? 'vessel' : null;
 }
@@ -131,7 +131,7 @@ export function syncEntry() {
   if (this.destroyed) return false;
   if (this.active) return;
   const info = this.readAircraftInfo();
-  const trackedContact = !!(info && this.viewer.trackedEntity?.position);
+  const trackedContact = !!(info && this.host.current());
   this.syncTr3bToggle(trackedContact ? info : null);
   const orbitContact = !trackedContact && !!this.readSatelliteInfo();
   const bridgeContact =
@@ -184,22 +184,18 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
   // vessel and orbital camera updates); it is never adopted as its subject.
   if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
     return false;
-  const nextEntity = this.viewer.trackedEntity;
-  if (
-    !this.active ||
-    !nextEntity?.position ||
-    nextEntity === this.trackedEntity
-  )
+  const nextEntity = this.host.current();
+  if (!this.active || !nextEntity || nextEntity === this.trackedEntity)
     return false;
   const info = suppliedInfo || this.readAircraftInfo();
   if (!info) return false;
-  if (this.trackedEntity && this.viewer.entities.contains(this.trackedEntity)) {
+  if (this.trackedEntity && this.host.contains(this.trackedEntity)) {
     this.trackedEntity.show = this.trackedEntityWasShown;
   }
   this.trackedEntity = nextEntity;
   this.trackedEntityWasShown = nextEntity.show;
   nextEntity.show = false;
-  this.viewer.trackedEntity = undefined;
+  this.host.release();
   this.cockpitAnchorValid = false;
   this.heading = normalizeHeading(info.track ?? 0);
   this.lastFrameMs = nowMs;
@@ -236,16 +232,16 @@ export function enter({ kind = null } = {}) {
     : satellite
       ? this.readSatelliteInfo()
       : this.readAircraftInfo();
-  // Only an aircraft is ridden through its Cesium entity.
-  const entity = vessel || satellite ? null : this.viewer.trackedEntity;
-  if (!info || (!vessel && !satellite && !entity?.position)) return false;
+  // Only an aircraft is ridden through its engine follow target.
+  const entity = vessel || satellite ? null : this.host.current();
+  if (!info || (!vessel && !satellite && !entity)) return false;
   this.entryFocusOrigin =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
   // Retire deferred navigation before cancelFlight can run its callbacks.
   this.onCameraTakeover?.();
-  this.viewer.camera.cancelFlight();
+  this.host.camera.cancelFlight();
   this.subjectKind = subjectKind;
   // Each session reads its own water: never a height left from the last.
   this.vesselWaterline = null;
@@ -268,7 +264,7 @@ export function enter({ kind = null } = {}) {
     Number.isFinite(info.track)
       ? info.track
       : vessel
-        ? cameraHeadingDeg(this.viewer.camera)
+        ? cameraHeadingDeg(this.host.camera.pose())
         : 0,
   );
   this.lastFrameMs = performance.now();
@@ -289,8 +285,8 @@ export function enter({ kind = null } = {}) {
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
   // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
-  this.viewer.trackedEntity = undefined;
-  this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  this.host.release();
+  this.host.inputs(false);
   document.body.classList.add('cockpit-mode');
   // Bridge styling reaches surfaces outside the HUD (exit row, side panels).
   if (vessel) document.body.classList.add('cockpit-bridge');
@@ -411,8 +407,8 @@ export function exit({ restoreTracking = true } = {}) {
   this.clearPredictiveRoute();
   this.publishRadar(null);
   this.setVisionMode('optical');
-  this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-  if (entity && this.viewer.entities.contains(entity))
+  this.host.inputs(true);
+  if (entity && this.host.contains(entity))
     entity.show = this.trackedEntityWasShown;
   this.trackedEntityWasShown = true;
   if (vesselSubject)
@@ -420,9 +416,8 @@ export function exit({ restoreTracking = true } = {}) {
   if (satelliteSubject !== null)
     this.services.satellitesLayer?.setCockpitSubject?.(null);
   this.dispatchCockpitModeChanged(false);
-  if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
-    this.viewer.trackedEntity = entity;
-    this.restoreTrackingFrame(entity);
+  if (restoreTracking && entity && this.host.contains(entity)) {
+    this.host.restore(entity);
   } else if (restoreTracking && vesselSubject) {
     // Back to the selected vessel's map view, through the layer's own focus.
     this.services.aisLiveVesselsLayer?.focusSelectedVessel?.();

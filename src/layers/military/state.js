@@ -1,11 +1,11 @@
 import { MilitaryFlightRecords } from './records.js';
 import { createMilitaryFeed } from './ingestion.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
-  const flightState = { lifetime: new AbortController() };
+  const flightState = { lifetime: new AbortController(), enabled: false };
   flightState.feed = createMilitaryFeed(source);
   flightState.records = new MilitaryFlightRecords({
     ...services.geoid,
@@ -35,15 +35,18 @@ export function createFlightState({ source, services }) {
 
   flightState._groundSnap = createGroundSnap();
 
-  flightState._scratchGroundCarto = new Cesium.Cartographic();
+  flightState._scratchGroundCarto = geo.cartographic.create();
 
-  flightState._scratchGroundPos = new Cesium.Cartesian3();
+  flightState._scratchGroundPos = geo.cartesian3.create();
 
-  /** @type {Cesium.PrimitiveCollection|null} */
+  /** @type {import('../aircraft/render/contract.js').AircraftRenderer|null}
+   *  The engine's aircraft renderer for this lifecycle (render/display.js,
+   *  on every engine): the fleet sprites, the models, the tracked visual,
+   *  the trail, the follow camera and the view reads. */
 
-  flightState._modelCollection = null;
+  flightState._renderer = null;
 
-  /** @type {Map<string, Cesium.Model>} icao24 → model */
+  /** @type {Map<string, object>} icao24 → model handle */
 
   flightState._models = new Map();
 
@@ -74,27 +77,6 @@ export function createFlightState({ source, services }) {
 
   flightState._lastModelCapWarnMs = 0;
   // throttle the "more planes in view than the cap" console notice
-  // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
-  // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
-  // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
-  // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
-
-  flightState._planeModelLoaded = false;
-
-  /** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm */
-
-  flightState._preloadModel = null;
-
-  flightState._scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
-
-  flightState._scratchModelMtx = new Cesium.Matrix4();
-
-  flightState._scratchModelBS = new Cesium.BoundingSphere(
-    new Cesium.Cartesian3(),
-    1.0,
-  );
-  // frustum-visibility test
   /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
 
   flightState._billboardLimbScale = new WeakMap();
@@ -103,11 +85,8 @@ export function createFlightState({ source, services }) {
   // Module-level state
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.BillboardCollection|null} Single GPU-batched collection for all aircraft */
-
-  flightState._billboardCollection = null;
-
-  /** @type {Map<string, Cesium.Billboard>} ICAO hex -> billboard primitive */
+  /** @type {Map<string, object>} ICAO hex -> fleet sprite handle (the
+   *  renderer's single GPU-batched fleet) */
 
   flightState._billboards = new Map();
 
@@ -115,7 +94,7 @@ export function createFlightState({ source, services }) {
 
   flightState._detectionObjects = new Map();
 
-  /** @type {Map<string, Array<{time: Cesium.JulianDate, position: Cesium.Cartesian3}>>} ICAO hex -> recent position samples for dead reckoning */
+  /** @type {Map<string, Array<{timeMs: number, epochMs: number, position: object}>>} ICAO hex -> recent position samples for dead reckoning (timeMs: whole ms since the epoch, the app clock's unit) */
 
   flightState._positionHistory = new Map();
 
@@ -128,15 +107,11 @@ export function createFlightState({ source, services }) {
 
   flightState._trackingIntentGeneration = 0;
 
-  /** @type {Cesium.Entity|null} Entity created for the tracked aircraft (camera follows this) */
+  /** @type {object|null} The renderer's tracked handle (the follow target) */
 
   flightState._trackedEntity = null;
 
-  /** Disposes the single active tracked-camera framing owner. */
-
-  flightState._trackedCameraFrameStop = null;
-
-  /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft — NOT a graphic on
+  /** @type {object|null} Standalone 3D model for the tracked aircraft — NOT a graphic on
    *  _trackedEntity, so viewer.trackedEntity's follow-camera always has a ready bounding sphere
    *  (a model graphic reports PENDING until loaded, which freezes the centering on 3D-toggle). */
 
@@ -146,13 +121,10 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedModelLoading = false;
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for selecting aircraft */
+  /** @type {(() => void)|null} Unregisters this layer from the engine's
+   *  selection dispatcher (clicks and Escape). */
 
-  flightState._clickHandler = null;
-
-  /** @type {Cesium.Viewer|null} Cached viewer reference */
-
-  flightState._viewer = null;
+  flightState._selectionRemove = null;
 
   /** Cockpit presentation switches ambient AIR contacts between near aircraft and far dots. */
 
@@ -174,7 +146,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trail = null;
 
-  /** @type {Cesium.Entity|null} Per-frame head segment: last body point → live icon */
+  /** @type {object|null} Per-frame head segment: last body point → live icon */
 
   flightState._trailHeadEntity = null;
 
@@ -182,7 +154,7 @@ export function createFlightState({ source, services }) {
 
   flightState._trailHeadSeq = 0;
 
-  /** @type {{position: Cesium.Cartesian3|null, timeMs: number, nullAltitude: boolean, breakBefore: boolean, drawn?: boolean}[]}
+  /** @type {{position: object|null, timeMs: number, nullAltitude: boolean, breakBefore: boolean, drawn?: boolean}[]}
    *  Chronological tracked-aircraft trail (oldest first): reports, and
    *  (`drawn`) where the icon was drawn between them; `breakBefore` starts a
    *  new segment. */
@@ -229,44 +201,40 @@ export function createFlightState({ source, services }) {
 
   flightState._lastTrackedRotation = 0;
 
-  /** @type {Cesium.Event.RemoveCallback|null} preRender listener disposer */
+  /** @type {(() => void)|null} preRender listener disposer */
 
   flightState._preRenderRemove = null;
 
   flightState._trackedModelPreUpdateRemove = null;
 
-  /** @type {Cesium.Event.RemoveCallback|null} camera.moveEnd listener disposer (arrival rotation pass) */
+  /** @type {(() => void)|null} camera.moveEnd listener disposer (arrival rotation pass) */
 
   flightState._moveEndRemove = null;
 
-  /** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
+  /** @type {(() => void)|null} follow-change listener disposer (cross-layer untrack) */
 
   flightState._trackedEntityChangedRemove = null;
 
   // -- Scratch variables (reused each frame to avoid GC pressure) --
 
-  flightState._scratchOffset = new Cesium.Cartesian3();
+  flightState._scratchOffset = geo.cartesian3.create();
 
-  flightState._scratchCarto = new Cesium.Cartographic();
+  flightState._scratchCarto = geo.cartographic.create();
 
-  flightState._scratchEnu = new Cesium.Matrix4();
+  flightState._scratchEnu = geo.matrix4.create();
 
   flightState._scratchArc = { east: 0, north: 0, endCourseDeg: 0 };
 
-  flightState._scratchRenderTime = new Cesium.JulianDate();
+  flightState._scratchFleetPos = geo.cartesian3.create();
 
-  flightState._scratchFleetPos = new Cesium.Cartesian3();
+  flightState._scratchSonarScreen = geo.cartesian2.create();
 
-  flightState._scratchSonarScreen = new Cesium.Cartesian2();
+  flightState._scratchDrRaw = geo.cartesian3.create();
 
-  flightState._scratchDrRaw = new Cesium.Cartesian3();
-
-  flightState._scratchWarmupTime = new Cesium.JulianDate();
-
-  flightState._trackedPosHolder = new Cesium.Cartesian3();
+  flightState._trackedPosHolder = geo.cartesian3.create();
 
   // -- Per-frame dead-reckoning cache for the tracked entity --
-  /** @type {Cesium.Cartesian3|null} Cached DR position for the current render frame */
+  /** @type {object|null} Cached DR position for the current render frame */
 
   flightState._cachedDRPosition = null;
 
@@ -315,13 +283,13 @@ export function createFlightState({ source, services }) {
 
   flightState._displayCourse = new Map();
 
-  flightState._drCorrection = new Cesium.Cartesian3(0, 0, 0);
+  flightState._drCorrection = geo.cartesian3.create(0, 0, 0);
 
   flightState._drCorrectionStartMs = 0;
 
-  flightState._drPrevRaw = new Cesium.Cartesian3();
+  flightState._drPrevRaw = geo.cartesian3.create();
 
-  flightState._drPrevDisplay = new Cesium.Cartesian3();
+  flightState._drPrevDisplay = geo.cartesian3.create();
 
   flightState._drPrevMs = 0;
 
@@ -334,20 +302,20 @@ export function createFlightState({ source, services }) {
 
   flightState._drReconcileIcao = null;
 
-  /** @type {Cesium.Cartesian3} Scratch for the tracked model's rendered translation. */
+  /** @type {object} Scratch for the tracked model's rendered translation. */
 
-  flightState._trackedVisualPos = new Cesium.Cartesian3();
+  flightState._trackedVisualPos = geo.cartesian3.create();
 
-  flightState._trackedTrailPos = new Cesium.Cartesian3();
+  flightState._trackedTrailPos = geo.cartesian3.create();
 
   /** Scratch for the tracked model's world-space origin (the envelope centre). */
 
-  flightState._scratchTrailClip = new Cesium.Cartesian3();
+  flightState._scratchTrailClip = geo.cartesian3.create();
 
   /** Scratch for the shortened trail-head start. Owned by the head-segment
    *  callback alone, so nothing else can overwrite it mid-frame. */
 
-  flightState._scratchTrailHead = new Cesium.Cartesian3();
+  flightState._scratchTrailHead = geo.cartesian3.create();
 
   /** Hysteresis latch for the tracked contact's zoom regime, plus the selection it
    *  belongs to. Scoped per selection so a NEW target re-evaluates against the ENTER
@@ -364,25 +332,19 @@ export function createFlightState({ source, services }) {
   flightState._trackedModelRetryAtMs = 0;
 
   /** IR hot-target mode — mirror of flights.js: under the luminance-mapped
-   *  NVG/FLIR post-styles every model renders flat white (hottest); the dominant
-   *  amber/tracked tint restores on style exit. */
+   *  NVG/FLIR post-styles every model renders flat white (hottest) and UNLIT
+   *  (`unlit` in the model spec: material-stage tint still sun-shades, so
+   *  side-on planes read near-black under a high sun); the dominant
+   *  amber/tracked tint restores on style exit. The shader is baked at
+   *  creation (assigning it to a ready Cesium model is a silent no-op), so the
+   *  boost flips by release-and-reload. */
 
   flightState._irBoost = false;
 
-  /** Boosted models render UNLIT — mirror of flights.js (owner cockpit-FLIR
-   *  field rounds): material-stage tint still sun-shades, so side-on planes
-   *  read near-black under a high sun; UNLIT emits flat white regardless.
-   *  customShader on a READY model is a silent no-op (field-verified), so the
-   *  boost flips by release-and-reload — creation-time options carry it. */
-
-  flightState._IR_UNLIT_SHADER = new Cesium.CustomShader({
-    lightingModel: Cesium.LightingModel.UNLIT,
-  });
-
   flightState._irReloadQueue = null;
 
-  /** @type {Cesium.Cartographic} Scratch for _trailFloorPosition (per-frame safe). */
+  /** @type {object} Scratch (Cartographic) for _trailFloorPosition (per-frame safe). */
 
-  flightState._scratchTrailCarto = new Cesium.Cartographic();
+  flightState._scratchTrailCarto = geo.cartographic.create();
   return flightState;
 }

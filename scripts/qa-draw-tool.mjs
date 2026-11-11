@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+// Cesium-only probes: the stock input action and DataSource counts verify Cesium input restoration.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /** Rendered acceptance for UTILITIES ▸ Draw: real clicks, real keys, real teardown. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
@@ -19,24 +22,32 @@ const VIEW = {
   pitch: -85,
 };
 
-const browser = await puppeteer.launch({
-  headless: !HEADFUL,
-  ...(HEADFUL
-    ? {
-        executablePath: chromeExecutablePath(),
-      }
-    : {}),
+const browser = await launchBrowser({
+  headless: true,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     ...(HEADFUL ? ['--window-size=1280,860'] : []),
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
+// Daylight over San Francisco: the amber-pixel checks count the drawn mark,
+// and the globe's night side shows warm city lights the count would include.
+await page.evaluateOnNewDocument(() => {
+  const offset = Date.UTC(2026, 5, 15, 20, 0) - Date.now();
+  const RealDate = Date;
+  globalThis.Date = class ShiftedDate extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) super(RealDate.now() + offset);
+      else super(...args);
+    }
+    static now() {
+      return RealDate.now() + offset;
+    }
+  };
+});
 const errors = [];
 page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 let failures = 0;
@@ -53,7 +64,6 @@ const shot = (name) =>
     type: 'jpeg',
     quality: 82,
   });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A clip of the globe canvas, clear of the panels on every side. */
 const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
@@ -148,7 +158,7 @@ async function pressFinish() {
 /** One click on the globe canvas, the way a person makes one. */
 async function clickWorld(x, y, options = {}) {
   await page.mouse.click(x, y, options);
-  await wait(options.settle ?? 140);
+  await whenSettled(page);
 }
 
 const drawState = () =>
@@ -189,52 +199,41 @@ async function waitForMarks(expected, timeout = 15_000) {
 
 try {
   await page.setViewport({ width: 1280, height: 860 });
-  await page.goto(`${BASE_URL}/?welcome=0`, { waitUntil: 'domcontentloaded' });
+  // The view in the address too: the boot flight lands there instead of
+  // flying away from the view set below once deferred init runs.
+  await page.goto(
+    `${BASE_URL}/?welcome=0#v=2&lat=${VIEW.lat}&lon=${VIEW.lon}&alt=${VIEW.height}&heading=${VIEW.heading}&pitch=${VIEW.pitch}`,
+    { waitUntil: 'domcontentloaded' },
+  );
   await page.waitForFunction(
-    () =>
-      window.__gevDrawTool &&
-      window.__gevAnnotations &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__gevDrawTool && window.__gevAnnotations,
     { timeout: 90_000 },
   );
-  await page.evaluate((view) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (view.lon * Math.PI) / 180,
-        latitude: (view.lat * Math.PI) / 180,
-        height: view.height,
-      }),
-      orientation: {
-        heading: (view.heading * Math.PI) / 180,
-        pitch: (view.pitch * Math.PI) / 180,
-        roll: 0,
-      },
-    });
-    viewer.scene.requestRender();
-  }, VIEW);
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const primitives = window.__godsEyeView.viewer.scene.primitives;
-        for (let index = 0; index < primitives.length; index++) {
-          const primitive = primitives.get(index);
-          if (
-            typeof primitive.tilesLoaded === 'boolean' &&
-            !primitive.tilesLoaded
-          )
-            return false;
-        }
-        return true;
-      },
-      { timeout: 90_000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
+  await whenSettled(page);
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, view) => {
+      window.__godsEyeView.engine.camera.cancelFlight?.();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
+          longitude: (view.lon * Math.PI) / 180,
+          latitude: (view.lat * Math.PI) / 180,
+          height: view.height,
+        }),
+        orientation: {
+          heading: (view.heading * Math.PI) / 180,
+          pitch: (view.pitch * Math.PI) / 180,
+          roll: 0,
+        },
+      });
+      window.__godsEyeView.engine.render.request();
+    },
+    VIEW,
+  );
+  const settled = await whenTilesLoaded(page, { timeoutMs: 90_000 }).then(
+    () => true,
+    () => false,
+  );
   check('visible tile content settles before drawing', settled);
 
   // UTILITIES starts collapsed on a first run: open it the way a user does.
@@ -301,21 +300,20 @@ try {
   const before = await drawState();
   for (let cycle = 0; cycle < 3; cycle += 1) {
     await page.click('#draw-toggle');
-    await wait(120);
+    await whenSettled(page);
     await page.click('#draw-toggle');
-    await wait(120);
+    await whenSettled(page);
   }
   const after = await drawState();
   check(
     'three enable/disable cycles add no listener, handler or preview data source',
     after.domListeners === before.domListeners &&
-      after.previewDataSources === 1 &&
-      before.previewDataSources === 1 &&
+      after.previewDataSources === 0 &&
+      before.previewDataSources === 0 &&
       after.sceneHandler === false &&
-      after.pointerOwner === null &&
-      after.stockDoubleClick === before.stockDoubleClick,
+      after.pointerOwner === null,
     `listeners ${before.domListeners}→${after.domListeners}, previews ${after.previewDataSources}, ` +
-      `handler ${after.sceneHandler}, owner ${after.pointerOwner}, stock dblclick ${after.stockDoubleClick}`,
+      `handler ${after.sceneHandler}, owner ${after.pointerOwner}`,
   );
 
   // ── the viewer's own click actions are borrowed, then given back ────────
@@ -360,7 +358,7 @@ try {
   await clickWorld(600, 470);
   const beforeBackspace = (await drawState()).vertices;
   await page.keyboard.press('Backspace');
-  await wait(120);
+  await whenSettled(page);
   const afterBackspace = (await drawState()).vertices;
   check(
     'Backspace removes the last vertex only',
@@ -396,7 +394,7 @@ try {
   );
   await page.mouse.click(410, 500, { count: 2 });
   const areaLanded = await waitForMarks(3);
-  await wait(900);
+  await whenSettled(page);
   const afterDoubleClick = await page.evaluate(() =>
     window.__gevAnnotations.count(),
   );
@@ -421,7 +419,7 @@ try {
   await page.click(rowControl(areaId, 'name'));
   await page.keyboard.type('Civic Center block');
   await page.keyboard.press('Enter');
-  await wait(300);
+  await whenSettled(page);
   const areaMark = (await marks()).find(
     (mark) => mark.label === 'Civic Center block',
   );
@@ -434,7 +432,7 @@ try {
     'naming a shape keeps Draw on and the shape in progress untouched',
     (await drawState()).active === true,
   );
-  await wait(1200);
+  await whenSettled(page);
   const amberAfter = await amberPixels();
   check(
     'the finished area actually PAINTS — amber pixels appear on this surface',
@@ -493,32 +491,31 @@ try {
   // Fly-to frames the line by its whole path: once the flight settles, the
   // middle of the line sits near the middle of the view.
   await page.click(rowControl(ids[1], 'fly'));
-  await page
-    .waitForFunction(() => !window.__godsEyeView.viewer.camera._currentFlight, {
-      timeout: 15_000,
-    })
-    .catch(() => {});
-  await wait(300);
-  const framed = await page.evaluate((id) => {
-    const { viewer } = window.__godsEyeView;
-    // No Cesium global in the page: borrow Cartesian3 from a live object.
-    const Cartesian3 = viewer.camera.positionWC.constructor;
-    const mark = window.__gevAnnotations.list().find((m) => m.id === id);
-    const lons = mark.path.map((p) => p.lon);
-    const lats = mark.path.map((p) => p.lat);
-    const middle = Cartesian3.fromDegrees(
-      (Math.min(...lons) + Math.max(...lons)) / 2,
-      (Math.min(...lats) + Math.max(...lats)) / 2,
-    );
-    const at = viewer.scene.cartesianToCanvasCoordinates(middle);
-    const canvas = viewer.scene.canvas;
-    return (
-      at && {
-        dx: Math.abs(at.x - canvas.clientWidth / 2) / canvas.clientWidth,
-        dy: Math.abs(at.y - canvas.clientHeight / 2) / canvas.clientHeight,
-      }
-    );
-  }, ids[1]);
+  await whenSettled(page).catch(() => {});
+  await whenSettled(page);
+  const framed = await evaluateWithGeo(
+    page,
+    async (qaGeo, id) => {
+      // No Cesium global in the page: borrow Cartesian3 from a live object.
+      const Cartesian3 = qaGeo.cartesian3;
+      const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+      const lons = mark.path.map((p) => p.lon);
+      const lats = mark.path.map((p) => p.lat);
+      const middle = Cartesian3.fromDegrees(
+        (Math.min(...lons) + Math.max(...lons)) / 2,
+        (Math.min(...lats) + Math.max(...lats)) / 2,
+      );
+      const at = window.__godsEyeView.engine.projector.worldToWindow(middle);
+      const canvas = window.__godsEyeView.engine.host.canvas;
+      return (
+        at && {
+          dx: Math.abs(at.x - canvas.clientWidth / 2) / canvas.clientWidth,
+          dy: Math.abs(at.y - canvas.clientHeight / 2) / canvas.clientHeight,
+        }
+      );
+    },
+    ids[1],
+  );
   check(
     'fly to frames that shape: its middle is near the middle of the view',
     Boolean(framed) && framed.dx < 0.2 && framed.dy < 0.2,
@@ -531,11 +528,11 @@ try {
   await page.click(rowControl(lineId, 'swatch'));
   await page.click(rowControl(lineId, 'color-amber'));
   await markReaches(lineId, { color: 'amber', alpha: 1 });
-  await wait(800);
+  await whenSettled(page);
   const shown = await canvasShot();
   await page.click(rowControl(lineId, 'toggle'));
   await markReaches(lineId, { hidden: true, alpha: 0 });
-  await wait(800);
+  await whenSettled(page);
   const hiddenShot = await canvasShot();
   // Amber the shown line had and the hidden one lost; amber that appears
   // only once it is hidden is noise, and must stay small beside it.
@@ -547,7 +544,7 @@ try {
     `${gone} amber pixels went with the line, ${noise} appeared`,
   );
   await page.click(rowControl(lineId, 'toggle'));
-  await wait(1200);
+  await whenSettled(page);
   const back = await amberOnlyIn(await canvasShot(), hiddenShot);
   check(
     'and paints again when shown',
@@ -562,7 +559,7 @@ try {
   await clickWorld(560, 340);
   check('a new shape is in progress', (await drawState()).vertices === 2);
   await page.keyboard.press('Escape');
-  await wait(150);
+  await whenSettled(page);
   const afterFirstEscape = await drawState();
   check(
     'Escape cancels the shape in progress and stays in draw mode',
@@ -570,7 +567,7 @@ try {
     `vertices ${afterFirstEscape.vertices}, active ${afterFirstEscape.active}`,
   );
   await page.keyboard.press('Escape');
-  await wait(150);
+  await whenSettled(page);
   const afterSecondEscape = await drawState();
   check(
     'a second Escape leaves draw mode and gives the pointer back',
@@ -601,24 +598,46 @@ try {
       : 'no CCTV camera or bundled site could be reached — the ownership case cannot be proved',
   );
   if (target) {
+    // Layers select through their own state now, not the viewer's
+    // selectedEntity: a CCTV marker makes its camera the active one, a data
+    // centre selects its record in the shared context store.
+    const isSelected = (spot) =>
+      page.evaluate((spot) => {
+        if (spot.kind === 'cctv')
+          return (
+            window.__godsEyeView.dataManager.layers
+              .get('cctv')
+              ?.module?.getUIState?.()?.activeCameraId === spot.id
+          );
+        return window.__gevContextStore?.selectedEntityId === spot.id;
+      }, spot);
+    // Clear the selection (another camera active; no context selection), as
+    // the old check cleared the viewer's selectedEntity.
+    const deselect = (spot) =>
+      page.evaluate((spot) => {
+        if (spot.kind === 'cctv') {
+          const module =
+            window.__godsEyeView.dataManager.layers.get('cctv')?.module;
+          const other = (module?.getUIState?.()?.cameras || []).find(
+            (camera) => camera.id !== spot.id,
+          );
+          if (other) module.selectCamera(other.id);
+        } else if (window.__gevContextStore)
+          window.__gevContextStore.selectedEntityId = null;
+      }, spot);
+    await deselect(target);
     await clickWorld(target.x, target.y, { settle: 900 });
-    const selectedNormally = await page.evaluate(() =>
-      Boolean(window.__godsEyeView.viewer.selectedEntity),
-    );
+    const selectedNormally = await isSelected(target);
     check(
       `clicking a ${target.layer} selects it when nothing owns the pointer`,
       selectedNormally,
     );
-    await page.evaluate(() => {
-      window.__godsEyeView.viewer.selectedEntity = undefined;
-    });
+    await deselect(target);
     await page.click('#draw-toggle');
     await page.click('.pp-mode-btn[data-shape="area"]');
     await clickWorld(target.x, target.y, { settle: 900 });
     const whileDrawing = await drawState();
-    const selectedWhileDrawing = await page.evaluate(() =>
-      Boolean(window.__godsEyeView.viewer.selectedEntity),
-    );
+    const selectedWhileDrawing = await isSelected(target);
     check(
       `clicking the same ${target.layer} while drawing adds a vertex and selects nothing`,
       whileDrawing.vertices === 1 && selectedWhileDrawing === false,
@@ -626,7 +645,7 @@ try {
     );
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
-    await wait(150);
+    await whenSettled(page);
   }
 
   // ── what a reload actually does ─────────────────────────────────────────
@@ -634,12 +653,10 @@ try {
     window.__gevAnnotations.count(),
   );
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () =>
-      window.__gevAnnotations &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 90_000 },
-  );
+  await page.waitForFunction(() => window.__gevAnnotations, {
+    timeout: 90_000,
+  });
+  await whenSettled(page);
   const afterReload = await page.evaluate(() =>
     window.__gevAnnotations.count(),
   );
@@ -677,19 +694,40 @@ try {
         null,
     };
   });
-  await page.evaluate((view) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (view.lon * Math.PI) / 180,
-        latitude: (view.lat * Math.PI) / 180,
-        height: view.height,
-      }),
-      orientation: { heading: 0, pitch: (view.pitch * Math.PI) / 180, roll: 0 },
-    });
-  }, VIEW);
-  await wait(2500);
+  // The reload restores the view in the address (the clicked CCTV camera's
+  // flight left a low, near-horizontal view there) with a boot flight that can
+  // land after a setView: set the view until it holds.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, view) => {
+        window.__godsEyeView.engine.camera.cancelFlight?.();
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: (view.lon * Math.PI) / 180,
+            latitude: (view.lat * Math.PI) / 180,
+            height: view.height,
+          }),
+          orientation: {
+            heading: 0,
+            pitch: (view.pitch * Math.PI) / 180,
+            roll: 0,
+          },
+        });
+      },
+      VIEW,
+    );
+    await whenSettled(page);
+    const held = await page.evaluate((view) => {
+      const carto = window.__godsEyeView.engine.camera.pose().cartographic;
+      return (
+        Math.abs((carto.latitude * 180) / Math.PI - view.lat) < 0.01 &&
+        Math.abs((carto.longitude * 180) / Math.PI - view.lon) < 0.01 &&
+        Math.abs(carto.height - view.height) < view.height * 0.2
+      );
+    }, VIEW);
+    if (held) break;
+  }
   await page.click('#draw-toggle');
   await page.click('.pp-mode-btn[data-shape="area"]');
   await clickWorld(420, 280);
@@ -708,7 +746,7 @@ try {
   const beforeButtonEnter = await drawState();
   await page.focus('#draw-clear');
   await page.keyboard.press('Enter');
-  await wait(600);
+  await whenSettled(page);
   const afterButtonEnter = await drawState();
   check(
     'Enter on a keyboard-focused button activates the button, it does not finish the shape',
@@ -731,7 +769,7 @@ try {
     await waitForMarks(1),
   );
   await page.click('#draw-clear');
-  await wait(400);
+  await whenSettled(page);
   const cleared = await drawState();
   check(
     'Clear removes every mark from the board',
@@ -756,7 +794,7 @@ try {
     `${degenerateVertices} vertices`,
   );
   await pressFinish();
-  await wait(600);
+  await whenSettled(page);
   const degenerate = await drawState();
   check(
     'three points in a line are refused with a reason, not placed',
@@ -765,20 +803,19 @@ try {
   );
 
   // ── a shape drawn across the antimeridian lands where it was drawn ──────
-  await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+  await evaluateWithGeo(page, async (qaGeo) => {
+    window.__godsEyeView.engine.camera.cancelFlight?.();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: (179.9995 * Math.PI) / 180,
         latitude: 0,
         height: 3000,
       }),
       orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
     });
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
   });
-  await wait(2500);
+  await whenSettled(page);
   await page.evaluate(() => {
     const tool = window.__gevDrawTool;
     tool.cancel();
@@ -806,14 +843,14 @@ try {
   await page.evaluate(() => window.__gevAnnotations.clear());
 
   await page.click('#draw-toggle');
-  await wait(200);
+  await whenSettled(page);
   const finalState = await drawState();
   check(
     'leaving draw mode gives back the pointer, the handler and the double-click',
     finalState.active === false &&
       finalState.pointerOwner === null &&
       finalState.sceneHandler === false &&
-      finalState.previewDataSources === 1,
+      finalState.previewDataSources === 0,
     JSON.stringify(finalState),
   );
   // ── destroy(): the shell disposing the tool leaves nothing behind ───────
@@ -821,7 +858,7 @@ try {
     () => window.__godsEyeView.viewer.dataSources.length,
   );
   await page.click('#draw-toggle'); // destroy from an ACTIVE session: the harder case
-  await wait(200);
+  await whenSettled(page);
   const destroyed = await page.evaluate(async () => {
     const tool = window.__gevDrawTool;
     const wasActive = tool.active;
@@ -859,9 +896,9 @@ try {
     JSON.stringify(destroyed.diagnostics),
   );
   check(
-    'destroy() detaches the preview data source and gives the window handle back',
+    'destroy() leaves no preview data source and gives the window handle back',
     destroyed.previews === 0 &&
-      destroyed.dataSources === beforeDestroy - 1 &&
+      destroyed.dataSources === beforeDestroy &&
       destroyed.handleGone,
     `previews ${destroyed.previews}, dataSources ${beforeDestroy} → ${destroyed.dataSources}, handle gone ${destroyed.handleGone}`,
   );
@@ -877,7 +914,7 @@ try {
     errors.join(' | '),
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures} failures`);
 process.exitCode = failures ? 1 : 0;
@@ -916,31 +953,32 @@ async function findClickableTarget() {
     .catch(() => null);
 
   if (camera) {
-    await page.evaluate((spot) => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.cancelFlight?.();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-          longitude: (spot.lon * Math.PI) / 180,
-          latitude: (spot.lat * Math.PI) / 180,
-          height: 600,
-        }),
-        orientation: { heading: 0, pitch: (-80 * Math.PI) / 180, roll: 0 },
-      });
-      viewer.scene.requestRender();
-    }, camera);
-    await wait(4000);
-    const spot = await onScreen(
-      (entity) => typeof entity.id === 'string' && entity.id.startsWith('CAM-'),
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, spot) => {
+        window.__godsEyeView.engine.camera.cancelFlight?.();
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: (spot.lon * Math.PI) / 180,
+            latitude: (spot.lat * Math.PI) / 180,
+            height: 600,
+          }),
+          orientation: { heading: 0, pitch: (-80 * Math.PI) / 180, roll: 0 },
+        });
+        window.__godsEyeView.engine.render.request();
+      },
+      camera,
     );
-    if (spot) return { ...spot, layer: 'CCTV camera' };
+    await whenSettled(page);
+    const spot = await onScreen(['cctv']);
+    if (spot) return { ...spot, kind: 'cctv', layer: 'CCTV camera' };
   }
 
   // Bundled infrastructure as the keyless fallback: a different guarded handler,
-  // the same shared claim, and always present without a key.
+  // the same shared claim, and always present without a key. The layer
+  // registers each site in the shared context store with its coordinates.
   const site = await page
     .evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
       await window.__godsEyeView.dataManager.setEnabled(
         'local-datacenters',
         true,
@@ -948,30 +986,15 @@ async function findClickableTarget() {
           origin: 'user',
         },
       );
-      const centreOf = (entity) => {
-        const time = viewer.clock.currentTime;
-        const point = entity.position?.getValue?.(time);
-        if (point) return point;
-        const hierarchy = entity.polygon?.hierarchy?.getValue?.(time);
-        if (hierarchy?.positions?.length) return hierarchy.positions[0];
-        const line = entity.polyline?.positions?.getValue?.(time);
-        return line?.length ? line[0] : null;
-      };
       for (let attempt = 0; attempt < 40; attempt += 1) {
-        for (let i = 0; i < viewer.dataSources.length; i += 1) {
-          for (const entity of viewer.dataSources.get(i).entities.values) {
-            if (entity.__localLayerId !== 'local-datacenters') continue;
-            const point = centreOf(entity);
-            if (!point) continue;
-            const carto = window.Cesium
-              ? window.Cesium.Cartographic.fromCartesian(point)
-              : viewer.scene.globe.ellipsoid.cartesianToCartographic(point);
-            if (!carto) continue;
-            return {
-              lon: (carto.longitude * 180) / Math.PI,
-              lat: (carto.latitude * 180) / Math.PI,
-            };
-          }
+        for (const record of window.__gevContextStore?.entities.values() ??
+          []) {
+          if (record.layerId !== 'local-datacenters') continue;
+          if (
+            Number.isFinite(record.latitude) &&
+            Number.isFinite(record.longitude)
+          )
+            return { lon: record.longitude, lat: record.latitude };
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
@@ -979,68 +1002,57 @@ async function findClickableTarget() {
     })
     .catch(() => null);
   if (!site) return null;
-  await page.evaluate((spot) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (spot.lon * Math.PI) / 180,
-        latitude: (spot.lat * Math.PI) / 180,
-        height: 2500,
-      }),
-      orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
-    });
-    viewer.scene.requestRender();
-  }, site);
-  await wait(4000);
-  const spot = await onScreen(
-    (entity) => entity.__localLayerId === 'local-datacenters',
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, spot) => {
+      window.__godsEyeView.engine.camera.cancelFlight?.();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
+          longitude: (spot.lon * Math.PI) / 180,
+          latitude: (spot.lat * Math.PI) / 180,
+          height: 2500,
+        }),
+        orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
+      });
+      window.__godsEyeView.engine.render.request();
+    },
+    site,
   );
-  return spot ? { ...spot, layer: 'data centre' } : null;
+  await whenSettled(page);
+  const spot = await onScreen([
+    'local-datacenters-tips',
+    'local-datacenters-pins',
+  ]);
+  return spot ? { ...spot, kind: 'context', layer: 'data centre' } : null;
 }
 
 /**
- * Canvas coordinates of the first entity matching `belongs` that is on screen
- * and clear of the side panels. Annotation marks and the draw tool's own
- * preview vertices are on screen too, so the predicate has to be specific.
+ * Canvas coordinates of a spot clear of the side panels where the engine's
+ * pick returns an instance of one of the mover sets `owners` (layers draw
+ * through engine.movers; a pick reports the set as `owner` and the instance's
+ * pickId as `id`). Picking, not projecting, proves the spot is clickable: an
+ * instance beyond the horizon or behind a building does not count.
  */
-async function onScreen(belongs, timeout = 20_000) {
+async function onScreen(owners, timeout = 20_000) {
   return page
     .waitForFunction(
-      (belongsSource) => {
-        // eslint-disable-next-line no-new-func
-        const belongsTo = new Function(`return (${belongsSource})`)();
-        const viewer = window.__godsEyeView.viewer;
-        const scene = viewer.scene;
-        const collections = [viewer.entities];
-        for (let i = 0; i < viewer.dataSources.length; i += 1) {
-          const source = viewer.dataSources.get(i);
-          if (source?.name === 'gev-draw-preview') continue;
-          collections.push(source.entities);
-        }
-        for (const source of collections) {
-          for (const entity of source.values) {
-            if (!belongsTo(entity)) continue;
-            const position = entity.position?.getValue?.(
-              viewer.clock.currentTime,
-            );
-            if (!position) continue;
-            const window2d = scene.cartesianToCanvasCoordinates(position);
-            if (!window2d) continue;
-            const { x, y } = window2d;
-            if (!(x > 300 && x < 900 && y > 180 && y < 600)) continue;
-            // Projecting into the window is not the same as being clickable:
-            // the entity may be beyond the horizon or behind a building. Only a
-            // spot where the scene actually picks it proves the control case.
-            const hit = scene.pick({ x: Math.round(x), y: Math.round(y) });
-            if (!hit?.id || !belongsTo(hit.id)) continue;
-            return { x: Math.round(x), y: Math.round(y) };
+      (wanted) => {
+        const { engine } = window.__godsEyeView;
+        const sets = engine.movers
+          .list()
+          .filter((set) => wanted.includes(set.id) && set.count > 0);
+        if (!sets.length) return false;
+        for (let y = 190; y < 600; y += 20) {
+          for (let x = 310; x < 900; x += 20) {
+            const hit = engine.picker.pick({ x, y });
+            if (hit && wanted.includes(hit.owner) && hit.id != null)
+              return { x, y, id: String(hit.id) };
           }
         }
         return false;
       },
-      { timeout, polling: 500 },
-      belongs.toString(),
+      { timeout, polling: 1000 },
+      owners,
     )
     .then(
       (handle) => handle.jsonValue(),

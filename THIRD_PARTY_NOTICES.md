@@ -2,8 +2,8 @@
 
 The project depends on third-party npm packages whose own licenses apply. This
 file records the packages added for the browser-local SDR feature and the
-Street Level viewer; the complete resolved dependency inventory remains in
-`package-lock.json`.
+Street Level viewer, and the CesiumJS code ported into `src/geo/`; the complete
+resolved dependency inventory remains in `package-lock.json`.
 
 ## Web RTL-SDR
 
@@ -45,3 +45,23 @@ Street Level viewer; the complete resolved dependency inventory remains in
 - Source: <https://github.com/mrdoob/three.js>
 - License: MIT
 - License text: <https://github.com/mrdoob/three.js/blob/dev/LICENSE>
+
+## CesiumJS (portions ported to src/geo)
+
+- Package: `cesium` 1.138.0 (`@cesium/engine` 22.3.0); the files in `src/geo/`
+  are adapted from `@cesium/engine/Source/Core` (`Math.js`, `Ellipsoid.js`,
+  `scaleToGeodeticSurface.js`, `Cartographic.js`, `Cartesian2.js`,
+  `Cartesian3.js`, `Matrix3.js`, `Matrix4.js`, `Quaternion.js`,
+  `Transforms.js`, `BoundingSphere.js`, `EllipsoidGeodesic.js`, `JulianDate.js`,
+  `Simon1994PlanetaryPositions.js`) and say so in their first
+  line. The changes: the classes' static functions became module functions,
+  vectors, geodetic positions and quaternions became plain-data instances of
+  module-private constructors (own enumerable fields only, no methods),
+  matrices plain arrays, and the ellipsoid a frozen object; the debug
+  argument checks were left out, as in Cesium's release build; only the subset
+  gev uses was kept.
+- Author: Copyright 2011-2024 CesiumJS Contributors
+- Source: <https://github.com/CesiumGS/cesium>
+- License: Apache License 2.0
+- License text: `node_modules/@cesium/engine/LICENSE.md` (shipped with the
+  dependency) and <https://www.apache.org/licenses/LICENSE-2.0>

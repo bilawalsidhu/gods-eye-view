@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCyclonesLayer } from './index.js';
 import { setLocale, t } from '../../i18n/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 // The exact string the server sends (COVERAGE in server/providers/cyclones.js).
 const SERVER_COVERAGE =
@@ -52,7 +53,7 @@ function harness(feed) {
     matchMedia: () => ({ matches: false }),
     openLink: () => {},
   });
-  layer.init({ camera: { flyToBoundingSphere() {} } });
+  layer.init(null, { engine: createFakeEngine() });
   layer.attachShellServices({ runNavigation: (fn) => fn() });
   return layer;
 }

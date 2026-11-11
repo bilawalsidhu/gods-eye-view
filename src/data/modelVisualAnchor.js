@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 /**
  * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
  *
@@ -70,19 +70,11 @@ export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
   '/models/atr72.glb': Object.freeze([12.9785, -1.2935, 0]),
 });
 
-/** @constant Cesium's OWN axis correction for a glTF loaded with the
- *  `Model.fromGltfAsync` defaults (upAxis Y, forwardAxis Z), assembled from its
- *  exported constants rather than restated as numbers here. `ModelSceneGraph`
- *  renders with `modelMatrix x components.transform x axisCorrection`, and the
- *  trail anchor has to ride the same chain or it lands on a different axis than
- *  the aircraft it is supposed to be attached to. */
-const AXIS_CORRECTION = Cesium.Matrix4.multiplyTransformation(
-  Cesium.Axis.Y_UP_TO_Z_UP,
-  Cesium.Axis.Z_UP_TO_X_UP,
-  new Cesium.Matrix4(),
-);
-const _anchorScratch = new Cesium.Cartesian3();
-const _chainScratch = new Cesium.Matrix4();
+// glTF Y-up/Z-forward to the model frame: Cesium's Y_UP_TO_Z_UP ×
+// Z_UP_TO_X_UP, shared with Navara before the Cesium SDK is loaded.
+const AXIS_CORRECTION = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
+const _anchorScratch = geo.cartesian3.create();
+const _chainScratch = geo.matrix4.create();
 
 /**
  * World position of a model-local anchor, through the SAME transform chain
@@ -121,17 +113,17 @@ export function modelAnchorWorld(model, nativeAnchor, result) {
   // correction. Read from the instance rather than assumed, so an asset with a
   // baked root transform is carried too.
   const components = model?.sceneGraph?.components?.transform;
-  Cesium.Matrix4.multiplyTransformation(
+  geo.matrix4.multiplyTransformation(
     model.modelMatrix,
-    components || Cesium.Matrix4.IDENTITY,
+    components || geo.matrix4.IDENTITY,
     _chainScratch,
   );
-  Cesium.Matrix4.multiplyTransformation(
+  geo.matrix4.multiplyTransformation(
     _chainScratch,
     AXIS_CORRECTION,
     _chainScratch,
   );
-  return Cesium.Matrix4.multiplyByPoint(_chainScratch, _anchorScratch, result);
+  return geo.matrix4.multiplyByPoint(_chainScratch, _anchorScratch, result);
 }
 
 /**

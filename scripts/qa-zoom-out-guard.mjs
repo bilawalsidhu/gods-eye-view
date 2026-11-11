@@ -1,22 +1,20 @@
 #!/usr/bin/env node
+// Cesium-only probes: native inertia and render-loop control reproduce the Cesium zoom guard.
 /** Real-app zoom and tilt regression. Start a dev server, then run this file. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const origin = process.env.QA_BASE_URL || 'http://localhost:4173';
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
     ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : [
-          '--use-gl=angle',
-          '--use-angle=swiftshader',
-          '--enable-unsafe-swiftshader',
-        ]),
+      ? ['--enable-gpu']
+      : ['--enable-unsafe-swiftshader']),
   ],
   protocolTimeout: 120_000,
 });
@@ -28,33 +26,36 @@ try {
   await page.goto(`${origin}/?welcome=0`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
     () =>
-      window.__godsEyeView?.viewer &&
+      window.__godsEyeView?.engine &&
       window.__godsEyeView.viewer.scene.screenSpaceCameraController
-        .enableInputs &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+        .enableInputs,
     { timeout: 90_000 },
   );
+  await whenSettled(page);
   const renderer = await page.evaluate(async () => {
     const C = await import('/node_modules/cesium/Build/Cesium/index.js');
-    const { maxPitchForHeight } = await import('/src/app/zoomOutGuard.js');
+    const { maxPitchForHeight } =
+      await import('/src/globe/cesium/zoomOutGuard.js');
     const { readCameraTargetFrame } =
       await import('/src/ui/cameraOrientationControls.js');
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight();
+    const { viewer, engine } = window.__godsEyeView;
+    window.__godsEyeView.engine.camera.cancelFlight();
     viewer.trackedEntity = undefined;
     // Explicit real renders make each gesture independent of host frame rate.
     viewer.useDefaultRenderLoop = false;
     const controller = viewer.scene.screenSpaceCameraController;
     controller.inertiaZoom = 0;
     controller.inertiaSpin = 0;
-    const original = viewer.camera.setView.bind(viewer.camera);
+    const original = window.__godsEyeView.engine.camera.setView.bind(
+      viewer.camera,
+    );
     const qa = {
       viewer,
       guardWrites: 0,
-      targetPitch: () => readCameraTargetFrame(viewer)?.pitch,
+      targetPitch: () => readCameraTargetFrame(engine, viewer)?.pitch,
       history: [],
       frame() {
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
         viewer.render();
         qa.history.push({
           height: viewer.camera._positionCartographic.height,
@@ -65,17 +66,17 @@ try {
       },
       pose() {
         return {
-          height: viewer.camera.positionCartographic.height,
-          pitch: viewer.camera.pitch,
+          height: window.__godsEyeView.engine.camera.pose().cartographic.height,
+          pitch: window.__godsEyeView.engine.camera.pose().pitch,
           maxPitch: maxPitchForHeight(
-            viewer.camera.positionCartographic.height,
+            window.__godsEyeView.engine.camera.pose().cartographic.height,
           ),
           guardWrites: qa.guardWrites,
         };
       },
       reset(height = 1_000_000, pitch = -35) {
-        viewer.camera.cancelFlight();
-        viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
+        window.__godsEyeView.engine.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.lookAtTransform(C.Matrix4.IDENTITY);
         original({
           destination: C.Cartesian3.fromDegrees(0, 0, height),
           orientation: { heading: 0, pitch: C.Math.toRadians(pitch), roll: 0 },
@@ -86,12 +87,12 @@ try {
     };
     viewer.camera.setView = (options) => {
       // Cesium itself also calls setView while processing touch movement.
-      if (new Error().stack.includes('/src/app/zoomOutGuard.js'))
+      if (new Error().stack.includes('/src/globe/cesium/zoomOutGuard.js'))
         qa.guardWrites++;
       return original(options);
     };
     window.__zoomGuardQa = qa;
-    const gl = viewer.scene.context._gl;
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
     return gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
   });
@@ -329,5 +330,5 @@ try {
   assert.deepEqual(errors, [], 'no JavaScript page errors');
   console.log('[PASS] no JavaScript page errors');
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

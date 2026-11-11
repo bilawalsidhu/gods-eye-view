@@ -6,6 +6,24 @@ import { createFlow } from './flow.js';
 import { createRetention } from './retention.js';
 import { createControls } from './controls.js';
 import { createState } from './state.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+
+// An engine-shaped view of a Cesium camera: the canvas size, and worldToWindow
+// through Cesium's own projection (undefined behind the camera or in front of
+// the near plane, as the engines answer).
+function cameraEngine(scene) {
+  const eye = new C.Cartesian3();
+  const engine = createFakeEngine({
+    width: scene.canvas.clientWidth,
+    height: scene.canvas.clientHeight,
+  });
+  engine.fake.script('worldToWindow', (point, result) => {
+    C.Matrix4.multiplyByPoint(scene.camera.viewMatrix, point, eye);
+    if (eye.z >= -scene.camera.frustum.near) return undefined;
+    return C.SceneTransforms.worldToWindowCoordinates(scene, point, result);
+  });
+  return engine;
+}
 
 const bounds = { west: 0, east: 0.01, south: 0, north: 0.01 };
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
@@ -87,7 +105,7 @@ for (const y of [-175, -200, -300]) test(`off-screen camera-plane height correct
   };
   const point = new C.Cartesian3(0, y, 100), target = new C.Cartesian3(0, y, 197);
   const state = createState({ services: {} });
-  Object.assign(state, { _viewer: { scene }, _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] });
+  Object.assign(state, { _engine: cameraEngine(scene), _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] });
   const retention = createRetention({ state, parts: {} });
   retention.easeHeights(1 / 60);
   const controls = createControls({ state, services: {}, source: { getFlowSessionStats: () => ({}) }, parts: { model: { trafficFeedPresentation: () => ({}) } } });
@@ -111,7 +129,7 @@ test('visible corrections use the pixel limit without the off-screen world-speed
     frustum: new C.PerspectiveFrustum({ fov: Math.PI / 3, aspectRatio: 1.6, near: 1, far: 1e7 }) },
   };
   const point = new C.Cartesian3(0, 1000, 0), target = new C.Cartesian3(0, 1000, 300);
-  const state = { _viewer: { scene }, _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
+  const state = { _engine: cameraEngine(scene), _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
   const retention = createRetention({ state, parts: {} });
   let loadingFrames = 0, maxPixels = 0;
   for (let frame = 0; frame < 180; frame++) {
@@ -137,7 +155,7 @@ for (const targetHeight of [200, 2000]) test(`visible height steps stay pixel-li
     frustum: new C.PerspectiveFrustum({ fov: Math.PI / 3, aspectRatio: 1.6, near: 1, far: 1e7 }) },
   };
   const point = new C.Cartesian3(0, 50, 400), target = new C.Cartesian3(0, 50, targetHeight);
-  const state = { _viewer: { scene }, _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
+  const state = { _engine: cameraEngine(scene), _roads: [{ heightMoving: true, waypoints: [point], targetWaypoints: [target], segmentDist: [] }] };
   const before = C.SceneTransforms.worldToWindowCoordinates(scene, point);
   assert.ok(before.y > 0 && before.y < 800);
   const trial = C.Cartesian3.lerp(point, target, 0.2, new C.Cartesian3());
@@ -173,6 +191,24 @@ function holdFlowTasks(t) {
   };
 }
 
+// A globe without photoreal tiles 450 m over the road, whose terrain
+// answers 100 m (counted), with no rendered depth.
+function terrainEngine(calls) {
+  const engine = createFakeEngine();
+  engine.fake.maps.imagery = { kind: 'osm' };
+  engine.fake.setPose({
+    longitude: (0.0005 * Math.PI) / 180,
+    latitude: 0,
+    height: 450,
+  });
+  engine.fake.script('pickPosition', undefined);
+  engine.fake.script('terrainHeight', () => {
+    calls.samples++;
+    return 100;
+  });
+  return engine;
+}
+
 function flowFixture(source) {
   const state = createState({ services: {} });
   const calls = { samples: 0, selections: 0 };
@@ -194,17 +230,7 @@ function flowFixture(source) {
     _enabled: true,
     _roadMode: 'osm',
     _parseRoads: (data) => data.roads,
-    _viewer: {
-      scene: {
-        globe: {
-          show: true,
-          getHeight: () => {
-            calls.samples++;
-            return 100;
-          },
-        },
-      },
-    },
+    _engine: terrainEngine(calls),
   });
   const parts = {
     viewport: {

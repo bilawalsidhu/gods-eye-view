@@ -1,4 +1,11 @@
+import * as geo from '../../geo/index.js';
 import { wildlifeGridCellBounds } from './gridViewport.js';
+import {
+  createWildlifeSpriteBank,
+  wildlifeCameraView,
+  wildlifeMetresToPixels,
+  wildlifeNearFarValue,
+} from './display.js';
 import {
   createWildlifeWorkQueue,
   drainWildlifeWork,
@@ -14,6 +21,10 @@ const METERS_PER_DEGREE = (2 * Math.PI * 6378137) / 360;
 const FADE_STEPS = 3;
 const FADE_STEP_MS = 60;
 const SPRITE_SIZE = 128;
+const WGS84_MINIMUM_RADIUS = geo.ellipsoid.WGS84.minimumRadius;
+// Under every contact sprite set (src/data/spriteOrder.js orders start at 0).
+export const WILDLIFE_DENSITY_ORDER = -1;
+export const WILDLIFE_DENSITY_SET_ID = 'wildlife-sightings-density';
 // Fade coarse splats before they read as haze across the whole Earth disc.
 const ALTITUDE_FADE_START = 3_000_000;
 const ALTITUDE_FADE_END = 8_000_000;
@@ -106,7 +117,7 @@ function intersects(bounds, boxes, padding = 0) {
 }
 
 // Fit the entire kernel inside the globe's tangent cone, plus 5% of its radius.
-// A visible centre alone lets a depth-free billboard bleed across the limb.
+// A visible centre alone lets a depth-free sprite bleed across the limb.
 // The inscribed sphere is conservative for WGS84 and needs no projections.
 function horizonTest(cameraPosition, radius) {
   const { x, y, z } = cameraPosition || {};
@@ -130,16 +141,33 @@ function horizonTest(cameraPosition, radius) {
   };
 }
 
-/** Own noninteractive, world-sized glow splats, arrival fades and style changes. */
 /** A world-sized kernel fills the screen once the camera is inside it, e.g.
- * while flying in before the closer view's tiles arrive. Cesium fades it on the
- * GPU: gone within half its width, full beyond twice its width. */
+ * while flying in before the closer view's tiles arrive. Its alpha fades with
+ * the camera distance: gone within half its width, full beyond twice its
+ * width (Cesium's NearFarScalar interpolation). */
 export const WILDLIFE_DENSITY_NEAR_FADE = Object.freeze({ near: 0.5, far: 2 });
 
+const DENSITY_ATLAS = Object.freeze({
+  url: DENSITY_IMAGE,
+  cells: Object.freeze({ glow: Object.freeze([0, 0, 1, 1]) }),
+});
+
+/** The near fade of a kernel `width` metres wide, as [nearM, 0, farM, 1]. */
+export function wildlifeDensityNearFade(width) {
+  return [
+    width * WILDLIFE_DENSITY_NEAR_FADE.near,
+    0,
+    width * WILDLIFE_DENSITY_NEAR_FADE.far,
+    1,
+  ];
+}
+
+/** Own noninteractive, world-sized glow splats, arrival fades and style
+ * changes. Splats are sprites sized in metres: their pixel size and near fade
+ * follow the camera each frame it moves. */
 export function createWildlifeDensity({
-  cesium: C,
-  viewer,
-  positionForCell = (cell) => C.Cartesian3.fromDegrees(cell.lon, cell.lat),
+  engine,
+  positionForCell = (cell) => geo.cartesian3.fromDegrees(cell.lon, cell.lat),
   requestRender = () => {},
   setTimer = (fn, delay) => setTimeout(fn, delay),
   clearTimer = (timer) => clearTimeout(timer),
@@ -149,13 +177,8 @@ export function createWildlifeDensity({
   documentRef = globalThis.document,
 } = {}) {
   let collection = null;
-  const nearFade = (width) =>
-    new C.NearFarScalar(
-      width * WILDLIFE_DENSITY_NEAR_FADE.near,
-      0,
-      width * WILDLIFE_DENSITY_NEAR_FADE.far,
-      1,
-    );
+  let removeFrame = null;
+  let lastView = null;
   let metadata = new WeakMap();
   const entries = new Map();
   const fading = new Set();
@@ -168,30 +191,81 @@ export function createWildlifeDensity({
   const fadeQueue = createWildlifeWorkQueue({ requestIdle, cancelIdle });
   const styleQueue = createWildlifeWorkQueue({ requestIdle, cancelIdle });
 
-  // BillboardCollection does not implement Primitive's allowPicking option.
-  // Skipping its public pick update prevents its translucent quads from
-  // intercepting observations, including pixels with a faint glow alpha.
-  class DensityCollection extends C.BillboardCollection {
-    constructor() {
-      // Cesium's TRANSLUCENT-only option writes depth and occludes badges.
-      super();
-      this.allowPicking = false;
-    }
-    update(frameState) {
-      if (frameState.passes?.pick) return;
-      return super.update(frameState);
-    }
-  }
-
   function color(entry) {
     const mix = (i) => tint.low[i] + (tint.high[i] - tint.low[i]) * entry.rank;
-    return new C.Color(
+    return [
       mix(0),
       mix(1),
       mix(2),
-      (wildlifeDensityIntensity(entry.rank) * entry.opacity * entry.fade) /
-        FADE_STEPS,
+      ((wildlifeDensityIntensity(entry.rank) * entry.opacity * entry.fade) /
+        FADE_STEPS) *
+        entry.near,
+    ];
+  }
+
+  // Pixel size and near fade of one splat for the camera `view`.
+  function layout({ position, width }, view) {
+    const pixels = wildlifeMetresToPixels(width, position, view);
+    const distance = Math.hypot(
+      position.x - view.position.x,
+      position.y - view.position.y,
+      position.z - view.position.z,
     );
+    return {
+      scale: pixels === undefined ? 0 : pixels / SPRITE_SIZE,
+      show: pixels !== undefined,
+      near: wildlifeNearFarValue(wildlifeDensityNearFade(width), distance),
+    };
+  }
+
+  // Lays one splat out for `view`, writing only what changed; true when it
+  // wrote.
+  function place(entry, view) {
+    const { scale, show, near } = layout(entry.data, view);
+    let wrote = false;
+    if (entry.point.scale !== scale) {
+      entry.point.scale = scale;
+      wrote = true;
+    }
+    if (entry.point.show !== show) {
+      entry.point.show = show;
+      wrote = true;
+    }
+    if (entry.near !== near) {
+      entry.near = near;
+      entry.point.color = color(entry);
+      wrote = true;
+    }
+    return wrote;
+  }
+
+  const sameView = (a, b) =>
+    !!a &&
+    !!b &&
+    a.focalPx === b.focalPx &&
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.position.z === b.position.z &&
+    a.direction.x === b.direction.x &&
+    a.direction.y === b.direction.y &&
+    a.direction.z === b.direction.z;
+
+  // Lays every splat out for the current camera; commits what changed.
+  function follow() {
+    if (!collection || !entries.size) return false;
+    const view = wildlifeCameraView(engine);
+    if (sameView(view, lastView)) return false;
+    lastView = view;
+    let wrote = false;
+    for (const entry of entries.values()) wrote = place(entry, view) || wrote;
+    if (wrote) collection.commit();
+    return wrote;
+  }
+  const onFrame = () => follow();
+  // Commit what the data passes wrote before asking for a frame.
+  function render(reason) {
+    collection?.commit();
+    requestRender(reason);
   }
 
   function* styleWork() {
@@ -207,7 +281,7 @@ export function createWildlifeDensity({
     if (next === tint) return;
     tint = next;
     if (entries.size)
-      styleQueue.start(styleWork(), () => requestRender('density-style'));
+      styleQueue.start(styleWork(), () => render('density-style'));
   }
 
   function onStyle(event) {
@@ -221,8 +295,18 @@ export function createWildlifeDensity({
 
   function ensureCollection() {
     if (collection) return;
-    collection = new DensityCollection();
-    viewer.scene.primitives.add(collection);
+    collection = createWildlifeSpriteBank(engine, {
+      id: WILDLIFE_DENSITY_SET_ID,
+      order: WILDLIFE_DENSITY_ORDER,
+      // Picks pass through the glow, including pixels with a faint alpha.
+      pickable: false,
+      // A depth-tested glow would hide under terrain and tiles; depth-free
+      // splats rely on the limb test below instead.
+      depthTest: 'always',
+      sprite: { atlas: DENSITY_ATLAS, sizePx: SPRITE_SIZE },
+    });
+    lastView = null;
+    removeFrame = engine.frames.preRender.addEventListener(onFrame);
     if (!listening) {
       tint = tintForStyle(documentRef?.documentElement?.dataset?.gevStyle);
       eventTarget?.addEventListener?.('gev:style-change', onStyle);
@@ -247,7 +331,7 @@ export function createWildlifeDensity({
     fadeTimer = setTimer(() => {
       fadeTimer = null;
       fadeQueue.start(fadeWork(), () => {
-        requestRender('density-fade');
+        render('density-fade');
         scheduleFade();
       });
     }, FADE_STEP_MS);
@@ -314,7 +398,7 @@ export function createWildlifeDensity({
     };
     let sightingCount = 0;
     let changed = false;
-    const height = viewer.camera?.positionCartographic?.height ?? 0;
+    const height = engine.camera.height();
     const opacity = Math.max(
       0,
       Math.min(
@@ -323,9 +407,13 @@ export function createWildlifeDensity({
           (ALTITUDE_FADE_END - ALTITUDE_FADE_START),
       ),
     );
+    const camera = engine.camera.livePosition;
+    // Splats written in this pass are laid out for this camera.
+    const view = wildlifeCameraView(engine);
+    let created = false;
     const insideHorizon = horizonTest(
-      viewer.camera?.positionWC,
-      C.Ellipsoid?.WGS84?.minimumRadius ?? 6_356_752.314245,
+      { x: camera.x, y: camera.y, z: camera.z },
+      WGS84_MINIMUM_RADIUS,
     );
     const rankOf = wildlifeDensityRanks(cells);
     for (const cell of cells) {
@@ -355,21 +443,24 @@ export function createWildlifeDensity({
       const rank = rankOf(data.count);
       let entry = entries.get(data.id);
       if (!entry) {
+        created ||= !collection;
         ensureCollection();
-        entry = { data, rank, opacity, fade: 1, seen: token, point: null };
+        const { scale, show, near } = layout(data, view);
+        entry = {
+          data,
+          rank,
+          opacity,
+          fade: 1,
+          near,
+          seen: token,
+          point: null,
+        };
         entry.point = collection.add({
           position: data.position,
-          image: DENSITY_IMAGE,
-          // Cesium packs width in 16 bits even for meter-sized billboards.
-          // Put the world diameter in its unrestricted scale attribute so
-          // continental kernels never clamp into thin vertical ellipses.
-          width: SPRITE_SIZE,
-          height: SPRITE_SIZE,
-          scale: data.width / SPRITE_SIZE,
-          sizeInMeters: true,
+          cell: 'glow',
+          scale,
+          show,
           color: color(entry),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          translucencyByDistance: nearFade(data.width),
         });
         entries.set(data.id, entry);
         fading.add(entry);
@@ -377,17 +468,11 @@ export function createWildlifeDensity({
         changed = true;
       } else {
         entry.seen = token;
-        if (entry.data.position !== data.position) {
+        const moved =
+          entry.data.position !== data.position ||
+          entry.data.width !== data.width;
+        if (entry.data.position !== data.position)
           entry.point.position = data.position;
-          operations.densityWrites++;
-          changed = true;
-        }
-        if (entry.data.width !== data.width) {
-          entry.point.scale = data.width / SPRITE_SIZE;
-          entry.point.translucencyByDistance = nearFade(data.width);
-          operations.densityWrites++;
-          changed = true;
-        }
         if (entry.rank !== rank || entry.opacity !== opacity) {
           entry.rank = rank;
           entry.opacity = opacity;
@@ -396,6 +481,12 @@ export function createWildlifeDensity({
           changed = true;
         }
         entry.data = data;
+        // A moved or resized splat is laid out again.
+        if (moved) {
+          place(entry, view);
+          operations.densityWrites++;
+          changed = true;
+        }
       }
     }
     for (const [id, entry] of entries) {
@@ -413,12 +504,15 @@ export function createWildlifeDensity({
     }
     if (!entries.size && collection) clear(true);
     else scheduleFade();
-    if (changed) requestRender('density');
+    // A new set is laid out for this camera; otherwise the next frame
+    // relays out whatever an earlier camera placed.
+    if (created && collection) lastView = view;
+    if (changed) render('density');
     onOperations(operations);
     return { sightingCount, changed, size: entries.size };
   }
 
-  /** Release the texture atlas, billboards, cached coordinates and all work. */
+  /** Release the mover set, cached coordinates, frame listener and all work. */
   function clear(keepMetadata = false) {
     generation++;
     fadeQueue.cancel();
@@ -428,12 +522,11 @@ export function createWildlifeDensity({
     entries.clear();
     fading.clear();
     if (!keepMetadata) metadata = new WeakMap();
+    removeFrame?.();
+    removeFrame = null;
+    lastView = null;
     if (collection) {
-      if (
-        viewer.scene.primitives.remove(collection) !== true &&
-        !collection.isDestroyed?.()
-      )
-        collection.destroy();
+      collection.destroy();
       collection = null;
     }
     if (listening) {

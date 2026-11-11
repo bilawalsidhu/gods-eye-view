@@ -5,6 +5,8 @@
  */
 
 export const OSM_PLACES_LAYER_ID = 'osm-places';
+/** The places' point and label colour. */
+export const OSM_PLACE_COLOR = '#7fe3ff';
 /** A node and a way/relation of the same name this close are one site mapped twice. */
 const SAME_SITE_M = 75;
 

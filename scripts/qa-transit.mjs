@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// Cesium-only probes: native entity counts audit Cesium resource ownership alongside the contract checks.
+import { whenSettled, whenUiSettled, whenFramesDrawn } from './qa/ready.mjs';
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { hookRenderErrors } from './qa-browserEvidence.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { runTransitHeadingRegression } from './qa-transit-heading.mjs';
 import {
   boundPageEvaluations,
@@ -6,6 +11,7 @@ import {
   restoreRetainedTransit,
   sampleTransitPixels,
   readTransitFleetStyle,
+  transitQaBase,
 } from './qa-transit-browser.mjs';
 import {
   BOSTON,
@@ -22,7 +28,7 @@ import {
 /**
  * Browser proof for the Transit layer against a running app.
  *
- *   npm run qa:transit                       (defaults to http://localhost:4173)
+ *   QA_BASE_URL=http://localhost:4305 npm run qa:transit
  *   QA_BASE_URL=http://localhost:4305 node scripts/qa-transit.mjs
  *
  * Drives the real layer toggle and the real CONTEXT chooser, watches the real
@@ -35,7 +41,7 @@ import {
  * exercises the same paths.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { chromeExecutablePath, captureQaScreenshot } from './qa-chrome.mjs';
 import { createTransitHistory } from '../server/providers/transitHistory.js';
 import { DETECTION_THEME_MAP } from '../src/overlays/worldOverlayTokens.js';
@@ -50,9 +56,9 @@ import {
   reduceScriptedMotion,
 } from '../src/layers/transit/qaMetrics.js';
 
-const BASE = process.env.QA_BASE_URL || 'http://localhost:4173';
+const BASE = transitQaBase(process.env.QA_BASE_URL);
 const SHOTS = process.env.QA_SHOTS || 'qa-shots/transit';
-const TAG = process.env.QA_TAG || 'keyed';
+const TAG = process.env.QA_TAG || 'keyless';
 /** Which sections to run: all, or a comma list of cities,playback,disable,context. */
 const SECTIONS = new Set((process.env.QA_SECTIONS || 'all').split(','));
 const runs = (section) => SECTIONS.has('all') || SECTIONS.has(section);
@@ -96,9 +102,11 @@ const renderingSource = await readFile(
   new URL('../src/layers/transit/rendering.js', import.meta.url),
   'utf8',
 );
+// The body of onPreRender: up to the closing brace at its own indentation
+// (the visibility sweep that follows it may scan the fleet; the frame may not).
 const frameSource = renderingSource
   .split('function onPreRender()')[1]
-  .split('const occluder')[0];
+  .split('\n  }\n')[0];
 check(
   'frame pass does not scan the fleet or copy the moving set',
   !/_vehicles\.values|\[\.\.\.state\._moving\]/.test(frameSource),
@@ -163,13 +171,10 @@ async function sampleScreen(page) {
     const app = window.__godsEyeView;
     const layer = app.dataManager.layers.get('transit').module;
     const state = layer._transitStateForTest();
-    const scene = app.viewer.scene;
-    const canvas = scene.canvas;
+    const canvas = window.__godsEyeView.engine.host.canvas;
     // The app exposes no `window.Cesium`, so the projection is done here in
     // plain numbers: Cesium matrices are column-major arrays of 16 doubles,
     // and window coordinates are the standard clip -> NDC -> viewport walk.
-    const view = scene.camera.viewMatrix;
-    const proj = scene.camera.frustum.projectionMatrix;
     const mul = (m, v) => [
       m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12] * v[3],
       m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13] * v[3],
@@ -182,7 +187,12 @@ async function sampleScreen(page) {
     for (const entry of state._vehicles.values()) {
       if (!entry.marker || entry.marker.show === false) continue;
       const p = entry.marker.position;
-      const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
+      const clip = mul(window.__godsEyeView.engine.projector.viewProjection(), [
+        p.x,
+        p.y,
+        p.z,
+        1,
+      ]);
       if (!(clip[3] > 0)) continue;
       const ndcX = clip[0] / clip[3];
       const ndcY = clip[1] / clip[3];
@@ -203,11 +213,11 @@ async function sampleScreen(page) {
 }
 
 async function sampleVisible(page) {
-  return page.evaluate(() => {
+  return evaluateWithGeo(page, async (qaGeo) => {
     const app = window.__godsEyeView;
     const layer = app.dataManager.layers.get('transit').module;
     const state = layer._transitStateForTest();
-    const Cartographic = app.viewer.camera.positionCartographic.constructor;
+    const Cartographic = qaGeo.cartographic;
     return [...state._vehicles.values()]
       .filter((entry) => entry.marker && entry.marker.show !== false)
       .slice(0, 200)
@@ -259,13 +269,12 @@ check(
 historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
-const browser = await puppeteer.launch({
-  headless: false,
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 150000,
-  executablePath: chromeExecutablePath(),
   args: [
     '--no-sandbox',
-    '--disable-backgrounding-occluded-windows',
+    '--enable-gpu',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--window-size=1920,1080',
@@ -273,6 +282,8 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
+await hookRenderErrors(page);
+await blockPaidQaMaps(page);
 // This gate measures visible-page motion. OS minimization must not silently
 // switch it into the app's intentional hidden-tab polling pause.
 const focus = await page.createCDPSession();
@@ -314,7 +325,7 @@ try {
       Boolean(document.querySelector('[data-layer-id="transit"]')),
     { timeout: 90_000 },
   );
-  await wait(6_000);
+  await whenSettled(page);
 
   // The Data Layers panel starts collapsed; a user opens it before toggling.
   const expanded = await page.$eval(
@@ -325,7 +336,7 @@ try {
       return false;
     },
   );
-  if (!expanded) await wait(800);
+  if (!expanded) await whenUiSettled(page);
   check(
     'the Data Layers panel opens from its own header button',
     await page.$eval(
@@ -365,7 +376,7 @@ try {
   await page.$eval(row, (element) =>
     element.scrollIntoView({ block: 'center' }),
   );
-  await wait(400);
+  await whenUiSettled(page);
   const before = transitRequests.length;
   await page.click(`${row} .data-toggle-btn`);
   await page.waitForFunction(
@@ -379,24 +390,24 @@ try {
   );
 
   await page.evaluate(() => {
-    window.__transitRenderErrors = [];
-    window.__godsEyeView.viewer.scene.renderError.addEventListener(
-      (scene, error) => window.__transitRenderErrors.push(error.message),
-    );
+    window.__transitRenderErrors = window.__qaRenderErrors;
   });
   for (const city of runs('cities') ? CITIES : []) {
     console.log(`\n== ${city.label} ==`);
     // City-wide first: enough altitude to see the fleet as a fleet.
-    await page.evaluate((c) => {
-      const camera = window.__godsEyeView.viewer.camera;
-      const Cartographic = camera.positionCartographic.constructor;
-      camera.setView({
-        destination: Cartographic.toCartesian(
-          Cartographic.fromDegrees(c.lon, c.lat - 0.03, 3_500),
-        ),
-        orientation: { heading: 0, pitch: (-40 * Math.PI) / 180, roll: 0 },
-      });
-    }, city);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, c) => {
+        const Cartographic = qaGeo.cartographic;
+        window.__godsEyeView.engine.camera.setView({
+          destination: Cartographic.toCartesian(
+            Cartographic.fromDegrees(c.lon, c.lat - 0.03, 3_500),
+          ),
+          orientation: { heading: 0, pitch: (-40 * Math.PI) / 180, roll: 0 },
+        });
+      },
+      city,
+    );
     const arrived = await page
       .waitForFunction(
         (feedId) =>
@@ -422,7 +433,7 @@ try {
       );
       continue;
     }
-    await wait(9_000);
+    await whenSettled(page);
     const fleet = await page.evaluate((feedId) => {
       const layer =
         window.__godsEyeView.dataManager.layers.get('transit').module;
@@ -445,49 +456,52 @@ try {
 
     // Street level: 600 m up, 45 degrees down, framed on a real vehicle so the
     // shot shows what a user sees when they drop in on one.
-    const framed = await page.evaluate((c) => {
-      const app = window.__godsEyeView;
-      const camera = app.viewer.camera;
-      const Cartographic = camera.positionCartographic.constructor;
-      const state = app.dataManager.layers
-        .get('transit')
-        .module._transitStateForTest();
-      let best = null;
-      for (const entry of state._vehicles.values()) {
-        if (!entry.key.startsWith(`${c.feedId}:`)) continue;
-        const d = Math.hypot(entry.to.lat - c.lat, entry.to.lon - c.lon);
-        if (!best || d < best.d)
-          best = { d, lat: entry.to.lat, lon: entry.to.lon, key: entry.key };
-      }
-      if (!best) return null;
-      // Camera 600 m back along the heading, 600 m up, looking 45 degrees down:
-      // the vehicle lands in the middle of the frame.
-      const heading = (c.heading * Math.PI) / 180;
-      const lat = best.lat - (600 * Math.cos(heading)) / 111_320;
-      const lon =
-        best.lon -
-        (600 * Math.sin(heading)) /
-          (111_320 * Math.cos((best.lat * Math.PI) / 180));
-      camera.setView({
-        destination: Cartographic.toCartesian(
-          Cartographic.fromDegrees(lon, lat, 600),
-        ),
-        orientation: { heading, pitch: (-45 * Math.PI) / 180, roll: 0 },
-      });
-      return best;
-    }, city);
+    const framed = await evaluateWithGeo(
+      page,
+      async (qaGeo, c) => {
+        const app = window.__godsEyeView;
+        const Cartographic = qaGeo.cartographic;
+        const state = app.dataManager.layers
+          .get('transit')
+          .module._transitStateForTest();
+        let best = null;
+        for (const entry of state._vehicles.values()) {
+          if (!entry.key.startsWith(`${c.feedId}:`)) continue;
+          const d = Math.hypot(entry.to.lat - c.lat, entry.to.lon - c.lon);
+          if (!best || d < best.d)
+            best = { d, lat: entry.to.lat, lon: entry.to.lon, key: entry.key };
+        }
+        if (!best) return null;
+        // Camera 600 m back along the heading, 600 m up, looking 45 degrees down:
+        // the vehicle lands in the middle of the frame.
+        const heading = (c.heading * Math.PI) / 180;
+        const lat = best.lat - (600 * Math.cos(heading)) / 111_320;
+        const lon =
+          best.lon -
+          (600 * Math.sin(heading)) /
+            (111_320 * Math.cos((best.lat * Math.PI) / 180));
+        window.__godsEyeView.engine.camera.setView({
+          destination: Cartographic.toCartesian(
+            Cartographic.fromDegrees(lon, lat, 600),
+          ),
+          orientation: { heading, pitch: (-45 * Math.PI) / 180, roll: 0 },
+        });
+        return best;
+      },
+      city,
+    );
     check(
       `${city.label}: a vehicle to fly to`,
       Boolean(framed),
       framed?.key || 'none',
     );
-    await wait(9_000);
+    await whenSettled(page);
 
-    const first = await page.evaluate(() => {
+    const first = await evaluateWithGeo(page, async (qaGeo) => {
       const app = window.__godsEyeView;
       const layer = app.dataManager.layers.get('transit').module;
       const state = layer._transitStateForTest();
-      const Cartographic = app.viewer.camera.positionCartographic.constructor;
+      const Cartographic = qaGeo.cartographic;
       return {
         count: state._vehicles.size,
         stats: layer.getStats(),
@@ -522,18 +536,19 @@ try {
         const state = app.dataManager.layers
           .get('transit')
           .module._transitStateForTest();
-        const scene = app.viewer.scene;
         const seen = [];
         for (const entry of state._vehicles.values()) {
-          const screen = scene.cartesianToCanvasCoordinates(
+          const screen = window.__godsEyeView.engine.projector.worldToWindow(
             entry.marker.position,
           );
           if (
             screen &&
             screen.x > 360 &&
-            screen.x < scene.canvas.clientWidth - 120 &&
+            screen.x <
+              window.__godsEyeView.engine.host.canvas.clientWidth - 120 &&
             screen.y > 120 &&
-            screen.y < scene.canvas.clientHeight - 160
+            screen.y <
+              window.__godsEyeView.engine.host.canvas.clientHeight - 160
           ) {
             seen.push({
               key: entry.key,
@@ -546,7 +561,7 @@ try {
       }, attempt);
       if (!target) break;
       await page.mouse.click(target.x, target.y);
-      await wait(900);
+      await whenUiSettled(page);
       selected = await page.evaluate(() => {
         const app = window.__godsEyeView;
         const key = app.dataManager.layers
@@ -705,7 +720,7 @@ try {
       });
       for (const preset of presets) {
         const how = await selectStyle(page, preset.style, preset.params);
-        await wait(1_200);
+        await whenUiSettled(page);
         const styling = await page.evaluate(() =>
           window.__godsEyeView.dataManager.layers
             .get('transit')
@@ -776,7 +791,7 @@ try {
         const clickTarget = rendered[0];
         if (clickTarget) {
           await page.mouse.click(clickTarget.x, clickTarget.y);
-          await wait(100);
+          await whenUiSettled(page);
           const picked = await page.evaluate((key) => {
             const state = window.__godsEyeView.dataManager.layers
               .get('transit')
@@ -810,7 +825,7 @@ try {
       const target = (await sampleRendered(page))[0];
       if (target) {
         await page.mouse.click(target.x, target.y);
-        await wait(800);
+        await whenUiSettled(page);
         const underFlir = await page.evaluate((key) => {
           const layer =
             window.__godsEyeView.dataManager.layers.get('transit').module;
@@ -821,15 +836,16 @@ try {
             color: entry?.marker.color.toCssColorString(),
             width: entry?.marker.width,
             pickOwner: (() => {
-              const p = window.__godsEyeView.viewer.scene.pick(
-                entry.marker.computeScreenSpacePosition(
-                  window.__godsEyeView.viewer.scene,
-                ),
+              // The marker is a mover instance: project it and pick through
+              // the engine, whose result names the instance's pickId.
+              const { engine } = window.__godsEyeView;
+              const screen = engine.projector.worldToWindow(
+                entry.marker.position,
               );
+              const p = screen ? engine.picker.pick(screen) : undefined;
               return {
                 id: typeof p?.id === 'string' ? p.id : null,
-                primitiveId:
-                  typeof p?.primitive?.id === 'string' ? p.primitive.id : null,
+                primitiveId: null,
                 collection:
                   entry.markerCollection === state._animatedMarkers
                     ? 'animated'
@@ -844,7 +860,7 @@ try {
           JSON.stringify(underFlir),
         );
         await page.keyboard.press('Escape');
-        await wait(500);
+        await whenUiSettled(page);
       } else {
         check(
           'clicking a sprite under FLIR selects it and keeps it white-hot',
@@ -874,16 +890,18 @@ try {
 
     // Motion acceptance uses known report-time playback even when live fleets park.
     await selectStyle(page, 'normal');
-    await page.evaluate((city) => {
-      const app = window.__godsEyeView,
-        camera = app.viewer.camera;
-      const C = camera.positionCartographic.constructor;
-      camera.setView({
-        destination: C.toCartesian(C.fromDegrees(city.lon, city.lat, 600)),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-    }, city);
-    await wait(2000);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, city) => {
+        const C = qaGeo.cartographic;
+        window.__godsEyeView.engine.camera.setView({
+          destination: C.toCartesian(C.fromDegrees(city.lon, city.lat, 600)),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+      },
+      city,
+    );
+    await whenUiSettled(page);
     await page.evaluate(
       (city) =>
         window.__godsEyeView.dataManager.layers
@@ -894,11 +912,11 @@ try {
     await wait(1000);
     const motionFirst = await sampleVisible(page);
     await wait(30_000);
-    const second = await page.evaluate(() => {
+    const second = await evaluateWithGeo(page, async (qaGeo) => {
       const app = window.__godsEyeView;
       const layer = app.dataManager.layers.get('transit').module;
       const state = layer._transitStateForTest();
-      const Cartographic = app.viewer.camera.positionCartographic.constructor;
+      const Cartographic = qaGeo.cartographic;
       return {
         count: state._vehicles.size,
         // The RENDERED primitive position, read back through Cesium — not the
@@ -1045,6 +1063,8 @@ try {
   if (runs('history')) {
     console.log('\n== retained history reload ==');
     const recovery = await browser.newPage();
+    await hookRenderErrors(recovery);
+    await blockPaidQaMaps(recovery);
     boundPageEvaluations(recovery);
     try {
       await recovery.goto(view(BOSTON), { waitUntil: 'domcontentloaded' });
@@ -1098,10 +1118,7 @@ try {
         { timeout: 90000 },
       );
       await recovery.evaluate(() => {
-        window.__transitRenderErrors = [];
-        window.__godsEyeView.viewer.scene.renderError.addEventListener(
-          (scene, error) => window.__transitRenderErrors.push(error.message),
-        );
+        window.__transitRenderErrors = window.__qaRenderErrors;
       });
       const restored = await recovery.evaluate(
         restoreRetainedTransit,
@@ -1116,7 +1133,7 @@ try {
               .trails.requestDiagnostics().pending,
           { timeout: 20000 },
         );
-        await wait(4000);
+        await whenFramesDrawn(recovery);
         const proof = await recovery.evaluate(
           ({ key, oldest }) => {
             const layer =
@@ -1181,16 +1198,19 @@ try {
   // every rendered frame is sampled.
   if (runs('playback')) {
     console.log('\n== deterministic playback ==');
-    await page.evaluate((c) => {
-      const camera = window.__godsEyeView.viewer.camera;
-      const Cartographic = camera.positionCartographic.constructor;
-      camera.setView({
-        destination: Cartographic.toCartesian(
-          Cartographic.fromDegrees(c.lon, c.lat + 0.005, 2400),
-        ),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-    }, BOSTON);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, c) => {
+        const Cartographic = qaGeo.cartographic;
+        window.__godsEyeView.engine.camera.setView({
+          destination: Cartographic.toCartesian(
+            Cartographic.fromDegrees(c.lon, c.lat + 0.005, 2400),
+          ),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+      },
+      BOSTON,
+    );
     await page.evaluate(() => {
       window.__godsEyeView.dataManager.layers
         .get('transit')
@@ -1337,14 +1357,14 @@ try {
     console.log(`  scripted fleet before trace: ${await simState()}`);
     await reportTransitVisibility(page, 'scripted visibility before trace');
     // Sample every rendered frame for two minutes.
-    const trace = await page.evaluate(
-      (durationMs) =>
+    const trace = await evaluateWithGeo(
+      page,
+      (qaGeo, durationMs) =>
         new Promise((resolve) => {
           const app = window.__godsEyeView;
           const layer = app.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();
-          const Cartographic =
-            app.viewer.camera.positionCartographic.constructor;
+          const Cartographic = qaGeo.cartographic;
           const keys = [
             'sim-straight',
             'sim-corner',
@@ -1402,7 +1422,10 @@ try {
               resolve({ out, words });
             }
           };
-          remove = app.viewer.scene.postRender.addEventListener(tick);
+          remove =
+            window.__godsEyeView.engine.frames.postRender.addEventListener(
+              tick,
+            );
         }),
       120_000,
     );
@@ -1544,23 +1567,22 @@ try {
 
     // ---- Card anchor synchronisation ---------------------------------------
     console.log('\n== card anchor ==');
-    await page.evaluate(() => {
-      const app = window.__godsEyeView,
-        camera = app.viewer.camera;
+    await evaluateWithGeo(page, async (qaGeo) => {
+      const app = window.__godsEyeView;
       const entry = app.dataManager.layers
         .get('transit')
         .module._transitStateForTest()
         ._vehicles.get('mbta:sim-straight');
       if (!entry) return;
-      const C = camera.positionCartographic.constructor;
+      const C = qaGeo.cartographic;
       const at = C.fromCartesian(entry.marker.position);
       at.height = 600;
-      camera.setView({
+      window.__godsEyeView.engine.camera.setView({
         destination: C.toCartesian(at),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     });
-    await wait(1500);
+    await whenUiSettled(page);
     await reportTransitVisibility(page, 'scripted visibility before click');
     const target = await page.evaluate(() => {
       const app = window.__godsEyeView;
@@ -1568,10 +1590,7 @@ try {
       const state = layer._transitStateForTest();
       const entry = state._vehicles.get('mbta:sim-straight');
       if (!entry?.marker?.show) return null;
-      const scene = app.viewer.scene;
-      const canvas = scene.canvas;
-      const view = scene.camera.viewMatrix;
-      const proj = scene.camera.frustum.projectionMatrix;
+      const canvas = window.__godsEyeView.engine.host.canvas;
       const mul = (m, v) => [
         m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12] * v[3],
         m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13] * v[3],
@@ -1579,7 +1598,12 @@ try {
         m[3] * v[0] + m[7] * v[1] + m[11] * v[2] + m[15] * v[3],
       ];
       const p = entry.marker.position;
-      const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
+      const clip = mul(window.__godsEyeView.engine.projector.viewProjection(), [
+        p.x,
+        p.y,
+        p.z,
+        1,
+      ]);
       const x = ((clip[0] / clip[3]) * 0.5 + 0.5) * canvas.clientWidth;
       const y = (1 - ((clip[1] / clip[3]) * 0.5 + 0.5)) * canvas.clientHeight;
       if (
@@ -1590,7 +1614,7 @@ try {
         y >= canvas.clientHeight
       )
         return null;
-      const picked = scene.pick({ x, y });
+      const picked = app.engine.picker.pick({ x, y });
       return {
         entityCount: app.viewer.entities.values.length,
         key: entry.key,
@@ -1607,10 +1631,12 @@ try {
         JSON.stringify(target),
       );
       await page.mouse.click(target.x, target.y);
-      await wait(600);
+      await whenUiSettled(page);
       anchor = await page.evaluate(
         async (key, durationMs) => {
-          const overlay = await import('/src/overlays/worldOverlay.js');
+          const overlay = (
+            await import('/src/overlays/worldOverlay.js')
+          ).worldOverlayFor(window.__godsEyeView.engine);
           const app = window.__godsEyeView;
           const layer = app.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();
@@ -1627,8 +1653,7 @@ try {
                 ).pointerOwner(),
               },
             };
-          const scene = app.viewer.scene;
-          const canvas = scene.canvas;
+          const canvas = window.__godsEyeView.engine.host.canvas;
           const mul = (m, v) => [
             m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12] * v[3],
             m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13] * v[3],
@@ -1647,12 +1672,13 @@ try {
             const t0 = performance.now();
             const tick = () => {
               const entry = state._vehicles.get(key);
-              const rect = overlay.getOverlayPaintRect('transit-selected', key);
+              const rect = overlay.getPaintRect('transit-selected', key);
               if (entry?.marker) {
-                const view = scene.camera.viewMatrix;
-                const proj = scene.camera.frustum.projectionMatrix;
                 const p = entry.marker.position;
-                const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
+                const clip = mul(
+                  window.__godsEyeView.engine.projector.viewProjection(),
+                  [p.x, p.y, p.z, 1],
+                );
                 if (
                   entry.marker.show !== false &&
                   rect &&
@@ -1688,8 +1714,8 @@ try {
                 if (trail.head.show && trail.head.positions.length) {
                   const project = (p) => {
                     const clip = mul(
-                      scene.camera.frustum.projectionMatrix,
-                      mul(scene.camera.viewMatrix, [p.x, p.y, p.z, 1]),
+                      window.__godsEyeView.engine.projector.viewProjection(),
+                      [p.x, p.y, p.z, 1],
                     );
                     return [
                       ((clip[0] / clip[3]) * canvas.clientWidth) / 2,
@@ -1732,7 +1758,10 @@ try {
               });
             };
             const timer = setTimeout(finish, durationMs + 1000);
-            remove = scene.postRender.addEventListener(tick);
+            remove =
+              window.__godsEyeView.engine.frames.postRender.addEventListener(
+                tick,
+              );
           });
         },
         target.key,
@@ -1806,21 +1835,24 @@ try {
       afterRemoval.gone && afterRemoval.selected !== 'mbta:sim-straight',
       JSON.stringify(afterRemoval),
     );
-    await page.evaluate((c) => {
-      const camera = window.__godsEyeView.viewer.camera;
-      const Cartographic = camera.positionCartographic.constructor;
-      camera.setView({
-        destination: Cartographic.toCartesian(
-          Cartographic.fromDegrees(c.lon, c.lat, 600),
-        ),
-        orientation: {
-          heading: (c.heading * Math.PI) / 180,
-          pitch: (-45 * Math.PI) / 180,
-          roll: 0,
-        },
-      });
-    }, CITIES.at(-1));
-    await wait(4_000);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, c) => {
+        const Cartographic = qaGeo.cartographic;
+        window.__godsEyeView.engine.camera.setView({
+          destination: Cartographic.toCartesian(
+            Cartographic.fromDegrees(c.lon, c.lat, 600),
+          ),
+          orientation: {
+            heading: (c.heading * Math.PI) / 180,
+            pitch: (-45 * Math.PI) / 180,
+            roll: 0,
+          },
+        });
+      },
+      CITIES.at(-1),
+    );
+    await whenSettled(page);
   }
 
   const sceneQA = {
@@ -1911,7 +1943,7 @@ try {
       if (button.getAttribute('aria-expanded') !== 'true') button.click();
     },
   );
-  await wait(1_200);
+  await whenFramesDrawn(page);
   check(
     'the CONTEXT panel opens from its own header button',
     await page.$eval(
@@ -1927,12 +1959,12 @@ try {
       origin: 'user',
     }),
   );
-  await wait(6_000);
+  await whenFramesDrawn(page);
   check('transit is on before entering a Context mode', await isOn());
 
   // CONTACTS
   await page.click('#global-context-flights-btn');
-  await wait(18_000);
+  await whenFramesDrawn(page);
   const inContacts = {
     transit: await isOn(),
     vehicles: await page.evaluate(
@@ -1949,7 +1981,7 @@ try {
     JSON.stringify(inContacts),
   );
   await page.click('#global-context-flights-btn');
-  await wait(12_000);
+  await whenFramesDrawn(page);
   check('leaving Contacts restores Transit', await isOn());
 
   // SPACE MISSIONS
@@ -1958,9 +1990,9 @@ try {
       origin: 'user',
     }),
   );
-  await wait(2_000);
+  await whenFramesDrawn(page);
   await page.click('#global-context-missions-btn');
-  await wait(20_000);
+  await whenFramesDrawn(page);
   const blocked = await page.evaluate(async () => {
     const settled = await window.__godsEyeView.dataManager.setEnabled(
       'transit',
@@ -1978,7 +2010,7 @@ try {
     JSON.stringify(blocked),
   );
   await page.click('#global-context-missions-btn');
-  await wait(12_000);
+  await whenFramesDrawn(page);
   check(
     'leaving Space Missions leaves Transit off, as it was on entry',
     (await isOn()) === false,
@@ -2007,7 +2039,7 @@ try {
     error.stack || error.message,
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(
   failures

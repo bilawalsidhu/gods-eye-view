@@ -1,16 +1,28 @@
-import * as Cesium from 'cesium';
+export {
+  GROUND_FLOOR_CLAMP_RADIUS_KM,
+  GROUND_FLOOR_WARM_MAX_ALT_M,
+  POSITION_HISTORY_LIMIT,
+  LANDED_MISSING_POLL_LIMIT,
+  MISSING_POLL_LIMIT,
+  ERROR_BACKOFF_INTERVAL,
+} from './recordPolicy.js';
+import {
+  CYAN,
+  constantRgba,
+  nearFarScale,
+  rgbaFromCss,
+} from '../shared/color.js';
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
-export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+export const MIL_TINT = Object.freeze(rgbaFromCss('#FFB800'));
 
 /** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
 
-export const EMERGENCY_TINT =
-  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
+export const EMERGENCY_TINT = rgbaFromCss(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
@@ -105,18 +117,19 @@ export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
 
 export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
-export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
+export const CYAN_TRANSPARENT = constantRgba(
+  CYAN.red,
+  CYAN.green,
+  CYAN.blue,
+  0,
+);
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
-export const COCKPIT_CIVILIAN_COLOR =
-  Cesium.Color.fromCssColorString('#DCEEFF');
+export const COCKPIT_CIVILIAN_COLOR = Object.freeze(rgbaFromCss('#DCEEFF'));
 
-export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  1000,
-  3.0,
-  8000000,
-  0.5,
+export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze(
+  nearFarScale(1000, 3.0, 8000000, 0.5),
 );
 
 // ---------------------------------------------------------------------------

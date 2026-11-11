@@ -37,6 +37,8 @@ const { computeInRangeCities } = createViewport({
   services: { render: { governorRequestRender() {} } },
   parts,
   source: null,
+  // The range check reads no camera.
+  camera: {},
 });
 
 test('Bicing and AMBici are registered and readable through the proxy', () => {

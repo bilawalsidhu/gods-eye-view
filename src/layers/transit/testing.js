@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { recordFix, updatePlayback, attachFloorToPlace } from './movement.js';
 import { seek, setRate, mergeHistory } from '../../data/contactPlayback.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
@@ -97,8 +97,8 @@ export function createTesting({ state, parts }) {
           entry.displayPaths.set(fixes[i].seq, {
             toSeq: fixes[i + 1].seq,
             positions: [
-              Cesium.Cartesian3.fromDegrees(fixes[i].lon, fixes[i].lat, 20),
-              Cesium.Cartesian3.fromDegrees(
+              geo.cartesian3.fromDegrees(fixes[i].lon, fixes[i].lat, 20),
+              geo.cartesian3.fromDegrees(
                 fixes[i + 1].lon,
                 fixes[i + 1].lat,
                 20,
@@ -139,8 +139,8 @@ export function createTesting({ state, parts }) {
           entry.displayPaths.set(fixes[i].seq, {
             toSeq: fixes[i + 1].seq,
             positions: [
-              Cesium.Cartesian3.fromDegrees(fixes[i].lon, fixes[i].lat, 20),
-              Cesium.Cartesian3.fromDegrees(
+              geo.cartesian3.fromDegrees(fixes[i].lon, fixes[i].lat, 20),
+              geo.cartesian3.fromDegrees(
                 fixes[i + 1].lon,
                 fixes[i + 1].lat,
                 20,
@@ -161,12 +161,12 @@ export function createTesting({ state, parts }) {
     /** Measure inside Cesium postRender with fixed typed storage; no sample objects per frame. */
     _measureTransitFramesForTest(durationMs = 12000) {
       stopProbe?.();
-      const scene = state._viewer.scene;
+      const probe = parts.renderer.frameProbe();
       const capacity = 20000,
         stride = 12,
         data = new Float64Array(capacity * stride);
       const previousPositions = new Float64Array(state._vehicles.size * 3);
-      const gl = scene.context._gl;
+      const gl = probe.gl;
       let active = false,
         upload = 0,
         cpu = 0,
@@ -195,9 +195,9 @@ export function createTesting({ state, parts }) {
           gl[name] = original;
         });
       }
-      for (const collection of [state._markers, state._animatedMarkers]) {
-        const original = collection.update;
-        collection.update = function (frame) {
+      for (const { target, method } of probe.uploads) {
+        const original = target[method];
+        target[method] = function (frame) {
           active = true;
           try {
             return original.call(this, frame);
@@ -206,12 +206,13 @@ export function createTesting({ state, parts }) {
           }
         };
         saved.push(() => {
-          collection.update = original;
+          target[method] = original;
         });
       }
       state._preRenderRemove?.();
-      const removePre = scene.preRender.addEventListener(() => {
+      const removePre = parts.renderer.onPreRender(() => {
         upload = 0;
+        active = probe.allUploads === true;
         const start = performance.now();
         parts.rendering.onPreRender();
         cpu = performance.now() - start;
@@ -224,7 +225,7 @@ export function createTesting({ state, parts }) {
           removePost?.();
           for (const restore of saved) restore();
           if (state._enabled)
-            state._preRenderRemove = scene.preRender.addEventListener(
+            state._preRenderRemove = parts.renderer.onPreRender(
               parts.rendering.onPreRender,
             );
           stopProbe = null;
@@ -246,13 +247,14 @@ export function createTesting({ state, parts }) {
           }
           resolve({
             rows,
+            uploadScope: probe.uploadScope ?? 'transit-marker-banks',
             dpr: devicePixelRatio,
-            width: scene.canvas.clientWidth,
-            height: scene.canvas.clientHeight,
+            width: probe.canvas.clientWidth,
+            height: probe.canvas.clientHeight,
           });
         };
         stopProbe = finish;
-        removePost = scene.postRender.addEventListener(() => {
+        removePost = parts.renderer.onPostRender(() => {
           const now = performance.now();
           if (count >= capacity) return;
           const k = count++ * stride;

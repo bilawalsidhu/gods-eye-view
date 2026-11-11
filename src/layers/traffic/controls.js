@@ -128,10 +128,12 @@ export function createControls({ state: layerState, services, parts, source }) {
       ) {
         layerState._showDots = params.dots;
         // Hidden dots are kept, so showing them again is instant.
-        if (layerState._enabled && layerState._pointCollection)
-          layerState._pointCollection.show = params.dots;
+        if (layerState._enabled) {
+          layerState._display?.show(params.dots);
+          parts.animation.drawDots?.();
+        }
         parts.animation.syncRenderDemand();
-        layerState._viewer?.scene?.requestRender?.();
+        layerState._engine?.render.request('traffic-dots');
       }
       if (typeof params.densityScale === 'number') {
         layerState._densityScale = Math.max(
@@ -273,7 +275,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object}  [options]
      * @param {number}  [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number}  [options.seed]     - Integer seed to offset the sampling start.
-     * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
+     * @returns {Array<{position:{x:number,y:number,z:number}, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
       // Hidden dots are not on screen to detect.
@@ -357,6 +359,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         fetching: Boolean(layerState._fetching),
         flowPending: layerState._flowPending,
         surfaceRefining: Boolean(layerState._surfaceRefining),
+        surfaceWaiting: Boolean(layerState._surfaceRefineRemove),
         populationPending: Boolean(layerState._populationPending),
         heightPending: Boolean(layerState._heightPending),
         generation: layerState._loadGeneration,

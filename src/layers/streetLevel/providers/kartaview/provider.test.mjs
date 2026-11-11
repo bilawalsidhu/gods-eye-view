@@ -15,7 +15,8 @@ import {
 import { validateProviders } from '../../registry.js';
 import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
-  coverageViewer,
+  coverageMap,
+  streetLevelMap,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
 
@@ -402,33 +403,35 @@ test('archived photos are skipped: by the nearest lookup, and by › and ‹', a
   );
 });
 
-/** A stand-in Cesium viewer the cones can draw on; `cones()` lists their photo indexes. */
+/** The display the cones draw on; `cones()` lists their first and last photo indexes. */
 async function withCones(t, env) {
-  const Cesium = await import('cesium');
   const drawing = new Proxy({}, { get: () => () => {}, set: () => true });
   const saved = globalThis.document;
   globalThis.document = {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const harness = streetLevelMap();
+  // The cones are drawn hidden until the provider is switched on; they are
+  // read whether shown or not.
+  let group = null;
+  const sprites = harness.map.sprites;
+  harness.map.sprites = (...args) => (group = sprites(...args));
+  env.instance.init(harness.map);
+  // The cones paint on the next frame.
+  const ids = () => {
+    group?.show(true);
+    harness.frame();
+    return harness
+      .moverSets('street-level:kartaview-cones')
+      .flatMap((set) => set.instances)
+      .map((cone) => cone.pickId);
+  };
   const cones = () => {
-    const indexes = [];
-    for (let i = 0; i < collection.length; i++)
-      indexes.push(Number(collection.get(i).id.split('-').at(-1)));
+    const indexes = ids().map((id) => Number(id.split('-').at(-1)));
     return [Math.min(...indexes), Math.max(...indexes)];
   };
-  cones.count = () => collection?.length ?? 0;
+  cones.count = () => ids().length;
   return cones;
 }
 
@@ -733,10 +736,7 @@ function coverageSetup(
     return { query };
   };
   const centre = tileCentre(-83.0458, 42.3314);
-  const viewer = coverageViewer(
-    { lon: centre.lon, lat: centre.lat, height },
-    t,
-  );
+  const harness = coverageMap({ lon: centre.lon, lat: centre.lat, height });
   const tiles = [];
   let hold = null;
   env.source.getTile = (tile) => {
@@ -751,11 +751,12 @@ function coverageSetup(
     };
     return hold ? hold.then(() => answer) : Promise.resolve(answer);
   };
-  env.instance.init(viewer);
-  t.after(() => env.instance.destroy(viewer));
+  env.instance.init(harness.map);
+  t.after(() => env.instance.destroy());
   return {
     ...env,
-    viewer,
+    harness,
+    map: harness.map,
     centre,
     tiles,
     masks,
@@ -779,8 +780,8 @@ function coverageSetup(
 }
 
 /** The camera came to rest: coverage refreshes once its debounce is over. */
-async function moved(viewer) {
-  viewer.camera.moveEnd.raiseEvent();
+async function moved(harness) {
+  harness.moveEnd();
   await new Promise((resolve) =>
     setTimeout(resolve, COVERAGE_TUNING.moveDebounceMs + 20),
   );
@@ -799,7 +800,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
     // 360° photos lie on the middle line only.
     drawnRows: (query) => (query === 'fieldOfView=360' ? [[254, 258]] : []),
   });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   assert.deepEqual(env.masks, ['fieldOfView=360']);
   // Unfiltered: every line, and the tile's lines are not asked for again.
@@ -815,7 +816,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
   env.instance.setFilter();
   assert.ok(await until(() => env.instance.coverageStats().loading));
   assert.equal(
-    env.viewer.scene.groundPrimitives.items.size,
+    env.harness.groundSets('kartaview-coverage:').length,
     0,
     'the unfiltered lines are not shown as filtered ones',
   );
@@ -832,7 +833,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
     `startDate=${new Date(since).toISOString().slice(0, 10)}`,
   );
   assert.equal(env.instance.coverageStats().hint, NO_COVERAGE_HINT);
-  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
+  assert.equal(env.harness.groundSets('kartaview-coverage:').length, 0);
   // The same filter again asks KartaView for nothing.
   env.instance.setFilter();
   for (let i = 0; i < 5; i++) await settle();
@@ -841,12 +842,12 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
 
 test('coverage hints: zoom in from too high, “no photos” only once an empty view has loaded', async (t) => {
   const env = coverageSetup(t, { height: 7_000 });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.equal(env.instance.coverageStats().hint, TOO_HIGH_HINT);
   assert.deepEqual(env.tiles, [], 'nothing asked from up there');
   const release = env.holdTiles();
-  env.viewer.view.height = 900;
-  await moved(env.viewer);
+  env.harness.view.height = 900;
+  await moved(env.harness);
   assert.ok(await until(() => env.instance.coverageStats().loading));
   assert.equal(env.instance.coverageStats().hint, '', 'not while it loads');
   release();
@@ -864,14 +865,14 @@ test('coverage tiles are kept while KartaView is on and dropped once it is switc
       ],
     ],
   });
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
-  await moved(env.viewer);
+  await moved(env.harness);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   assert.equal(env.tiles.length, 1, 'kept while on');
   // Switched off: the decoded lines are not kept, so on again asks again.
   env.instance.deactivate();
-  env.instance.activate(env.viewer);
+  env.instance.activate(env.map);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   assert.equal(env.tiles.length, 2);
 });

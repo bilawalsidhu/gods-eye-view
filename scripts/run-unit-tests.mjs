@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -32,7 +32,7 @@ export function assertCalibratedAllocationRuntime(version = process.versions.nod
  * outside dependencies, build output and dot-directories, so adding a tree
  * without adding it here fails.
  */
-export const UNIT_TEST_ROOTS = Object.freeze(['src', 'server']);
+export const UNIT_TEST_ROOTS = Object.freeze(['src', 'server', 'scripts']);
 
 /** Discover repository unit tests in stable path order. */
 export function discoverUnitTestFiles(root = process.cwd()) {
@@ -46,7 +46,10 @@ export function discoverUnitTestFiles(root = process.cwd()) {
       }
     }
   };
-  for (const testRoot of UNIT_TEST_ROOTS) visit(path.join(root, testRoot));
+  // A checkout without one of the roots (a test fixture) has no tests there.
+  for (const testRoot of UNIT_TEST_ROOTS)
+    if (existsSync(path.join(root, testRoot)))
+      visit(path.join(root, testRoot));
   return files.sort();
 }
 

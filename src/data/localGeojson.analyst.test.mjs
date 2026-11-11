@@ -1,19 +1,8 @@
-// Focused tests for the local-infrastructure analyst-record mapper and snapshot seam.
+// Focused tests for the local-infrastructure analyst-record mapper. The
+// layer's snapshot is tested in src/layers/infrastructure/session.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
-import { localGeoJsonServices } from '../app/localGeojsonServices.js';
-import {
-  createLocalGeoJsonLayer as createLayer,
-  mapAnalystRecord,
-} from './localGeojsonCore.js';
-
-/** The catalog's services, with the overlay host each test supplies. */
-const createLocalGeoJsonLayer = (options) =>
-  createLayer(options, {
-    ...localGeoJsonServices,
-    overlayHost: options.overlayHost,
-  });
+import { mapAnalystRecord } from './localGeojsonCore.js';
 
 const DC_RAW = {
   id: '1176042553',
@@ -95,7 +84,7 @@ test('infra analyst record: empty record yields nulls, never NaN/undefined', () 
   }
 });
 
-test('infra analyst record: output is JSON-safe (no Cesium types leak)', () => {
+test('infra analyst record: output is JSON-safe (no engine types leak)', () => {
   const r = mapAnalystRecord(
     {
       ...DAM_RAW,
@@ -107,127 +96,4 @@ test('infra analyst record: output is JSON-safe (no Cesium types leak)', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(r)), r);
   assert.equal('entity' in r, false);
   assert.equal('position' in r, false);
-});
-
-class MockLayerEvent {
-  constructor() {
-    this.listeners = new Set();
-  }
-
-  addEventListener(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-}
-
-test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable returns []', async () => {
-  const originalFetch = globalThis.fetch;
-  const originalWindow = globalThis.window;
-  globalThis.window = { dispatchEvent() {} };
-  globalThis.fetch = async () => ({
-    ok: true,
-    status: 200,
-    text: async () =>
-      JSON.stringify({
-        type: 'Feature',
-        id: 'runtime-dam',
-        properties: {
-          name: 'Runtime Dam',
-          output: '12 MW',
-          tags: { associated_river: 'Test River', operator: 'Test Hydro' },
-        },
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            [
-              [-97.7, 30.2],
-              [-97.69, 30.2],
-              [-97.69, 30.21],
-              [-97.7, 30.2],
-            ],
-          ],
-        },
-      }),
-  });
-  const viewer = {
-    selectedEntity: undefined,
-    dataSources: {
-      add(dataSource) {
-        return dataSource;
-      },
-      remove() {
-        return true;
-      },
-    },
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
-      frustum: { fov: Math.PI / 3 },
-      moveEnd: new MockLayerEvent(),
-      flyTo() {},
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      preRender: new MockLayerEvent(),
-      sampleHeightSupported: false,
-      sampleHeight() {
-        return undefined;
-      },
-      screenSpaceCameraController: { enableInputs: true },
-      pick() {
-        return null;
-      },
-      requestRender() {},
-    },
-  };
-  const layer = createLocalGeoJsonLayer({
-    id: 'local-dams',
-    url: '/runtime-dam.geojsonl',
-    name: 'Runtime Dams',
-    color: '#0088ff',
-    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
-    projectToWindow: () => ({ x: 400, y: 300 }),
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
-    }),
-  });
-  try {
-    assert.deepEqual(
-      layer.getAnalystRecords(),
-      [],
-      'unenabled layer has no analyst records',
-    );
-    await layer.enable(viewer);
-    const rows = layer.getAnalystRecords();
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0].id, 'Runtime Dam');
-    assert.equal(rows[0].name, 'Runtime Dam');
-    assert.equal(rows[0].operator, 'Test Hydro');
-    assert.equal(rows[0].river, 'Test River');
-    assert.equal(rows[0].output, '12 MW');
-    assert.ok(Number.isFinite(rows[0].lat) && Number.isFinite(rows[0].lon));
-    assert.deepEqual(JSON.parse(JSON.stringify(rows[0])), rows[0]);
-    assert.equal(
-      layer.getAnalystRecords(0).length,
-      1,
-      'non-finite/zero cap still returns at least one',
-    );
-
-    layer.disable(viewer);
-    assert.deepEqual(
-      layer.getAnalystRecords(),
-      [],
-      'disable keeps stems but analyst snapshot is empty',
-    );
-  } finally {
-    layer.destroy(viewer);
-    assert.deepEqual(
-      layer.getAnalystRecords(),
-      [],
-      'destroy releases analyst records',
-    );
-    globalThis.fetch = originalFetch;
-    if (originalWindow === undefined) delete globalThis.window;
-    else globalThis.window = originalWindow;
-  }
 });

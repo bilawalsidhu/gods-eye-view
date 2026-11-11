@@ -163,11 +163,29 @@ export function createCyberSonarSampler(
   root = globalThis.document?.documentElement,
 ) {
   if (now === undefined) now = globalThis.performance?.now?.() ?? 0;
-  const settings = readCyberSonarSettings(root);
+  const { range, opacity, sector } = readCyberSonarSettings(root);
+  return cyberSonarSampler(width, height, {
+    angleDeg: cyberSonarAngleDeg(now),
+    range,
+    opacity,
+    sector,
+  });
+}
+
+/**
+ * The sampler of one paint from a sonar state (the globe contract's
+ * ContactSonar: the sweep's angle and the range, opacity and sector
+ * settings), as an engine that is handed the state samples it.
+ */
+export function cyberSonarSampler(
+  width,
+  height,
+  { angleDeg: angle, range, opacity, sector },
+) {
+  const settings = { range, opacity, sector };
   const floor = settings.opacity / 100;
   const radius = (Math.min(width * 0.4, height * 0.52) * settings.range) / 100;
   const radiusSquared = radius * radius;
-  const angle = cyberSonarAngleDeg(now);
   const feather = Math.min(CYBER_SONAR_FEATHER_DEG, settings.sector * 0.42);
   return {
     floor,

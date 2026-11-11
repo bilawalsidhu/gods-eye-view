@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: render-loop shutdown and manual rendering inject a Cesium failure.
+import { whenUiSettled, whenSettled } from './qa/ready.mjs';
 /**
  * qa-failstate-b10.mjs
  *
@@ -31,7 +33,7 @@
  * Exits non-zero if any assertion fails. DOES NOT COMMIT anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -58,28 +60,7 @@ function withDetectDebug(url) {
 const HEADFUL = getFlag('--headful');
 const ARTIFACT_DIR = getOpt('--artifact-dir', null);
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch { /* ignore */ }
-  }
-  return null;
-}
 
 const results = [];
 function record(name, ok, detail) {
@@ -88,7 +69,6 @@ function record(name, ok, detail) {
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function readLayerControl(page, layerId, expectedLabel) {
   await page.waitForFunction(
@@ -127,7 +107,7 @@ async function captureLayerControl(page, layerId, filename) {
     const rect = element?.getBoundingClientRect();
     return !!rect && rect.width > 0 && rect.height > 0;
   }, { timeout: 5_000 }, layerId);
-  await sleep(100);
+  await whenUiSettled(page);
   await row.screenshot({ path: path.join(ARTIFACT_DIR, filename) });
 }
 
@@ -156,21 +136,9 @@ async function main() {
     process.exit(2);
   }
 
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
-      '--disable-dev-shm-usage',
-      '--disable-web-security',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   let exitCode = 0;
@@ -221,7 +189,8 @@ async function main() {
         && window.__godsEyeView.styleManager,
       { timeout: 60000 },
     );
-    await sleep(1500);
+    await whenSettled(page);
+    await whenUiSettled(page);
 
     // ── (0) Manager-owned periodic refresh → shared work/failure/recovery ──
     console.log('\n(0) Universal periodic refresh feedback...');
@@ -524,7 +493,7 @@ async function main() {
       } finally {
         if (tileset) tileset.show = priorTilesetShow;
         viewer.useDefaultRenderLoop = priorDefaultLoop;
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       }
       const detState = gev.styleManager.getDetectionState?.() || null;
       return { present: true, nonEmpty, solid, sampled, mode: detState?.detectionMode ?? null };
@@ -550,7 +519,7 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const pass = results.filter((r) => r.ok === true).length;

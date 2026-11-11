@@ -162,20 +162,6 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
   assert.ok(Math.abs(Cesium.Math.toDegrees(carto.latitude) - 30.2672) < 1e-6);
 });
 
-test('the ground under a click: the rendered surface, else the ellipsoid, never the sky', async () => {
-  const { pickGroundPosition } = await import('./scenePick.js');
-  const ground = { x: 6378137, y: 0, z: 0 };
-  const sky = { x: 500, y: 0, z: 0 };
-  const viewer = (picked, ellipsoid) => ({
-    scene: { pickPositionSupported: true, pickPosition: () => picked },
-    camera: { pickEllipsoid: () => ellipsoid },
-  });
-  assert.equal(pickGroundPosition(viewer(ground, null), {}), ground);
-  assert.equal(pickGroundPosition(viewer(sky, ground), {}), ground);
-  assert.equal(pickGroundPosition(viewer(undefined, undefined), {}), null);
-  assert.equal(pickGroundPosition(null, {}), null);
-});
-
 test('a surface pick is nothing, or Google 3D tile content without an id', async () => {
   const { isSurfacePick } = await import('./scenePick.js');
   assert.equal(isSurfacePick(undefined), true);
@@ -183,4 +169,53 @@ test('a surface pick is nothing, or Google 3D tile content without an id', async
   assert.equal(isSurfacePick({ primitive: { isCesium3DTileset: true } }), true);
   assert.equal(isSurfacePick({ id: 'flight:1', content: {} }), false);
   assert.equal(isSurfacePick({ primitive: {} }), false, 'an unnamed primitive');
+});
+
+test('on a globe engine the ground is the picked surface, else the ellipsoid, never the sky', async () => {
+  const { pickGroundPosition } = await import('./scenePick.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const ground = { x: 6378137, y: 0, z: 0 };
+  const sky = { x: 500, y: 0, z: 0 };
+  const screen = { x: 10, y: 20 };
+  const engine = createFakeEngine();
+  engine.fake.script('pickPosition', ground);
+  engine.fake.script('pickEllipsoid', undefined);
+  assert.equal(pickGroundPosition(engine, screen), ground);
+  assert.deepEqual(engine.fake.callsOf('picker.pickPosition')[0].args, [screen]);
+  engine.fake.script('pickPosition', sky);
+  engine.fake.script('pickEllipsoid', ground);
+  assert.equal(pickGroundPosition(engine, screen), ground);
+  engine.fake.script('pickPosition', () => {
+    throw new Error('depth read failed');
+  });
+  assert.equal(pickGroundPosition(engine, screen), ground);
+  engine.fake.script('pickEllipsoid', undefined);
+  assert.equal(pickGroundPosition(engine, screen), null);
+  const unsupported = createFakeEngine();
+  unsupported.picker.pickPositionSupported = false;
+  unsupported.fake.script('pickEllipsoid', ground);
+  assert.equal(pickGroundPosition(unsupported, screen), ground);
+  assert.equal(unsupported.fake.callsOf('picker.pickPosition').length, 0);
+  unsupported.fake.script('pickEllipsoid', undefined);
+  assert.equal(pickGroundPosition(unsupported, screen), null);
+  assert.equal(pickGroundPosition(null, screen), null, 'no engine');
+});
+
+test('engine pick results classify like the Cesium picks they wrap', async () => {
+  const { isSurfacePick } = await import('./scenePick.js');
+  const { createCesiumPicker } = await import('../globe/cesium/picker.js');
+  const { createFakeViewer } = await import('../globe/cesium/testing/fakeViewer.mjs');
+  const raws = [
+    undefined,
+    { content: {}, primitive: {} },
+    { primitive: { isCesium3DTileset: true } },
+    { id: 'flight:1', content: {} },
+    { primitive: {} },
+  ];
+  for (const raw of raws) {
+    const viewer = createFakeViewer();
+    viewer.scene.pick = () => raw;
+    const { picker } = createCesiumPicker(viewer);
+    assert.equal(isSurfacePick(picker.pick({ x: 1, y: 2 })), isSurfacePick(raw), JSON.stringify(raw));
+  }
 });

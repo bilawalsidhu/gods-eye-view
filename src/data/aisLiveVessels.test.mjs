@@ -1,3 +1,4 @@
+import { forEngine as contextForEngine } from './contextStore.js';
 // src/data/aisLiveVessels.test.mjs
 // Focused tests for the AIS feed-status derivation helper (Batch 10, finding H3/AIS)
 // and the vessel vertical-datum seam (2026-07-27 datum pass — see
@@ -15,7 +16,7 @@ import {
   reduceVesselSelection,
   vesselDatumHeightM,
   _bindVesselInteractionForTest,
-  _setVesselStateForTest,
+  _setVesselStateForTest as setVesselStateForTest,
   _reconcileVesselsForTest,
   _applyAisFeedSnapshotForTest,
   _loadLivePositionsForTest,
@@ -32,13 +33,29 @@ import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { registerEntityContext, selectEntityContext } from './contextStore.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import { pickRegistryFor } from './pickRegistry.js';
+const wireEngine = createFakeEngine({ width: 1600, height: 900 });
+const { registerPickOwner, unregisterPickOwner } = pickRegistryFor(wireEngine);
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
 import { layerFeedState } from './manager.js';
 import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createVesselsDisplay, vesselAtlasLayout } from '../layers/vessels/render/display.js';
+
+function vesselDisplay(engine = createFakeEngine({ width: 1600, height: 900 })) {
+  const layout = vesselAtlasLayout();
+  const renderer = createVesselsDisplay(engine, {
+    drawAtlas: async () => ({ canvas: { width: layout.width, height: layout.height }, cells: layout.cells }),
+  });
+  renderer.fleet.attach({ show: true });
+  return renderer;
+}
+
+const _setVesselStateForTest = (options = {}) =>
+  setVesselStateForTest({ renderer: () => options.enabled === false ? null : vesselDisplay(options.engine), ...options });
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
@@ -947,6 +964,17 @@ function installWireHarness(picked, stateOverrides = {}) {
   globalThis.document = {
     getElementById: () => null,
   };
+  Object.defineProperty(wireEngine.camera, 'followChanged', { configurable: true, value: trackedEntityChanged });
+  wireEngine.camera.following = () => viewer.trackedEntity ?? null;
+  const pickedRecord = picked?.id && typeof picked.id === 'object' && Object.hasOwn(picked.id, 'mmsi') ? picked.id : null;
+  const renderer = () => {
+    const display = vesselDisplay(wireEngine);
+    if (pickedRecord) {
+      const handle = display.fleet.add({ id: pickedRecord, position: pickedRecord.position });
+      picked = { id: handle.pickId };
+    }
+    return display;
+  };
   _setVesselStateForTest({
     records: [record],
     selectedRecord: record,
@@ -955,6 +983,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     trailPositions: [POS],
     interactionHandlerFactory,
     interactionKeyTarget: keyTarget,
+    renderer,
     ...stateOverrides,
   });
   _bindVesselInteractionForTest(viewer, handler, keyTarget);
@@ -969,6 +998,8 @@ function installWireHarness(picked, stateOverrides = {}) {
     windowTarget,
     reinstalledHandlers,
     interactionHandlerFactory,
+    engine: wireEngine,
+    renderer,
     cleanup() {
       stopReadout();
       aisLiveVesselsLayer.destroy();
@@ -1099,12 +1130,12 @@ test('vessel interaction wire: id-less 3D Tiles pick deselects and resets the HU
   const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 });
   const cleared = [];
   try {
-    registerEntityContext(harness.record, {
+    contextForEngine(harness.engine).registerEntityContext(harness.record, {
       id: `ais-${harness.record.mmsi}`,
       layerId: 'ais-live-vessels',
       label: harness.record.name,
     });
-    selectEntityContext(harness.record);
+    contextForEngine(harness.engine).selectEntityContext(harness.record);
     harness.windowTarget.addEventListener('gev:entity-selection-cleared', (event) => {
       cleared.push(event.detail);
     });
@@ -1126,12 +1157,12 @@ test('vessel interaction wire: empty pick deselects and emits gev:entity-selecti
   const harness = installWireHarness(undefined);
   const cleared = [];
   try {
-    registerEntityContext(harness.record, {
+    contextForEngine(harness.engine).registerEntityContext(harness.record, {
       id: `ais-${harness.record.mmsi}`,
       layerId: 'ais-live-vessels',
       label: harness.record.name,
     });
-    selectEntityContext(harness.record);
+    contextForEngine(harness.engine).selectEntityContext(harness.record);
     harness.windowTarget.addEventListener('gev:entity-selection-cleared', (event) => {
       cleared.push(event.detail);
     });
@@ -1220,6 +1251,7 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
       trailPositions: [POS],
       interactionHandlerFactory: harness.interactionHandlerFactory,
       interactionKeyTarget: harness.keyTarget,
+      renderer: harness.renderer,
     });
     disabledClick({ position: { x: 10, y: 20 } });
     disabledKeydown({ key: 'Escape' });
@@ -1409,7 +1441,8 @@ test('buildSelectedVesselCard: full detail card with MMSI + position time', () =
 
 test('vessel host publication preserves the shipped grid winner and separation selector', () => {
   const publications = [];
-  const originalProjection = Cesium.SceneTransforms.worldToWindowCoordinates;
+  const engine = createFakeEngine({ width: 1600, height: 900 });
+  engine.projector.worldToWindow = (position) => position.screen;
   const makeCandidate = (mmsi, name, x, y, speed = 1) => makeRecord({
     mmsi,
     name,
@@ -1419,7 +1452,6 @@ test('vessel host publication preserves the shipped grid winner and separation s
   const low = makeCandidate('100', 'VESSEL', 20, 20, 1);
   const winner = makeCandidate('200', 'NAMED WINNER', 40, 30, 16);
   const separated = makeCandidate('300', 'SEPARATED', 400, 300, 3);
-  Cesium.SceneTransforms.worldToWindowCoordinates = (_scene, position) => position.screen;
   _setVesselOverlayHostForTest({
     setEntries(sourceId, entries, options) { publications.push({ sourceId, entries, options }); },
     setVisible() {},
@@ -1428,6 +1460,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
   _setVesselStateForTest({
     viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
     records: [low, winner, separated],
+    engine,
   });
   try {
     _updateVesselCardsForTest([low, winner, separated]);
@@ -1440,7 +1473,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
     assert.equal(publications[0].options.cohortLimit, 112);
     assert.equal(publications[0].options.collisionCapacity, 112);
   } finally {
-    Cesium.SceneTransforms.worldToWindowCoordinates = originalProjection;
+    engine.destroy();
     _setVesselStateForTest({ enabled: false });
     _setVesselOverlayHostForTest();
   }

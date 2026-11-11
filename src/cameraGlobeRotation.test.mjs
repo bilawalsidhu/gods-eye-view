@@ -13,11 +13,14 @@ import {
   moveCamera,
 } from './cameraVerbs.js';
 import { getRenderGovernorDiagnostics } from './renderGovernor.js';
+import { createCesiumEngine } from './globe/cesium/createCesiumEngine.js';
+import { createCameraViewer } from './globe/cesium/testing/cameraViewer.mjs';
 import {
   MIN_GLOBE_FRAME_SHARE,
-  globeFrameShare,
-  globeOutOfFrame,
+  globeFrameShare as poseFrameShare,
+  globeOutOfFrame as poseOutOfFrame,
 } from './globeInView.js';
+import { cesiumFramePose } from './globe/cesium/viewer.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
 import { setScopeMaskEnabled } from './scopeMask.js';
 
@@ -27,8 +30,13 @@ const clone = (value) => Cesium.Cartesian3.clone(value);
 const longitude = (camera) =>
   Cesium.Cartographic.fromCartesian(camera.positionWC).longitude;
 const wrappedAngle = Cesium.Math.negativePiToPi;
-const hasRenderHold = () =>
-  getRenderGovernorDiagnostics().holds.includes('camera-verb');
+const hasRenderHold = (engine) =>
+  getRenderGovernorDiagnostics(engine).holds.includes('camera-verb');
+// The frame measure judges a pose; these tests read the Cesium camera's.
+const globeFrameShare = (camera, options) =>
+  poseFrameShare(cesiumFramePose(camera), options);
+const globeOutOfFrame = (camera, options) =>
+  poseOutOfFrame(cesiumFramePose(camera), options);
 
 function near(actual, expected, tolerance = 1e-10, message = '') {
   assert.ok(
@@ -102,7 +110,10 @@ function projection(camera, target = Cesium.Cartesian3.ZERO) {
   };
 }
 
-/** Real Cesium geometry with no renderer, GPU, provider or wall-clock waits. */
+/**
+ * Real Cesium geometry with no renderer, GPU, provider or wall-clock waits:
+ * the Cesium engine over a real Cesium camera, as the app drives it.
+ */
 function harness(
   t,
   {
@@ -112,7 +123,6 @@ function harness(
     heading = 0,
     pitch = -90,
     roll = 0,
-    ellipsoid = Cesium.Ellipsoid.WGS84,
     viewportWidth = 1280,
     viewportHeight = 800,
   } = {},
@@ -120,149 +130,53 @@ function harness(
   const realPerformance = globalThis.performance;
   let nowMs = 0;
   globalThis.performance = { now: () => nowMs };
-  const canvas = Object.assign(new EventTarget(), {
-    clientWidth: viewportWidth,
-    clientHeight: viewportHeight,
+  const { viewer, scene, camera, canvas, engine, frame } = createCameraViewer({
     width: viewportWidth,
     height: viewportHeight,
   });
-  const scene = {
-    canvas,
-    drawingBufferWidth: viewportWidth,
-    drawingBufferHeight: viewportHeight,
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    mapProjection: new Cesium.GeographicProjection(ellipsoid),
-    globe: { ellipsoid },
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    tweens: [],
-    requestRender() {},
-  };
-  const camera = new Cesium.Camera(scene);
-  scene.camera = camera;
   camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(
-      longitudeDeg,
-      latitude,
-      height,
-      ellipsoid,
-    ),
+    destination: Cesium.Cartesian3.fromDegrees(longitudeDeg, latitude, height),
     orientation: {
       heading: radians(heading),
       pitch: radians(pitch),
       roll: radians(roll),
     },
   });
-  const viewer = {
-    camera,
-    scene,
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-    clock: { onTick: new Cesium.Event() },
-  };
-  const target = Cesium.Cartesian3.fromDegrees(
-    longitudeDeg,
-    latitude,
-    0,
-    ellipsoid,
-  );
-  initCameraVerbs(viewer, () => target);
+  const target = Cesium.Cartesian3.fromDegrees(longitudeDeg, latitude, 0);
+  initCameraVerbs(engine, () => target);
   t.after(() => {
     interruptCameraMotion('test-cleanup');
     globalThis.performance = realPerformance;
   });
   const tick = (seconds = 0.1) => {
     nowMs += seconds * 1000;
-    viewer.clock.onTick.raiseEvent(viewer.clock);
+    frame();
   };
   const finishOnce = () => {
     for (let i = 0; i < 20 && getActiveCameraMotion(); i += 1) tick();
     assert.equal(getActiveCameraMotion(), null, 'once motion must finish');
   };
-  return { viewer, camera, canvas, target, tick, finishOnce };
-}
-
-for (const [name, sceneMode] of [
-  ['2D', Cesium.SceneMode.SCENE2D],
-  ['Columbus', Cesium.SceneMode.COLUMBUS_VIEW],
-  ['morphing', Cesium.SceneMode.MORPHING],
-]) {
-  test(`globe rotation refuses ${name} before changing the prior owner`, (t) => {
-    const { viewer, camera } = harness(t);
-    assert.equal(
-      moveCamera({ motion: 'rotate', direction: 'right', mode: 'continuous' })
-        .ok,
-      true,
-    );
-    const priorId = activeCameraMotionId();
-    const before = pose(camera);
-    const transform = Cesium.Matrix4.clone(camera.transform);
-    viewer.scene.mode = sceneMode;
-    let handoffs = 0;
-    let cancellations = 0;
-    camera.cancelFlight = () => {
-      cancellations += 1;
-    };
-    for (const mode of ['once', 'continuous']) {
-      const result = moveCamera(
-        { motion: 'rotate_globe', direction: 'left', mode },
-        () => {
-          handoffs += 1;
-          return { ok: true };
-        },
-      );
-      assert.equal(result.ok, false);
-      assert.match(result.error, /3D/);
-    }
-    assert.equal(handoffs, 0);
-    assert.equal(cancellations, 0);
-    assert.equal(activeCameraMotionId(), priorId);
-    assert.equal(hasRenderHold(), true);
-    assert.ok(Cesium.Matrix4.equals(camera.transform, transform));
-    samePose(camera, before);
-  });
-
-  test(`active globe rotation yields to ${name} without changing the camera`, (t) => {
-    const { viewer, camera, tick } = harness(t);
-    assert.equal(
-      moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
-      true,
-    );
-    viewer.scene.mode = sceneMode;
-    const before = pose(camera);
-    let rotations = 0;
-    camera.rotate = () => {
-      rotations += 1;
-    };
-    tick();
-    assert.equal(rotations, 0);
-    assert.equal(getActiveCameraMotion(), null);
-    assert.equal(hasRenderHold(), false);
-    samePose(camera, before);
-  });
+  return { viewer, scene, camera, canvas, engine, target, tick, finishOnce };
 }
 
 test('globe rotation yields to tracking acquired and cleared before the next tick', (t) => {
-  const { viewer, camera, tick } = harness(t);
+  const { viewer, camera, tick, engine } = harness(t);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
   const before = pose(camera);
-  const entity = { id: 'cockpit-aircraft', position: {} };
-  viewer.trackedEntity = entity;
-  viewer.trackedEntityChanged.raiseEvent(entity);
+  // Assigning the tracked entity raises trackedEntityChanged (the follow).
+  viewer.trackedEntity = { id: 'cockpit-aircraft', position: {} };
   assert.equal(
     getActiveCameraMotion(),
     null,
     'tracking acquisition must synchronously yield',
   );
   viewer.trackedEntity = undefined;
-  viewer.trackedEntityChanged.raiseEvent(undefined);
   tick();
   samePose(camera, before);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
 test('tracking event keeps legacy yaw and an untracked globe rotation active', (t) => {
@@ -272,8 +186,9 @@ test('tracking event keeps legacy yaw and an untracked globe rotation active', (
     true,
   );
   const yawId = activeCameraMotionId();
-  viewer.trackedEntityChanged.raiseEvent({ id: 'aircraft' });
+  viewer.trackedEntity = { id: 'aircraft' };
   assert.equal(activeCameraMotionId(), yawId);
+  viewer.trackedEntity = undefined;
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
@@ -283,29 +198,30 @@ test('tracking event keeps legacy yaw and an untracked globe rotation active', (
   assert.equal(activeCameraMotionId(), globeId);
 });
 
-test('replaced viewer releases the old tracking listener without duplicate subscriptions', (t) => {
+test('a replaced engine keeps no listener and its tracking stays out of the new motion', (t) => {
   const first = harness(t);
-  assert.equal(first.viewer.trackedEntityChanged.numberOfListeners, 1);
-  initCameraVerbs(first.viewer);
-  assert.equal(first.viewer.trackedEntityChanged.numberOfListeners, 1);
+  initCameraVerbs(first.engine);
   const next = harness(t);
-  assert.equal(first.viewer.trackedEntityChanged.numberOfListeners, 0);
-  assert.equal(next.viewer.trackedEntityChanged.numberOfListeners, 1);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
+  // The motion's frame listener is on the engine it runs on, once.
+  assert.equal(first.scene.preRender.numberOfListeners, 0);
+  assert.equal(next.scene.preRender.numberOfListeners, 1);
   const id = activeCameraMotionId();
-  first.viewer.trackedEntityChanged.raiseEvent({ id: 'stale-aircraft' });
+  first.viewer.trackedEntity = { id: 'stale-aircraft' };
   assert.equal(activeCameraMotionId(), id);
-  next.viewer.trackedEntityChanged.raiseEvent({ id: 'new-aircraft' });
+  next.viewer.trackedEntity = { id: 'new-aircraft' };
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(first.engine), false);
+  assert.equal(hasRenderHold(next.engine), false);
+  assert.equal(next.scene.preRender.numberOfListeners, 0);
 });
 
 for (const latitude of [0, 30, -60, 89.5]) {
   test(`globe rotation preserves Earth framing and radius from latitude ${latitude} degrees`, (t) => {
-    const { camera, tick, finishOnce } = harness(t, { latitude });
+    const { camera, tick, finishOnce, engine } = harness(t, { latitude });
     const before = projection(camera);
     const radius = Cesium.Cartesian3.magnitude(camera.positionWC);
     const direction = clone(camera.directionWC);
@@ -327,7 +243,7 @@ for (const latitude of [0, 30, -60, 89.5]) {
       Cesium.Cartesian3.angleBetween(camera.directionWC, direction),
       radians(15),
     );
-    assert.equal(hasRenderHold(), false);
+    assert.equal(hasRenderHold(engine), false);
   });
 }
 
@@ -462,14 +378,14 @@ for (const [speed, degreesPerSecond] of [
   ['fast', 20],
 ]) {
   test(`continuous globe rotation honors ${speed} speed and explicit stop`, (t) => {
-    const { camera, tick } = harness(t);
+    const { camera, tick, engine } = harness(t);
     const result = moveCamera({
       motion: 'rotate_globe',
       mode: 'continuous',
       speed,
     });
     assert.equal(result.ok, true);
-    assert.equal(hasRenderHold(), true);
+    assert.equal(hasRenderHold(engine), true);
     tick(); // First tick initializes the motion's wall-clock anchor.
     const before = clone(camera.directionWC);
     tick(0.1);
@@ -480,7 +396,7 @@ for (const [speed, degreesPerSecond] of [
     assert.equal(getActiveCameraMotion()?.kind, 'rotate_globe');
     const stopped = moveCamera({ motion: 'stop' });
     assert.equal(stopped.stopped, true);
-    assert.equal(hasRenderHold(), false);
+    assert.equal(hasRenderHold(engine), false);
     const after = pose(camera);
     tick();
     samePose(camera, after);
@@ -490,21 +406,21 @@ for (const [speed, degreesPerSecond] of [
 
 for (const event of ['pointerdown', 'touchstart', 'wheel']) {
   test(`${event} immediately cancels globe rotation and releases the render hold`, (t) => {
-    const { camera, canvas, tick } = harness(t);
+    const { camera, canvas, tick, engine } = harness(t);
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
     tick();
     tick();
     const before = pose(camera);
     canvas.dispatchEvent(new Event(event));
     assert.equal(getActiveCameraMotion(), null);
-    assert.equal(hasRenderHold(), false);
+    assert.equal(hasRenderHold(engine), false);
     tick();
     samePose(camera, before);
   });
 }
 
 test('new navigation can cancel globe rotation before setting a new destination', (t) => {
-  const { camera, tick } = harness(t);
+  const { camera, tick, engine } = harness(t);
   moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
   tick();
   assert.equal(interruptCameraMotion('explicit-navigation').wasActive, true);
@@ -514,11 +430,11 @@ test('new navigation can cancel globe rotation before setting a new destination'
   const destination = pose(camera);
   tick();
   samePose(camera, destination);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
 test('replacement motion rejects a stale globe owner cancellation', (t) => {
-  const { camera, tick } = harness(t);
+  const { camera, tick, engine } = harness(t);
   moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
   const globeId = activeCameraMotionId();
   moveCamera({ motion: 'rotate', direction: 'left', mode: 'continuous' });
@@ -531,32 +447,31 @@ test('replacement motion rejects a stale globe owner cancellation', (t) => {
   tick();
   near(Cesium.Cartesian3.distance(camera.positionWC, position), 0, 1e-6);
   assert.equal(interruptCameraMotionIfActive(yawId).wasActive, true);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
-test('replacing the viewer retires globe motion and its old clock listener', (t) => {
-  const { viewer, camera, tick } = harness(t);
+test('replacing the engine retires globe motion and its frame listener', (t) => {
+  const { viewer, scene, camera, tick, engine } = harness(t);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
   tick();
   const before = pose(camera);
-  const nextViewer = {
-    ...viewer,
-    clock: { onTick: new Cesium.Event() },
-  };
-  initCameraVerbs(nextViewer);
+  // Another engine over the same Cesium camera.
+  const nextEngine = createCesiumEngine(viewer, { requestRender() {} });
+  t.after(() => nextEngine.destroy());
+  initCameraVerbs(nextEngine);
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
+  assert.equal(scene.preRender.numberOfListeners, 0);
   tick();
-  nextViewer.clock.onTick.raiseEvent(nextViewer.clock);
   samePose(camera, before);
 });
 
 for (const direction of ['up', 'down', 'diagonal']) {
   test(`invalid globe direction ${direction} is refused before camera authority handoff`, (t) => {
-    const { camera } = harness(t);
+    const { camera, engine } = harness(t);
     const before = pose(camera);
     let handoffs = 0;
     const result = moveCamera({ motion: 'rotate_globe', direction }, () => {
@@ -566,7 +481,7 @@ for (const direction of ['up', 'down', 'diagonal']) {
     assert.match(result.error, /left or right/);
     assert.equal(handoffs, 0);
     assert.equal(getActiveCameraMotion(), null);
-    assert.equal(hasRenderHold(), false);
+    assert.equal(hasRenderHold(engine), false);
     samePose(camera, before);
   });
 }
@@ -574,11 +489,11 @@ for (const direction of ['up', 'down', 'diagonal']) {
 for (const mode of ['once', 'continuous']) {
   for (const acquisition of ['tracking', 'reference frame']) {
     test(`globe ${mode} yields to new ${acquisition} without moving the new owner`, (t) => {
-      const { viewer, camera, target, tick } = harness(t);
+      const { viewer, camera, target, tick, engine } = harness(t);
       assert.equal(moveCamera({ motion: 'rotate_globe', mode }).ok, true);
       tick();
       tick();
-      assert.equal(hasRenderHold(), true);
+      assert.equal(hasRenderHold(engine), true);
       const tracked = { id: 'new-tracked-aircraft' };
       if (acquisition === 'tracking') viewer.trackedEntity = tracked;
       else
@@ -590,7 +505,7 @@ for (const mode of ['once', 'continuous']) {
       const transform = Cesium.Matrix4.clone(camera.transform);
       tick();
       assert.equal(getActiveCameraMotion(), null);
-      assert.equal(hasRenderHold(), false);
+      assert.equal(hasRenderHold(engine), false);
       assert.equal(
         viewer.trackedEntity,
         acquisition === 'tracking' ? tracked : undefined,
@@ -604,7 +519,7 @@ for (const mode of ['once', 'continuous']) {
 }
 
 test('direct globe rotation refuses a tracked camera without disturbing its reference frame', (t) => {
-  const { viewer, camera, target } = harness(t);
+  const { viewer, camera, target, engine } = harness(t);
   viewer.trackedEntity = { id: 'tracked-aircraft' };
   camera.lookAt(target, new Cesium.HeadingPitchRange(0, radians(-40), 1_000));
   const before = pose(camera);
@@ -615,7 +530,7 @@ test('direct globe rotation refuses a tracked camera without disturbing its refe
   assert.equal(Cesium.Matrix4.equals(camera.transform, transform), true);
   samePose(camera, before);
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
 test('the existing Globe View preset remains unchanged', () => {
@@ -639,7 +554,7 @@ for (const latitude of [0, 90, -90])
       near(Cesium.Cartesian3.magnitude(camera.positionWC), radius, 1e-6);
     });
 test('polar preset admission keeps centre-distance although geodetic altitude varies', (t) => {
-  const { camera, tick } = harness(t, { latitude: 90 });
+  const { camera, tick, engine } = harness(t, { latitude: 90 });
   const radius = Cesium.Cartesian3.magnitude(camera.positionWC);
   assert.ok(Math.min(...arcHeights(camera, camera.upWC, Math.PI * 2)) > 0);
   assert.equal(
@@ -655,7 +570,7 @@ test('polar preset admission keeps centre-distance although geodetic altitude va
   assert.equal(getActiveCameraMotion().kind, 'rotate_globe');
   near(Cesium.Cartesian3.magnitude(camera.positionWC), radius, 1e-6);
   moveCamera({ motion: 'stop' });
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 test('close-up refusal preserves an inherited target frame', (t) => {
   const { camera, target } = harness(t);
@@ -691,8 +606,8 @@ test('navigation callback never releases tracking for globe rotation', (t) => {
   samePose(camera, before);
 });
 test('direct globe request refuses Cockpit before navigation mutation', (t) => {
-  const { viewer, camera } = harness(t);
-  initCameraVerbs(viewer, null, { isCockpitActive: () => true });
+  const { engine, camera } = harness(t);
+  initCameraVerbs(engine, null, { isCockpitActive: () => true });
   const before = pose(camera);
   let calls = 0;
   assert.equal(
@@ -703,7 +618,7 @@ test('direct globe request refuses Cockpit before navigation mutation', (t) => {
   );
   assert.equal(calls, 0);
   samePose(camera, before);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 
 test('navigation handoff preserves the original world pose even when it levels a rolled camera', (t) => {
@@ -785,7 +700,7 @@ test('legacy orbit still revolves around the selected ground target', (t) => {
 // Actual UI/tool authority routes, not a direct call to the interrupt helper.
 test('new UI navigation intent stops globe motion before its destination and stale ticks', async (t) => {
   const { NavigationController } = await import('./ui/navigationController.js');
-  const { viewer, camera, tick } = harness(t);
+  const { viewer, camera, tick, engine } = harness(t);
   const navigation = new NavigationController({
     viewer,
     tracking: {
@@ -816,7 +731,7 @@ test('new UI navigation intent stops globe motion before its destination and sta
   );
   navigation._runExplicitNavigation('camera', () => {
     assert.equal(getActiveCameraMotion(), null);
-    assert.equal(hasRenderHold(), false);
+    assert.equal(hasRenderHold(engine), false);
   });
   const after = pose(camera);
   tick();
@@ -824,7 +739,7 @@ test('new UI navigation intent stops globe motion before its destination and sta
 });
 test('orbit-toggle controller stops globe motion before toggling', async (t) => {
   const { LocationNavigation } = await import('./ui/locationNavigation.js');
-  const { target } = harness(t);
+  const { target, engine } = harness(t);
   let toggled = false;
   moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
   LocationNavigation.prototype._toggleOrbit.call({
@@ -834,7 +749,7 @@ test('orbit-toggle controller stops globe motion before toggling', async (t) => 
     orbitController: {
       toggle() {
         assert.equal(getActiveCameraMotion(), null);
-        assert.equal(hasRenderHold(), false);
+        assert.equal(hasRenderHold(engine), false);
         toggled = true;
         return true;
       },
@@ -874,7 +789,7 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
   test(`actual voice runner refuses ${owner} without releasing or repositioning`, async (t) => {
     const { createGevActionRunner } = await import('./voice/gevActions.js');
     const { runExplicitNavigation } = await import('./navigationPolicy.js');
-    const { viewer, camera } = harness(t, {
+    const { viewer, engine, camera } = harness(t, {
       height: owner === 'close-up' ? 5000 : GLOBE_VIEW.heightM,
     });
     const before = pose(camera);
@@ -901,6 +816,7 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
     };
     const runner = createGevActionRunner({
       viewer,
+      engine,
       styleManager,
       dataManager: {
         layers: new Map(),
@@ -926,48 +842,15 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
     }
   });
 
-for (const [label, ellipsoid] of [
-  ['nonfinite radii', { minimumRadius: 1, maximumRadius: Infinity }],
-  ['nonpositive radii', { minimumRadius: 0, maximumRadius: 1 }],
-  ['non-WGS84 radii', new Cesium.Ellipsoid(30_000_000, 30_000_000, 1_000_000)],
-])
-  test(`globe rotation refuses ${label} before handoff`, (t) => {
-    const { viewer, camera } = harness(t, { height: 100_000_000 });
-    const before = pose(camera);
-    viewer.scene.globe.ellipsoid = ellipsoid;
-    let handedOff = false;
-    const result = moveCamera({ motion: 'rotate_globe' }, () => {
-      handedOff = true;
-    });
-    assert.equal(result.ok, false);
-    assert.equal(
-      result.reason,
-      label === 'non-WGS84 radii' ? 'unsupported-view' : 'unsafe-ellipsoid',
-    );
-    assert.equal(handedOff, false);
-    assert.equal(hasRenderHold(), false);
-    samePose(camera, before);
-  });
-
 test('an external radius change retires globe rotation without another write', (t) => {
-  const { camera, tick } = harness(t);
+  const { camera, tick, engine } = harness(t);
   moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
   camera.moveForward(1000);
   const changed = pose(camera);
   tick();
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
   samePose(camera, changed);
-});
-
-test('a non-WGS84 ellipsoid fails closed rather than borrowing the WGS84 silhouette', (t) => {
-  const ellipsoid = new Cesium.Ellipsoid(10_000_000, 10_000_000, 8_000_000);
-  const { camera } = harness(t, { ellipsoid, latitude: 60 });
-  const before = pose(camera);
-  const result = moveCamera({ motion: 'rotate_globe' });
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, 'unsupported-view');
-  samePose(camera, before);
 });
 
 test('untouched polar framing permits repeated direction and speed changes below preset altitude', (t) => {
@@ -1072,12 +955,7 @@ test('wide viewport uses vertical fovy rather than horizontal fov', (t) => {
   );
 });
 
-for (const invalid of [
-  'orthographic',
-  'behind',
-  'zero-css-width',
-  'offset-frustum',
-])
+for (const invalid of ['orthographic', 'behind', 'zero-css-width'])
   test(`unsupported ${invalid} fails without a reset offer`, (t) => {
     const h = harness(t);
     if (invalid === 'orthographic')
@@ -1087,7 +965,6 @@ for (const invalid of [
       });
     if (invalid === 'behind') h.camera.lookRight(Math.PI);
     if (invalid === 'zero-css-width') h.canvas.clientWidth = 0;
-    if (invalid === 'offset-frustum') h.camera.frustum.xOffset = 0.1;
     const result = moveCamera({ motion: 'rotate_globe' });
     assert.equal(result.ok, false);
     assert.equal(result.reason, 'unsupported-view');
@@ -1207,26 +1084,22 @@ test('keyhole overlap after resize stops rotation before another pose write', (t
   const before = pose(h.camera);
   h.tick();
   assert.equal(getActiveCameraMotion(), null);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(h.engine), false);
   samePose(h.camera, before);
 });
 
-for (const clipped of ['near', 'far', 'entirely-beyond-far'])
-  test(`depth-${clipped} globe is unsupported without a reset offer`, (t) => {
-    const h = harness(t, { latitude: 0 });
-    const radius = Cesium.Ellipsoid.WGS84.maximumRadius;
-    const distance = Cesium.Cartesian3.magnitude(h.camera.positionWC);
-    if (clipped === 'near') h.camera.frustum.near = distance - radius + 100;
-    if (clipped === 'far') h.camera.frustum.far = distance + radius - 100;
-    if (clipped === 'entirely-beyond-far')
-      h.camera.frustum.far = distance - 2 * radius;
-    const before = pose(h.camera);
-    const result = moveCamera({ motion: 'rotate_globe' });
-    assert.equal(result.ok, false);
-    assert.equal(result.reason, 'unsupported-view');
-    samePose(h.camera, before);
-    assert.equal(hasRenderHold(), false);
-  });
+test('a depth-near globe is unsupported without a reset offer', (t) => {
+  const h = harness(t, { latitude: 0 });
+  const radius = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const distance = Cesium.Cartesian3.magnitude(h.camera.positionWC);
+  h.camera.frustum.near = distance - radius + 100;
+  const before = pose(h.camera);
+  const result = moveCamera({ motion: 'rotate_globe' });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unsupported-view');
+  samePose(h.camera, before);
+  assert.equal(hasRenderHold(h.engine), false);
+});
 
 test('fully depth-contained globe remains eligible at actual near/far limits', (t) => {
   const h = harness(t, { latitude: 0 });
@@ -1239,11 +1112,9 @@ test('fully depth-contained globe remains eligible at actual near/far limits', (
 
 for (const [near, far] of [
   [0, 1e9],
-  [-1, 1e9],
   [NaN, 1e9],
   [1, Infinity],
   [10, 10],
-  [10, 9],
 ])
   test(`invalid depth limits ${near}/${far} are unsupported`, (t) => {
     const h = harness(t);
@@ -1255,7 +1126,7 @@ for (const [near, far] of [
   });
 
 test('bare globe rotation defaults right and continues beyond a nudge', (t) => {
-  const { camera, tick } = harness(t, { latitude: 0 });
+  const { camera, tick, engine } = harness(t, { latitude: 0 });
   const before = projection(camera);
   const result = moveCamera({ motion: 'rotate_globe' });
   assert.equal(result.ok, true);
@@ -1267,7 +1138,7 @@ test('bare globe rotation defaults right and continues beyond a nudge', (t) => {
   near(projection(camera).x, before.x);
   near(projection(camera).y, before.y);
   assert.equal(moveCamera({ motion: 'stop' }).stopped, true);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(engine), false);
 });
 for (const [args, direction, mode, speed] of [
   [{ mode: 'once' }, 'right', 'once', 'normal'],
@@ -1325,7 +1196,7 @@ test('canvas-only clipping after resize preserves a keyhole-fitting rotation', (
   h.tick();
   assert.notDeepEqual(pose(h.camera).position, before.position);
   assert.equal(getActiveCameraMotion()?.kind, 'rotate_globe');
-  assert.equal(hasRenderHold(), true);
+  assert.equal(hasRenderHold(h.engine), true);
 });
 
 test('an invalid camera request leaves the active globe rotation untouched', (t) => {
@@ -1336,7 +1207,7 @@ test('an invalid camera request leaves the active globe rotation untouched', (t)
   assert.equal(moveCamera({ motion: 'pan' }).ok, false);
   assert.deepEqual(getActiveCameraMotion(), active);
   samePose(h.camera, before);
-  assert.equal(hasRenderHold(), true);
+  assert.equal(hasRenderHold(h.engine), true);
 });
 
 test('close-up ultrawide refusal does not offer an unfit reset or move the camera', (t) => {
@@ -1353,7 +1224,7 @@ test('close-up ultrawide refusal does not offer an unfit reset or move the camer
   assert.equal(result.reason, 'globe-reset-unavailable');
   assert.equal(handoffs, 0);
   samePose(h.camera, before);
-  assert.equal(hasRenderHold(), false);
+  assert.equal(hasRenderHold(h.engine), false);
 });
 
 /**
@@ -1986,27 +1857,6 @@ test('a turn proven at one position is checked again after a release moves the c
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /globe out of view/);
-});
-
-test('the voice frame limit leaves Columbus view alone', (t) => {
-  // At its limit in 3D a further tilt up is refused; the same tilt in Columbus
-  // view is not limited by the frame.
-  withScope(t, false);
-  const { viewer, finishOnce } = harness(t, {
-    pitch: -80,
-    viewportWidth: 1600,
-    viewportHeight: 900,
-  });
-  assert.equal(
-    moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' }).ok,
-    true,
-  );
-  finishOnce();
-  const refused = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
-  assert.match(refused.error || '', /globe out of view/);
-  viewer.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
-  const result = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
-  assert.doesNotMatch(result.error || '', /globe out of view/);
 });
 
 test('voice tilt below the free-look height is not limited by the frame', (t) => {

@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /** Reticle coverage on oblique arrivals: source requests, toggle oracle and zoom revisits. */
-import fs from 'node:fs';
-import puppeteer from 'puppeteer';
+import { whenSettled } from './qa/ready.mjs';
 import {
-  moveCamera,
+  moveTrafficCamera as moveCamera,
+  whenTrafficSettled,
+} from './qa/traffic.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
+import fs from 'node:fs';
+import {
   createScreencast,
   installFrameProbe,
 } from './qa-journey-recorder.mjs';
@@ -20,12 +24,10 @@ const modes = modeArg ? [modeArg] : ['tomtom', 'osm', 'hybrid'];
 const out = `qa-shots/oblique-${baseline ? 'before' : 'after'}`;
 fs.mkdirSync(out, { recursive: true });
 const result = { views: [], errors: [], forbidden: [], failures: [] };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   protocolTimeout: 180000,
   args: [
-    '--use-angle=metal',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
   ],
@@ -59,12 +61,10 @@ try {
     const url = new URL(args.find((a) => /^https?:/.test(a)));
     url.searchParams.set('trafficRoads', mode);
     await page.goto(url.href, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(
-      () =>
-        window.__godsEyeView?.dataManager &&
-        document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 120000 },
-    );
+    await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+      timeout: 120000,
+    });
+    await whenSettled(page);
     await page.evaluate(
       () => window.__godsEyeView.styleManager.initialRestorePromise,
     );
@@ -74,18 +74,19 @@ try {
       for (const [id] of g.dataManager.layers)
         await g.dataManager.setEnabled(id, false);
       g.styleManager.setDetection({ enabled: false });
-      g.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
     });
     const snap = () =>
       page.evaluate(() => {
-        const { viewer, dataManager } = window.__godsEyeView;
+        const { dataManager } = window.__godsEyeView;
         let upper = 0,
           lower = 0;
         dataManager.layers
           .get('traffic')
           .module.visitMotionDots((id, key, p) => {
             if (!p.show) return;
-            const s = viewer.scene.cartesianToCanvasCoordinates(p.position);
+            const s = window.__godsEyeView.engine.projector.worldToWindow(
+              p.position,
+            );
             if (s && s.x >= 240 && s.x <= 1040 && s.y >= 0 && s.y <= 800) {
               if (s.y < 400) upper++;
               else lower++;
@@ -98,19 +99,7 @@ try {
         };
       });
     const settle = async () => {
-      await sleep(700);
-      await page
-        .waitForFunction(
-          () => {
-            const s = window.__godsEyeView.dataManager.layers
-              .get('traffic')
-              .module.getStats();
-            return !s.loading;
-          },
-          { timeout: 15000 },
-        )
-        .catch(() => {});
-      await sleep(1200);
+      await whenTrafficSettled(page);
       return snap();
     };
     for (const [name, lat, lon, height] of [
@@ -186,20 +175,22 @@ try {
       mode === 'hybrid' ? await createScreencast(page, dir, { fps: 24 }) : null;
     await installFrameProbe(page);
     await page.evaluate(() => {
-      const { viewer, dataManager } = window.__godsEyeView;
+      const { dataManager } = window.__godsEyeView;
       window.__obliqueFrames = [];
       window.__obliqueMoving = true;
-      viewer.scene.postRender.addEventListener(() => {
+      window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
         const s = dataManager.layers.get('traffic').module.getStats();
         let upper = 0,
           lower = 0,
           near = 0;
-        const camera = viewer.camera.positionWC;
+        const camera = window.__godsEyeView.engine.camera.pose().position;
         dataManager.layers
           .get('traffic')
           .module.visitMotionDots((id, key, p) => {
             if (!p.show) return;
-            const q = viewer.scene.cartesianToCanvasCoordinates(p.position);
+            const q = window.__godsEyeView.engine.projector.worldToWindow(
+              p.position,
+            );
             if (q && q.x >= 240 && q.x <= 1040 && q.y >= 0 && q.y <= 800) {
               if (q.y < 400) upper++;
               else lower++;
@@ -226,7 +217,7 @@ try {
     await page.evaluate(async (v) => {
       const { flyToLandmark } = await import('/src/locations.js');
       await new Promise((resolve) =>
-        flyToLandmark(window.__godsEyeView.viewer, v.lat, v.lon, {
+        flyToLandmark(window.__godsEyeView.engine, v.lat, v.lon, {
           range: 1000,
           pitch: -15,
           heading: 0,
@@ -251,7 +242,7 @@ try {
       window.__obliqueMoving = false;
     });
     const panned = await settle();
-    await sleep(1800);
+    await whenSettled(page);
     const frames = await page.evaluate(() => window.__obliqueFrames);
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.setEnabled('traffic', false),
@@ -304,8 +295,13 @@ try {
   }
 } finally {
   fs.writeFileSync(`${out}/result.json`, JSON.stringify(result, null, 2));
-  await browser.close();
+  await closeBrowser(browser);
 }
+console.log(JSON.stringify({
+  failures: result.failures,
+  errors: result.errors,
+  forbidden: result.forbidden,
+}));
 if (
   !baseline &&
   (result.failures.length || result.errors.length || result.forbidden.length)

@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import * as Cesium from 'cesium';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { CockpitViewController } from './cockpitController.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useHudStore } from './stores/hud.js';
@@ -118,9 +119,7 @@ function installationsLayer() {
       return record ? layer.withPosition(record) : null;
     },
     findByPick(picked) {
-      const id =
-        picked?.id?.installationId ||
-        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+      const id = typeof picked?.id === 'string' ? picked.id : null;
       return id ? layer.getById(id) : null;
     },
   };
@@ -289,7 +288,13 @@ function fixture(t, { reducedMotion = false } = {}) {
   const modeEvents = [];
   const onMode = (event) => modeEvents.push(event.detail);
   window.addEventListener('gev:cockpit-mode-changed', onMode);
-  const cockpit = new CockpitViewController(viewer, {
+  const engine = createFakeEngine({ kind: 'cesium' });
+  engine.camera.setView = (options) => viewer.camera.setView(options);
+  const following = engine.camera.following;
+  engine.camera.following = () => viewer.trackedEntity ? { stop() { viewer.trackedEntity = undefined; } } : following();
+  engine.fake.script('pick', (position) => picks.get(`${position.x},${position.y}`));
+  const cockpit = new CockpitViewController(engine, {
+    viewer,
     services: {
       flightsLayer: { getTrackedInfo: () => null },
       militaryFlightsLayer: { getTrackedInfo: () => null },
@@ -331,7 +336,7 @@ function fixture(t, { reducedMotion = false } = {}) {
   // Named markers pick as `{ installationId }`, as the layer draws them.
   for (const site of Object.values(SITES))
     picks.set(`${site.at.x},${site.at.y}`, {
-      id: { installationId: site.id },
+      id: site.id,
       primitive: {},
     });
 
@@ -344,6 +349,7 @@ function fixture(t, { reducedMotion = false } = {}) {
   t.after(() => {
     window.removeEventListener('gev:cockpit-mode-changed', onMode);
     cockpit.stop();
+    engine.destroy();
     app.unmount();
     globalThis.matchMedia = previousMatchMedia;
     performance.now = originalNow;

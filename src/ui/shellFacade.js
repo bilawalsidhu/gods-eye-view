@@ -501,14 +501,6 @@ export class ShellFacade {
     return this._visualSettings.sharpenEnabled;
   }
 
-  get _bloomStage() {
-    return this._visualEffects.bloomStage;
-  }
-
-  get _sharpenStage() {
-    return this._visualEffects.sharpenStage;
-  }
-
   /** Settle only the search generation that still owns the shared input UI. */
   _settleLocationSearchUi(generation, options) {
     return this._navigation._settleLocationSearchUi(...arguments);
@@ -1170,6 +1162,10 @@ export class ShellFacade {
   }
 
   /** Show a message in the universal top-center status banner. */
+  _clearPersistentStatusNotice() {
+    return this._feedback.clearPersistentNotice();
+  }
+
   _showGlobalStatusNotice(message, options) {
     return this._feedback._showGlobalStatusNotice(message, options);
   }
@@ -1299,12 +1295,13 @@ export class ShellFacade {
   }
 
   /**
-   * Displays a temporary toast notification for 2 seconds.
+   * Displays a temporary toast notification.
    * @param {string} message - Text to show in the toast.
+   * @param {number} [durationMs=2000] How long the notice stays visible.
    * @returns {void}
    */
-  _showToast(message) {
-    return this._feedback._showToast(message);
+  _showToast(message, durationMs) {
+    return this._feedback._showToast(message, durationMs);
   }
 
   /** One 3D toggle drives BOTH aircraft layers (commercial + military) so all planes flip together. */

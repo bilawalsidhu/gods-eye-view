@@ -33,7 +33,7 @@ export function createCivilFlightLayer({
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);
   parts.clockFollow = createClockFollow(context);
-  const applySnapshot = createFlightSnapshotRenderer({
+  parts.snapshots = createFlightSnapshotRenderer({
     flightState,
     records: flightState.records,
     militaryRegistry: services.militaryRegistry,
@@ -48,10 +48,10 @@ export function createCivilFlightLayer({
   parts.ingestion = createIngestion({
     feed: flightState.feed,
     getQuery: (viewer) =>
-      parts.controller._flightQuery(viewer || flightState._viewer),
-    applySnapshot: (snapshot, viewer, options) => {
+      parts.controller._flightQuery(viewer || flightState._renderer?.view),
+    applySnapshot: (snapshot, _view, options) => {
       if (options?.replace) parts.clockFollow.resetMotion();
-      return applySnapshot(snapshot, viewer, options);
+      return parts.snapshots.applySnapshot(snapshot, options);
     },
     followsClock: () => flightState.timeline.active(),
     setSourceLabel: (source) => {
@@ -70,7 +70,7 @@ export function createCivilFlightLayer({
       parts.ingestion.methods.loadAt(atMs, { signal, replace }),
     clear: () => parts.clockFollow.clear(),
     resumeLive: () => {
-      layer.update(flightState._viewer).catch(() => {});
+      layer.update(flightState._renderer?.view).catch(() => {});
     },
   });
 

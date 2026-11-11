@@ -8,7 +8,7 @@
  *  - Pure drag math (this top section): ray↔axis closest-point, ray↔plane
  *    intersection with a grazing-angle guard, ring angles. All unit-tested
  *    under node:test with zero scene dependencies.
- *  - createCalibrationGizmo (below): the entity + ScreenSpaceEventHandler
+ *  - createCalibrationGizmo (below): the engine-neutral drag
  *    controller that renders grab-able handles on the ACTIVE camera and turns
  *    drags into calibration patches through a narrow callback interface. It
  *    never touches the layer's records/stores directly.
@@ -23,7 +23,8 @@
  * throttled hover picks while ADJUST mode is on) — the layer's zero-steady-state-query
  * invariant is untouched.
  */
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { rgbaFromCss } from '../layers/shared/color.js';
 import { isPointerFree } from './inputOwnership.js';
 
 // Grazing guard (spec §5): reject plane intersections when the view ray is
@@ -33,7 +34,7 @@ const GRAZING_DOT_MIN = 0.08;
 // Near-parallel guard for ray/axis closest-point (denominator 1 - (d·a)²).
 const PARALLEL_EPS = 1e-6;
 
-const scratchW = new Cesium.Cartesian3();
+const scratchW = geo.cartesian3.create();
 
 /**
  * Parameter t (metres) along an axis line of the point on that axis closest
@@ -50,12 +51,12 @@ const scratchW = new Cesium.Cartesian3();
  * @returns {number|null} Axis parameter in metres, or null when near-parallel.
  */
 export function closestParamOnAxis(rayOrigin, rayDir, axisOrigin, axisDir) {
-  const b = Cesium.Cartesian3.dot(rayDir, axisDir);
+  const b = geo.cartesian3.dot(rayDir, axisDir);
   const denom = 1 - b * b;
   if (Math.abs(denom) < PARALLEL_EPS) return null;
-  const w = Cesium.Cartesian3.subtract(rayOrigin, axisOrigin, scratchW);
-  const d = Cesium.Cartesian3.dot(rayDir, w);
-  const e = Cesium.Cartesian3.dot(axisDir, w);
+  const w = geo.cartesian3.subtract(rayOrigin, axisOrigin, scratchW);
+  const d = geo.cartesian3.dot(rayDir, w);
+  const e = geo.cartesian3.dot(axisDir, w);
   return (e - b * d) / denom;
 }
 
@@ -69,17 +70,17 @@ export function closestParamOnAxis(rayOrigin, rayDir, axisOrigin, axisDir) {
  * @returns {Cesium.Cartesian3|null} Hit point (new instance), or null.
  */
 export function rayPlaneIntersect(rayOrigin, rayDir, planeOrigin, planeNormal) {
-  const denom = Cesium.Cartesian3.dot(rayDir, planeNormal);
+  const denom = geo.cartesian3.dot(rayDir, planeNormal);
   if (Math.abs(denom) < GRAZING_DOT_MIN) return null;
-  const toPlane = Cesium.Cartesian3.subtract(planeOrigin, rayOrigin, scratchW);
-  const s = Cesium.Cartesian3.dot(toPlane, planeNormal) / denom;
+  const toPlane = geo.cartesian3.subtract(planeOrigin, rayOrigin, scratchW);
+  const s = geo.cartesian3.dot(toPlane, planeNormal) / denom;
   if (s < 0) return null;
-  const hit = Cesium.Cartesian3.multiplyByScalar(
+  const hit = geo.cartesian3.multiplyByScalar(
     rayDir,
     s,
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
   );
-  return Cesium.Cartesian3.add(rayOrigin, hit, hit);
+  return geo.cartesian3.add(rayOrigin, hit, hit);
 }
 
 /**
@@ -92,10 +93,10 @@ export function rayPlaneIntersect(rayOrigin, rayDir, planeOrigin, planeNormal) {
  * @returns {number} Angle in (−π, π].
  */
 export function ringAngle(hitPoint, center, basisA, basisB) {
-  const v = Cesium.Cartesian3.subtract(hitPoint, center, scratchW);
+  const v = geo.cartesian3.subtract(hitPoint, center, scratchW);
   return Math.atan2(
-    Cesium.Cartesian3.dot(v, basisB),
-    Cesium.Cartesian3.dot(v, basisA),
+    geo.cartesian3.dot(v, basisB),
+    geo.cartesian3.dot(v, basisA),
   );
 }
 
@@ -130,12 +131,12 @@ const ARROW_LENGTH_FACTOR = 1.6;
 const DRAG_THROTTLE_MS = 16;
 const HOVER_THROTTLE_MS = 120;
 
-const COLOR_RING_HEADING = Cesium.Color.fromCssColorString('#35d8ff');
-const COLOR_RING_PITCH = Cesium.Color.fromCssColorString('#ff5fd0');
-const COLOR_MOVE_EAST = Cesium.Color.fromCssColorString('#ff5252');
-const COLOR_MOVE_NORTH = Cesium.Color.fromCssColorString('#52ff7a');
-const COLOR_MOVE_UP = Cesium.Color.fromCssColorString('#5b8cff');
-const COLOR_HANDLE = Cesium.Color.fromCssColorString('#ffd97a');
+const COLOR_RING_HEADING = rgbaFromCss('#35d8ff');
+const COLOR_RING_PITCH = rgbaFromCss('#ff5fd0');
+const COLOR_MOVE_EAST = rgbaFromCss('#ff5252');
+const COLOR_MOVE_NORTH = rgbaFromCss('#52ff7a');
+const COLOR_MOVE_UP = rgbaFromCss('#5b8cff');
+const COLOR_HANDLE = rgbaFromCss('#ffd97a');
 
 const toRadians = (deg) => (deg * Math.PI) / 180;
 const toDeg = (rad) => (rad * 180) / Math.PI;
@@ -146,24 +147,26 @@ const toDeg = (rad) => (rad * 180) / Math.PI;
  * @returns {{east: Cesium.Cartesian3, north: Cesium.Cartesian3, up: Cesium.Cartesian3}}
  */
 function enuAxes(position) {
-  const frame = Cesium.Transforms.eastNorthUpToFixedFrame(position);
-  const rot = Cesium.Matrix4.getMatrix3(frame, new Cesium.Matrix3());
+  const frame = geo.transforms.eastNorthUpToFixedFrame(position);
+  const rot = geo.matrix4.getMatrix3(frame, geo.matrix3.create());
   return {
-    east: Cesium.Matrix3.getColumn(rot, 0, new Cesium.Cartesian3()),
-    north: Cesium.Matrix3.getColumn(rot, 1, new Cesium.Cartesian3()),
-    up: Cesium.Matrix3.getColumn(rot, 2, new Cesium.Cartesian3()),
+    east: geo.matrix3.getColumn(rot, 0, geo.cartesian3.create()),
+    north: geo.matrix3.getColumn(rot, 1, geo.cartesian3.create()),
+    up: geo.matrix3.getColumn(rot, 2, geo.cartesian3.create()),
   };
 }
 
 /** a*sa + b*sb (fresh Cartesian3). */
 function combine2(a, sa, b, sb) {
-  const out = Cesium.Cartesian3.multiplyByScalar(
+  // Retain the existing call layout during engine extraction.
+  // prettier-ignore
+  const out = geo.cartesian3.multiplyByScalar(
     a,
     sa,
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
   );
-  const t = Cesium.Cartesian3.multiplyByScalar(b, sb, new Cesium.Cartesian3());
-  return Cesium.Cartesian3.add(out, t, out);
+  const t = geo.cartesian3.multiplyByScalar(b, sb, geo.cartesian3.create());
+  return geo.cartesian3.add(out, t, out);
 }
 
 /**
@@ -198,7 +201,7 @@ function ringPositions(center, radius, basisA, basisB) {
       basisB,
       Math.sin(angle) * radius,
     );
-    positions.push(Cesium.Cartesian3.add(center, offset, offset));
+    positions.push(geo.cartesian3.add(center, offset, offset));
   }
   return positions;
 }
@@ -210,7 +213,7 @@ function ringPositions(center, radius, basisA, basisB) {
  * never touches layer records/stores directly.
  *
  * @param {Object} deps
- * @param {Cesium.Viewer} deps.viewer
+ * @param {Object} deps.renderer - Layer-owned handle renderer and input.
  * @param {function(): Object|null} deps.getActiveRecord - Returns the record
  *   the gizmo should attach to, or null to hide (layer decides: enabled +
  *   calibration mode + active camera).
@@ -224,7 +227,7 @@ function ringPositions(center, radius, basisA, basisB) {
  *   isEnabled: function(): boolean}}
  */
 export function createCalibrationGizmo({
-  viewer,
+  renderer,
   getActiveRecord,
   applyPatch,
   endPatch,
@@ -236,68 +239,26 @@ export function createCalibrationGizmo({
   let lastHoverAt = 0;
   const entities = new Map(); // part -> Entity
 
-  const scene = viewer.scene;
-  const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+  const { pickRay, setCursor } = renderer;
+  const pickGizmoPart = (event) => renderer.pickPart(event);
+  const polylinePart = (part, ...args) =>
+    entities.set(part, renderer.createLine(part, ...args));
+  const pointPart = (part, ...args) =>
+    entities.set(part, renderer.createPoint(part, ...args));
 
-  /** Adds (or re-adds) a gizmo entity, clearing any stale duplicate id. */
-  function addEntity(part, options) {
-    const id = `${GIZMO_ID_PREFIX}${part}`;
-    const stale = viewer.entities.getById(id);
-    if (stale) viewer.entities.remove(stale);
-    const entity = viewer.entities.add({ id, show: false, ...options });
-    entities.set(part, entity);
-    return entity;
+  try {
+    polylinePart('ring-heading', COLOR_RING_HEADING, 3);
+    polylinePart('ring-pitch', COLOR_RING_PITCH, 3);
+    polylinePart('move-east', COLOR_MOVE_EAST, 12, true);
+    polylinePart('move-north', COLOR_MOVE_NORTH, 12, true);
+    polylinePart('move-up', COLOR_MOVE_UP, 12, true);
+    pointPart('handle-range', COLOR_HANDLE, 13);
+    pointPart('handle-fov-l', COLOR_HANDLE, 10);
+    pointPart('handle-fov-r', COLOR_HANDLE, 10);
+  } catch (error) {
+    renderer.destroy();
+    throw error;
   }
-
-  function polylinePart(part, color, width, arrow = false) {
-    addEntity(part, {
-      ...(arrow
-        ? {
-            position: Cesium.Cartesian3.ZERO,
-            point: {
-              pixelSize: 14,
-              color,
-              outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-              outlineWidth: 2,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
-          }
-        : {}),
-      polyline: {
-        positions: [],
-        width,
-        material: arrow
-          ? new Cesium.PolylineArrowMaterialProperty(color)
-          : color.withAlpha(0.9),
-        // Standard gizmo convention: parts behind geometry stay clearly
-        // visible, just dimmed (a street-level mount buries half the heading
-        // ring in sloped photogrammetry tiles — smoke-tested 2026-07-05).
-        depthFailMaterial: color.withAlpha(0.45),
-      },
-    });
-  }
-
-  function pointPart(part, color, pixelSize) {
-    addEntity(part, {
-      position: Cesium.Cartesian3.ZERO,
-      point: {
-        pixelSize,
-        color,
-        outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
-  }
-
-  polylinePart('ring-heading', COLOR_RING_HEADING, 3);
-  polylinePart('ring-pitch', COLOR_RING_PITCH, 3);
-  polylinePart('move-east', COLOR_MOVE_EAST, 12, true);
-  polylinePart('move-north', COLOR_MOVE_NORTH, 12, true);
-  polylinePart('move-up', COLOR_MOVE_UP, 12, true);
-  pointPart('handle-range', COLOR_HANDLE, 13);
-  pointPart('handle-fov-l', COLOR_HANDLE, 10);
-  pointPart('handle-fov-r', COLOR_HANDLE, 10);
 
   function hideAll() {
     for (const entity of entities.values()) entity.show = false;
@@ -342,14 +303,16 @@ export function createCalibrationGizmo({
     );
     const arrowTo = (dir) => [
       mount,
-      Cesium.Cartesian3.add(
+      // Retain the existing call layout during engine extraction.
+      // prettier-ignore
+      geo.cartesian3.add(
         mount,
-        Cesium.Cartesian3.multiplyByScalar(
+        geo.cartesian3.multiplyByScalar(
           dir,
           arrowLen,
-          new Cesium.Cartesian3(),
+          geo.cartesian3.create(),
         ),
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       ),
     ];
     const eastArrow = arrowTo(axes.east);
@@ -362,80 +325,17 @@ export function createCalibrationGizmo({
     entities.get('move-up').polyline.positions = upArrow;
     entities.get('move-up').position = upArrow[1];
     entities.get('handle-range').position = positions.capCenter;
-    entities.get('handle-fov-l').position = Cesium.Cartesian3.midpoint(
+    entities.get('handle-fov-l').position = geo.cartesian3.midpoint(
       positions.tl,
       positions.bl,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    entities.get('handle-fov-r').position = Cesium.Cartesian3.midpoint(
+    entities.get('handle-fov-r').position = geo.cartesian3.midpoint(
       positions.tr,
       positions.br,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
     for (const entity of entities.values()) entity.show = true;
-  }
-
-  /** Extracts a gizmo part name from a pick result, or null. */
-  function gizmoPartFrom(picked) {
-    const id = picked?.id?.id ?? picked?.id;
-    if (typeof id !== 'string' || !id.startsWith(GIZMO_ID_PREFIX)) return null;
-    return id.slice(GIZMO_ID_PREFIX.length);
-  }
-
-  function pickGizmoPart(windowPosition) {
-    // Gizmo primitives render depth-test-free and should be the topmost pick.
-    // Take the cheap single-result path first: a full drillPick can stall for
-    // tens of seconds under software GL even when its first result is already
-    // the gizmo. Retain drillPick for uncommon overlap/fallback cases.
-    try {
-      const picked = scene.pick(windowPosition, 14, 14);
-      const part = gizmoPartFrom(picked);
-      if (part && entities.get(part)?.show) return part;
-    } catch (err) {
-      if (typeof window !== 'undefined' && window.__gevGizmoDebug) {
-        console.debug('[CCTV:gizmo] pick threw:', err?.message || err);
-      }
-    }
-
-    let results = [];
-    try {
-      results = scene.drillPick(windowPosition, 6, 14, 14) || [];
-    } catch (err) {
-      if (typeof window !== 'undefined' && window.__gevGizmoDebug) {
-        console.debug('[CCTV:gizmo] drillPick threw:', err?.message || err);
-      }
-      return null;
-    }
-    if (typeof window !== 'undefined' && window.__gevGizmoDebug) {
-      console.debug(
-        '[CCTV:gizmo] drillPick @',
-        windowPosition?.x,
-        windowPosition?.y,
-        '→',
-        JSON.stringify(
-          results.map((r) =>
-            String(r?.id?.id ?? r?.id ?? r?.primitive?.constructor?.name),
-          ),
-        ),
-      );
-    }
-    for (const picked of results) {
-      const part = gizmoPartFrom(picked);
-      if (part && entities.get(part)?.show) return part;
-    }
-    return null;
-  }
-
-  function pickRay(windowPosition) {
-    try {
-      return viewer.camera.getPickRay(windowPosition) || null;
-    } catch {
-      return null;
-    }
-  }
-
-  function setCursor(value) {
-    if (scene.canvas?.style) scene.canvas.style.cursor = value;
   }
 
   function setHovered(part) {
@@ -468,8 +368,8 @@ export function createCalibrationGizmo({
     const ray = pickRay(windowPosition);
     if (!ray) return false;
 
-    const mount = Cesium.Cartesian3.clone(positions.mount);
-    const capCenter = Cesium.Cartesian3.clone(positions.capCenter);
+    const mount = geo.cartesian3.clone(positions.mount);
+    const capCenter = geo.cartesian3.clone(positions.capCenter);
     const axes = enuAxes(mount);
     const { forwardHoriz, right, view } = viewAxesFor(
       camera.headingDeg,
@@ -533,9 +433,7 @@ export function createCalibrationGizmo({
 
     drag = state;
     setCursor('grabbing');
-    if (scene.screenSpaceCameraController) {
-      scene.screenSpaceCameraController.enableInputs = false;
-    }
+    state.releaseInputs = renderer.suspendCameraInputs();
     return true;
   }
 
@@ -597,8 +495,8 @@ export function createCalibrationGizmo({
       const hit = rayPlaneIntersect(ray.origin, ray.direction, capCenter, view);
       if (!hit) return null;
       const lateral = Math.abs(
-        Cesium.Cartesian3.dot(
-          Cesium.Cartesian3.subtract(hit, capCenter, new Cesium.Cartesian3()),
+        geo.cartesian3.dot(
+          geo.cartesian3.subtract(hit, capCenter, geo.cartesian3.create()),
           right,
         ),
       );
@@ -614,10 +512,9 @@ export function createCalibrationGizmo({
   function endDrag() {
     if (!drag) return;
     const record = drag.record;
+    const releaseInputs = drag.releaseInputs;
     drag = null;
-    if (scene.screenSpaceCameraController) {
-      scene.screenSpaceCameraController.enableInputs = true;
-    }
+    releaseInputs();
     setCursor(hoveredId ? 'grab' : '');
     endPatch(record);
   }
@@ -629,18 +526,18 @@ export function createCalibrationGizmo({
     }
   }
 
-  handler.setInputAction((event) => {
+  renderer.on('down', (event) => {
     // A tool owns the pointer (src/data/inputOwnership.js): yield the press.
     if (!isPointerFree()) return;
-    if (!enabled) return;
-    const part = pickGizmoPart(event.position);
+    if (!enabled || drag) return;
+    const part = pickGizmoPart(event);
     debugLog('LEFT_DOWN', event.position, 'part:', part);
     if (!part) return;
     const started = beginDrag(part, event.position);
     debugLog('beginDrag', part, '→', started);
-  }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+  });
 
-  handler.setInputAction((event) => {
+  renderer.on('move', (event) => {
     if (!enabled) return;
     const now = Date.now();
     if (drag) {
@@ -666,13 +563,14 @@ export function createCalibrationGizmo({
     }
     if (now - lastHoverAt < HOVER_THROTTLE_MS) return;
     lastHoverAt = now;
-    setHovered(pickGizmoPart(event.endPosition));
-  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    setHovered(pickGizmoPart(event));
+  });
 
-  handler.setInputAction(() => {
+  renderer.on('up', () => {
     if (!enabled) return;
     endDrag();
-  }, Cesium.ScreenSpaceEventType.LEFT_UP);
+  });
+  renderer.on('cancel', endDrag);
 
   return {
     setEnabled(value) {
@@ -688,10 +586,7 @@ export function createCalibrationGizmo({
     refresh,
     destroy() {
       if (drag) endDrag();
-      handler.destroy();
-      for (const entity of entities.values()) {
-        viewer.entities.remove(entity);
-      }
+      renderer.destroy();
       entities.clear();
       setCursor('');
     },

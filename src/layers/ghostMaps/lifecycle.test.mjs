@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createGhostMapsLayer } from './index.js';
+import { createGhostMapsDisplay } from './render/display.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -87,6 +88,30 @@ function fixtureKmz() {
   return new Uint8Array(Buffer.concat([...local, directory, end]));
 }
 
+// The editions drawn on the engine: their ground and placemark sets carry
+// `s2-ghostmaps:<product>:<draw>` in their ids.
+function drawnEditions(engine) {
+  const ids = [
+    ...engine.ground.list().map(({ id }) => id),
+    ...engine.movers.list().map(({ id }) => id),
+  ];
+  return new Set(ids.map((id) => id.split(':').slice(0, 3).join(':')));
+}
+
+// The pick ids drawn on the engine (placemarks and ground items), in order.
+function drawnIds(engine, ground) {
+  const ids = [];
+  for (const { id, count } of engine.ground.list())
+    ids.push(...(ground.get(id) ?? []).slice(0, count).map((i) => i.pickId));
+  for (const { id } of engine.movers.list()) {
+    const { store } = engine.fake.moverSet(id);
+    ids.push(
+      ...Array.from({ length: store.count }, (_, i) => store.pickIds[i]),
+    );
+  }
+  return ids;
+}
+
 function fixture(
   t,
   {
@@ -118,22 +143,28 @@ function fixture(
   });
   t.mock.method(URL, 'revokeObjectURL', (url) => revoked.push(url));
   t.mock.method(console, 'warn', () => {});
-  const mounted = new Set();
-  const viewer = {
-    scene: { requestRender() {} },
-    dataSources: {
-      async add(dataSource) {
-        mounted.add(dataSource);
-        return dataSource;
-      },
-      remove(dataSource) {
-        return mounted.delete(dataSource);
-      },
-    },
+  const engine = createFakeEngine();
+  // What each ground set was last given, by set id.
+  const ground = new Map();
+  const createSet = engine.ground.createSet.bind(engine.ground);
+  engine.ground.createSet = (options) => {
+    const set = createSet(options);
+    const replace = set.replace.bind(set);
+    set.replace = (items) => {
+      ground.set(options.id, items);
+      replace(items);
+    };
+    return set;
   };
+  const display = () =>
+    createGhostMapsDisplay(engine, {
+      loadImage: async () => ({ naturalWidth: 32, naturalHeight: 32 }),
+      createCanvas: () => ({ getContext: () => ({ drawImage() {} }) }),
+    });
   const layer = createGhostMapsLayer({
     storage: null,
     now,
+    createRenderer: display,
     ...controls,
     source: {
       getCatalog: async () => ({
@@ -147,11 +178,35 @@ function fixture(
       },
     },
   });
-  layer.init(viewer);
+  layer.init(null, { engine });
   layer.enable();
   t.after(() => layer.destroy());
-  return { layer, viewer, mounted, created, revoked };
+  const mounted = {
+    get size() {
+      return drawnEditions(engine).size;
+    },
+  };
+  const ids = () => drawnIds(engine, ground);
+  // A click at the window centre on what the engine picks there.
+  const click = (pickId) => {
+    engine.fake.script('pick', pickId ? { id: pickId } : undefined);
+    engine.fake.input('click', { position: { x: 512, y: 384 } });
+  };
+  return {
+    layer,
+    viewer: null,
+    engine,
+    mounted,
+    ids,
+    editions: () => drawnEditions(engine),
+    click,
+    created,
+    revoked,
+  };
 }
+
+// The layer's picking service, as the application's resolves a pick.
+const picking = { resolvePickId: (picked) => picked?.id ?? null };
 
 test('cancelling a file read does not allocate packed-image URLs', async (t) => {
   const { layer, viewer, mounted, created, revoked } = fixture(t, {
@@ -173,9 +228,32 @@ test('cancellation during parsing releases every packed-image URL', async (t) =>
   assert.equal(mounted.size, 0);
 });
 
-test('entity construction failure releases parsed image URLs', async (t) => {
-  const { layer, viewer, mounted, created, revoked } = fixture(t);
-  t.mock.method(Cesium.EntityCollection.prototype, 'add', () => {
+test('a KMZ delivered between planets is reused by the new scene and releases its icon on disable', async (t) => {
+  let layer;
+  const h = fixture(t, {
+    beforeFileReturns() {
+      layer.detachRenderer();
+    },
+  });
+  layer = h.layer;
+  await layer.update();
+  assert.deepEqual(
+    layer.getAnalystRecords().map((r) => r.name),
+    ['Test report'],
+  );
+  assert.equal(h.mounted.size, 0);
+  await layer.attachRenderer({ engine: h.engine });
+  assert.equal(h.mounted.size, 1);
+  assert.equal(h.created.length, 1);
+  assert.equal(h.revoked.length, 0);
+  layer.disable();
+  assert.deepEqual(h.revoked, h.created);
+  assert.equal(h.mounted.size, 0);
+});
+
+test('a drawing failure releases parsed image URLs', async (t) => {
+  const { layer, viewer, engine, mounted, created, revoked } = fixture(t);
+  t.mock.method(engine.ground, 'createSet', () => {
     throw new Error('fixture entity failure');
   });
   await layer.update(viewer);
@@ -363,7 +441,7 @@ test('age filtering and All markers apply to every conflict-map product, includi
 });
 
 test('default products filter old event dates while keeping recent, future and undated markers', async (t) => {
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, ids } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [
       dated('Old event', '10/20/2026'),
@@ -397,21 +475,17 @@ test('default products filter old event dates while keeping recent, future and u
     ],
   );
   assert.equal(layer.getStats().count, 7);
-  assert.equal([...mounted][0].entities.values.length, 7);
+  assert.equal(ids().length, 7);
   // Filtering cannot shift pick ids onto a different report.
-  assert.ok([...mounted][0].entities.getById('ghostmaps:cip:1:0'));
-  assert.equal(
-    [...mounted][0].entities.getById('ghostmaps:cip:0:0'),
-    undefined,
-  );
+  assert.ok(ids().includes('ghostmaps:cip:1:0'));
+  assert.equal(ids().includes('ghostmaps:cip:0:0'), false);
 });
 
 test('unchanged cached products age out on the timer, clear selected cards and keep surviving picks', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   let at = Date.UTC(2026, 10, 3, 12);
-  let click;
   const cards = [];
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, mounted, ids, editions, click } = fixture(t, {
     now: () => at,
     reports: [
       dated('Expiring', '10/27/2026 12:00:00 PM'),
@@ -419,31 +493,27 @@ test('unchanged cached products age out on the timer, clear selected cards and k
     ],
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
-      picking: { resolvePickId: (picked) => picked },
+      picking,
     },
   });
   await layer.update(viewer);
-  const ds = [...mounted][0];
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  const [edition] = editions();
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   at += 60_000;
   t.mock.timers.tick(60_000);
   assert.equal(layer.getStats().count, 1);
-  assert.equal(ds.entities.values.length, 1);
-  assert.equal(ds.entities.getById('ghostmaps:cip:0:0'), undefined);
-  assert.ok(ds.entities.getById('ghostmaps:cip:1:0'));
+  // Dropped in place: the edition's drawing stays for the survivor.
+  assert.deepEqual(ids(), ['ghostmaps:cip:1:0']);
+  assert.deepEqual([...editions()], [edition]);
   assert.deepEqual(cards.at(-1), []);
   await layer.update(viewer);
-  assert.equal([...mounted][0], ds, 'same-version KMZ is not reloaded');
-  viewer.scene.pick = () => 'ghostmaps:cip:1:0';
-  click({ position: { x: 0, y: 0 } });
+  assert.deepEqual(
+    [...editions()],
+    [edition],
+    'same-version KMZ is not reloaded',
+  );
+  click('ghostmaps:cip:1:0');
   assert.match(cards.at(-1)[0].title, /Surviving/);
   layer.disable();
   at += 14 * 86400_000;
@@ -464,8 +534,13 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
         element('coordinates', [], '12,34 13,34 13,35 12,34'),
       ]),
     ]),
+    element('innerBoundaryIs', [
+      element('LinearRing', [
+        element('coordinates', [], '12.6,34.2 12.8,34.2 12.8,34.4 12.6,34.2'),
+      ]),
+    ]),
   ]);
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, ids } = fixture(t, {
     now: () => at,
     reports: [
       {
@@ -479,11 +554,16 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
     ],
   });
   await layer.update(viewer);
-  const ds = [...mounted][0];
-  assert.equal(ds.entities.values.length, 4);
+  // The placemark, the line, the polygon and its outer outline.
+  assert.deepEqual(ids().sort(), [
+    'ghostmaps:cip:0:0',
+    'ghostmaps:cip:0:1',
+    'ghostmaps:cip:0:2',
+    'ghostmaps:cip:0:2:outline',
+  ]);
   at += 60_000;
   t.mock.timers.tick(60_000);
-  assert.equal(ds.entities.values.length, 0);
+  assert.deepEqual(ids(), []);
   assert.equal(layer.getStats().count, 0);
 });
 
@@ -518,27 +598,19 @@ test('two quick clicks, 1d then 7d, restore the report', async (t) => {
 });
 
 test('narrowing the window keeps the open card of a surviving marker', async (t) => {
-  let click;
   const cards = [];
-  const { layer, viewer } = fixture(t, {
+  const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')],
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
-      picking: { resolvePickId: (picked) => picked },
+      picking,
     },
   });
   await layer.update(viewer);
   await ageChip(layer, 30).onClick();
   assert.equal(layer.getStats().count, 2);
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().count, 1);
@@ -560,26 +632,18 @@ test('a report dated yesterday is shown by 1d one hour into today (UTC)', async 
 });
 
 test('a widened reload that returns a different report at the selected index closes its card', async (t) => {
-  let click;
   const cards = [];
   const reports = [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')];
-  const { layer, viewer } = fixture(t, {
+  const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports,
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
-      picking: { resolvePickId: (picked) => picked },
+      picking,
     },
   });
   await layer.update(viewer);
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   // The server answers the pinned version with a newer edition's bytes.
   reports[0] = dated('Replacement', '11/2/2026');

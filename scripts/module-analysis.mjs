@@ -1,4 +1,5 @@
 import { parsers } from 'prettier/plugins/babel.mjs';
+import { vueScripts } from './vue-scripts.mjs';
 
 const browserGlobals = new Set([
   'window',
@@ -15,9 +16,14 @@ const browserGlobals = new Set([
   'getComputedStyle',
 ]);
 
-/** Inspect literal module dependencies and browser-platform references without executing code. */
-export function analyzeModule(source) {
+/**
+ * Inspect literal module dependencies and browser-platform references without
+ * executing code. With `dynamic`, also list the static (not import())
+ * specifiers apart.
+ */
+export function analyzeModule(source, { dynamic = false, filename = '' } = {}) {
   const imports = [];
+  const staticImports = [];
   const browser = new Set();
   function walk(node, parent, field) {
     if (!node || typeof node !== 'object') return;
@@ -35,6 +41,8 @@ export function analyzeModule(source) {
           'Computed module imports are not allowed in runtime code',
         );
       imports.push(node.source.value);
+      if (node.type !== 'ImportExpression')
+        staticImports.push(node.source.value);
     }
     if (node.type === 'CallExpression' && node.callee?.name === 'require')
       throw new Error('Runtime modules must use ES imports');
@@ -70,8 +78,15 @@ export function analyzeModule(source) {
       else if (value && typeof value === 'object') walk(value, node, key);
     }
   }
-  walk(parsers.babel.parse(source));
-  return { imports, browser: [...browser] };
+  for (const script of filename.endsWith('.vue')
+    ? vueScripts(source, filename)
+    : [source])
+    walk(parsers.babel.parse(script));
+  return {
+    imports,
+    browser: [...browser],
+    ...(dynamic && { staticImports }),
+  };
 }
 
 /** Return static imports, literal dynamic imports and re-exports. */

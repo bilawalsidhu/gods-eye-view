@@ -33,6 +33,7 @@ import militaryFlightsLayer, {
 import { findCompatibleHistoryIndex } from './militaryAwareness.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { ANALYST_LAYERS, createAnalystEngine } from './analystEngine.js';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
 
 /** Strip block and line comments so source pins scan CODE, not prose. */
 function stripComments(source) {
@@ -161,6 +162,9 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
   };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24,
     entity,
     billboard,
@@ -260,7 +264,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
 
     // 4. Orientation contract is untouched: still a screen-projected rotation
     //    with alignedAxis ZERO, and no new per-frame CallbackProperty.
-    assert.match(source, /alignedAxis: Cesium\.Cartesian3\.ZERO/, `${name}: alignedAxis stays ZERO`);
+    assert.match(source, /alignedAxis: geo\.cartesian3\.ZERO/, `${name}: alignedAxis stays ZERO`);
     assert.doesNotMatch(source, /isTr3b[\s\S]{0,200}new Cesium\.CallbackProperty/,
       `${name}: the Easter egg adds no per-frame CallbackProperty`);
   }
@@ -295,6 +299,9 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
   setTr3b(icao24, true);
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24,
     entity: null,
     billboard: {
@@ -459,6 +466,9 @@ test('cockpit class filter matches a converted contact end to end', async () => 
 
   // 2) Real getNearby record for a real (converted) contact in the layer.
   const seed = () => _setTrackedFlightRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24,
     entity: null,
     billboard: {
@@ -505,6 +515,9 @@ test('military records and detection cards agree with the conversion', () => {
   const icao24 = 'ae01ce';
   const center = Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 200);
   const seed = () => _setTrackedMilitaryRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24,
     entity: null,
     billboard: {

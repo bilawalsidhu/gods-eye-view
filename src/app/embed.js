@@ -11,7 +11,7 @@
  * embedded or not.
  */
 
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
@@ -144,18 +144,18 @@ const delay = (ms, signal) =>
   });
 
 /** Fly the camera to a view's camera and resolve when the flight ends. */
-function flyTo(viewer, camera) {
+function flyTo(engine, camera) {
   announceNavigationAuthority('embed-view');
   return new Promise((resolve) => {
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
+    engine.camera.flyTo({
+      destination: geo.cartesian3.fromDegrees(
         camera.lon,
         camera.lat,
         camera.altitude_m,
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(camera.heading_deg),
-        pitch: Cesium.Math.toRadians(camera.pitch_deg),
+        heading: geo.math.toRadians(camera.heading_deg),
+        pitch: geo.math.toRadians(camera.pitch_deg),
         roll: 0,
       },
       duration: FLIGHT_SECONDS,
@@ -173,7 +173,7 @@ function flyTo(viewer, camera) {
  */
 export async function applyView(
   view,
-  { viewer, dataManager, run, signal, retryMs = FOLLOW_RETRY_MS },
+  { engine, dataManager, run, signal, retryMs = FOLLOW_RETRY_MS },
 ) {
   const steps = [];
   const act = async (name, args) => {
@@ -208,7 +208,7 @@ export async function applyView(
   if (view.annotations.length)
     await act('annotate_map', { annotations: [...view.annotations] });
   if (!view.follow) {
-    steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
+    steps.push({ step: 'camera', ok: await flyTo(engine, view.camera) });
     return steps;
   }
   // A followed entity owns the camera, and a camera flight would end the
@@ -227,7 +227,7 @@ export async function applyView(
   };
   let followed = await follow();
   if (!followed) {
-    steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
+    steps.push({ step: 'camera', ok: await flyTo(engine, view.camera) });
     for (let attempt = 1; attempt < FOLLOW_ATTEMPTS && !followed; attempt++) {
       if (signal?.aborted) break;
       await delay(retryMs, signal);
@@ -242,11 +242,14 @@ export async function applyView(
 
 /**
  * Install embed mode when the page asks for it, and draw any annotations the
- * opening link carries. Returns a function that removes the message handler.
+ * opening link carries. `keepRendering({ windowRef })`, when the engine needs
+ * it, keeps an inline panel drawing (keepPanelRendering). Returns a function
+ * that removes the message handler.
  */
 export function installViews({
   shell,
-  viewer,
+  engine,
+  keepRendering = null,
   dataManager,
   run,
   signal,
@@ -265,9 +268,10 @@ export function installViews({
 
   windowRef.document.body.classList.add('ui-embed');
   shell.setCleanView?.(true);
-  const stopRendering = isEmbeddedInline()
-    ? keepPanelRendering(viewer, { windowRef })
-    : () => {};
+  const stopRendering =
+    isEmbeddedInline() && keepRendering
+      ? keepRendering({ windowRef })
+      : () => {};
   // A framing page talks to the app across frames; an inline panel shares
   // the page with it and talks through the page's own window.
   const peer = isEmbeddedInline() ? windowRef : windowRef.parent;
@@ -304,7 +308,7 @@ export function installViews({
     }
     queue = queue.then(async () => {
       if (signal?.aborted) return;
-      const steps = await applyView(view, { viewer, dataManager, run, signal });
+      const steps = await applyView(view, { engine, dataManager, run, signal });
       post(
         {
           type: EMBED_APPLIED_MESSAGE,

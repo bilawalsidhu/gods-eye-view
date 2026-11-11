@@ -10,6 +10,7 @@ import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { SceneControls } from './ui/sceneControls.js';
 import { isRenderedOnScreen } from './ui/cockpitPresentation.js';
 import { onKeyDown as cockpitKeyDown } from './ui/cockpitInput.js';
+import { cockpitHost } from './ui/cockpitHost.js';
 import {
   enter as cockpitEnter,
   exit as cockpitExit,
@@ -224,11 +225,11 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   assert.match(enter, /activeElement/);
   assert.match(enter, /mapViewButton.*focus|focus.*mapViewButton/s);
   assert.match(exit, /focus\(\{ preventScroll: true \}\)/);
-  assert.match(exit, /this\.restoreTrackingFrame\(entity\)/);
+  assert.match(exit, /this\.host\.restore\(entity\)/);
   assert.doesNotMatch(exit, /applyTrackedCameraFrame/);
   assert.match(
-    ui,
-    /restoreTrackingFrame: \(entity\) => \{[\s\S]*?gevTrackedId[\s\S]*?flightsLayer\.refocusTrackedById[\s\S]*?militaryFlightsLayer\.refocusTrackedById/,
+    cockpitHost.toString(),
+    /restore: \(target\) => target\.resumeAircraftFollow\(\)/,
     'Cockpit exit must return camera-frame ownership through the source layer so Contact Focus cannot accumulate a second owner',
   );
 });
@@ -294,14 +295,14 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   );
 });
 
-test('the cockpit reads its aircraft from the layer that owns Cesium tracking', () => {
+test('the cockpit reads its aircraft from the layer that owns the tracking', () => {
   const read = readAircraftInfo.toString();
   assert.ok(read, 'readAircraftInfo is missing');
   assert.match(read, /resolveTrackedAircraftInfo\(\{/);
   assert.match(read, /gevTrackedId/);
-  // In cockpit mode the controller moves the entity off viewer.trackedEntity,
-  // so its own handle is the tracked identity there.
-  assert.match(read, /this\.viewer\?\.trackedEntity \|\| this\.trackedEntity/);
+  // In cockpit mode the controller releases the engine's follow of the
+  // aircraft, so its own handle is the tracked identity there.
+  assert.match(read, /this\.host\.followed\(\) \|\| this\.trackedEntity/);
 });
 
 test('programmatic Context layer changes cannot bypass explicit expansion policy', () => {
@@ -794,11 +795,11 @@ test('Cockpit hides the complete top-center globe action group', () => {
 test('Reset releases Contact camera ownership through its selection-preserving route', () => {
   const resetStart = ui.indexOf('resetToGlobeView()');
   const contextRelease = ui.indexOf(
-    "militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' })",
+    "releaseTrackers(this.services, { origin: 'tool' })",
     resetStart,
   );
   const satelliteRelease = ui.indexOf(
-    "satellitesLayer.stopTracking?.({ origin: 'tool' })",
+    'this.engine.camera.following()?.stop()',
     resetStart,
   );
 
@@ -835,14 +836,13 @@ test('Location navigation releases immediate routes before flight and deferred r
   const locationFlight = ui.indexOf(
     '_flyWithTransition(cityChanged, flyAction)',
   );
-  const search = ui.indexOf('searchAndFlyTo(this.viewer, query, {');
+  const search = ui.indexOf('searchAndFlyTo(this.engine, query, {');
   const voiceStart = voiceActions.indexOf('beginDeferredLocationNavigation');
 
   assert.ok(releaseStart >= 0, 'shared Location camera handoff is missing');
-  assert.match(
-    ui.slice(releaseStart, releaseStart + 1800),
-    /militaryAwarenessLayer\.releaseCameraOwnership\?\.\(\{[\s\S]*?origin: trackingOrigin[\s\S]*?\}\)[\s\S]*?satellitesLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)[\s\S]*?rocketLaunchesLayer\.releaseCameraOwnership\?\.\(\)/,
-  );
+  assert.match(ui.slice(releaseStart, releaseStart + 1800),
+    /releaseTrackers\(this.tracking, \{[\s\S]*?origin: trackingOrigin/);
+
   assert.match(
     ui.slice(locationFlight, locationFlight + 900),
     /this\._runExplicitNavigation\('location',[\s\S]*?flyAction\(/,
@@ -1170,7 +1170,7 @@ test('cockpit route direction uses self-contained vector artwork, not a font lig
 test('cockpit aircraft handoff invalidates the prior world-position anchor', () => {
   const match = _adoptTrackedEntity.toString();
   assert.ok(match, 'cockpit tracked-entity handoff block is missing');
-  assert.match(match, /this\.viewer\.trackedEntity = undefined;/);
+  assert.match(match, /this\.host\.release\(\);/);
   assert.match(match, /this\.cockpitAnchorValid = false;/);
   assert.match(
     match,
@@ -1379,9 +1379,9 @@ test('voice Cockpit entry refuses when the entry gate is shut', () => {
 });
 
 test('cockpit state cannot report entryAllowed while already active', () => {
-  // Cockpit takes the entity off viewer.trackedEntity on entry and NEXT puts
-  // one back, so this flipped true/false between calls while active stayed
-  // true — read by the voice model as a broken half-entered state.
+  // Cockpit releases the engine's follow on entry and NEXT starts another,
+  // so this flipped true/false between calls while active stayed true —
+  // read by the voice model as a broken half-entered state.
   const state = ui.slice(
     ui.indexOf('  getCockpitState() {'),
     ui.indexOf('  _retargetCockpitEntryLayer({'),

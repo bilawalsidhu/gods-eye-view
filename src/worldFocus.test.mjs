@@ -13,21 +13,33 @@ import {
   requestWorldFocus,
   routeWorldFocusRequest,
 } from './worldFocus.js';
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
 
 const POSITION = Cesium.Cartesian3.fromDegrees(-97.74, 30.26, 0);
 
-function stubCamera() {
-  const calls = { cancelFlight: 0, flights: [] };
-  return {
-    calls,
+/** A globe engine looking north-east (heading 45°) at the test target. */
+function stubEngine() {
+  const engine = createFakeEngine();
+  engine.fake.setPose({
+    position: Cesium.Cartesian3.fromDegrees(-97.74, 30.2, 3000),
     heading: Cesium.Math.toRadians(45),
-    cancelFlight() {
-      calls.cancelFlight += 1;
-    },
-    flyToBoundingSphere(sphere, options) {
-      calls.flights.push({ sphere, options });
+    pitch: -0.5,
+    roll: 0,
+  });
+  const camera = {
+    heading: engine.camera.pose().heading,
+    calls: {
+      get cancelFlight() {
+        return engine.fake.callsOf('camera.cancelFlight').length;
+      },
+      get flights() {
+        return engine.fake
+          .callsOf('camera.flyToSphere')
+          .map(({ args: [sphere, options] }) => ({ sphere, options }));
+      },
     },
   };
+  return { engine, camera };
 }
 
 test('a focus request carries the clicked target to any registered listener', () => {
@@ -163,12 +175,9 @@ test('an unflyable request never reaches the release policy', () => {
 });
 
 test('the transfer flight supersedes any flight in progress and keeps the operator heading', () => {
-  const camera = stubCamera();
+  const { engine, camera } = stubEngine();
   assert.equal(
-    flyToWorldTarget(
-      { camera },
-      { kind: 'vessel', id: '123', position: POSITION },
-    ),
+    flyToWorldTarget(engine, { kind: 'vessel', id: '123', position: POSITION }),
     true,
   );
   assert.equal(
@@ -180,21 +189,19 @@ test('the transfer flight supersedes any flight in progress and keeps the operat
   const { sphere, options } = camera.calls.flights[0];
   assert.equal(sphere.radius, WORLD_FOCUS_FRAMING.vessel.radiusM);
   assert.equal(options.duration, WORLD_CLICK_FOCUS_DURATION_SEC);
-  assert.equal(options.offset.range, WORLD_FOCUS_FRAMING.vessel.rangeM);
+  assert.equal(options.range, WORLD_FOCUS_FRAMING.vessel.rangeM);
   // Heading is preserved so the transfer never spins the operator around.
-  assert.equal(options.offset.heading, camera.heading);
-  assert.equal(options.easingFunction, Cesium.EasingFunction.CUBIC_IN_OUT);
+  assert.equal(options.heading, camera.heading);
+  assert.ok(Math.abs(camera.heading - Cesium.Math.toRadians(45)) < 1e-9);
+  assert.equal(options.easing, 'cubicInOut');
 });
 
 test('fires frame wider than vessels — a fire is read by its surroundings', () => {
-  const camera = stubCamera();
-  flyToWorldTarget(
-    { camera },
-    { kind: 'fire', id: 'fire-1', position: POSITION },
-  );
+  const { engine, camera } = stubEngine();
+  flyToWorldTarget(engine, { kind: 'fire', id: 'fire-1', position: POSITION });
   const { sphere, options } = camera.calls.flights[0];
   assert.equal(sphere.radius, WORLD_FOCUS_FRAMING.fire.radiusM);
-  assert.equal(options.offset.range, WORLD_FOCUS_FRAMING.fire.rangeM);
+  assert.equal(options.range, WORLD_FOCUS_FRAMING.fire.rangeM);
   assert.ok(
     WORLD_FOCUS_FRAMING.fire.rangeM > WORLD_FOCUS_FRAMING.vessel.rangeM,
   );
@@ -255,12 +262,12 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
 });
 
 test('unknown kinds and missing viewers issue no flight', () => {
-  const camera = stubCamera();
+  const { engine, camera } = stubEngine();
   assert.equal(
-    flyToWorldTarget({ camera }, { kind: 'plane', position: POSITION }),
+    flyToWorldTarget(engine, { kind: 'plane', position: POSITION }),
     false,
   );
-  assert.equal(flyToWorldTarget({ camera }, { kind: 'vessel' }), false);
+  assert.equal(flyToWorldTarget(engine, { kind: 'vessel' }), false);
   assert.equal(
     flyToWorldTarget(null, { kind: 'vessel', position: POSITION }),
     false,

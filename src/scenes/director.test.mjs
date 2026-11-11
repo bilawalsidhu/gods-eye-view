@@ -20,6 +20,9 @@ import { LayerLifecycle } from '../data/lifecycle.js';
 import { SceneDirector } from './director.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
 import { SCENE_RECIPES, getSceneAppendRecipeById } from './recipes.js';
+import { GROUND_HARNESSES } from '../testSupport/groundDisplayEngines.mjs';
+import { useSceneInteractionsStore } from '../ui/stores/sceneInteractions.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 const NEPAL_ORIGINAL_SHOT_TITLES = [
   'Global Incident Context',
@@ -256,7 +259,7 @@ test('same-shot seeking restores a layer whose superseded LOAD transition rolls 
       update() {},
     });
   }
-  const realDirector = new SceneDirector(viewer, styleManager, lifecycle);
+  const realDirector = new SceneDirector({ engine: engineFor(viewer), viewer }, styleManager, lifecycle);
   try {
     await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
     await dataManager.setEnabled('flights', false);
@@ -370,7 +373,7 @@ test('same-shot seeking aborts in-flight admission when superseded by an early-r
     disable() {},
     update() {},
   });
-  const director = new SceneDirector(viewer, styleManager, lifecycle);
+  const director = new SceneDirector({ engine: engineFor(viewer), viewer }, styleManager, lifecycle);
   try {
     await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
     assert.equal(await director.seekScene('scene-1', 0.1), true);
@@ -448,7 +451,7 @@ test('a rejected loadShot does not cancel an in-flight LOAD', async () => {
     disable() {},
     update() {},
   });
-  const director = new SceneDirector(viewer, styleManager, lifecycle);
+  const director = new SceneDirector({ engine: engineFor(viewer), viewer }, styleManager, lifecycle);
   try {
     const load = director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
     for (
@@ -1067,6 +1070,17 @@ function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
   return manager;
 }
 
+/**
+ * A globe engine whose camera commands go to the viewer double's camera (read
+ * on each call, so a test may replace one), as the scene engine's do.
+ */
+function engineFor(viewer) {
+  const engine = createFakeEngine();
+  for (const name of ['flyTo', 'cancelFlight', 'setView'])
+    engine.camera[name] = (...args) => viewer.camera[name]?.(...args);
+  return engine;
+}
+
 /** Cesium viewer double whose flights complete on the next microtask turn. */
 function fakeViewer() {
   const flights = [];
@@ -1101,7 +1115,7 @@ function makeDirector(options = {}) {
   const viewer = fakeViewer();
   const styleManager = fakeStyleManager(options.style);
   const dataManager = fakeDataManager(options.data);
-  const director = new SceneDirector(viewer, styleManager, dataManager, {
+  const director = new SceneDirector({ engine: engineFor(viewer), viewer }, styleManager, dataManager, {
     isMapStackAvailable: options.isMapStackAvailable,
   });
   // Telemetry is only accumulated during a run; observable-failure assertions
@@ -1777,7 +1791,7 @@ test('destroy drains cancelled LOAD work before its viewer can be discarded', as
   let finishVisual;
   const dataManager = fakeDataManager();
   const viewer = { camera: { cancelFlight() {} } };
-  const director = new SceneDirector(viewer, {
+  const director = new SceneDirector({ engine: engineFor(viewer), viewer }, {
     applyVisualState: () => new Promise((resolve) => { finishVisual = resolve; }),
   }, dataManager);
   const loading = director.loadShot('scene-1', 'shot-a');
@@ -1964,6 +1978,30 @@ test('camera refusal starts no authored frame or playback clock', async () => {
   } finally { restore(); }
 });
 
+test('scene placement, flights and stop run on a globe engine without a viewer', async () => {
+  const restore = installSceneRuntime();
+  try {
+    const engine = createFakeEngine();
+    const director = new SceneDirector({ engine }, fakeStyleManager(), fakeDataManager());
+    const pose = { lat: 27.95, lon: 85.95, alt: 4200, heading: 40, pitch: -25, roll: 0 };
+    assert.equal(director._setCameraView(pose), true);
+    const placed = engine.camera.pose().cartographic;
+    assert.ok(Math.abs(placed.height - 4200) < 1e-6);
+    const flying = director._flyCamera({ ...pose, alt: 6000 }, 0.2, { cancelled: false });
+    const [flight] = engine.fake.callsOf('camera.flyTo').at(-1).args;
+    assert.equal(flight.easing, 'cubicInOut');
+    engine.fake.frames(20, 16);
+    await flying;
+    assert.ok(Math.abs(engine.camera.height() - 6000) < 1e-6);
+    director.stopScene('test');
+    assert.ok(engine.fake.callsOf('camera.cancelFlight').length >= 2);
+    director.destroy();
+    await director._destroyPromise;
+  } finally {
+    restore();
+  }
+});
+
 test('an unreadable saved project does not overwrite its recovery checkpoint (#971)', async () => {
   const unreadable = '{"version":99,"scenes":[]}';
   const warn = console.warn;
@@ -2027,4 +2065,113 @@ test('a caught run failure resolves as run-failed, not success (#971)', async ()
       { started: false, reason: 'run-failed' },
     );
   } finally { console.warn = warn; await director.destroy(); restore(); }
+});
+
+test('a failed scene-pack rebind releases the partial renderer and a stopped shot unblocks', async () => {
+  const director = Object.create(SceneDirector.prototype);
+  const drawn = new Set();
+  director.engine = createFakeEngine();
+  director._dataPacks = {
+    setScene(viewer) {
+      if (!viewer) drawn.clear();
+      else {
+        drawn.add('point');
+        throw new Error('could not attach polygon');
+      }
+    },
+  };
+  director._interactions = { setScene() {} };
+  director.suspendScene();
+  const gate = director._sceneGate;
+  const abort = new AbortController();
+  const stopped = director._waitForScene({ signal: abort.signal });
+  assert.throws(
+    () =>
+      director.attachScene(
+        { engine: createFakeEngine() },
+        {},
+        () => true,
+      ),
+    /could not attach polygon/,
+  );
+  assert.equal(director.engine, null);
+  assert.equal(director._sceneGate, gate);
+  assert.equal(drawn.size, 0);
+  abort.abort();
+  assert.equal(await stopped, false);
+  const waiting = director._waitForScene();
+  director.engine = createFakeEngine();
+  director.styleManager = {};
+  director.resumeScene();
+  assert.equal(await waiting, true);
+});
+
+
+for (const createHarness of GROUND_HARNESSES) {
+  test(`Director retains the existing tracking interaction policy on ${createHarness.name}`, async () => {
+    const restore = installSceneRuntime();
+    const harness = createHarness();
+    const { engine } = harness;
+    const director = new SceneDirector({ engine, viewer: harness.viewer }, fakeStyleManager(), fakeDataManager());
+    const store = useSceneInteractionsStore(applicationPinia());
+    const target = { packId: 'test', featureId: 'point' };
+    const shot = { interactions: [{ id: 'card', label: 'Read', target, action: { type: 'card', text: 'Details' } }] };
+    try {
+      director._interactions.activate(shot, new Map([[JSON.stringify(['test', 'point']), 'point']]));
+      const follow = engine.camera.follow({ position: () => ({ x: 6378137, y: 0, z: 1000 }), viewFrom: { x: 0, y: -4800, z: 3300 } });
+      store.controls.dispatch('card', store.panel.owner);
+      await settle();
+      assert.equal(store.panel.card, null, 'a followed subject keeps camera ownership');
+      follow.stop();
+      store.controls.dispatch('card', store.panel.owner);
+      await settle();
+      assert.equal(store.panel.card.text, 'Details');
+      director.suspendScene();
+      assert.equal(director.engine, null);
+      director.attachScene({ engine, viewer: harness.viewer }, director.styleManager, () => true);
+      director.resumeScene();
+      assert.equal(director.engine, engine);
+    } finally {
+      await director.destroy();
+      harness.destroy();
+      restore();
+    }
+  });
+}
+
+test('seek waits for a scene reattachment after loading data packs', async () => {
+  const { director, restore } = makeDirector();
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let waiting = false;
+  let activated = false;
+  director._applyDataPacks = async () => {
+    director._sceneGate = gate;
+    return true;
+  };
+  director._waitForScene = async () => {
+    waiting = true;
+    await gate;
+    return true;
+  };
+  director._activateInteractions = () => {
+    activated = true;
+  };
+  try {
+    const seeking = director.seekScene('scene-1', 0.25);
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    assert.equal(activated, false);
+    assert.equal(waiting, true);
+    director._sceneGate = null;
+    release();
+    await seeking;
+    assert.equal(activated, true);
+  } finally {
+    director._sceneGate = null;
+    release();
+    await director.destroy();
+    restore();
+  }
 });

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createState } from './state.js';
 import { createViewport } from './viewport.js';
 import { createQueries } from './queries.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
 import { LayerPanel, layerFeedState } from '../../ui/layerPanel.js';
 
@@ -12,21 +13,7 @@ const rad = Math.PI / 180;
 const LONDON = { lat: 51.5072, lon: -0.1276 };
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
 
-function viewer(at, height) {
-  return {
-    camera: {
-      positionCartographic: {
-        height,
-        latitude: at.lat * rad,
-        longitude: at.lon * rad,
-      },
-      computeViewRectangle: () => undefined,
-    },
-    scene: { globe: {} },
-  };
-}
-
-test('leaving a feed whose tick failed repaints its error away', async () => {
+test('leaving a feed whose tick failed repaints its error away', async (t) => {
   const services = {
     overlays: {
       setOverlayEntries() {},
@@ -41,7 +28,15 @@ test('leaving a feed whose tick failed repaints its error away', async () => {
       state._feedStatus.set(feedId, { count: 0, error: null, loading: false });
     return state._feedStatus.get(feedId);
   };
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
   const parts = {
+    renderer: {
+      ready: true,
+      engine,
+      cameraCartographic: () => engine.camera.pose().cartographic,
+      viewRectangle: () => undefined,
+    },
     ingestion: {
       feedStatus,
       // As pollFeed's catch does when the proxy answers 503.
@@ -86,13 +81,21 @@ test('leaving a feed whose tick failed repaints its error away', async () => {
     },
   };
 
-  state._viewer = viewer(BOSTON, 4_000);
+  engine.fake.setPose({
+    latitude: BOSTON.lat * rad,
+    longitude: BOSTON.lon * rad,
+    height: 4_000,
+  });
   parts.viewport.runProximityCheck();
   await lifecycle.refreshLayer('transit');
   assert.match(row(), /feed unavailable/, 'the tick recorded the failure');
 
   const before = painted.length;
-  state._viewer = viewer(LONDON, 4_000);
+  engine.fake.setPose({
+    latitude: LONDON.lat * rad,
+    longitude: LONDON.lon * rad,
+    height: 4_000,
+  });
   parts.viewport.runProximityCheck();
   assert.equal(queries.getStats().status, 'zoom-in');
   assert.ok(painted.length > before, 'leaving Boston repainted the row');

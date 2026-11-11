@@ -261,6 +261,8 @@ const TRACKED_RASTER_PX = 192;
  *  Default size serves the fleet; pass `aircraftIcon(kind, TRACKED_ICON_PX)`
  *  (re-exported below) for the tracked billboard. */
 export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
+/** Every silhouette kind aircraftIcon draws (an engine's sprite atlas). */
+const AIRCRAFT_ICON_KINDS = Object.freeze(Object.keys(BODIES));
 export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
   const k = BODIES[kind] ? kind : 'airliner';
   const key = `${k}@${px}`;
@@ -271,4 +273,66 @@ export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
     _iconCache.set(key, uri);
   }
   return uri;
+}
+
+// ---------------------------------------------------------------------------
+// The glyph atlas (engines that draw sprites from one texture: Navara)
+// ---------------------------------------------------------------------------
+
+const ATLAS_PAD = 2;
+const atlasCellKey = (kind, px) => `${kind}@${px}`;
+
+/** Every aircraftIcon() data URI → its atlas cell key (`${kind}@${px}`). */
+export function aircraftIconCells() {
+  const cells = new Map();
+  for (const kind of AIRCRAFT_ICON_KINDS)
+    for (const px of [FLEET_RASTER_PX, TRACKED_RASTER_PX])
+      cells.set(aircraftIcon(kind, px), atlasCellKey(kind, px));
+  return cells;
+}
+
+/**
+ * The atlas layout (pure): the tracked raster in row 0, the fleet raster in
+ * row 1, one column per kind, ATLAS_PAD px around each cell; cells are
+ * [u0, v0, u1, v1] in 0..1.
+ */
+export function aircraftIconAtlasLayout(kinds = AIRCRAFT_ICON_KINDS) {
+  const big = TRACKED_RASTER_PX + 2 * ATLAS_PAD;
+  const small = FLEET_RASTER_PX + 2 * ATLAS_PAD;
+  const width = kinds.length * big;
+  const height = big + small;
+  const rects = new Map();
+  const cells = {};
+  kinds.forEach((kind, column) => {
+    for (const [px, row] of [
+      [TRACKED_RASTER_PX, 0],
+      [FLEET_RASTER_PX, big],
+    ]) {
+      const x = column * big + ATLAS_PAD;
+      const y = row + ATLAS_PAD;
+      const key = atlasCellKey(kind, px);
+      rects.set(key, { x, y, size: px });
+      cells[key] = [x / width, y / height, (x + px) / width, (y + px) / height];
+    }
+  });
+  return { width, height, rects, cells };
+}
+
+/** Draws the atlas (browser): a canvas and its cells, once the SVGs decode. */
+export async function drawAircraftIconAtlas() {
+  const layout = aircraftIconAtlasLayout();
+  const canvas = document.createElement('canvas');
+  canvas.width = layout.width;
+  canvas.height = layout.height;
+  const context = canvas.getContext('2d');
+  await Promise.all(
+    [...aircraftIconCells()].map(async ([uri, key]) => {
+      const image = new Image();
+      image.src = uri;
+      await image.decode();
+      const { x, y, size } = layout.rects.get(key);
+      context.drawImage(image, x, y, size, size);
+    }),
+  );
+  return { canvas, cells: layout.cells };
 }

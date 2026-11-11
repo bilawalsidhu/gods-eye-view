@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
@@ -19,8 +18,8 @@ export function createCards({
    * Rebuild the card entries for the shared world-overlay host: the
    * selected-fire detail card (if any) plus at most MAX_AMBIENT_LABELS
    * ambient cards picked by a greedy screen-space declutter — walk the
-   * priority-ranked candidates, project each with
-   * SceneTransforms.worldToWindowCoordinates, and accept only candidates
+   * priority-ranked candidates, project each through the renderer
+   * (engine.projector.worldToWindow), and accept only candidates
    * ≥ LABEL_MIN_SEP_PX from every already-accepted card. Candidates whose
    * projection fails are dropped silently. SELECTION runs here, on LOD/
    * viewport rebuilds and camera moveEnd — never per frame; RENDERING is
@@ -29,13 +28,15 @@ export function createCards({
    */
 
   function rebuildAmbientLabels() {
-    if (!layerState._viewer) return;
-    const scene = layerState._viewer.scene;
+    if (!layerState._renderer) return;
+    const scene = layerState._view.scene;
+    const project = (position, result) =>
+      layerState._renderer.view.worldToWindow(position, result);
     const now = Date.now();
     const entries = [];
     /** @type {Array<{x: number, y: number}>} Screen positions of accepted labels. */
     const accepted = [];
-    // worldToWindowCoordinates happily projects points on the FAR side of the
+    // The window projection happily projects points on the FAR side of the
     // planet, so without this the ≤18 ambient slots get spent on fires the
     // overlay host will then horizon-cull at paint time (`horizonCull: true`
     // in applyFirmsOverlayPolicy) — near-side fires silently lose their cards.
@@ -53,8 +54,7 @@ export function createCards({
       );
       layerState._fireByCardId.set(selectedCard.id, layerState._selectedFire);
       entries.push(selectedCard);
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
+      const screen = project(
         components.model.firePosition(layerState._selectedFire),
         layerState.scratchWindowCoord,
       );
@@ -83,11 +83,7 @@ export function createCards({
       // LOD, far-side cells can still project on-canvas; accepting those first
       // starves front-side cards before the host applies its authoritative cull.
       if (beyondHorizon(candidate.cullPosition || candidate.position)) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        candidate.position,
-        layerState.scratchWindowCoord,
-      );
+      const screen = project(candidate.position, layerState.scratchWindowCoord);
       if (!screen) continue; // projection failed (e.g. behind camera) — drop silently
       if (
         screen.x < -LABEL_VIEW_MARGIN_PX ||

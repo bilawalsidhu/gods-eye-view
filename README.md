@@ -340,6 +340,8 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
+Open **Visual Presets → Globe Engine** to switch between Cesium and experimental Navara. The globe switches in place at the current view and remembers your choice. A link with `?engine=cesium` or `?engine=navara` overrides the saved choice. A fresh visit starts with Cesium.
+
 **Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` CCTV · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---

@@ -1,13 +1,13 @@
-import * as Cesium from 'cesium';
+import { julianDate } from '../geo/index.js';
 
 const scratch = new Date();
 
 /**
- * Epoch ms as a Cesium JulianDate, like `JulianDate.now(result)` for any time.
+ * Epoch ms as a Julian date, like `JulianDate.now(result)` for any time.
  * @param {number} ms
- * @param {Cesium.JulianDate} [result]
+ * @param {{dayNumber: number, secondsOfDay: number}} [result]
  */
 export function julianAt(ms, result) {
   scratch.setTime(ms);
-  return Cesium.JulianDate.fromDate(scratch, result);
+  return julianDate.fromDate(scratch, result);
 }

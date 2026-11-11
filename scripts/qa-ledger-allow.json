@@ -1,0 +1,18 @@
+[
+  {
+    "id": "local-dams-footprints",
+    "field": "count",
+    "reason": "Infrastructure level of detail keeps features chosen on the way to a view (incumbents and eviction grace, so footprints do not flicker while panning); a cold start reaches the view without that path."
+  },
+  {
+    "id": "local-datacenters-footprints",
+    "field": "count",
+    "reason": "Infrastructure level of detail keeps features chosen on the way to a view (incumbents and eviction grace, so footprints do not flicker while panning); a cold start reaches the view without that path."
+  },
+  {
+    "id": "traffic-fill",
+    "field": "count",
+    "maxDelta": 3,
+    "reason": "Simulated vehicles enter and leave the traffic fill every frame, so two pages snapshotted at slightly different moments differ by a vehicle or two."
+  }
+]

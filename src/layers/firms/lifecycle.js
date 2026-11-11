@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 
 export function createLifecycle({
@@ -9,39 +9,82 @@ export function createLifecycle({
   feed,
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
-  const { restoreSpriteOrderOnEnable } = services.sprites;
-  const { clearSelectedEntityContextForLayer } = services.context;
+  const { clearSelectedEntityContextForLayer } = bindOverlayHost(
+    services.context,
+    () => layerState._renderer?.engine,
+  );
   const { id, overlayHost } = config;
 
+  // The heatmap is draped on the renderer's globe; it goes with the renderer
+  // and is built again on the next one.
+  function releaseHeat() {
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = null;
+    layerState._heatImagery?.destroy();
+    layerState._heatImagery = null;
+    layerState._heatRaster = null;
+    layerState._handoffHeat = -1;
+  }
+
+  const picks = {
+    owner: id,
+    predicate: (pickedId) => layerState._pickIndexById.has(pickedId),
+  };
   const methods = {
-    /**
-     * Shell services: `imageryHost()` resolves where draped imagery goes on
-     * the active map stack (globe or 3D tiles, src/maps/imageryHost.js). The
-     * heatmap moves with it; without a host it drapes on viewer.imageryLayers.
-     * @param {{imageryHost?: () => {collection: ?Object, kind: string}}|null} services
-     */
-    attachShellServices(services) {
-      layerState._imageryHost =
-        typeof services?.imageryHost === 'function'
-          ? services.imageryHost
-          : null;
-      layerState._heatImagery?.rehome();
+    init(viewer, options) {
+      this.attachRenderer(options);
+    },
+    /** Draws on `engine` (the scene's globe engine); without one, nothing. */
+    show(enabled) {
+      layerState._renderer?.setVisible(enabled);
+      layerState._heatImagery?.setShow(enabled && layerState._fires.length > 0);
+      overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, enabled);
+    },
+    picks,
+    attachRenderer(context = {}) {
+      const { engine = null } = context;
+      layerState._sceneContext = context;
+      if (layerState._destroyed) return;
+      if (layerState._renderer || !engine) return;
+      layerState._renderer = config.renderer.create({ engine, id, services });
+      if (!layerState._renderer) return;
+      layerState._view = layerState._renderer.view;
+      layerState._renderer.setVisible(false);
+      if (layerState._enabled && context.viewReady !== false)
+        this.showRenderer();
+      // Enabled before a renderer: the load enable() could not start.
+      if (
+        layerState._enabled &&
+        context.viewReady !== false &&
+        !layerState._fires.length &&
+        !layerState._loading
+      )
+        void components.ingestion.loadHeatmap();
     },
 
-    init(viewer) {
-      if (layerState._destroyed) return;
-      layerState._viewer = viewer;
-      layerState._dataSource = new Cesium.CustomDataSource(id);
-      layerState._dataSource.show = false;
-      viewer.dataSources.add(layerState._dataSource);
+    resumeViewport() {
+      if (layerState._enabled && layerState._renderer) {
+        this.showRenderer();
+        if (!layerState._fires.length && !layerState._loading)
+          void components.ingestion.loadHeatmap();
+      }
     },
 
-    async enable(viewer) {
-      if (layerState._destroyed) return;
-      layerState._enabled = true;
-      layerState._viewer = viewer;
-      if (!layerState._dataSource) this.init(viewer);
-      if (layerState._dataSource) layerState._dataSource.show = true;
+    detachRenderer() {
+      components.selection.removeClickHandler();
+      components.viewport.removeMoveEndWatcher();
+      components.viewport.removeLodWatcher();
+      unregisterPickOwner(id, layerState._renderer?.engine);
+      components.rendering.removeDetectionCollections();
+      releaseHeat();
+      layerState._renderer?.destroy();
+      layerState._renderer = layerState._view = null;
+      layerState._pickIndexById.clear();
+      layerState._labelCandidates = [];
+      layerState._camSnapValid = false;
+    },
+
+    showRenderer() {
       if (layerState._billboards) {
         // The camera can have moved anywhere while the layer was off: moveEnd
         // was not being listened to, and the preRender watcher is inert while
@@ -51,8 +94,8 @@ export function createLifecycle({
         // new location flashes far-side fires through the planet (and keeps
         // near-side ones hidden) until the fetch resolves.
         components.rendering.refreshHorizonCulling();
-        layerState._billboards.show = true;
       }
+      layerState._renderer.setVisible(true);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, true);
       // A filter can leave an old raster cached while the current set is empty.
       layerState._heatImagery?.setShow(layerState._fires.length > 0);
@@ -61,17 +104,21 @@ export function createLifecycle({
       components.viewport.installLodWatcher();
       components.viewport.installMoveEndWatcher();
       components.selection.installClickHandler();
-      registerPickOwner(id, (pickedId) =>
-        layerState._pickIndexById.has(pickedId),
+      registerPickOwner(
+        picks.owner,
+        picks.predicate,
+        layerState._renderer?.engine,
       );
+      components.rendering.renderCurrentLod(true);
+    },
+
+    async enable() {
+      if (layerState._destroyed) return;
+      layerState._enabled = true;
+      if (!layerState._renderer) return;
+      this.showRenderer();
       if (!layerState._fires.length && !layerState._loading)
         await components.ingestion.loadHeatmap();
-      if (
-        layerState._enabled &&
-        !layerState._destroyed &&
-        layerState._viewer === viewer
-      )
-        restoreSpriteOrderOnEnable('firms', viewer);
     },
 
     disable() {
@@ -80,19 +127,18 @@ export function createLifecycle({
       layerState._loading = false;
       layerState._enabled = false;
       components.selection.clearFireSelection();
-      if (layerState._dataSource) layerState._dataSource.show = false;
-      if (layerState._billboards) layerState._billboards.show = false;
+      layerState._renderer?.setVisible(false);
       layerState._heatImagery?.setShow(false);
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
       clearSelectedEntityContextForLayer(id);
       components.selection.removeClickHandler();
       components.viewport.removeMoveEndWatcher();
-      unregisterPickOwner(id);
+      unregisterPickOwner(id, layerState._renderer?.engine);
       components.viewport.removeLodWatcher();
     },
 
-    destroy(viewer = layerState._viewer) {
+    destroy() {
       layerState.request?.abort();
       layerState.request = null;
       layerState._loading = false;
@@ -102,26 +148,21 @@ export function createLifecycle({
       components.viewport.removeLodWatcher();
       components.viewport.removeMoveEndWatcher();
       components.selection.removeClickHandler();
-      unregisterPickOwner(id);
-      if (layerState._dataSource && viewer) {
-        viewer.dataSources.remove(layerState._dataSource, true);
-      }
-      layerState._dataSource = null;
-      components.rendering.removeDetectionCollections(viewer);
+      unregisterPickOwner(id, layerState._renderer?.engine);
+      components.rendering.removeDetectionCollections();
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);
+      layerState._renderer?.destroy();
+      layerState._renderer = null;
+      layerState._view = null;
+      layerState._renderer = null;
       layerState._allFires = [];
       layerState._allFiresByFrp = [];
       layerState._fires = [];
       layerState._firesByFrp = [];
       layerState._cellCacheByGrid.clear();
-      clearTimeout(layerState._heatRebuildTimer);
-      layerState._heatRebuildTimer = null;
-      layerState._heatImagery?.destroy();
-      layerState._heatImagery = null;
-      layerState._heatRaster = null;
-      layerState._handoffHeat = -1;
-      layerState._imageryHost = null;
+      layerState.glowSpriteCache.clear();
+      releaseHeat();
       layerState._count = 0;
       layerState._totalCount = 0;
       layerState._rowControlsListener = null;

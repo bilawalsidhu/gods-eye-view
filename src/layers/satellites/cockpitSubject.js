@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import {
   classifySatellite,
@@ -22,32 +22,21 @@ export const COCKPIT_ORBIT_DIM_FACTOR = 0.3;
 
 /**
  * Write an orbit ring's alpha as a multiple of the alpha it was built with.
- * The ring's per-instance attributes exist only once Cesium has updated the
- * primitive; until then nothing is written and the next tick retries.
- * @param {{primitive: object, instanceId: string, baseColor: Cesium.Color,
- *   baseDepthFailColor: Cesium.Color, alphaFactor: number}} path
+ * The contract line applies the same multiple to its depth-fail appearance.
+ * @param {{primitive: object, baseColor: object, alphaFactor: number}} path
  * @param {number} factor 1 restores the built colours exactly.
  * @returns {boolean} True when the ring now carries `factor`.
  */
 export function applyOrbitPathAlpha(path, factor) {
   if (!path?.primitive || !path.baseColor) return false;
   if ((path.alphaFactor ?? 1) === factor) return true;
-  let attributes;
-  try {
-    attributes = path.primitive.getGeometryInstanceAttributes?.(
-      path.instanceId,
-    );
-  } catch {
-    return false;
-  }
-  if (!attributes) return false;
-  const scaled = (color) => color.withAlpha(color.alpha * factor);
-  attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
-    factor === 1 ? path.baseColor : scaled(path.baseColor),
-  );
-  attributes.depthFailColor = Cesium.ColorGeometryInstanceAttribute.toValue(
-    factor === 1 ? path.baseDepthFailColor : scaled(path.baseDepthFailColor),
-  );
+  const color = path.baseColor;
+  path.primitive.line.setColor([
+    color.red,
+    color.green,
+    color.blue,
+    color.alpha * factor,
+  ]);
   path.alphaFactor = factor;
   return true;
 }
@@ -163,7 +152,11 @@ export function satelliteCockpitInfo(noradId, sat, fix) {
  * picture cannot untrack its own subject. Release restores exactly what the
  * hold hid or dimmed.
  */
-export function createCockpitSubject({ state: layerState, parts }) {
+export function createCockpitSubject({
+  state: layerState,
+  parts,
+  getRenderer,
+}) {
   /** The subject is held only while it is the tracked satellite. */
   function _cockpitHeld() {
     return (
@@ -222,7 +215,7 @@ export function createCockpitSubject({ state: layerState, parts }) {
       const path = layerState._orbitPaths.get(hiddenPath);
       // The ISS's ring also follows its class (and its tracking).
       if (path && hiddenPath === ISS_NORAD) parts.controls._syncIssOrbit();
-      else if (path)
+      else if (path?.primitive)
         path.primitive.show = parts.controls.satelliteVisualsVisible(
           layerState._enabled,
           layerState._params.showOrbits,
@@ -231,7 +224,7 @@ export function createCockpitSubject({ state: layerState, parts }) {
     }
     if (held) {
       const path = layerState._orbitPaths.get(tracked);
-      if (path) {
+      if (path?.primitive) {
         path.primitive.show = false;
         layerState._cockpitHiddenPath = tracked;
       }
@@ -275,15 +268,15 @@ export function createCockpitSubject({ state: layerState, parts }) {
     /**
      * The tracked satellite's Earth-fixed position this frame: the per-frame
      * cache the dot and follow camera read, never a separate propagation.
-     * @param {Cesium.Cartesian3} [result] Receives the position.
-     * @returns {Cesium.Cartesian3|null} Null while the layer is off, nothing
+     * @param {{x: number, y: number, z: number}} [result] Receives the position.
+     * @returns {{x: number, y: number, z: number}|null} Null while the layer is off, nothing
      *   is tracked or no sample has propagated.
      */
     getCockpitPosition(result) {
       if (!layerState._enabled || layerState._trackedNorad === null)
         return null;
       if (!parts.tracking._getTrackedFramePosition()) return null;
-      return Cesium.Cartesian3.clone(layerState._trackedFrameCartesian, result);
+      return geo.cartesian3.clone(layerState._trackedFrameCartesian, result);
     },
 
     /**
@@ -312,18 +305,17 @@ export function createCockpitSubject({ state: layerState, parts }) {
      */
     refocusTrackedById(noradId) {
       const id = parts.tracking._normalizeTrackedNorad(noradId);
-      const viewer = layerState._viewer;
+      const renderer = getRenderer();
       const entity = layerState._trackedEntity;
       if (
         id === null ||
         id !== layerState._trackedNorad ||
-        !viewer ||
-        !entity ||
-        !viewer.entities?.contains?.(entity)
+        !renderer ||
+        !entity
       )
         return false;
-      viewer.camera?.cancelFlight?.();
-      viewer.trackedEntity = entity;
+      layerState._engine.camera.cancelFlight();
+      renderer.follow.start(entity);
       return true;
     },
   };

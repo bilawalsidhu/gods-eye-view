@@ -1,3 +1,5 @@
+import { installManualTimers } from './testSupport/manualTimers.mjs';
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager } from './sharelink.js';
@@ -71,25 +73,8 @@ function installTab(t, initialHash = '') {
   };
 }
 
-/** Queue timers instead of running them, so delayed work runs only on demand. */
-function installManualTimers(t) {
-  const prior = {
-    setTimeout: globalThis.setTimeout,
-    clearTimeout: globalThis.clearTimeout,
-  };
-  const timers = new Map();
-  let timerId = 0;
-  globalThis.setTimeout = (fn) => {
-    timers.set(++timerId, fn);
-    return timerId;
-  };
-  globalThis.clearTimeout = (id) => timers.delete(id);
-  t.after(() => Object.assign(globalThis, prior));
-  return timers;
-}
-
 function fakeViewer() {
-  return {
+  return viewerEngine({
     camera: {
       changed: { addEventListener: () => () => {} },
       positionCartographic: { latitude: 0, longitude: 0, height: 1000 },
@@ -97,7 +82,7 @@ function fakeViewer() {
       pitch: -Math.PI / 2,
       roll: 0,
     },
-  };
+  });
 }
 
 test('a hash navigation to a different share restores it and holds URL writes', (t) => {
@@ -174,7 +159,7 @@ test('a non-share hash is ignored and Back/Forward restores each entry once', (t
 
 test('a newer navigation supersedes an older restore and its pending write', (t) => {
   const tab = installTab(t, SHARE_A);
-  const timers = installManualTimers(t);
+  const timers = installManualTimers(t).timers;
 
   const manager = new ShareLinkManager(fakeViewer());
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
@@ -236,7 +221,7 @@ function deferred() {
 /** A ShareRestoration over a real ShareLinkManager with a stub restore sink. */
 function restorationHarness(t, initialHash, navigationOverrides = {}) {
   const tab = installTab(t, initialHash);
-  const timers = installManualTimers(t);
+  const timers = installManualTimers(t).timers;
 
   const restores = [];
   let navigationGeneration = 0;
@@ -422,6 +407,58 @@ test('the layer coordinator replaces in-flight share layers with the navigated s
     createDefaultLayerState().enabledLayerIds.includes('flights'),
   );
   coordinator.destroy();
+});
+
+test('a manager held for an engine-changing visit neither stamps nor restores that entry', (t) => {
+  const tab = installTab(t, SHARE_A);
+  const timers = installManualTimers(t).timers;
+  const manager = new ShareLinkManager(fakeViewer());
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  // The page's own popstate listener runs first (src/main.js): the visit
+  // asks for another engine, so it holds this manager.
+  let engineChanges = false;
+  window.addEventListener('popstate', () => {
+    if (engineChanges) manager.holdNavigation();
+  });
+  const navigated = [];
+  manager.watchNavigation((state) => navigated.push(state));
+  tab.navigate(SHARE_B);
+  navigated.length = 0;
+  manager.completeInitialRestore(manager._restoreToken);
+  // A camera move has armed a debounced write of the outgoing view.
+  manager._scheduleUpdate();
+  assert.equal(timers.size, 1);
+  engineChanges = true;
+  tab.back();
+  assert.equal(timers.size, 0);
+  manager._scheduleUpdate();
+  manager._updateHash();
+  manager.flush();
+  window.dispatchEvent(new Event('hashchange'));
+  assert.equal(timers.size, 0);
+  assert.equal(window.location.hash, `#${SHARE_A}`);
+  assert.equal(navigated.length, 0);
+  // Kept after all (the next visit returned to this engine): it restores
+  // the entry it was held on and writes again.
+  manager.resumeNavigation();
+  assert.equal(navigated.length, 1);
+  assert.equal(navigated[0].lat, 10);
+  manager.destroy();
+});
+
+test('resuming navigation restores an entry visited before the manager watched', (t) => {
+  installTab(t, SHARE_A);
+  const manager = new ShareLinkManager(fakeViewer());
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const navigated = [];
+  manager.watchNavigation((state) => navigated.push(state));
+  manager.resumeNavigation();
+  assert.equal(navigated.length, 0, 'the same entry is not restored again');
+  window.location.hash = SHARE_B;
+  manager.resumeNavigation();
+  assert.equal(navigated.length, 1);
+  assert.equal(navigated[0].lat, 48.8584);
+  manager.destroy();
 });
 
 test('a link made away from live carries its world time to the page that opens it', (t) => {

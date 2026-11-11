@@ -14,13 +14,13 @@
  * Needs the repository's puppeteer (devDependencies). Exit status 0 when the
  * drop selects the file, 1 otherwise.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import http from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
-import puppeteer from 'puppeteer';
 import { createServer } from 'vite';
 import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 
@@ -77,7 +77,7 @@ async function main() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}/`;
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await launchBrowser({ headless: true });
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1000, height: 800 });
@@ -100,7 +100,7 @@ async function main() {
     }
     console.log('OK: a file dropped on the visible control is selected');
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
     server.close();
     await vite.close();
     await rm(dir, { recursive: true, force: true });

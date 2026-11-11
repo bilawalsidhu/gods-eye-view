@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   REPLAY_ASCENT_CAMERA_OFFSET_RAD,
   REPLAY_ORBIT_CAMERA_OFFSET_RAD,
@@ -13,19 +13,25 @@ import {
   REPLAY_ORBIT_FRAME_CENTER_BLEND,
 } from './policy.js';
 
-export function createCamera({ state: layerState, services, parts, source }) {
+export function createCamera({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   function cameraHeadingForPath(path, progress, fallback = Math.PI) {
     if (!path?.length) return fallback;
     const current = parts.paths.samplePath(path, progress);
     const currentCartographic =
-      Cesium.Ellipsoid.WGS84.cartesianToCartographic(current);
+      geo.ellipsoid.WGS84.cartesianToCartographic(current);
     if (!currentCartographic) return fallback;
     for (const step of [0.01, 0.025, 0.05, 0.1, 0.2]) {
       const next = parts.paths.samplePath(path, Math.min(1, progress + step));
       const nextCartographic =
-        Cesium.Ellipsoid.WGS84.cartesianToCartographic(next);
+        geo.ellipsoid.WGS84.cartesianToCartographic(next);
       if (!nextCartographic) continue;
-      const geodesic = new Cesium.EllipsoidGeodesic(
+      const geodesic = geo.ellipsoidGeodesic.create(
         currentCartographic,
         nextCartographic,
       );
@@ -36,7 +42,7 @@ export function createCamera({ state: layerState, services, parts, source }) {
         // HeadingPitchRange positions the camera opposite its heading vector.
         // Passing the forward path heading therefore keeps the camera behind
         // the vehicle, with the remaining ascent receding into the scene.
-        return Cesium.Math.zeroToTwoPi(geodesic.startHeading);
+        return geo.math.zeroToTwoPi(geodesic.startHeading);
       }
     }
     return fallback;
@@ -49,8 +55,8 @@ export function createCamera({ state: layerState, services, parts, source }) {
    */
 
   function replayInitialCameraHeading(path) {
-    return Cesium.Math.zeroToTwoPi(
-      cameraHeadingForPath(path, 0, Math.PI) + Cesium.Math.PI_OVER_TWO,
+    return geo.math.zeroToTwoPi(
+      cameraHeadingForPath(path, 0, Math.PI) + geo.math.PI_OVER_TWO,
     );
   }
 
@@ -63,10 +69,10 @@ export function createCamera({ state: layerState, services, parts, source }) {
    */
 
   function replayChaseCameraHeading(pathHeading, orbitBlend = 0) {
-    const blend = Cesium.Math.clamp(Number(orbitBlend) || 0, 0, 1);
-    return Cesium.Math.zeroToTwoPi(
+    const blend = geo.math.clamp(Number(orbitBlend) || 0, 0, 1);
+    return geo.math.zeroToTwoPi(
       pathHeading +
-        Cesium.Math.lerp(
+        geo.math.lerp(
           REPLAY_ASCENT_CAMERA_OFFSET_RAD,
           REPLAY_ORBIT_CAMERA_OFFSET_RAD,
           blend,
@@ -86,17 +92,17 @@ export function createCamera({ state: layerState, services, parts, source }) {
   function smoothReplayCameraHeading(
     previous,
     desired,
-    maxStepRad = Cesium.Math.toRadians(2),
+    maxStepRad = geo.math.toRadians(2),
   ) {
-    if (!Number.isFinite(previous)) return Cesium.Math.zeroToTwoPi(desired);
-    if (!Number.isFinite(desired)) return Cesium.Math.zeroToTwoPi(previous);
-    const delta = Cesium.Math.negativePiToPi(desired - previous);
-    const step = Cesium.Math.clamp(
+    if (!Number.isFinite(previous)) return geo.math.zeroToTwoPi(desired);
+    if (!Number.isFinite(desired)) return geo.math.zeroToTwoPi(previous);
+    const delta = geo.math.negativePiToPi(desired - previous);
+    const step = geo.math.clamp(
       delta,
       -Math.abs(maxStepRad),
       Math.abs(maxStepRad),
     );
-    return Cesium.Math.zeroToTwoPi(previous + step);
+    return geo.math.zeroToTwoPi(previous + step);
   }
 
   /**
@@ -108,7 +114,7 @@ export function createCamera({ state: layerState, services, parts, source }) {
 
   function missionZoomPitch(rangeM) {
     const range = Math.max(0, Number(rangeM) || 0);
-    const blend = Cesium.Math.clamp(
+    const blend = geo.math.clamp(
       (Math.log(Math.max(range, MISSION_CLOSE_VIEW_RANGE_M)) -
         Math.log(MISSION_CLOSE_VIEW_RANGE_M)) /
         (Math.log(MISSION_GLOBE_VIEW_RANGE_M) -
@@ -116,11 +122,7 @@ export function createCamera({ state: layerState, services, parts, source }) {
       0,
       1,
     );
-    return Cesium.Math.lerp(
-      Cesium.Math.toRadians(-42),
-      -Cesium.Math.PI_OVER_TWO,
-      blend,
-    );
+    return geo.math.lerp(geo.math.toRadians(-42), -geo.math.PI_OVER_TWO, blend);
   }
 
   /**
@@ -133,48 +135,44 @@ export function createCamera({ state: layerState, services, parts, source }) {
 
   function replayCameraView(state, altitudeM) {
     const altitude = Math.max(0, Number(altitudeM) || 0);
-    const localRange = Cesium.Math.clamp(
+    const localRange = geo.math.clamp(
       REPLAY_INITIAL_RANGE_M + altitude * 0.7,
       REPLAY_INITIAL_RANGE_M,
       REPLAY_LOCAL_MAX_RANGE_M,
     );
-    const rawContextBlend = Cesium.Math.clamp(
+    const rawContextBlend = geo.math.clamp(
       (altitude - 20000) / (REPLAY_CONTEXT_ALTITUDE_END_M - 20000),
       0,
       1,
     );
     const contextBlend =
       rawContextBlend * rawContextBlend * (3 - 2 * rawContextBlend);
-    const contextRange = Cesium.Math.clamp(
+    const contextRange = geo.math.clamp(
       180000 + altitude * 3.8,
       MISSION_CLOSE_VIEW_RANGE_M,
       REPLAY_CONTEXT_MAX_RANGE_M,
     );
-    const ascentRange = Cesium.Math.lerp(
-      localRange,
-      contextRange,
-      contextBlend,
-    );
-    const ascentPitch = Cesium.Math.lerp(
-      Cesium.Math.toRadians(-20),
-      Cesium.Math.toRadians(-34),
+    const ascentRange = geo.math.lerp(localRange, contextRange, contextBlend);
+    const ascentPitch = geo.math.lerp(
+      geo.math.toRadians(-20),
+      geo.math.toRadians(-34),
       contextBlend,
     );
     if (state?.ascending) {
       return { range: ascentRange, pitch: ascentPitch };
     }
-    const rawBlend = Cesium.Math.clamp(
+    const rawBlend = geo.math.clamp(
       (Number(state?.phaseProgress) || 0) / REPLAY_ORBIT_PULLBACK_FRACTION,
       0,
       1,
     );
     const blend = rawBlend * rawBlend * (3 - 2 * rawBlend);
     return {
-      range: Cesium.Math.lerp(ascentRange, REPLAY_ORBIT_GLOBE_RANGE_M, blend),
+      range: geo.math.lerp(ascentRange, REPLAY_ORBIT_GLOBE_RANGE_M, blend),
       // Keep an oblique tactical view of the complete orbit rather than ending
       // in a nadir view. This also prevents the camera from appearing to
       // return toward the launch site after insertion.
-      pitch: Cesium.Math.lerp(ascentPitch, Cesium.Math.toRadians(-45), blend),
+      pitch: geo.math.lerp(ascentPitch, geo.math.toRadians(-45), blend),
     };
   }
 
@@ -188,16 +186,15 @@ export function createCamera({ state: layerState, services, parts, source }) {
 
   function replayOrbitGlobeAnchor(position, orbitBlend = 0) {
     if (!position) return position;
-    const blend = Cesium.Math.clamp(Number(orbitBlend) || 0, 0, 1);
-    if (blend <= 0) return Cesium.Cartesian3.clone(position);
-    const cartographic =
-      Cesium.Ellipsoid.WGS84.cartesianToCartographic(position);
-    if (!cartographic) return Cesium.Cartesian3.clone(position);
+    const blend = geo.math.clamp(Number(orbitBlend) || 0, 0, 1);
+    if (blend <= 0) return geo.cartesian3.clone(position);
+    const cartographic = geo.ellipsoid.WGS84.cartesianToCartographic(position);
+    if (!cartographic) return geo.cartesian3.clone(position);
     const altitude = Math.max(0, cartographic.height || 0);
-    return Cesium.Cartesian3.fromRadians(
+    return geo.cartesian3.fromRadians(
       cartographic.longitude,
       cartographic.latitude,
-      Cesium.Math.lerp(altitude, altitude * 0.1, blend),
+      geo.math.lerp(altitude, altitude * 0.1, blend),
     );
   }
 
@@ -216,15 +213,15 @@ export function createCamera({ state: layerState, services, parts, source }) {
 
   function replayOrbitCameraTarget(vehicleAnchor, frameCenter, orbitBlend = 0) {
     if (!vehicleAnchor) return vehicleAnchor;
-    if (!frameCenter) return Cesium.Cartesian3.clone(vehicleAnchor);
+    if (!frameCenter) return geo.cartesian3.clone(vehicleAnchor);
     const blend =
-      Cesium.Math.clamp(Number(orbitBlend) || 0, 0, 1) *
+      geo.math.clamp(Number(orbitBlend) || 0, 0, 1) *
       REPLAY_ORBIT_FRAME_CENTER_BLEND;
-    return Cesium.Cartesian3.lerp(
+    return geo.cartesian3.lerp(
       vehicleAnchor,
       frameCenter,
       blend,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
   }
 
@@ -249,63 +246,59 @@ export function createCamera({ state: layerState, services, parts, source }) {
     pitch,
   ) {
     if (!position || !tangentPosition || !target) return null;
-    const radial = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.clone(position),
-      new Cesium.Cartesian3(),
+    const radial = geo.cartesian3.normalize(
+      geo.cartesian3.clone(position),
+      geo.cartesian3.create(),
     );
-    const tangent = Cesium.Cartesian3.subtract(
+    const tangent = geo.cartesian3.subtract(
       tangentPosition,
       position,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    if (Cesium.Cartesian3.magnitudeSquared(tangent) < 1) return null;
-    Cesium.Cartesian3.normalize(tangent, tangent);
-    const orbitNormal = Cesium.Cartesian3.cross(
+    if (geo.cartesian3.magnitudeSquared(tangent) < 1) return null;
+    geo.cartesian3.normalize(tangent, tangent);
+    const orbitNormal = geo.cartesian3.cross(
       radial,
       tangent,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    if (Cesium.Cartesian3.magnitudeSquared(orbitNormal) < 1e-12) return null;
-    Cesium.Cartesian3.normalize(orbitNormal, orbitNormal);
+    if (geo.cartesian3.magnitudeSquared(orbitNormal) < 1e-12) return null;
+    geo.cartesian3.normalize(orbitNormal, orbitNormal);
 
     const distance = Math.max(1, Number(range) || 1);
-    const elevation = Cesium.Math.clamp(
+    const elevation = geo.math.clamp(
       Math.abs(Number(pitch) || 0),
-      Cesium.Math.toRadians(5),
-      Cesium.Math.toRadians(80),
+      geo.math.toRadians(5),
+      geo.math.toRadians(80),
     );
-    const planeOffset = Cesium.Cartesian3.multiplyByScalar(
+    const planeOffset = geo.cartesian3.multiplyByScalar(
       orbitNormal,
       Math.cos(elevation) * distance,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const radialOffset = Cesium.Cartesian3.multiplyByScalar(
+    const radialOffset = geo.cartesian3.multiplyByScalar(
       radial,
       Math.sin(elevation) * distance,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const destination = Cesium.Cartesian3.add(
+    const destination = geo.cartesian3.add(
       target,
       planeOffset,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    Cesium.Cartesian3.add(destination, radialOffset, destination);
-    const direction = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(target, destination, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
+    geo.cartesian3.add(destination, radialOffset, destination);
+    const direction = geo.cartesian3.normalize(
+      geo.cartesian3.subtract(target, destination, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
-    const radialAlongView = Cesium.Cartesian3.multiplyByScalar(
+    const radialAlongView = geo.cartesian3.multiplyByScalar(
       direction,
-      Cesium.Cartesian3.dot(radial, direction),
-      new Cesium.Cartesian3(),
+      geo.cartesian3.dot(radial, direction),
+      geo.cartesian3.create(),
     );
-    const up = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(
-        radial,
-        radialAlongView,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
+    const up = geo.cartesian3.normalize(
+      geo.cartesian3.subtract(radial, radialAlongView, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
     return { destination, direction, up };
   }
@@ -320,17 +313,13 @@ export function createCamera({ state: layerState, services, parts, source }) {
    */
 
   function replayOrbitFrameSphere(orbitPath = []) {
-    const earth = new Cesium.BoundingSphere(
-      Cesium.Cartesian3.ZERO,
-      Cesium.Ellipsoid.WGS84.maximumRadius,
+    const earth = geo.boundingSphere.create(
+      geo.cartesian3.ZERO,
+      geo.ellipsoid.WGS84.maximumRadius,
     );
     if (!Array.isArray(orbitPath) || orbitPath.length < 2) return earth;
-    const orbit = Cesium.BoundingSphere.fromPoints(orbitPath);
-    return Cesium.BoundingSphere.union(
-      earth,
-      orbit,
-      new Cesium.BoundingSphere(),
-    );
+    const orbit = geo.boundingSphere.fromPoints(orbitPath);
+    return geo.boundingSphere.union(earth, orbit, geo.boundingSphere.create());
   }
 
   /**
@@ -351,13 +340,13 @@ export function createCamera({ state: layerState, services, parts, source }) {
     const range = Math.max(0, Number(baseRange) || 0);
     const altitude = Math.max(0, Number(altitudeM) || 0);
     const frameRadius = Math.max(0, Number(frameRadiusM) || 0);
-    const blend = Cesium.Math.clamp(Number(orbitBlend) || 0, 0, 1);
+    const blend = geo.math.clamp(Number(orbitBlend) || 0, 0, 1);
     const globeAndVehicleRange = Math.max(
       range,
-      altitude + Cesium.Ellipsoid.WGS84.maximumRadius * 2.4,
+      altitude + geo.ellipsoid.WGS84.maximumRadius * 2.4,
       frameRadius * 3,
     );
-    return Cesium.Math.lerp(range, globeAndVehicleRange, blend);
+    return geo.math.lerp(range, globeAndVehicleRange, blend);
   }
   return {
     cameraHeadingForPath,

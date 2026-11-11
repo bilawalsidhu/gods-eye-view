@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   TRAIL_HEIGHT_M,
   VESSEL_LIFT_M,
@@ -17,7 +17,6 @@ export function createTracking({
 }) {
   const { state } = vesselState;
   const { geoidHeight } = services.geoid;
-  const { createTrail } = services.trails;
 
   /**
    * Geoid undulation N at (lat, lon), or null until the grid has loaded.
@@ -35,7 +34,7 @@ export function createTracking({
    * TRAIL_HEIGHT_M above the sea surface (geoid, same datum as the anchor)
    * to avoid z-fighting.
    * @param {Object} record - Vessel record with lat/lon.
-   * @returns {Cesium.Cartesian3|null} Lifted position, or null without a fix.
+   * @returns {object|null} Lifted position (Cartesian3), or null without a fix.
    */
 
   function vesselTrailPosition(record) {
@@ -45,7 +44,7 @@ export function createTracking({
       currentGeoidN(record.lat, record.lon),
       TRAIL_HEIGHT_M,
     );
-    return Cesium.Cartesian3.fromDegrees(record.lon, record.lat, heightM);
+    return geo.cartesian3.fromDegrees(record.lon, record.lat, heightM);
   }
 
   /**
@@ -67,7 +66,7 @@ export function createTracking({
         currentGeoidN(record.lat, record.lon),
         VESSEL_LIFT_M,
       );
-      visual.position = Cesium.Cartesian3.fromDegrees(
+      visual.position = geo.cartesian3.fromDegrees(
         record.lon,
         record.lat,
         heightM,
@@ -90,14 +89,24 @@ export function createTracking({
     state.trailPositions = [];
     const current = vesselTrailPosition(record);
     if (current) state.trailPositions.push(current);
-    if (!state.trail && state.viewer) {
-      state.trail = createTrail(state.viewer, {
+    attachSelectedVesselTrail();
+    backfillVesselTrail(record.id, state.trailBackfillToken, record.reference);
+  }
+
+  function attachSelectedVesselTrail() {
+    if (!state.trailId) return;
+    if (!state.trail && state.renderer) {
+      state.trail = state.renderer.trails.create({
         color: TRAIL_COLOR,
         width: 2.5,
       });
     }
     if (state.trail) state.trail.setPositions(state.trailPositions);
-    backfillVesselTrail(record.id, state.trailBackfillToken, record.reference);
+  }
+
+  function detachSelectedVesselTrail() {
+    state.trail?.destroy();
+    state.trail = null;
   }
 
   /**
@@ -154,7 +163,7 @@ export function createTracking({
         currentGeoidN(lat, lon),
         TRAIL_HEIGHT_M,
       );
-      older.push(Cesium.Cartesian3.fromDegrees(lon, lat, heightM));
+      older.push(geo.cartesian3.fromDegrees(lon, lat, heightM));
     }
     if (!older.length) return;
 
@@ -174,16 +183,15 @@ export function createTracking({
    */
 
   function appendSelectedVesselTrailFix(record) {
-    if (!state.trail) return;
+    if (state.trailId !== record.id) return;
     const next = vesselTrailPosition(record);
     if (!next) return;
     const last = state.trailPositions[state.trailPositions.length - 1];
-    if (last && Cesium.Cartesian3.distance(last, next) <= TRAIL_MIN_MOVE_M)
-      return;
+    if (last && geo.cartesian3.distance(last, next) <= TRAIL_MIN_MOVE_M) return;
     state.trailPositions.push(next);
     if (state.trailPositions.length > TRAIL_MAX_POINTS)
       state.trailPositions.shift();
-    state.trail.setPositions(state.trailPositions);
+    state.trail?.setPositions(state.trailPositions);
   }
 
   /**
@@ -205,16 +213,15 @@ export function createTracking({
 
   function destroySelectedVesselTrail() {
     clearSelectedVesselTrail();
-    if (state.trail) {
-      state.trail.destroy();
-      state.trail = null;
-    }
+    detachSelectedVesselTrail();
   }
   return {
     currentGeoidN,
     vesselTrailPosition,
     refloorVesselRecords,
     startSelectedVesselTrail,
+    attachSelectedVesselTrail,
+    detachSelectedVesselTrail,
     backfillVesselTrail,
     appendSelectedVesselTrailFix,
     clearSelectedVesselTrail,

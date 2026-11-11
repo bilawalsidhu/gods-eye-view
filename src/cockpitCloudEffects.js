@@ -1,5 +1,5 @@
 import { applicationServices } from './services/application.js';
-import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 import { greatCircleMeters } from './geoDistance.js';
 import {
   deriveWeatherEffectProfile,
@@ -128,9 +128,23 @@ function compileShader(gl, type, source) {
 }
 
 function greatCircleM(a, b) {
-  return greatCircleMeters(
-    { lat: a?.latitude, lon: a?.longitude },
-    { lat: b?.latitude, lon: b?.longitude },
+  if (
+    ![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(
+      Number.isFinite,
+    )
+  )
+    return Infinity;
+  const latitudeA = geo.math.toRadians(a.latitude);
+  const latitudeB = geo.math.toRadians(b.latitude);
+  const latitudeDelta = geo.math.toRadians(b.latitude - a.latitude);
+  const longitudeDelta = geo.math.toRadians(b.longitude - a.longitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(latitudeA) *
+      Math.cos(latitudeB) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return (
+    6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
   );
 }
 
@@ -171,6 +185,104 @@ export function cockpitWeatherEnabledFromStoredValue(value) {
 }
 
 /**
+ * The cloud strength (0..1) a weather observation gives at an altitude: the
+ * weather profile's cloud, faded out above the cloud deck.
+ */
+export function cockpitCloudStrength(weather, altitudeM) {
+  const profile = deriveWeatherEffectProfile(weather);
+  return profile.available
+    ? profile.cloud * weatherAltitudeFactors(altitudeM).cloud
+    : 0;
+}
+
+/** Highest cloud cover a globe engine is asked for (overcast, not a wall). */
+export const COCKPIT_CLOUD_COVERAGE_MAX = 0.8;
+
+/** The globe engine's cloud cover (0..1) for a cockpit cloud strength. */
+export function cockpitCloudCoverage(strength) {
+  const value = Math.min(1, Math.max(0, Number(strength) || 0));
+  return value * COCKPIT_CLOUD_COVERAGE_MAX;
+}
+
+/**
+ * The cockpit's weather observations, shared by both cloud presentations:
+ * one request at a time, the last observation and where and when it was
+ * taken (cockpitWeatherRefreshDue decides when it is stale).
+ */
+export class CockpitWeatherFeed {
+  constructor(weatherService = applicationServices.weather) {
+    this.weatherService = weatherService;
+    this.weather = null;
+    this.fetchedAt = 0;
+    this.anchor = null;
+    this.pending = null;
+    this.abort = null;
+    this.sourceStatus = 'idle';
+  }
+
+  /** Whether an observation for `point` must be fetched. */
+  due(point, nowMs = Date.now()) {
+    return cockpitWeatherRefreshDue({
+      nowMs,
+      fetchedAt: this.fetchedAt,
+      anchor: this.anchor,
+      point,
+      hasWeather: Boolean(this.weather),
+    });
+  }
+
+  /**
+   * Fetch the observation at `point` (replacing a request in flight):
+   * `onWeather(weather, status)` once it arrives, `onError()` when the
+   * observation is unavailable (an abort calls neither). Resolves to the
+   * weather, or null.
+   */
+  fetch(point, { onWeather, onError } = {}) {
+    this.abort?.abort();
+    const request = (this.abort = new AbortController());
+    const pending = this.weatherService.getConditions(
+      point.latitude,
+      point.longitude,
+      { signal: request.signal },
+    );
+    this.pending = pending
+      .then(async (payload) => {
+        if (this.abort !== request || request.signal.aborted) return null;
+        if (!payload?.weather)
+          throw new Error('Cloud weather observation unavailable');
+        this.weather = payload.weather;
+        this.fetchedAt = Date.now();
+        this.anchor = point;
+        this.sourceStatus = payload.status || 'ready';
+        onWeather?.(payload.weather, this.sourceStatus);
+        return payload.weather;
+      })
+      .catch((error) => {
+        if (request.signal.aborted || this.abort !== request) return null;
+        if (error?.name !== 'AbortError') {
+          this.sourceStatus = 'unavailable';
+          onError?.(error);
+        }
+        return null;
+      })
+      .finally(() => {
+        if (this.abort === request) {
+          this.pending = null;
+          this.abort = null;
+        }
+      });
+    return this.pending;
+  }
+
+  /** Abandon a request in flight; the last observation stays. */
+  cancel() {
+    this.abort?.abort();
+    this.abort = null;
+    this.pending = null;
+  }
+}
+
+/**
  * Whether the cloud pass runs for a Cockpit subject's layer. Not in orbit:
  * the pass fades out above 24 km (weatherAltitudeFactors), so a satellite
  * would pay for it and see nothing. The saved preference is left as it is
@@ -188,7 +300,7 @@ export function cockpitCloudsShowFor(layerId) {
  */
 class CockpitCloudEffectsController {
   constructor(viewer, { weatherService = applicationServices.weather } = {}) {
-    this.weatherService = weatherService;
+    this.feed = new CockpitWeatherFeed(weatherService);
     this.viewer = viewer;
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'cockpit-cloud-effects';
@@ -197,21 +309,17 @@ class CockpitCloudEffectsController {
 
     this.gl = null;
     this.program = null;
+    this.buffer = null;
     this.locations = null;
     this.frame = null;
     this.refreshTimer = null;
     this.startupTimer = null;
     this.lastFrameMs = 0;
     this.lastRefreshCheckMs = 0;
-    this.fetchedAt = 0;
-    this.anchor = null;
-    this.weather = null;
     this.strength = 0;
     this.targetStrength = 0;
     this.windDirectionDeg = 0;
     this.windStrength = 0;
-    this.pending = null;
-    this.abort = null;
     this.destroyed = false;
     this.reducedMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
@@ -225,7 +333,7 @@ class CockpitCloudEffectsController {
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
       this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
-      if (active && this.enabled) this.start();
+      if (active && this.enabled && !this.orbit) this.start();
       else this.stop();
     };
     this.onEnabledChange = (event) => {
@@ -275,8 +383,9 @@ class CockpitCloudEffectsController {
   }
 
   initializeRenderer() {
+    let gl = null;
     try {
-      const gl = this.canvas.getContext('webgl', {
+      gl = this.canvas.getContext('webgl', {
         alpha: true,
         antialias: false,
         depth: false,
@@ -318,6 +427,7 @@ class CockpitCloudEffectsController {
 
       this.gl = gl;
       this.program = program;
+      this.buffer = buffer;
       this.locations = {
         resolution: gl.getUniformLocation(program, 'uResolution'),
         time: gl.getUniformLocation(program, 'uTime'),
@@ -327,6 +437,7 @@ class CockpitCloudEffectsController {
     } catch (error) {
       console.warn('[Cockpit clouds] Renderer unavailable:', error);
       this.canvas.dataset.status = 'unavailable';
+      if (gl && !this.gl) gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
   }
 
@@ -343,8 +454,8 @@ class CockpitCloudEffectsController {
   cameraPoint() {
     const cartographic = this.viewer?.camera?.positionCartographic;
     if (!cartographic) return null;
-    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+    const latitude = geo.math.toDegrees(cartographic.latitude);
+    const longitude = geo.math.toDegrees(cartographic.longitude);
     if (![latitude, longitude].every(Number.isFinite)) return null;
     return {
       latitude,
@@ -384,9 +495,7 @@ class CockpitCloudEffectsController {
     this.refreshTimer = null;
     if (this.startupTimer !== null) window.clearTimeout(this.startupTimer);
     this.startupTimer = null;
-    this.abort?.abort();
-    this.abort = null;
-    this.pending = null;
+    this.feed.cancel();
     this.strength = 0;
     this.targetStrength = 0;
     this.canvas.classList.remove('active');
@@ -404,66 +513,33 @@ class CockpitCloudEffectsController {
     if (
       this.destroyed ||
       !this.enabled ||
-      this.pending ||
+      this.feed.pending ||
       this.suspended ||
       !document.body.classList.contains('cockpit-mode')
     ) {
-      return this.pending;
+      return this.feed.pending;
     }
     const point = this.cameraPoint();
     if (!point) return null;
-    if (
-      this.weather &&
-      Date.now() - this.fetchedAt < WEATHER_REFRESH_MS &&
-      greatCircleM(this.anchor, point) < WEATHER_MOVE_REFRESH_M
-    ) {
-      this.applyWeather(this.weather, point.altitudeM);
-      return this.weather;
+    if (!this.feed.due(point)) {
+      this.applyWeather(this.feed.weather, point.altitudeM);
+      return this.feed.weather;
     }
-
-    this.abort?.abort();
-    this.abort = new AbortController();
-    const pending = this.weatherService.getConditions(
-      point.latitude,
-      point.longitude,
-      { signal: this.abort.signal },
-    );
-    const request = this.abort;
-    this.pending = pending
-      .then(async (payload) => {
-        if (this.abort !== request || request.signal.aborted) return null;
-        if (!payload?.weather)
-          throw new Error('Cloud weather observation unavailable');
-        this.weather = payload.weather;
-        this.fetchedAt = Date.now();
-        this.anchor = point;
-        this.applyWeather(payload.weather, point.altitudeM);
-        this.canvas.dataset.sourceStatus = payload.status || 'ready';
-        return payload.weather;
-      })
-      .catch((error) => {
-        if (request.signal.aborted || this.abort !== request) return;
-        if (error?.name !== 'AbortError') {
-          this.targetStrength = 0;
-          this.canvas.dataset.sourceStatus = 'unavailable';
-        }
-        return null;
-      })
-      .finally(() => {
-        if (this.abort === request) {
-          this.pending = null;
-          this.abort = null;
-        }
-      });
-    return this.pending;
+    return this.feed.fetch(point, {
+      onWeather: (weather, status) => {
+        this.applyWeather(weather, point.altitudeM);
+        this.canvas.dataset.sourceStatus = status;
+      },
+      onError: () => {
+        this.targetStrength = 0;
+        this.canvas.dataset.sourceStatus = 'unavailable';
+      },
+    });
   }
 
   applyWeather(weather, altitudeM) {
     const profile = deriveWeatherEffectProfile(weather);
-    const altitude = weatherAltitudeFactors(altitudeM);
-    this.targetStrength = profile.available
-      ? profile.cloud * altitude.cloud
-      : 0;
+    this.targetStrength = cockpitCloudStrength(weather, altitudeM);
     this.windDirectionDeg = profile.windDirectionDeg || 0;
     this.windStrength = profile.wind || 0;
     this.canvas.dataset.cloudStrength = this.targetStrength.toFixed(3);
@@ -502,17 +578,7 @@ class CockpitCloudEffectsController {
     if (timeMs - this.lastRefreshCheckMs >= 1000) {
       this.lastRefreshCheckMs = timeMs;
       const point = this.cameraPoint();
-      if (
-        point &&
-        cockpitWeatherRefreshDue({
-          nowMs: Date.now(),
-          fetchedAt: this.fetchedAt,
-          anchor: this.anchor,
-          point,
-          hasWeather: Boolean(this.weather),
-        })
-      )
-        void this.refresh();
+      if (point && this.feed.due(point)) void this.refresh();
     }
 
     const blend = this.reducedMotion ? 1 : 0.08;
@@ -543,7 +609,7 @@ class CockpitCloudEffectsController {
   render(timeSec) {
     const gl = this.gl;
     if (!gl || !this.program || !this.locations) return;
-    const windRadians = Cesium.Math.toRadians(this.windDirectionDeg);
+    const windRadians = geo.math.toRadians(this.windDirectionDeg);
     const windScale = 0.008 + this.windStrength * 0.022;
     gl.useProgram(this.program);
     gl.uniform2f(
@@ -569,7 +635,7 @@ class CockpitCloudEffectsController {
       enabled: this.enabled,
       active: this.canvas.classList.contains('active'),
       strength: this.targetStrength,
-      weather: this.weather ? { ...this.weather } : null,
+      weather: this.feed.weather ? { ...this.feed.weather } : null,
       renderSize: { width: this.canvas.width, height: this.canvas.height },
       sourceStatus: this.canvas.dataset.sourceStatus || 'idle',
     };
@@ -606,11 +672,219 @@ class CockpitCloudEffectsController {
       'gev:cockpit-weather-toggle',
       this.onEnabledChange,
     );
-    if (this.program && this.gl) this.gl.deleteProgram(this.program);
+    this.releaseRenderer();
     this.canvas.remove();
+  }
+
+  /**
+   * Free GPU objects and the canvas's WebGL context: browsers cap live contexts.
+   */
+  releaseRenderer() {
+    const gl = this.gl;
+    this.gl = null;
+    this.locations = null;
+    if (!gl) return;
+    if (this.buffer) gl.deleteBuffer(this.buffer);
+    if (this.program) gl.deleteProgram(this.program);
+    this.buffer = null;
+    this.program = null;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 }
 
 export function initCockpitCloudEffects(viewer, options) {
   return new CockpitCloudEffectsController(viewer, options);
+}
+
+/**
+ * The cockpit's weather clouds on a globe engine that draws its own clouds
+ * (render.setCloudCover, the `cloudCover` capability: Navara's volumetric
+ * clouds), with no canvas or WebGL context of its own. While cockpit mode
+ * and the cockpit weather toggle are on, the engine's cloud cover follows
+ * the weather under the camera (the same observations, refresh rule and
+ * strength as the Cesium pass); otherwise the engine keeps its own clouds.
+ */
+class EngineCockpitCloudsController {
+  constructor(engine, { weatherService = applicationServices.weather } = {}) {
+    this.engine = engine;
+    this.feed = new CockpitWeatherFeed(weatherService);
+    this.timer = null;
+    this.targetStrength = 0;
+    this.coverage = null;
+    this.suspended = false;
+    this.destroyed = false;
+    this.enabled = this.readEnabledPreference();
+    this.orbit = false;
+    this.onCockpitMode = (event) => {
+      const active =
+        event?.detail?.active ??
+        document.body.classList.contains('cockpit-mode');
+      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
+      if (active && this.enabled && !this.orbit) this.start();
+      else this.stop();
+    };
+    this.onEnabledChange = (event) => {
+      const requested = event?.detail?.enabled;
+      this.setEnabled(
+        typeof requested === 'boolean' ? requested : !this.enabled,
+      );
+    };
+    window.addEventListener('gev:cockpit-mode-changed', this.onCockpitMode);
+    window.addEventListener('gev:cockpit-weather-toggle', this.onEnabledChange);
+    this.emitEnabledState();
+    if (this.enabled && document.body.classList.contains('cockpit-mode'))
+      this.start();
+  }
+
+  readEnabledPreference() {
+    try {
+      return cockpitWeatherEnabledFromStoredValue(
+        localStorage.getItem(WEATHER_ENABLED_STORAGE_KEY),
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  emitEnabledState() {
+    window.dispatchEvent(
+      new CustomEvent('gev:cockpit-weather-state', {
+        detail: { enabled: this.enabled },
+      }),
+    );
+  }
+
+  setEnabled(enabled) {
+    this.enabled = !!enabled;
+    try {
+      localStorage.setItem(
+        WEATHER_ENABLED_STORAGE_KEY,
+        this.enabled ? '1' : '0',
+      );
+    } catch {
+      /* best effort */
+    }
+    if (!this.enabled) this.stop();
+    else if (document.body.classList.contains('cockpit-mode')) this.start();
+    this.emitEnabledState();
+  }
+
+  cameraPoint() {
+    if (this.engine.isDestroyed?.()) return null;
+    let place;
+    try {
+      place = this.engine.camera.pose().cartographic;
+    } catch {
+      return null;
+    }
+    const latitude = geo.math.toDegrees(place?.latitude);
+    const longitude = geo.math.toDegrees(place?.longitude);
+    if (![latitude, longitude].every(Number.isFinite)) return null;
+    return {
+      latitude,
+      longitude,
+      altitudeM: Math.max(0, Number(place.height) || 0),
+    };
+  }
+
+  /** Shows the cloud cover for `strength`; null gives the engine its own. */
+  showCoverage(coverage) {
+    if (coverage === this.coverage || this.engine.isDestroyed?.()) return;
+    this.coverage = coverage;
+    this.engine.render.setCloudCover({ coverage });
+    this.engine.render.request('cockpit-clouds');
+  }
+
+  applyWeather(weather, altitudeM) {
+    this.targetStrength = cockpitCloudStrength(weather, altitudeM);
+    this.showCoverage(cockpitCloudCoverage(this.targetStrength));
+  }
+
+  start() {
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      this.suspended ||
+      this.orbit ||
+      this.timer
+    )
+      return;
+    // The first observation at once, then the refresh rule every second
+    // (time or movement), as the Cesium pass checks it.
+    this.timer = window.setInterval(() => this.check(), 1000);
+    this.check();
+  }
+
+  check() {
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      this.suspended ||
+      !document.body.classList.contains('cockpit-mode')
+    )
+      return;
+    const point = this.cameraPoint();
+    if (!point || this.feed.pending) return;
+    if (!this.feed.due(point)) {
+      this.applyWeather(this.feed.weather, point.altitudeM);
+      return;
+    }
+    void this.feed.fetch(point, {
+      onWeather: (weather) => {
+        if (this.timer) this.applyWeather(weather, point.altitudeM);
+      },
+      onError: () => {
+        this.targetStrength = 0;
+        if (this.timer) this.showCoverage(0);
+      },
+    });
+  }
+
+  stop() {
+    if (this.timer) window.clearInterval(this.timer);
+    this.timer = null;
+    this.feed.cancel();
+    this.targetStrength = 0;
+    this.showCoverage(null);
+  }
+
+  getSnapshot() {
+    return {
+      enabled: this.enabled,
+      active: this.timer !== null && this.coverage !== null,
+      strength: this.targetStrength,
+      coverage: this.coverage,
+      weather: this.feed.weather ? { ...this.feed.weather } : null,
+      renderSize: null,
+      sourceStatus: this.feed.sourceStatus,
+    };
+  }
+
+  /** Pauses the weather checks while the document is hidden. */
+  setSuspended(suspended) {
+    this.suspended = Boolean(suspended);
+    if (this.suspended) {
+      if (this.timer) window.clearInterval(this.timer);
+      this.timer = null;
+      this.feed.cancel();
+    } else if (document.body.classList.contains('cockpit-mode')) {
+      this.start();
+    }
+  }
+
+  destroy() {
+    if (this.destroyed) return;
+    this.stop();
+    this.destroyed = true;
+    window.removeEventListener('gev:cockpit-mode-changed', this.onCockpitMode);
+    window.removeEventListener(
+      'gev:cockpit-weather-toggle',
+      this.onEnabledChange,
+    );
+  }
+}
+
+/** The cockpit weather clouds on a globe engine with the cloudCover capability. */
+export function initEngineCockpitClouds(engine, options) {
+  return new EngineCockpitCloudsController(engine, options);
 }

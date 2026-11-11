@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWindLayer } from './index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { setLocale } from '../../i18n/index.js';
 
 function harness(problem) {
@@ -24,9 +25,9 @@ function harness(problem) {
         throw new Error(problem);
       },
     },
-    createRendering: () => rendering,
+    createNativeRendering: () => rendering,
   });
-  layer.init({ container: {} });
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   return layer;
 }

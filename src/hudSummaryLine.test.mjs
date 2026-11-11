@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './testSupport/stubMgrs.mjs';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
 
 const { IntelHUD } = await import('./hud.js');
 const { setLocale } = await import('./i18n/index.js');
@@ -49,7 +50,8 @@ function createHud(
     },
   };
   const sent = [];
-  const hud = new IntelHUD(viewer, {
+  const hud = new IntelHUD(viewerEngine(viewer), {
+    viewer,
     publish,
     summaryService: {
       configured: async () => true,

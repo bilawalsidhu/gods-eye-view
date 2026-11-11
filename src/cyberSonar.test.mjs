@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { transformWithEsbuild } from 'vite';
+import * as Cesium from 'cesium';
 import { BillboardCollection, Color, PointPrimitive } from 'cesium';
 import {
+  createCyberSonarSampler,
+  cyberSonarSampler,
+  isCyberContactSonarActive,
   syncCyberSonarAnimation,
   applyCyberSonarPrimitive,
   cyberSonarBaseAlpha,
@@ -367,4 +371,96 @@ test('the selected Cyber theme seeds and releases the compositor sweep phase', (
   applyCyberSonarThemePhase(root, false, 0);
   assert.equal(values.has('--cyber-sonar-angle'), false);
   assert.equal(values.has('--cyber-sonar-phase-delay'), false);
+});
+
+test('frame sampler matches reference without per-contact settings access', () => {
+  let reads = 0;
+  const values = {
+    cyberSonarOpacity: '62',
+    cyberSonarSector: '40',
+    cyberSonarRange: '110',
+  };
+  const root = {
+    dataset: new Proxy(values, {
+      get(o, k) {
+        reads++;
+        return o[k];
+      },
+    }),
+  };
+  const frame = createCyberSonarSampler(1000, 800, 1234, root),
+    once = reads;
+  for (let x = 0; x < 1000; x += 33)
+    for (let y = 0; y < 800; y += 31) frame.at(x, y);
+  assert.equal(reads, once);
+  for (let x = 0; x < 1000; x += 33)
+    for (let y = 0; y < 800; y += 31)
+      assert.ok(
+        Math.abs(
+          frame.at(x, y) -
+            cyberSonarIntensityAtScreenPoint(x, y, 1000, 800, 1234, {
+              dataset: values,
+            }),
+        ) < 1e-10,
+      );
+});
+
+test('a sampler from a sonar state matches the one from the settings it carries', () => {
+  const root = {
+    dataset: {
+      cyberSonarOpacity: '62',
+      cyberSonarSector: '40',
+      cyberSonarRange: '110',
+    },
+  };
+  const fromSettings = createCyberSonarSampler(1000, 800, 1234, root);
+  const fromState = cyberSonarSampler(1000, 800, {
+    angleDeg: cyberSonarAngleDeg(1234),
+    range: 110,
+    opacity: 62,
+    sector: 40,
+  });
+  assert.equal(fromState.floor, fromSettings.floor);
+  assert.equal(fromState.neutral, fromSettings.neutral);
+  for (let x = 0; x < 1000; x += 37)
+    for (let y = 0; y < 800; y += 29)
+      assert.equal(fromState.at(x, y), fromSettings.at(x, y));
+});
+
+test('models retain render-pass alpha and owner refresh survives teardown', () => {
+  const frame = createCyberSonarSampler(1000, 800, 0);
+  const model = { color: new Cesium.Color(1, 0.5, 0.2, 1) };
+  applyCyberSonarPrimitive(model, 0.5, true, frame, 'color', true);
+  assert.equal(model.color.alpha, 1);
+  assert.ok(model.color.red < 1);
+  const owner = new Cesium.Color(0.2, 0.3, 0.4, 0.7);
+  model.color = owner;
+  applyCyberSonarPrimitive(model, 1, false);
+  assert.equal(model.color, owner);
+  const unset = {};
+  applyCyberSonarPrimitive(unset, 0.5, true, frame, 'color', true);
+  applyCyberSonarPrimitive(unset, 1, false);
+  assert.equal(unset.color, undefined);
+});
+
+test('removed CSS mode cannot disable GPU contacts; unsupported adapters fail closed', () => {
+  const root = { dataset: { uiTheme: 'cyber' }, style: { setProperty() {} } };
+  const options = {
+    root,
+    body: { classList: { contains: () => false } },
+    hud: { classList: { contains: () => true } },
+    reducedMotion: false,
+  };
+  root.dataset.cyberSonarMode = 'css';
+  assert.equal(applyCyberSonarSettings({ mode: 'css' }, root).mode, undefined);
+  assert.equal(root.dataset.cyberSonarMode, undefined);
+  assert.equal(isCyberSonarActive(options), true);
+  assert.equal(isCyberContactSonarActive(options), true);
+  assert.equal(
+    applyCyberSonarSettings({ mode: 'invalid' }, root).mode,
+    undefined,
+  );
+  assert.equal(isCyberContactSonarActive(options), true);
+  root.dataset.cyberSonarGpu = 'unsupported';
+  assert.equal(isCyberContactSonarActive(options), false);
 });

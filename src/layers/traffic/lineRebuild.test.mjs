@@ -2,69 +2,55 @@
 // a set is building wait, and only the newest of them runs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createTrafficDisplay } from './render/display.js';
 import { createRendering } from './rendering.js';
-
-// Cesium tests a material's uniforms against these browser classes.
-for (const name of [
-  'HTMLCanvasElement',
-  'HTMLImageElement',
-  'ImageBitmap',
-  'OffscreenCanvas',
-])
-  globalThis[name] ??= class {};
-// A line primitive's render state is checked against the context's limits,
-// which only a WebGL context sets.
-Cesium.ContextLimits._minimumAliasedLineWidth = 1;
-Cesium.ContextLimits._maximumAliasedLineWidth = 1;
 
 /** A road with flow; `level` picks its bucket (0.1 jam, 0.6 slow, 1 free). */
 function road(level = 1) {
   return {
     flow: { level, closure: false },
     segmentDist: [100],
-    waypoints: Cesium.Cartesian3.fromDegreesArray([
-      -97.744, 30.267, -97.742, 30.267,
-    ]),
+    coords: [
+      [-97.744, 30.267],
+      [-97.742, 30.267],
+    ],
   };
 }
 
-/**
- * Rendering over a scene that records its ground primitives. Each added
- * primitive is replaced by a stand-in whose `ready` the test sets, as Cesium
- * sets it once the asynchronous geometry is built.
- */
-function harness() {
+/** Ground sets whose readiness follows the simulated asynchronous build. */
+function harness(t) {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
   const scene = [];
   const added = [];
   let linesOn = true;
-  const state = {
-    _viewer: {
-      scene: {
-        globe: { show: true },
-        groundPrimitives: {
-          add(primitive) {
-            const line = {
-              ready: false,
-              roads: primitive.geometryInstances.length,
-            };
-            scene.push(line);
-            added.push(line);
-            return line;
-          },
-          remove(line) {
-            const index = scene.indexOf(line);
-            if (index >= 0) scene.splice(index, 1);
-          },
-        },
+  const createSet = engine.ground.createSet;
+  engine.ground.createSet = (options) => {
+    const set = createSet(options);
+    const line = { ready: false, roads: 0 };
+    scene.push(line);
+    added.push(line);
+    return {
+      ...set,
+      ready: () => line.ready,
+      replace(items) {
+        line.roads = items.length;
+        set.replace(items);
       },
-    },
+      destroy() {
+        set.destroy();
+        const index = scene.indexOf(line);
+        if (index >= 0) scene.splice(index, 1);
+      },
+    };
+  };
+  const display = createTrafficDisplay(engine);
+  const state = {
+    _engine: engine,
+    _display: display,
     _liveMode: true,
     _showLines: true,
-    _heatSupported: true,
-    _heatJamPrim: null,
-    _heatSlowPrim: null,
-    _heatFreePrim: null,
     _heatRetired: [],
     _heatPendingRoads: null,
     _heatLineCount: 0,
@@ -97,8 +83,8 @@ function harness() {
 
 const roads = (count) => Array.from({ length: count }, () => road());
 
-test('rebuilds asked for while lines build do not start more builds', () => {
-  const { rendering, scene, added, frame } = harness();
+test('rebuilds asked for while lines build do not start more builds', (t) => {
+  const { rendering, scene, added, frame } = harness(t);
   rendering.rebuildHeatLines(roads(1));
   assert.equal(added.length, 1);
   // Progressive paints while the first set builds.
@@ -109,8 +95,8 @@ test('rebuilds asked for while lines build do not start more builds', () => {
   assert.deepEqual(scene[0].roads, 1);
 });
 
-test('the newest rebuild asked for during a build is the one that runs', () => {
-  const { state, rendering, scene, added, frame } = harness();
+test('the newest rebuild asked for during a build is the one that runs', (t) => {
+  const { state, rendering, scene, added, frame } = harness(t);
   rendering.rebuildHeatLines(roads(1));
   for (const count of [2, 3, 4]) rendering.rebuildHeatLines(roads(count));
   frame();
@@ -136,8 +122,8 @@ test('the newest rebuild asked for during a build is the one that runs', () => {
   assert.equal(added.length, 2);
 });
 
-test('a rebuild with nothing building starts at once', () => {
-  const { rendering, added, frame } = harness();
+test('a rebuild with nothing building starts at once', (t) => {
+  const { rendering, added, frame } = harness(t);
   rendering.rebuildHeatLines(roads(1));
   frame();
   rendering.rebuildHeatLines(roads(2));
@@ -147,8 +133,8 @@ test('a rebuild with nothing building starts at once', () => {
   );
 });
 
-test('turning lines off during a build removes them at once and drops the waiting rebuild', () => {
-  const { state, rendering, scene, added, setLines, frame } = harness();
+test('turning lines off during a build removes them at once and drops the waiting rebuild', (t) => {
+  const { state, rendering, scene, added, setLines, frame } = harness(t);
   rendering.rebuildHeatLines(roads(1));
   frame();
   rendering.rebuildHeatLines(roads(2));
@@ -164,8 +150,8 @@ test('turning lines off during a build removes them at once and drops the waitin
   assert.deepEqual(scene, []);
 });
 
-test('a rebuild right after a build finishes does not keep the lines that build replaced', () => {
-  const { rendering, scene } = harness();
+test('a rebuild right after a build finishes does not keep the lines that build replaced', (t) => {
+  const { rendering, scene } = harness(t);
   rendering.rebuildHeatLines(roads(1));
   for (const line of scene) line.ready = true;
   rendering.rebuildHeatLines(roads(2));
@@ -178,8 +164,8 @@ test('a rebuild right after a build finishes does not keep the lines that build 
   );
 });
 
-test('removing the lines drops the waiting rebuild', () => {
-  const { state, rendering, scene, added, frame } = harness();
+test('removing the lines drops the waiting rebuild', (t) => {
+  const { state, rendering, scene, added, frame } = harness(t);
   rendering.rebuildHeatLines(roads(1));
   rendering.rebuildHeatLines(roads(2));
   rendering.removeHeatLines();
@@ -189,8 +175,8 @@ test('removing the lines drops the waiting rebuild', () => {
   assert.equal(added.length, 1);
 });
 
-test('a stream of rebuilds never leaves more than two sets in the scene, and ends with one', () => {
-  const { rendering, scene, added, frame } = harness();
+test('a stream of rebuilds never leaves more than two sets in the scene, and ends with one', (t) => {
+  const { rendering, scene, added, frame } = harness(t);
   let most = 0;
   const lines = [road(0.1), road(0.6), road(1)];
   // Three primitives per set: one per flow bucket.

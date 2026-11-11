@@ -13,7 +13,7 @@ import {
 export function createWildlifeSightingCard({
   layer,
   ui,
-  viewer = null,
+  engine = null,
   documentRef = globalThis.document,
   windowRef = globalThis.window,
   now = () => Date.now(),
@@ -66,7 +66,7 @@ export function createWildlifeSightingCard({
 
   function observeLayout(elements) {
     const next = new Set(
-      [host.firstElementChild, viewer?.scene?.canvas, ...elements].filter(
+      [host.firstElementChild, engine?.host.canvas, ...elements].filter(
         Boolean,
       ),
     );
@@ -97,12 +97,12 @@ export function createWildlifeSightingCard({
 
   function position({ allowPan = false } = {}) {
     if (destroyed || !selected.value || !host.firstElementChild) return;
-    const point = project(viewer, selected.value, layer);
+    const point = project(engine, selected.value, layer);
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
       host.style.display = 'none';
       return;
     }
-    const safe = readWildlifeCardSafeArea({ documentRef, viewer, windowRef });
+    const safe = readWildlifeCardSafeArea({ documentRef, engine, windowRef });
     observeLayout(safe.elements);
     host.style.width = `${Math.min(WILDLIFE_SELECTED_CARD_WIDTH, safe.bounds.width)}px`;
     host.style.maxHeight = `${safe.bounds.height}px`;
@@ -137,7 +137,7 @@ export function createWildlifeSightingCard({
       const reduced =
         windowRef?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ===
         true;
-      pan(viewer, point, result.anchor, reduced);
+      pan(engine, point, result.anchor, reduced);
     }
     host.style.left = `${result.left}px`;
     host.style.top = `${result.top}px`;
@@ -192,10 +192,10 @@ export function createWildlifeSightingCard({
     if (fresh) panForId = null;
     nextTick(() => {
       if (destroyed || !selected.value) return;
-      position({ allowPan: fresh || metadata?.explicitSelection === true });
+      position({ allowPan: metadata?.explicitSelection === true });
       if (moving) startFrameUpdates();
       // Focus the container so keyboard navigation starts inside the card.
-      if (fresh)
+      if (metadata?.explicitSelection === true)
         host
           .querySelector('[data-wildlife-sighting-card]')
           ?.focus?.({ preventScroll: true });
@@ -211,7 +211,7 @@ export function createWildlifeSightingCard({
   const outside = (event) => {
     if (!selected.value || host.contains(event.target)) return;
     // The layer selects on pointer-up; its following click must keep the card open.
-    const canvas = viewer?.scene?.canvas;
+    const canvas = engine?.host.canvas;
     if (canvas && (event.target === canvas || canvas.contains?.(event.target)))
       return;
     layer.clearSightingSelection();
@@ -231,19 +231,19 @@ export function createWildlifeSightingCard({
     if (!selected.value || removeFrame) return;
     // Installed only for camera motion; an idle card has zero per-frame work.
     removeFrame =
-      viewer?.scene?.preRender?.addEventListener?.(() => position()) || null;
+      engine?.frames.preRender.addEventListener(() => position()) || null;
   }
-  listen(viewer?.camera?.moveStart, () => {
+  listen(engine?.camera.moveStart, () => {
     moving = true;
     startFrameUpdates();
   });
-  listen(viewer?.camera?.moveEnd, () => {
+  listen(engine?.camera.moveEnd, () => {
     moving = false;
     removeFrame?.();
     removeFrame = null;
     position();
   });
-  listen(viewer?.camera?.changed, () => {
+  listen(engine?.camera.changed, () => {
     if (!moving) position();
   });
 

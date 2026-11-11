@@ -1,4 +1,15 @@
-import * as Cesium from 'cesium';
+import { worldToWindowCoordinates } from '../globe/cesium/sceneProjection.js';
+import * as geo from '../geo/index.js';
+
+// A window position through the engine projector the scene carries (the
+// layers' engine views, src/layers/shared/render/engineView.js), else
+// Cesium's SceneTransforms (a Cesium scene). The two agree on Cesium (the
+// engine projector is SceneTransforms).
+function worldToWindow(scene, position, result) {
+  return scene.projector
+    ? scene.projector.worldToWindow(position, result)
+    : worldToWindowCoordinates(scene, position, result);
+}
 
 /**
  * Focus-aware sprite treatment shared by the live contact layers.
@@ -30,7 +41,7 @@ export const DEFAULT_FOCUS_DEEMPHASIS_PARAMS = Object.freeze({
 let _params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS };
 let _focusTarget = null;
 const _spriteStates = new WeakMap();
-const _scratchScreen = new Cesium.Cartesian2();
+const _scratchScreen = geo.cartesian2.create();
 const _advanceResult = {
   factor: 1,
   changed: false,
@@ -208,11 +219,7 @@ export function publishFocusTargetFromCachedPosition({
     clearFocusTarget(ownerLayer, id);
     return null;
   }
-  const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    displayPosition,
-    _scratchScreen,
-  );
+  const screen = worldToWindow(scene, displayPosition, _scratchScreen);
   if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
     clearFocusTarget(ownerLayer, id);
     return null;
@@ -232,10 +239,7 @@ export function publishFocusTargetFromCachedPosition({
       bottom: screen.y + halfHeight + padding,
     },
     paddingPx: padding,
-    cameraDistance: Cesium.Cartesian3.distance(
-      camera.positionWC,
-      displayPosition,
-    ),
+    cameraDistance: geo.cartesian3.distance(camera.positionWC, displayPosition),
     frameNumber: scene.frameState?.frameNumber ?? -1,
   };
   if (appeared) {
@@ -480,16 +484,10 @@ export function advanceProjectedSpriteFocus(
     return _advanceResult;
   }
   const screen =
-    position && scene
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          _scratchScreen,
-        )
-      : null;
+    position && scene ? worldToWindow(scene, position, _scratchScreen) : null;
   const cameraDistance =
     position && camera?.positionWC
-      ? Cesium.Cartesian3.distance(camera.positionWC, position)
+      ? geo.cartesian3.distance(camera.positionWC, position)
       : Number.NaN;
   return advanceSpriteFocus(sprite, {
     screenPosition: screen,

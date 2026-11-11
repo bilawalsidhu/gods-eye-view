@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { t, msg } from '../../i18n/index.js';
 import {
   createCyberSonarSampler,
@@ -12,11 +12,17 @@ import {
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS,
 } from './policy.js';
 
-export function createOverlays({ state: layerState, services, parts, source }) {
+export function createOverlays({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   /**
    * Resolve whether a surface mission anchor is safely on the camera-facing
    * side of Earth. The small positive limb margin prevents labels anchored just
-   * beyond the horizon from leaking through the hidden Cesium globe.
+   * beyond the horizon from leaking through a hidden globe.
    * @param {Cesium.Cartesian3} cameraPosition Camera world position.
    * @param {Cesium.Cartesian3} markerPosition Mission anchor world position.
    * @param {number} [limbMargin] Additional normalized horizon clearance.
@@ -29,25 +35,24 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     limbMargin = 0.012,
   ) {
     if (!cameraPosition || !markerPosition) return false;
-    const cameraMagnitude = Cesium.Cartesian3.magnitude(cameraPosition);
+    const cameraMagnitude = geo.cartesian3.magnitude(cameraPosition);
     if (
       !Number.isFinite(cameraMagnitude) ||
-      cameraMagnitude <= Cesium.Ellipsoid.WGS84.maximumRadius
+      cameraMagnitude <= geo.ellipsoid.WGS84.maximumRadius
     ) {
       return false;
     }
-    const cameraDirection = Cesium.Cartesian3.normalize(
+    const cameraDirection = geo.cartesian3.normalize(
       cameraPosition,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const markerDirection = Cesium.Cartesian3.normalize(
+    const markerDirection = geo.cartesian3.normalize(
       markerPosition,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const limbThreshold =
-      Cesium.Ellipsoid.WGS84.maximumRadius / cameraMagnitude;
+    const limbThreshold = geo.ellipsoid.WGS84.maximumRadius / cameraMagnitude;
     return (
-      Cesium.Cartesian3.dot(cameraDirection, markerDirection) >
+      geo.cartesian3.dot(cameraDirection, markerDirection) >
       limbThreshold + limbMargin
     );
   }
@@ -359,7 +364,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
   }
 
   function syncMissionOverlayEntries() {
-    if (!layerState._enabled || !layerState._dataSource?.show) {
+    if (!layerState._enabled || !getRenderer()?.visible()) {
       clearMissionOverlaySources();
       return;
     }
@@ -452,7 +457,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
 
   function updateReplayVehicleOverlay(occluder) {
     if (
-      !layerState._viewer ||
+      !layerState._engine ||
       !layerState._replayVehicleOverlay ||
       !layerState._selectedLaunchId
     ) {
@@ -493,20 +498,18 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       hideReplayVehicleOverlay();
       return null;
     }
-    const windowPosition = Cesium.SceneTransforms.worldToWindowCoordinates(
-      layerState._viewer.scene,
-      position,
-    );
+    const project = (point) => getRenderer().project(point);
+    const windowPosition = project(position);
     if (!windowPosition) {
       hideReplayVehicleOverlay();
       return null;
     }
-    const canvas = layerState._viewer.scene.canvas;
+    const canvas = layerState._engine.host.size();
     if (
       windowPosition.x < -80 ||
       windowPosition.y < -100 ||
-      windowPosition.x > canvas.clientWidth + 80 ||
-      windowPosition.y > canvas.clientHeight + 100
+      windowPosition.x > canvas.width + 80 ||
+      windowPosition.y > canvas.height + 100
     ) {
       hideReplayVehicleOverlay();
       return null;
@@ -526,7 +529,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     track.lastOverlayWindowPosition = renderedWindowPosition;
     track.lastOverlayMode = mode;
     const sonar = isCyberSonarActive()
-      ? createCyberSonarSampler(canvas.clientWidth, canvas.clientHeight)
+      ? createCyberSonarSampler(canvas.width, canvas.height)
       : null;
     const factor =
       sonar?.at(renderedWindowPosition.x, renderedWindowPosition.y) ?? 1;
@@ -550,10 +553,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         useForward ? forwardProgress : backwardProgress,
       );
       const tangentWindowPosition = tangentPosition
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(
-            layerState._viewer.scene,
-            tangentPosition,
-          )
+        ? project(tangentPosition)
         : null;
       if (tangentWindowPosition) {
         const screenDelta = Math.hypot(
@@ -580,7 +580,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         }
       }
     }
-    frame.rotation = `${Cesium.Math.toDegrees(vehicleRotation)}deg`;
+    frame.rotation = `${geo.math.toDegrees(vehicleRotation)}deg`;
 
     const mission = shortMissionLabel(launch.name, 22).toUpperCase();
     const siteName = compactLaunchSiteName(launch.launchSite);

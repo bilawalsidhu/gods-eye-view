@@ -18,9 +18,9 @@ function overlay(screenAngle) {
   const container = document.body.appendChild(document.createElement('div'));
   const subject = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
   Object.assign(state, {
-    viewer: {
+    display: {
       container,
-      scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
+      canvas: { clientWidth: 800, clientHeight: 600 },
       camera: {
         heading: 0,
         rightWC: new Cesium.Cartesian3(0, 1, 0),
@@ -115,7 +115,7 @@ test('an unstable frame keeps the last stable bearing, until the overlay is remo
   rendering.updateDirectionOverlay();
   assert.equal(state.directionAngles[0], 1);
   // The heading turns, so the next frame recomputes the contact.
-  state.viewer.camera.heading = 0.1;
+  state.display.camera.heading = 0.1;
   rendering.updateDirectionOverlay();
   assert.equal(previous[1], 1, 'the unstable frame is given the last angle');
   assert.equal(state.directionAngles[0], 1, 'and does not replace it');

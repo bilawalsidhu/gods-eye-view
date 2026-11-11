@@ -21,23 +21,30 @@ const tool = () => read('src/annotations/drawTool.js');
 
 test('the application composition wires the draw tool and owns its teardown', () => {
   const tools = read('src/app/tools.js');
-  const engineAt = tools.indexOf('const annotations = initAnnotations({');
+  const session = read('src/app/sessionTools.js');
+  const engineAt = tools.indexOf('const annotations = sessionAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    navigation: styleManager,\n    publish: (view) => displayStore.publishDraw(view),',
+    'const drawTool = sessionDrawTool({\n    layerSession,\n    annotations,',
   );
-  assert.ok(engineAt >= 0, 'initAnnotations call missing');
+  assert.ok(engineAt >= 0, 'the session annotation board is missing');
   assert.ok(
     drawAt > engineAt,
-    'initDrawTool must follow initAnnotations and receive its engine',
+    'the draw tool must follow the annotation board and receive it',
+  );
+  // The page session owns the tool; its rows answer through the store.
+  assert.match(
+    session,
+    /import \{ createSessionDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
   );
   assert.match(
-    tools,
-    /import \{ initDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
+    session,
+    /sessionTool\(layerSession, 'draw', defer, \(\) =>\s*createSessionDrawTool\(\{\s*annotations,\s*navigation: styleManager,\s*publish: \(view\) => displayStore\.publishDraw\(view\),/,
   );
-  // The tool holds a pointer claim, DOM listeners and a data source, so the
-  // application lifetime disposes it — not whoever last pressed the button.
-  const deferAt = tools.indexOf('defer(() => drawTool?.destroy());');
-  assert.ok(deferAt > drawAt, 'the shell must defer the draw tool teardown');
+  // The tool holds a pointer claim, DOM listeners and a data source on the
+  // viewer, so the viewer's attachment ends it — not whoever last pressed the
+  // button; the session tool ends with the page.
+  const detachAt = tools.indexOf('defer(() => drawTool?.detachScene());');
+  assert.ok(detachAt > drawAt, 'the scene must end the draw tool');
 });
 
 test('the engine resolves manual geometry before any name resolution', () => {
@@ -46,7 +53,7 @@ test('the engine resolves manual geometry before any name resolution', () => {
     'async function resolveSpec(spec, signal) {',
   );
   const manualAt = engine.indexOf(
-    'if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, viewer);',
+    'if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, globe);',
     resolveAt,
   );
   const routeAt = engine.indexOf("if (type === 'route') {", resolveAt);
@@ -204,7 +211,9 @@ test('draped marks classify onto terrain as well as 3D tiles', () => {
   // globe carries the imagery and there are no tiles to classify against. The
   // rendered proof is in scripts/qa-draw-tool.mjs, which counts stroke pixels
   // against a keyless server; this stops the constant being narrowed again.
-  const renderer = read('src/annotations/worldAnnotationRenderer.js');
+  const renderer = read(
+    'src/globe/cesium/annotations/worldAnnotationRenderer.js',
+  );
   assert.match(renderer, /const CLASSIFY = Cesium\.ClassificationType\.BOTH;/);
   assert.doesNotMatch(
     renderer,
@@ -229,7 +238,12 @@ test('the draw modules are registered for formatting and boundary checks', () =>
   const boundaries = JSON.parse(read('scripts/package-boundaries.json'));
   const owners = (file) =>
     Object.entries(boundaries)
-      .filter(([, group]) => group.modules?.includes(file))
+      .filter(([, group]) =>
+        // An entry ending in '/' owns every module in that directory.
+        group.modules?.some((entry) =>
+          entry.endsWith('/') ? file.startsWith(entry) : entry === file,
+        ),
+      )
       .map(([name]) => name);
   for (const file of [
     'src/annotations/drawMode.js',
@@ -241,13 +255,21 @@ test('the draw modules are registered for formatting and boundary checks', () =>
       `${file} must be owned by at least one boundary group`,
     );
   }
-  // Every layer that consults the shared claim has to own the module it reads,
-  // or its bundle fails the boundary check.
-  for (const group of ['alpr-cameras', 'vessel-layer', 'satellites-layer']) {
-    assert.ok(
-      boundaries[group]?.modules.includes('src/data/inputOwnership.js'),
-      `${group} consults the pointer claim and must own the module`,
-    );
+  // Every package drawing these layers must own the shared pointer claim,
+  // including layers whose click handling belongs to a supplied display.
+  for (const file of [
+    'src/layers/alpr/render/display.js',
+    'src/layers/vessels/selection.js',
+    'src/layers/satellites/interaction.js',
+  ]) {
+    const groups = owners(file);
+    assert.ok(groups.length > 0, `${file} must have a package owner`);
+    for (const group of groups) {
+      assert.ok(
+        boundaries[group]?.modules.includes('src/data/inputOwnership.js'),
+        `${group} consults the pointer claim and must own the module`,
+      );
+    }
   }
   const exports = JSON.parse(read('package.json')).exports;
   assert.equal(exports['./annotations'], './src/annotations/index.js');

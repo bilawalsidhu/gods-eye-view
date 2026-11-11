@@ -295,16 +295,16 @@ export class LayerPanel {
   }
   mount(container) {
     if (this._destroyed) return;
+    this._suspended = false;
     this._releaseBindings();
     if (this._toggleContainer && this._toggleContainer !== container)
       renderVue(null, this._toggleContainer);
-    for (const element of this._groupContainers.values())
-      renderVue(null, element);
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
+    const previous = this._groupContainers;
     this._groupContainers = new Map();
     for (const { containerId } of PANEL_GROUPS) {
       const element =
@@ -313,6 +313,10 @@ export class LayerPanel {
       if (!element._vnode) element.replaceChildren();
       this._groupContainers.set(containerId, element);
     }
+    // A remount into the same lists (a globe switch) keeps their keyed rows
+    // mounted, as it does for Data Layers; a list no longer used is released.
+    for (const [id, element] of previous)
+      if (this._groupContainers.get(id) !== element) renderVue(null, element);
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -353,6 +357,15 @@ export class LayerPanel {
     this._cancelRowControlsRefresh?.();
     this._cancelRowControlsRefresh = null;
     for (const remove of this._removers.splice(0)) remove();
+  }
+  // During a globe switch the keyed Vue rows stay mounted. Their event
+  // generation expires here, before any legacy scene-owned modules are freed.
+  suspend() {
+    this._suspended = true;
+    this._releaseBindings();
+    this._weatherPanel?.destroy();
+    this._weatherPanel = null;
+    this.attachRecentImagery(null);
   }
   destroy() {
     if (this._destroyed) return;
@@ -436,7 +449,7 @@ export class LayerPanel {
 
   /** Present every row from the layers' current state and render them. */
   _paint() {
-    if (this._destroyed || !this._toggleContainer) return;
+    if (this._destroyed || this._suspended || !this._toggleContainer) return;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
     // Each list renders its own rows: Data Layers, and any group's own list.
     const lists = new Map([[null, []]]);

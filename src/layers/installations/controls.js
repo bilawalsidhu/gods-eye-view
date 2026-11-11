@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { installationFeedback } from '../../data/installationFeedback.js';
 import { describeInstallationFeedback } from '../../data/installationFeedback.js';
 import {
   LAYER_ID,
@@ -48,7 +49,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     statsRefreshInterval: 1000,
 
     visitNamedMarkers(visitor) {
-      parts.namedMarkers.visit(visitor);
+      parts.display?.namedMarkers?.visit(visitor);
     },
 
     /** Request a one-shot Google Maps Places search around the current map view. */
@@ -65,7 +66,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * only area that answers "what is near this contact". The window moves
      * only after the subject travels ANCHOR_REFRESH_M, and cached tiles make
      * that cheap. Passing null returns the layer to viewport loading.
-     * @param {Cesium.Cartesian3|{latitude:number, longitude:number}|null} position
+     * @param {object|{latitude:number, longitude:number}|null} position
      *   Subject position.
      * @returns {boolean} Whether a new load was scheduled.
      */
@@ -78,17 +79,17 @@ export function createControls({ state: layerState, services, parts, source }) {
         )
           next = { latitude: position.latitude, longitude: position.longitude };
         else {
-          const carto = Cesium.Cartographic.fromCartesian(position);
+          const carto = geo.cartographic.fromCartesian(position);
           if (carto)
             next = {
-              latitude: Cesium.Math.toDegrees(carto.latitude),
-              longitude: Cesium.Math.toDegrees(carto.longitude),
+              latitude: geo.math.toDegrees(carto.latitude),
+              longitude: geo.math.toDegrees(carto.longitude),
             };
         }
       }
       // Keep the live centre even when the coarse fetch anchor has not moved.
       layerState.contextPosition = next
-        ? Cesium.Cartesian3.fromDegrees(next.longitude, next.latitude)
+        ? geo.cartesian3.fromDegrees(next.longitude, next.latitude)
         : null;
       const previous = layerState.contextAnchor;
       if (!next) {
@@ -100,8 +101,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (
         previous &&
         parts.model.approximateSurfaceDistanceM(
-          Cesium.Math.toRadians(previous.latitude),
-          Cesium.Math.toRadians(previous.longitude),
+          geo.math.toRadians(previous.latitude),
+          geo.math.toRadians(previous.longitude),
           next.latitude,
           next.longitude,
         ) < ANCHOR_REFRESH_M
@@ -115,7 +116,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     getNearby(center, rangeM, maxCount = 50) {
       if (!center) return [];
       const range = Number.isFinite(rangeM) ? rangeM : Infinity;
-      const centerCartographic = Cesium.Cartographic.fromCartesian(center);
+      const centerCartographic = geo.cartographic.fromCartesian(center);
       if (!centerCartographic) return [];
       const nearby = [];
       const approximateLimit = Number.isFinite(range)
@@ -134,10 +135,10 @@ export function createControls({ state: layerState, services, parts, source }) {
           continue;
         // The awareness disk is projected onto the ground. Confirm candidates
         // with an exact ellipsoidal surface distance and reusable scratch state.
-        layerState.distanceEndpointScratch.longitude = Cesium.Math.toRadians(
+        layerState.distanceEndpointScratch.longitude = geo.math.toRadians(
           record.longitude,
         );
-        layerState.distanceEndpointScratch.latitude = Cesium.Math.toRadians(
+        layerState.distanceEndpointScratch.latitude = geo.math.toRadians(
           record.latitude,
         );
         layerState.distanceEndpointScratch.height = 0;
@@ -149,10 +150,10 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         nearby.push({
           ...record,
-          position: Cesium.Cartesian3.fromDegrees(
+          position: geo.cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
-            parts.rendering.installationSurfaceHeightM(record),
+            parts.model.installationSurfaceHeightM(record),
           ),
           distanceM,
         });
@@ -177,25 +178,22 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (!record || record.kind !== 'installation') return null;
       return {
         ...record,
-        position: Cesium.Cartesian3.fromDegrees(
+        position: geo.cartesian3.fromDegrees(
           record.longitude,
           record.latitude,
-          parts.rendering.installationSurfaceHeightM(record),
+          parts.model.installationSurfaceHeightM(record),
         ),
       };
     },
 
     /**
-     * The mapped installation a `scene.pick()` result landed on: a named
-     * marker point (`{ installationId }`) or a site entity, as this layer's
-     * own click selection reads them. Null for anything else.
+     * The mapped installation an engine pick landed on, as this layer's
+     * own click selection reads it. Null for anything else.
      * @param {object|null|undefined} picked
      * @returns {object|null} As {@link getById}.
      */
     findByPick(picked) {
-      const id =
-        picked?.id?.installationId ||
-        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+      const id = typeof picked?.id === 'string' ? picked.id : null;
       return id ? methods.getById(id) : null;
     },
 
@@ -206,21 +204,27 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     focusById(id) {
       const record = layerState.recordById.get(String(id));
-      if (!record || !layerState.viewer) return false;
+      const camera = layerState.engine?.camera;
+      const flyToSphere = camera?.flyToSphere;
+      const flyToBoundingSphere =
+        layerState.viewer?.camera?.flyToBoundingSphere;
+      if (!record || (!flyToSphere && !flyToBoundingSphere)) return false;
       // No camera flight without a real selection: a flight plus a stale subject
       // reads as success to Context navigation and strands NEXT on this item.
-      if (!parts.selection.selectRecord(record.id)) return false;
-      layerState.viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            record.longitude,
-            record.latitude,
-            parts.rendering.installationSurfaceHeightM(record),
-          ),
-          18000,
+      if (!parts.display.selectRecord(record.id)) return false;
+      const sphere = {
+        center: geo.cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+          parts.model.installationSurfaceHeightM(record),
         ),
-        { duration: 1.4 },
-      );
+        radius: 18000,
+      };
+      if (flyToSphere) flyToSphere.call(camera, sphere, { duration: 1.4 });
+      else
+        flyToBoundingSphere.call(layerState.viewer.camera, sphere, {
+          duration: 1.4,
+        });
       return true;
     },
 
@@ -254,7 +258,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     getStats() {
-      const namedMarkers = parts.namedMarkers?.stats();
+      const namedMarkers = parts.display?.namedMarkers?.stats();
       const subjectWindow =
         layerState.coverage?.kind === 'subject' &&
         layerState.contextPosition &&

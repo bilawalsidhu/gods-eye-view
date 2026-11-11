@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-/** Import regressions through the real UI controller and Cesium loaders.
+// Cesium-only probes: primitive failure injection and terrain isolation exercise the Cesium import adapter.
+/** Import regressions through the real UI controller and globe primitives.
  * Run against dev and preview: QA_BASE_URL=http://localhost:4173 node scripts/qa-geo-import-regressions.mjs
  */
-import puppeteer from 'puppeteer';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import * as Cesium from 'cesium';
+import { installImportProbe } from './qa-geo-import-probe.mjs';
 import { hookRenderErrors, readRenderErrors } from './qa-browserEvidence.mjs';
 
-const browser = await puppeteer.launch({ headless: true });
+const browser = await launchBrowser({ headless: true });
 const page = await browser.newPage();
 const meshBytes = Buffer.alloc(60);
 [
@@ -18,7 +21,9 @@ const meshBytes = Buffer.alloc(60);
 const fixture = {
   '/__qa_import_surface/tileset.json': {
     asset: { version: '1.1' },
-    geometricError: 0,
+    // Cesium draws no tileset whose own error is 0: the mesh must draw to be
+    // the rendered surface.
+    geometricError: 10000,
     root: {
       transform: Cesium.Matrix4.toArray(
         Cesium.Transforms.eastNorthUpToFixedFrame(
@@ -86,15 +91,11 @@ let failed = 0;
 try {
   await page.setViewport({ width: 390, height: 844 });
   await page.goto(
-    `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
+    `${process.argv.find((arg) => /^https?:/.test(arg)) || process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__gevGeoImport &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 90000 },
-  );
+  await page.waitForFunction(() => window.__gevGeoImport, { timeout: 90000 });
+  await whenSettled(page);
   await page.evaluate(async () => {
     const { viewer, dataManager } = window.__godsEyeView,
       C = window.__CESIUM__;
@@ -103,8 +104,8 @@ try {
     viewer.imageryLayers.removeAll();
     viewer.terrainProvider = new C.EllipsoidTerrainProvider();
     viewer.clock.shouldAnimate = false;
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
       destination: C.Cartesian3.fromDegrees(-122.5, 37.7, 100000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
@@ -112,8 +113,9 @@ try {
   page.on('request', (r) => {
     if (!/^(data:|blob:)/.test(r.url())) requests.push(r.url());
   });
+  await installImportProbe(page);
   const results = await page.evaluate(async () => {
-    const { viewer } = window.__godsEyeView,
+    const { viewer, engine } = window.__godsEyeView,
       C = window.__CESIUM__,
       tool = window.__gevGeoImport;
     const results = [],
@@ -128,14 +130,27 @@ try {
         typeof value === 'object' && !ArrayBuffer.isView(value)
           ? JSON.stringify(value)
           : value;
+      const before = new Set(window.__qaImports.records());
       const [outcome] = await tool.importFiles([new File([content], name)]);
       return {
         outcome,
-        source: outcome.ok
-          ? viewer.dataSources.get(viewer.dataSources.length - 1)
-          : null,
+        drawing: window.__qaImports
+          .records()
+          .filter((record) => !before.has(record)),
       };
     };
+    const pins = (r) =>
+      r.drawing
+        .filter((record) => record.kind === 'movers')
+        .flatMap((record) => record.items);
+    const ground = (r) =>
+      r.drawing
+        .filter((record) => record.kind === 'ground')
+        .flatMap((record) => record.items);
+    const lines = (r) => r.drawing.filter((record) => record.kind === 'lines');
+    const screenOf = (p) => engine.projector.worldToWindow(p);
+    const inFrame = (p) =>
+      p && p.x > 0 && p.x < innerWidth && p.y > 0 && p.y < innerHeight;
     const remove = (r) => {
       if (r.outcome.ok) tool.remove(r.outcome.id);
     };
@@ -171,26 +186,34 @@ try {
       },
       'xyz.geojson',
     );
-    const pin = (r.source?.importedEntities || r.source?.entities.values).find(
-        (e) => e.billboard,
-      ),
-      polygon = (r.source?.importedEntities || r.source?.entities.values).find(
-        (e) => e.polygon,
-      );
+    // The file's 100 m is dropped: the pin is on the ground sampled under
+    // it, the globe's tiles drawn (here the ellipsoid, 0 m, once they have
+    // loaded and the import has read them again).
+    const pinHeight = () =>
+      C.Cartographic.fromCartesian(pins(r)[0].position).height;
+    const groundDeadline = performance.now() + 15000;
+    while (
+      Math.abs(pinHeight()) >= 0.01 &&
+      performance.now() < groundDeadline
+    ) {
+      window.__godsEyeView.engine.render.request();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const pin = pins(r)[0],
+      polygon = ground(r)[0];
     check(
-      'XYZ ground footprint and isolated entity IDs',
+      'XYZ ground footprint and isolated pick IDs',
       r.outcome.ok &&
-        pin.id !== 'kartaview-owned' &&
-        Math.abs(
-          C.Cartographic.fromCartesian(pin.position.getValue(now)).height,
-        ) < 0.01 &&
-        polygon.polygon.perPositionHeight?.getValue(now) !== true,
+        pin.pickId === undefined &&
+        Math.abs(pinHeight()) < 0.01 &&
+        polygon.rings.flat().every((p) => p.length === 2),
+      { pinHeight: pinHeight() },
     );
     check(
-      'ground pins have no persistent clamping callbacks',
-      pin?.billboard.heightReference?.getValue(now) ===
-        C.HeightReference.NONE &&
-        pin.billboard.disableDepthTestDistance.getValue(now) === Infinity,
+      'ground pins use fixed positions and ignore scene depth',
+      typeof pin.position.x === 'number' &&
+        r.drawing.find((record) => record.kind === 'movers').options
+          .depthTest === 'always',
     );
     remove(r);
     r = await load(
@@ -201,24 +224,18 @@ try {
       ),
       'tracks.kml',
     );
-    const find = (name) =>
-      (r.source?.importedEntities || r.source?.entities.values).find(
-        (e) => e.name === name,
-      );
     check(
       'ground tracks and untessellated authored lines clamp',
-      find('ground')?.polyline.clampToGround?.getValue(now) &&
-        find('line')?.polyline.clampToGround?.getValue(now),
+      ground(r).length === 2,
     );
     check(
       'explicit track altitude and original vertices survive',
-      find('absolute')?.polyline.positions.getValue(now).length === 2 &&
-        find('absolute')
-          .polyline.positions.getValue(now)
-          .every(
-            (p) =>
-              Math.abs(C.Cartographic.fromCartesian(p).height - 10000) < 0.01,
-          ),
+      lines(r).length === 1 &&
+        lines(r)[0].positions.length === 2 &&
+        lines(r)[0].positions.every(
+          (p) =>
+            Math.abs(C.Cartographic.fromCartesian(p).height - 10000) < 0.01,
+        ),
     );
     remove(r);
     r = await load(
@@ -245,10 +262,7 @@ try {
     );
     check(
       'import show controls own previously hidden KML content',
-      r.outcome.ok &&
-        (r.source.importedEntities || r.source.entities.values).every(
-          (e) => e.isShowing,
-        ),
+      r.outcome.ok && pins(r).length === 1 && pins(r).every((pin) => pin.show),
     );
     remove(r);
     r = await load(
@@ -260,9 +274,8 @@ try {
     check(
       'a colored overlay without an icon is drawable',
       r.outcome.ok &&
-        (r.source.importedEntities || r.source.entities.values).some(
-          (e) => e.rectangle,
-        ),
+        ground(r).length === 1 &&
+        ground(r)[0].fill.join() === '0,1,0,1',
     );
     remove(r);
     const xml = wrap(`<Placemark>${point}</Placemark>`);
@@ -325,11 +338,10 @@ try {
       'portrait.geojson',
     );
     await new Promise((resolve) => setTimeout(resolve, 2300));
-    const positions = (r.source?.importedEntities ||
-      r.source?.entities.values)[0].polyline.positions.getValue(now);
-    const screen = positions?.map((p) =>
-      C.SceneTransforms.worldToWindowCoordinates(viewer.scene, p),
+    const positions = ground(r)[0].positions.map(([lon, lat]) =>
+      C.Cartesian3.fromDegrees(lon, lat),
     );
+    const screen = positions.map(screenOf);
     check(
       'portrait flight includes both route endpoints',
       screen?.every(
@@ -349,28 +361,13 @@ try {
       'intercontinental.geojson',
     );
     await new Promise((resolve) => setTimeout(resolve, 2300));
-    const intercontinental = (
-      r.source?.importedEntities || r.source?.entities.values
-    )
-      .filter((e) => e.position)
-      .map((e) => e.position.getValue(now));
-    const occluder = new C.EllipsoidalOccluder(
-      C.Ellipsoid.WGS84,
-      viewer.camera.positionWC,
-    );
+    const intercontinental = pins(r).map((pin) => pin.position);
     check(
       'intercontinental points remain in frame and in front of the horizon',
-      intercontinental?.every((p) => {
-        const s = C.SceneTransforms.worldToWindowCoordinates(viewer.scene, p);
-        return (
-          occluder.isPointVisible(p) &&
-          s &&
-          s.x > 0 &&
-          s.x < innerWidth &&
-          s.y > 0 &&
-          s.y < innerHeight
-        );
-      }),
+      intercontinental.length === 2 &&
+        intercontinental.every(
+          (p) => engine.projector.horizonVisible(p) && inFrame(screenOf(p)),
+        ),
     );
     remove(r);
     r = await load(
@@ -381,20 +378,12 @@ try {
     );
     await new Promise((resolve) => setTimeout(resolve, 2300));
     check(
-      'a wall contributes both endpoints to the flight',
+      'a wall top edge contributes both endpoints to the flight',
       r.outcome.ok &&
-        (r.source.importedEntities || r.source.entities.values)
-          .find((e) => e.wall)
-          ?.wall.positions.getValue(now)
-          .every((p) => {
-            const s = C.SceneTransforms.worldToWindowCoordinates(
-              viewer.scene,
-              p,
-            );
-            return (
-              s && s.x > 0 && s.x < innerWidth && s.y > 0 && s.y < innerHeight
-            );
-          }),
+        lines(r).length === 1 &&
+        lines(r)[0].positions.length === 2 &&
+        lines(r)[0].positions.every((p) => inFrame(screenOf(p))) &&
+        tool.list().find((file) => file.id === r.outcome.id).undrawn === 1,
     );
     remove(r);
     r = await load(
@@ -411,11 +400,13 @@ try {
     check(
       'symmetric global extents keep a finite camera',
       r.outcome.ok &&
-        Number.isFinite(viewer.camera.positionCartographic.height),
+        Number.isFinite(
+          window.__godsEyeView.engine.camera.pose().cartographic.height,
+        ),
     );
     remove(r);
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
       destination: C.Cartesian3.fromDegrees(-122.5, 37.7, 100000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
@@ -427,17 +418,18 @@ try {
     // Let the new camera/tiles reach a rendered frame before testing sampling.
     await new Promise((resolve) => {
       let frames = 0;
-      const remove = viewer.scene.postRender.addEventListener(() => {
-        if (++frames >= 2) {
-          remove();
-          resolve();
-        } else viewer.scene.requestRender();
-      });
-      viewer.scene.requestRender();
+      const remove =
+        window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
+          if (++frames >= 2) {
+            remove();
+            resolve();
+          } else window.__godsEyeView.engine.render.request();
+        });
+      window.__godsEyeView.engine.render.request();
     });
     const fixtureDeadline = performance.now() + 5000;
     while (!mesh.tilesLoaded && performance.now() < fixtureDeadline) {
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const globeShown = viewer.scene.globe.show;
@@ -447,9 +439,7 @@ try {
       { type: 'Point', coordinates: [-122.5, 37.7, 0] },
       'mesh-point.geojson',
     );
-    const meshPoint = (r.source?.importedEntities || r.source?.entities.values)
-      .find((e) => e.billboard)
-      ?.position.getValue(now);
+    const meshPoint = pins(r)[0]?.position;
     const meshHeight =
       meshPoint && C.Cartographic.fromCartesian(meshPoint).height;
     check(
@@ -463,9 +453,7 @@ try {
     );
     tool.flyTo(r.outcome.id);
     await new Promise((resolve) => setTimeout(resolve, 2300));
-    const meshScreen =
-      meshPoint &&
-      C.SceneTransforms.worldToWindowCoordinates(viewer.scene, meshPoint);
+    const meshScreen = meshPoint && screenOf(meshPoint);
     check(
       'a high-surface arrival frames the elevated pin',
       meshScreen &&
@@ -474,13 +462,13 @@ try {
       {
         screen: meshScreen && [meshScreen.x, meshScreen.y],
         camera: {
-          height: viewer.camera.positionCartographic.height,
-          pitch: viewer.camera.pitch,
+          height: window.__godsEyeView.engine.camera.pose().cartographic.height,
+          pitch: window.__godsEyeView.engine.camera.pose().pitch,
         },
         meshHeight,
       },
     );
-    const groundSource = r.source;
+    const groundDrawing = r;
     const elevated = await load(
       wrap(
         '<Placemark><Point><altitudeMode>absolute</altitudeMode><coordinates>-122.5,37.7,5000</coordinates></Point></Placemark>',
@@ -492,9 +480,8 @@ try {
       'a higher imported pin never becomes the sampled ground',
       elevated.outcome.ok &&
         Math.abs(
-          C.Cartographic.fromCartesian(
-            groundSource.importedBillboards.get(0).position,
-          ).height - 2000,
+          C.Cartographic.fromCartesian(pins(groundDrawing)[0].position).height -
+            2000,
         ) < 2,
     );
     remove(elevated);
@@ -526,7 +513,13 @@ try {
       'the shared clock stays exactly unchanged',
       C.JulianDate.equals(now, viewer.clock.currentTime),
     );
-    check('no file sources remain', tool.list().length === 0);
+    check(
+      'no files or drawing sets remain',
+      tool.list().length === 0 &&
+        Object.values(window.__qaImports.list()).every(
+          (list) => list.length === 0,
+        ),
+    );
     return results;
   });
   for (const r of results) {
@@ -559,6 +552,6 @@ try {
   );
   if (unexpected.length) failed++;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failed ? 1 : 0;

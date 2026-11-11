@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
-import { createRendering } from './rendering.js';
-import { nearFarScalarValueAtDistance } from '../../data/focusDeemphasis.js';
-import { wildlifeGridCellId } from './gridViewport.js';
+import * as geo from '../../geo/index.js';
+import { createFakeGroundHarness } from '../../testSupport/groundDisplayEngines.mjs';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import {
-  WILDLIFE_GROUND_READY_MAX_CHECKS,
-  WILDLIFE_SCALE_BY_DISTANCE,
-} from './policy.js';
+  createRendering,
+  WILDLIFE_BADGE_ORDER,
+  WILDLIFE_BADGE_SET_ID,
+  WILDLIFE_CELL_SET_ID,
+} from './rendering.js';
+import { WILDLIFE_DENSITY_SET_ID } from './density.js';
+import { wildlifeNearFarValue } from './display.js';
+import { wildlifeGridCellId } from './gridViewport.js';
+import { WILDLIFE_ATLAS_CELLS } from './sprites.js';
+import { WILDLIFE_SCALE_BY_DISTANCE, ICONIC_TINTS } from './policy.js';
 
 const NOW = Date.parse('2026-11-04T18:00:00Z');
 const base = {
@@ -22,146 +28,59 @@ const base = {
   obscured: false,
   cell: null,
 };
+const degrees = (value) => (value * Math.PI) / 180;
+const lonOf = (position) =>
+  (geo.cartographic.fromCartesian(position).longitude * 180) / Math.PI;
+const latOf = (position) =>
+  (geo.cartographic.fromCartesian(position).latitude * 180) / Math.PI;
 
-function event() {
-  const listeners = new Set();
-  return {
-    addEventListener(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    emit(...args) {
-      for (const listener of [...listeners]) listener(...args);
-    },
-    get size() {
-      return listeners.size;
-    },
+/** The real rendering on a fake engine above the fixture, 100 px a degree. */
+function harness(rows = [base], { project, groundHarness, ...extra } = {}) {
+  const engine = groundHarness?.engine ?? createFakeEngine();
+  engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(base.lon, base.lat, 30_000),
+  });
+  engine.fake?.setPose({
+    longitude: degrees(base.lon),
+    latitude: degrees(base.lat),
+    height: 30_000,
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
+  let projections = 0;
+  engine.projector.worldToWindow = (position) => {
+    projections++;
+    return project
+      ? project(position)
+      : {
+          x: 100 + (lonOf(position) - base.lon) * 100,
+          y: 100 - (latOf(position) - base.lat) * 100,
+        };
   };
-}
-
-function harness(rows = [base], extra = {}) {
-  const counts = {
-    collections: 0,
-    created: 0,
-    removed: 0,
-    cleared: 0,
-    writes: [],
-  };
-  const tracked = new Set([
-    'position',
-    'image',
-    'color',
-    'scale',
-    'show',
-    'width',
-    'height',
-    'scaleByDistance',
-  ]);
-  class BillboardCollection extends Cesium.BillboardCollection {
-    constructor() {
-      super();
-      counts.collections += 1;
-    }
-    add(options) {
-      counts.created += 1;
-      const point = super.add(options);
-      return new Proxy(point, {
-        get: (target, key) => Reflect.get(target, key, target),
-        set(target, key, value) {
-          if (tracked.has(key)) counts.writes.push(key);
-          return Reflect.set(target, key, value, target);
-        },
-      });
-    }
-    remove(point) {
-      counts.removed += 1;
-      return super.remove(point);
-    }
-    removeAll() {
-      counts.cleared += 1;
-      return super.removeAll();
-    }
-  }
-  class GroundBatch {
-    constructor(options) {
-      Object.assign(this, options);
-      this.ready = false;
-    }
-    destroy() {
-      this.destroyed = true;
-    }
-    isDestroyed() {
-      return this.destroyed === true;
-    }
-  }
-  function primitives() {
-    const values = [];
-    return {
-      values,
-      get length() {
-        return values.length;
-      },
-      get: (i) => values[i],
-      add(primitive) {
-        values.push(primitive);
-        return primitive;
-      },
-      remove(primitive) {
-        const i = values.indexOf(primitive);
-        if (i < 0) return false;
-        values.splice(i, 1);
-        primitive.destroy();
-        return true;
-      },
-    };
-  }
-  const postRender = event();
-  const terrain = event();
-  const tileProgress = event();
-  const scene = {
-    primitives: primitives(),
-    groundPrimitives: primitives(),
-    postRender,
-    terrainProviderChanged: terrain,
-    globe: {
-      terrainProviderChanged: terrain,
-      tileLoadProgressEvent: tileProgress,
-    },
-  };
+  let visible = true;
+  engine.projector.horizonVisible = () => visible;
+  const counts = { created: 0, removed: 0, cleared: 0, writes: [] };
   const state = {
     enabled: true,
-    viewer: { scene, camera: { positionWC: {} } },
+    engine,
     rows: new Map(rows.map((row) => [row.stableId, row])),
     renderedRows: [],
     rowById: new Map(),
     pointById: new Map(),
     positions: new Map(),
     cells: [],
-    staging: null,
     taxa: 'all',
     selectedId: null,
     query: { visibleBoxes: [{ south: -90, west: -180, north: 90, east: 180 }] },
     band: 'cards',
   };
   const renders = [];
-  let visible = true;
-  const registration = new Set();
   const rendering = createRendering({
     state,
     services: {
       now: () => NOW,
-      cesium: {
-        ...Cesium,
-        BillboardCollection,
-        GroundPrimitive: GroundBatch,
-        GroundPolylinePrimitive: GroundBatch,
-      },
-      occluderFactory: () => ({ isPointVisible: () => visible }),
       render: { governorRequestRender: (reason) => renders.push(reason) },
-      sprites: {
-        registerSpriteCollection: (_id, value) => registration.add(value),
-        unregisterSpriteCollection: (_id, value) => registration.delete(value),
-      },
       ...extra,
     },
     parts: {
@@ -176,17 +95,35 @@ function harness(rows = [base], extra = {}) {
     },
   });
   rendering.init();
+  // Count badge allocations and property writes as the bank makes them.
+  const bank = state.badges;
+  const { add, remove, removeAll, write } = bank;
+  bank.add = (fields) => {
+    counts.created += 1;
+    return add.call(bank, fields);
+  };
+  bank.remove = (handle) => {
+    counts.removed += 1;
+    return remove.call(bank, handle);
+  };
+  bank.removeAll = () => {
+    counts.cleared += 1;
+    return removeAll.call(bank);
+  };
+  bank.write = (handle, fields) => {
+    counts.writes.push(...Object.keys(fields));
+    return write.call(bank, handle, fields);
+  };
   rendering.activate();
   return {
+    engine,
     state,
-    scene,
     rendering,
     counts,
     renders,
-    postRender,
-    terrain,
-    tileProgress,
-    registration,
+    badges: () => engine.fake.moverSet(WILDLIFE_BADGE_SET_ID),
+    glow: () => engine.fake.moverSet(WILDLIFE_DENSITY_SET_ID),
+    projections: () => projections,
     visible(value) {
       visible = value;
     },
@@ -196,32 +133,52 @@ function harness(rows = [base], extra = {}) {
   };
 }
 
-test('real Cesium billboard values update in place, and unchanged refreshes write nothing', () => {
+test('badge sprites update in place, and unchanged refreshes write nothing', () => {
   const second = { ...base, stableId: 'synthetic:2', lon: -120 };
   const h = harness([base, second]);
   h.rendering.rebuild();
-  const collection = h.state.points;
+  const set = h.badges();
   const incumbent = h.state.pointById.get(base.stableId);
-  assert.equal(h.counts.collections, 1);
   assert.equal(h.counts.created, 2);
-  assert.equal(incumbent.width * incumbent.scaleByDistance.farValue, 12);
-  assert.deepEqual(
-    incumbent.scaleByDistance,
-    new Cesium.NearFarScalar(...WILDLIFE_SCALE_BY_DISTANCE),
+  assert.equal(set.options.kind, 'sprite');
+  assert.equal(set.options.pickable, true);
+  assert.equal(set.options.depthTest, 'always');
+  assert.equal(set.options.order, WILDLIFE_BADGE_ORDER);
+  assert.equal(set.store.count, 2);
+  assert.equal(
+    set.options.sprite.sizePx * set.options.sprite.scaleByDistance[3],
+    12,
   );
-  assert.equal(incumbent.color.alpha, 1);
+  assert.deepEqual(
+    [...set.options.sprite.scaleByDistance],
+    WILDLIFE_SCALE_BY_DISTANCE,
+  );
+  assert.deepEqual(incumbent.color, [1, 1, 1, 1]);
+  assert.equal(set.store.pickIds[incumbent.index], `wildlife:${base.stableId}`);
+  assert.equal(
+    set.store.cellKeys[set.store.cells[incumbent.index]],
+    'bird',
+    'the taxon picks its atlas cell',
+  );
   h.counts.writes.length = 0;
   h.renders.length = 0;
+  const commits = h.badges().commits;
   h.rows([{ ...second }, { ...base }]);
   assert.equal(h.rendering.rebuild(), false);
   assert.equal(h.rendering.cull(), false);
   assert.deepEqual(h.counts.writes, []);
   assert.deepEqual(h.renders, []);
+  assert.equal(h.badges().commits, commits, 'nothing uploads');
   h.rows([{ ...base, lat: base.lat + 0.01 }, second]);
   assert.equal(h.rendering.rebuild(), true);
   assert.deepEqual(h.counts.writes, ['position']);
+  assert.equal(h.badges().commits, commits + 1, 'one upload per rebuild');
   assert.equal(h.state.pointById.get(base.stableId), incumbent);
-  assert.equal(h.state.points, collection);
+  const at = 3 * incumbent.index;
+  assert.deepEqual(
+    [...set.store.positions.subarray(at, at + 3)],
+    [incumbent.position.x, incumbent.position.y, incumbent.position.z],
+  );
   h.rows([
     { ...base, lat: base.lat + 0.01 },
     { ...second, stableId: 'synthetic:3' },
@@ -230,12 +187,12 @@ test('real Cesium billboard values update in place, and unchanged refreshes writ
   assert.equal(h.counts.created, 3);
   assert.equal(h.counts.removed, 1);
   assert.equal(h.counts.cleared, 0);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, 1);
   h.rendering.destroy();
-  assert.equal(h.registration.size, 0);
-  assert.equal(h.scene.primitives.length, 0);
+  assert.equal(h.badges(), undefined);
+  assert.deepEqual(h.engine.movers.list(), []);
   assert.equal(h.state.pointById.size, 0);
-  assert.equal(h.terrain.size, 0);
-  assert.equal(h.tileProgress.size, 0);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, 0);
 });
 
 test('horizon changes write only changed visibility, with one governor request per batch', () => {
@@ -250,6 +207,7 @@ test('horizon changes write only changed visibility, with one governor request p
   h.rendering.endBatch();
   assert.deepEqual(h.counts.writes, ['show']);
   assert.equal(h.renders.length, 1);
+  assert.equal(h.badges().store.shows[0], 0);
   h.rendering.cull();
   assert.deepEqual(h.counts.writes, ['show']);
   assert.equal(h.renders.length, 1);
@@ -260,6 +218,7 @@ test('badge pixels stay between 12 and 22 at near, mid and far heights, includin
   const h = harness();
   h.rendering.rebuild();
   const wildlife = h.state.pointById.get(base.stableId);
+  const { sizePx, scaleByDistance } = h.badges().options.sprite;
   for (const selectedId of [null, base.stableId]) {
     h.state.selectedId = selectedId;
     h.rendering.refreshSelection();
@@ -267,9 +226,9 @@ test('badge pixels stay between 12 and 22 at near, mid and far heights, includin
       0, 1000, 9000, 120_000, 400_000, 1_500_000, 8_000_000, 10_000_000,
     ]) {
       const pixels =
-        wildlife.width *
+        sizePx *
         wildlife.scale *
-        nearFarScalarValueAtDistance(wildlife.scaleByDistance, heightM);
+        wildlifeNearFarValue(scaleByDistance, heightM);
       assert.ok(
         pixels >= 12 && pixels <= 22,
         `${heightM}m, selected=${!!selectedId}: ${pixels}px`,
@@ -277,8 +236,8 @@ test('badge pixels stay between 12 and 22 at near, mid and far heights, includin
     }
   }
   assert.deepEqual(
-    wildlife.color,
-    Cesium.Color.WHITE,
+    [...h.badges().store.colors.subarray(0, 4)],
+    [1, 1, 1, 1],
     'keep the baked white glyph white',
   );
   h.rendering.destroy();
@@ -292,15 +251,10 @@ test('adjacent 28px bucket edges never overlap badges or erase sighting counts',
     x,
   }));
   const h = harness(rows, {
-    project: (_scene, anchor) => {
-      const lon = Cesium.Math.toDegrees(
-        Cesium.Cartographic.fromCartesian(anchor).longitude,
-      );
-      return {
-        x: rows.find((row) => Math.abs(row.lon - lon) < 1e-7).x,
-        y: 100,
-      };
-    },
+    project: (anchor) => ({
+      x: rows.find((row) => Math.abs(row.lon - lonOf(anchor)) < 1e-7).x,
+      y: 100,
+    }),
   });
   h.rendering.rebuild();
   assert.equal(h.state.sightingCount, 4);
@@ -316,6 +270,12 @@ test('adjacent 28px bucket edges never overlap badges or erase sighting counts',
   for (let i = 0; i < visible.length; i++)
     for (let j = i + 1; j < visible.length; j++)
       assert.ok(Math.abs(visible[i].x - visible[j].x) >= 22);
+  const shows = h.badges().store.shows;
+  assert.equal(
+    [...shows.subarray(0, 4)].filter(Boolean).length,
+    3,
+    'the engine draws the same three',
+  );
   h.counts.writes.length = 0;
   h.renders.length = 0;
   h.rendering.rebuild();
@@ -338,6 +298,7 @@ test('only painted photo cards hide their anchored badges, with zero repeated vi
   h.renders.length = 0;
   h.rendering.setPhotoCardVisibility(new Set([`sighting:${base.stableId}`]));
   assert.equal(point.show, false);
+  assert.equal(h.badges().store.shows[point.index], 0);
   assert.deepEqual(h.counts.writes, ['show']);
   h.rendering.rebuild();
   h.rendering.cull();
@@ -365,18 +326,11 @@ test('sampled fallback buckets allocate only representatives at every height, wi
       rows.map((row) => [row.lon.toFixed(6), { x: 100, y: 100 }]),
     );
     const h = harness(rows, {
-      project: (_scene, anchor) => {
-        const lon = Cesium.Math.toDegrees(
-          Cesium.Cartographic.fromCartesian(anchor).longitude,
-        );
-        return screens.get(lon.toFixed(6));
-      },
+      project: (anchor) => screens.get(lonOf(anchor).toFixed(6)),
     });
-    h.state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      base.lon,
-      base.lat,
-      heightM,
-    );
+    h.engine.fake.setPose({
+      position: geo.cartesian3.fromDegrees(base.lon, base.lat, heightM),
+    });
     h.rendering.rebuild();
     assert.equal(
       h.state.pointById.size,
@@ -393,20 +347,18 @@ test('sampled fallback buckets allocate only representatives at every height, wi
     assert.equal(h.rendering.cull(), false);
     assert.equal(h.rendering.rebuild(), false);
     assert.deepEqual(h.counts.writes, []);
-    assert.equal(h.postRender.size, 0);
+    assert.equal(
+      h.engine.frames.preRender.numberOfListeners,
+      1,
+      'one shared surface observer',
+    );
     h.rendering.destroy();
   }
 });
 
 test('UTFGrid creates a dedicated unpickable glow and observations alone create badges', () => {
-  let projections = 0;
-  const h = harness([base], {
-    project() {
-      projections++;
-      return { x: 100, y: 100 };
-    },
-  });
-  h.scene.canvas = { clientWidth: 280, clientHeight: 200 };
+  const h = harness([base], { project: () => ({ x: 100, y: 100 }) });
+  h.engine.fake.setSize(280, 200);
   h.state.gridAvailable = true;
   h.state.gridCells = [1, 50, 2].map((cellCount, index) => ({
     id: wildlifeGridCellId(base.lat, base.lon + index * 0.01, 16),
@@ -414,32 +366,48 @@ test('UTFGrid creates a dedicated unpickable glow and observations alone create 
     lon: base.lon + index * 0.01,
     cellCount,
   }));
+  const before = h.projections();
   h.rendering.rebuild();
-  const glow = h.rendering.density.collection;
+  const glow = h.glow();
   assert.ok(glow);
-  assert.equal(glow.allowPicking, false);
-  assert.equal(glow.length, 3);
-  assert.equal(h.scene.primitives.length, 2);
+  assert.equal(glow.options.pickable, false);
+  assert.ok(glow.options.order < WILDLIFE_BADGE_ORDER, 'glow under badges');
+  assert.equal(glow.store.count, 3);
+  assert.equal(h.engine.movers.list().length, 2);
   assert.deepEqual([...h.state.pointById.keys()], [base.stableId]);
   assert.deepEqual(h.state.renderedRows, [base]);
   assert.equal(h.state.sightingCount, 53);
-  assert.equal(projections, 1, 'only observations require screen projections');
-  assert.equal(h.postRender.size, 0, 'density installs no frame listener');
+  assert.equal(
+    h.projections() - before,
+    1,
+    'only observations require screen projections',
+  );
+  assert.equal(
+    h.engine.frames.preRender.numberOfListeners,
+    2,
+    'glow and the shared surface observer follow the camera',
+  );
+  const glowSet = h.rendering.density.collection.set;
   h.state.gridCells = [...h.state.gridCells].reverse();
   h.counts.writes.length = 0;
   assert.equal(h.rendering.rebuild(), false);
-  assert.equal(h.rendering.density.collection, glow);
+  assert.equal(h.rendering.density.collection.set, glowSet);
   assert.deepEqual(h.counts.writes, []);
   h.rendering.clear();
-  assert.equal(glow.isDestroyed(), true);
-  assert.equal(h.scene.primitives.length, 1);
-  assert.equal(h.state.points.length, 0);
+  assert.equal(glowSet.isDestroyed(), true);
+  assert.equal(h.glow(), undefined);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, 1);
+  assert.equal(h.badges().store.count, 0);
   h.rendering.destroy();
-  assert.equal(h.scene.primitives.length, 0);
+  assert.deepEqual(h.engine.movers.list(), []);
 });
 
 test('tile arrival or loss cannot replace a real observation with a grid badge', () => {
   const h = harness();
+  // High enough that the continental kernel stays in front of the limb.
+  h.engine.fake.setPose({
+    position: geo.cartesian3.fromDegrees(base.lon, base.lat, 2_000_000),
+  });
   h.rendering.rebuild();
   const badge = h.state.pointById.get(base.stableId);
   h.state.gridAvailable = true;
@@ -452,7 +420,7 @@ test('tile arrival or loss cannot replace a real observation with a grid badge',
     },
   ];
   h.rendering.rebuild();
-  const glow = h.rendering.density.collection;
+  const glow = h.rendering.density.collection.set;
   assert.equal(h.state.sightingCount, 10_000);
   assert.equal(h.state.pointById.get(base.stableId), badge);
   h.state.gridAvailable = false;
@@ -474,39 +442,104 @@ test('a selected observation remains rendered outside the viewport and observati
   assert.equal(h.state.rowById.get(selected.stableId), selected);
   assert.equal(h.state.pointById.has(selected.stableId), true);
   h.state.band = 'regional';
-  h.state.viewer.camera.positionCartographic = { height: 1_500_000 };
+  h.engine.fake.setPose({
+    position: geo.cartesian3.fromDegrees(base.lon, base.lat, 1_500_000),
+  });
   h.rendering.rebuild();
   assert.equal(h.state.selectedId, selected.stableId);
   assert.equal(h.state.rowById.get(selected.stableId), selected);
   h.rendering.destroy();
 });
 
-test('privacy ground staging has a bounded readiness listener and complete teardown', () => {
-  const h = harness([
-    {
-      ...base,
-      obscured: true,
-      cell: { south: 47.6, west: -122.4, north: 47.8, east: -122.2 },
-    },
-  ]);
-  h.rendering.rebuild();
-  assert.equal(h.postRender.size, 1);
-  assert.equal(h.scene.groundPrimitives.length, 2);
-  for (let i = 0; i < WILDLIFE_GROUND_READY_MAX_CHECKS; i++)
-    h.postRender.emit();
-  assert.equal(h.postRender.size, 0);
-  assert.equal(h.state.staging, null);
-  assert.equal(h.scene.groundPrimitives.length, 0);
-  h.rendering.destroy();
-  assert.equal(h.postRender.size, 0);
-});
+for (const make of [createFakeGroundHarness]) {
+  test(`privacy cells drape accent fills and outlines and release them (${make.name})`, () => {
+    const cell = { south: 47.6, west: -122.4, north: 47.8, east: -122.2 };
+    const groundHarness = make();
+    const h = harness(
+      [
+        { ...base, obscured: true, cell },
+        { ...base, stableId: 'duplicate', obscured: true, cell },
+      ],
+      { groundHarness, groundFloor: { cachedGroundFloor: () => 250 } },
+    );
+    h.rendering.rebuild();
+    const set = groundHarness.set(WILDLIFE_CELL_SET_ID);
+    assert.equal(set.options.kind, 'cell');
+    assert.equal(set.options.drape, 'both');
+    assert.equal(set.options.pickable, false);
+    assert.equal(set.items.length, 1, 'same bounds and taxon share a cell');
+    const item = set.items[0];
+    assert.deepEqual(
+      {
+        south: item.south,
+        west: item.west,
+        north: item.north,
+        east: item.east,
+      },
+      cell,
+    );
+    const tint = ICONIC_TINTS.Aves;
+    const rgb = [1, 3, 5].map((offset) =>
+      parseInt(tint.slice(offset, offset + 2), 16),
+    );
+    assert.deepEqual(
+      item.fill.map((v) => Math.round(v * 255)),
+      [...rgb, Math.round(0.25 * 255)],
+    );
+    assert.deepEqual(
+      item.outline.color.map((v) => Math.round(v * 255)),
+      [...rgb, Math.round(0.8 * 255)],
+    );
+    assert.equal(item.outline.widthPx, 2);
+    assert.equal(item.pickId, undefined, 'picks pass through the cell');
+    assert.equal(set.shown, true);
+    assert.deepEqual(h.engine.lines.list(), [], 'ground owns the outline');
+    if (groundHarness.cesium) {
+      const { fills, lines } = groundHarness.primitives(WILDLIFE_CELL_SET_ID);
+      assert.equal(fills.length, 1);
+      assert.equal(lines.length, 1);
+      assert.equal(fills[0].options.allowPicking, false);
+      assert.equal(lines[0].options.allowPicking, false);
+    }
+    h.rendering.rebuild();
+    assert.equal(
+      groundHarness.set(WILDLIFE_CELL_SET_ID).commits,
+      1,
+      'unchanged cells keep their geometry',
+    );
+    h.visible(false);
+    h.rendering.cull();
+    assert.equal(
+      groundHarness.set(WILDLIFE_CELL_SET_ID).shown,
+      true,
+      'ground handles horizon occlusion',
+    );
+    h.visible(true);
+    h.state.band = 'regional';
+    h.rendering.rebuild();
+    assert.deepEqual(h.engine.ground.list(), [], 'wide views draw no cells');
+    h.state.band = 'cards';
+    h.rendering.rebuild();
+    assert.equal(h.engine.ground.list().length, 1);
+    h.rendering.destroy();
+    assert.deepEqual(h.engine.ground.list(), []);
+    groundHarness.destroy();
+  });
+}
 
-test('font readiness swaps images in place without billboard recreation or position work', () => {
+test('font readiness swaps the atlas in place without badge recreation or position work', () => {
   const listeners = new Set();
   let ready = false;
+  const plain = {
+    url: 'data:image/svg+xml,plain',
+    cells: WILDLIFE_ATLAS_CELLS,
+  };
+  const glyphs = {
+    url: 'data:image/svg+xml,glyphs',
+    cells: WILDLIFE_ATLAS_CELLS,
+  };
   const badgeSprites = {
-    get: (group) =>
-      `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg"><circle r="${ready ? 9 : 8}" data-group="${group}"/></svg>`)}`,
+    atlas: () => (ready ? glyphs : plain),
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -518,27 +551,52 @@ test('font readiness swaps images in place without billboard recreation or posit
   ];
   const h = harness(rows, { badgeSprites });
   h.rendering.rebuild();
-  const collection = h.state.points;
+  assert.equal(h.badges().options.sprite.atlas, plain);
   const points = new Map(h.state.pointById);
-  const before = new Map([...points].map(([id, point]) => [id, point.image]));
+  const cells = [...h.badges().store.cells.subarray(0, 2)];
   h.counts.writes.length = 0;
   h.renders.length = 0;
   ready = true;
   for (const listener of listeners) listener();
-  assert.equal(h.state.points, collection);
+  assert.equal(h.badges().options.sprite.atlas, glyphs);
+  assert.equal(h.badges().store.count, 2);
+  assert.deepEqual([...h.badges().store.cells.subarray(0, 2)], cells);
   assert.equal(h.counts.created, 2);
   assert.equal(h.counts.removed, 0);
   assert.equal(h.counts.cleared, 0);
-  assert.deepEqual(h.counts.writes, ['image', 'image']);
+  assert.deepEqual(h.counts.writes, []);
   assert.equal(h.renders.length, 1);
-  for (const [id, point] of points) {
+  for (const [id, point] of points)
     assert.equal(h.state.pointById.get(id), point);
-    assert.notEqual(point.image, before.get(id));
-  }
   h.counts.writes.length = 0;
   h.rows(rows.map((row) => ({ ...row, lat: row.lat + 0.01 })));
   h.rendering.rebuild();
   assert.deepEqual(h.counts.writes, ['position', 'position']);
   h.rendering.destroy();
   assert.equal(listeners.size, 0);
+});
+
+test('badges resample when the surface finishes loading, on the frame after', () => {
+  let floor = 0;
+  const h = harness([base], {
+    groundFloor: { cachedGroundFloor: () => floor },
+  });
+  let loaded = false;
+  h.engine.fake.script('tilesLoaded', () => loaded);
+  h.rendering.activate();
+  h.rendering.rebuild();
+  const point = h.state.pointById.get(base.stableId);
+  floor = 600;
+  h.engine.fake.frame();
+  assert.ok(
+    Math.abs(geo.cartographic.fromCartesian(point.position).height) < 1e-3,
+  );
+  loaded = true;
+  h.engine.fake.frame();
+  assert.ok(
+    Math.abs(geo.cartographic.fromCartesian(point.position).height - 600) <
+      1e-3,
+  );
+  assert.equal(h.state.pointById.get(base.stableId), point);
+  h.rendering.destroy();
 });

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t, msg, onLocaleChange } from '../i18n/index.js';
 
 const YOUTUBE_HOSTS = new Set([
@@ -538,23 +537,12 @@ function ensureProviderConnections(documentRef, provider) {
   }
 }
 
-function anchorOnScreen(viewer, anchor, root) {
-  if (!viewer?.scene || !anchor || !root) return null;
-  const camera = viewer.camera;
-  if (camera?.positionWC && camera?.directionWC) {
-    const delta = Cesium.Cartesian3.subtract(
-      anchor,
-      camera.positionWC,
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.dot(delta, camera.directionWC) <= 0) return null;
-  }
-  const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    anchor,
-  );
+function anchorOnScreen(engine, anchor, root) {
+  if (!engine || !anchor || !root) return null;
+  if (!engine.projector.horizonVisible(anchor)) return null;
+  const pixel = engine.projector.worldToWindow(anchor, {});
   if (!pixel) return null;
-  const canvasBounds = viewer.canvas?.getBoundingClientRect?.();
+  const canvasBounds = engine.host.canvas?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;
   const x = pixel.x + canvasBounds.left - rootBounds.left;
@@ -637,7 +625,11 @@ function createRoot(documentRef, viewer) {
   const root = documentRef.createElement('div');
   root.id = 'bhote-koshi-embedded-media-root';
   root.setAttribute('aria-live', 'polite');
-  (viewer?.container || documentRef.body)?.append(root);
+  (
+    documentRef.getElementById?.('cesiumContainer') ||
+    viewer?.container ||
+    documentRef.body
+  )?.append(root);
   return root;
 }
 
@@ -648,6 +640,7 @@ function createRoot(documentRef, viewer) {
  */
 export function createBhoteKoshiEmbeddedMedia({
   viewer,
+  engine = null,
   documentRef = globalThis.document,
   globalRef = globalThis,
   xLoader = loadXWidgets,
@@ -660,7 +653,7 @@ export function createBhoteKoshiEmbeddedMedia({
   const pinokioShell = /(?:^|\s)Pinokio\/[^\s]+/i.test(
     globalRef.navigator?.userAgent || '',
   );
-  if (pinokioShell || !documentRef?.createElement || !viewer) {
+  if (pinokioShell || !documentRef?.createElement || (!viewer && !engine)) {
     return {
       supportsPlayback: false,
       warm: () => false,
@@ -671,7 +664,7 @@ export function createBhoteKoshiEmbeddedMedia({
       destroy: () => {},
     };
   }
-  const root = createRoot(documentRef, viewer);
+  const root = createRoot(documentRef, engine?.host ?? viewer);
   let record = null;
   let warmRecord = null;
   let generation = 0;
@@ -848,7 +841,7 @@ export function createBhoteKoshiEmbeddedMedia({
 
   const position = () => {
     if (!record) return;
-    const projected = anchorOnScreen(viewer, record.anchor, root);
+    const projected = anchorOnScreen(engine, record.anchor, root);
     record.card.hidden = !projected;
     if (projected) {
       placeCard(record.card, record.leader, projected);
@@ -864,8 +857,16 @@ export function createBhoteKoshiEmbeddedMedia({
       }
     }
   };
-  const removePostRender =
-    viewer.scene?.postRender?.addEventListener?.(position);
+  let removePostRender;
+  function attachScene(nextViewer, nextEngine) {
+    removePostRender?.();
+    viewer = nextViewer;
+    engine = nextEngine;
+    const frames = engine?.frames.postRender ?? viewer?.scene?.postRender;
+    removePostRender = frames?.addEventListener?.(position);
+    position();
+  }
+  attachScene(viewer, engine);
 
   function hide({ immediate = false, preserveWarm = false } = {}) {
     if (!preserveWarm) clearWarm();
@@ -1223,6 +1224,7 @@ export function createBhoteKoshiEmbeddedMedia({
   }
 
   return {
+    attachScene,
     supportsPlayback: true,
     warm,
     show,

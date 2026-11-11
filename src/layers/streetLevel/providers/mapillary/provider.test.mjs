@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { createMapillaryProvider } from './index.js';
 import { mapillaryImageUrl } from './policy.js';
 import { sequenceIdFromPick } from '../../lineCoverage.js';
 import { thinImages } from '../../sequenceCones.js';
 import { validateProviders } from '../../registry.js';
 import {
+  SACRAMENTO_VIEW,
+  cameraEngine,
   fakeMapillarySource,
-  rayCamera,
+  streetLevelMap,
 } from '../../../../testSupport/streetLevelFakes.mjs';
 
 function fakeContext(filter = { pano: 'all', sinceMs: null }) {
@@ -83,49 +84,11 @@ test('cone thinning across the date line drops images metres apart', () => {
   );
 });
 
-/** A viewer looking straight down on downtown Sacramento from 900 m. */
-function streetViewer() {
-  const collection = () => ({
-    add: (item) => item,
-    remove: () => true,
-    contains: () => false,
-    get length() {
-      return 0;
-    },
-  });
-  const event = () => ({ addEventListener: () => () => {} });
-  const camera = Object.assign(
-    rayCamera({
-      lon: -121.4944,
-      lat: 38.5816,
-      altitude: 900,
-      pitch: -90,
-      width: 100,
-      height: 100,
-    }),
-    { changed: event(), moveEnd: event() },
-  );
-  return {
-    camera,
-    scene: {
-      canvas: { clientWidth: 100, clientHeight: 100 },
-      globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      primitives: collection(),
-      groundPrimitives: collection(),
-      preRender: event(),
-      postRender: event(),
-      requestRender() {},
-    },
-  };
-}
+/** The display looking straight down on downtown Sacramento from 900 m. */
+const streetMap = () =>
+  streetLevelMap({ engine: cameraEngine(SACRAMENTO_VIEW) }).map;
 
-test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {
-  // Skip Cesium's one-time terrain table download for draped lines.
-  t.mock.method(
-    Cesium.GroundPolylinePrimitive,
-    'initializeTerrainHeights',
-    async () => {},
-  );
+test('coverage asks for no tiles before the key status is known, and none without a key', async () => {
   for (const configured of [false, true]) {
     let answer;
     const tiles = [];
@@ -138,10 +101,10 @@ test('coverage asks for no tiles before the key status is known, and none withou
       },
     });
     const instance = createMapillaryProvider({ source }).create(fakeContext());
-    const viewer = streetViewer();
-    instance.init(viewer);
+    const map = streetMap();
+    instance.init(map);
     const status = instance.status();
-    instance.activate(viewer);
+    instance.activate(map);
     assert.equal(tiles.length, 0, 'nothing before the status answers');
     answer({ configured });
     assert.deepEqual(await status, { configured });
@@ -151,7 +114,7 @@ test('coverage asks for no tiles before the key status is known, and none withou
       assert.equal(tiles.length, 0, 'a key-less install never asks');
       assert.equal(instance.coverageStats().keyRequired, true);
     }
-    instance.destroy(viewer);
+    instance.destroy();
   }
 });
 

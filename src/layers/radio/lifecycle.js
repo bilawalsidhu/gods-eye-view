@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   RADIO_OVERLAY_SOURCE_ID,
   DEFAULT_RADIO_VOLUME,
@@ -11,24 +10,61 @@ export function createLifecycle({
   services,
   parts,
   source,
+  rendererFactory,
 }) {
-  const { clearOverlaySource, setOverlaySourceVisible } = services.overlays;
+  const { clearSource, setVisible } = services.overlays;
 
   const methods = {
-    /** Initialize the Cesium data source and the single audio element. */
-    init(viewer) {
+    picks: {
+      owner: 'radio',
+      predicate: (id) => parts.renderer?.ownsPick(id) ?? false,
+    },
+    /** Initialize scene resources and the single audio element. */
+    init(viewer, options = {}) {
+      this.attachRenderer(options);
       layerState._sessionGeneration += 1;
-      layerState._viewer = viewer;
       parts.clustering.resetRadioClusterOverlayIdentities();
       parts.playback.installAudio();
-      if (!layerState._dataSource) {
-        layerState._dataSource = new Cesium.CustomDataSource('Radio stations');
-        viewer.dataSources.add(layerState._dataSource);
-        parts.rendering.installClusterStyling();
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      setVisible(RADIO_OVERLAY_SOURCE_ID, false);
+    },
+
+    attachRenderer(options = {}) {
+      if (parts.renderer?.ready)
+        throw new Error('Radio layer is already initialized');
+      if (typeof rendererFactory !== 'function')
+        throw new TypeError('A radio renderer factory is required');
+      parts.renderer = rendererFactory({
+        state: layerState,
+        services,
+        parts,
+        source,
+        engine: options.engine,
+      });
+      if (!parts.renderer)
+        throw new TypeError('Radio has no renderer on this engine');
+      parts.renderer.init();
+      if (layerState._enabled) {
+        parts.rendering.drawStations(layerState._stations);
+        parts.interaction.syncRadioLifecyclePresentation();
       }
-      layerState._dataSource.show = false;
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+    },
+
+    resumeViewport() {
+      if (parts.interaction.radioPresentationAllowed())
+        parts.rendering.updateRenderVisibility();
+    },
+
+    detachRenderer() {
+      parts.interaction.removeInteraction();
+      clearTimeout(layerState._overlayPublishTimer);
+      layerState._overlayPublishTimer = null;
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      parts.renderer?.destroy();
+      parts.renderer = null;
+      layerState._renderById.clear();
+      layerState._selectedPosition = null;
+      layerState._lastHorizonCameraPosition = null;
     },
 
     /** Show stations. Enabling or preset restoration never starts audio. */
@@ -55,18 +91,17 @@ export function createLifecycle({
       layerState._cancelledTuningPresentationStation = null;
       layerState._tuningUnavailableStationId = null;
       parts.playback.stopRadioPlayback({ origin: 'layer-disable' });
-      if (layerState._dataSource) layerState._dataSource.show = false;
-      if (layerState._selectedEntity && layerState._viewer)
-        layerState._viewer.entities.remove(layerState._selectedEntity);
-      layerState._selectedEntity = null;
+      parts.renderer?.setVisible(false);
+      parts.renderer?.clearSelected();
+      layerState._selectedPosition = null;
       if (layerState._overlayPublishTimer)
         clearTimeout(layerState._overlayPublishTimer);
       layerState._overlayPublishTimer = null;
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._overlayDiagnostics =
         parts.clustering.emptyRadioOverlayDiagnostics();
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      setVisible(RADIO_OVERLAY_SOURCE_ID, false);
       parts.presentation.emitState();
     },
 
@@ -83,12 +118,9 @@ export function createLifecycle({
       if (layerState._audio) layerState._audio.volume = DEFAULT_RADIO_VOLUME;
       layerState._audio = null;
       layerState._userVolume = DEFAULT_RADIO_VOLUME;
-      layerState._removeClusterListener?.();
-      layerState._removeClusterListener = null;
-      if (layerState._dataSource && layerState._viewer)
-        layerState._viewer.dataSources.remove(layerState._dataSource, true);
-      layerState._dataSource = null;
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      parts.renderer?.destroy();
+      parts.renderer = null;
       layerState._stations = [];
       layerState._acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
       layerState._stationById.clear();
@@ -112,7 +144,6 @@ export function createLifecycle({
       layerState._error = null;
       layerState._updatedAt = null;
       layerState._managerLifecyclePresentation = null;
-      layerState._viewer = null;
       parts.presentation.emitState();
       layerState._listeners.clear();
       layerState._playbackControlListeners.clear();

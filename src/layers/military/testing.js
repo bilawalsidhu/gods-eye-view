@@ -17,7 +17,8 @@ export function createTesting({
    * @param {object} state.meta
    * @param {object} state.billboard
    * @param {object} state.billboardCollection
-   * @param {object} state.viewer
+   * @param {(options: object) => object} state.renderer The test's renderer
+   *   with the view and collection fixtures for this test.
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
    * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
@@ -30,15 +31,16 @@ export function createTesting({
     meta,
     billboard,
     billboardCollection,
-    viewer,
     history = [],
     tracked = true,
     models = [],
-    modelCollection = null,
+    renderer: createRenderer,
   }) {
-    flightState._viewer = viewer;
-    flightState._modelCollection = modelCollection;
-    flightState._billboardCollection = billboardCollection;
+    flightState.enabled = billboardCollection?.show !== false;
+    // The test's renderer over its fleet collection.
+    flightState._renderer = createRenderer({
+      billboardCollection,
+    });
     flightState._billboards = new Map([[icao24, billboard]]);
     flightState._cullPositions.clear();
     flightState._models.clear();
@@ -150,6 +152,20 @@ export function createTesting({
     await parts.rendering._ensureModel(icao24);
     return flightState._models.get(icao24) || null;
   }
+
+  /** The renderer handles one contact draws with, for QA probes that tamper
+   *  with them: its glyph and fleet model, and the tracked glyph and model
+   *  while it is tracked. */
+
+  function _aircraftHandlesForTest(icao24) {
+    const tracked = icao24 === flightState._trackedIcao;
+    return {
+      sprite: flightState._billboards.get(icao24) ?? null,
+      model: flightState._models.get(icao24) ?? null,
+      trackedSprite: tracked ? flightState._trackedEntity : null,
+      trackedModel: tracked ? flightState._trackedModel : null,
+    };
+  }
   return {
     _setTrackedMilitaryRefreshStateForTest,
     _setMilitaryTrackingRefreshOutcomeForTest,
@@ -162,5 +178,6 @@ export function createTesting({
     _trackedBillboardColorForTest,
     _driveFleetModelHandoffForTest,
     _ensureFleetModelForTest,
+    _aircraftHandlesForTest,
   };
 }

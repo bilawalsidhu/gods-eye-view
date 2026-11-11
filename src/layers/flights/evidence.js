@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
 
@@ -18,7 +18,7 @@ export function createEvidence({
       cartesian.length >= 3 &&
       cartesian.slice(0, 3).every(Number.isFinite)
     ) {
-      return Cesium.Cartesian3.fromElements(
+      return geo.cartesian3.fromElements(
         cartesian[0],
         cartesian[1],
         cartesian[2],
@@ -29,7 +29,7 @@ export function createEvidence({
       !Number.isFinite(record?.latitude)
     )
       return null;
-    return Cesium.Cartesian3.fromDegrees(
+    return geo.cartesian3.fromDegrees(
       record.longitude,
       record.latitude,
       Number.isFinite(record.altitudeM) ? record.altitudeM : 3_000,
@@ -39,16 +39,12 @@ export function createEvidence({
   /** Replace the real fleet with deterministic explicit-position contacts. */
 
   function _setFocusEvidenceAircraft(records = []) {
-    if (
-      !FOCUS_EVIDENCE_DEV ||
-      !flightState._billboardCollection ||
-      !flightState._viewer
-    )
+    if (!FOCUS_EVIDENCE_DEV || !flightState._renderer?.fleet.attached())
       return { ok: false, count: 0 };
     if (flightState._trackedIcao) parts.tracking._clearTracking();
     parts.rendering._releaseModels();
     for (const bb of flightState._billboards.values())
-      flightState._billboardCollection.remove(bb);
+      flightState._renderer.fleet.remove(bb);
     flightState._billboards.clear();
     flightState.records.data.clear();
     flightState._positionHistory.clear();
@@ -65,7 +61,7 @@ export function createEvidence({
       const klass = record.klass || 'airliner';
       const altitudeM = Number.isFinite(record.altitudeM)
         ? record.altitudeM
-        : Cesium.Cartographic.fromCartesian(position)?.height || 3_000;
+        : geo.cartographic.fromCartesian(position)?.height || 3_000;
       const meta = {
         callsign: String(record.callsign || id).toUpperCase(),
         altitude: altitudeM,
@@ -83,14 +79,14 @@ export function createEvidence({
       flightState.records.data.set(id, meta);
       flightState._cullPositions.delete(id);
       flightState._focusEvidenceIds.add(id);
-      const bb = flightState._billboardCollection.add({
+      const bb = flightState._renderer.fleet.add({
         position,
         image: aircraftIcon(parts.rendering._iconKind(id, klass)),
         width: 20,
         height: 20,
         scale: parts.rendering._fleetBillboardScale(id, klass),
         rotation: 0,
-        alignedAxis: Cesium.Cartesian3.ZERO,
+        alignedAxis: geo.cartesian3.ZERO,
         color: parts.rendering._fleetBillboardColor(id),
         sizeInMeters: false,
         scaleByDistance: parts.rendering._normalBillboardScaleByDistance(),
@@ -102,7 +98,7 @@ export function createEvidence({
     }
     flightState.feed._count = flightState._billboards.size;
     flightState._lastFleetTickMs = 0;
-    flightState._viewer.scene.requestRender?.();
+    flightState._renderer.view.requestRender();
     return { ok: true, count: flightState.feed._count };
   }
 
@@ -129,22 +125,18 @@ export function createEvidence({
       moved += 1;
     }
     flightState._lastFleetTickMs = 0;
-    flightState._viewer?.scene?.requestRender?.();
+    flightState._renderer?.view.requestRender();
     return { ok: true, moved };
   }
 
   /** JSON-safe visual snapshot for the evidence report. */
 
   function _focusEvidenceSnapshot() {
-    if (!FOCUS_EVIDENCE_DEV || !flightState._viewer) return [];
+    const view = flightState._renderer?.view;
+    if (!FOCUS_EVIDENCE_DEV || !view) return [];
     return [...flightState._focusEvidenceIds].map((id) => {
       const bb = flightState._billboards.get(id);
-      const screen = bb?.position
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(
-            flightState._viewer.scene,
-            bb.position,
-          )
-        : null;
+      const screen = bb?.position ? view.worldToWindow(bb.position) : null;
       return {
         id,
         show: bb?.show === true,
@@ -153,10 +145,7 @@ export function createEvidence({
         x: screen?.x ?? null,
         y: screen?.y ?? null,
         cameraDistanceM: bb?.position
-          ? Cesium.Cartesian3.distance(
-              flightState._viewer.camera.positionWC,
-              bb.position,
-            )
+          ? geo.cartesian3.distance(view.camera.positionWC, bb.position)
           : null,
       };
     });

@@ -3086,6 +3086,64 @@ test('Clear All cancels a saved restore still waiting to start', async () => {
   coordinator.destroy();
 });
 
+test('a link through an engine without some layers keeps their state and activates nothing', async () => {
+  // Engine availability does not remove layers from the application's catalog.
+  const manager = new DataLayerManager(
+    {},
+    {
+      getSourceAvailability: (id) => ({ available: id === 'satellites' }),
+    },
+  );
+  const enabled = [];
+  manager.register(
+    fakeLayer('satellites', {
+      enable: () => (enabled.push('satellites'), true),
+    }),
+  );
+  for (const id of ['flights', 'ais-live-vessels'])
+    manager.register(fakeLayer(id, { enable: () => (enabled.push(id), true) }));
+  manager.finalizeRegistrations(
+    LAYER_STATE_REGISTRY.filter(({ id }) =>
+      ['satellites', 'flights', 'ais-live-vessels'].includes(id),
+    ),
+  );
+  const shared = normalizeLayerState({
+    enabledLayerIds: ['flights', 'ais-live-vessels', 'satellites'],
+  });
+  const sink = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, sink, {
+    storage: memoryStorage(),
+  });
+  const results = await coordinator.start({
+    shareLayerState: shared,
+    shareCreatedAtMs: 1_000,
+  });
+  assert.deepEqual(enabled, ['satellites'], 'only the available layer runs');
+  const missing = results
+    .filter(({ succeeded, targetEnabled }) => !succeeded && targetEnabled)
+    .map(({ layerId }) => layerId)
+    .sort();
+  assert.deepEqual(missing, ['ais-live-vessels', 'flights']);
+  // Re-saved (the link the user copies on Navara): the state is all there.
+  assert.deepEqual(sink.provider().enabledLayerIds, [
+    'ais-live-vessels',
+    'flights',
+    'satellites',
+  ]);
+  // An explicit change of a layer that is here keeps the others too.
+  await manager.setEnabled('satellites', false, { origin: 'user' });
+  assert.deepEqual(sink.provider().enabledLayerIds, [
+    'ais-live-vessels',
+    'flights',
+  ]);
+  // And back on Cesium the link turns them on.
+  const decoded = decodeLayerStateParams(
+    new URLSearchParams(encode(sink.provider())),
+  );
+  assert.deepEqual(decoded.enabledLayerIds, ['ais-live-vessels', 'flights']);
+  coordinator.destroy();
+});
+
 /** Active Fires options decoded from a v2 link with these `lo` assignments. */
 function firmsOptions(lo) {
   const params = new URLSearchParams([

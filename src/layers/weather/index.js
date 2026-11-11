@@ -1,7 +1,7 @@
-import * as Cesium from 'cesium';
-import { createWeatherRendering } from './rendering.js';
+import * as geo from '../../geo/index.js';
+import { createWeatherDisplay } from './render/display.js';
+import { engineImageryHost, imageryHostStatus } from '../shared/imageryHost.js';
 import { weatherFrameSource } from './source.js';
-import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
   RADAR_MAX_GAP_MS,
@@ -54,28 +54,31 @@ const utc = (value) =>
 
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. Its time is the world clock's, so a link made away from live
- * opens its imagery at that time; one made live opens the latest. */
+ * opens its imagery at that time; one made live opens the latest.
+ * It draws through its display (render/display.js) on the engine it is
+ * attached to: `createNativeRendering(engine, options)`, the application's,
+ * or the display made here. */
 export function createWeatherLayer({
   feed,
   clock,
   id = 'weather-radar',
-  cesium = Cesium,
-  createRendering = createWeatherRendering,
+  createNativeRendering = createWeatherDisplay,
   documentRef = globalThis.document,
   eventTarget = globalThis.window,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
-  // A feed may also supply decoded frames; see weatherFrameSource.
+  const frameSource = weatherFrameSource(feed);
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
   const satellite = !radar && !lightning;
   let product = radar ? 'radar' : lightning ? 'lightning' : 'clouds-regional';
   let opacity = 'strong';
   let infrared = 100;
-  let viewer = null,
-    rendering = null,
+  let sceneEngine = null;
+  let lastShown = null;
+  let rendering = null,
     manifest = null,
     request = null,
     listener = null;
@@ -89,7 +92,6 @@ export function createWeatherLayer({
     removeCamera = null;
   let motion = null;
   let runNavigation = null;
-  let imageryHost = null;
   let hostCollection;
   let hostHidden = false;
   let hostStatus = null;
@@ -106,10 +108,21 @@ export function createWeatherLayer({
           : REGIONAL_INFRARED_MAX_GAP_MS;
   const isLatest = () =>
     clock ? clock.getState().mode === 'latest' : followLatest;
+  // The display draws through engine.imagery, which follows the surface the
+  // map shows; without an engine nothing draws and nothing is hidden.
+  const unsupportedTiles = () =>
+    frameSource?.getTile &&
+    sceneEngine &&
+    !sceneEngine.extensions?.cesium?.viewer &&
+    product !== 'clouds' &&
+    sceneEngine.imagery.surface() !== 'tiles';
   const getHost = () =>
-    imageryHost?.() ?? { collection: viewer?.imageryLayers, kind: 'globe' };
+    sceneEngine
+      ? engineImageryHost(sceneEngine)
+      : { collection: null, kind: 'globe' };
   const notify = () => listener?.();
-  const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
+  const shownTime = () =>
+    noFrame ? null : (rendering?.getDiagnostics().time ?? lastShown);
   const unsubscribeClock = clock?.subscribe(() => {
     if (!clock.getState().advancing || suspended())
       rendering?.cancelPrefetch?.();
@@ -136,7 +149,9 @@ export function createWeatherLayer({
 
   function checkHost(resume = true) {
     const host = getHost();
-    const status = imageryHostStatus(host);
+    const status = unsupportedTiles()
+      ? msg('This weather source requires Cesium')
+      : imageryHostStatus(host);
     const changed = host.collection !== hostCollection || hostStatus !== status;
     hostCollection = host.collection;
     hostStatus = status;
@@ -163,7 +178,7 @@ export function createWeatherLayer({
           : shownTime();
       if (
         time !== shownTime() ||
-        (satellite && rendering.getDiagnostics().infrared !== infrared)
+        (satellite && rendering?.getDiagnostics().infrared !== infrared)
       )
         void show(time);
       else schedule();
@@ -198,7 +213,7 @@ export function createWeatherLayer({
     return true;
   }
   function registerClock() {
-    if (!clock || unregisterClock || !rendering || !enabled) return;
+    if (!clock || unregisterClock || !enabled) return;
     unregisterClock = clock.register({
       id,
       get maxGapMs() {
@@ -231,6 +246,7 @@ export function createWeatherLayer({
     if (!enabled || hostHidden || !manifest?.times?.includes(time))
       return false;
     signal?.throwIfAborted();
+    if (!rendering) return false;
     frameRequest?.abort();
     const controller = new AbortController();
     frameRequest = controller;
@@ -248,6 +264,7 @@ export function createWeatherLayer({
         return false;
       if (ok) {
         noFrame = false;
+        lastShown = time;
         rendering.setHidden?.(false);
         void warmNext(time);
       }
@@ -273,6 +290,14 @@ export function createWeatherLayer({
       }
     }
   }
+  function watchCamera() {
+    const moveEnd = sceneEngine?.camera.moveEnd;
+    removeCamera ??= moveEnd?.addEventListener(() => {
+      checkHost();
+      notify();
+    });
+  }
+
   const layer = {
     id,
     name: radar
@@ -283,31 +308,58 @@ export function createWeatherLayer({
     icon: radar ? '◉' : lightning ? 'ϟ' : '☁',
     source: 'NOAA nowCOAST · OBSERVED',
     updateInterval: lightning ? 600_000 : 120_000,
-    init(nextViewer) {
-      viewer = nextViewer;
-      rendering = createRendering({
-        viewer,
-        cesium,
-        getHost,
-        onChange: notify,
-        frameSource: weatherFrameSource(feed),
-      });
+    init(nextViewer, options = {}) {
+      motion = matchMedia?.('(prefers-reduced-motion: reduce)');
+      motion?.addEventListener?.('change', onVisibility);
+      documentRef?.addEventListener?.('visibilitychange', onVisibility);
+      if (options.engine) layer.attachRenderer(options);
+    },
+    attachRenderer({ engine = null } = {}) {
+      sceneEngine = engine;
+      rendering = engine
+        ? (createNativeRendering(engine, {
+            onChange: notify,
+            frameSource,
+          }) ?? null)
+        : null;
       checkHost(false);
       eventTarget?.addEventListener?.(
         'gev:map-stack-changed',
         onMapStackChanged,
       );
-      rendering.setAlpha(opacity === 'light' ? 0.4 : satellite ? 0.7 : 0.8);
-      motion = matchMedia?.('(prefers-reduced-motion: reduce)');
-      motion?.addEventListener?.('change', onVisibility);
-      documentRef?.addEventListener?.('visibilitychange', onVisibility);
-      registerClock();
+      rendering?.setAlpha(opacity === 'light' ? 0.4 : satellite ? 0.7 : 0.8);
+      if (!enabled) return;
+      watchCamera();
+      if (!manifest) return;
+      const time =
+        clock && !isLatest()
+          ? clock.selectFor(id, clock.getState().target)
+          : followLatest
+            ? manifest.latest
+            : lastShown;
+      if (time) void show(time);
+      else rendering?.setHidden(true);
+    },
+    detachRenderer() {
+      ++generation;
+      frameRequest?.abort();
+      frameRequest = null;
+      clearTimeout(timer);
+      timer = null;
+      removeCamera?.();
+      removeCamera = null;
+      eventTarget?.removeEventListener?.(
+        'gev:map-stack-changed',
+        onMapStackChanged,
+      );
+      rendering?.clear();
+      rendering = null;
+      hostCollection = null;
+      runNavigation = null;
+      sceneEngine = null;
+      loading = Boolean(request && !request.signal.aborted);
     },
     attachShellServices(services) {
-      imageryHost =
-        typeof services?.imageryHost === 'function'
-          ? services.imageryHost
-          : null;
       checkHost();
       runNavigation =
         typeof services?.runNavigation === 'function'
@@ -317,12 +369,7 @@ export function createWeatherLayer({
     },
     enable() {
       enabled = true;
-      if (!removeCamera) {
-        removeCamera = viewer.camera.moveEnd?.addEventListener(() => {
-          checkHost();
-          notify();
-        });
-      }
+      watchCamera();
       registerClock();
     },
     disable() {
@@ -340,6 +387,7 @@ export function createWeatherLayer({
       stop();
       rendering?.clear();
       manifest = null;
+      lastShown = null;
       loading = false;
       error = null;
       followLatest = true;
@@ -399,7 +447,7 @@ export function createWeatherLayer({
             : shownTime();
         if (
           shownTime() !== time ||
-          (satellite && rendering.getDiagnostics().infrared !== infrared)
+          (satellite && rendering?.getDiagnostics().infrared !== infrared)
         )
           await show(time, controller.signal);
         return (
@@ -461,7 +509,7 @@ export function createWeatherLayer({
         followLatest = true;
         rendering?.clear();
         if (clock) void clock.refresh();
-        if (enabled) void layer.update(viewer);
+        if (enabled) void layer.update();
       }
       if (infraredChanged && enabled && manifest) {
         clearTimeout(timer);
@@ -473,7 +521,8 @@ export function createWeatherLayer({
         params.focus === true &&
         enabled &&
         manifest?.bounds &&
-        runNavigation
+        runNavigation &&
+        sceneEngine
       ) {
         const b =
           weatherDisplay(manifest).extent ??
@@ -481,13 +530,14 @@ export function createWeatherLayer({
             ? { west: 110, south: -25, east: 0, north: 80 }
             : manifest.bounds);
         runNavigation(() =>
-          viewer.camera.flyTo({
-            destination: cesium.Rectangle.fromDegrees(
-              b.west,
-              b.south,
-              b.east,
-              b.north,
-            ),
+          sceneEngine.camera.flyTo({
+            // The engine camera takes a plain rectangle in radians.
+            destination: {
+              west: geo.math.toRadians(b.west),
+              south: geo.math.toRadians(b.south),
+              east: geo.math.toRadians(b.east),
+              north: geo.math.toRadians(b.north),
+            },
             duration: motion?.matches ? 0 : 1.4,
           }),
         );
@@ -534,6 +584,7 @@ export function createWeatherLayer({
           : { product, opacity };
     },
     getRowControls() {
+      if (unsupportedTiles()) return null;
       const shared = clock?.getState();
       const followLatest = isLatest();
       // Source-described text is data: shown as is, never translated.
@@ -582,21 +633,18 @@ export function createWeatherLayer({
       const shownProblem = problem ? presentWeatherProblem(problem) : null;
       const shownHost = hostStatus ? t(hostStatus) : null;
       const b = manifest?.bounds;
-      const canvas = viewer?.scene?.canvas;
+      const canvas = sceneEngine?.host.canvas;
       const point =
         canvas &&
-        viewer.camera.pickEllipsoid?.(
-          new cesium.Cartesian2(
+        sceneEngine.camera.pickEllipsoid(
+          geo.cartesian2.create(
             canvas.clientWidth / 2,
             canvas.clientHeight / 2,
           ),
-          viewer.scene.globe.ellipsoid,
         );
-      const camera = point
-        ? cesium.Cartographic.fromCartesian(point, viewer.scene.globe.ellipsoid)
-        : null;
-      const lon = camera ? cesium.Math.toDegrees(camera.longitude) : 0;
-      const lat = camera ? cesium.Math.toDegrees(camera.latitude) : 0;
+      const camera = point ? geo.cartographic.fromCartesian(point) : null;
+      const lon = camera ? geo.math.toDegrees(camera.longitude) : 0;
+      const lat = camera ? geo.math.toDegrees(camera.latitude) : 0;
       const outside =
         b &&
         camera &&
@@ -878,19 +926,10 @@ export function createWeatherLayer({
     },
     destroy() {
       layer.disable();
+      layer.detachRenderer();
       unsubscribeClock?.();
-      removeCamera?.();
-      removeCamera = null;
       motion?.removeEventListener?.('change', onVisibility);
       documentRef?.removeEventListener?.('visibilitychange', onVisibility);
-      eventTarget?.removeEventListener?.(
-        'gev:map-stack-changed',
-        onMapStackChanged,
-      );
-      runNavigation = null;
-      imageryHost = null;
-      viewer = null;
-      rendering = null;
       listener = null;
     },
   };

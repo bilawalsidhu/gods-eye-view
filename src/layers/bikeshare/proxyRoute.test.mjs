@@ -401,7 +401,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
 }
 
 test('unknown GBFS counts stay unknown through the source, model and station color', async () => {
-  const { createRendering } = await import('./rendering.js');
+  const { statusToColor, resolveCapacity } = await import('./presentation.js');
   const { COLOR_NEUTRAL, COLOR_RED } = await import('./policy.js');
   for (const missing of [null, '']) {
     const source = createBikeshareSource({
@@ -425,21 +425,16 @@ test('unknown GBFS counts stay unknown through the source, model and station col
     const status = model
       .parseStationStatus(await source.getStations(AUSTIN.stationStatusUrl))
       .get('2537');
-    const rendering = createRendering({
-      state: {},
-      services: { render: {} },
-      parts: { model },
-    });
     assert.equal(status.bikesAvailable, null);
     assert.equal(
       model.toNonNegativeInteger(status.bikesAvailable),
       null,
       'render-map normalization preserves unknown',
     );
-    assert.equal(rendering.statusToColor(status, 12), COLOR_NEUTRAL);
-    assert.equal(rendering.resolveCapacity(missing, status), 4);
+    assert.equal(statusToColor(model, status, 12), COLOR_NEUTRAL);
+    assert.equal(resolveCapacity(model, missing, status), 4);
     assert.equal(
-      rendering.statusToColor({ ...status, bikesAvailable: 0 }, 12),
+      statusToColor(model, { ...status, bikesAvailable: 0 }, 12),
       COLOR_RED,
       'reported zero is still empty',
     );
@@ -453,18 +448,20 @@ test('unknown GBFS counts stay unknown through the source, model and station col
 });
 
 test('a station without a published capacity re-derives it from every status poll', async () => {
-  const { createRendering } = await import('./rendering.js');
+  const { createBikeshareDisplay } = await import('./render/display.js');
+  const { createFakeEngine } =
+    await import('../../globe/testing/fakeEngine.js');
   const { COLOR_YELLOW } = await import('./policy.js');
   const model = createModel({});
   const state = {
     _cityRuntime: new Map(),
     _stationRenderMap: new Map(),
-    _pointCollection: { add: (options) => ({ ...options }) },
   };
-  const rendering = createRendering({
+  const parts = { model, display: { refreshSelectedCard() {} } };
+  const rendering = createBikeshareDisplay(createFakeEngine(), {
     state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model },
+    parts,
   });
   const info = model.parseStationInformation({
     data: {

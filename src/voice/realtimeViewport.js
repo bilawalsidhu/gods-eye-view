@@ -4,9 +4,19 @@ import {
 } from './realtimeProtocol.js';
 import { cameraPoseKey } from './pointerContext.js';
 
-/** The live viewer's camera pose identity (Cesium-free read). */
+/** The page's globe engine (both engines). */
+function pageGlobe() {
+  return globalThis.window?.__godsEyeView?.engine ?? null;
+}
+
+/** The map canvas: the engine's host canvas. */
+function pageCanvas(globe) {
+  return globe?.host?.canvas;
+}
+
+/** The live camera pose identity (Cesium-free read). */
 function readViewerCameraKey() {
-  return cameraPoseKey(globalThis.window?.__godsEyeView?.viewer);
+  return cameraPoseKey(pageGlobe());
 }
 // Viewport-screenshot size guards (M13). The old code clamped WIDTH only, so a
 // tall portrait window produced an oversized capture whose dc.send could throw.
@@ -18,16 +28,18 @@ const VIEWPORT_MAX_PIXELS = 1200 * 900;
 const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
 
 export async function captureViewportImage() {
-  const viewer = window.__godsEyeView?.viewer;
+  // Both engines draw with preserveDrawingBuffer (Cesium's contextOptions;
+  // Navara's own WebGL2 canvas, S4), so the canvas holds the last frame.
+  const globe = pageGlobe();
   const source =
-    viewer?.scene?.canvas ||
+    pageCanvas(globe) ||
     document.querySelector('#cesiumContainer .cesium-widget canvas');
   if (!source || !source.width || !source.height) return null;
   // No fresh frame (hidden, or the bounded render wait timed out) → no
   // capture. The caller labels this image "Current"; a stale preserved
   // frame would feed the model old entities as current context. (perf
   // wave 2 fix)
-  const fresh = await renderFreshCesiumFrame(viewer);
+  const fresh = await renderFreshFrame(globe);
   if (!fresh) return null;
 
   // Clamp BOTH dimensions by a total-pixel budget so tall portrait windows are
@@ -166,10 +178,10 @@ export function pointerCropRect({
  *   the crop's normalized bounds in the full canvas, or null.
  */
 async function capturePointerCrop(screenPx) {
-  const viewer = window.__godsEyeView?.viewer;
-  const source = viewer?.scene?.canvas;
+  const globe = pageGlobe();
+  const source = pageCanvas(globe);
   if (!source?.width || !source?.height || !screenPx) return null;
-  const fresh = await renderFreshPointerFrame(viewer);
+  const fresh = await renderFreshPointerFrame(globe);
   if (!fresh) return null;
   const rect = pointerCropRect({
     x: screenPx.x,
@@ -223,10 +235,10 @@ async function capturePointerCrop(screenPx) {
  * Pointer crops get one bounded recovery request for a slow render loop.
  * Full-viewport captures intentionally keep their single 400 ms attempt.
  */
-export async function renderFreshPointerFrame(viewer) {
-  if (await renderFreshCesiumFrame(viewer)) return true;
+export async function renderFreshPointerFrame(globe) {
+  if (await renderFreshFrame(globe)) return true;
   if (typeof document !== 'undefined' && document.hidden) return false;
-  return renderFreshCesiumFrame(viewer);
+  return renderFreshFrame(globe);
 }
 
 // Scale (w, h) down so w*h <= maxPixels while preserving aspect ratio. Never
@@ -265,9 +277,13 @@ export function estimateDataUrlBytes(dataUrl) {
  *   when the bounded wait timed out. Callers must not label a non-fresh
  *   canvas as current. (perf wave 2)
  */
-export async function renderFreshCesiumFrame(viewer) {
-  const scene = viewer?.scene;
-  if (!scene) return false;
+export async function renderFreshFrame(globe) {
+  if (!globe) return false;
+  // The engine's frame events and render request.
+  const scene = {
+    postRender: globe.frames.postRender,
+    requestRender: () => globe.render.request('voice-capture'),
+  };
   // While the document is hidden the render loop is suspended — don't
   // secretly restart rendering for an optional screenshot, and don't pass
   // the stale preserved frame off as current.
@@ -596,3 +612,6 @@ export class RealtimeViewport {
     return true;
   }
 }
+
+/** renderFreshFrame under its earlier name (realtimeController re-exports it). */
+export const renderFreshCesiumFrame = renderFreshFrame;

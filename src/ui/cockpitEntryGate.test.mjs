@@ -11,6 +11,7 @@ import { createApp, defineComponent, h, nextTick } from 'vue';
 import { DataLayerManager } from '../data/manager.js';
 import { createDependencies } from '../layers/awareness/dependencies.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
+import { createCockpitEngine } from '../testSupport/cockpitEngine.mjs';
 import { ContextControls } from './contextControls.js';
 import { _handleContextLayerChange } from './contextLayerChanges.js';
 import { useCockpitStore } from './stores/cockpit.js';
@@ -75,29 +76,21 @@ function fixture(
     tracked?.layerId === layerId && dataManager.isEnabled(layerId)
       ? tracked.info
       : null;
-  const entityFor = (subject) => ({
-    position: { getValue: () => null },
-    show: true,
-    gevTrackedId: subject ? `${subject.layerId}:${subject.info.icao24}` : '',
-  });
-  const entities = new Set();
-  const entity = entityFor(tracked);
-  entities.add(entity);
-  const listeners = () => ({ addEventListener: () => () => {} });
-  const viewer = {
-    trackedEntity: tracked ? entity : undefined,
-    clock: { currentTime: null },
-    camera: { cancelFlight() {}, frustum: { fov: 1, aspectRatio: 1 } },
-    entities: { contains: (candidate) => entities.has(candidate) },
-    scene: {
-      preUpdate: listeners(),
-      screenSpaceCameraController: { enableInputs: true },
-    },
-    trackedEntityChanged: listeners(),
-  };
+  // The tracked aircraft is the engine follow's glyph, as its layer draws it.
+  const globe = createCockpitEngine();
+  const { engine } = globe;
+  const aircraftFor = (subject) =>
+    globe.aircraft({
+      gevTrackedId: `${subject.layerId}:${subject.info.icao24}`,
+    });
+  if (tracked) globe.ride(aircraftFor(tracked));
   const context = { mode: contextMode, changing };
   const coordinator = new CockpitCoordinator({
-    viewer,
+    engine,
+    viewer: {
+      camera: { frustum: { fov: 1, aspectRatio: 16 / 9 } },
+      scene: {},
+    },
     services: {
       flightsLayer: { getTrackedInfo: trackedFrom('flights') },
       militaryFlightsLayer: { getTrackedInfo: trackedFrom('military') },
@@ -142,6 +135,7 @@ function fixture(
   });
   t.after(() => {
     coordinator.stop();
+    engine.destroy();
     app.unmount();
     document.body.classList.remove(
       'cockpit-mode',
@@ -168,8 +162,7 @@ function fixture(
   /** Track another aircraft, as Contacts navigation does mid-session. */
   const retrack = (subject) => {
     tracked = subject;
-    viewer.trackedEntity = entityFor(subject);
-    entities.add(viewer.trackedEntity);
+    return globe.ride(aircraftFor(subject));
   };
   const $ = (selector) => document.querySelector(selector);
   return { $, coordinator, cockpit, store, layers, disable, retrack, pinia };
@@ -498,8 +491,10 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   await settle();
   assert.equal(cockpit.enter(), true);
   // NEXT hands the view to a military aircraft; Contacts turned its layer on.
-  retrack({ layerId: 'military', info: MILITARY });
-  assert.equal(cockpit._adoptTrackedEntity(performance.now()), true);
+  // The Cockpit adopts it when the engine's follow changes to it.
+  const military = retrack({ layerId: 'military', info: MILITARY });
+  assert.equal(cockpit.trackedEntity, military);
+  assert.equal(military.show, false, 'the new ride is not drawn either');
   assert.equal(cockpit.readSubjectLayerId(), 'military');
   await manager.setEnabled('ais-live-vessels', false, { origin: 'user' });
   await settle();

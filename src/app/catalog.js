@@ -47,16 +47,15 @@ export function createLayerCatalog(layers, metadata) {
   });
 }
 
-/** Bind the current control surface to the exact instances registered by the app. */
+/** Bind controls to the exact instances registered by the app. */
 export function catalogControlServices(catalog) {
   if (!catalog?.get)
     throw new TypeError('An application layer catalog is required');
   return Object.fromEntries(
     Object.entries(CONTROL_LAYER_IDS).map(([role, id]) => {
       const layer = catalog.get(id);
-      if (!layer)
-        throw new TypeError(`Control layer missing from catalog: ${id}`);
-      return [role, layer];
+      if (layer) return [role, layer];
+      throw new TypeError(`Control layer missing from catalog: ${id}`);
     }),
   );
 }

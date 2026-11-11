@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { cameraPoseKey } from './pointerContext.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
@@ -11,37 +11,35 @@ function pointerRadiusKm(cameraHeightM) {
 }
 
 /**
- * The Cesium side of point-and-ask: one entity pick and one depth-aware world
- * pick at canvas CSS pixels. Called lazily by the pointer tracker (dwell and
- * snapshot only), never per mouse move.
+ * The globe side of point-and-ask: one object pick (engine.picker.pick) and
+ * one depth-aware world pick at canvas CSS pixels, on either engine. Called
+ * lazily by the pointer tracker (dwell and snapshot only), never per mouse
+ * move.
  * @param {object} options
- * @param {object} options.viewer Cesium viewer.
+ * @param {object} options.engine The globe engine.
  * @param {object} [options.dataManager] Layer lifecycle.
  * @param {Function} [options.pickWorldFromScreen] Normalized-pixel world pick.
  * @returns {(x: number, y: number) => {entity: object|null, ground: object|null, radiusKm: number}|null}
  */
 export function createPointerPicker({
-  viewer,
+  engine,
   dataManager = null,
   pickWorldFromScreen = defaultAnnotationResolver.pickWorldFromScreen,
 }) {
   return function pickPointer(x, y) {
-    const scene = viewer?.scene;
-    const canvas = scene?.canvas;
-    if (!scene || !canvas) return null;
-    const width = canvas.clientWidth || canvas.width || 0;
-    const height = canvas.clientHeight || canvas.height || 0;
+    if (!engine || engine.isDestroyed?.()) return null;
+    const { width, height } = engine.host.size();
     if (!width || !height) return null;
     let picked = null;
     try {
-      picked = scene.pick(new Cesium.Cartesian2(x, y));
+      picked = engine.picker.pick(geo.cartesian2.create(x, y)) ?? null;
     } catch {
       picked = null;
     }
-    const entity = resolvePickedContext(picked, { dataManager });
+    const entity = resolvePickedContext(picked, { dataManager, engine });
     let ground = null;
     try {
-      const hit = pickWorldFromScreen(viewer, x / width, y / height);
+      const hit = pickWorldFromScreen(engine, x / width, y / height);
       if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lon))
         ground = {
           lat: hit.lat,
@@ -54,8 +52,8 @@ export function createPointerPicker({
     return {
       entity,
       ground,
-      radiusKm: pointerRadiusKm(viewer.camera?.positionCartographic?.height),
-      cameraKey: cameraPoseKey(viewer),
+      radiusKm: pointerRadiusKm(engine.camera.height()),
+      cameraKey: cameraPoseKey(engine),
     };
   };
 }

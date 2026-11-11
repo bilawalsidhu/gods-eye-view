@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAnimation } from './animation.js';
 
-test('traffic render demand follows animated population and jam lines across empty, disable and re-enable', () => {
+test('traffic render demand follows the animated population across empty, disable and re-enable', () => {
   const calls = [];
   const state = { _enabled: true, _dots: [], _motion: { rebuilds: 0 } };
   const animation = createAnimation({
@@ -17,7 +17,7 @@ test('traffic render demand follows animated population and jam lines across emp
       retention: { clear() {} },
       rendering: {
         removeHeatLines() {
-          state._heatJamPrim = null;
+          state._heatLineCount = 0;
         },
       },
     },
@@ -30,7 +30,13 @@ test('traffic render demand follows animated population and jam lines across emp
   assert.deepEqual(calls, [['hold', 'traffic']]);
   animation.clearDots();
   assert.deepEqual(calls.at(-1), ['release', 'traffic']);
-  state._heatJamPrim = {};
+  // Heat lines alone hold no continuous render: the jam's pulse keeps frames
+  // coming through engine.ground while it is shown.
+  state._heatLineCount = 3;
+  animation.syncRenderDemand();
+  assert.deepEqual(calls.at(-1), ['release', 'traffic']);
+  assert.equal(state._renderHeld, false);
+  state._dots.push({});
   animation.syncRenderDemand();
   assert.deepEqual(calls.at(-1), ['hold', 'traffic']);
   state._enabled = false;
@@ -39,6 +45,7 @@ test('traffic render demand follows animated population and jam lines across emp
   state._enabled = true;
   animation.clearDots();
   assert.equal(state._renderHeld, false);
+  assert.equal(state._heatLineCount, 0, 'a clear removes the heat lines');
   state._dots.push({});
   animation.syncRenderDemand();
   assert.equal(state._renderHeld, true);

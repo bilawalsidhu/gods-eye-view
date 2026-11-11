@@ -123,7 +123,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 12  | `panelState`                 | LEN   | none        | packed panel entries, see panels                                  |
 | 13  | thing                        | LEN   | none        | sub-message, see thing views                                      |
 | 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow (retired) |
-| 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm            |
+| 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm, sentinel2 |
 | 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber                      |
 | 17  | `bloomIntensity`             | uint  | style       |                                                                   |
 | 18  | `bloomVersion`               | uint  | 2           |                                                                   |

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { CCTV_FOCUS_RESULT } from './policy.js';
 
 export function createNavigation({
@@ -13,10 +13,10 @@ export function createNavigation({
    */
 
   function nearestCameraIdToViewer() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     if (!carto || !layerState._records.length) return null;
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+    const lat = geo.math.toDegrees(carto.latitude);
+    const lon = geo.math.toDegrees(carto.longitude);
 
     let best = null;
     for (const record of layerState._records) {
@@ -72,8 +72,8 @@ export function createNavigation({
    * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'cockpit-active'} Focus result.
    */
 
-  function focusCctvRecord(viewer, record, duration = 2.2) {
-    if (!viewer || !record) return CCTV_FOCUS_RESULT.NO_ACTIVE_CAMERA;
+  function focusCctvRecord(renderer, record, duration = 2.2) {
+    if (!renderer || !record) return CCTV_FOCUS_RESULT.NO_ACTIVE_CAMERA;
     if (
       typeof document !== 'undefined' &&
       document.body?.classList.contains('cockpit-mode')
@@ -81,35 +81,19 @@ export function createNavigation({
       console.debug('[Data:CCTV] focus ignored while cockpit owns the camera');
       return CCTV_FOCUS_RESULT.COCKPIT_ACTIVE;
     }
-    if (viewer.trackedEntity) {
+    if (renderer.following()) {
       console.debug(
         '[Data:CCTV] focus ignored while a tracked entity owns the camera',
       );
       return CCTV_FOCUS_RESULT.TRACKING_HOLDS_VIEW;
     }
-    const { camera } = record;
-    const range = Math.max(280, camera.rangeM * 1.18);
-    viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(
-        record.position,
-        Math.max(40, camera.rangeM * 0.36),
-      ),
-      {
-        offset: new Cesium.HeadingPitchRange(
-          parts.model.toRad(camera.headingDeg),
-          parts.model.toRad(-22),
-          range,
-        ),
-        duration: Math.max(0.2, duration || 0),
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-      },
-    );
+    renderer.focus(record, duration);
     return CCTV_FOCUS_RESULT.FOCUSED;
   }
 
   function focusCamera(cameraId, duration = 2.2) {
     return focusCctvRecord(
-      layerState._viewer,
+      parts.renderer?.ready ? parts.renderer : null,
       layerState._recordById.get(cameraId),
       duration,
     );

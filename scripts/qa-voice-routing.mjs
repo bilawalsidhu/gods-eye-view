@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native pick and tracking probes validate the legacy Cesium voice route.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
 /**
  * qa-voice-routing.mjs — voice-surface QA harness (overnight 2026-07-27).
  *
@@ -36,11 +39,11 @@
  * routing assertions pin tool NAMES (model wording varies, tool choice must not).
  */
 
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { ROUTING_PHRASES } from './voice-bench/phrases.mjs';
 import { gradeCore, expectLabel } from './voice-bench/grade.mjs';
@@ -52,19 +55,6 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-const CHROME_EXECUTABLE = CHROME_CANDIDATES.find((candidate) => {
-  try {
-    return fs.existsSync(candidate);
-  } catch {
-    return false;
-  }
-});
 
 // ── CLI ─────────────────────────────────────────────────────
 function getOpt(flag, fallback) {
@@ -674,21 +664,9 @@ async function runDeixisRoutingLayer() {
 
 async function runDeixisLiveLayer() {
   console.log('\nLAYER 1c — deixis live (in-app text turns)');
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--use-fake-device-for-media-stream',
-      '--use-fake-ui-for-media-stream',
-      '--autoplay-policy=no-user-gesture-required',
-      '--window-size=1500,950',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(HEADFUL ? [] : []), '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required', '--window-size=1500,950'],
     protocolTimeout: 180000,
   });
   const appUrl = new URL(APP_URL);
@@ -716,11 +694,12 @@ async function runDeixisLiveLayer() {
       timeout: 60000,
     });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.session,
+      () => window.__godsEyeView?.engine && window.__gevVoiceCommands?.session,
       { timeout: 120000, polling: 250 },
     );
+    await whenSettled(page);
     await page.evaluate(() =>
-      window.__godsEyeView.viewer.camera.cancelFlight(),
+      window.__godsEyeView.engine.camera.cancelFlight(),
     );
     await run('fly_to_location', { query: 'Austin, Texas' });
     await settle(9000);
@@ -778,7 +757,7 @@ async function runDeixisLiveLayer() {
             ).find((e) => e.id === p.aircraftId);
             viewer.scene.render();
             at = found?.position
-              ? viewer.scene.cartesianToCanvasCoordinates(found.position)
+              ? window.__godsEyeView.engine.projector.worldToWindow(found.position)
               : null;
           }
           if (at) window.__gevVoiceCommands.pointer.moveTo(at.x, at.y);
@@ -865,8 +844,8 @@ async function runDeixisLiveLayer() {
     }
 
     const size = await page.evaluate(() => ({
-      w: window.__godsEyeView.viewer.scene.canvas.clientWidth,
-      h: window.__godsEyeView.viewer.scene.canvas.clientHeight,
+      w: window.__godsEyeView.engine.host.canvas.clientWidth,
+      h: window.__godsEyeView.engine.host.canvas.clientHeight,
     }));
     const events = await turn('How many flights are around here?', {
       x: size.w * 0.3,
@@ -893,7 +872,7 @@ async function runDeixisLiveLayer() {
     } catch {
       /* closing */
     }
-    await browser.close();
+    await closeBrowser(browser);
     console.log(`  deixis live turns used: ${turnsUsed}`);
   }
 }
@@ -986,8 +965,8 @@ function findPickableAircraft(page) {
   return page.evaluate(() => {
     const { viewer, dataManager } = window.__godsEyeView;
     const module = dataManager.layers.get('flights')?.module;
-    const canvas = viewer.scene.canvas;
-    const eye = viewer.camera.positionWC;
+    const canvas = window.__godsEyeView.engine.host.canvas;
+    const eye = window.__godsEyeView.engine.camera.pose().position;
     viewer.scene.render();
     let picks = 0;
     const candidates = [];
@@ -995,7 +974,7 @@ function findPickableAircraft(page) {
       // Horizon test: far-side contacts still project onto the canvas.
       const p = entry.position;
       if (eye.x * p.x + eye.y * p.y + eye.z * p.z < 6356000 ** 2) continue;
-      const at = viewer.scene.cartesianToCanvasCoordinates(entry.position);
+      const at = window.__godsEyeView.engine.projector.worldToWindow(entry.position);
       if (
         !at ||
         at.x < 60 ||
@@ -1176,7 +1155,7 @@ async function runDeixisBehavior(page, run, settle) {
 
   // D2 — bare ground: the chip gives coordinates and "around here" is a radius.
   const size = await page.evaluate(() => {
-    const canvas = window.__godsEyeView.viewer.scene.canvas;
+    const canvas = window.__godsEyeView.engine.host.canvas;
     return { w: canvas.clientWidth, h: canvas.clientHeight };
   });
   let groundTurn = null;
@@ -1320,19 +1299,9 @@ async function runBehaviorLayer() {
     return;
   }
 
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--disable-dev-shm-usage',
-      '--disable-web-security',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1500,950',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(HEADFUL ? [] : []), '--mute-audio', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1500,950'],
     protocolTimeout: 180000,
   });
   const page = await browser.newPage();
@@ -1388,14 +1357,15 @@ async function runBehaviorLayer() {
     });
     await page.waitForFunction(
       () =>
-        window.__godsEyeView?.viewer &&
+        window.__godsEyeView?.engine &&
         window.__gevVoiceCommands?.runner &&
         window.__gevAnnotations,
       { timeout: 120000, polling: 250 },
     );
+    await whenSettled(page);
     // House rule: the intro flight clobbers teleports issued mid-flight.
     await page.evaluate(() =>
-      window.__godsEyeView.viewer.camera.cancelFlight(),
+      window.__godsEyeView.engine.camera.cancelFlight(),
     );
 
     const run = (name, args) =>
@@ -1413,13 +1383,12 @@ async function runBehaviorLayer() {
       );
     const camState = () =>
       page.evaluate(() => {
-        const c = window.__godsEyeView.viewer.camera;
-        const p = c.positionCartographic;
+        const p = window.__godsEyeView.engine.camera.pose().cartographic;
         return {
           lat: (p.latitude * 180) / Math.PI,
           lon: (p.longitude * 180) / Math.PI,
           altKm: p.height / 1000,
-          pitchDeg: (c.pitch * 180) / Math.PI,
+          pitchDeg: (window.__godsEyeView.engine.camera.pose().pitch * 180) / Math.PI,
         };
       });
     const settle = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1464,7 +1433,7 @@ async function runBehaviorLayer() {
     // final tween frame. Cancel that already-arrived flight so the assertion
     // measures Radio's camera ownership, not residual navigation motion.
     await page.evaluate(() =>
-      window.__godsEyeView.viewer.camera.cancelFlight(),
+      window.__godsEyeView.engine.camera.cancelFlight(),
     );
     await settle(250);
     const radioCameraBefore = await camState();
@@ -1831,7 +1800,7 @@ async function runBehaviorLayer() {
     await page
       .waitForFunction(
         () =>
-          window.__godsEyeView.viewer.camera.positionCartographic.height /
+          window.__godsEyeView.engine.camera.pose().cartographic.height /
             1000 >
           12000,
         { timeout: 30_000, polling: 250 },
@@ -1852,7 +1821,7 @@ async function runBehaviorLayer() {
     await page
       .waitForFunction(
         () =>
-          window.__godsEyeView.viewer.camera.positionCartographic.height /
+          window.__godsEyeView.engine.camera.pose().cartographic.height /
             1000 <
           900,
         { timeout: 40_000, polling: 250 },
@@ -1922,7 +1891,7 @@ async function runBehaviorLayer() {
     // (6c) move_camera orbit ONCE: bounded eased ~30° heading advance.
     const heading = () =>
       page.evaluate(
-        () => (window.__godsEyeView.viewer.camera.heading * 180) / Math.PI,
+        () => (window.__godsEyeView.engine.camera.pose().heading * 180) / Math.PI,
       );
     let h0 = await heading();
     r = await run('move_camera', { motion: 'orbit', mode: 'once' });
@@ -2104,10 +2073,9 @@ async function runBehaviorLayer() {
 
     // (6e5) tilt at the clamp answers honestly instead of silently no-oping.
     await page.evaluate(() => {
-      const c = window.__godsEyeView.viewer.camera;
-      c.setView({
+      window.__godsEyeView.engine.camera.setView({
         orientation: {
-          heading: c.heading,
+          heading: window.__godsEyeView.engine.camera.pose().heading,
           pitch: (-5.2 * Math.PI) / 180,
           roll: 0,
         },
@@ -2394,7 +2362,7 @@ async function runBehaviorLayer() {
       String(e?.message || e).slice(0, 200),
     );
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 }
 
@@ -2424,11 +2392,10 @@ async function runBundledOutlineScenarios({
   const timings = [];
   for (const scenario of BUNDLED_OUTLINES) {
     const label = `behavior: "outline ${scenario.target}" draws the bundled ${scenario.pack} outline`;
-    await page.evaluate(({ lat, lon }) => {
-      const { viewer } = window.__godsEyeView;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo, { lat, lon }) => {
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (lon * Math.PI) / 180,
           latitude: (lat * Math.PI) / 180,
           height: 9000,
@@ -2528,11 +2495,10 @@ async function runGeometryScenarios({ page, run, settle, overpassRequests }) {
   const shot = (name) => page.screenshot({ path: path.join(shotDir, `${name}.png`) }).catch(() => {});
   const nominatimStart = nominatimCount();
   const overpassStart = overpassRequests.length;
-  const teleport = (lat, lon, height, pitch = -90) => page.evaluate(({ lat, lon, height, pitch }) => {
-    const { viewer } = window.__godsEyeView;
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+  const teleport = (lat, lon, height, pitch = -90) => evaluateWithGeo(page, async (qaGeo, { lat, lon, height, pitch }) => {
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: (lon * Math.PI) / 180, latitude: (lat * Math.PI) / 180, height,
       }),
       orientation: { heading: 0, pitch: (pitch * Math.PI) / 180, roll: 0 },
@@ -2728,11 +2694,10 @@ async function runOutlineAcceptance({
   const overpassStart = overpassRequests.length;
   if (SHOT_DIR) fs.mkdirSync(path.resolve(ROOT, SHOT_DIR), { recursive: true });
 
-  const teleport = (ask) => page.evaluate(({ lat, lon, height }) => {
-    const { viewer } = window.__godsEyeView;
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+  const teleport = (ask) => evaluateWithGeo(page, async (qaGeo, { lat, lon, height }) => {
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: (lon * Math.PI) / 180,
         latitude: (lat * Math.PI) / 180,
         height,

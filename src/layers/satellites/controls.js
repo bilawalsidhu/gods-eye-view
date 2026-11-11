@@ -1,6 +1,6 @@
+import * as geo from '../../geo/index.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { decodeSatelliteClassMask } from '../../data/satelliteClassMask.js';
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
   DEFAULT_SATELLITE_CLASSES,
@@ -79,7 +79,7 @@ export function createControls({ state: layerState, services, parts, source }) {
   /** Show or hide the ISS's ring by _issOrbitVisible, if it is built. */
   function _syncIssOrbit() {
     const issPath = layerState._orbitPaths.get(ISS_NORAD);
-    if (issPath) issPath.primitive.show = _issOrbitVisible();
+    if (issPath?.primitive) issPath.primitive.show = _issOrbitVisible();
   }
 
   /**
@@ -323,7 +323,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       return {
         noradId,
         name: sat.name.trim(),
-        position: Cesium.Cartesian3.fromDegrees(
+        position: geo.cartesian3.fromDegrees(
           pos.longitude,
           pos.latitude,
           pos.altitude,
@@ -356,15 +356,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._catalog.get(noradId)?.group === 'dense'
         )
           continue;
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        const carto = geo.cartographic.fromCartesian(point.position);
         if (!carto) continue;
         const sat = layerState._catalog.get(noradId);
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
           position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: geo.math.toDegrees(carto.latitude),
+          longitude: geo.math.toDegrees(carto.longitude),
           altitudeM: carto.height,
         });
       }
@@ -421,14 +421,14 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       const result = [];
       for (const { noradId, point, sat, distanceSq } of nearest) {
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        const carto = geo.cartographic.fromCartesian(point.position);
         if (!carto) continue;
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
           position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: geo.math.toDegrees(carto.latitude),
+          longitude: geo.math.toDegrees(carto.longitude),
           altitudeM: carto.height,
           satelliteClass: sat?.satelliteClass ?? null,
           distanceM: Math.sqrt(distanceSq),
@@ -443,15 +443,24 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {string|number} noradId NORAD catalog number.
      * @returns {boolean} True if tracking started.
      */
+    hasContact(id) {
+      return layerState._points.has(Number(id));
+    },
+
     trackById(noradId, { origin = 'programmatic' } = {}) {
       const id = Number(noradId);
       if (
         !Number.isFinite(id) ||
-        !layerState._viewer ||
+        !layerState._renderer ||
         !layerState._catalog.has(id) ||
         !layerState._points.has(id)
       )
         return false;
+      if (
+        layerState._sceneContext?.viewReady === false &&
+        layerState._trackedNorad === id
+      )
+        return true;
       parts.tracking._cancelPendingTrackingRestore();
       parts.tracking._trackSatellite(id, { origin });
       return layerState._trackedNorad === id;
@@ -627,13 +636,14 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (params.showOrbits !== undefined) {
         layerState._params.showOrbits = params.showOrbits !== false;
         for (const [noradId, path] of layerState._orbitPaths)
-          path.primitive.show =
-            noradId === ISS_NORAD
-              ? _issOrbitVisible()
-              : satelliteVisualsVisible(
-                  layerState._enabled,
-                  layerState._params.showOrbits,
-                );
+          if (path.primitive)
+            path.primitive.show =
+              noradId === ISS_NORAD
+                ? _issOrbitVisible()
+                : satelliteVisualsVisible(
+                    layerState._enabled,
+                    layerState._params.showOrbits,
+                  );
         parts.labels._syncIssOverlay();
       }
       if (catalogChanged && catalog === 'dense') {

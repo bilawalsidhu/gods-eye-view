@@ -1,6 +1,15 @@
+// The layer shows the USGS all_day feed: events within 24 h of its generation.
+const FEED_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /** Validate a complete feed before replacing the last good earthquake snapshot. */
 export function normalizeEarthquakeSnapshot(geojson) {
   if (!Array.isArray(geojson?.features)) return null;
+  // The feed's own clock bounds the window, so a wrong local clock cannot
+  // empty the layer; a feed without one is taken as published.
+  const generated = geojson.metadata?.generated;
+  const oldest = Number.isFinite(generated)
+    ? generated - FEED_WINDOW_MS
+    : -Infinity;
   const rows = [];
   const ids = new Set();
   for (const [index, feature] of geojson.features.entries()) {
@@ -28,6 +37,7 @@ export function normalizeEarthquakeSnapshot(geojson) {
       return null;
     // A missing magnitude cannot establish that this event meets M2.5+.
     if (mag == null || mag < 2.5) continue;
+    if (Number.isFinite(properties.time) && properties.time < oldest) continue;
     const stableId =
       feature.id == null || feature.id === ''
         ? `event-${index + 1}`

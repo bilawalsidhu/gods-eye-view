@@ -1,0 +1,19 @@
+{
+  "metrics": {
+    "attachRendererWithViewer": 0,
+    "restoreFlagCopies": 0,
+    "surfaceCallsOutsideGlobe": 10,
+    "engineSwitchLayerIds": 0,
+    "cesiumLayerRendererLines": 0,
+    "navaraLayerRendererLines": 0,
+    "cesiumImportFiles": 2,
+    "viewerLines": 632,
+    "navaraKindChecks": 1,
+    "engineSniffCalls": 0,
+    "engineExtensionReads": 4,
+    "groundEffectPasses": 0,
+    "cesiumSdkLoads": 3,
+    "screenSpaceHandlerFiles": 2,
+    "engineNameLines": 20
+  }
+}

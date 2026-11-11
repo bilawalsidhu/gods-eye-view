@@ -1,11 +1,11 @@
 import { attachCctvVideo } from './videoPlayback.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
-  PLANE_OUTLINE_COLOR,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
+  PROJECTION_TEXTURE_SWAP_MS,
 } from './policy.js';
 
 export function createProjection({
@@ -14,7 +14,12 @@ export function createProjection({
   parts,
   source,
 }) {
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const {
+    holdContinuousRender,
+    releaseContinuousRender,
+    governorRequestRender,
+  } = services.render;
+  let loopRevision = 0;
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -65,19 +70,14 @@ export function createProjection({
       );
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
-    runtime.planeEntity.position = positions.capCenter;
-    runtime.planeEntity.orientation = parts.model.planeOrientationFor(
-      record.camera,
-      positions.capCenter,
+    parts.renderer.updatePlane(
+      runtime,
+      geometry,
+      positions,
+      parts.model.planeOrientationFor(record.camera, positions.capCenter),
     );
-    if (runtime.planeEntity.plane) {
-      runtime.planeEntity.plane.dimensions = new Cesium.Cartesian2(
-        geometry.halfW * 2,
-        geometry.halfH * 2,
-      );
-    }
     if (runtime.labelPosition) {
-      Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
+      geo.cartesian3.clone(positions.label, runtime.labelPosition);
     }
   }
 
@@ -102,7 +102,9 @@ export function createProjection({
 
   function setPlaneVisible(runtime, visible) {
     if (!runtime) return;
-    if (runtime.planeEntity) runtime.planeEntity.show = !!visible;
+    runtime.planeVisible = !!visible;
+    if (runtime.planeEntity)
+      parts.renderer?.setPlaneVisible(runtime, !!visible);
     if (visible && runtime.overlayEntry && runtime.cameraId) {
       if (layerState._projectionOverlayOwnerId !== runtime.cameraId) {
         layerState._cctvOverlayHost.setEntries(
@@ -124,34 +126,22 @@ export function createProjection({
   /** Create the native monitor plane plus its cached host-label presentation. */
 
   function createProjectionPlane(record, runtime, geometry, positions) {
-    runtime.labelPosition ||= new Cesium.Cartesian3();
-    Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
+    runtime.labelPosition ||= geo.cartesian3.create();
+    geo.cartesian3.clone(positions.label, runtime.labelPosition);
     runtime.cameraId = String(record.camera.id);
     runtime.overlayEntry = createCctvProjectionOverlayEntry({
       cameraId: runtime.cameraId,
       name: record.camera.name,
       position: () => runtime.labelPosition,
     });
-    runtime.planeEntity = layerState._viewer.entities.add({
-      id: `cctv-${record.camera.id}-plane`,
-      properties: { cctvCameraId: record.camera.id },
-      show: false,
-      position: positions.capCenter,
-      orientation: parts.model.planeOrientationFor(
-        record.camera,
-        positions.capCenter,
-      ),
-      plane: {
-        plane: new Cesium.Plane(Cesium.Cartesian3.UNIT_Z, 0.0),
-        dimensions: new Cesium.Cartesian2(
-          geometry.halfW * 2,
-          geometry.halfH * 2,
-        ),
-        material: runtime.planeMaterial,
-        outline: true,
-        outlineColor: PLANE_OUTLINE_COLOR,
-      },
-    });
+    runtime.planeVisible = false;
+    runtime.planeEntity = parts.renderer.createPlane(
+      record,
+      runtime,
+      geometry,
+      positions,
+      parts.model.planeOrientationFor(record.camera, positions.capCenter),
+    );
     return runtime.planeEntity;
   }
 
@@ -170,9 +160,9 @@ export function createProjection({
    */
 
   function createProjectionRuntime(record) {
-    if (!layerState._viewer) return null;
+    if (!parts.renderer?.ready) return null;
     // Québec 511 denies CORS pixel access; Québec map previews are native DOM
-    // videos positioned over the globe, never Cesium video textures.
+    // videos positioned over the globe, never video textures.
     if (parts.model.isBrowserOverlayCamera(record.camera)) return null;
     const canvas = document.createElement('canvas');
     canvas.width = PROJECTION_CANVAS_WIDTH;
@@ -189,7 +179,7 @@ export function createProjection({
       video: null,
       planeEntity: null,
       cameraId: String(record.camera.id),
-      labelPosition: new Cesium.Cartesian3(),
+      labelPosition: geo.cartesian3.create(),
       overlayEntry: null,
       planeMaterial: null,
       buffers: null,
@@ -215,6 +205,7 @@ export function createProjection({
     };
 
     parts.frames.paintProjectionPlaceholder(ctx, record.camera);
+    runtime.planeMaterial = parts.renderer.createPlaneMaterial(canvas);
 
     if (mode === 'video') {
       const video = document.createElement('video');
@@ -226,15 +217,25 @@ export function createProjection({
       // attributes at first upload. Set them from the real stream dimensions
       // and rebind on any resolution change (camera switch, adaptive source).
       const bindVideoTexture = () => {
-        if (runtime.video !== video || !runtime.planeMaterial) return;
+        if (
+          runtime.disposed ||
+          runtime.video !== video ||
+          !runtime.planeMaterial
+        )
+          return;
         if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
         video.width = video.videoWidth;
         video.height = video.videoHeight;
-        runtime.planeMaterial.image = runtime.canvas;
-        runtime.planeMaterial.image = video;
+        parts.renderer.setPlaneImage(runtime, runtime.canvas);
+        parts.renderer.setPlaneImage(runtime, video);
       };
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
+      runtime.removeVideoBindings = () => {
+        video.removeEventListener('loadedmetadata', bindVideoTexture);
+        video.removeEventListener('resize', bindVideoTexture);
+        runtime.removeVideoBindings = null;
+      };
       runtime.video = video;
       runtime.playback = attachCctvVideo(
         video,
@@ -243,20 +244,24 @@ export function createProjection({
         {
           onFailure: () => {
             if (runtime.disposed) return;
+            runtime.removeVideoBindings?.();
             runtime.video = null;
             runtime.mode = 'image';
             runtime.image = new Image();
             runtime.image.decoding = 'async';
             runtime.image.onload = () => {
+              if (runtime.disposed) return;
               runtime.imageLoading = false;
               runtime.imageReady = true;
               runtime.imageStamp = Date.now();
             };
             runtime.image.onerror = () => {
+              if (runtime.disposed) return;
               runtime.imageLoading = false;
               runtime.imageReady = false;
             };
-            runtime.planeMaterial.image = runtime.canvas;
+            if (runtime.planeMaterial)
+              parts.renderer?.setPlaneImage(runtime, runtime.canvas);
             parts.frames.refreshProjectionImage(record, true);
             parts.presentation.notifyListeners();
           },
@@ -267,11 +272,13 @@ export function createProjection({
       img.decoding = 'async';
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        if (runtime.disposed) return;
         runtime.imageLoading = false;
         runtime.imageReady = true;
         runtime.imageStamp = Date.now();
       };
       img.onerror = () => {
+        if (runtime.disposed) return;
         runtime.imageLoading = false;
         runtime.imageReady = false;
       };
@@ -291,12 +298,12 @@ export function createProjection({
       );
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
-    runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-      image: canvas,
-      transparent: true,
-      color: Cesium.Color.WHITE.withAlpha(0.95),
-    });
-    createProjectionPlane(record, runtime, geometry, positions);
+    try {
+      createProjectionPlane(record, runtime, geometry, positions);
+    } catch (error) {
+      destroyProjectionRuntime(runtime);
+      throw error;
+    }
 
     return runtime;
   }
@@ -309,8 +316,29 @@ export function createProjection({
 
   function ensureProjectionRuntime(record) {
     if (!record) return null;
-    if (record.projection && !record.projection.disposed)
-      return record.projection;
+    if (record.projection && !record.projection.disposed) {
+      const runtime = record.projection;
+      if (runtime.needsPlane && parts.renderer?.ready) {
+        const geometry =
+          record.frustumGeometry ||
+          parts.geometry.computeFrustumGeometry(
+            record.camera,
+            parts.ground.groundAltFor(record),
+            record.probeClampRangeM,
+          );
+        const positions =
+          record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+        runtime.planeMaterial = parts.renderer.createPlaneMaterial(
+          runtime.canvas,
+        );
+        createProjectionPlane(record, runtime, geometry, positions);
+        if (runtime.video?.videoWidth)
+          parts.renderer.setPlaneImage(runtime, runtime.video);
+        runtime.needsPlane = false;
+        runtime.lastSwappedCanvasStamp = -1;
+      }
+      return runtime;
+    }
     const runtime = createProjectionRuntime(record);
     record.projection = runtime;
     if (runtime) {
@@ -328,6 +356,7 @@ export function createProjection({
   function destroyProjectionRuntime(runtime) {
     if (!runtime || runtime.disposed) return;
     runtime.disposed = true;
+    runtime.removeVideoBindings?.();
     runtime.playback?.dispose();
     runtime.playback = null;
     if (runtime.image) {
@@ -340,8 +369,8 @@ export function createProjection({
       runtime.video.removeAttribute('src');
       runtime.video.load();
     }
-    if (runtime.planeEntity && layerState._viewer) {
-      layerState._viewer.entities.remove(runtime.planeEntity);
+    if (runtime.planeEntity) {
+      parts.renderer?.removePlane(runtime);
       runtime.planeEntity = null;
     }
     if (layerState._projectionOverlayOwnerId === runtime.cameraId)
@@ -354,15 +383,16 @@ export function createProjection({
   function startProjectionLoop() {
     if (layerState._projectionRaf) return;
     if (!parts.model.projectionLoopIsNeeded()) return;
-    // The armed projection loop uploads video textures / runs focus fades per
-    // frame — the scene must render continuously while it runs. Released when
-    // the tick self-stops. (perf wave 2)
-    holdContinuousRender('cctv-projection');
+    clearTimeout(layerState._projectionTimer);
+    layerState._projectionTimer = 0;
+    const revision = ++loopRevision;
 
     const tick = () => {
-      if (!layerState._viewer || !parts.model.projectionLoopIsNeeded()) {
-        layerState._projectionRaf = 0;
-        releaseContinuousRender('cctv-projection');
+      if (revision !== loopRevision) return;
+      layerState._projectionRaf = 0;
+      layerState._projectionTimer = 0;
+      if (!parts.renderer?.ready || !parts.model.projectionLoopIsNeeded()) {
+        releaseContinuousRender('cctv-projection', parts.renderer?.engine);
         return;
       }
 
@@ -373,11 +403,32 @@ export function createProjection({
         ensureProjectionRuntime(active);
         if (active.projection && !active.projection.video) {
           parts.frames.drawProjectionFrame(active);
-          parts.frames.refreshProjectionTextures(active);
+          if (parts.frames.refreshProjectionTextures(active))
+            governorRequestRender(
+              'cctv-projection-image',
+              parts.renderer?.engine,
+            );
         }
       }
 
-      layerState._projectionRaf = requestAnimationFrame(tick);
+      const continuous =
+        (layerState._showProjection && active?.projection?.video) ||
+        services.focus.focusPassIsNeeded(
+          services.focus.getFocusTarget(),
+          layerState._activeFocusStyleCount,
+        );
+      if (continuous) {
+        holdContinuousRender('cctv-projection', parts.renderer?.engine);
+        layerState._projectionRaf = requestAnimationFrame(tick);
+      } else {
+        // Stills retain the existing fetch/texture cadence without rendering
+        // unchanged pixels at display refresh rate.
+        releaseContinuousRender('cctv-projection', parts.renderer?.engine);
+        layerState._projectionTimer = setTimeout(
+          tick,
+          PROJECTION_TEXTURE_SWAP_MS,
+        );
+      }
     };
 
     layerState._projectionRaf = requestAnimationFrame(tick);
@@ -386,11 +437,14 @@ export function createProjection({
   /** Cancels the projection animation loop. */
 
   function stopProjectionLoop() {
+    loopRevision++;
+    clearTimeout(layerState._projectionTimer);
+    layerState._projectionTimer = 0;
     if (layerState._projectionRaf) {
       cancelAnimationFrame(layerState._projectionRaf);
       layerState._projectionRaf = 0;
     }
-    releaseContinuousRender('cctv-projection');
+    releaseContinuousRender('cctv-projection', parts.renderer?.engine);
   }
 
   /**

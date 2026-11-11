@@ -1,11 +1,13 @@
-import * as Cesium from 'cesium';
 import { passesImageryFilter } from './filter.js';
 import { groundUnderCamera, viewFocus, visibleBbox } from './view.js';
 import { tilesForBbox } from './tileMath.js';
 import { msg } from '../../i18n/index.js';
 
-/** Sequences per primitive: smaller batches build, and show, sooner. */
-const SEQUENCE_PRIMITIVE_BATCH = 120;
+/** Line alpha of the coverage; the selected sequence is drawn opaque. */
+const COVERAGE_ALPHA = 0.92;
+/** Draw order of the ground sets: the selected sequence over the coverage. */
+const COVERAGE_ORDER = 0;
+const HIGHLIGHT_ORDER = 1;
 
 /** Hint above the street-zoom ceiling, where no coverage is drawn. */
 export const ZOOM_IN_HINT = msg('Zoom in to see street-level coverage');
@@ -45,46 +47,8 @@ export function freshCoverage({ keyless = false } = {}) {
     blockTimer: null,
     debounceTimer: null,
     removeCameraListener: null,
-    terrainReady: null,
     hint: '',
   };
-}
-
-/** Line instances for sequences' parts, every part picking its sequence. */
-function lineInstances(sequences, color, width, prefix) {
-  const attributes = {
-    color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
-  };
-  const instances = [];
-  for (const sequence of sequences)
-    for (const coordinates of sequence.parts) {
-      let positions;
-      try {
-        positions = Cesium.Cartesian3.fromDegreesArray(coordinates.flat());
-      } catch {
-        continue;
-      }
-      if (positions.length < 2) continue;
-      instances.push(
-        new Cesium.GeometryInstance({
-          geometry: new Cesium.GroundPolylineGeometry({ positions, width }),
-          id: `${prefix}${sequence.id}`,
-          attributes,
-        }),
-      );
-    }
-  return instances;
-}
-
-/** Draped lines that follow terrain and 3D tiles (Google 3D) alike. */
-function linePrimitive(geometryInstances, asynchronous) {
-  return new Cesium.GroundPolylinePrimitive({
-    geometryInstances,
-    appearance: new Cesium.PolylineColorAppearance(),
-    classificationType: Cesium.ClassificationType.BOTH,
-    asynchronous,
-    allowPicking: true,
-  });
 }
 
 function pointsOf(sequence) {
@@ -126,11 +90,11 @@ export function coverageZoom(level) {
 
 /**
  * Camera-driven sequence lines from any XYZ line-tile source, near the
- * ground only, draped on terrain and 3D tiles alike. Nothing is drawn from
- * orbit.
+ * ground only, draped on terrain and 3D tiles alike (the display's ground
+ * corridors, render/display.js). Nothing is drawn from orbit.
  *
  * @param {object} options
- * @param {object} options.state  Provider state: `context`, `services`, `viewer`, `coverage` (freshCoverage), `sequence`.
+ * @param {object} options.state  Provider state: `context`, `services`, `map` (the display), `coverage` (freshCoverage), `sequence`.
  * @param {(tile: {x: number, y: number, z: number}, init: {signal: AbortSignal}) => Promise<{sequences: Array<object>}>} options.fetchTile
  *   A decoded tile; sequences are `{id, parts, capturedAt, isPano}`. A
  *   rejection may carry `keyRequired`, `keyRejected` or `retryAfterSec`.
@@ -162,12 +126,7 @@ export function createLineCoverage({
     : Infinity;
 
   function requestRender() {
-    render?.governorRequestRender?.(renderKey);
-  }
-
-  function ensureTerrainReady() {
-    return (state.coverage.terrainReady ||=
-      Cesium.GroundPolylinePrimitive.initializeTerrainHeights());
+    render?.governorRequestRender?.(renderKey, state.map?.engine);
   }
 
   function tileKey({ x, y, z }) {
@@ -208,34 +167,25 @@ export function createLineCoverage({
     return drawn;
   }
 
-  /** Batched draped primitives for a tile's sequences. */
-  function buildSequencePrimitives(sequences) {
-    const instances = lineInstances(
-      sequences,
-      Cesium.Color.fromCssColorString(colors.coverage).withAlpha(0.92),
-      tuning.lineWidthPx,
-      pickPrefix,
+  /** The display's lines for `sequences` (`color` CSS, at `alpha`), or null. */
+  function drawLines(sequences, id, style) {
+    return (
+      state.map?.sequenceLines?.(sequences, {
+        id: `${renderKey}:${id}`,
+        pickPrefix,
+        ...style,
+      }) ?? null
     );
-    const primitives = [];
-    for (let i = 0; i < instances.length; i += SEQUENCE_PRIMITIVE_BATCH)
-      primitives.push(
-        linePrimitive(instances.slice(i, i + SEQUENCE_PRIMITIVE_BATCH), true),
-      );
-    return primitives;
   }
 
   /**
    * Draw the selected sequence again over the coverage, in the selection
    * colour, from every loaded tile it crosses; none when nothing is selected.
-   * Built at once: its tiles loaded, so the terrain table has too.
    */
   function highlight(sequenceId = state.sequence.selectedId) {
-    const scene = state.viewer?.scene;
-    if (state.coverage.highlight) {
-      scene?.groundPrimitives?.remove(state.coverage.highlight);
-      state.coverage.highlight = null;
-    }
-    if (!sequenceId || !scene) return;
+    state.coverage.highlight?.destroy();
+    state.coverage.highlight = null;
+    if (!sequenceId || !state.map) return;
     // From every loaded line, drawn or not: a sequence selected after its
     // tiles were drawn may have been left out by their caps.
     const current = filter();
@@ -244,35 +194,36 @@ export function createLineCoverage({
       const sequence = entry.sequenceList.find(({ id }) => id === sequenceId);
       if (sequence && passes(sequence, current)) parts.push(...sequence.parts);
     }
-    const instances = lineInstances(
+    state.coverage.highlight = drawLines(
       [{ id: sequenceId, parts }],
-      Cesium.Color.fromCssColorString(colors.selected),
-      tuning.lineWidthPx + 1,
-      pickPrefix,
-    );
-    if (!instances.length) return;
-    state.coverage.highlight = scene.groundPrimitives.add(
-      linePrimitive(instances, false),
+      'selected',
+      {
+        color: colors.selected,
+        widthPx: tuning.lineWidthPx + 1,
+        order: HIGHLIGHT_ORDER,
+      },
     );
     requestRender();
   }
 
-  function attachPrimitive(entry) {
-    const scene = state.viewer?.scene;
-    if (!scene) return;
+  function attachPrimitive(entry, key) {
+    if (!state.map) return;
     // Lookup, picking and counts follow what is drawn, not the whole tile.
     const sequences = drawnSequences(entry);
     entry.sequences = new Map(sequences.map((s) => [s.id, s]));
-    entry.primitives = buildSequencePrimitives(sequences);
-    for (const primitive of entry.primitives)
-      scene.groundPrimitives.add(primitive);
+    const lines = drawLines(sequences, key, {
+      color: colors.coverage,
+      alpha: COVERAGE_ALPHA,
+      widthPx: tuning.lineWidthPx,
+      order: COVERAGE_ORDER,
+    });
+    entry.primitives = lines ? [lines] : [];
   }
 
   function detachPrimitive(entry) {
-    const scene = state.viewer?.scene;
     for (const primitive of entry.primitives || []) {
       try {
-        scene?.groundPrimitives?.remove(primitive);
+        primitive.destroy();
       } catch {
         /* already gone */
       }
@@ -295,12 +246,7 @@ export function createLineCoverage({
     state.coverage.pending.set(key, controller);
     notify();
     try {
-      // Fetch and the one-time terrain-height table load run side by side,
-      // both handled from the start so an early tile failure is not unhandled.
-      const [decoded] = await Promise.all([
-        fetchTile(tile, { signal: controller.signal }),
-        ensureTerrainReady(),
-      ]);
+      const decoded = await fetchTile(tile, { signal: controller.signal });
       // Only an abort, a zoom change, a clear or a newer request for this tile
       // discards it; a refresh that still wants the tile keeps it.
       if (
@@ -318,7 +264,7 @@ export function createLineCoverage({
         ? sequences
         : sequences.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0));
       entry.total = sequences.length;
-      attachPrimitive(entry);
+      attachPrimitive(entry, key);
       state.coverage.tiles.set(key, entry);
       state.coverage.lastError = null;
       // Over the new lines, and along any of the selection's parts they add.
@@ -394,9 +340,9 @@ export function createLineCoverage({
    * The tiles for the camera: what the screen shows within range of it, at
    * the zoom for its height above ground, nearest the camera first.
    */
-  function wantedTiles(viewer) {
-    const ground = groundUnderCamera(viewer);
-    const cameraHeight = viewer.camera?.positionCartographic?.height;
+  function wantedTiles(map) {
+    const ground = groundUnderCamera(map);
+    const cameraHeight = map.engine?.camera.height();
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
       : null;
@@ -411,22 +357,28 @@ export function createLineCoverage({
         height * tuning.viewRangePerHeight,
       ),
     };
-    const bbox = visibleBbox(viewer, ranged);
+    const bbox = visibleBbox(map, ranged);
     if (!bbox) return { hint: NO_GROUND_HINT };
     // Ranked from between the camera's ground point and the screen centre's:
     // a tilted view's box centre can sit kilometres past both.
     const tiles = tilesForBbox(bbox, zoom, {
       limit: tuning.maxTiles,
-      from: viewFocus(viewer, ranged),
+      from: viewFocus(map, ranged),
     });
     return { zoom, tiles };
   }
 
   /** Recompute the tile set for the current camera and reconcile primitives. */
   function refresh() {
-    const viewer = state.viewer;
-    if (!viewer || !state.context.isActive() || state.coverage.blocked) return;
-    const { zoom, tiles, hint } = wantedTiles(viewer);
+    const map = state.map;
+    if (
+      !map ||
+      state.context.viewReady?.() === false ||
+      !state.context.isActive() ||
+      state.coverage.blocked
+    )
+      return;
+    const { zoom, tiles, hint } = wantedTiles(map);
     if (hint) {
       state.coverage.hint = hint;
       clear();
@@ -454,10 +406,11 @@ export function createLineCoverage({
     state.coverage.debounceTimer = setTimeout(refresh, tuning.moveDebounceMs);
   }
 
-  function attach(viewer) {
+  function attach(map) {
     detach();
-    const remove = viewer.camera.changed.addEventListener(scheduleRefresh);
-    const removeEnd = viewer.camera.moveEnd.addEventListener(scheduleRefresh);
+    const { camera } = map.engine;
+    const remove = camera.changed.addEventListener(scheduleRefresh);
+    const removeEnd = camera.moveEnd.addEventListener(scheduleRefresh);
     state.coverage.removeCameraListener = () => {
       remove();
       removeEnd();
@@ -484,9 +437,9 @@ export function createLineCoverage({
 
   /** Rebuild every loaded tile from its decoded lines (after a filter change). */
   function rebuild() {
-    for (const entry of state.coverage.tiles.values()) {
+    for (const [key, entry] of state.coverage.tiles) {
       detachPrimitive(entry);
-      attachPrimitive(entry);
+      attachPrimitive(entry, key);
     }
     highlight();
     requestRender();
@@ -534,6 +487,11 @@ export function createLineCoverage({
   return {
     attach,
     detach,
+    releaseGraphics() {
+      detach();
+      highlight(null);
+      for (const entry of state.coverage.tiles.values()) detachPrimitive(entry);
+    },
     refresh,
     clear,
     unblock,

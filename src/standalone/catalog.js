@@ -7,6 +7,8 @@ export { createStandaloneReferenceSources } from './layerSources.js';
 /** Create fresh layer instances using the existing standalone source choices. */
 export function createStandaloneCatalog({
   nepalBoundaryResolver,
+  engineKind = 'cesium',
+  layerSession,
   sources = {},
   streetLevelProviders,
   signal = new AbortController().signal,
@@ -16,6 +18,8 @@ export function createStandaloneCatalog({
   }),
 } = {}) {
   return createApplicationCatalog({
+    engineKind,
+    layerSession,
     nepalBoundaryResolver,
     surface,
     sources: createStandaloneLayerSources(sources),

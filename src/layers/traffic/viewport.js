@@ -1,5 +1,5 @@
 import { createReticleFootprint } from './footprint.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   deriveFetchCenter,
   clampBoundsAroundCenter,
@@ -23,7 +23,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getCameraAltitude() {
-    const carto = layerState._viewer.camera.positionCartographic;
+    const carto = layerState._engine?.camera.pose().cartographic;
     return carto ? carto.height : Infinity;
   }
 
@@ -34,13 +34,13 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getViewBounds() {
-    const rect = layerState._viewer.camera.computeViewRectangle();
+    const rect = layerState._engine?.camera.viewRectangle();
     if (!rect) return null;
     return {
-      south: Cesium.Math.toDegrees(rect.south),
-      west: Cesium.Math.toDegrees(rect.west),
-      north: Cesium.Math.toDegrees(rect.north),
-      east: Cesium.Math.toDegrees(rect.east),
+      south: geo.math.toDegrees(rect.south),
+      west: geo.math.toDegrees(rect.west),
+      north: geo.math.toDegrees(rect.north),
+      east: geo.math.toDegrees(rect.east),
     };
   }
 
@@ -59,25 +59,24 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getFetchCenter() {
-    const carto = layerState._viewer.camera.positionCartographic;
+    const carto = layerState._engine?.camera.pose().cartographic;
     if (!carto) return null;
-    const nadirLat = Cesium.Math.toDegrees(carto.latitude);
-    const nadirLon = Cesium.Math.toDegrees(carto.longitude);
+    const nadirLat = geo.math.toDegrees(carto.latitude);
+    const nadirLon = geo.math.toDegrees(carto.longitude);
 
     let hitLat;
     let hitLon;
-    const canvas = layerState._viewer.scene.canvas;
+    const canvas = layerState._engine.host.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     if (width > 0 && height > 0) {
-      const hit = layerState._viewer.camera.pickEllipsoid(
-        new Cesium.Cartesian2(width / 2, height / 2),
-        Cesium.Ellipsoid.WGS84,
+      const hit = layerState._engine.camera.pickEllipsoid(
+        geo.cartesian2.create(width / 2, height / 2),
       );
       if (hit) {
-        const hitCarto = Cesium.Cartographic.fromCartesian(hit);
-        hitLat = Cesium.Math.toDegrees(hitCarto.latitude);
-        hitLon = Cesium.Math.toDegrees(hitCarto.longitude);
+        const hitCarto = geo.cartographic.fromCartesian(hit);
+        hitLat = geo.math.toDegrees(hitCarto.latitude);
+        hitLon = geo.math.toDegrees(hitCarto.longitude);
       }
     }
 
@@ -173,7 +172,12 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /** Debounce camera events and sample the actual settled view, including final flight steps. */
   function onCameraChanged(options) {
-    if (!layerState._enabled) return;
+    if (
+      !layerState._enabled ||
+      layerState._waitForScene ||
+      layerState._sceneContext?.viewReady === false
+    )
+      return;
     clearTimeout(layerState._fetchTimeout);
     if (getCameraAltitude() > ACTIVATION_ALTITUDE) {
       clearTimeout(layerState._retryTimer);
@@ -196,10 +200,15 @@ export function createViewport({ state: layerState, services, parts, source }) {
       : null;
     layerState._fetchTimeout = setTimeout(
       () => {
-        if (!layerState._enabled) return;
+        if (
+          !layerState._enabled ||
+          layerState._waitForScene ||
+          layerState._sceneContext?.viewReady === false
+        )
+          return;
         const alt = getCameraAltitude();
         if (alt > ACTIVATION_ALTITUDE) return onCameraChanged();
-        const footprint = reticleFootprint(layerState._viewer, alt);
+        const footprint = reticleFootprint(layerState._engine, alt);
         const bounds = footprint || getViewBounds();
         if (!bounds) return;
         const center = footprint ? null : getFetchCenter();

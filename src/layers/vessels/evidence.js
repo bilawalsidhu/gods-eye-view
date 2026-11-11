@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
 
 export function createEvidence({
@@ -13,12 +12,13 @@ export function createEvidence({
   /** Replace live AIS rows through the production reconciliation path (DEV only). */
 
   function _setFocusEvidenceVessels(rows = []) {
-    if (!FOCUS_EVIDENCE_DEV || !state.viewer || !state.billboardCollection) {
+    const scene = state.viewer || state.renderer?.view;
+    if (!FOCUS_EVIDENCE_DEV || !scene || !state.renderer?.fleet.attached()) {
       return { ok: false, count: 0 };
     }
     components.selection.clearVesselInspection();
     components.snapshots.reconcileVessels(
-      state.viewer,
+      scene,
       Array.isArray(rows) ? rows : [],
     );
     state.feed.count = state.records.all.length;
@@ -37,15 +37,11 @@ export function createEvidence({
   /** JSON-safe vessel alpha/position snapshot for the evidence report. */
 
   function _focusEvidenceVesselSnapshot() {
-    if (!FOCUS_EVIDENCE_DEV || !state.viewer) return [];
+    const view = state.renderer?.view;
+    if (!FOCUS_EVIDENCE_DEV || !view) return [];
     return state.records.all.map((record) => {
       const bb = components.rendering.getVisual(record).billboard;
-      const screen = bb?.position
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(
-            state.viewer.scene,
-            bb.position,
-          )
-        : null;
+      const screen = bb?.position ? view.worldToWindow(bb.position) : null;
       return {
         id: record.id,
         show: bb?.show === true,

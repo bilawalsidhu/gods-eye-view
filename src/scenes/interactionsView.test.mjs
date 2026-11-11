@@ -1,5 +1,5 @@
 // src/scenes/interactionsView.test.mjs — the Scene actions panel renders in
-// the viewer's container from what the scene interactions owner presents.
+// the engine's container from what the scene interactions owner presents.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,6 +8,7 @@ import { createPinia } from 'pinia';
 import { useSceneInteractionsStore } from '../ui/stores/sceneInteractions.js';
 import SceneInteractions from '../ui/views/panels/SceneInteractions.vue';
 import { createSceneInteractions } from './interactions.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 const target = (featureId) => ({ packId: 'qa', featureId });
 const key = (featureId) => JSON.stringify(['qa', featureId]);
@@ -36,25 +37,25 @@ function fixture(t, { execute = async () => true } = {}) {
   const app = createApp(SceneInteractions).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   const executed = [];
-  const interactions = createSceneInteractions(
-    { container, scene: { canvas, pick: () => null } },
-    {
-      execute: (action, signal) => {
-        executed.push(action.type);
-        return execute(action, signal);
-      },
-      store: useSceneInteractionsStore(pinia),
+  const engine = createFakeEngine({ container, canvas });
+  const interactions = createSceneInteractions({
+    engine,
+    execute: (action, signal) => {
+      executed.push(action.type);
+      return execute(action, signal);
     },
-  );
+    store: useSceneInteractionsStore(pinia),
+  });
   t.after(() => {
     interactions.destroy();
     app.unmount();
+    engine.destroy();
   });
   const $ = (selector) => container.querySelector(selector);
   const settle = async () => {
     for (let flush = 0; flush < 4; flush += 1) await nextTick();
   };
-  return { interactions, container, executed, $, settle, pinia };
+  return { interactions, engine, container, executed, $, settle, pinia };
 }
 
 test('a shot with actions shows its panel in the viewer container', async (t) => {
@@ -175,11 +176,12 @@ test('a button reused before the next render still belongs to its own panel', as
 });
 
 test("an earlier owner leaves a later owner's panel alone", async (t) => {
-  const { interactions, container, $, settle, pinia } = fixture(t);
-  const later = createSceneInteractions(
-    { container, scene: { canvas: $('canvas'), pick: () => null } },
-    { execute: async () => true, store: useSceneInteractionsStore(pinia) },
-  );
+  const { interactions, engine, $, settle, pinia } = fixture(t);
+  const later = createSceneInteractions({
+    engine,
+    execute: async () => true,
+    store: useSceneInteractionsStore(pinia),
+  });
   t.after(() => later.destroy());
   interactions.activate(SHOT, new Map([[key('point'), {}]]));
   later.activate(SHOT, new Map([[key('point'), {}]]));
@@ -189,4 +191,29 @@ test("an earlier owner leaves a later owner's panel alone", async (t) => {
   $('[data-director-action="fly"]').click();
   await settle();
   assert.equal(later.getState().selected, 'fly');
+});
+
+test('a click on a feature of the shot outlines its actions through engine.input', async (t) => {
+  const { interactions, engine, $, settle } = fixture(t);
+  const feature = { kind: 'pack-feature' };
+  interactions.activate(SHOT, new Map([[key('point'), feature]]));
+  await settle();
+  engine.fake.script('pick', { id: { kind: 'other' } });
+  engine.fake.input('click', { position: { x: 10, y: 10 } });
+  await settle();
+  assert.deepEqual(interactions.getState().outlined ?? [], []);
+  assert.equal(
+    $('[data-director-action="card"]').style.outline,
+    '',
+    'another object selects nothing',
+  );
+  engine.fake.script('pick', { id: feature });
+  engine.fake.input('click', { position: { x: 10, y: 10 } });
+  await settle();
+  assert.equal(
+    $('[role=status]').textContent,
+    'Selected feature: point. Choose an action.',
+  );
+  assert.ok($('[data-director-action="card"]').style.outline);
+  assert.ok($('[data-director-action="fly"]').style.outline);
 });

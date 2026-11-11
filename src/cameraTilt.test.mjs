@@ -9,11 +9,15 @@ import {
   moveCamera,
 } from './cameraVerbs.js';
 import { createGevActionRunner } from './voice/gevActions.js';
+import { createCameraViewer } from './globe/cesium/testing/cameraViewer.mjs';
 
 const radians = Cesium.Math.toRadians;
 const degrees = Cesium.Math.toDegrees;
 
-/** Real Cesium camera over London with no renderer: the voice fly-to frame. */
+/**
+ * Real Cesium camera over London with no renderer: the voice fly-to frame,
+ * driven through the Cesium engine as the app drives it.
+ */
 function harness(
   t,
   { height = 4000, heading = 0, pitch = -90, pivot = true } = {},
@@ -21,39 +25,15 @@ function harness(
   const realPerformance = globalThis.performance;
   let nowMs = 0;
   globalThis.performance = { now: () => nowMs };
-  const canvas = Object.assign(new EventTarget(), {
-    clientWidth: 1280,
-    clientHeight: 800,
+  const { viewer, camera, engine, frame } = createCameraViewer({
     width: 1280,
     height: 800,
   });
   const ellipsoid = Cesium.Ellipsoid.WGS84;
-  const scene = {
-    canvas,
-    drawingBufferWidth: 1280,
-    drawingBufferHeight: 800,
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    mapProjection: new Cesium.GeographicProjection(ellipsoid),
-    globe: { ellipsoid },
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    tweens: [],
-    requestRender() {},
-  };
-  const camera = new Cesium.Camera(scene);
-  scene.camera = camera;
   camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(-0.1276, 51.5072, height),
     orientation: { heading: radians(heading), pitch: radians(pitch), roll: 0 },
   });
-  const viewer = {
-    camera,
-    scene,
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-    clock: { onTick: new Cesium.Event() },
-  };
   // The app's view target: the ground point under the screen centre.
   const viewTarget = () => {
     const ray = new Cesium.Ray(camera.positionWC, camera.directionWC);
@@ -61,20 +41,21 @@ function harness(
     return hit ? Cesium.Ray.getPoint(ray, hit.start) : undefined;
   };
   const target = viewTarget();
-  initCameraVerbs(viewer, pivot ? viewTarget : () => undefined);
+  initCameraVerbs(engine, pivot ? viewTarget : () => undefined);
   t.after(() => {
     interruptCameraMotion('test-cleanup');
+    engine.destroy();
     globalThis.performance = realPerformance;
   });
   const tick = (seconds = 1 / 30) => {
     nowMs += seconds * 1000;
-    viewer.clock.onTick.raiseEvent(viewer.clock);
+    frame();
   };
   const finish = () => {
     for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) tick();
     assert.equal(getActiveCameraMotion(), null, 'tilt must finish');
   };
-  return { viewer, camera, target, tick, finish, viewTarget };
+  return { viewer, camera, engine, target, tick, finish, viewTarget };
 }
 
 const pitchDeg = (camera) => degrees(camera.pitch);
@@ -432,6 +413,7 @@ test('a voice zoom during a pivot tilt says what it changed', async (t) => {
   const h = harness(t, { height: 400 });
   const runner = createGevActionRunner({
     viewer: h.viewer,
+    engine: h.engine,
     styleManager: {},
     dataManager: { layers: new Map(), getAll: () => [] },
   });
@@ -668,6 +650,7 @@ test('a voice zoom during a tilt to an angle passes on the new end angle', async
   const h = harness(t, { height: 400_000 });
   const runner = createGevActionRunner({
     viewer: h.viewer,
+    engine: h.engine,
     styleManager: {},
     dataManager: { layers: new Map(), getAll: () => [] },
   });

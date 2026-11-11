@@ -8,7 +8,7 @@ import { analyzeModule } from './module-analysis.mjs';
 const builtins = new Set(
   builtinModules.flatMap((name) => [name, `node:${name}`]),
 );
-const code = /\.[mc]?js$/;
+const code = /\.(?:[mc]?js|vue)$/;
 const entry = (file) =>
   file === 'src/main.js' || file.startsWith('src/standalone/');
 const tests = (file) =>
@@ -19,6 +19,17 @@ const tests = (file) =>
 const source = (file) =>
   file.startsWith('src/sources/') ||
   /^src\/layers\/[^/]+\/(?:source|bundledSource|flowSource)\.js$/.test(file);
+// Engine-neutral geometry ported from Cesium; every runtime file is a portable root.
+const geo = (file) => file.startsWith('src/geo/');
+// The app clock (src/time): plain numbers, no engine, no DOM.
+const time = (file) => file.startsWith('src/time/');
+// The engine-neutral globe contract and its test support; engines live below it.
+const globeContract = (file) =>
+  /^src\/globe\/[^/]+$/.test(file) || file.startsWith('src/globe/testing/');
+const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
+const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
+// Navara renders through three.js and its postprocessing peer.
+const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
@@ -70,6 +81,25 @@ export function checkImportDirections(root) {
     (file) =>
       code.test(file) && !tests(file) && existsSync(path.join(root, file)),
   );
+  const boundaryFile = path.join(root, 'scripts/package-boundaries.json');
+  const { engineImportExceptions = [] } = existsSync(boundaryFile)
+    ? JSON.parse(readFileSync(boundaryFile, 'utf8'))
+    : {};
+  const exceptionKeys = new Set();
+  for (const item of engineImportExceptions) {
+    const key = `${item.file}:${item.package}`;
+    if (
+      typeof item.file !== 'string' ||
+      !files.includes(item.file) ||
+      !(cesiumPackage.test(item.package) || navaraPackage.test(item.package)) ||
+      typeof item.reason !== 'string' ||
+      !item.reason.trim() ||
+      exceptionKeys.has(key)
+    )
+      throw new Error(`Invalid engine import exception: ${key}`);
+    exceptionKeys.add(key);
+  }
+  const usedExceptions = new Set();
   const errors = new Set();
   const modules = new Map();
   const relative = (file) =>
@@ -87,7 +117,10 @@ export function checkImportDirections(root) {
     }
     let analysis;
     try {
-      analysis = analyzeModule(readFileSync(resolved, 'utf8'));
+      analysis = analyzeModule(readFileSync(resolved, 'utf8'), {
+        dynamic: true,
+        filename: file,
+      });
     } catch (error) {
       report(file, error.message);
       return null;
@@ -109,6 +142,19 @@ export function checkImportDirections(root) {
         target = path.resolve(root, exported);
       } else {
         record.external.push(specifier);
+        const owner = cesiumPackage.test(specifier)
+          ? 'cesium'
+          : navaraPackage.test(specifier)
+            ? 'navara'
+            : null;
+        if (owner && !file.startsWith(`src/globe/${owner}/`)) {
+          const exception = engineImportExceptions.find(
+            (item) => item.file === file && item.package === specifier,
+          );
+          if (exception) usedExceptions.add(exception);
+          else
+            report(file, `${specifier} imports belong in src/globe/${owner}/`);
+        }
         if (
           file.startsWith('src/') &&
           (builtins.has(specifier) || specifier.startsWith('node:'))
@@ -131,6 +177,18 @@ export function checkImportDirections(root) {
         continue;
       }
       record.edges.push(to);
+      // Navara stays out of the Cesium-mode bundle: outside its own directory
+      // it is reached only through import() (src/app/scene.js), which the
+      // bundler splits into a chunk loaded on ?engine=navara.
+      if (
+        to.startsWith('src/globe/navara/') &&
+        !file.startsWith('src/globe/navara/') &&
+        analysis.staticImports.includes(specifier)
+      )
+        report(
+          file,
+          `The Navara engine loads only through a dynamic import(): ${to}`,
+        );
       if (file.startsWith('src/') && to.startsWith('server/'))
         report(file, `Browser imports server: ${to}`);
       if (
@@ -177,6 +235,8 @@ export function checkImportDirections(root) {
   for (const file of files.filter((file) => file.startsWith('src/')))
     browser(file);
   const roots = new Map(files.filter(source).map((file) => [file, 'source']));
+  for (const file of files.filter(geo)) roots.set(file, 'geo');
+  for (const file of files.filter(time)) roots.set(file, 'time');
   for (const [key, value] of Object.entries(pkg.exports || {})) {
     if (portableExport(key) && typeof value === 'string')
       roots.set(value.replace(/^\.\//, ''), key);
@@ -202,7 +262,12 @@ export function checkImportDirections(root) {
         if (
           builtins.has(specifier) ||
           specifier.startsWith('node:') ||
-          /^(?:cesium|vite)(?:\/|$)/.test(specifier)
+          /^(?:cesium|vite)(?:\/|$)/.test(specifier) ||
+          // Geo must not reach Cesium through its workspace packages either.
+          (label === 'geo' && /^@cesium\//.test(specifier)) ||
+          // Neither engine reaches the app clock.
+          (label === 'time' &&
+            (cesiumPackage.test(specifier) || navaraPackage.test(specifier)))
         )
           report(
             file,
@@ -216,6 +281,51 @@ export function checkImportDirections(root) {
       }
     }
     visit(start);
+  }
+  // The globe contract reaches no engine, directly or through helpers; each
+  // engine implementation imports only its own engine's packages.
+  const globeSeen = new Set();
+  function globe(file) {
+    if (globeSeen.has(file) || !code.test(file)) return;
+    globeSeen.add(file);
+    const info = load(file);
+    if (!info) return;
+    for (const specifier of info.external) {
+      if (cesiumPackage.test(specifier) || navaraPackage.test(specifier))
+        report(file, `globe contract reaches engine dependency: ${specifier}`);
+    }
+    for (const to of info.edges) {
+      if (globeEngine(to))
+        report(file, `globe contract imports engine implementation: ${to}`);
+      else globe(to);
+    }
+  }
+  for (const file of files.filter(globeContract)) globe(file);
+  // Each engine graph stays on its own engine, through helpers too.
+  for (const owner of ['cesium', 'navara']) {
+    const navara = owner === 'navara';
+    const label = navara ? 'Navara globe engine' : 'Cesium globe engine';
+    const foreignPackage = navara ? cesiumPackage : navaraPackage;
+    const foreignEngine = navara ? 'src/globe/cesium/' : 'src/globe/navara/';
+    const seen = new Set();
+    const visit = (file) => {
+      if (seen.has(file) || !code.test(file)) return;
+      seen.add(file);
+      const info = load(file);
+      if (!info) return;
+      for (const specifier of info.external)
+        if (foreignPackage.test(specifier))
+          report(file, `${label} reaches ${specifier}`);
+      for (const to of info.edges) {
+        if (to.startsWith(foreignEngine))
+          report(file, `${label} reaches ${to}`);
+        else visit(to);
+      }
+    };
+    for (const start of files.filter((file) =>
+      file.startsWith(`src/globe/${owner}/`),
+    ))
+      visit(start);
   }
   // Common voice controls may use their DOM view, but never a protocol implementation.
   const voiceSeen = new Set();
@@ -231,8 +341,17 @@ export function checkImportDirections(root) {
   }
   if (existsSync(path.join(root, 'src/voice/sessionCommands.js')))
     voice('src/voice/sessionCommands.js');
+  for (const item of engineImportExceptions) {
+    if (!usedExceptions.has(item))
+      report(item.file, `Unused engine import exception: ${item.package}`);
+  }
   if (errors.size) throw new Error([...errors].join('\n'));
-  return { modules: files.length, portableEntries: roots.size };
+  return {
+    modules: files.length,
+    portableEntries: roots.size,
+    engineImportExceptionCount: usedExceptions.size,
+    engineImportExceptions: [...usedExceptions],
+  };
 }
 
 if (

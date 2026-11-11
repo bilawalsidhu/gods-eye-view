@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { t } from '../../i18n/index.js';
 import {
   SATELLITE_STANDALONE_DEFAULTS,
@@ -11,6 +11,7 @@ export function createPolicyHelpers({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   /**
    * Derive the temporary Satellite display mode required by Space Missions.
@@ -224,24 +225,18 @@ export function createPolicyHelpers({
   }
 
   function previewMissionFromRoster(launch) {
-    if (!layerState._viewer || !launch || layerState._selectedLaunchId) return;
-    const range = parts.panel.missionHoverPreviewRange(
-      layerState._viewer.camera.positionCartographic?.height,
-    );
-    const position = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
+    const engine = layerState._engine;
+    if (!engine || !launch || layerState._selectedLaunchId) return;
+    const range = parts.panel.missionHoverPreviewRange(engine.camera.height());
+    const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     layerState._cameraReleased = false;
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(position, 0),
-      {
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          -Cesium.Math.PI_OVER_TWO,
-          range,
-        ),
-        duration: 0.8,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-      },
-    );
+    engine.camera.flyToSphere(geo.boundingSphere.create(position, 0), {
+      heading: 0,
+      pitch: -geo.math.PI_OVER_TWO,
+      range,
+      duration: 0.8,
+      easing: 'cubicInOut',
+    });
   }
   return {
     satelliteParamsForSpaceMissions,

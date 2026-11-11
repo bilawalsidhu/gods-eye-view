@@ -1,6 +1,29 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
-export function createTesting({ state: layerState, services, parts, source }) {
+export function createTesting({
+  state: layerState,
+  services,
+  parts,
+  source,
+  rendererFactory,
+}) {
+  let testEngine;
+  function useRenderer(engine) {
+    if (parts.renderer && testEngine === engine) return;
+    parts.renderer?.destroy();
+    parts.renderer = null;
+    testEngine = engine;
+    if (!engine) return;
+    parts.renderer = rendererFactory({
+      state: layerState,
+      services,
+      parts,
+      source,
+      engine,
+    });
+    parts.renderer.attach();
+  }
+
   /** Test seam: republishes host entries through the real push path, so tests
    * can observe the pristine module default without touching the setter. */
 
@@ -19,13 +42,13 @@ export function createTesting({ state: layerState, services, parts, source }) {
 
   /**
    * Create the production monitor-plane/host-label pair without media setup.
-   * @param {Object} viewer Cesium viewer seam.
+   * @param {Object} engine Globe engine.
    * @param {Object} record CCTV runtime record.
    * @returns {Object} Projection runtime.
    */
 
-  function _createCctvProjectionPlaneForTest(viewer, record) {
-    layerState._viewer = viewer;
+  function _createCctvProjectionPlaneForTest(engine, record) {
+    useRenderer(engine);
     const geometry =
       record.frustumGeometry ||
       parts.geometry.computeFrustumGeometry(
@@ -40,9 +63,9 @@ export function createTesting({ state: layerState, services, parts, source }) {
     const runtime = {
       cameraId: String(record.camera.id),
       planeEntity: null,
-      labelPosition: new Cesium.Cartesian3(),
+      labelPosition: geo.cartesian3.create(),
       overlayEntry: null,
-      planeMaterial: new Cesium.ColorMaterialProperty(Cesium.Color.WHITE),
+      planeMaterial: parts.renderer.createTestPlaneMaterial(),
     };
     parts.projection.createProjectionPlane(
       record,
@@ -73,7 +96,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
    * Primes the minimum module state needed to exercise the production coverage
    * refresh path in unit tests.
    * @param {Object} [options={}] Test state values.
-   * @param {Object|null} [options.viewer] Viewer-like entity owner.
+   * @param {Object|null} [options.engine] Globe engine the display draws on.
    * @param {Object[]} [options.records] Seeded CCTV records.
    * @param {string|null} [options.activeCameraId] Active record id.
    * @param {boolean} [options.enabled=true] Layer enabled state.
@@ -84,7 +107,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
    */
 
   function _setCctvCoverageStateForTest({
-    viewer = null,
+    engine = null,
     records = [],
     activeCameraId = null,
     enabled = true,
@@ -93,7 +116,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     healthById = new Map(),
     openingCameraProvisional = false,
   } = {}) {
-    layerState._viewer = viewer;
+    useRenderer(engine);
     layerState._records = Array.isArray(records) ? records : [];
     layerState._recordById = new Map(
       layerState._records
@@ -102,7 +125,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     );
     layerState._coverageEntities = [];
     layerState._projectionEntities = [];
-    layerState._billboards = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
     layerState._openingCameraProvisional = !!openingCameraProvisional;
@@ -119,6 +141,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._neighborCountCache = null;
   }
   return {
+    _cctvRecordsForTest: () => layerState._records,
     _pushAmbientCardEntriesForTest,
     _setCctvOverlayHostForTest,
     _createCctvProjectionPlaneForTest,

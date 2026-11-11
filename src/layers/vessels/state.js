@@ -1,16 +1,15 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { DEFAULT_AIS_RUNTIME, followsClock } from './policy.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
 export function createVesselState({ source, services }) {
-  const {
-    setOverlayEntries,
-    setOverlaySourceVisible,
-    clearOverlaySource,
-    hitTestWorldOverlay,
-  } = services.overlay;
+  const { setEntries, setVisible, clearSource, hitTest } = bindOverlayHost(
+    services.overlay,
+    () => vesselState.state.renderer?.engine,
+  );
   const vesselState = {};
 
   vesselState._source = source;
@@ -19,13 +18,13 @@ export function createVesselState({ source, services }) {
 
   vesselState._lastCamPoseSig = '';
 
-  vesselState._scratchFocusScreen = new Cesium.Cartesian2();
+  vesselState._scratchFocusScreen = geo.cartesian2.create();
 
   vesselState.DEFAULT_VESSEL_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
-    hitTest: hitTestWorldOverlay,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
+    hitTest: hitTest,
   });
 
   vesselState._vesselOverlayHost = vesselState.DEFAULT_VESSEL_OVERLAY_HOST;
@@ -60,18 +59,26 @@ export function createVesselState({ source, services }) {
 
   vesselState.shipIconCache = new Map();
 
+  /** The card entries published last (QA: the layer's qaDrawn). */
+
+  vesselState._publishedCards = [];
+
   vesselState.state = {
     feed: createVesselFeed(),
     records: new VesselRecords({ now: () => vesselState.recordsNow() }),
     viewer: null,
 
-    billboardCollection: null,
+    /** The engine's vessel renderer (render/*.js), per lifecycle. */
+    renderer: null,
+    /** Test-only: the handler-like click source (interactionHandlerFactory). */
     clickHandler: null,
+    /** Leaves the engine's selection dispatcher. */
+    selectionRemove: null,
     /** Exact EventTarget currently holding the Escape listener. */
     keyTarget: null,
     /** Exact callback registered on keyTarget. */
     keydownHandler: null,
-    /** Cesium trackedEntityChanged listener disposer. */
+    /** The renderer's follow-changed listener disposer. */
     trackedEntityRemover: null,
     /** Test-only factory used to exercise enable-time interaction installation. */
     interactionHandlerFactory: null,
@@ -90,7 +97,7 @@ export function createVesselState({ source, services }) {
     cockpitSubjectId: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
-    /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */
+    /** @type {object[]} Chronological trail vertices, Cartesian3 (oldest first) */
     trailPositions: [],
     /** @type {string|null} Id of the vessel that owns the active selected-vessel trail. */
     trailId: null,

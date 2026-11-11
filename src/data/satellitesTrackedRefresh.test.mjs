@@ -18,6 +18,12 @@ import {
 } from './satellites.js';
 import satellitesLayer from './satellites.js';
 import { createTrackedOverlayEntry } from './trackedReadout.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';
@@ -99,16 +105,9 @@ test('selected satellite params survive delayed arrival and yield to newer expli
     outlineWidth: 2,
     disableDepthTestDistance: 0,
   };
-  const viewer = {
-    entities: new Cesium.EntityCollection(),
-    trackedEntity: undefined,
-    scene: {
-      frameState: { frameNumber: 1 },
-      primitives: { remove() {} },
-    },
-  };
+  const engine = createFakeEngine();
   _setSatelliteLabelLifecycleStateForTest({
-    viewer,
+    engine,
     satrec: twoline2satrec(L1, L2),
     point,
   });
@@ -117,7 +116,10 @@ test('selected satellite params survive delayed arrival and yield to newer expli
       satellitesLayer.setParams({ selectedSatTrackingId: 25544 }),
     );
     assert.equal(satellitesLayer.getParams().selectedSatTrackingId, 25544);
-    assert.equal(viewer.trackedEntity?.gevTrackedId, 'satellites:25544');
+    assert.equal(
+      engine.camera.following()?.native.gevTrackedId,
+      'satellites:25544',
+    );
 
     satellitesLayer.stopTracking();
     _removeSatelliteTrackingCandidateForTest(25544);
@@ -127,7 +129,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
     );
     assert.equal(_pendingSatelliteTrackingRestoreForTest(), 25544);
     _setSatelliteLabelLifecycleStateForTest({
-      viewer,
+      engine,
       satrec: twoline2satrec(L1, L2),
       point,
       preservePending: true,
@@ -163,7 +165,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
       'explicit clear cancels stale restore',
     );
     _setSatelliteLabelLifecycleStateForTest({
-      viewer,
+      engine,
       satrec: twoline2satrec(L1, L2),
       point,
       preservePending: true,
@@ -196,7 +198,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   // members — never unrelated satellites that merely happen to be nearby.
   const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
   const point = { position: new Cesium.Cartesian3() };
-  const viewer = { camera: null, scene: { frameState: { frameNumber: 1 } } };
+  const engine = createFakeEngine();
   let nowMs = Date.UTC(2008, 8, 20, 12, 30);
   // The tracked satellite moves ~7.6 km/s, so neighbours are defined RELATIVE to
   // wherever it is at scan time rather than pinned to a stale sample.
@@ -213,7 +215,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
     satrec: twoline2satrec(L1, L2),
     entity,
     point,
-    viewer,
+    engine,
     now: () => nowMs,
     neighbours: [
       { noradId: 55555, name: 'PROGRESS-MS 34', point: near(120) }, // berthed
@@ -226,7 +228,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   // The cluster scan is throttled, so advance past its interval before the frame
   // that must observe the cluster.
   nowMs += 2000;
-  viewer.scene.frameState.frameNumber = 2;
+  engine.fake.frame();
   _runSatellitePreRenderForTest();
 
   const details = entity.gevLabelModel.details;
@@ -254,10 +256,7 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
 test('satellite pre-render refreshes the tracked altitude on each propagated frame', () => {
   const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
   const point = { position: new Cesium.Cartesian3() };
-  const viewer = {
-    camera: null,
-    scene: { frameState: { frameNumber: 1 } },
-  };
+  const engine = createFakeEngine();
   const epochs = [Date.UTC(2008, 8, 20, 12, 30), Date.UTC(2008, 8, 20, 13, 0)];
   let epochIndex = 0;
   _setTrackedSatelliteRefreshStateForTest({
@@ -266,7 +265,7 @@ test('satellite pre-render refreshes the tracked altitude on each propagated fra
     satrec: twoline2satrec(L1, L2),
     entity,
     point,
-    viewer,
+    engine,
     now: () => epochs[epochIndex],
   });
 
@@ -277,7 +276,7 @@ test('satellite pre-render refreshes the tracked altitude on each propagated fra
   assert.equal(entity.gevLabelModel.details[1], '353\u00a0km · NORAD 25544');
 
   epochIndex = 1;
-  viewer.scene.frameState.frameNumber = 2;
+  engine.fake.frame();
   _runSatellitePreRenderForTest();
   assert.equal(entity.gevLabelModel.details[1], '366\u00a0km · NORAD 25544');
   assert.equal(
@@ -303,17 +302,10 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
     outlineWidth: 2,
     disableDepthTestDistance: 0,
   };
-  const viewer = {
-    entities: new Cesium.EntityCollection(),
-    trackedEntity: undefined,
-    scene: {
-      frameState: { frameNumber: 1 },
-      primitives: { remove() {} },
-    },
-  };
+  const engine = createFakeEngine();
   let cleaned = false;
   _setSatelliteLabelLifecycleStateForTest({
-    viewer,
+    engine,
     satrec: twoline2satrec(L1, L2),
     point,
     overlayHost,
@@ -339,9 +331,9 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
     const trackedEntity = _trackIssForTest();
     assert.ok(trackedEntity);
     assert.equal(
-      viewer.entities.values.length,
-      1,
-      'runtime guard requires a real tracked entity',
+      engine.camera.following()?.native,
+      trackedEntity,
+      'the follow is of the tracked satellite',
     );
     assert.equal(trackedEntity.label, undefined);
     assert.ok(
@@ -372,7 +364,7 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
 
     _clearSatelliteLabelLifecycleForTest();
     cleaned = true;
-    assert.equal(viewer.entities.values.length, 0);
+    assert.equal(engine.camera.following(), null);
     assert.equal(
       calls.filter(
         ([type, sourceId]) =>
@@ -399,4 +391,31 @@ test('ISS overlay entry retains the native distance scale and source text', () =
   });
   assert.equal(entry.edgeFade, 'keyhole');
   assert.equal(entry.horizonCull, true);
+});
+
+test('the tracked satellite is propagated at the app clock time', async () => {
+  const { appClock } = await import('../time/clock.js');
+  const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
+  const point = { position: new Cesium.Cartesian3() };
+  const engine = createFakeEngine();
+  _setTrackedSatelliteRefreshStateForTest({
+    noradId: 25544,
+    name: 'ISS (ZARYA)',
+    satrec: twoline2satrec(L1, L2),
+    entity,
+    point,
+    engine,
+    now: undefined,
+  });
+  try {
+    appClock.freeze(Date.UTC(2008, 8, 20, 12, 30));
+    _runSatellitePreRenderForTest();
+    assert.equal(entity.gevLabelModel.details[1], '353\u00a0km · NORAD 25544');
+    appClock.freeze(Date.UTC(2008, 8, 20, 13, 0));
+    engine.fake.frame();
+    _runSatellitePreRenderForTest();
+    assert.equal(entity.gevLabelModel.details[1], '366\u00a0km · NORAD 25544');
+  } finally {
+    appClock.reset();
+  }
 });

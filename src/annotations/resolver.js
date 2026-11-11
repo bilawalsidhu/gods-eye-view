@@ -14,7 +14,7 @@ import {
   nearestPointOnLines,
 } from '../sources/featureGeometry.js';
 import { defaultGeospatial } from '../search/defaults.js';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
 import {
   lookupNaturalRegionOutline,
@@ -178,7 +178,8 @@ export function createAnnotationResolver({
    * Resolve a single annotation target to a normalized world anchor.
    *
    * @param {object} opts
-   * @param {Cesium.Viewer} opts.viewer
+   * @param {object} [opts.engine]  The globe engine (view bias, screen picks,
+   *                                    ground heights, credits).
    * @param {string} [opts.target]      Place name to geocode.
    * @param {number} [opts.latitude]    Explicit latitude (wins over target).
    * @param {number} [opts.longitude]   Explicit longitude.
@@ -200,7 +201,7 @@ export function createAnnotationResolver({
    */
   async function resolveAnnotationTarget({
     placeSearch = unavailablePlaceSearch,
-    viewer,
+    engine,
     target,
     latitude,
     longitude,
@@ -271,7 +272,7 @@ export function createAnnotationResolver({
       !NON_ADMIN_ENTITY_KINDS.has(entityKind)
     ) {
       const center =
-        pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+        pickWorldFromScreen(engine, 0.5, 0.5) || viewportProximity(engine);
       bundledCenter = center;
       const admin = await findAdminArea(trace.query, { near: center }).catch(
         () => null,
@@ -280,7 +281,7 @@ export function createAnnotationResolver({
       if (admin && !askNamesAdmin && isCoarseCityShape(admin))
         coarseCityShape = admin;
       else if (admin)
-        return bundledAdminTarget(viewer, admin, trace.query, signal);
+        return bundledAdminTarget(engine, admin, trace.query, signal);
       // Bundled US places and neighborhoods named at or near the view. A
       // campus, grounds or monument ask ("Stanford" as a compound, "the
       // Capitol grounds") wants that feature, not a district of its name,
@@ -288,10 +289,10 @@ export function createAnnotationResolver({
       if (intent !== 'around_the_thing' && !isMonumentLikeQuery(trace.query)) {
         const area = await bundledAreaNear(trace.query, center, {
           entityKind,
-          viewRadiusKm: viewportProximity(viewer)?.radiusKm ?? null,
+          viewRadiusKm: viewportProximity(engine)?.radiusKm ?? null,
         });
         signal?.throwIfAborted();
-        if (area) return bundledAdminTarget(viewer, area, trace.query, signal);
+        if (area) return bundledAdminTarget(engine, area, trace.query, signal);
       }
     }
 
@@ -299,7 +300,7 @@ export function createAnnotationResolver({
       const query = String(target || '').trim();
       if (query) {
         const center =
-          pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+          pickWorldFromScreen(engine, 0.5, 0.5) || viewportProximity(engine);
         // Monument / grounds names scatter under Geocoding — try a view-biased Places Text Search FIRST.
         // A hit near the view centre is trusted (skips the proximity gate, like the osm-local snap); on a
         // miss we fall through to geocode + fetchLocalMonument below. The model's entityKind counts too:
@@ -336,7 +337,7 @@ export function createAnnotationResolver({
         if (source !== 'places') {
           const geocoded = await geocodePlace(
             query,
-            viewportBias(viewer),
+            viewportBias(engine),
             signal,
             placeSearch,
           );
@@ -409,7 +410,7 @@ export function createAnnotationResolver({
       Number.isFinite(Number(screenY))
     ) {
       const picked = pickWorldFromScreen(
-        viewer,
+        engine,
         Number(screenX),
         Number(screenY),
       );
@@ -422,7 +423,7 @@ export function createAnnotationResolver({
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon))
       return coarseCityHolds(bundledCenter)
-        ? bundledAdminTarget(viewer, coarseCityShape, trace.query, signal)
+        ? bundledAdminTarget(engine, coarseCityShape, trace.query, signal)
         : null;
 
     // Monument/memorial/statue names geocode unreliably — Google scatters them across the city (e.g.
@@ -435,7 +436,7 @@ export function createAnnotationResolver({
       (isMonumentLikeQuery(target) || entityKind === 'point_feature')
     ) {
       const center =
-        pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+        pickWorldFromScreen(engine, 0.5, 0.5) || viewportProximity(engine);
       if (center) {
         const mon = await fetchLocalMonument(
           center.lat,
@@ -468,7 +469,7 @@ export function createAnnotationResolver({
     // footprint resolution below re-checks its own recentered centroid against the same bound — a
     // polygon that would drag a good anchor out of plausibility is dropped (the mark stays an
     // honest point) rather than rejecting the whole annotation.
-    const vpGate = viewportProximity(viewer);
+    const vpGate = viewportProximity(engine);
     const gateDrift = (gLat, gLon) => {
       if (!vpGate) return null; // no camera info → pass
       const driftKm =
@@ -489,7 +490,7 @@ export function createAnnotationResolver({
           );
         }
         return coarseCityHolds(bundledCenter)
-          ? bundledAdminTarget(viewer, coarseCityShape, trace.query, signal)
+          ? bundledAdminTarget(engine, coarseCityShape, trace.query, signal)
           : null;
       }
     }
@@ -579,7 +580,7 @@ export function createAnnotationResolver({
         );
         signal?.throwIfAborted();
         if (ne) {
-          registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
+          registerDynamicCredit(engine, NATURAL_EARTH_CREDIT);
           traceBundledOutline(ne.name, 'natural-earth');
           const neCentroid = ringCentroid(ne.ring);
           return {
@@ -592,7 +593,7 @@ export function createAnnotationResolver({
             lat: neCentroid?.lat ?? lat,
             lon: neCentroid?.lon ?? lon,
             height: sampleGroundHeight(
-              viewer,
+              engine,
               neCentroid?.lon ?? lon,
               neCentroid?.lat ?? lat,
             ),
@@ -640,7 +641,7 @@ export function createAnnotationResolver({
           signal?.throwIfAborted();
           if (admin && !askNamesAdmin && isCoarseCityShape(admin))
             coarseCityShape ||= admin;
-          else if (admin) return bundledAdminOutline(viewer, admin, signal);
+          else if (admin) return bundledAdminOutline(engine, admin, signal);
         }
         // A geocoded US city, town or CDP: the Census place that holds it.
         if (scope === 'city') {
@@ -650,7 +651,7 @@ export function createAnnotationResolver({
             lon,
           ).catch(() => null);
           signal?.throwIfAborted();
-          if (place) return bundledAdminOutline(viewer, place, signal);
+          if (place) return bundledAdminOutline(engine, place, signal);
         }
         // Pure admin: only an admin boundary is correct — never fall back to a
         // building/landuse (a city is never a single building).
@@ -674,7 +675,7 @@ export function createAnnotationResolver({
             lon,
           ).catch(() => null);
           signal?.throwIfAborted();
-          if (wof) return bundledAdminOutline(viewer, wof, signal);
+          if (wof) return bundledAdminOutline(engine, wof, signal);
         }
         // Else fall through to the OSM admin/place → named-landuse → synthesis ladder. Each
         // returns a footprint, null (definitively no polygon), or undefined (transient
@@ -873,7 +874,7 @@ export function createAnnotationResolver({
         ...(fp.adminLevel ? { adminLevel: fp.adminLevel } : {}),
         lat: centroid.lat,
         lon: centroid.lon,
-        height: sampleGroundHeight(viewer, centroid.lon, centroid.lat),
+        height: sampleGroundHeight(engine, centroid.lon, centroid.lat),
       };
     };
 
@@ -889,11 +890,11 @@ export function createAnnotationResolver({
       pointLike,
       groundsLike,
       around: intent === 'around_the_thing',
-      view: viewportProximity(viewer),
+      view: viewportProximity(engine),
       signal,
       credit: (kind) =>
         registerDynamicCredit(
-          viewer,
+          engine,
           kind === 'tiles' ? OPENMAPTILES_CREDIT : OSM_CREDIT,
         ),
     };
@@ -909,7 +910,7 @@ export function createAnnotationResolver({
         coarseCityHolds({ lat, lon }) &&
         !(result?.ring && !result.synthesized)
       )
-        return bundledAdminOutline(viewer, coarseCityShape, signal);
+        return bundledAdminOutline(engine, coarseCityShape, signal);
       return result;
     };
 
@@ -937,7 +938,7 @@ export function createAnnotationResolver({
       }
     }
 
-    const height = sampleGroundHeight(viewer, lon, lat);
+    const height = sampleGroundHeight(engine, lon, lat);
     // One concise line per target so the resolution path is visible in the browser console.
     if (trace.query) {
       console.log(
@@ -1002,13 +1003,13 @@ export function createAnnotationResolver({
   const COARSE_CITY_MAX_VERTICES = 32;
 
   /** Credit the pack a bundled boundary came from. */
-  function creditAdminSource(viewer, admin) {
+  function creditAdminSource(engine, admin) {
     const credit = {
       'natural-earth': NATURAL_EARTH_CREDIT,
       'us-census': US_CENSUS_CREDIT,
       wof: WOF_CREDIT,
     }[admin.source];
-    if (credit) registerDynamicCredit(viewer, credit);
+    if (credit) registerDynamicCredit(engine, credit);
   }
 
   /**
@@ -1111,9 +1112,9 @@ export function createAnnotationResolver({
    * draw them. Like the Natural Earth rung, it bypasses the scope caps and the
    * centroid drift bound: the unit IS the asked scope.
    */
-  function bundledAdminOutline(viewer, admin, signal) {
+  function bundledAdminOutline(engine, admin, signal) {
     signal?.throwIfAborted();
-    creditAdminSource(viewer, admin);
+    creditAdminSource(engine, admin);
     traceBundledOutline(admin.name, admin.source, admin.polygons?.length);
     const { lat, lon } = admin.label;
     return {
@@ -1126,7 +1127,7 @@ export function createAnnotationResolver({
       outlineSource: admin.source,
       lat,
       lon,
-      height: sampleGroundHeight(viewer, lon, lat),
+      height: sampleGroundHeight(engine, lon, lat),
     };
   }
 
@@ -1156,8 +1157,8 @@ export function createAnnotationResolver({
   }
 
   /** A complete resolved target for a bundled administrative unit (no outline pending). */
-  function bundledAdminTarget(viewer, admin, query, signal) {
-    const outline = bundledAdminOutline(viewer, admin, signal);
+  function bundledAdminTarget(engine, admin, query, signal) {
+    const outline = bundledAdminOutline(engine, admin, signal);
     const [west, south, east, north] = admin.bbox;
     console.log(
       `[Resolver] "${query}": bundled ${admin.kind} "${admin.name}"` +
@@ -2198,7 +2199,7 @@ export function createAnnotationResolver({
     return matches;
   }
 
-  // --- viewer helpers ---------------------------------------------------------
+  // --- engine helpers ---------------------------------------------------------
 
   /**
    * Current view rectangle as a Google `bounds` string `swLat,swLng|neLat,neLng`,
@@ -2214,12 +2215,12 @@ export function createAnnotationResolver({
    * Radius is scaled from camera height (a generous proxy for how much ground is on screen), with a
    * floor so a super-zoomed-in view doesn't over-reject genuinely nearby places.
    */
-  function viewportProximity(viewer) {
+  function viewportProximity(engine) {
     try {
-      const carto = viewer?.camera?.positionCartographic;
+      const carto = engine?.camera.pose().cartographic;
       if (!carto) return null;
-      const lat = Cesium.Math.toDegrees(carto.latitude);
-      const lon = Cesium.Math.toDegrees(carto.longitude);
+      const lat = geo.math.toDegrees(carto.latitude);
+      const lon = geo.math.toDegrees(carto.longitude);
       const radiusKm = Math.max((carto.height / 1000) * 3, 5);
       if (![lat, lon, radiusKm].every(Number.isFinite)) return null;
       return { lat, lon, radiusKm };
@@ -2229,14 +2230,14 @@ export function createAnnotationResolver({
   }
 
   /** Exported for searchAndFlyTo (src/locations.js), which shares this bias. */
-  function viewportBias(viewer) {
+  function viewportBias(engine) {
     try {
-      const rect = viewer?.camera?.computeViewRectangle?.();
+      const rect = engine?.camera.viewRectangle();
       if (!rect) return null;
-      const swLat = Cesium.Math.toDegrees(rect.south).toFixed(4);
-      const swLng = Cesium.Math.toDegrees(rect.west).toFixed(4);
-      const neLat = Cesium.Math.toDegrees(rect.north).toFixed(4);
-      const neLng = Cesium.Math.toDegrees(rect.east).toFixed(4);
+      const swLat = geo.math.toDegrees(rect.south).toFixed(4);
+      const swLng = geo.math.toDegrees(rect.west).toFixed(4);
+      const neLat = geo.math.toDegrees(rect.north).toFixed(4);
+      const neLng = geo.math.toDegrees(rect.east).toFixed(4);
       if ([swLat, swLng, neLat, neLng].some((v) => v === 'NaN')) return null;
       return `${swLat},${swLng}|${neLat},${neLng}`;
     } catch {
@@ -2255,14 +2256,14 @@ export function createAnnotationResolver({
    * ({ lat, lon, label, types, viewport, distanceM, … }) or null.
    */
   async function placesNearViewRecovery(
-    viewer,
+    engine,
     query,
     geocoded = null,
     signal = undefined,
     placeSearch = defaultGeospatial,
   ) {
     const center =
-      pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+      pickWorldFromScreen(engine, 0.5, 0.5) || viewportProximity(engine);
     if (!center) return null;
     const geocodeFar =
       !geocoded ||
@@ -2281,102 +2282,112 @@ export function createAnnotationResolver({
     return hit && hit.distanceM <= PLACES_MAX_DISTANCE_M ? hit : null;
   }
 
+  /** World lon/lat/height from a picked Cartesian, or null for a missed pick. */
+  function pickedPlace(cart) {
+    if (!isPickedWorldPosition(cart)) return null;
+    const carto = geo.cartographic.fromCartesian(cart);
+    if (!carto) return null;
+    return {
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
+      height: Number.isFinite(carto.height) ? carto.height : 0,
+    };
+  }
+
+  /**
+   * Whether a depth pick landed on the camera itself: something drawn into
+   * the depth buffer at the near plane (Navara's screen-space preview lines
+   * and sprites) reads back as a point near the camera, the nearer the lower
+   * the camera. Such a pick is a miss; the ray's globe hit answers instead.
+   * The scale is the rendered surface under the ray, not sea level, so a
+   * camera just above high terrain keeps its ground.
+   */
+  function depthAtCamera(engine, screen, hit) {
+    const camera = engine.camera.livePosition;
+    let ground = engine.picker.pickGlobe(screen);
+    if (!isPickedWorldPosition(ground))
+      ground = engine.camera.pickEllipsoid(screen);
+    const reference = isPickedWorldPosition(ground)
+      ? geo.cartesian3.distance(ground, camera)
+      : 0;
+    return geo.cartesian3.distance(hit, camera) < Math.max(2, 0.01 * reference);
+  }
+
   /**
    * Convert a NORMALIZED screen point (x,y in [0,1] of the current viewport) into
    * a world lon/lat using the depth-aware pick cascade — the inverse of the
    * project-to-screen used by the renderers. This is the "point at the pixel"
    * fallback: the agent indicates a spot in the viewport screenshot when it can't
    * name the place, and we anchor the mark to the actual world point under it.
+   *
+   * Each stage is validated before it is accepted: a depth pick over empty sky
+   * can return a NaN or centre-of-the-earth Cartesian. A degenerate pick IS a
+   * missed pick, so it falls through to the next stage and ultimately to the
+   * caller's null. The answer carries the height the pick landed on (a roof, a
+   * hillside, or 0 on the ellipsoid): the draw tool's live preview needs it,
+   * or the rubber band sinks to sea level while the pointer is on a hill.
    */
-  function pickWorldFromScreen(viewer, nx, ny) {
-    const scene = viewer?.scene;
-    if (!scene) return null;
-    const canvas = scene.canvas;
-    const w = canvas.clientWidth || canvas.width || 0;
-    const h = canvas.clientHeight || canvas.height || 0;
+  function pickWorldFromScreen(engine, nx, ny) {
+    let size;
+    try {
+      size = engine?.host.size();
+    } catch {
+      return null;
+    }
+    const { width: w, height: h } = size ?? {};
     if (!w || !h) return null;
-    const px = Math.max(0, Math.min(1, nx)) * w;
-    const py = Math.max(0, Math.min(1, ny)) * h;
-    const pos = new Cesium.Cartesian2(px, py);
-
-    // Each stage is validated before it is accepted: a depth pick over empty sky
-    // can return a NaN or centre-of-the-earth Cartesian, and converting one of
-    // those throws inside Cesium. A degenerate pick IS a missed pick, so it falls
-    // through to the next stage and ultimately to the caller's null.
-    let cart = null;
-    if (
-      scene.pickPositionSupported &&
-      typeof scene.pickPosition === 'function'
-    ) {
-      try {
-        cart = scene.pickPosition(pos);
-      } catch {
-        cart = null;
-      }
-    }
-    if (
-      !isPickedWorldPosition(cart) &&
-      typeof viewer.camera.pickEllipsoid === 'function'
-    ) {
-      try {
-        cart = viewer.camera.pickEllipsoid(pos, Cesium.Ellipsoid.WGS84);
-      } catch {
-        cart = null;
-      }
-    }
-    if (
-      !isPickedWorldPosition(cart) &&
-      typeof viewer.camera.getPickRay === 'function'
-    ) {
-      try {
-        const ray = viewer.camera.getPickRay(pos);
-        cart = ray ? scene.globe?.pick(ray, scene) || null : null;
-      } catch {
-        cart = null;
-      }
-    }
-    if (!isPickedWorldPosition(cart)) return null;
-    const carto = Cesium.Cartographic.fromCartesian(cart);
-    if (!carto) return null;
-    return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      // The height the pick actually landed on — a roof, a hillside, or 0 on
-      // the ellipsoid. Callers that only want a coordinate ignore it; the draw
-      // tool's live preview needs it, or the rubber band sinks to sea level
-      // while the pointer is on a hill.
-      height: Number.isFinite(carto.height) ? carto.height : 0,
+    const screen = {
+      x: Math.max(0, Math.min(1, nx)) * w,
+      y: Math.max(0, Math.min(1, ny)) * h,
     };
+    const stages = [
+      () => {
+        if (!engine.picker.pickPositionSupported) return undefined;
+        const hit = engine.picker.pickPosition(screen);
+        return hit && !depthAtCamera(engine, screen, hit) ? hit : undefined;
+      },
+      () => engine.picker.pickGlobe(screen),
+      () => engine.camera.pickEllipsoid(screen),
+    ];
+    for (const stage of stages) {
+      let cart = null;
+      try {
+        cart = stage();
+      } catch {
+        cart = null;
+      }
+      if (isPickedWorldPosition(cart)) return pickedPlace(cart);
+    }
+    return null;
   }
 
   /**
-   * Best-effort ground height at a coordinate. The Cesium globe is hidden behind
-   * the Google 3D tiles, so we try to clamp onto the photoreal tile surface; if
-   * the tiles for that spot aren't loaded we fall back to the ellipsoid (0).
+   * Best-effort ground height at a coordinate. The globe is hidden behind
+   * the Google 3D tiles, so we try to clamp onto the rendered surface; if the
+   * tiles for that spot aren't loaded we fall back to the terrain, else the
+   * ellipsoid (0).
    */
-  function sampleGroundHeight(viewer, lon, lat) {
-    const scene = viewer?.scene;
-    if (!scene) return 0;
+  function sampleGroundHeight(engine, lon, lat) {
+    if (!engine) return 0;
     try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-        const surface = Cesium.Cartographic.toCartesian(carto);
-        const clamped = scene.clampToHeight(surface);
-        if (clamped) {
-          const h = Cesium.Cartographic.fromCartesian(clamped).height;
-          if (Number.isFinite(h)) return h;
-        }
+      if (engine.surface.clampToHeightSupported) {
+        const clamped = engine.surface.clampToHeight(
+          geo.cartesian3.fromDegrees(lon, lat, 0),
+        );
+        const h = clamped && geo.cartographic.fromCartesian(clamped)?.height;
+        if (Number.isFinite(h)) return h;
       }
     } catch {
       /* tiles not ready — fall through */
     }
-    const globeHeight = scene.globe?.getHeight?.(
-      Cesium.Cartographic.fromDegrees(lon, lat),
-    );
-    return Number.isFinite(globeHeight) && globeHeight > 0 ? globeHeight : 0;
+    try {
+      const h = engine.surface.terrainHeightSupported
+        ? engine.surface.terrainHeight(geo.cartographic.fromDegrees(lon, lat))
+        : undefined;
+      return Number.isFinite(h) && h > 0 ? h : 0;
+    } catch {
+      return 0;
+    }
   }
 
   function shortLabel(formattedAddress) {

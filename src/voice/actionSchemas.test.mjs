@@ -51,6 +51,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
+    // EOX Sentinel-2 joins the set_map_stack enum.
     // The layer alias hint leaves out aliases the layer id already spells.
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
@@ -58,7 +59,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
-    '6a0d154e68beb787c4e20f12d29a5c86577dc343f3e71d8b5651998ea45d8c3c',
+    'fd0e4b884c501411b3cf57fde932f53954566d56cb14836155925744111f986f',
   );
 });
 
@@ -161,6 +162,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // layerManifest.test.mjs; the two shipped right-rail panels are additive.
   const property = (name) =>
     legacy.find((tool) => tool.name === name).parameters.properties;
+  assert.equal(property('set_map_stack').stack.enum.pop(), 'sentinel2');
   delete property('control_cockpit').voicePanel;
   delete property('set_layer_visibility').layerId.enum;
   delete property('show_data_layers_menu').layerId.enum;

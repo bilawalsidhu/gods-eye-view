@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createSceneHost } from './app/sceneHost.js';
+import { attachScenePart } from './app/sceneParts.js';
 import vm from 'node:vm';
 import { createGoogleTokenSource } from './maps/googleTokens.js';
 import {
@@ -59,7 +61,9 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
   )
     // Imports may span lines (`import {\n  a,\n  b,\n} from '…';`).
     .replace(/^import [^;]*;\n/gm, '')
-    .replace(/^export /gm, '');
+    .replace(/^export /gm, '')
+    // A classic script has no import.meta; the dev-only branches stay off.
+    .replace(/import\.meta\.env/g, '({}).env');
   const context = vm.createContext({
     document: {
       getElementById: () => ({ querySelector: () => ({}) }),
@@ -72,9 +76,13 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     applyDocumentLanguage() {},
     applyDocumentTranslations() {},
     CITY_POIS: [],
-    createApplication: (options) => options,
+    createApplication: (options) => ({ ...options, subscribe() {} }),
+    resolveEngineKind: () => 'cesium',
+    engineOfChoice: (choice) => (choice === 'cesium' ? 'cesium' : 'navara'),
     createStandalonePlaceSearch: () => ({}),
     createStandaloneCatalog: () => ({}),
+    // The startup path draws no layer: its displays need not load.
+    loadLayerRenderers: async () => {},
     createGoogleTokenSource: () => createGoogleTokenSource({ fetchImpl }),
     selectMapStartupRoute,
     // The real scene forwards these credentials to this same loader.
@@ -82,11 +90,21 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
       ...(await loadPhotorealisticTileset(Cesium, options)),
       operations: {},
     }),
+    createSceneHost,
+    attachScenePart,
+    AbortController,
+    AbortSignal,
+    DOMException,
   });
   vm.runInContext(source, context);
   const app = context.createStandaloneApplication(credentials);
-  // The application passes each constructor its signal and defer(cleanup).
-  return app.createScene({ signal: new AbortController().signal, defer() {} });
+  // The application passes each constructor its signal and defer(cleanup);
+  // the scene it returns reads the attached globe.
+  const scene = await app.createScene({
+    signal: new AbortController().signal,
+    defer() {},
+  });
+  return scene.current();
 }
 
 test('standalone falls back to ion when the server token route is unavailable', async () => {

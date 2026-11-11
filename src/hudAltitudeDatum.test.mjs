@@ -1,3 +1,4 @@
+import './testSupport/stubMgrs.mjs';
 // The HUD's ALT readout datum. Field report (2026-08-22, cockpit parked at
 // SFO): the bottom-right OSD read "ALT: -15M" — and JFK, earlier, "ALT: -18M".
 // Cesium reports the camera's height against the WGS84 ELLIPSOID, and San
@@ -20,30 +21,13 @@
 // The same hook is why the live AI-summary test lives here too: this is the
 // one file that can construct a real IntelHUD.
 import { test } from 'node:test';
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { readFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
 import { ensureGeoidReady } from './data/geoid.js';
 
-const MGRS_STUB_URL = 'gev-test-stub:mgrs';
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier === 'mgrs') return { url: MGRS_STUB_URL, shortCircuit: true };
-    return next(specifier, context);
-  },
-  load(url, context, next) {
-    if (url === MGRS_STUB_URL) {
-      return {
-        format: 'module',
-        shortCircuit: true,
-        source:
-          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
-      };
-    }
-    return next(url, context);
-  },
-});
 
 const { IntelHUD } = await import('./hud.js');
 
@@ -204,7 +188,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, publish: env.publish });
     const alt = () => env.elements.get('hud-alt').textContent;
     const summary = () => env.elements.get('hud-summary').textContent;
 
@@ -258,7 +242,7 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
   env.viewer.camera.positionCartographic.height = 100;
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, publish: env.publish });
     hud._updateCameraData(); // cold: requests the grid, paints uncorrected
     assert.match(env.elements.get('hud-alt').textContent, /^ALT: 100m/);
     await ensureGeoidReady();
@@ -293,7 +277,7 @@ test('a summary asked for one view is dropped once the camera moves', async () =
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, summaryService, publish: env.publish });
     let place = 'Yellowstone';
     hud._summaryContext = async () => ({ placeLabels: [place] });
     const summary = () => env.elements.get('hud-summary').textContent;
@@ -353,7 +337,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ placeLabels: ['Yellowstone'] });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -415,7 +399,7 @@ test('a cancelled summary retries the same context but completed answers stay re
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -472,7 +456,7 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, summaryService, publish: env.publish });
     // The same place before and after: a slow follow camera, a small pan.
     hud._summaryContext = async () => ({ placeLabels: ['Lisboa'] });
     const element = env.elements.get('hud-summary');
@@ -537,7 +521,7 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     await hud._updateSummary(true);
@@ -578,12 +562,52 @@ test('a retired Operator layout falls back to Tactical in the live HUD', () => {
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(viewerEngine(env.viewer), { viewer: env.viewer, publish: env.publish });
     hud.setVariant('minimal');
     assert.equal(hud.getVariant(), 'minimal');
     hud.setVariant('operator');
     assert.equal(hud.getVariant(), 'tactical');
     assert.equal(env.view().variant, 'tactical');
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+/**
+ * The HUD reads its camera through a globe engine: one standing where the
+ * viewer double's camera stands (cartographic, pitch, no view rectangle).
+ */
+function engineFor(viewer) {
+  const engine = createFakeEngine();
+  const { longitude, latitude, height } = viewer.camera.positionCartographic;
+  engine.fake.setPose({ longitude, latitude, height, heading: 0, pitch: viewer.camera.pitch, roll: 0 });
+  engine.fake.script('viewRectangle', undefined);
+  return engine;
+}
+
+test('the HUD follows the engine camera: moveEnd repaints, the view window reads the engine, destroy unsubscribes', () => {
+  const env = installHudEnvironment();
+  const engine = engineFor(env.viewer);
+  let hud;
+  try {
+    hud = new IntelHUD(engine, { publish: env.publish });
+    assert.equal(engine.camera.moveEnd.numberOfListeners, 1);
+    engine.fake.script('viewRectangle', {
+      west: (-122.5 * Math.PI) / 180,
+      south: (37.5 * Math.PI) / 180,
+      east: (-122.4 * Math.PI) / 180,
+      north: (37.6 * Math.PI) / 180,
+    });
+    const window = hud._viewWindowKm(37.55);
+    assert.ok(Math.abs(window.heightKm - 11.1) < 1e-9);
+    hud._visible = true;
+    hud._firstSummaryKicked = true; // no AI summary request from this test
+    engine.fake.emit('camera.moveEnd');
+    assert.match(env.elements.get('hud-mgrs').textContent, /^MGRS: 10S/);
+    hud.destroy();
+    hud = null;
+    assert.equal(engine.camera.moveEnd.numberOfListeners, 0);
   } finally {
     hud?.destroy();
     env.restore();

@@ -1,18 +1,22 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+import * as geo from '../../geo/index.js';
 import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+  const { setEntries, setVisible, clearSource } = bindOverlayHost(
+    services.overlays,
+    () => state._engine,
+  );
   const state = {};
 
   state.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
   });
 
-  state._dataSource = null;
+  // The layer's records of what it draws, by pick id (rendering.js).
+  state._missionElements = new Map();
 
   state._count = 0;
 
@@ -36,8 +40,6 @@ export function createState({ services }) {
   state._clickHandler = null;
 
   state._moveHandler = null;
-
-  state._viewer = null;
 
   state._declutterHandler = null;
 
@@ -110,6 +112,11 @@ export function createState({ services }) {
 
   state._focusAfterActiveLookup = false;
 
+  // The mission whose orbit view the user asked for last; any later camera
+  // command of this layer (a flyover, a launch-site view) clears it, so a late
+  // active-satellite answer can reframe only a view nobody has left.
+  state._missionFocusIntentId = null;
+
   state._satelliteStateBeforeMission = null;
 
   state._satelliteActivationPromise = null;
@@ -129,6 +136,7 @@ export function createState({ services }) {
   state._replaySpeed = 1;
 
   state._replayTracks = new Map();
+  state._replayCameraHeading = null;
 
   state._missionOverlayRecords = new Map();
 
@@ -148,12 +156,9 @@ export function createState({ services }) {
 
   state._missionOrbitPrimitives = new Map();
 
-  state._declutterTime = new Cesium.JulianDate();
-
-  state._declutterOccluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    new Cesium.Cartesian3(),
-  );
+  // The display (render/display.js) and the engine it draws on.
+  state._renderer = null;
+  state._engine = null;
 
   state._missionRingDate = new Date(0);
 
@@ -188,8 +193,6 @@ export function createState({ services }) {
   /** The launches hidden at the last frame, by id, to spot a change. */
 
   state._pendingLaunchIds = new Set();
-
-  state._missionOrbitPatternRegistered = false;
 
   state._pathDistanceCache = new WeakMap();
   state._sourceController = new AbortController();

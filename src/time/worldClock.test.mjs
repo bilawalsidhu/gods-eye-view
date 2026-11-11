@@ -73,6 +73,35 @@ test('the page clock moves the layers with a time of their own', async () => {
     assert.equal(worldClock.follows(id), false, id);
 });
 
+test('the host frame scheduler replaces ticks and releases its pending frame', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  const frames = new Map();
+  let nextFrame = 0;
+  const heard = [];
+  const unsubscribe = clock.subscribe((state) => heard.push(state.timeMs));
+  clock.play({ rate: 60 });
+  assert.equal(t.timers.size, 1);
+  const release = clock.setFrameScheduler(
+    (fn) => { frames.set(++nextFrame, fn); return nextFrame; },
+    (id) => frames.delete(id),
+  );
+  assert.equal(t.timers.size, 0);
+  assert.equal(frames.size, 1);
+  const [[id, fn]] = frames;
+  frames.delete(id);
+  t.advance(16);
+  fn();
+  assert.equal(heard.at(-1), t.wall - 16 + 16 * 60);
+  assert.equal(frames.size, 1);
+  release();
+  assert.equal(frames.size, 0);
+  assert.equal(t.timers.size, 1);
+  release();
+  unsubscribe();
+  assert.equal(t.timers.size, 0);
+});
+
 test('continuous play advances the cursor at the rate and pause holds it', () => {
   const t = fakeTime();
   const clock = createWorldClock(t.options);

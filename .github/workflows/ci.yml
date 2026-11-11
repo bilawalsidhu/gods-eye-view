@@ -59,6 +59,10 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
+      - name: Main chunk size budget
+        if: matrix.node == '24.22.2'
+        run: npm run check:main-chunk
+
   street-level-browser:
     # Hermetic: every Mapillary request is answered from fixtures, so the
     # dummy token below never leaves the page.

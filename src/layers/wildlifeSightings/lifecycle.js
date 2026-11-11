@@ -125,15 +125,14 @@ export function createLifecycle({ state, services, parts }) {
   }
 
   function currentQuery() {
-    const height = state.viewer?.camera?.positionCartographic?.height;
+    const engine = state.engine;
+    const height = engine?.camera.height();
     state.band = getWildlifeHeightBand(height ?? Infinity, state.band);
     const boxes =
       state.band === 'global'
         ? null
-        : wildlifeViewportBoxes(state.viewer)?.map((box) =>
-            snapWildlifeBox(box),
-          );
-    const visibleBoxes = wildlifeGridViewportBoxes(state.viewer);
+        : wildlifeViewportBoxes(engine)?.map((box) => snapWildlifeBox(box));
+    const visibleBoxes = wildlifeGridViewportBoxes(engine);
     const scope =
       state.band === 'global' ||
       (!boxes && (height ?? Infinity) > WILDLIFE_GRID_HEIGHT_METERS)
@@ -147,12 +146,12 @@ export function createLifecycle({ state, services, parts }) {
       state.confirmed,
       state.taxa,
     ]);
-    const canvas = state.viewer?.scene?.canvas;
+    const size = engine?.host.size();
     const zoom = visibleBoxes?.length
       ? chooseWildlifeGridZoom({
           boxes: visibleBoxes,
-          width: canvas?.clientWidth || 1400,
-          height: canvas?.clientHeight || 900,
+          width: size?.width || 1400,
+          height: size?.height || 900,
         })
       : 0;
     const tiles = visibleBoxes?.length
@@ -500,11 +499,50 @@ export function createLifecycle({ state, services, parts }) {
     });
   }
 
-  function disable() {
+  function onMoveEnd() {
+    if (!state.enabled) return;
+    wildlifeMeasure('moveEnd', () => {
+      if (initialCameraDeadline && services.now() < initialCameraDeadline) {
+        initialCameraDeadline = services.now() + INITIAL_CAMERA_SETTLE_MS;
+        refreshView();
+        initialSettle?.schedule();
+      } else {
+        refreshView();
+        scheduleRefresh();
+      }
+      parts.controls.notify();
+    });
+  }
+
+  // Draw the retained observations on the attached engine and listen to it.
+  function attachScene() {
+    parts.rendering.activate?.();
+    refreshView();
+    for (const id of parts.selection.sourceIds)
+      services.overlayHost?.setVisible?.(id, true);
+    parts.selection.install();
+    services.picking?.registerPickOwner?.(
+      picks.owner,
+      picks.predicate,
+      state.engine,
+    );
+    state.removeCamera =
+      state.engine.camera.moveEnd.addEventListener(onMoveEnd);
+  }
+
+  function releaseScene() {
+    state.removeCamera?.();
+    state.removeCamera = null;
+    parts.rendering.deactivate?.();
+    parts.selection.uninstall?.();
+    services.picking?.unregisterPickOwner?.('wildlife-sightings', state.engine);
+  }
+
+  // Requests, timers and debounces in flight end with their scene or lifetime.
+  function stopAcquisition() {
     lifetimeEpoch += 1;
     initialSettle?.finish();
     initialCameraDeadline = 0;
-    state.enabled = false;
     services.clearTimer(state.cameraTimer);
     state.cameraTimer = null;
     state.request?.abort();
@@ -514,13 +552,16 @@ export function createLifecycle({ state, services, parts }) {
     state.background = null;
     state.loading = false;
     clearPending();
-    state.removeCamera?.();
-    state.removeCamera = null;
-    parts.rendering.deactivate?.();
+  }
+
+  function disable() {
+    stopAcquisition();
+    state.enabled = false;
+    clearPending();
+    releaseScene();
     removeManagerListener?.();
     removeManagerListener = null;
     parts.selection.remove();
-    services.picking?.unregisterPickOwner?.('wildlife-sightings');
     parts.rendering.clear();
     parts.photos.clear();
     parts.controls.notify();
@@ -528,56 +569,63 @@ export function createLifecycle({ state, services, parts }) {
     return true;
   }
 
+  const picks = {
+    owner: 'wildlife-sightings',
+    predicate: (id) =>
+      typeof id === 'string' &&
+      id.startsWith('wildlife:') &&
+      state.rowById.has(id.slice(9)),
+  };
   const methods = {
-    /** Attach this layer's Cesium resources to one viewer. */
-    init(viewer, { signal } = {}) {
-      if (state.viewer)
+    /** Attach this layer to the scene's globe engine. */
+    init(_viewer, options = {}) {
+      if (state.engine)
         throw new Error('Wildlife sightings layer is already initialized');
+      return methods.attachRenderer(options);
+    },
+    /** Draw on `engine` (a scene switch brings another); observations,
+     * filters and selection carry over. */
+    picks,
+    attachRenderer({ engine = null, signal = null } = {}) {
       if (state.destroyed || signal?.aborted) return false;
-      state.viewer = viewer;
+      if (state.engine)
+        throw new Error('Wildlife sightings display is already attached');
+      if (!engine)
+        throw new TypeError('Wildlife sightings need a globe engine');
+      state.engine = engine;
       parts.rendering.init();
+      if (state.enabled) {
+        attachScene();
+        if (state.selectedId) {
+          parts.selection.publishSelected();
+          parts.selection.notify();
+        }
+        scheduleRefresh();
+        parts.controls.notify();
+      }
       return true;
+    },
+    /** Release everything drawn on the engine; the data stays. */
+    detachRenderer() {
+      if (!state.engine) return;
+      stopAcquisition();
+      if (state.enabled) {
+        releaseScene();
+        parts.selection.detach();
+      }
+      parts.rendering.destroy();
+      state.engine = null;
+      parts.controls.notify();
     },
     /** Show retained observations and acquire the settled camera view. */
     enable(_viewer, { signal } = {}) {
       if (state.destroyed || signal?.aborted) return false;
-      if (!state.viewer)
+      if (!state.engine)
         throw new Error('Wildlife sightings layer must be initialized');
       if (state.enabled) return true;
       state.enabled = true;
       initialCameraDeadline = services.now() + INITIAL_CAMERA_SETTLE_MS;
-      parts.rendering.activate?.();
-      state.points.show = true;
-      refreshView();
-      for (const id of parts.selection.sourceIds)
-        services.overlayHost?.setVisible?.(id, true);
-      parts.selection.install();
-      services.picking?.registerPickOwner?.(
-        'wildlife-sightings',
-        (id) =>
-          typeof id === 'string' &&
-          id.startsWith('wildlife:') &&
-          state.rowById.has(id.slice(9)),
-      );
-      state.removeCamera = state.viewer.camera?.moveEnd?.addEventListener?.(
-        () => {
-          if (!state.enabled) return;
-          wildlifeMeasure('moveEnd', () => {
-            if (
-              initialCameraDeadline &&
-              services.now() < initialCameraDeadline
-            ) {
-              initialCameraDeadline = services.now() + INITIAL_CAMERA_SETTLE_MS;
-              refreshView();
-              initialSettle?.schedule();
-            } else {
-              refreshView();
-              scheduleRefresh();
-            }
-            parts.controls.notify();
-          });
-        },
-      );
+      attachScene();
       // A debounce can expire while the manager is still enabling and cannot
       // accept refreshLayer yet. Its settled visibility event is the one
       // catch-up edge; completed initial queries are skipped by their key.
@@ -591,19 +639,13 @@ export function createLifecycle({ state, services, parts }) {
           )
             scheduleRefresh();
         }) || null;
-      if (services.sprites?.restoreSpriteOrderOnEnable)
-        services.sprites.restoreSpriteOrderOnEnable(
-          'wildlife-sightings',
-          state.viewer,
-        );
-      else services.sprites?.restoreSpriteOrder?.(state.viewer);
       return true;
     },
     /** Refresh observations and density independently for the current filters. */
     async update(_viewer, { signal } = {}) {
       if (
         !state.enabled ||
-        !state.points ||
+        !state.engine ||
         state.destroyed ||
         signal?.aborted
       ) {
@@ -827,6 +869,7 @@ export function createLifecycle({ state, services, parts }) {
     destroy() {
       if (state.destroyed) return;
       disable();
+      methods.detachRenderer();
       state.destroyed = true;
       parts.selection.destroy();
       parts.photos.destroy();
@@ -841,7 +884,6 @@ export function createLifecycle({ state, services, parts }) {
       state.failedParams = null;
       state.controlsListener = null;
       state.manager = null;
-      state.viewer = null;
     },
   };
   return {

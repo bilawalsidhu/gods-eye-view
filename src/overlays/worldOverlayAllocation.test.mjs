@@ -129,6 +129,18 @@ const WORKLOADS = [
     saturated: true,
   },
   {
+    // The Navara engine's projector (cameraMath) with the horizon test on,
+    // over a real WGS84 camera: measured on Node 24.14 at 10 905 B/frame
+    // (generic 250: 9 681) — the per-frame matrix allocates a little, the
+    // per-label horizon test nothing.
+    name: 'through the Navara projector with the horizon test on',
+    profile: 'navara-projector',
+    entries: 250,
+    candidates: 250,
+    maxBytesPerFrame: 13_000,
+    saturated: true,
+  },
+  {
     name: 'with both local infrastructure sources live',
     profile: 'local-infrastructure',
     entries: LOCAL_OVERLAY_COHORT_LIMIT * 2,

@@ -1,3 +1,4 @@
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -77,7 +78,10 @@ function fixture({ holdFirst = false } = {}) {
       },
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   const runner = createGevActionRunner({
+    engine: createCesiumEngine(viewer),
     viewer,
     dataManager: { layers: new Map() },
     styleManager: {

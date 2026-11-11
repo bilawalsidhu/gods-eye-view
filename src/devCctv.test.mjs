@@ -28,7 +28,7 @@ async function launch(overrides = {}, dotenv = '', omitCctv = false) {
     await fs.writeFile(path.join(root, 'src', 'standalone', 'catalog.js'), catalog);
     await fs.mkdir(path.join(root, 'src', 'app'), { recursive: true });
     const assembly = await fs.readFile(new URL('./app/constructCatalog.js', import.meta.url), 'utf8');
-    await fs.writeFile(path.join(root, 'src', 'app', 'constructCatalog.js'), omitCctv ? assembly.replace(/^\s*createApplicationCctv\(.*$/m, '') : assembly);
+    await fs.writeFile(path.join(root, 'src', 'app', 'constructCatalog.js'), omitCctv ? assembly.replace(/^.*createApplicationCctv\(.*$/m, '') : assembly);
     await fs.mkdir(path.join(root, 'node_modules'));
     await fs.symlink(fileURLToPath(new URL('.', import.meta.resolve('vite/package.json'))), path.join(root, 'node_modules', 'vite'), 'dir');
     await fs.writeFile(path.join(root, '.env'), dotenv);

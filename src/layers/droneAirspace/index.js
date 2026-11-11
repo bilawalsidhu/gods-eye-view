@@ -1,5 +1,7 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+import * as geo from '../../geo/index.js';
 import { msg, t } from '../../i18n/index.js';
+import { createDroneAirspaceDisplay } from './render/display.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
   droneAirspaceAnchorDegrees,
@@ -9,14 +11,6 @@ import {
 export { normalizeDroneAirspaceSnapshot } from './records.js';
 export { createDroneAirspaceSource } from './source.js';
 export * from './cards.js';
-
-/** Fill/line color for a zone by TYPE_CODE. */
-export function droneAirspaceColor(typeCode) {
-  return Cesium.Color.fromCssColorString(droneAirspaceAccent(typeCode));
-}
-
-const ringPositions = (ring) =>
-  ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat));
 
 /**
  * FNV-1a over a zone's rings: a short, deterministic fingerprint so a
@@ -43,16 +37,19 @@ const CARD_HOST_OPTIONS = Object.freeze({
 export function createDroneAirspaceLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
+  rendererFactory = ({ engine }) => createDroneAirspaceDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Drone airspace requires a snapshot source');
-  let _viewer = null;
+  let initialized = false;
+  let renderer = null;
+  let sceneEngine = null;
+  /** The rows drawn, kept for the next globe's renderer. */
+  let _rows = [];
   let _request = null;
   let _snapshotSignature = null;
-  let _dataSource = null;
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
@@ -64,11 +61,11 @@ export function createDroneAirspaceLayer({
   /** @type {Map<string, {stableId: string, anchor: {lon: number, lat: number}}>} */
   const _rowById = new Map();
 
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
+  const canSelect = () => overlayHost && picking;
 
   function publishSelectedCard() {
-    if (!canSelect()) return;
+    if (!canSelect() || !renderer) return;
     const row = _selectedId ? _rowById.get(_selectedId) : null;
     if (!row) {
       _selectedId = null;
@@ -82,7 +79,7 @@ export function createDroneAirspaceLayer({
     }
     const card = {
       ...buildDroneAirspaceCard(row),
-      position: Cesium.Cartesian3.fromDegrees(row.anchor.lon, row.anchor.lat),
+      position: geo.cartesian3.fromDegrees(row.anchor.lon, row.anchor.lat),
     };
     _selectedCardId = card.id;
     overlayHost.setEntries(
@@ -102,14 +99,13 @@ export function createDroneAirspaceLayer({
   }
 
   function installClickHandler() {
-    if (!canSelect() || _clickHandler || !_viewer) return;
+    if (!canSelect() || _clickHandler || !renderer) return;
     // Deliberately NOT registered in the pick-ownership registry: sibling
     // layers yield to owned picks before their own overlay-card hit-tests,
     // so claiming these large ground polygons would make FIRMS/vessel/CCTV
     // cards inert anywhere over a zone. Unowned, our picks read as
     // "empty space" to siblings — the same contract as fire perimeters.
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    _clickHandler = renderer.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
       const cardHit = overlayHost.hitTest?.(
         click.position?.x,
@@ -117,7 +113,7 @@ export function createDroneAirspaceLayer({
         { sourceId: DRONE_AIRSPACE_OVERLAY_SOURCE_ID },
       );
       if (cardHit && cardHit.entryId === _selectedCardId) return;
-      const picked = _viewer.scene.pick(click.position);
+      const picked = click?.picked ?? null;
       const zoneId = picked ? pickedZoneId(picked) : null;
       if (zoneId) {
         _selectedId = zoneId;
@@ -126,18 +122,22 @@ export function createDroneAirspaceLayer({
       }
       if (picked) {
         const pickId = picking.resolvePickId(picked);
-        if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
+        if (
+          pickId &&
+          picking.isOwnedByOtherLayer(layer.id, pickId, sceneEngine)
+        )
+          return;
       }
       if (_selectedId) {
         _selectedId = null;
         publishSelectedCard();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
     if (_clickHandler) {
-      _clickHandler.destroy();
+      _clickHandler();
       _clickHandler = null;
     }
   }
@@ -158,24 +158,51 @@ export function createDroneAirspaceLayer({
     source: 'FAA SUA',
     updateInterval: 3600000,
 
-    init(viewer) {
-      if (_viewer)
+    init(viewer, { engine = null } = {}) {
+      if (initialized)
         throw new Error('Drone airspace layer is already initialized');
-      _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('drone-airspace');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
-      _count = 0;
-      _lastUpdate = null;
-      _lastError = null;
-      _stale = false;
-      _enabled = false;
+      initialized = true;
+      try {
+        if (engine) this.attachRenderer({ engine });
+      } catch (error) {
+        this.destroy();
+        throw error;
+      }
       console.log('[Data:DroneAirspace] Initialized');
+    },
+
+    /** Draw on a globe: the rows already fetched, and the selection. */
+    show(enabled) {
+      renderer?.setVisible(enabled);
+      overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
+      if (!initialized || renderer)
+        throw new Error('Invalid drone airspace scene attachment');
+      sceneEngine = engine;
+      renderer = rendererFactory({ engine });
+      this.show(_enabled);
+      if (_rows.length) renderer.replace(_rows);
+      if (_enabled) {
+        overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, true);
+        installClickHandler();
+        if (_selectedId) publishSelectedCard();
+      }
+    },
+
+    /** Leave the globe; the rows and selection stay for the next one. */
+    detachRenderer() {
+      removeClickHandler();
+      overlayHost?.clearSource(DRONE_AIRSPACE_OVERLAY_SOURCE_ID);
+      overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, false);
+      renderer?.destroy();
+      renderer = null;
+      sceneEngine = null;
     },
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      renderer?.setVisible(true);
       overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, true);
       installClickHandler();
     },
@@ -184,13 +211,13 @@ export function createDroneAirspaceLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      renderer?.setVisible(false);
       removeClickHandler();
       clearSelection();
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -227,55 +254,25 @@ export function createDroneAirspaceLayer({
           _lastError = null;
           return true;
         }
-        const nextEntities = [];
         _rowById.clear();
+        let polygonCount = 0;
         for (const row of rows) {
-          const color = droneAirspaceColor(row.typeCode);
-          for (const [index, rings] of row.polygons.entries()) {
-            const [outer, ...holes] = rings;
-            const outerPositions = ringPositions(outer);
-            nextEntities.push(
-              new Cesium.Entity({
-                id: `drone-airspace:${row.stableId}:${index}`,
-                polygon: {
-                  hierarchy: new Cesium.PolygonHierarchy(
-                    outerPositions,
-                    holes.map(
-                      (hole) =>
-                        new Cesium.PolygonHierarchy(ringPositions(hole)),
-                    ),
-                  ),
-                  material: new Cesium.ColorMaterialProperty(
-                    color.withAlpha(0.25),
-                  ),
-                },
-                polyline: {
-                  positions: outerPositions,
-                  clampToGround: true,
-                  width: 2,
-                  material: new Cesium.ColorMaterialProperty(
-                    color.withAlpha(0.9),
-                  ),
-                },
-              }),
-            );
-          }
+          polygonCount += row.polygons.length;
           const { polygons, ...facts } = row;
           _rowById.set(row.stableId, {
             ...facts,
             anchor: droneAirspaceAnchorDegrees(polygons),
           });
         }
-
-        _dataSource.entities.removeAll();
-        for (const entity of nextEntities) _dataSource.entities.add(entity);
+        _rows = rows;
+        renderer?.replace(rows);
         _snapshotSignature = signature;
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
         _lastUpdate = updatedAt;
         _lastError = null;
         console.log(
-          `[Data:DroneAirspace] Updated: ${_count} zones, ${nextEntities.length} polygons`,
+          `[Data:DroneAirspace] Updated: ${_count} zones, ${polygonCount} polygons`,
         );
         return true;
       } catch (e) {
@@ -292,19 +289,17 @@ export function createDroneAirspaceLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       removeClickHandler();
       clearSelection();
       _rowById.clear();
+      _rows = [];
       _snapshotSignature = null;
-      _viewer = null;
+      initialized = false;
       _enabled = false;
-      if (_dataSource) {
-        viewer.dataSources.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      this.detachRenderer();
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -312,7 +307,7 @@ export function createDroneAirspaceLayer({
     },
 
     getAnalystRecords(maxCount = 2000) {
-      if (!_dataSource || !_dataSource.show) return [];
+      if (!_enabled) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;

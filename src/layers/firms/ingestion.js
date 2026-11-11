@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
 import { fireDetectionKey } from '../../data/firmsLabels.js';
 import { filterFires } from '../../data/firmsIntensity.js';
@@ -14,13 +15,16 @@ export function createIngestion({
   config,
   feed,
 }) {
-  const { clearSelectedEntityContextForLayer } = services.context;
+  const { clearSelectedEntityContextForLayer } = bindOverlayHost(
+    services.context,
+    () => layerState._renderer?.engine,
+  );
   const { id } = config;
 
   /** Replace a validated snapshot while preserving source freshness and selection identity. */
 
   async function loadHeatmap() {
-    if (!layerState._dataSource || !layerState._enabled) return;
+    if (!layerState._renderer || !layerState._enabled) return;
     layerState.request?.abort();
     const request = new AbortController();
     layerState.request = request;
@@ -73,6 +77,7 @@ export function createIngestion({
         // last-known values for this instead of tearing down.
         clearSelectedEntityContextForLayer(id, { evicted: true });
       }
+      layerState._selectedFire = reselected;
       components.rendering.renderCurrentLod(true);
       if (reselected) components.selection.selectFire(reselected, false);
       layerState._rowControlsListener?.();

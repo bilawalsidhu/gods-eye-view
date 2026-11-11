@@ -1,5 +1,9 @@
-export { ACTIVE_FRAME_REFRESH_MS } from './sourcePolicy.js';
-import * as Cesium from 'cesium';
+export {
+  FRAME_ENDPOINT,
+  MEDIA_ENDPOINT,
+  ACTIVE_FRAME_REFRESH_MS,
+} from './sourcePolicy.js';
+import { rgbaFromCss } from '../shared/color.js';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 
@@ -437,41 +441,50 @@ export const CAMERA_SEEDS = [
 // Visual style constants
 // ---------------------------------------------------------------------------
 
+// prettier-ignore
 export const IDLE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.88);
+  rgbaFromCss('#6be8ff').withAlpha(0.88);
 
+// prettier-ignore
 export const ACTIVE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#ffd97a').withAlpha(0.95);
+  rgbaFromCss('#ffd97a').withAlpha(0.95);
 
-export const LIVE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#b48cff').withAlpha(0.88);
+export const LIVE_CAMERA_COLOR = rgbaFromCss('#b48cff').withAlpha(0.88);
 
+// prettier-ignore
 export const IDLE_COVERAGE_COLOR =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.24);
+  rgbaFromCss('#2fe0ff').withAlpha(0.24);
 
+// prettier-ignore
 export const IDLE_COVERAGE_CENTER_MUTED =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.2);
+  rgbaFromCss('#2fe0ff').withAlpha(0.2);
 
+// prettier-ignore
 export const IDLE_COVERAGE_EDGE_MUTED =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.18);
+  rgbaFromCss('#2fe0ff').withAlpha(0.18);
 
+// prettier-ignore
 export const ACTIVE_COVERAGE_EDGE =
-  Cesium.Color.fromCssColorString('#8dff87').withAlpha(0.58);
+  rgbaFromCss('#8dff87').withAlpha(0.58);
 
+// prettier-ignore
 export const ACTIVE_COVERAGE_CENTER =
-  Cesium.Color.fromCssColorString('#d7ff8d').withAlpha(0.82);
+  rgbaFromCss('#d7ff8d').withAlpha(0.82);
 
 // H6: dimmer depth-fail materials let the active frustum wireframe read
 // through buildings while in monitor fallback mode.
 
+// prettier-ignore
 export const ACTIVE_COVERAGE_EDGE_DEPTHFAIL =
-  Cesium.Color.fromCssColorString('#8dff87').withAlpha(0.18);
+  rgbaFromCss('#8dff87').withAlpha(0.18);
 
+// prettier-ignore
 export const ACTIVE_COVERAGE_CENTER_DEPTHFAIL =
-  Cesium.Color.fromCssColorString('#d7ff8d').withAlpha(0.26);
+  rgbaFromCss('#d7ff8d').withAlpha(0.26);
 
+// prettier-ignore
 export const PLANE_OUTLINE_COLOR =
-  Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.55);
+  rgbaFromCss('#6be8ff').withAlpha(0.55);
 
 /**
  * Card budget while the staggered geometry drain is running — the raised

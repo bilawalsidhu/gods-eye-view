@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { nearFarScale } from '../shared/color.js';
 import { roadSurfaceChunks } from './surface.js';
 import { t, translateKnown } from '../../i18n/index.js';
 import {
@@ -10,6 +11,7 @@ import {
   DOT_HEIGHT_OFFSET,
   DENSITY_MULT,
   JAM_DOT_FAR_SCALE,
+  SIM_DOT_COLOR,
 } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
@@ -33,14 +35,14 @@ export function createModel({ state: layerState, services, parts, source }) {
             (Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? floor
               : layerState._viewHeightEstimate || 0) + DOT_HEIGHT_OFFSET;
-          return Cesium.Cartesian3.fromDegrees(lng, lat, h);
+          return geo.cartesian3.fromDegrees(lng, lat, h);
         });
 
         // Pre-compute segment distances in meters for speed-to-t conversion
         const segmentDist = [];
         for (let i = 0; i < waypoints.length - 1; i++) {
           segmentDist.push(
-            Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
+            geo.cartesian3.distance(waypoints[i], waypoints[i + 1]),
           );
         }
 
@@ -367,7 +369,7 @@ export function createModel({ state: layerState, services, parts, source }) {
       dot.bucket = bucket;
       dot.point.color = bucket
         ? layerState._activeBucketColors[bucket]
-        : Cesium.Color.WHITE.withAlpha(0.85);
+        : SIM_DOT_COLOR;
       dot.nominalSize =
         parts.style.baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
@@ -386,7 +388,7 @@ export function createModel({ state: layerState, services, parts, source }) {
             moving: Math.random() < 0.4,
             until: now + Math.random() * 2000,
           };
-        dot.point.scaleByDistance = new Cesium.NearFarScalar(
+        dot.point.scaleByDistance = nearFarScale(
           100,
           1.5,
           layerState._fadeScaleFar,

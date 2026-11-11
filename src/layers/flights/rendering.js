@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
-import { julianAt } from '../../time/julian.js';
+import * as geo from '../../geo/index.js';
+import { WHITE, CYAN, nearFarScale } from '../shared/color.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { civilAircraftModelSpec } from './modelSpec.js';
@@ -9,7 +9,6 @@ import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import {
   cameraPoseSignature,
-  horizonOccluder,
   screenProjectedRotation,
 } from '../../data/iconOrientation.js';
 import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
@@ -27,7 +26,6 @@ import {
   MODEL_PROX_ADD_M,
   MODEL_ALL_KEEP_M,
   MODEL_PROX_KEEP_M,
-  MODEL_HEADING_OFFSET_DEG,
   IR_RELOAD_BATCH,
   MODEL_MIN_PX,
   TRACKED_MODEL_MIN_PX,
@@ -41,7 +39,6 @@ import {
   STALE_ALPHA,
   displayDelayMs,
 } from './policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -77,7 +74,7 @@ export function createRendering({
     info = flightState.records.data.get(icao24),
   ) {
     if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
-    return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
+    return isMilitaryIcao(icao24) ? MIL_TINT : WHITE;
   }
 
   /** Cockpit far-contact dot tint: the emergency red outranks the category tint. */
@@ -126,11 +123,11 @@ export function createRendering({
   function _normalBillboardScaleByDistance() {
     // Preserve the established close-range 3× scale. Any smaller owner-visible
     // default belongs in a separate evidence-backed proposal.
-    return new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5);
+    return nearFarScale(1000, 3.0, 8000000, 0.5);
   }
 
   function _cockpitBillboardScaleByDistance() {
-    return new Cesium.NearFarScalar(1000, 1.15, 8000000, 0.65);
+    return nearFarScale(1000, 1.15, 8000000, 0.65);
   }
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except
@@ -188,7 +185,7 @@ export function createRendering({
   /** Model tint, mirroring the billboard color rules. */
 
   function _modelColor(icao24) {
-    if (icao24 === flightState._trackedIcao) return Cesium.Color.CYAN;
+    if (icao24 === flightState._trackedIcao) return CYAN;
     return _fleetBillboardColor(icao24);
   }
 
@@ -204,7 +201,8 @@ export function createRendering({
   function _modelRegimeActive() {
     if (!flightState._models3dEnabled) return false;
     const h =
-      flightState._viewer?.camera?.positionCartographic?.height ?? Infinity;
+      flightState._renderer?.view.camera?.positionCartographic?.height ??
+      Infinity;
     return h < MODEL_ALT_CEIL_M;
   }
 
@@ -239,30 +237,13 @@ export function createRendering({
       : MODEL_PROX_KEEP_M;
   }
 
-  /** World model matrix from a position + course heading (pitch/roll 0; ENU frame). Writes into
-   *  `result` and returns it — pass each model's OWN `.modelMatrix` so models never share one
-   *  mutable matrix object. `Model.modelMatrix` is a plain field (not a cloning setter); Cesium
-   *  clones it per frame in updateModelMatrix(). Sharing a single scratch made every model render at
-   *  the LAST-written transform — all stacked on one plane — and, once the tracked model wrote the
-   *  scratch every frame, the stack point oscillated frame-to-frame: the "flickering like mad" bug. */
+  /** World model transform from a position + course heading (pitch/roll 0;
+   *  ENU frame), written by the renderer into the model's OWN transform —
+   *  never a shared scratch (see the renderer's setPose: one shared matrix
+   *  stacked every model on the last-written plane, "flickering like mad"). */
 
-  function _modelMatrix(
-    pos,
-    headingDeg,
-    result = flightState._scratchModelMtx,
-  ) {
-    flightState._scratchModelHpr.heading = Cesium.Math.toRadians(
-      (headingDeg || 0) + MODEL_HEADING_OFFSET_DEG,
-    );
-    flightState._scratchModelHpr.pitch = 0;
-    flightState._scratchModelHpr.roll = 0;
-    return Cesium.Transforms.headingPitchRollToFixedFrame(
-      pos,
-      flightState._scratchModelHpr,
-      Cesium.Ellipsoid.WGS84,
-      undefined,
-      result,
-    );
+  function _modelMatrix(pos, headingDeg, model) {
+    return flightState._renderer.models.setPose(model, pos, headingDeg);
   }
 
   /** Everything scene.sampleHeight must NOT hit when snapping a grounded model: the
@@ -298,23 +279,23 @@ export function createRendering({
     const meta = flightState.records.data.get(icao24);
     if (!meta || !meta.onGround) return pos;
     const h = flightState._groundSnap.heightFor(
-      flightState._viewer,
+      flightState._renderer?.view.engine,
       icao24,
       pos,
       _groundSampleExclusions,
     );
     if (h == null) return null;
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       pos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       flightState._scratchGroundCarto,
     );
     carto.height = h + _modelSpec(meta.klass).bellyM;
-    return Cesium.Cartesian3.fromRadians(
+    return geo.cartesian3.fromRadians(
       carto.longitude,
       carto.latitude,
       carto.height,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       result,
     );
   }
@@ -343,7 +324,7 @@ export function createRendering({
     // The matrix is written BEFORE the readiness test on purpose: a model can flip
     // `ready` during scene update after this tick, and a first rendered frame on a
     // stale load-start matrix is the one-frame jump this ordering prevents.
-    _modelMatrix(displayPos, course, model.modelMatrix);
+    _modelMatrix(displayPos, course, model);
     if (!model.ready) {
       model.show = false; // not loaded yet → keep the 2D icon, no half-model flash
       bb.show = true;
@@ -507,23 +488,22 @@ export function createRendering({
     // toggle must reject too (the reload queue only covers ADMITTED models).
     const specKey = _specKeyFor(flightState.records.data.get(icao24)?.klass);
     const loadIrBoost = flightState._irBoost;
+    const renderer = flightState._renderer;
     try {
       const spec = _modelSpec(flightState.records.data.get(icao24)?.klass);
-      model = await Cesium.Model.fromGltfAsync({
+      model = await renderer.models.loadFleet({
         url: resolveAsset(spec.url),
-        asynchronous: false,
-        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
-        color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
+        // Bounding radius per scale unit (an engine that keeps
+        // minimumPixelSize on the CPU reports the drawn scale with it).
+        radiusM: spec.nativeRadiusM,
+        color: flightState._irBoost ? WHITE : _modelColor(icao24),
         // Launch presentation keeps the code-side tint dominant for every approved
         // model; IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : spec.blendAmount,
-        customShader: flightState._irBoost
-          ? flightState._IR_UNLIT_SHADER
-          : undefined,
-        id: icao24, // so scene.pick returns the icao for click-to-track
+        blendAmount: flightState._irBoost ? 1.0 : spec.blendAmount,
+        unlit: flightState._irBoost,
+        id: icao24, // so a pick returns the icao for click-to-track
       });
     } catch {
       // asset/decode fail — stay billboard. Only touch this lifecycle's state if still current
@@ -537,11 +517,7 @@ export function createRendering({
     // A load from a PREVIOUS lifecycle (destroy→init happened mid-load) must NOT mutate the new
     // epoch's _modelPending/_modelGen or add to the new collection — just drop its model.
     if (epoch !== flightState._modelEpoch) {
-      try {
-        model.destroy();
-      } catch {
-        /* gone */
-      }
+      renderer.models.destroy(model);
       return;
     }
     flightState._modelPending.delete(icao24);
@@ -553,8 +529,7 @@ export function createRendering({
     const stale =
       (flightState._modelGen.get(icao24) || 0) !== gen ||
       !_modelRegimeActive() ||
-      !flightState._modelCollection ||
-      flightState._modelCollection.isDestroyed() ||
+      !flightState._renderer?.models.live() ||
       !flightState.records.data.has(icao24) ||
       icao24 === flightState._trackedIcao ||
       flightState._models.has(icao24) ||
@@ -564,11 +539,7 @@ export function createRendering({
       // IR boost flipped mid-load → this model baked the wrong shader/tint.
       flightState._irBoost !== loadIrBoost;
     if (stale) {
-      try {
-        model.destroy();
-      } catch {
-        /* already gone */
-      }
+      renderer.models.destroy(model);
       _cleanupModelGen(icao24); // bound the map
       return;
     }
@@ -582,9 +553,8 @@ export function createRendering({
     // between admission and the next fleet tick (and draw at the identity matrix,
     // i.e. the Earth's centre). The handoff turns it on once it has a matrix.
     model.show = false;
-    flightState._modelCollection.add(model);
+    flightState._renderer.models.add(model);
     flightState._models.set(icao24, model);
-    flightState._planeModelLoaded = true; // GLB is cached now — the tracked entity's model can fade in its billboard
   }
 
   /** Remove the 3D model for ONE aircraft (removal / military-suppression / track handoff).
@@ -602,16 +572,7 @@ export function createRendering({
       );
     }
     if (m) {
-      if (
-        flightState._modelCollection &&
-        !flightState._modelCollection.isDestroyed()
-      ) {
-        try {
-          flightState._modelCollection.remove(m);
-        } catch {
-          /* gone */
-        }
-      }
+      flightState._renderer?.models.remove(m);
       flightState._models.delete(icao24);
     }
     // Do NOT clear _modelPending here — the in-flight load's OWN post-await removes it. Keeping
@@ -641,17 +602,9 @@ export function createRendering({
         icao,
         (flightState._modelGen.get(icao) || 0) + 1,
       );
-    if (
-      flightState._modelCollection &&
-      !flightState._modelCollection.isDestroyed()
-    ) {
-      for (const m of flightState._models.values()) {
-        try {
-          flightState._modelCollection.remove(m);
-        } catch {
-          /* gone */
-        }
-      }
+    if (flightState._renderer?.models.live()) {
+      for (const m of flightState._models.values())
+        flightState._renderer.models.remove(m);
     }
     flightState._models.clear();
   }
@@ -662,16 +615,7 @@ export function createRendering({
     flightState._trackedModelGen++;
     flightState._trackedModelLoading = false;
     if (flightState._trackedModel) {
-      if (
-        flightState._modelCollection &&
-        !flightState._modelCollection.isDestroyed()
-      ) {
-        try {
-          flightState._modelCollection.remove(flightState._trackedModel);
-        } catch {
-          /* gone */
-        }
-      }
+      flightState._renderer?.models.remove(flightState._trackedModel);
       flightState._trackedModel = null;
     }
   }
@@ -689,17 +633,14 @@ export function createRendering({
       ? STALE_ALPHA
       : 1;
     if (model.color?.alpha === alpha) return;
-    model.color = (
-      flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN
-    ).withAlpha(alpha);
+    model.color = (flightState._irBoost ? WHITE : CYAN).withAlpha(alpha);
   }
 
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
       parts.tracking._trackedModelRegimeActive() &&
-      flightState._modelCollection &&
-      !flightState._modelCollection.isDestroyed();
+      flightState._renderer?.models.live();
     if (!active) {
       if (flightState._trackedModel) flightState._trackedModel.show = false;
       return;
@@ -729,37 +670,30 @@ export function createRendering({
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
       const trackedIrBoost = flightState._irBoost;
-      Cesium.Model.fromGltfAsync({
-        url: resolveAsset(trackedSpec.url),
-        asynchronous: false,
-        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
-        minimumPixelSize: TRACKED_MODEL_MIN_PX,
-        scale: trackedSpec.scale,
-        color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // The tracked aircraft uses the same dominant light tint as the fleet;
-        // IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : trackedSpec.blendAmount,
-        customShader: flightState._irBoost
-          ? flightState._IR_UNLIT_SHADER
-          : undefined,
-        // Pick id (H1): without it, clicking the very plane being tracked read as
-        // EMPTY SPACE (scene.pick → primitive with no id) → an unintended
-        // deselect. With the icao, the click handler recognizes it as ours.
-        id: flightState._trackedIcao,
-      })
+      const renderer = flightState._renderer;
+      renderer.models
+        .loadTracked({
+          url: resolveAsset(trackedSpec.url),
+          minimumPixelSize: TRACKED_MODEL_MIN_PX,
+          scale: trackedSpec.scale,
+          radiusM: trackedSpec.nativeRadiusM,
+          color: flightState._irBoost ? WHITE : CYAN,
+          // The tracked aircraft uses the same dominant light tint as the fleet;
+          // IR boost removes the remaining diffuse hint with flat UNLIT white.
+          blendAmount: flightState._irBoost ? 1.0 : trackedSpec.blendAmount,
+          unlit: flightState._irBoost,
+          // Pick id (H1): without it, clicking the very plane being tracked read as
+          // EMPTY SPACE (a pick with no id) → an unintended deselect. With the
+          // icao, the click handler recognizes it as ours.
+          id: flightState._trackedIcao,
+        })
         .then((m) => {
           // Untracked / re-tracked / torn down during the load → drop it.
           if (
             gen !== flightState._trackedModelGen ||
-            !flightState._modelCollection ||
-            flightState._modelCollection.isDestroyed()
+            !flightState._renderer?.models.live()
           ) {
-            try {
-              m.destroy();
-            } catch {
-              /* gone */
-            }
+            renderer.models.destroy(m);
             return;
           }
           // Class reclassified OR boost flipped mid-load (no release ran —
@@ -770,11 +704,7 @@ export function createRendering({
             ) !== trackedKey ||
             flightState._irBoost !== trackedIrBoost
           ) {
-            try {
-              m.destroy();
-            } catch {
-              /* gone */
-            }
+            renderer.models.destroy(m);
             flightState._trackedModelLoading = false;
             return;
           }
@@ -796,21 +726,11 @@ export function createRendering({
               flightState._scratchGroundPos,
             );
             if (displayPos)
-              _modelMatrix(
-                displayPos,
-                parts.motion._trackedDisplayCourse(),
-                m.modelMatrix,
-              );
+              _modelMatrix(displayPos, parts.motion._trackedDisplayCourse(), m);
           }
           flightState._trackedModel = m;
           flightState._trackedModelLoading = false;
-          // A good load retires this selection's failure budget — a contact that
-          // recovers after a transient blip is not one attempt from giving up.
-          flightState._trackedModelFailIcao = null;
-          flightState._trackedModelFailCount = 0;
-          flightState._trackedModelRetryAtMs = 0;
-          flightState._modelCollection.add(m);
-          flightState._planeModelLoaded = true; // GLB cached — the tracked billboard can fade out once the model is up
+          flightState._renderer.models.add(m);
         })
         .catch((err) => {
           if (gen !== flightState._trackedModelGen) return; // superseded load — not this selection's failure
@@ -835,22 +755,27 @@ export function createRendering({
       _modelMatrix(
         displayPos,
         parts.motion._trackedDisplayCourse(),
-        flightState._trackedModel.modelMatrix,
+        flightState._trackedModel,
       );
       _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
+      // A model that loaded retires this selection's failure budget: a contact
+      // that recovers after a transient blip is not one attempt from giving up.
+      if (flightState._trackedModelFailIcao === flightState._trackedIcao) {
+        flightState._trackedModelFailIcao = null;
+        flightState._trackedModelFailCount = 0;
+        flightState._trackedModelRetryAtMs = 0;
+      }
       const spec = _modelSpec(
         flightState.records.data.get(flightState._trackedIcao)?.klass,
       );
+      const view = flightState._renderer.view;
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
         nativeRadiusM: spec.nativeRadiusM,
-        rangeM: Cesium.Cartesian3.distance(
-          flightState._viewer.camera.positionWC,
-          displayPos,
-        ),
-        viewportHeightPx: flightState._viewer.scene.canvas.clientHeight,
-        fovyRad: flightState._viewer.camera.frustum.fovy,
+        rangeM: geo.cartesian3.distance(view.camera.positionWC, displayPos),
+        viewportHeightPx: view.viewportHeightPx(),
+        fovyRad: view.camera.frustum.fovy,
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
       flightState._trackedModel.show = true;
@@ -864,21 +789,14 @@ export function createRendering({
   }
 
   function _fleetTick() {
-    // Every frame, shown or not: the tracked trail records where its icon is
-    // drawn and moves its body on (the head callback only reads the result),
-    // and the tracked label's stale cue follows the clock.
-    if (flightState._viewer) {
+    if (flightState._renderer) {
       parts.tracking._trailTick?.();
       parts.tracking._staleCueTick?.();
     }
-    if (
-      !flightState._viewer ||
-      !flightState._billboardCollection ||
-      !flightState._billboardCollection.show
-    )
-      return;
-    const scene = flightState._viewer.scene;
-    const camera = flightState._viewer.camera;
+    if (!flightState._renderer?.fleet.visible()) return;
+    const view = flightState._renderer.view;
+    const scene = view.scene;
+    const camera = view.camera;
     const nowMs = focusNowMs(Date.now());
 
     // (The tracked trail head is now the per-frame _trailHeadEntity segment — no 1 Hz
@@ -893,11 +811,7 @@ export function createRendering({
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
-    const renderTime = Cesium.JulianDate.addSeconds(
-      julianAt(flightState.now(), flightState._scratchFleetRenderTime),
-      -displayDelayMs(flightState) / 1000,
-      flightState._scratchFleetRenderTime,
-    );
+    const renderTime = flightState.now() - displayDelayMs(flightState);
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
@@ -913,7 +827,7 @@ export function createRendering({
       flightState._lastRotPassMs = nowMs;
     }
 
-    const occluder = horizonOccluder(camera);
+    const occluder = view.horizon();
     const focusTarget = getFocusTarget();
 
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
@@ -944,11 +858,7 @@ export function createRendering({
       const addDistSq = addM * addM;
       const keepM = _modelKeepDistM();
       const keepDistSq = keepM * keepM;
-      const cull = camera.frustum.computeCullingVolume(
-        camPos,
-        camera.directionWC,
-        camera.upWC,
-      );
+      const inFrustum = view.frustumTester();
       // Candidates = planes within the KEEP radius, nearest first, each tagged with on-screen-ness.
       const cand = [];
       for (const [icao, bb] of flightState._billboards) {
@@ -963,18 +873,9 @@ export function createRendering({
         // ground or in the air — no distinction"). The cap + nearest-first ordering
         // below already bound airport clusters; grounded placement is handled by the
         // one-shot ground snap in _modelDisplayPosition.
-        const d2 = Cesium.Cartesian3.distanceSquared(camPos, bb.position);
+        const d2 = geo.cartesian3.distanceSquared(camPos, bb.position);
         if (d2 > keepDistSq) continue; // beyond the keep radius → never eligible
-        Cesium.Cartesian3.clone(
-          bb.position,
-          flightState._scratchModelBS.center,
-        );
-        cand.push([
-          icao,
-          d2,
-          cull.computeVisibility(flightState._scratchModelBS) !==
-            Cesium.Intersect.OUTSIDE,
-        ]);
+        cand.push([icao, d2, inFrustum(bb.position)]);
       }
       cand.sort((a, b) => a[1] - b[1]); // nearest first
       if (cand.length > cap && nowMs - flightState._lastModelCapWarnMs > 5000) {
@@ -1037,7 +938,7 @@ export function createRendering({
       // collection's vertex buffer, so skip sub-meter moves.
       if (
         display &&
-        Cesium.Cartesian3.distanceSquared(display, bb.position) > 1.0
+        geo.cartesian3.distanceSquared(display, bb.position) > 1.0
       ) {
         bb.position = display;
       }
@@ -1070,7 +971,7 @@ export function createRendering({
       // locked NearFarScalar remains a separate multiplicative stage. This
       // narrowly amends always-visible rendering without count culling or zero
       // alpha; nearer focus behavior remains tunable rather than universal.
-      const cameraDistanceM = Cesium.Cartesian3.distance(
+      const cameraDistanceM = geo.cartesian3.distance(
         camera.positionWC,
         bb.position,
       );
@@ -1186,9 +1087,7 @@ export function createRendering({
               // white. Boosted models also skip the recession fade: hot targets
               // stay full-strength at any range (billboards keep their normal
               // fade — full-opacity glyph walls read as overwhelming).
-              baseColor: flightState._irBoost
-                ? Cesium.Color.WHITE
-                : _modelColor(icao24),
+              baseColor: flightState._irBoost ? WHITE : _modelColor(icao24),
               alpha: flightState._irBoost ? 1 : treatment.alpha,
             });
           },

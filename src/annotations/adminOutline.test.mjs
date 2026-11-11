@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from './resolver.js';
 import { createAnnotationEngine } from './annotationEngine.js';
-import { _resetRenderGovernorForTest } from '../renderGovernor.js';
+import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 function viewerAt(lat, lon, height = 20_000) {
-  return {
+  return cameraOnlyEngine({
     camera: {
       positionCartographic: {
         latitude: (lat * Math.PI) / 180,
@@ -16,7 +16,7 @@ function viewerAt(lat, lon, height = 20_000) {
         height,
       },
     },
-  };
+  });
 }
 
 /** A resolver whose boundary lookups and geocoder record every call. */
@@ -45,7 +45,7 @@ function harness(place = null) {
   const resolve = (target, viewer, extra = {}) =>
     resolveAnnotationTarget({
       placeSearch,
-      viewer,
+      engine: viewer,
       target,
       footprint: true,
       deferFootprint: true,
@@ -252,8 +252,6 @@ test('non-admin asks and entity facts keep the existing path', async () => {
 test('the engine keeps every part on the mark, drawn at once or upgraded', async (t) => {
   globalThis.requestAnimationFrame ??= () => 1;
   globalThis.cancelAnimationFrame ??= () => {};
-  _resetRenderGovernorForTest();
-  t.after(() => _resetRenderGovernorForTest());
   const polygons = [
     [
       [
@@ -287,7 +285,7 @@ test('the engine keeps every part on the mark, drawn at once or upgraded', async
     destroy() {},
   };
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async ({ target }) =>
       target === 'now'

@@ -4,12 +4,12 @@
  * Run: node --test --test-reporter=spec scripts/qa-voice-auth-focus.mjs
  * Sign-in responses are fixtures. No credentials or live login are used.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { after, before, test } from 'node:test';
-import puppeteer from 'puppeteer';
 
 const root = new URL('../', import.meta.url);
 const view = await readFile(
@@ -63,17 +63,13 @@ before(async () => {
     server.listen(0, '127.0.0.1', resolve);
   });
   origin = `http://127.0.0.1:${server.address().port}`;
-  const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  browser = await puppeteer.launch({
+  browser = await launchBrowser({
     headless: true,
-    executablePath:
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      (existsSync(chrome) ? chrome : await puppeteer.executablePath()),
   });
 });
 
 after(async () => {
-  await browser?.close();
+  await closeBrowser(browser);
   if (server?.listening) await new Promise((resolve) => server.close(resolve));
   const output = new URL('.gev-logs/voice-auth-focus/', root);
   await mkdir(output, { recursive: true });

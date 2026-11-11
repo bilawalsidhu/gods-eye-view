@@ -22,15 +22,12 @@ function setup() {
         clearSelectedEntityContextForLayer: noop,
         registerEntityContext: () => null,
       },
-      trails: {
-        createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
-      },
       labels: {},
       picking: { unregisterPickOwner: noop },
       overlay: {
-        setOverlayEntries: noop,
-        setOverlaySourceVisible: noop,
-        clearOverlaySource: noop,
+        setEntries: noop,
+        setVisible: noop,
+        clearSource: noop,
       },
       geoid: {},
       sprites: {},

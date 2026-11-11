@@ -11,6 +11,7 @@ import militaryFlightsLayer, {
   _setCockpitDetectionSubjectForTest as setMilitaryCockpitSubject,
   _setTrackedMilitaryRefreshStateForTest,
 } from './militaryFlights.js';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
 
 const SUBJECT = 'abc123';
 const NEXT_SUBJECT = 'def456';
@@ -25,6 +26,9 @@ const LAYERS = [
     setSubject: setFlightsCockpitSubject,
     seed(icao24) {
       _setTrackedFlightRefreshStateForTest({
+        renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
         icao24,
         entity: null,
         billboard: candidateBillboard(icao24),
@@ -46,6 +50,9 @@ const LAYERS = [
     setSubject: setMilitaryCockpitSubject,
     seed(icao24) {
       _setTrackedMilitaryRefreshStateForTest({
+        renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
         icao24,
         entity: null,
         billboard: candidateBillboard(icao24),

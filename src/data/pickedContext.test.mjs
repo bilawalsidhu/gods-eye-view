@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -11,11 +12,14 @@ globalThis.CustomEvent ||= class CustomEvent {
 globalThis.dispatchEvent ||= () => true;
 
 const { registerEntityContext } = await import('./contextStore.js');
-const { registerPickOwner, unregisterPickOwner, findPickOwner } = await import('./pickRegistry.js');
+const engine = createFakeEngine();
+const { pickRegistryFor } = await import('./pickRegistry.js');
+const { registerPickOwner, unregisterPickOwner, findPickOwner } = pickRegistryFor(engine);
 const { resolvePickedContext, pickedKindForLayer } = await import('./pickedContext.js');
 
 function manager({ enabled = new Set(['flights', 'local-datacenters']), modules = {} } = {}) {
   return {
+    engine,
     isEnabled: (id) => enabled.has(id),
     layers: new Map(Object.entries(modules).map(([id, module]) => [id, { name: id, module }])),
   };
@@ -72,4 +76,24 @@ test('disabled layers, trails and empty picks never resolve', () => {
   assert.equal(resolvePickedContext(null), null);
   assert.equal(resolvePickedContext({ id: 'unknown' }, { dataManager: manager() }), null);
   assert.equal(pickedKindForLayer('ais-live-vessels'), 'vessel');
+});
+
+test('an explicit pointer engine resolves only that scene, without a manager', () => {
+  const first = {};
+  const second = {};
+  const a = pickRegistryFor(first);
+  const b = pickRegistryFor(second);
+  a.registerPickOwner('flights', (id) => id === 'shared');
+  b.registerPickOwner('satellites', (id) => id === 'shared');
+  try {
+    const picked = { id: 'shared' };
+    assert.equal(resolvePickedContext(picked, { engine: first }).layerId, 'flights');
+    assert.equal(resolvePickedContext(picked, { engine: second }).layerId, 'satellites');
+    a.destroy();
+    assert.equal(resolvePickedContext(picked, { engine: first }), null);
+    assert.equal(resolvePickedContext(picked, { engine: second }).layerId, 'satellites');
+  } finally {
+    a.destroy();
+    b.destroy();
+  }
 });

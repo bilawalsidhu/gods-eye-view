@@ -19,6 +19,17 @@ excluded. The formatter validates every entry before writing any file.
 
 New world text labels must use the world-overlay host; Cesium text labels are forbidden.
 
+## QA scripts
+
+New `scripts/qa-*.mjs` scenarios use `scripts/qa/browser.mjs` for headless launch
+and bounded shutdown, and `scripts/qa/ready.mjs` for application, camera and
+frame readiness. Select the GPU backend with `QA_ANGLE`. Keep timed pauses only
+when elapsed time is part of the assertion, and explain that measurement.
+Read scene state through the globe contract or the QA probe; native reads belong
+only in explicit engine-adapter checks. The counters in
+`node scripts/report-qa-harness.mjs` must not grow; lower the baseline with
+`--write-baseline` after removing duplication.
+
 ## Current component ownership
 
 Package imports use `gods-eye-view`; `package.json` is the authoritative
@@ -30,8 +41,10 @@ export inventory. Use declared exports rather than reaching into internal files.
 | `src/standalone/`      | Select the default catalog, local sources and setup controls                                            |
 | `src/ui/`              | Navigation generations, restoration, visual state, panel snapshots and their subscriptions              |
 | `src/data/`            | Lifecycle, context and feed state; legacy default-layer facades                                         |
-| `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
+| `src/layers/<family>/` | Source acquisition, records and shared contract displays with explicit lifecycle owners                 |
 | `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
+| `src/geo/`             | Engine-neutral WGS84 maths, ported from Cesium, never imports Cesium                                    |
+| `src/globe/`           | Engine-neutral globe contract and its test support; engines only in `globe/cesium`, `globe/navara`      |
 | `src/services/`        | Supplied application operations; scene construction owns caches and cancellation                        |
 | `src/voice/`           | Portable action schemas/session, common controls, action execution and separate protocol adapters       |
 | `server/providers/`    | Node route factories, process-scoped provider caches and shutdown cleanup                               |
@@ -53,17 +66,69 @@ See [application construction](APPLICATION.md) and the
 2. `scripts/check-package-boundaries.mjs` builds every declared export without
    app Vite configuration or environment files. `scripts/package-boundaries.json`
    assigns each export exactly once and lists its owned modules and external
-   dependencies. Unused imports still count. Node exports have only a `node`
+   dependencies. Shared foundations use directory entries: `src/i18n/`,
+   `src/geo/` and `src/globe/`. An entry ending in `/` owns the files below it;
+   `src/globe/` excludes `cesium/`, `navara/` and `testing/`, which need separate
+   ownership. The import-direction gate still enforces engine rules.
+   Aggregate groups use directories where their module lists cover the directory;
+   small groups retain explicit snapshots outside the shared foundations.
+   Unused imports still count. Node exports have only a `node`
    condition; browser groups cannot use build-only dependency exceptions.
+
+   Run `node scripts/check-package-boundaries.mjs --write` to regenerate each
+   group's `modules` list in `scripts/package-boundaries.json`, retaining useful
+   entries in order and appending newly reached paths in sorted order. Directory
+   entries stay directories while they own reached modules; they never expand
+   into file lists. Without `--write`, the check rejects both undeclared reached
+   modules and declarations no longer reached, printing additions and removals
+   for each changed group. A directory becomes stale only when no reached module
+   belongs to it. Review the manifest diff like a lockfile diff before accepting
+   changes to ownership.
 
 Portable source graphs cannot reach application/rendering, Node, Cesium or
 browser globals. This includes `sources/*`, dedicated `layers/*/source` exports,
 flight/military/vessel record and ingestion exports, action schemas, the session
-interface, lifecycle and feed state. The browser-global rule reserves platform
-names such as `document` and `window` in these modules; it is an architectural
-check, not a JavaScript sandbox. Common voice controls cannot depend on a
+interface, lifecycle and feed state, and every runtime file in `src/geo/` (the
+engine-neutral geometry ported from Cesium). The browser-global rule reserves
+platform names such as `document` and `window` in these modules; it is an
+architectural check, not a JavaScript sandbox. The globe contract
+(`src/globe/*.js` and `src/globe/testing/**`) cannot reach `cesium`,
+`@cesium/*`, `three`, `postprocessing` or `@navaramap/*`, directly or through
+helpers, nor import an engine implementation; the `src/globe/cesium/**` graph
+reaches no Navara/three package or `src/globe/navara/**` module, and the
+`src/globe/navara/**` graph no Cesium package or `src/globe/cesium/**` module,
+through helpers too. Outside its own directory, `src/globe/navara/**` is
+reached only through a literal `import()` (the app's `?engine=navara` mode), so
+Navara stays out of the Cesium-mode bundle. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
+
+Runtime SDK imports are restricted by directory, including unreachable modules:
+`cesium` and `@cesium/*` belong in `src/globe/cesium/`; `three`,
+`postprocessing` and `@navaramap/*` belong in `src/globe/navara/`. Package
+subpaths, re-exports and literal dynamic imports obey the same rule, and the
+`<script>` blocks of Vue components count as runtime modules. A module outside
+the Navara engine reaches it only through `import()`: a static import of the
+same specifier fails even beside a dynamic one. Tests and Node test support
+retain their existing exemptions. The production script loader is
+`src/app/loadCesium.js`; it imports no SDK package and needs no exception, and
+it adds no `widgets.css` when the page's markup has already run `Cesium.js`
+(the MCP panel). The panel build replaces `src/app/navaraMode.js` and
+`src/globe/navara/windFlowMesh.js` with stubs (`build/panelNavara.js`), so the
+panel carries no Navara or three. There is no blanket exception for layer
+`render/` directories.
+
+The temporary `engineImportExceptions` list in `scripts/package-boundaries.json`
+contains exact file/package pairs with reasons. The checker reports the used
+entries and rejects duplicates, missing reasons and unused entries. Its two
+exceptions are the Bhote Koshi event and locator models in `src/data/`, which
+still construct Cesium property records. Their drawing uses shared displays.
+Exceptions do not relax the portable, contract or cross-engine graph checks.
+Cesium annotation renderers live in `src/globe/cesium/annotations/`. Wind's
+Cesium rendering (the particle canvas, its GPU path and the relief shading)
+lives in `src/globe/cesium/`; `src/layers/wind/` keeps the data, model,
+presentation and engine-neutral inspection. The remaining annotation migration
+is separate debt.
 
 Source-only factories use dedicated `layers/<family>/source` exports where
 available, preserving the same factory implementation without loading rendering.
@@ -391,10 +456,12 @@ the caller.
 ## Visual effects
 
 `ui/effects` exports the effects controller and existing preset definitions.
-It owns shader stages and their clock, with explicit render ownership callbacks.
-Construction installs no stages or frame callbacks. Stop animation before
-releasing UI consumers, then destroy to remove owned stages and restore the
-borrowed bloom state. `ui/effects/bloom` exposes the pure intensity/version helpers
+It owns transitions and their clock, with explicit render ownership callbacks,
+and writes styles, bloom and sharpening through `engine.render`. Construction
+installs no stages or frame callbacks. Stop animation before releasing UI
+consumers; controller destruction disables its effects. Cesium's
+`src/globe/cesium/postStages.js` owns stage creation and destruction and restores
+the borrowed bloom state when the engine is destroyed. `ui/effects/bloom` exposes the pure intensity/version helpers
 without loading the renderer. UI presentation and product-action coordination
 remain in their callers.
 
@@ -506,7 +573,7 @@ perform no network requests and discover no additional modules.
 `maps/controller` coordinates scene changes and lifetimes. `maps/imagery`,
 `maps/terrain` and `maps/3d` supply constructors; `maps/defaults` selects the
 standard sources and their setup/fallback policy. The standalone facade wires
-these to the application's render governor.
+these to their engine's render requests.
 
 A registry supplies `sources`, `defaultId`, `unknownId` and optional `recoveryId`.
 Each source has a user-facing `descriptor`, availability/reason, and either an
@@ -550,12 +617,22 @@ services into each family factory. Standalone provider selection lives in
 `src/standalone/layerSources.js`. The construction export has its own checked
 dependency graph, excluding standalone setup and compatibility layer instances.
 
+`src/app/layers/renderers.js` is the layer manifest. Its lazy display loaders
+resolve the shared factories exported by `displays.js` through `display`. All
+five drawing primitives are required by the globe contract. The only display
+backend options are wind streamlines, loaded from the engine folders. A missing wind backend leaves the raster field
+available. Wildlife Sightings draws itself through the contract; Sea Marks and
+Ski Pistes use their overlay controller. No layer display imports an engine SDK.
+`displayRehearsal.test.mjs` loads every manifest display on the fake engine with
+an unknown kind and no extensions, draws a small fixture and checks cleanup.
+
 Both aircraft layers share the catalog's classification registry; launches use
 its satellites and Contacts uses its aircraft, vessels and installations. Data
 registration, controls and voice actions read those same instances. Destruction
 remains the manager's responsibility; classification also observes application
-abort when startup has not reached registration. Scene engines remain page-owned,
-so this change does not introduce multiple simultaneous viewers.
+abort when startup has not reached registration. The session retains models while
+scene attachment builds displays on the active engine. A parked engine can remain
+allocated for a warm switch; its layer drawing is detached.
 
 Direct `src/data` compatibility entries retain their old defaults and testing
 exports. Browser regression probes use the registered instance's testing surface
@@ -593,6 +670,23 @@ render requests and detection invalidation. It owns hidden-panel refresh and
 listener cleanup. Application data assembly constructs both owners explicitly;
 `data/manager` is the compatibility facade for direct callers. The ordinary
 state subscriptions retain their existing event contract.
+
+`data/layerSceneBinding.js` owns renderer attach/detach, asynchronous settlement,
+parking and failed-release retries. Lifecycle keeps visibility intentions and
+refresh policy. `app/layerSession.js` defines the retained session fields and
+handoff predicate. `standalone/sceneSwitcher.js` coordinates page handoff;
+`ui/shellScene.js` owns scene-bound shell construction, while `applicationShell`
+keeps page controls and policy. `app/sceneHost.js` owns the transition queue,
+request ordering and recovery decision. Application acquisition, attachment,
+restoration and renderer release run in that queue, and shell calls use it too.
+Nested work receives an explicit transaction; outside calls wait for the whole
+transition. A replacement application shares the transition owner with fresh
+parts, and a shell used alone creates its own host. Pick ownership, selection
+dispatch and render demand belong to
+`scene.services`; render demand drives the engine contract, with no dependency
+from the Cesium render backend to the governor. Overlay and tracked-readout
+services still include module singletons; debug access still exposes the native
+viewer and tileset.
 
 ## UI state owners
 
@@ -768,3 +862,17 @@ CSS rather than mapping machine states to universal severity. CCTV owns
 frame/source and calibration rules and their data attributes, while Weather
 owns coverage labels. The rail card keeps node identity, header focus,
 disclosure and teardown, and does not announce every card update.
+
+## Engine implementation modules
+
+Cesium's viewer construction, atmosphere compatibility, zoom-out guard, starry
+sky, map scene application, imagery and terrain live in `src/globe/cesium/`.
+The public viewer export still resolves through `package.json`. Celestial
+rendering, screen-event constants, scene projection and the legacy trail
+backend also live there. Sonar commands and post stages are engine internals;
+feature controllers call `engine.render`.
+
+Imported-file parsing (`geoFileImport.js`, `geoImportRecords.js`,
+`geoImportKml.js`) returns plain records. `geoImportDisplay.js` consumes them
+through ground, movers, lines and imagery. The UI owns file bytes, visibility
+and attachment lifetime, with no DataSource or engine-specific import backend.

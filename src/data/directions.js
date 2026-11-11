@@ -3,21 +3,19 @@ import { createDirectionsSource } from '../layers/directions/source.js';
  * @module directions
  * @description Service bundle for the Directions layer.
  *
- * The layer itself lives in `src/layers/directions/`, which imports nothing
- * but Cesium and the pure step formatter. This module is the one place that
- * names the application's shared services — the render governor, sprite order,
- * the pick registry, the world overlay, the annotation material, the camera
- * verbs, the shared ground floor and the pointer arbiter — and it re-exports
- * the layer's pure helpers for the tests and the share-link code.
+ * The layer itself lives in `src/layers/directions/` and draws through the
+ * globe contract (its render/display.js). This module is the one place that
+ * names the application's shared services — the render governor, the pick
+ * registry, the ground pick, the world overlay, the camera verbs, the shared
+ * ground floor and the pointer arbiter — and it re-exports the layer's pure
+ * helpers for the tests and the share-link code.
  */
 
 import * as credits from './dataCredits.js';
 import * as render from '../renderGovernor.js';
-import * as sprites from './spriteOrder.js';
 import * as picking from './pickRegistry.js';
 import * as scenePick from './scenePick.js';
-import * as overlays from '../overlays/worldOverlay.js';
-import * as annotations from '../annotations/worldAnnotationRenderer.js';
+import { worldOverlayFor as overlays } from '../overlays/worldOverlay.js';
 import * as camera from '../cameraVerbs.js';
 import * as ground from './groundFloor.js';
 import * as input from './inputOwnership.js';
@@ -27,11 +25,9 @@ import { createDirectionsLayer } from '../layers/directions/index.js';
 const directionsServices = Object.freeze({
   credits,
   render,
-  sprites,
   picking,
   scenePick,
   overlays,
-  annotations,
   camera,
   ground,
   input,
@@ -40,8 +36,14 @@ const directionsServices = Object.freeze({
 /** Construct one Directions layer over the application scene owners. */
 export function createApplicationDirectionsLayer({
   source = createDirectionsSource(),
+  createRenderer,
+  groundFloor = ground,
 } = {}) {
-  return createDirectionsLayer({ services: directionsServices, source });
+  return createDirectionsLayer({
+    services: { ...directionsServices, ground: groundFloor },
+    source,
+    createRenderer,
+  });
 }
 
 export {

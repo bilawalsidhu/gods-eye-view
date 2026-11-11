@@ -9,8 +9,8 @@ import { LiveSourceError } from '../../sources/live/contract.js';
 function services() {
   const names = [
     'picking',
-    'sprites',
-    'trails',
+    'selection',
+    'renderer',
     'aircraftPresentation',
     'camera',
     'militaryRegistry',
@@ -162,6 +162,102 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     tracking._contextSubjectMetadata('abc123').properties.heading,
     '0°',
   );
+});
+
+test('a live flight keeps observations, selection and freshness across renderer lifetimes', async () => {
+  const { createFakeEngine } =
+    await import('../../globe/testing/fakeEngine.js');
+  const { aircraftAtlasLayout, createAircraftDisplay } =
+    await import('../aircraft/render/display.js');
+  const { createApplicationFlights } =
+    await import('../../app/layers/flights.js');
+  const first = createFakeEngine();
+  const second = createFakeEngine();
+  const epoch = Date.now();
+  let polls = 0;
+  const atl = aircraftAtlasLayout();
+  const source = {
+    label: 'QA',
+    async getSnapshot() {
+      polls++;
+      return {
+        source: 'QA',
+        observedAtMs: epoch + polls * 1000,
+        ageMs: 0,
+        complete: true,
+        records: [
+          {
+            id: '71be26',
+            callsign: 'QA',
+            latitude: 40.25,
+            longitude: -125.58 + polls / 1000,
+            ellipsoidAltitudeM: 9000,
+            baroAltitudeM: 8800,
+            courseDeg: 90,
+            speedMps: 200,
+            positionTimeMs: epoch + polls * 1000,
+          },
+        ],
+      };
+    },
+  };
+  const layer = createApplicationFlights({
+    source,
+    surface: {
+      groundSnap: { createGroundSnap: () => ({ clear() {}, forget() {} }) },
+      groundFloor: {
+        cachedGroundFloor: () => null,
+        warmGroundFloor() {},
+        floorAltitudeM: (h) => h,
+      },
+      meshFloor: { sampleMeshFloorCells() {} },
+    },
+    militaryRegistry: {
+      isMilitaryIcao: () => false,
+      isMilitaryLayerActive: () => false,
+      refreshMilitaryRegistryIfStale() {},
+      onMilitaryLayerActiveChange: () => () => {},
+    },
+    renderer: {
+      create: ({ engine }) =>
+        createAircraftDisplay(engine, {
+          layerId: 'flights',
+          order: 1,
+          headingOffsetDeg: 180,
+          drawAtlas: async () => ({
+            canvas: { width: atl.width, height: atl.height },
+            cells: atl.cells,
+          }),
+        }),
+    },
+  });
+  try {
+    layer.init(null);
+    layer.enable();
+    await layer.update(null);
+    assert.equal(layer.hasContact('71BE26'), true);
+    assert.equal(layer.getAnalystRecords().length, 1);
+    assert.equal(layer.findByQuery('QA').icao24, '71be26');
+    layer.attachRenderer({ engine: first });
+    assert.equal(layer.qaDrawn().length, 1);
+    assert.equal(layer.trackById('71be26'), true);
+    layer.detachRenderer();
+    assert.equal(first.camera.following(), null);
+    assert.equal(layer.getTrackedInfo().icao24, '71be26');
+    await layer.update(null);
+    assert.equal(layer.getStats().lastUpdate, epoch + 2000);
+    layer.attachRenderer({ engine: second });
+    assert.equal(second.camera.following()?.label.id, 'flights:71be26');
+    assert.equal(layer.qaDrawn().length, 1);
+    assert.equal(polls, 2, 'attaching either renderer performs no source poll');
+    layer.disable();
+    assert.equal(layer.hasContact('71be26'), null);
+    assert.deepEqual(layer.getAnalystRecords(), []);
+  } finally {
+    layer.destroy(null);
+    first.destroy();
+    second.destroy();
+  }
 });
 
 test('the tracked plane’s photo is asked once per hex and lands on its record', async () => {

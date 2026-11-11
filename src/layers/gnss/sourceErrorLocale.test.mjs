@@ -1,8 +1,9 @@
+import { createGnssDisplay } from './render/display.js';
 // The GNSS source's own failures are English data (source.js); the
 // card's info line shows them in the UI language, the HTTP form included.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { setLocale } from '../../i18n/index.js';
 import { createGnssIntegrityLayer } from './index.js';
 
@@ -16,17 +17,11 @@ async function failedLayer(message) {
         });
       },
     },
-    viewAnchor: () => ({ latitude: 50, longitude: 30 }),
+    rendererFactory: ({ engine }) => createGnssDisplay(engine, { viewAnchor: () => ({ latitude: 50, longitude: 30 }) }),
     now: () => 1_000,
     monotonicNow: () => 1_000,
   });
-  layer.init({
-    camera: { moveEnd: new Cesium.Event(), changed: new Cesium.Event() },
-    scene: {
-      globe: { show: true },
-      groundPrimitives: { add() {}, remove() {} },
-    },
-  });
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   await layer.update();
   return layer;

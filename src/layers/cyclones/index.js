@@ -1,15 +1,13 @@
-import * as Cesium from 'cesium';
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   registerPickOwner,
   unregisterPickOwner,
 } from '../../data/pickRegistry.js';
-import {
-  createCycloneRendering,
-  coherentCycloneGeometry,
-} from './rendering.js';
+import { coherentCycloneGeometry } from './rendering.js';
 import {
   CYCLONE_OVERLAY_SOURCE_ID,
   cycloneStormIdFromEntryId,
@@ -62,21 +60,26 @@ const classificationName = (code) =>
 const number = (value, unit) =>
   value === null ? t('Unavailable') : formatQuantity(value, unit);
 
-/** Advisory status and coherent forecast geometry; selected through the shared row list. */
+/**
+ * Advisory status and coherent forecast geometry; selected through the
+ * shared row list. `createRendering(engine, { overlayHost })` makes the
+ * engine's display (render/display.js through the renderer registry).
+ */
 export function createCyclonesLayer({
   feed,
-  hitTestOverlay = hitTestWorldOverlay,
+  hitTestOverlay = null,
   overlayHost,
   context = null,
-  cesium = Cesium,
-  createRendering = createCycloneRendering,
+  createRendering = null,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   openLink = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Cyclones require a snapshot source');
-  let viewer = null,
-    rendering = null,
+  let engine = null;
+  context = bindOverlayHost(context, () => engine);
+  hitTestOverlay ??= (...args) => worldOverlayFor(engine)?.hitTest(...args);
+  let rendering = null,
     snapshot = null,
     request = null,
     listener = null,
@@ -155,26 +158,15 @@ export function createCyclonesLayer({
     selectedId = id;
     rendering?.setSelection(id);
   }
-  // Photorealistic 3D Tiles pick as tileset content without an entity id;
-  // that is empty map, the same as no pick at all on the globe.
+  // Photorealistic 3D Tiles pick as tile content without an id; that is
+  // empty map, the same as no pick at all on the globe.
   const isSurfacePick = (picked) =>
-    !picked ||
-    (picked.id === undefined &&
-      (picked.content !== undefined ||
-        (typeof cesium.Cesium3DTileset === 'function' &&
-          picked.primitive instanceof cesium.Cesium3DTileset)));
+    !picked || (picked.id === undefined && picked.content !== undefined);
   function installSelection() {
-    if (
-      clickHandler ||
-      !viewer?.scene?.canvas ||
-      typeof cesium.ScreenSpaceEventHandler !== 'function'
-    )
-      return;
-    const owner = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    const canvas = engine?.host.canvas;
+    if (clickHandler || !canvas) return;
+    const owner = {};
     clickHandler = owner;
-    // Snapshot before sibling bubble listeners can rebuild the overlay hit
-    // rectangles. A vessel selection does that synchronously in the same click.
-    const canvas = viewer.scene.canvas;
     let capturedHit = null;
     const overlayHit = (x, y) => {
       const hit = hitTestOverlay(x, y);
@@ -212,7 +204,7 @@ export function createCyclonesLayer({
         canvas.removeEventListener?.(type, resetCapture, { capture: true });
       capturedHit = null;
     };
-    owner.setInputAction((click) => {
+    const onClick = (click) => {
       const nativeHit = capturedHit;
       capturedHit = null;
       // Ambient selection yields to draw tools and Director; it never claims
@@ -242,28 +234,61 @@ export function createCyclonesLayer({
         if (id) layer.setParams({ stormId: id });
         return;
       }
-      const picked = viewer.scene.pick(click.position);
+      const { picked } = click;
       const id = rendering?.pickStorm(picked);
       if (id) layer.setParams({ stormId: id });
       else if (isSurfacePick(picked)) layer.setParams({ clear: true });
-    }, cesium.ScreenSpaceEventType.LEFT_CLICK);
+    };
+    owner.destroy = engine.input.on('click', onClick, { pick: true });
   }
   function removeSelection() {
     const owner = clickHandler;
     clickHandler = null;
     removeClickCapture?.();
     removeClickCapture = null;
-    if (owner && !owner.isDestroyed?.()) owner.destroy();
+    owner?.destroy();
   }
+  function registerOwnership() {
+    registerPickOwner(picks.owner, picks.predicate, engine);
+  }
+  const picks = {
+    owner: 'weather-cyclones',
+    predicate: (id) => enabled && rendering?.ownsPickId?.(id) === true,
+  };
   const layer = {
     id: 'weather-cyclones',
     name: 'Cyclone advisories',
     icon: '◉',
     source: 'NOAA NHC / CPHC',
     updateInterval: 300_000,
-    init(nextViewer) {
-      viewer = nextViewer;
-      rendering = createRendering({ viewer, cesium, overlayHost });
+    init(_viewer, options = {}) {
+      if (options.engine) return layer.attachRenderer(options);
+    },
+    picks,
+    attachRenderer(options = {}) {
+      engine = options.engine ?? null;
+      rendering =
+        engine && createRendering
+          ? createRendering(engine, { overlayHost })
+          : null;
+      if (!enabled) return;
+      registerOwnership();
+      installSelection();
+      if (rendering && snapshot && !snapshot.unavailable) {
+        const active = rendering;
+        return Promise.resolve(active.setSnapshot(snapshot)).then(() => {
+          if (active === rendering) active.setSelection(selectedId);
+        });
+      }
+    },
+    detachRenderer() {
+      unregisterPickOwner('weather-cyclones', engine);
+      removeSelection();
+      ++navigationGeneration;
+      rendering?.destroy();
+      rendering = null;
+      engine = null;
+      runNavigation = null;
     },
     attachShellServices(services) {
       runNavigation =
@@ -275,16 +300,13 @@ export function createCyclonesLayer({
     enable() {
       if (!destroyed && !enabled) {
         enabled = true;
-        registerPickOwner(
-          'weather-cyclones',
-          (id) => enabled && rendering?.ownsPickId?.(id) === true,
-        );
+        registerOwnership();
         installSelection();
       }
     },
     disable() {
       enabled = false;
-      unregisterPickOwner('weather-cyclones');
+      unregisterPickOwner('weather-cyclones', engine);
       removeSelection();
       request?.abort();
       request = null;
@@ -314,7 +336,7 @@ export function createCyclonesLayer({
           return false;
         if (next.unavailable) {
           // An expired advisory must not remain presented as current hazard context.
-          rendering.clear();
+          rendering?.clear();
           snapshot = next;
           selectedId = null;
           ++navigationGeneration;
@@ -322,9 +344,19 @@ export function createCyclonesLayer({
           error = next.reason || ADVISORIES_UNAVAILABLE;
           return true;
         }
-        const applied = await rendering.setSnapshot(next, {
-          signal: controller.signal,
-        });
+        let applied = true;
+        let display;
+        do {
+          display = rendering;
+          applied = display
+            ? await display.setSnapshot(next, { signal: controller.signal })
+            : true;
+        } while (
+          display !== rendering &&
+          enabled &&
+          !controller.signal.aborted &&
+          request === controller
+        );
         if (
           !applied ||
           !enabled ||
@@ -340,7 +372,7 @@ export function createCyclonesLayer({
               ? null
               : snapshot.storms[0]?.id || null,
           );
-        else rendering.setSelection(selectedId);
+        else rendering?.setSelection(selectedId);
         if (selectedContextStormId) {
           if (selectedId === selectedContextStormId) publishSelectedContext();
           else clearSelectedContext({ evicted: true });
@@ -382,8 +414,8 @@ export function createCyclonesLayer({
         notify();
       }
       const storm = selected();
-      if (params.focus === true && storm && runNavigation) {
-        const sphere = rendering.getFocusSphere(storm.id);
+      if (params.focus === true && storm && runNavigation && engine) {
+        const sphere = rendering?.getFocusSphere(storm.id);
         if (sphere) {
           const generation = ++navigationGeneration;
           runNavigation(() => {
@@ -394,7 +426,7 @@ export function createCyclonesLayer({
               selectedId !== storm.id
             )
               return;
-            return viewer.camera.flyToBoundingSphere(sphere, {
+            return engine.camera.flyToSphere(sphere, {
               duration: matchMedia?.('(prefers-reduced-motion: reduce)')
                 ?.matches
                 ? 0
@@ -597,9 +629,7 @@ export function createCyclonesLayer({
       if (destroyed) return;
       layer.disable();
       destroyed = true;
-      rendering?.destroy();
-      rendering = null;
-      viewer = null;
+      layer.detachRenderer();
       listener = null;
       runNavigation = null;
     },

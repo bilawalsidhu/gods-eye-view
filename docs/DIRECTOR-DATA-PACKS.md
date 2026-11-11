@@ -90,7 +90,7 @@ load, removes partial results and reports a stable error without exposing a URL.
 Successful loading leaves the attribution cards visible with the assets.
 
 `createApplicationTools({ sceneDataPacks: { sources } })` and
-`new SceneDirector(viewer, style, data, { dataPacks: { sources } })` accept a
+`new SceneDirector(scene, style, data, { dataPacks: { sources } })` accept a
 registry of source functions. Each receives `{ path, signal, maxBytes }` and
 returns `{ bytes: Uint8Array, mimeType }`. Custom transports must honor the
 signal, bound reads and return the real MIME type. They remain application code,

@@ -1,12 +1,12 @@
 /** Real-canvas wind regression. Run against this candidate's dev server. */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
-const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || await puppeteer.executablePath(), headless: false, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || await puppeteer.executablePath(), headless: process.env.QA_HEADFUL === '1' ? false : true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 try {
   const page = await browser.newPage();
   await page.goto(`${process.env.QA_BASE_URL || 'http://localhost:4173'}/`, { waitUntil: 'domcontentloaded' });
   const result = await page.evaluate(async () => {
-    const { createWindRendering } = await import('/src/layers/wind/rendering.js');
+    const { createWindRendering } = await import('/src/globe/cesium/windRendering.js');
     const raf = window.requestAnimationFrame; const caf = window.cancelAnimationFrame;
     const callbacks = new Map(); let sequence = 0;
     window.requestAnimationFrame = callback => { callbacks.set(++sequence, callback); return sequence; };

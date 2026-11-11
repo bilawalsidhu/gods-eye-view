@@ -97,10 +97,12 @@ import {
   onScenePointerDown,
   routeSceneDoubleClick,
 } from './cockpitInput.js';
+import * as geo from '../geo/index.js';
+
+import { cockpitHost } from './cockpitHost.js';
 import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
 import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
 import { stepLook } from '../cockpitLook.js';
-import * as Cesium from 'cesium';
 
 /** Whether the user asked for reduced motion: look turns then jump. */
 function prefersReducedMotion() {
@@ -110,10 +112,17 @@ function prefersReducedMotion() {
 }
 
 export class CockpitViewController {
+  /**
+   * @param {import('../globe/contract.js').GlobeEngine} engine The scene's
+   *   globe engine: its camera, frames, input and follow (cockpitHost.js).
+   * @param {object} options `viewer`: Cesium's Viewer on the Cesium engine,
+   *   whose stock double-click the Cockpit's goes ahead of.
+   */
   constructor(
-    viewer,
+    engine,
     {
       services,
+      viewer = null,
       onVisionChange = null,
       getInitialVisionMode = null,
       onCameraTakeover = null,
@@ -124,10 +133,10 @@ export class CockpitViewController {
       onEntered = null,
       onExited = null,
       onRide = null,
-      restoreTrackingFrame = null,
       publish = {},
     } = {},
   ) {
+    this.host = cockpitHost(engine, { viewer });
     this.viewer = viewer;
     this.services = services;
     this.destroyed = false;
@@ -187,10 +196,6 @@ export class CockpitViewController {
     this.onEntered = onEntered;
     this.onExited = onExited;
     this.onRide = onRide;
-    this.restoreTrackingFrame =
-      typeof restoreTrackingFrame === 'function'
-        ? restoreTrackingFrame
-        : () => false;
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
     // Without a supplied gate there is no vessel layer to ride either.
@@ -269,28 +274,28 @@ export class CockpitViewController {
     this.regionalBriefSubjectId = null;
     this.contextLayoutFrame = null;
     this.contextLayoutStamp = null;
-    this.scratchTarget = new Cesium.Cartesian3();
-    this.cockpitAnchor = new Cesium.Cartesian3();
+    this.scratchTarget = geo.cartesian3.create();
+    this.cockpitAnchor = geo.cartesian3.create();
     this.cockpitAnchorValid = false;
-    this.scratchCamera = new Cesium.Cartesian3();
-    this.scratchAdvance = new Cesium.Cartesian3();
-    this.scratchCorrection = new Cesium.Cartesian3();
-    this.scratchForward = new Cesium.Cartesian3();
-    this.scratchHorizontal = new Cesium.Cartesian3();
-    this.scratchUp = new Cesium.Cartesian3();
-    this.scratchLocal = new Cesium.Cartesian3();
-    this.scratchEnu = new Cesium.Matrix4();
-    this.scratchAnchorCartographic = new Cesium.Cartographic();
-    this.scratchCameraCartographic = new Cesium.Cartographic();
-    this.scratchTargetCartographic = new Cesium.Cartographic();
+    this.scratchCamera = geo.cartesian3.create();
+    this.scratchAdvance = geo.cartesian3.create();
+    this.scratchCorrection = geo.cartesian3.create();
+    this.scratchForward = geo.cartesian3.create();
+    this.scratchHorizontal = geo.cartesian3.create();
+    this.scratchUp = geo.cartesian3.create();
+    this.scratchLocal = geo.cartesian3.create();
+    this.scratchEnu = geo.matrix4.create();
+    this.scratchAnchorCartographic = geo.cartographic.create();
+    this.scratchCameraCartographic = geo.cartographic.create();
+    this.scratchTargetCartographic = geo.cartographic.create();
     this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can
     // create a self-sustaining refinement loop under a moving cockpit camera.
     this._listenerRemovers.push(
-      viewer.scene.preUpdate.addEventListener(() => this.update()),
-      viewer.trackedEntityChanged.addEventListener(() => {
+      this.host.preUpdate.addEventListener(() => this.update()),
+      this.host.followChanged.addEventListener(() => {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
       }),
@@ -298,7 +303,7 @@ export class CockpitViewController {
     this._listen(this.entry, 'click', () => this.enter());
     // Double-clicking the followed track is a third way in.
     this._listen(
-      viewer.scene?.canvas,
+      engine.host.canvas,
       'pointerdown',
       () => this.onScenePointerDown(),
       true,
@@ -309,7 +314,7 @@ export class CockpitViewController {
     // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
     // off while the Cockpit holds the camera).
     this._listen(
-      viewer.scene?.canvas,
+      engine.host.canvas,
       'wheel',
       (event) => this.onOrbitalWheel(event),
       { passive: false },
@@ -321,6 +326,10 @@ export class CockpitViewController {
     });
     this._listen(this.tr3bToggle, 'click', () => this.toggleTrackedTr3b());
     this._listen(this.mapViewButton, 'click', () => this.exit());
+    this._listen(document.getElementById('view-switcher'), 'click', (event) => {
+      if (event.target.closest?.('#cockpit-panels-toggle'))
+        this.scheduleContextLayout();
+    });
     this._listen(this.visionPrevious, 'click', () => this.cycleVisionMode(-1));
     this._listen(this.visionCurrent, 'click', () => this.cycleVisionMode(1));
     this._listen(this.visionNext, 'click', () => this.cycleVisionMode(1));

@@ -1,3 +1,4 @@
+// Cesium-only probes: native credits, imagery, primitive ownership and local camera coordinates are Cesium-specific claims.
 /**
  * qa-l9-matrix.mjs — the L9 release-candidate QA matrix, in one command.
  *
@@ -36,7 +37,7 @@
  *
  * Exit codes: 0 = no FAILs · 1 = at least one FAIL · 2 = target unreachable.
  */
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1086,15 +1087,25 @@ check({
   heavy: true, run: harness({ id: 'D1', script: 'track-regression.mjs', args: ['--url', APP_URL], timeoutMs: 1200000 }),
 });
 check({
-  id: 'D2', group: 'D', desc: 'qa-heading-b3 — path-derived display heading',
-  heavy: true, run: harness({ id: 'D2', script: 'qa-heading-b3.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
+  id: 'D2',
+  group: 'D',
+  desc: 'qa-aircraft-heading — path-derived display heading',
+  heavy: true,
+  run: harness({
+    id: 'D2',
+    script: 'qa-aircraft-heading.mjs',
+    args: ['--url', APP_URL],
+    timeoutMs: 900000,
+  }),
 });
 check({
-  id: 'D3', group: 'D', desc: 'qa-sprites-b5 — per-class billboard silhouettes',
+  id: 'D3',
+  group: 'D',
+  desc: 'qa-aircraft-sprites — per-class billboard silhouettes',
   heavy: true,
   run: harness({
     id: 'D3',
-    script: 'qa-sprites-b5.mjs',
+    script: 'qa-aircraft-sprites.mjs',
     args: ['--url', APP_URL],
     timeoutMs: 900000,
     knownConditions: [{
@@ -1197,7 +1208,7 @@ function selected(c) {
 }
 
 // ── browser group runner ──────────────────────────────────────────────────
-const BOOT_JS = () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager;
+const BOOT_JS = () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager;
 
 async function runBrowserGroup(record) {
   const ids = BROWSER_CHECKS.map(([id]) => id).filter((id) => selected(CHECKS.find((c) => c.id === id)));
@@ -1205,20 +1216,10 @@ async function runBrowserGroup(record) {
   const emit = (id, res, ms) => { if (ids.includes(id)) record(CHECKS.find((c) => c.id === id), res, ms); };
   const only = (id) => ids.includes(id);
 
-  const exe = await puppeteer.executablePath().catch(() => null);
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(exe ? { executablePath: exe } : {}),
-    // Heavy layers (CCTV fleet admission, traffic road graphs) can block the
-    // page's main thread past puppeteer's 180 s default and turn a healthy
-    // layer into a bogus "probe threw" FAIL.
+  const browser = await launchBrowser({
+    headless: true,
     protocolTimeout: 420000,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
-      '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-      // C17 drives the keyless voice path, which asks for a microphone before
-      // it mints a token. A fake device + auto-granted permission keeps the
-      // failure under test the MISSING KEY, not a missing microphone.
-      '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
   });
   env.browserVersion = await browser.version();
   const page = await browser.newPage();
@@ -1299,15 +1300,15 @@ async function runBrowserGroup(record) {
       // holds non-blank pixels.
       const painted = await new Promise((resolve) => {
         let done = false;
-        const stop = g.viewer.scene.postRender.addEventListener(() => {
+        const stop = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           if (done) return;
           done = true;
           setTimeout(() => { try { stop(); } catch { /* removed */ } resolve(true); }, 0);
         });
-        g.viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
         setTimeout(() => { if (!done) { done = true; try { stop(); } catch { /* removed */ } resolve(false); } }, 20000);
       });
-      const canvas = g.viewer.scene.canvas;
+      const canvas = window.__godsEyeView.engine.host.canvas;
       return { painted, w: canvas?.width ?? 0, h: canvas?.height ?? 0, frames: g.viewer.scene.frameState?.frameNumber ?? null };
     }, null, 45000);
     paint = paintR.ok ? paintR.value : { probeError: paintR.reason };
@@ -1329,12 +1330,12 @@ async function runBrowserGroup(record) {
     for (const [id] of BROWSER_CHECKS.slice(1)) {
       emit(id, skip('app did not boot — see C1', 'ENV'), 0);
     }
-    await browser.close();
+    await closeBrowser(browser);
     return;
   }
 
   // Cancel the intro flyTo: it clobbers any setView issued mid-flight.
-  await evalBounded(() => { try { window.__godsEyeView.viewer.camera.cancelFlight(); } catch { /* none */ } });
+  await evalBounded(() => { try { window.__godsEyeView.engine.camera.cancelFlight(); } catch { /* none */ } });
   await new Promise((r) => setTimeout(r, 3000));
 
   // Enable a layer, then poll its stats from THIS side. Polling in Node (many
@@ -1598,7 +1599,7 @@ async function runBrowserGroup(record) {
     // is also the only altitude at which "live flow" means anything.
     await evalBounded(async () => {
       const g = window.__godsEyeView;
-      g.viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       g.styleManager.applyCameraState({ lat: 30.2672, lon: -97.7431, alt: 2500, heading: 0, pitch: -40 }, 1.2);
       await new Promise((r) => setTimeout(r, 3500));
     });
@@ -1643,7 +1644,7 @@ async function runBrowserGroup(record) {
     // Establish the camera this check needs instead of inheriting one.
     await evalBounded(async () => {
       const g = window.__godsEyeView;
-      g.viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       g.styleManager.applyCameraState({ lat: 20, lon: 0, alt: 14000000, heading: 0, pitch: -90 }, 1.5);
       await new Promise((r) => setTimeout(r, 4000));
     }, null, 30000);
@@ -1715,7 +1716,7 @@ async function runBrowserGroup(record) {
     // down: nadir at 25 km spans well under a degree.
     await evalBounded(async (b) => {
       const g = window.__godsEyeView;
-      g.viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       g.styleManager.applyCameraState({ lat: b.lat, lon: b.lon, alt: 25000, heading: 0, pitch: -90 }, 1.2);
       await new Promise((r) => setTimeout(r, 4000));
     }, box, 30000);
@@ -1781,11 +1782,11 @@ async function runBrowserGroup(record) {
     const credR = await mustEval(async () => {
       const viewer = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const html = (viewer.creditDisplay._staticCredits || []).map((c) => c.html);
       viewer.creditDisplay.showLightbox();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const listCount = document.querySelector('.cesium-credit-lightbox > ul')?.children?.length || 0;
       viewer.creditDisplay.hideLightbox();
@@ -1820,12 +1821,11 @@ async function runBrowserGroup(record) {
 
   await step('C13', async () => {
     const stR = await mustEval(async () => {
-      const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.setCleanView(true);
       // Cesium paints the credit line during a render — force frames before
       // measuring, or a healthy credit reads as 0x0.
       for (let i = 0; i < 4; i += 1) {
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
         // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       }
@@ -1944,10 +1944,10 @@ async function runBrowserGroup(record) {
     // control at all.
     const setupR = await mustEval(async () => {
       const g = window.__godsEyeView;
-      g.viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       g.styleManager.applyCameraState({ lat: 30.2672, lon: -97.7431, alt: 3000, heading: 0, pitch: -35 }, 1.5);
       await new Promise((r) => setTimeout(r, 3000));
-      return { altKm: g.viewer.camera.positionCartographic.height / 1000 };
+      return { altKm: window.__godsEyeView.engine.camera.pose().cartographic.height / 1000 };
     }, null, 60000);
     if (!setupR.ok) return crash(`could not put the camera at city altitude to test the reset: ${setupR.reason}`);
     const before = setupR.value?.altKm;
@@ -1968,7 +1968,7 @@ async function runBrowserGroup(record) {
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 1000));
       // eslint-disable-next-line no-await-in-loop
-      altKm = (await evalBounded(() => window.__godsEyeView.viewer.camera.positionCartographic.height / 1000, null, 20000)) ?? altKm;
+      altKm = (await evalBounded(() => window.__godsEyeView.engine.camera.pose().cartographic.height / 1000, null, 20000)) ?? altKm;
       if (altKm > 5000) break;
     }
     return altKm > 5000
@@ -2018,7 +2018,7 @@ async function runBrowserGroup(record) {
         errorDetail: document.getElementById('gev-voice-error-detail')?.textContent?.trim() || null,
         dataStatus: document.getElementById('gev-voice-control')?.dataset?.status || null,
         recentError: diag?.recentErrors?.[0] ? { source: diag.recentErrors[0].source, message: diag.recentErrors[0].message } : null,
-        appAlive: !!window.__godsEyeView?.viewer,
+        appAlive: !!window.__godsEyeView?.engine,
       };
     }, null, 60000);
     if (!surfacedR.ok) return crash(`could not drive the keyless voice path: ${surfacedR.reason}`);
@@ -2035,7 +2035,7 @@ async function runBrowserGroup(record) {
     return pass(`keyless voice degrades honestly: status="${surfaced.status}", detail="${surfaced.detail}", reason "${surfaced.recentError?.message}"; globe still alive`);
   });
 
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 // ── preflight ─────────────────────────────────────────────────────────────

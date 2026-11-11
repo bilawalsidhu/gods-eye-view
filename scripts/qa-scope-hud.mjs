@@ -7,17 +7,16 @@
  * feather 0/11/100/200, layout independence,
  * share/scene restore, and visible text backing including rotated metadata.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -214,16 +213,7 @@ async function openApplication(url) {
     () => window.__godsEyeView?.styleManager?._applicationShortcuts,
     { timeout: 60_000 },
   );
-  await page.waitForFunction(
-    () => {
-      const cover = document.getElementById('loading-screen');
-      return (
-        cover?.classList.contains('hidden') &&
-        Number(getComputedStyle(cover).opacity) === 0
-      );
-    },
-    { timeout: 60_000 },
-  );
+  await whenSettled(page);
 }
 
 try {
@@ -668,7 +658,7 @@ try {
   }
   check('runtime has no uncaught browser errors', errors.length === 0, errors);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures} failures`);
 process.exitCode = failures ? 1 : 0;

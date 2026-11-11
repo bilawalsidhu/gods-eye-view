@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Cross-feature voice contracts, driven through the real action runner:
 // one result contract (engine fields → model payload → voice card), shared
 // pointing for imagery, result-set ownership between OSM and the analyst,
@@ -677,6 +678,38 @@ test('the cloud prompt states precedence and caveat speech once', () => {
     realtimeInstructions(),
     /"approximately"\/"roughly" for a tool number/,
   );
+});
+
+test('an engine switch keeps the last answer for a follow-up on the next engine', async () => {
+  const { createSceneRunner } = await import('./sceneRunner.js');
+  const analystMemory = { lastResult: null };
+  const layerEnabledAt = new Map();
+  const run = createSceneRunner({
+    build: () =>
+      harness({ runnerOptions: { analystMemory, layerEnabledAt } }).runner,
+  });
+  run.attach({ engine: createFakeEngine({ kind: 'cesium' }) });
+  const first = await run('analyst_query', {
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(first.ok, true);
+  // The real runner of the outgoing engine is disposed by the switch.
+  run.detach();
+  run.attach({ engine: createFakeEngine({ kind: 'navara' }) });
+  const followUp = await run('analyst_query', {
+    layers: ['flights'],
+    followUp: true,
+  });
+  assert.equal(followUp.ok, true, JSON.stringify(followUp));
+  assert.equal(followUp.engine, 'navara');
+  // The session ending still forgets it.
+  run.resetConversation();
+  const afterReset = await run('analyst_query', {
+    layers: ['flights'],
+    followUp: true,
+  });
+  assert.equal(afterReset.code, 'NO_RESULT_CONTEXT');
 });
 
 test('boundaries route to resolve_area; annotate_map is for marks', () => {

@@ -2,7 +2,10 @@
 // time brings the launches up in the order they flew.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { WHITE } from '../shared/color.js';
+import { createLaunchesDisplay } from './render/display.js';
 import { worldClock } from '../../time/worldClock.js';
 import { createState } from './state.js';
 import { createRendering } from './rendering.js';
@@ -16,9 +19,9 @@ function scene(t) {
   const state = createState({
     services: {
       overlays: {
-        setOverlayEntries: noop,
-        setOverlaySourceVisible: noop,
-        clearOverlaySource: noop,
+        setEntries: noop,
+        setVisible: noop,
+        clearSource: noop,
       },
     },
   });
@@ -27,21 +30,18 @@ function scene(t) {
     launchTime: new Date(LAUNCH_MS).toISOString(),
   };
   state._enabled = true;
-  state._dataSource = new Cesium.CustomDataSource('launches');
-  state._viewer = {
-    scene: { camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) } },
-  };
+  const engine = createFakeEngine();
+  const renderer = createLaunchesDisplay(engine);
+  engine.camera.setView({ destination: geo.cartesian3.create(2e7, 0, 0) });
+  state._engine = engine;
+  state._renderer = renderer;
+  renderer.setVisible(true);
+  t.after(() => {
+    renderer.destroy();
+    engine.destroy();
+  });
   state._missionOverlayRecords.set(launch.id, { launch });
-  const position = Cesium.Cartesian3.fromDegrees(0, 0);
-  const anchor = state._dataSource.entities.add({
-    id: `rocket-launch:${launch.id}`,
-    position,
-    point: { pixelSize: 5 },
-  });
-  const path = state._dataSource.entities.add({
-    id: `rocket-transfer:${launch.id}`,
-    polyline: { positions: [position, Cesium.Cartesian3.fromDegrees(1, 1)] },
-  });
+  const position = geo.cartesian3.fromDegrees(0, 0);
   const syncs = { labels: 0, orbits: 0 };
   const parts = {
     panel: { updateMissionTelemetry: noop },
@@ -60,14 +60,27 @@ function scene(t) {
     geometry: { getKeyholeGeometry: noop },
     satellites: {},
   };
-  parts.selection = createSelection({ state, services, parts });
-  const rendering = createRendering({ state, services, parts });
+  const context = { state, services, parts, getRenderer: () => renderer };
+  parts.selection = createSelection(context);
+  const rendering = createRendering(context);
+  const anchor = rendering.addMissionElement({
+    id: `rocket-launch:${launch.id}`,
+    position,
+    point: { pixelSize: 5, color: WHITE },
+  });
+  const path = rendering.addMissionElement({
+    id: `rocket-transfer:${launch.id}`,
+    polyline: {
+      positions: [position, geo.cartesian3.fromDegrees(1, 1)],
+      width: 2,
+      color: WHITE,
+    },
+  });
   const shown = () => {
     rendering.updateMissionFrame();
-    const time = Cesium.JulianDate.now();
     return {
-      marker: anchor.point.show.getValue(time),
-      path: path.polyline.show?.getValue(time) ?? true,
+      marker: anchor.point.show,
+      path: path.line.show,
     };
   };
   return { state, launch, syncs, shown };

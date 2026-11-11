@@ -85,6 +85,23 @@ export class ContextControls {
       this[field] = null;
     }
   }
+  canRetainScene() {
+    return (
+      ['flights', 'space-missions'].includes(this._contextMode) &&
+      !this._contextModeChanging &&
+      !this._contextRestoreState &&
+      !this._clearSelectedLayersPromise &&
+      !this._contextLayerReactionPromises.size
+    );
+  }
+  captureScene() {
+    return { mode: this._contextMode, snapshot: this._contextSessionSnapshot };
+  }
+  resumeScene(saved) {
+    if (!saved) return;
+    this._contextMode = saved.mode;
+    this._contextSessionSnapshot = saved.snapshot;
+  }
   stop() {
     if (this.destroyed) return;
     this.destroyed = true;

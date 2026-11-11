@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenUiSettled } from './qa/ready.mjs';
 /**
  * qa-firstrun — the mission launcher's contract, proved in the real app.
  *
@@ -18,10 +19,10 @@
  * every rendered/behavioral assertion below must go RED. A green --teeth run
  * means the assertions are not measuring what they claim to.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 
 const args = process.argv.slice(2);
 const getOpt = (flag, fallback) => {
@@ -35,12 +36,6 @@ const HEADFUL = args.includes('--headful');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHOT_DIR = path.join(ROOT, 'qa-shots', 'firstrun');
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Version-pinned Chrome-for-Testing over the auto-updating system Chrome.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
 
 const results = [];
 let currentSection = 'setup';
@@ -96,7 +91,7 @@ async function open(page, { hash = '', query = '', clearAll = true, clearSession
     { timeout: 45000 },
     LAUNCHER,
   ).catch(() => {});
-  await sleep(400);
+  await whenUiSettled(page);
   if (errorSink) errorSink.length = 0;
 }
 
@@ -184,7 +179,7 @@ async function pick(page, choice, { timeout = 40000, settle = [] } = {}) {
     }, settle).catch(() => {});
   }
   // Plus a render beat: settled data still has to reach the framebuffer.
-  await sleep(settle.length ? 3500 : 1500);
+  await whenUiSettled(page);
 }
 
 /** Every section the run is expected to reach; the teeth verdict requires all. */
@@ -236,7 +231,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     record('the launcher is up before the scene starts', beforeScene.onScreen);
 
     await page.evaluate(() => document.body.classList.add('scene-playback-mode'));
-    await sleep(300);
+    await whenUiSettled(page);
     const duringScene = await launcherState();
     record(
       'a scene taking the screen makes the launcher YIELD, not just hide',
@@ -249,7 +244,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     // The key that used to dismiss an invisible launcher must now do nothing
     // to it — proven by the scene class still being set afterwards.
     await page.keyboard.press('Escape');
-    await sleep(300);
+    await whenUiSettled(page);
     const afterEsc = await page.evaluate(() => ({
       sceneStillOn: document.body.classList.contains('scene-playback-mode'),
     }));
@@ -259,7 +254,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       afterEsc.sceneStillOn ? 'scene class untouched by the launcher' : 'something else consumed the key',
     );
     await page.evaluate(() => document.body.classList.remove('scene-playback-mode'));
-    await sleep(200);
+    await whenUiSettled(page);
     const afterScene = await launcherState();
     record('a yielded launcher does not pop back when the scene ends',
       !afterScene.classVisible, `classVisible=${afterScene.classVisible}`);
@@ -269,7 +264,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     const beforeCockpit = await launcherState();
     record('the launcher is up before cockpit engages', beforeCockpit.onScreen);
     await page.evaluate(() => document.body.classList.add('cockpit-mode'));
-    await sleep(300);
+    await whenUiSettled(page);
     const duringCockpit = await launcherState();
     record(
       'cockpit engaging makes the launcher YIELD before it can contest ESC',
@@ -277,7 +272,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       `classVisible=${duringCockpit.classVisible} — cockpit registers its capture listener first, so stacking must never arise`,
     );
     await page.evaluate(() => document.body.classList.remove('cockpit-mode'));
-    await sleep(200);
+    await whenUiSettled(page);
 
     // ── Blocker repro: a surface that takes the screen with NO class ────────
     // The attribution lightbox is full-screen at z-index 200 against the card's
@@ -303,7 +298,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       link?.click();
       return !!link;
     });
-    await sleep(300);
+    await whenUiSettled(page);
     const lightboxUp = await lightboxState();
     record(
       'the real "Data attribution" lightbox opens above the card',
@@ -318,7 +313,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
     );
 
     await page.keyboard.press('Escape');
-    await sleep(400);
+    await whenUiSettled(page);
     const escUnderLightbox = await launcherState();
     const lightboxAfterEsc = await lightboxState();
     record(
@@ -343,12 +338,12 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       document.activeElement === document.querySelector('#cesium-credits .cesium-credit-expand-link')
     ));
     record('closing attribution restores its disclosure focus', attributionFocusRestored);
-    await sleep(300);
+    await whenUiSettled(page);
     const uncovered = await launcherState();
     record('closing the lightbox hands the card back the key',
       uncovered.topmost, `topmost=${uncovered.topmost}`);
     await page.keyboard.press('Escape');
-    await sleep(600);
+    await whenUiSettled(page);
     const afterUncoveredEsc = await launcherState();
     record(
       'ESC dismisses normally again once nothing is on top',
@@ -407,7 +402,7 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
 
     // ...and appears once that surface clears.
     await page.evaluate(() => document.body.classList.remove('cockpit-mode'));
-    await sleep(800);
+    await whenUiSettled(page);
     const afterCockpitCleared = await launcherState();
     record('the launcher appears once the surface clears',
       afterCockpitCleared.onScreen, `onScreen=${afterCockpitCleared.onScreen}`);
@@ -439,21 +434,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const executablePath = CHROME_CANDIDATES.find((candidate) => {
-    try { return fs.existsSync(candidate); } catch { return false; }
-  });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(executablePath ? { executablePath } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox',
-      // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
-      ...(process.platform === 'darwin'
-        ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']
-        : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--disable-dev-shm-usage', '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding', '--window-size=1440,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(process.platform === 'darwin' ? ['--enable-gpu', '--ignore-gpu-blocklist'] : []), '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900'],
   });
 
   const shots = [];
@@ -510,7 +493,7 @@ async function main() {
       // ESC dismisses. Stated as a TRANSITION (was up, now gone) — "not visible"
       // alone passes vacuously whenever the launcher never appeared at all.
       await page.keyboard.press('Escape');
-      await sleep(600);
+      await whenUiSettled(page);
       const state = await appState(page);
       record('ESC dismisses the launcher', freshVisible && !(await launcherVisible(page)),
         freshVisible ? 'visible → dismissed' : 'never appeared, so nothing was dismissed');
@@ -530,11 +513,11 @@ async function main() {
 
       // Checkbox → durable suppression.
       await page.click('[data-first-run-suppress]');
-      await sleep(200);
+      await whenUiSettled(page);
       const ticked = await appState(page);
       record('the checkbox writes durable suppression immediately', ticked.durable === 'suppressed', `durable=${ticked.durable}`);
       await page.keyboard.press('Escape');
-      await sleep(400);
+      await whenUiSettled(page);
       await open(page, { clearAll: false, clearSession: true });
       record('a suppressed profile stays quiet in later sessions',
         ticked.durable === 'suppressed' && !(await launcherVisible(page)),
@@ -789,7 +772,7 @@ async function main() {
         if (list) list.scrollTop = 0;
         document.activeElement?.blur?.();
       }, LAUNCHER);
-      await sleep(250);
+      await whenUiSettled(page);
       shots.push(await shoot(page, `launcher-${vp.name}`));
     }
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
@@ -800,7 +783,7 @@ async function main() {
         consoleErrors.slice(0, 3).join(' | ') || 'clean');
     });
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const failed = results.filter((entry) => !entry.ok);

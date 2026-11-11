@@ -47,7 +47,6 @@ export const ORDER_REJECTS_BEFORE_RESET = 3;
  */
 export function createIngestion({ state, services, parts, source }) {
   const { governorRequestRender } = services.render;
-  const { registerDynamicCredit, transitFeedCredit } = services.credits;
 
   function feedStatus(feedId) {
     let status = state._feedStatus.get(feedId);
@@ -148,7 +147,7 @@ export function createIngestion({ state, services, parts, source }) {
       // Nothing else would notice: the per-frame pass returns early on an empty
       // fleet, so the hold would sit there held by a fleet that no longer exists.
       parts.rendering.syncRenderHold();
-      governorRequestRender('transit-evict');
+      governorRequestRender('transit-evict', parts.renderer?.engine);
       state._dataManager?.refreshLayerStats?.();
     }
     return removed;
@@ -191,7 +190,7 @@ export function createIngestion({ state, services, parts, source }) {
       removeFeedVehicles(feed.id);
       status.count = 0;
       parts.rendering.syncRenderHold();
-      governorRequestRender('transit-stale-refused');
+      governorRequestRender('transit-stale-refused', parts.renderer?.engine);
       state._dataManager?.refreshLayerStats?.();
       return;
     }
@@ -400,14 +399,11 @@ export function createIngestion({ state, services, parts, source }) {
         `[Data:Transit] ${feed.id}: ${rejectedFixes} fix(es) implied impossible travel and were not animated`,
       );
     }
-    if (state._viewer)
-      registerDynamicCredit(
-        state._viewer,
-        transitFeedCredit(feed, {
-          feedTimestamp: snapshot?.feedTimestamp,
-          fetchedAt,
-        }),
-      );
+    status.creditSnapshot = {
+      feedTimestamp: snapshot?.feedTimestamp,
+      fetchedAt,
+    };
+    parts.renderer?.addCredit(feed, status.creditSnapshot);
     if (
       state._selectedKey &&
       state._vehicles.get(state._selectedKey)?.feedId === feed.id
@@ -422,7 +418,7 @@ export function createIngestion({ state, services, parts, source }) {
     state._detectRevision++;
     parts.rendering.requestVisibility();
     parts.rendering.syncRenderHold();
-    governorRequestRender('transit-poll');
+    governorRequestRender('transit-poll', parts.renderer?.engine);
     state._dataManager?.refreshLayerStats?.();
   }
 

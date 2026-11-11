@@ -17,10 +17,11 @@
  * projection must fit one frame; Traffic does no outline projection and the
  * warm ask reuses it. Traffic activation Long Tasks are reported separately.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const args = process.argv.slice(2);
 const valueAfter = (flag, fallback) => {
@@ -155,19 +156,13 @@ function workEvidence(entries, label) {
 
 await fs.mkdir(path.dirname(OUTPUT), { recursive: true });
 
-const browser = await puppeteer.launch({
-  headless: args.includes('--headful') ? false : 'new',
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 240_000,
-  ...(process.env.PUPPETEER_EXECUTABLE_PATH
-    ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
-    : {}),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
-    '--use-gl=angle',
-    ...(args.includes('--headful')
-      ? []
-      : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
+    ...(args.includes('--headful') ? [] : ['--enable-unsafe-swiftshader']),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -251,15 +246,15 @@ async function settleOutline(page, label) {
     }
     if (!annotation || annotation.pendingOutline)
       throw new Error(`${label}: outline did not settle`);
-    const { scene } = window.__godsEyeView.viewer;
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, 1500);
-      const remove = scene.postRender.addEventListener(() => {
-        clearTimeout(timer);
-        remove();
-        resolve();
-      });
-      scene.requestRender();
+      const remove =
+        window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
+          clearTimeout(timer);
+          remove();
+          resolve();
+        });
+      window.__godsEyeView.engine.render.request();
     });
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
@@ -414,13 +409,13 @@ try {
     });
     await page.waitForFunction(
       () =>
-        window.__godsEyeView?.viewer &&
+        window.__godsEyeView?.engine &&
         window.__godsEyeView?.dataManager &&
         window.__gevVoiceCommands?.runner &&
-        window.__gevAnnotations &&
-        document.getElementById('loading-screen')?.classList.contains('hidden'),
+        window.__gevAnnotations,
       { timeout: 120_000, polling: 250 },
     );
+    await whenSettled(page);
     await page.evaluate(
       () => window.__godsEyeView.styleManager.initialRestorePromise,
     );
@@ -428,10 +423,10 @@ try {
       window.__godsEyeView.styleManager.setDetection({ enabled: false }),
     );
     await page.evaluate(async (target) => {
-      const { viewer, dataManager } = window.__godsEyeView;
+      const { dataManager } = window.__godsEyeView;
       await dataManager.setEnabled('traffic', false);
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
         destination: window.__CESIUM__.Cartesian3.fromDegrees(
           target.longitude,
           target.latitude,
@@ -443,11 +438,11 @@ try {
           roll: 0,
         },
       });
-      viewer.camera.moveEnd.raiseEvent();
+      window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
       window.__gevAnnotations.clear();
       performance.clearMeasures();
     }, TARGET);
-    await sleep(750);
+    await whenSettled(page);
 
     if (run === 0) {
       phase = 'overlap';
@@ -469,7 +464,7 @@ try {
       await sleep(100);
       await heldTargetRequest.continue();
       const overlap = await settleOutline(page, 'QA Capitol overlap');
-      await sleep(750);
+      await whenSettled(page);
       const trafficStats = await page.evaluate(() =>
         window.__godsEyeView.dataManager.layers
           .get('traffic')
@@ -538,7 +533,7 @@ try {
       },
       { timeout: 180_000, polling: 250 },
     );
-    await sleep(1500);
+    await whenSettled(page);
     const trafficMeasures = relevantMeasures(
       await page.evaluate(() =>
         performance.getEntriesByType('measure').map((entry) => ({
@@ -582,7 +577,7 @@ try {
 
     phase = 'outline-cold';
     const cold = await driveOutline(page, `QA Capitol cold ${run}`);
-    await sleep(750);
+    await whenSettled(page);
     cold.measures = relevantMeasures(cold.measures);
     cold.work = workEvidence(cold.measures, 'cold');
     cold.network = network.filter(
@@ -596,7 +591,7 @@ try {
     await page.evaluate(() => window.__gevAnnotations.clear());
     phase = 'outline-warm';
     const warm = await driveOutline(page, `QA Capitol warm ${run}`);
-    await sleep(750);
+    await whenSettled(page);
     warm.measures = relevantMeasures(warm.measures);
     warm.work = workEvidence(warm.measures, 'warm');
     warm.network = network.filter(
@@ -674,7 +669,7 @@ try {
     assert.equal(warmDecodes.length, 0, 'decoded-cache hit performs no decode');
 
     report.renderer ||= await page.evaluate(() => {
-      const gl = window.__godsEyeView.viewer.scene.context._gl;
+      const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
       const debug = gl.getExtension('WEBGL_debug_renderer_info');
       return debug
         ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
@@ -849,5 +844,5 @@ try {
   process.exitCode = 1;
 } finally {
   await fs.writeFile(OUTPUT, `${JSON.stringify(report, null, 2)}\n`);
-  await browser.close();
+  await closeBrowser(browser);
 }

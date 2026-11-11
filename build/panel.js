@@ -6,6 +6,9 @@
  * PANEL_BASE next to the app.
  */
 
+import cesium from 'vite-plugin-cesium';
+import { fileURLToPath } from 'node:url';
+
 // The panel loads these paths (src/tools/globePanel.js); a test keeps the
 // two in step.
 export const PANEL_BASE = '/panel/';
@@ -18,6 +21,27 @@ export function panelBuildConfig(config) {
   return {
     ...config,
     base: PANEL_BASE,
+    plugins: (config.plugins ?? []).map((plugin) =>
+      plugin?.name === 'vite-plugin-cesium' ? cesium() : plugin,
+    ),
+    resolve: {
+      ...config.resolve,
+      alias: [
+        // The panel runs Cesium: the Navara mode and Navara's wind mesh
+        // (the panel's only paths to Navara and three) become stubs.
+        {
+          find: /^(?:\.\/|.*\/app\/)navaraMode\.js$|^.*\/globe\/navara\/windFlowMesh\.js$/,
+          replacement: fileURLToPath(
+            new URL('./panelNavara.js', import.meta.url),
+          ),
+        },
+        ...(Array.isArray(config.resolve?.alias)
+          ? config.resolve.alias
+          : Object.entries(config.resolve?.alias ?? {}).map(
+              ([find, replacement]) => ({ find, replacement }),
+            )),
+      ],
+    },
     build: {
       ...config.build,
       outDir: PANEL_OUT_DIR,
@@ -26,6 +50,10 @@ export function panelBuildConfig(config) {
       cssCodeSplit: false,
       rollupOptions: {
         ...config.build?.rollupOptions,
+        // The panel is a single chunk; its alias excludes the Navara engine.
+        plugins: (config.build?.rollupOptions?.plugins ?? []).filter(
+          (plugin) => plugin?.name !== 'gev-initial-chunk-guard',
+        ),
         output: { inlineDynamicImports: true },
       },
     },

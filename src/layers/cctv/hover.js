@@ -25,13 +25,13 @@ export function createHover({ state: layerState, services, parts, source }) {
       !position
     )
       return;
-    if (!layerState._viewer || layerState._viewer.isDestroyed()) return;
+    if (!parts.renderer?.ready) return;
     const now = Date.now();
     if (now - layerState._hoverLastPickAt < HOVER_PICK_THROTTLE_MS) return;
     layerState._hoverLastPickAt = now;
     let picked = null;
     try {
-      picked = layerState._viewer.scene.pick(position);
+      picked = parts.renderer.pick(position);
     } catch {
       picked = null;
     }

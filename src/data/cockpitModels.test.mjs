@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,12 +29,17 @@ for (const layer of LAYERS) {
   const source = readLayerSource(layer.path);
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
-    const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
-    assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
-    for (const [index, call] of calls.entries()) {
-      assert.match(call[1], /\basynchronous:\s*false\b/,
-        `Model.fromGltfAsync call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
-    }
+    // The layer's models are the engine's model movers (the aircraft display);
+    // on Cesium each instance loads through Cesium.Model.fromGltfAsync there.
+    assert.doesNotMatch(source, /Cesium\.Model\.fromGltfAsync/);
+    const movers = readFileSync(
+      new URL('../globe/cesium/movers.js', import.meta.url),
+      'utf8',
+    );
+    const calls = [...movers.matchAll(/\.loadModel\(\{([\s\S]*?)\}\)/g)];
+    assert.equal(calls.length, 1, 'one model load in the Cesium movers');
+    assert.match(calls[0][1], /\basynchronous:\s*false\b/,
+      'Model.fromGltfAsync must keep bounded GLB readiness independent of tile jobs');
   });
 
   test(`${layer.name}: Cockpit 3D obeys the shared Display toggle`, () => {

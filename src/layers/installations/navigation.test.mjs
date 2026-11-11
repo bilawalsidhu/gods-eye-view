@@ -1,50 +1,52 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createViewport } from './viewport.js';
-import { createLifecycle } from './lifecycle.js';
+import { createDisplayHarness } from './render/displayHarness.mjs';
+import { createFakeGroundHarness } from '../../testSupport/groundDisplayEngines.mjs';
 
 test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and recover from wide views', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let rectangle = Cesium.Rectangle.fromDegrees(-117.2, 32.7, -117.1, 32.8);
-  const camera = {
-    changed: new Cesium.Event(),
-    moveEnd: new Cesium.Event(),
-    percentageChanged: 0.5,
-    computeViewRectangle: () => rectangle,
+  const h = createDisplayHarness(createFakeGroundHarness);
+  const { engine, state, parts } = h;
+  engine.fake.script('viewRectangle', () => rectangle);
+  const camera = engine.camera;
+  const base = {
+    changed: camera.changed.numberOfListeners,
+    moveEnd: camera.moveEnd.numberOfListeners,
+    sensitivity: camera.percentageChanged,
   };
-  const viewer = {
-    camera,
-    scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
-    dataSources: { add() {}, remove() {} },
-  };
-  const state = { enabled: false, renderedKeys: new Map() };
+  const changed = () => engine.fake.emit('camera.changed');
+  const moveEnd = () => engine.fake.emit('camera.moveEnd');
   const loads = [];
-  const parts = {
-    selection: { installInteraction() {} },
-    rendering: { clearRendered() {} },
-    ingestion: {
-      loadInstallations() {
-        state.abort = new AbortController();
-        loads.push({
-          ...parts.viewport.loadArea(viewer),
-          signal: state.abort.signal,
-        });
-      },
-      setInstallationStatus() {},
+  parts.ingestion = {
+    loadInstallations() {
+      state.abort = new AbortController();
+      loads.push({
+        ...parts.viewport.loadArea(null),
+        signal: state.abort.signal,
+      });
     },
+    setInstallationStatus() {},
   };
-  const services = {
-    picking: { registerPickOwner() {}, unregisterPickOwner() {} },
-    context: { clearSelectedEntityContextForLayer() {} },
-  };
-  const ctx = { state, parts, services, source: {} };
-  parts.viewport = createViewport(ctx);
-  const life = createLifecycle(ctx).methods;
-  life.init(viewer);
+  parts.viewport = createViewport({
+    state,
+    parts,
+    services: h.services,
+    source: {},
+  });
+  const life = parts.display;
+  life.init();
   life.enable();
+  assert.equal(
+    camera.percentageChanged,
+    0.01,
+    'the layer claims a fine camera',
+  );
   for (let i = 0; i < 8; i++) {
-    camera.changed.raiseEvent();
+    changed();
     t.mock.timers.tick(15);
   }
   t.mock.timers.tick(200);
@@ -53,7 +55,7 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
     1,
     'changed alone must load, even without moveEnd',
   );
-  camera.moveEnd.raiseEvent();
+  moveEnd();
   t.mock.timers.tick(200);
   assert.equal(loads.length, 1);
   assert.equal(
@@ -62,12 +64,12 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
     'duplicate settle must not abort its own load',
   );
   rectangle = Cesium.Rectangle.fromDegrees(-117.5, 33.2, -117.3, 33.4);
-  camera.changed.raiseEvent();
+  changed();
   assert.equal(loads[0].signal.aborted, true);
   t.mock.timers.tick(200);
   assert.equal(loads.length, 2);
   rectangle = Cesium.Rectangle.fromDegrees(-150, 10, -80, 60);
-  camera.moveEnd.raiseEvent();
+  moveEnd();
   t.mock.timers.tick(200);
   assert.equal(
     loads.at(-1).box.west,
@@ -75,25 +77,25 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
     'wide views reach the named-point source',
   );
   rectangle = Cesium.Rectangle.fromDegrees(-117.2, 32.7, -117.1, 32.8);
-  camera.changed.raiseEvent();
+  changed();
   t.mock.timers.tick(200);
   assert.ok(loads.at(-1).box);
   state.contextAnchor = { latitude: 32.8, longitude: -117.1 };
   const count = loads.length;
-  camera.moveEnd.raiseEvent();
+  moveEnd();
   t.mock.timers.tick(200);
   assert.equal(loads.length, count, 'Contacts owns the anchor while active');
   life.disable();
   assert.equal(state.contextAnchor, null);
   life.enable();
   rectangle = Cesium.Rectangle.fromDegrees(-117.5, 33.2, -117.3, 33.4);
-  camera.changed.raiseEvent();
+  changed();
   t.mock.timers.tick(200);
   assert.equal(loads.at(-1).coverage.kind, 'viewport');
-  life.destroy(viewer);
-  assert.equal(camera.changed.numberOfListeners, 0);
-  assert.equal(camera.moveEnd.numberOfListeners, 0);
-  assert.equal(camera.percentageChanged, 0.5);
+  h.destroy();
+  assert.equal(camera.changed.numberOfListeners, base.changed);
+  assert.equal(camera.moveEnd.numberOfListeners, base.moveEnd);
+  assert.equal(camera.percentageChanged, base.sensitivity);
 });
 
 test('an aborting real ingestion cannot clear the next scheduled view key', async (t) => {
@@ -158,6 +160,51 @@ test('an aborting real ingestion cannot clear the next scheduled view key', asyn
   assert.equal(state.cameraLoadKey, nextKey);
 });
 
+test('Navara installation ingestion loads from its engine camera without a viewer', async () => {
+  const { createIngestion } = await import('./ingestion.js');
+  const rectangle = Cesium.Rectangle.fromDegrees(-123, 37, -122, 38);
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.fake.script('viewRectangle', () => rectangle);
+  const state = {
+    enabled: true,
+    viewer: null,
+    engine: engine,
+    records: [],
+    recordById: new Map(),
+    coverage: { kind: 'viewport' },
+  };
+  const requests = [];
+  const parts = {
+    model: { installationWithinViewport: () => true },
+    rendering: { renderRecords() {}, warmInstallationFloors() {} },
+    namedMarkers: { sync() {} },
+  };
+  const context = {
+    state,
+    parts,
+    services: {
+      render: { governorRequestRender() {} },
+      ground: { resolveGroundFloorCellsBounded: async () => {} },
+    },
+    source: {
+      async getMappedSites(box) {
+        requests.push(box);
+        return { records: [], status: 'ready', wide: false, saturated: false };
+      },
+    },
+  };
+  parts.viewport = createViewport(context);
+  const ingestion = createIngestion(context);
+
+  await ingestion.loadInstallations();
+
+  assert.equal(requests.length, 1);
+  assert.ok(Math.abs(requests[0].west + 123) < 1e-10);
+  assert.ok(Math.abs(requests[0].south - 37) < 1e-10);
+  assert.equal(state.loading, false);
+  assert.ok(state.lastUpdate);
+});
+
 test('wide views refresh screen decluttering when the globe rectangle stays unchanged', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const camera = {
@@ -188,4 +235,44 @@ test('wide views refresh screen decluttering when the globe rectangle stays unch
   viewport.scheduleLoad();
   t.mock.timers.tick(200);
   assert.equal(loads, 2, 'a different continent needs fresh projected labels');
+});
+
+test('the engine camera drives installation viewport requests without a viewer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const rectangle = {
+    west: Cesium.Math.toRadians(179),
+    south: Cesium.Math.toRadians(-12),
+    east: Cesium.Math.toRadians(-178),
+    north: Cesium.Math.toRadians(16),
+  };
+  const engine = createFakeEngine();
+  engine.fake.script('viewRectangle', () => rectangle);
+  engine.camera.pose = () => ({
+    position: { x: 1, y: 2, z: 3 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
+  const state = {
+    enabled: true,
+    viewer: null,
+    engine: engine,
+  };
+  const loads = [];
+  const parts = {
+    ingestion: {
+      loadInstallations() {
+        loads.push(parts.viewport.loadArea(null));
+      },
+    },
+  };
+  parts.viewport = createViewport({ state, parts, services: {}, source: {} });
+
+  parts.viewport.scheduleLoad();
+  t.mock.timers.tick(200);
+
+  assert.equal(loads.length, 1);
+  assert.ok(Math.abs(loads[0].box.south + 12) < 1e-10);
+  assert.equal(loads[0].box.west, 179);
+  assert.equal(loads[0].box.north, 16);
+  assert.equal(loads[0].box.east, -178);
+  assert.equal(loads[0].coverage.kind, 'viewport');
 });

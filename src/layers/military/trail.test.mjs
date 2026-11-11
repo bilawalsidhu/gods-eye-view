@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
 import { TRAIL_MAX_POINTS } from './policy.js';
@@ -10,6 +12,7 @@ const HOUR = 60 * MINUTE;
 
 function services({ trails, floor = () => null } = {}) {
   const names = [
+    'selection',
     'picking',
     'sprites',
     'aircraftPresentation',
@@ -79,24 +82,23 @@ function trackedHarness({ liveFixes = [], trace = null, nowMs, floor, head }) {
     },
   });
   const added = [];
-  flightState._viewer = {
-    isDestroyed: () => false,
-    entities: {
-      add(definition) {
-        added.push(definition);
-        return definition;
-      },
-      remove() {},
+  flightState._renderer = recordingAircraftRenderer(createFakeEngine());
+  flightState._renderer.trails = {
+    create: svc.trails.createTrail,
+    createHead(definition) {
+      added.push(definition);
+      return definition;
     },
+    removeHead() {},
   };
   flightState._trackedIcao = 'ae0001';
   flightState.now = () => nowMs;
   flightState._positionHistory.set(
     'ae0001',
     liveFixes.map((fix) => ({
-      time: Cesium.JulianDate.fromDate(new Date(fix.timeMs)),
+      timeMs: fix.timeMs,
       epochMs: fix.timeMs,
-      position: Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 9_000),
+      position: geo.cartesian3.fromDegrees(fix.lon, fix.lat, 9_000),
     })),
   );
   const tracking = createTracking({
@@ -118,7 +120,7 @@ function trackedHarness({ liveFixes = [], trace = null, nowMs, floor, head }) {
       .find((definition) =>
         String(definition.id).startsWith('gev-trail:mil-head-'),
       )
-      .polyline.positions.getValue();
+      .positions();
   return { trail, tracking, flightState, headPositions };
 }
 
@@ -186,7 +188,7 @@ test('a military trace point with no altitude breaks the line and is never given
     [3, 4],
   );
   for (const fix of flightState._trailFixes) {
-    const height = Cesium.Cartographic.fromCartesian(fix.position).height;
+    const height = geo.cartographic.fromCartesian(fix.position).height;
     assert.ok(Math.abs(height - 9_000) < 1, `no invented height: ${height}`);
   }
 });
@@ -210,7 +212,7 @@ test('a military ground point is drawn on the ground and stays joined', async ()
     trail.last().map((segment) => segment.length),
     [5],
   );
-  const height = Cesium.Cartographic.fromCartesian(
+  const height = geo.cartographic.fromCartesian(
     flightState._trailFixes[0].position,
   ).height;
   assert.ok(Math.abs(height - 1_591) < 1);
@@ -223,7 +225,7 @@ test('the military head is drawn to a nearby aircraft and not to one more than 1
     lat: 35,
     lon: -106 + i * 0.12,
   }));
-  const near = Cesium.Cartesian3.fromDegrees(-105.7, 35, 9_000);
+  const near = geo.cartesian3.fromDegrees(-105.7, 35, 9_000);
   const joined = trackedHarness({
     liveFixes,
     nowMs: t0 + 3 * MINUTE,
@@ -232,7 +234,7 @@ test('the military head is drawn to a nearby aircraft and not to one more than 1
   joined.tracking._startTrail('ae0001');
   assert.equal(joined.headPositions().length, 2);
 
-  const far = Cesium.Cartesian3.fromDegrees(-103, 35, 9_000);
+  const far = geo.cartesian3.fromDegrees(-103, 35, 9_000);
   const detached = trackedHarness({
     liveFixes,
     nowMs: t0 + 3 * MINUTE,

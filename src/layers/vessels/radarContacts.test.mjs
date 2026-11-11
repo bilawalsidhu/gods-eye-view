@@ -5,41 +5,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingRenderer, services } from './testFixtures.mjs';
 
 const noop = () => {};
-function services() {
-  return {
-    context: {
-      clearSelectedEntityContextForLayer: noop,
-      registerEntityContext: () => null,
-    },
-    trails: {
-      createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
-    },
-    labels: {},
-    picking: { unregisterPickOwner: noop },
-    overlay: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
-    },
-    geoid: {},
-    sprites: {},
-    focus: {
-      focusNowMs: (now) => now,
-      getFocusTarget: () => null,
-      focusPassIsNeeded: () => false,
-      forgetSpriteFocus: noop,
-    },
-    worldFocus: {},
-    render: {
-      holdContinuousRender: noop,
-      releaseContinuousRender: noop,
-      governorRequestRender: noop,
-    },
-  };
-}
-
 /** A vessel `northNm` nautical miles north of 54.5°N 10.2°E. */
 function record(mmsi, northNm, extra = {}) {
   return {
@@ -56,22 +25,27 @@ function record(mmsi, northNm, extra = {}) {
   };
 }
 
-function layerWith(records, options = {}) {
+function layerWith(t, records, options = {}) {
+  const engine = createFakeEngine();
+  const recording = recordingRenderer(engine);
   const layer = createVesselLayer({
     source: { getSnapshot: noop },
-    services: services(),
+    services: services(recording.renderer),
   });
   layer.testing._setVesselStateForTest({
-    viewer: {},
+    engine,
     records,
-    billboardCollection: { add: (entry) => ({ ...entry }), remove: noop },
     ...options,
+  });
+  t.after(() => {
+    layer.destroy(null, { engine });
+    engine.destroy();
   });
   return layer;
 }
 
-test('radar contacts are within range, nearest first and capped', () => {
-  const layer = layerWith([
+test('radar contacts are within range, nearest first and capped', (t) => {
+  const layer = layerWith(t, [
     record('3', 5),
     record('1', 1),
     record('far', 20),
@@ -102,8 +76,8 @@ test('radar contacts are within range, nearest first and capped', () => {
   );
 });
 
-test('the ship whose bridge the Cockpit rides is not its own contact', () => {
-  const layer = layerWith([record('own', 0), record('other', 2)]);
+test('the ship whose bridge the Cockpit rides is not its own contact', (t) => {
+  const layer = layerWith(t, [record('own', 0), record('other', 2)]);
   layer.setCockpitSubject('own');
   assert.deepEqual(
     layer.getRadarContacts(54.5, 10.2, 6 * 1852).map((entry) => entry.id),
@@ -113,8 +87,8 @@ test('the ship whose bridge the Cockpit rides is not its own contact', () => {
   assert.equal(layer.getRadarContacts(54.5, 10.2, 6 * 1852).length, 2);
 });
 
-test('ships with no MMSI each keep a key of their own', () => {
-  const layer = layerWith([
+test('ships with no MMSI each keep a key of their own', (t) => {
+  const layer = layerWith(t, [
     record('', 1, { name: 'A' }),
     record('', 2, { name: 'B' }),
   ]);
@@ -124,7 +98,7 @@ test('ships with no MMSI each keep a key of their own', () => {
   assert.ok(ids.every((id) => id.startsWith('unkeyed:')));
 });
 
-test("the ridden ship's trail is hidden while the bridge holds it", () => {
+test("the ridden ship's trail is hidden while the bridge holds it", (t) => {
   const shown = [];
   const trail = {
     setPositions() {},
@@ -132,7 +106,7 @@ test("the ridden ship's trail is hidden while the bridge holds it", () => {
     destroy() {},
     setVisible: (visible) => shown.push(visible),
   };
-  const layer = layerWith([record('own', 0), record('other', 2)], {
+  const layer = layerWith(t, [record('own', 0), record('other', 2)], {
     trail,
     trailId: 'own',
   });
@@ -142,7 +116,7 @@ test("the ridden ship's trail is hidden while the bridge holds it", () => {
   assert.deepEqual(shown, [false, true]);
 });
 
-test('a disabled layer has no radar contacts', () => {
-  const layer = layerWith([record('1', 1)], { enabled: false });
+test('a disabled layer has no radar contacts', (t) => {
+  const layer = layerWith(t, [record('1', 1)], { enabled: false });
   assert.deepEqual(layer.getRadarContacts(54.5, 10.2, 6 * 1852), []);
 });

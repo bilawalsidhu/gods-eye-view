@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { Rgba, WHITE } from '../shared/color.js';
 import { flowBucket } from '../../data/trafficFlowStyle.js';
 import { trafficStyleProfile } from '../../data/trafficPresetStyle.js';
 import {
@@ -11,6 +12,9 @@ import {
   HEAT_SLOW_COLOR,
   HEAT_LINE_JAM_WIDTH,
   HEAT_JAM_BASE_ALPHA,
+  HEAT_JAM_GLOW_POWER,
+  HEAT_JAM_PULSE_ALPHA,
+  HEAT_JAM_PULSE_PERIOD_MS,
   HEAT_LINE_SLOW_WIDTH,
   TRAFFIC_TIMING_ENABLED,
 } from './policy.js';
@@ -38,43 +42,30 @@ export function createRendering({
       : roads;
   }
 
-  const LINE_KEYS = ['_heatJamPrim', '_heatSlowPrim', '_heatFreePrim'];
-
-  /** Detach the current line primitives, leaving them in the scene. */
-  function takeHeatLines() {
-    const taken = [];
-    for (const key of LINE_KEYS) {
-      if (layerState[key]) taken.push(layerState[key]);
-      layerState[key] = null;
-    }
-    layerState._heatLineCount = 0;
-    return taken;
+  function removeSets(sets) {
+    for (const set of sets) set.destroy();
   }
 
-  function removePrimitives(primitives) {
-    for (const primitive of primitives)
-      layerState._viewer?.scene.groundPrimitives.remove(primitive);
-  }
-
-  /** Remove the heat-line / flow-line ground primitives from the scene. */
+  /** Remove the heat-line / flow-line ground sets from the display. */
 
   function removeHeatLines() {
     layerState._heatPendingRoads = null;
-    removePrimitives(takeHeatLines());
-    removePrimitives(layerState._heatRetired || []);
+    layerState._display?.clearHeat();
+    layerState._heatLineCount = 0;
+    removeSets(layerState._heatRetired || []);
     layerState._heatRetired = [];
-    parts.animation.syncRenderDemand?.();
+    parts.animation?.syncRenderDemand?.();
   }
 
   /** @returns {boolean} Whether a line primitive's geometry is still building. */
 
   function linesBuilding() {
-    return LINE_KEYS.some((key) => layerState[key] && !layerState[key].ready);
+    return layerState._display?.heatBuilding() ?? false;
   }
 
   /**
    * Replaced lines stay drawn until their successors finish building
-   * (GroundPolylinePrimitive geometry is asynchronous), so a rebuild never
+   * (ground geometry can build asynchronously), so a rebuild never
    * blinks. Once they have, the replaced lines go and the newest rebuild
    * asked for in the meantime starts. Called every held frame.
    */
@@ -82,7 +73,7 @@ export function createRendering({
   function retireHeatLines() {
     if (linesBuilding()) return;
     if (layerState._heatRetired?.length) {
-      removePrimitives(layerState._heatRetired);
+      removeSets(layerState._heatRetired);
       layerState._heatRetired = [];
     }
     const pending = layerState._heatPendingRoads;
@@ -102,8 +93,8 @@ export function createRendering({
    *   glowing pulsing red for jam and a faint flat amber for slow. Capped at
    *   HEAT_LINE_CAP.
    *
-   * One batched GroundPolylinePrimitive per bucket, so the heat-line jam batch
-   * pulses through one shared material. Kept roads are jam first, then slow,
+   * One ground corridor set per bucket; the engine animates the jam pulse.
+   * Kept roads are jam first, then slow,
    * then free, longest first; overflow is logged. Lines drape on 3D tiles when
    * the globe is hidden (photoreal) and on terrain or tiles otherwise. No-op in
    * sim mode, when both looks are off, or without ground-primitive support.
@@ -120,35 +111,24 @@ export function createRendering({
 
   function rebuildHeatLines(roads) {
     const wanted =
-      layerState._viewer && layerState._liveMode && parts.style.heatlineOn();
+      layerState._display && layerState._liveMode && parts.style.heatlineOn();
     if (wanted && linesBuilding()) {
       layerState._heatPendingRoads = roads;
       return;
     }
     layerState._heatPendingRoads = null;
-    // No build is left for replaced lines to wait for (it finished, or lines
-    // are going off), so they go first and never pile up behind this rebuild.
-    removePrimitives(layerState._heatRetired || []);
+    // Retired sets no longer have a build to wait for, so they go before the
+    // next one starts. At most the drawn set and its successor remain.
+    removeSets(layerState._heatRetired || []);
     layerState._heatRetired = [];
-    const previous = takeHeatLines();
+    const previous = layerState._display?.takeHeat() || [];
+    layerState._heatLineCount = 0;
     const finish = () => {
-      if (LINE_KEYS.some((key) => layerState[key]))
-        (layerState._heatRetired ||= []).push(...previous);
-      // Nothing new to wait for: the old lines go now.
-      else removePrimitives(previous);
-      parts.animation.syncRenderDemand?.();
+      if (layerState._heatLineCount) layerState._heatRetired.push(...previous);
+      else removeSets(previous);
+      parts.animation?.syncRenderDemand?.();
     };
     if (!wanted) return finish();
-    if (layerState._heatSupported === null) {
-      layerState._heatSupported = Cesium.GroundPolylinePrimitive.isSupported(
-        layerState._viewer.scene,
-      );
-      if (!layerState._heatSupported)
-        console.warn(
-          '[Data:Traffic] GroundPolylinePrimitive unsupported — heat-lines disabled',
-        );
-    }
-    if (!layerState._heatSupported) return finish();
 
     const flowLines = layerState._showLines;
     const cap = flowLines ? FLOW_LINE_CAP : HEAT_LINE_CAP;
@@ -168,78 +148,47 @@ export function createRendering({
     );
     const kept = candidates.slice(0, cap);
 
-    const instancesFor = (bucket, width) =>
-      kept
-        .filter((c) => c.bucket === bucket)
-        .map(
-          (c) =>
-            new Cesium.GeometryInstance({
-              geometry: new Cesium.GroundPolylineGeometry({
-                positions: c.road.waypoints,
-                width,
-              }),
-            }),
-        );
-
-    // Mono presets (NVG/FLIR/noir) discard hue — lines re-encode in
-    // luminance like the dots: jam = white, slow = gray, free = dim gray.
+    // Mono presets discard hue: jam = white, slow = gray, free = dim gray.
     const mono =
       layerState._presetDots === 'on' &&
       trafficStyleProfile(layerState._stylePreset) === 'mono';
-    const gray = (level, alpha) => new Cesium.Color(level, level, level, alpha);
-    const classificationType =
-      layerState._viewer.scene.globe?.show === false
-        ? Cesium.ClassificationType.CESIUM_3D_TILE
-        : flowLines
-          ? Cesium.ClassificationType.BOTH
-          : Cesium.ClassificationType.CESIUM_3D_TILE;
-    const add = (instances, material) =>
-      instances.length
-        ? layerState._viewer.scene.groundPrimitives.add(
-            new Cesium.GroundPolylinePrimitive({
-              geometryInstances: instances,
-              classificationType,
-              appearance: new Cesium.PolylineMaterialAppearance({ material }),
-            }),
-          )
-        : null;
-
-    // Lines take the dots' active (preset-aware) colors.
-    const dotColor = (bucket) =>
-      layerState._activeBucketColors?.[bucket] || FLOW_BUCKET_COLORS[bucket];
+    const gray = (level, alpha) => new Rgba(level, level, level, alpha);
+    const roadsFor = (bucket) =>
+      kept.filter((item) => item.bucket === bucket).map((item) => item.road);
     if (flowLines) {
+      const dotColor = (bucket) =>
+        layerState._activeBucketColors?.[bucket] || FLOW_BUCKET_COLORS[bucket];
       const lineColor = {
         jam: mono ? gray(1, FLOW_LINE_ALPHA) : dotColor('jam'),
         slow: mono ? gray(0.7, FLOW_LINE_ALPHA) : dotColor('slow'),
         free: mono ? gray(0.45, FLOW_LINE_ALPHA) : dotColor('free'),
       };
-      for (const [bucket, key] of [
-        ['free', '_heatFreePrim'],
-        ['slow', '_heatSlowPrim'],
-        ['jam', '_heatJamPrim'],
-      ])
-        layerState[key] = add(
-          instancesFor(bucket, FLOW_LINE_WIDTH),
-          Cesium.Material.fromType('Color', {
-            color: lineColor[bucket].withAlpha(FLOW_LINE_ALPHA),
-          }),
-        );
+      for (const [order, bucket] of ['free', 'slow', 'jam'].entries())
+        layerState._display.setHeat(bucket, roadsFor(bucket), {
+          color: lineColor[bucket].withAlpha(FLOW_LINE_ALPHA).rgba(),
+          widthPx: FLOW_LINE_WIDTH,
+          drape: layerState._engine?.maps.photorealActive() ? 'tiles' : 'both',
+          order,
+        });
     } else {
-      const jamLineColor = mono ? Cesium.Color.WHITE : HEAT_JAM_COLOR;
+      const jamLineColor = mono ? WHITE : HEAT_JAM_COLOR;
       const slowLineColor = mono
         ? gray(0.7, HEAT_SLOW_COLOR.alpha)
         : HEAT_SLOW_COLOR;
-      layerState._heatJamPrim = add(
-        instancesFor('jam', HEAT_LINE_JAM_WIDTH),
-        Cesium.Material.fromType('PolylineGlow', {
-          color: jamLineColor.withAlpha(HEAT_JAM_BASE_ALPHA),
-          glowPower: 0.25,
-        }),
-      );
-      layerState._heatSlowPrim = add(
-        instancesFor('slow', HEAT_LINE_SLOW_WIDTH),
-        Cesium.Material.fromType('Color', { color: slowLineColor }),
-      );
+      layerState._display.setHeat('jam', roadsFor('jam'), {
+        color: jamLineColor.withAlpha(1).rgba(),
+        widthPx: HEAT_LINE_JAM_WIDTH,
+        glow: { power: HEAT_JAM_GLOW_POWER },
+        pulse: {
+          periodMs: HEAT_JAM_PULSE_PERIOD_MS,
+          min: HEAT_JAM_BASE_ALPHA - HEAT_JAM_PULSE_ALPHA,
+          max: HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA,
+        },
+      });
+      layerState._display.setHeat('slow', roadsFor('slow'), {
+        color: slowLineColor.rgba(),
+        widthPx: HEAT_LINE_SLOW_WIDTH,
+      });
     }
 
     layerState._heatLineCount = kept.length;
@@ -292,7 +241,7 @@ export function createRendering({
     // nadir view: oblique pitches put the loaded roads many km away even at
     // low altitude. Probe three roads and stretch the curves accordingly.
     let areaDist = altitude;
-    if (layerState._viewer && filteredRoads.length) {
+    if (layerState._engine && filteredRoads.length) {
       const probes = [
         filteredRoads[0],
         filteredRoads[Math.floor(filteredRoads.length / 2)],
@@ -303,10 +252,7 @@ export function createRendering({
         if (wp)
           areaDist = Math.max(
             areaDist,
-            Cesium.Cartesian3.distance(
-              layerState._viewer.camera.positionWC,
-              wp,
-            ),
+            geo.cartesian3.distance(layerState._engine.camera.livePosition, wp),
           );
       }
     }
@@ -323,10 +269,10 @@ export function createRendering({
       : null;
     parts.retention.reconcile(filteredRoads, altitude, replace);
     if (layerState._dots.length && filteredRoads.some((r) => !r.directFlow))
-      services.credits?.showOsmCredit?.(layerState._viewer, 'traffic', {
+      services.credits?.showOsmCredit?.(layerState._engine, 'traffic', {
         openMapTiles: true,
       });
-    else services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
+    else services.credits?.hideOsmCredit?.(layerState._engine, 'traffic');
     parts.model.recolorDotsInPlace(label);
 
     const renderMetrics = state
@@ -410,6 +356,7 @@ export function createRendering({
   return {
     visibleRoadsForAltitude,
     removeHeatLines,
+    linesBuilding,
     retireHeatLines,
     rebuildHeatLines,
     renderRoadsForAltitude,

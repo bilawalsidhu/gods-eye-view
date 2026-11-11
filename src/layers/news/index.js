@@ -1,25 +1,17 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
-import {
-  isOwnedByOtherLayer,
-  registerPickOwner,
-  resolvePickId,
-  unregisterPickOwner,
-} from '../../data/pickRegistry.js';
-import {
-  clearSelectedEntityContextForLayer,
-  registerEntityContext,
-  removeEntityContextsForLayer,
-  selectEntityContext,
-} from '../../data/contextStore.js';
+import * as geo from '../../geo/index.js';
+import { rgbaFromCss, WHITE } from '../shared/color.js';
+import { createMapMarkers } from '../shared/render/mapMarkers.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+import { selectionDispatcherFor } from '../../data/selectionDispatcher.js';
+import { pickRegistryFor, resolvePickId } from '../../data/pickRegistry.js';
+import * as contextStore from '../../data/contextStore.js';
 import {
   LIVEUAMAP_CREDIT,
   NATURAL_EARTH_CREDIT,
   registerDynamicCredit,
 } from '../../data/dataCredits.js';
 import { msg, t, tn } from '../../i18n/index.js';
-import { createHorizonCull, viewCentre } from '../streetLevel/view.js';
+import { viewCentre } from '../streetLevel/view.js';
 import {
   NEWS_CARD_MIN_SOURCES,
   NEWS_CATEGORIES,
@@ -78,6 +70,7 @@ import { CARD_H, CARD_W, eventCard } from './cards.js';
 export * from './model.js';
 export { createNewsSource } from './source.js';
 
+const BLACK = rgbaFromCss('#000000');
 const FEED_UNAVAILABLE = msg('News feed unavailable');
 // The providers a server without a news pipeline reads each section from,
 // by the key registry's ids (keySetupCore.mjs): name and variable. A copy, so
@@ -171,10 +164,9 @@ const emptyInView = () => ({
 export function createNewsLayer({
   source,
   overlayHost,
-  cesium = Cesium,
+  drawAtlas,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   now = () => Date.now(),
-  hitTestOverlay = hitTestWorldOverlay,
   openUrl = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
   getViewCentre = viewCentre,
   registerCredit = registerDynamicCredit,
@@ -186,9 +178,10 @@ export function createNewsLayer({
     throw new TypeError('News requires a news source');
   if (!overlayHost) throw new TypeError('News requires an overlay host');
 
-  let viewer = null,
-    dataSource = null,
-    outlineSource = null,
+  let engine = null,
+    sceneContext = null,
+    markers = null,
+    fallbackOutlines = null,
     clickHandler = null,
     listener = null,
     runNavigation = null,
@@ -227,6 +220,8 @@ export function createNewsLayer({
     selectedPin = 0;
   let shownDetail = null;
   let cullTargets = [];
+  overlayHost = bindOverlayHost(overlayHost, () => engine);
+  const context = bindOverlayHost(contextStore, () => engine);
   // The country badges drawn, by key: a click opens that country's news.
   let countryBadges = new Map();
   const contextEntities = new Map();
@@ -234,7 +229,7 @@ export function createNewsLayer({
   // keeps them for the session (as TomTom's) and has no removal.
   const credited = new Set();
   function credit(entry, shown) {
-    if (shown && !credited.has(entry.key) && registerCredit(viewer, entry))
+    if (shown && !credited.has(entry.key) && registerCredit(engine, entry))
       credited.add(entry.key);
   }
   // Liveuamap asks to be credited wherever its mapped reports show.
@@ -244,7 +239,7 @@ export function createNewsLayer({
       reports.some((r) => r?.kind === 'liveuamap'),
     );
   const notify = () => listener?.();
-  const requestRender = () => viewer?.scene?.requestRender?.();
+  const requestRender = () => engine?.render.request(NEWS_LAYER_ID);
   const reducedMotion = () =>
     Boolean(matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
 
@@ -283,10 +278,10 @@ export function createNewsLayer({
 
   function markerCartesian(report, pin = 0) {
     const { lat, lon } = reportMarkerPosition(report, pin);
-    return cesium.Cartesian3.fromDegrees(lon, lat);
+    return geo.cartesian3.fromDegrees(lon, lat);
   }
 
-  const cameraHeight = () => viewer?.camera?.positionCartographic?.height;
+  const cameraHeight = () => engine?.camera.pose().cartographic.height;
 
   // Global view: one beacon per hotspot. Close up: outlines and individual
   // reports. A chosen hotspot keeps the detail out to three times the height
@@ -306,17 +301,6 @@ export function createNewsLayer({
   const catchAllIds = () =>
     new Set(hotspots.filter((h) => h.catchAll).map((h) => h.id));
 
-  // Markers draw over terrain (depth test off) so a pin is never swallowed by
-  // the ground it sits on; the shared horizon cull hides the far side.
-  const horizon = createHorizonCull({
-    getViewer: () => viewer,
-    items: () => cullTargets,
-    onChange: () => {
-      requestRender();
-      updatePulse();
-    },
-  });
-
   // A developing situation's beacon breathes, unless motion is reduced. The
   // scene renders on demand, so a slow timer asks for frames only while such
   // a beacon is in view.
@@ -327,7 +311,11 @@ export function createNewsLayer({
     const pulsing =
       enabled &&
       !reducedMotion() &&
-      cullTargets.some((target) => target.developing && target.show);
+      cullTargets.some(
+        (target) =>
+          String(target.id).startsWith(DEVELOPING_PREFIX) &&
+          engine?.projector.horizonVisible(target.position),
+      );
     if (pulsing && !pulseTimer) pulseTimer = setInterval(requestRender, 250);
     else if (!pulsing && pulseTimer) {
       clearInterval(pulseTimer);
@@ -347,24 +335,21 @@ export function createNewsLayer({
   });
 
   // Several separate events in one country outside every hotspot.
-  function renderDeveloping(hotspot, entities, labels) {
+  function renderDeveloping(hotspot, rows, labels) {
     const still = reducedMotion();
     for (const item of hotspot.developing || []) {
-      const position = cesium.Cartesian3.fromDegrees(
+      const position = geo.cartesian3.fromDegrees(
         item.focus.lon,
         item.focus.lat,
       );
       const size = beaconPixelSize(item.reports);
-      entities.add({
+      rows.push({
         id: `${DEVELOPING_PREFIX}${hotspot.id}:${item.key}`,
         position,
         point: {
-          pixelSize: still
-            ? size
-            : new cesium.CallbackProperty(() => pulseSize(size), false),
-          color:
-            cesium.Color.fromCssColorString(DEVELOPING_COLOR).withAlpha(0.35),
-          outlineColor: cesium.Color.fromCssColorString(DEVELOPING_COLOR),
+          pixelSize: still ? size : () => pulseSize(size),
+          color: rgbaFromCss(DEVELOPING_COLOR).withAlpha(0.35),
+          outlineColor: rgbaFromCss(DEVELOPING_COLOR),
           outlineWidth: 2,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -385,21 +370,21 @@ export function createNewsLayer({
     }
   }
 
-  function renderBeacons(entities, labels) {
+  function renderBeacons(rows, labels) {
     for (const hotspot of hotspots) {
       if (hotspot.catchAll) {
-        renderDeveloping(hotspot, entities, labels);
+        renderDeveloping(hotspot, rows, labels);
         continue;
       }
       const { lat, lon } = hotspot.focus;
-      const position = cesium.Cartesian3.fromDegrees(lon, lat);
-      entities.add({
+      const position = geo.cartesian3.fromDegrees(lon, lat);
+      rows.push({
         id: `${HOTSPOT_PREFIX}${hotspot.id}`,
         position,
         point: {
           pixelSize: beaconPixelSize(hotspot.last24h),
-          color: cesium.Color.fromCssColorString(HOTSPOT_COLOR).withAlpha(0.35),
-          outlineColor: cesium.Color.fromCssColorString(HOTSPOT_COLOR),
+          color: rgbaFromCss(HOTSPOT_COLOR).withAlpha(0.35),
+          outlineColor: rgbaFromCss(HOTSPOT_COLOR),
           outlineWidth: 2,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -421,47 +406,35 @@ export function createNewsLayer({
     }
   }
 
-  function renderHotspotOutlines(entities, labels) {
+  function renderHotspotOutlines(outlines, labels) {
     for (const hotspot of hotspots) {
       if (hotspot.catchAll) continue;
       const [w, s, e, n] = hotspot.bbox;
       const active = filters.hotspot === hotspot.id;
       // The bounding box only until the real outline has loaded.
       if (!outlineParts.has(hotspot.id))
-        entities.add({
+        outlines.push({
           id: `${HOTSPOT_PREFIX}${hotspot.id}`,
-          polyline: {
-            positions: cesium.Cartesian3.fromDegreesArray([
-              w,
-              s,
-              e,
-              s,
-              e,
-              n,
-              w,
-              n,
-              w,
-              s,
-            ]),
-            width: active ? 3 : 2,
-            clampToGround: true,
-            material: new cesium.PolylineDashMaterialProperty({
-              color: cesium.Color.fromCssColorString(HOTSPOT_COLOR).withAlpha(
-                active ? 0.95 : 0.55,
-              ),
-              dashLength: 18,
-            }),
-          },
+          pickId: `${HOTSPOT_PREFIX}${hotspot.id}`,
+          positions: [
+            [w, s],
+            [e, s],
+            [e, n],
+            [w, n],
+            [w, s],
+          ],
+          widthPx: active ? 3 : 2,
+          color: rgbaFromCss(HOTSPOT_COLOR)
+            .withAlpha(active ? 0.95 : 0.55)
+            .rgba(),
+          dashPattern: { lengthPx: 18, pattern: 255 },
         });
       labels.push(
         ambientLabel({
           id: `hotspot:${hotspot.id}`,
           position: outlineParts.has(hotspot.id)
-            ? cesium.Cartesian3.fromDegrees(
-                hotspot.focus.lon,
-                hotspot.focus.lat,
-              )
-            : cesium.Cartesian3.fromDegrees(w, n),
+            ? geo.cartesian3.fromDegrees(hotspot.focus.lon, hotspot.focus.lat)
+            : geo.cartesian3.fromDegrees(w, n),
           title: hotspotLabel(hotspot),
           details: [
             tn(
@@ -484,7 +457,7 @@ export function createNewsLayer({
         labels.push(
           ambientLabel({
             id: `disputed:${hotspot.id}:${area.name}`,
-            position: cesium.Cartesian3.fromDegrees(lon, lat),
+            position: geo.cartesian3.fromDegrees(lon, lat),
             title: disputedLabel(area),
             accent: DISPUTED_COLOR,
             priority: 8_000,
@@ -495,7 +468,7 @@ export function createNewsLayer({
     }
   }
 
-  function renderMarkers(entities, drawn) {
+  function renderMarkers(rows, drawn) {
     for (const report of drawn) {
       const isSelected = report.id === selectedId;
       if (!report.pins.length || (!isSelected && !onMap(report))) continue;
@@ -506,16 +479,14 @@ export function createNewsLayer({
       // with the sources reporting its event and fades with age. A fresh,
       // widely reported or major event also gets a static halo.
       const look = markerStyle(report, now());
-      const color = cesium.Color.fromCssColorString(
-        severityStyle(report).color,
-      );
+      const color = rgbaFromCss(severityStyle(report).color);
       const size = isSelected ? look.size + 4 : look.size;
       const sprite = markerSprite({ ...look, selected: isSelected });
       const pressing = isPressing(report, now());
       for (const [pin] of report.pins.entries()) {
         const position = markerCartesian(report, pin);
         if (pressing)
-          entities.add({
+          rows.push({
             id: `${REPORT_PREFIX}${report.id}~${pin}~halo`,
             position,
             point: {
@@ -523,11 +494,10 @@ export function createNewsLayer({
               color: color.withAlpha(0.22),
               outlineColor: color.withAlpha(0.6),
               outlineWidth: 1,
-              heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
               disableDepthTestDistance: Number.POSITIVE_INFINITY,
             },
           });
-        entities.add({
+        rows.push({
           id: `${REPORT_PREFIX}${report.id}~${pin}`,
           position,
           ...(sprite
@@ -536,10 +506,7 @@ export function createNewsLayer({
                   image: sprite,
                   width: Math.round(size * SPRITE_SCALE),
                   height: Math.round(size * SPRITE_SCALE),
-                  color: cesium.Color.WHITE.withAlpha(
-                    isSelected ? 1 : look.alpha,
-                  ),
-                  heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
+                  color: WHITE.withAlpha(isSelected ? 1 : look.alpha),
                   disableDepthTestDistance: Number.POSITIVE_INFINITY,
                 },
               }
@@ -547,11 +514,8 @@ export function createNewsLayer({
                 point: {
                   pixelSize: size,
                   color,
-                  outlineColor: isSelected
-                    ? cesium.Color.WHITE
-                    : cesium.Color.BLACK.withAlpha(0.7),
+                  outlineColor: isSelected ? WHITE : BLACK.withAlpha(0.7),
                   outlineWidth: isSelected ? 3 : 1.5,
-                  heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
                   disableDepthTestDistance: Number.POSITIVE_INFINITY,
                 },
               }),
@@ -562,21 +526,21 @@ export function createNewsLayer({
 
   // News placed no closer than a country: one badge at its centre with the
   // number of reports, in place of that many markers piled there.
-  function renderCountryBadges(entities, drawn, labels) {
+  function renderCountryBadges(rows, drawn, labels) {
     countryBadges = new Map();
     const groups = countryGroups(
       drawn.filter((r) => r.id !== selectedId && onMap(r)),
     );
     for (const group of groups) {
       countryBadges.set(group.key, group);
-      const position = cesium.Cartesian3.fromDegrees(group.lon, group.lat);
+      const position = geo.cartesian3.fromDegrees(group.lon, group.lat);
       const size = COUNTRY_BADGE_PX;
       const sprite = countSprite(
         group.count,
-        size * (viewer?.scene?.pixelRatio || 1),
+        size * (globalThis.devicePixelRatio || 1),
       );
-      const color = cesium.Color.fromCssColorString(DISPUTED_COLOR);
-      entities.add({
+      const color = rgbaFromCss(DISPUTED_COLOR);
+      rows.push({
         id: `${COUNTRY_PREFIX}${group.key}`,
         position,
         ...(sprite
@@ -729,18 +693,14 @@ export function createNewsLayer({
   }
 
   function render() {
-    if (!dataSource) return;
-    const entities = dataSource.entities;
-    // Removed before events are suspended: a marker removed and re-added
-    // under the same id in one suspended batch reaches Cesium's visualizers
-    // as "changed", and they keep drawing the removed entity (i.e. nothing).
-    entities.removeAll();
-    entities.suspendEvents();
+    if (!markers || sceneContext?.viewReady === false) return;
+    const rows = [];
+    const outlines = [];
     const labels = [];
     const detail = detailMode();
     shownDetail = detail;
-    if (detail) renderHotspotOutlines(entities, labels);
-    else renderBeacons(entities, labels);
+    if (detail) renderHotspotOutlines(outlines, labels);
+    else renderBeacons(rows, labels);
     // A report picked in the feed or In view still gets its marker.
     const current = selected();
     const elsewhere = catchAllIds();
@@ -754,26 +714,18 @@ export function createNewsLayer({
       current && !shown.some((r) => r.id === current.id)
         ? [...shown, current]
         : shown;
-    renderMarkers(entities, drawn);
-    renderCountryBadges(entities, drawn, labels);
+    renderMarkers(rows, drawn);
+    renderCountryBadges(rows, drawn, labels);
     if (enabled) creditReports(drawn.filter((r) => r.pins.length && onMap(r)));
-    entities.resumeEvents();
+    void markers
+      .replace(rows)
+      .catch((error) =>
+        console.warn('[Data:News] Marker image unavailable:', error),
+      );
+    fallbackOutlines.replace(outlines);
+    fallbackOutlines.commit();
     showOutlines(detail);
-    const at = cesium.JulianDate.now();
-    cullTargets = entities.values
-      .filter((entity) => (entity.point || entity.billboard) && entity.position)
-      .map((entity) => ({
-        position: entity.position.getValue(at),
-        developing: String(entity.id).startsWith(DEVELOPING_PREFIX),
-        get show() {
-          return entity.show;
-        },
-        set show(value) {
-          entity.show = value;
-        },
-      }))
-      .filter((target) => target.position);
-    horizon.update();
+    cullTargets = rows;
     updatePulse();
     pictureCards(drawn, current, labels);
     selectedCard(current, labels);
@@ -794,13 +746,12 @@ export function createNewsLayer({
       report,
       report.pins[selectedPin] ? selectedPin : 0,
     );
-    entity.__localBaseCartesian = cesium.Cartesian3.fromDegrees(lon, lat);
-    registerEntityContext(entity, {
+    entity.__localBaseCartesian = geo.cartesian3.fromDegrees(lon, lat);
+    context.registerEntityContext(entity, {
       id: `news-report:${report.id}`,
       layerId: NEWS_LAYER_ID,
       layerName: 'News',
       source: report.publisher,
-      dataSource,
       label: report.title, // i18n-ignore: publisher headline (data)
       latitude: place.lat,
       longitude: place.lon,
@@ -822,14 +773,14 @@ export function createNewsLayer({
     const report = selected();
     if (report) {
       const entity = registerContext(report);
-      if (entity) selectEntityContext(entity);
-    } else clearSelectedEntityContextForLayer(NEWS_LAYER_ID);
+      if (entity) context.selectEntityContext(entity);
+    } else context.clearSelectedEntityContextForLayer(NEWS_LAYER_ID);
     render();
     notify();
   }
 
   function flyTo(navigate) {
-    if (!runNavigation || !viewer) return;
+    if (!runNavigation || !engine) return;
     runNavigation(() => (enabled && !destroyed ? navigate() : undefined));
   }
 
@@ -838,12 +789,8 @@ export function createNewsLayer({
     if (!report?.pins.length) return;
     const { lat, lon } = report.pins[selectedPin] || report.pins[0];
     flyTo(() =>
-      viewer.camera.flyTo({
-        destination: cesium.Cartesian3.fromDegrees(
-          lon,
-          lat,
-          NEWS_FOCUS_HEIGHT_M,
-        ),
+      engine.camera.flyTo({
+        destination: geo.cartesian3.fromDegrees(lon, lat, NEWS_FOCUS_HEIGHT_M),
         duration: reducedMotion() ? 0 : 1.4,
       }),
     );
@@ -851,8 +798,13 @@ export function createNewsLayer({
 
   function focusRectangle([w, s, e, n]) {
     flyTo(() =>
-      viewer.camera.flyTo({
-        destination: cesium.Rectangle.fromDegrees(w, s, e, n),
+      engine.camera.flyTo({
+        destination: {
+          west: geo.math.toRadians(w),
+          south: geo.math.toRadians(s),
+          east: geo.math.toRadians(e),
+          north: geo.math.toRadians(n),
+        },
         duration: reducedMotion() ? 0 : 1.6,
       }),
     );
@@ -871,37 +823,29 @@ export function createNewsLayer({
     { polygons, borders, disputed = [] },
     { color, fillAlpha, pickId, lineAlpha = 0.85, width = 2 },
   ) {
-    if (!outlineSource || outlineParts.has(key)) return;
-    const css = cesium.Color.fromCssColorString(color);
-    const parts = { fills: [], borders: [] };
-    const ring = (points) => cesium.Cartesian3.fromDegreesArray(points.flat());
-    const closed = (points) => ring([...points, points[0]]);
-    const line = (id, positions, width, material) =>
-      parts.borders.push(
-        outlineSource.entities.add({
-          id,
-          show: false,
-          polyline: { positions, width, clampToGround: true, material },
-        }),
-      );
+    if (outlineParts.has(key)) return;
+    const css = rgbaFromCss(color);
+    const parts = { fills: [], borders: [], fillSet: null, borderSet: null };
+    const closed = (points) => [...points, points[0]];
+    const line = (id, positions, widthPx, color, dashLength) =>
+      parts.borders.push({
+        id,
+        pickId: id,
+        positions,
+        widthPx,
+        color: color.rgba(),
+        ...(dashLength
+          ? { dashPattern: { lengthPx: dashLength, pattern: 255 } }
+          : {}),
+      });
     for (const [index, polygon] of polygons.entries()) {
       if (fillAlpha > 0)
-        parts.fills.push(
-          outlineSource.entities.add({
-            id: `${pickId}~fill${index}`,
-            show: false,
-            polygon: {
-              hierarchy: new cesium.PolygonHierarchy(
-                ring(polygon.outer),
-                polygon.holes.map(
-                  (hole) => new cesium.PolygonHierarchy(ring(hole)),
-                ),
-              ),
-              material: css.withAlpha(fillAlpha),
-              classificationType: cesium.ClassificationType.BOTH,
-            },
-          }),
-        );
+        parts.fills.push({
+          id: `${pickId}~fill${index}`,
+          pickId: `${pickId}~fill${index}`,
+          rings: [polygon.outer, ...polygon.holes],
+          fill: css.withAlpha(fillAlpha).rgba(),
+        });
       for (const [k, points] of [polygon.outer, ...polygon.holes].entries())
         line(
           `${pickId}~line${index}.${k}`,
@@ -910,26 +854,44 @@ export function createNewsLayer({
           css.withAlpha(lineAlpha),
         );
     }
-    // National borders inside a multi-country hotspot: thin and dashed.
     for (const [index, points] of borders.entries())
       line(
         `${pickId}~border${index}`,
         closed(points),
         1.5,
-        new cesium.PolylineDashMaterialProperty({
-          color: css.withAlpha(0.6),
-          dashLength: 12,
-        }),
+        css.withAlpha(0.6),
+        12,
       );
-    const dotted = new cesium.PolylineDashMaterialProperty({
-      color: cesium.Color.fromCssColorString(DISPUTED_COLOR).withAlpha(0.9),
-      dashLength: 6,
-    });
     for (const [index, area] of disputed.entries())
       for (const [k, points] of area.rings.entries())
-        line(`${pickId}~disputed${index}.${k}`, closed(points), 2, dotted);
+        line(
+          `${pickId}~disputed${index}.${k}`,
+          closed(points),
+          2,
+          rgbaFromCss(DISPUTED_COLOR).withAlpha(0.9),
+          6,
+        );
     outlineDisputed.set(key, disputed);
     outlineParts.set(key, parts);
+    attachOutline(key, parts);
+  }
+  function attachOutline(key, parts) {
+    if (!engine) return;
+    for (const [items, kind, field] of [
+      [parts.fills, 'polygon', 'fillSet'],
+      [parts.borders, 'corridor', 'borderSet'],
+    ]) {
+      if (!items.length) continue;
+      const set = engine.ground.createSet({
+        id: `news-${key}-${kind}`,
+        kind,
+        pickable: true,
+      });
+      set.replace(items);
+      set.show(false);
+      set.commit();
+      parts[field] = set;
+    }
   }
   function loadOutline(key, fetchOutline, style) {
     if (outlineParts.has(key) || outlineRequests.has(key) || !fetchOutline)
@@ -970,7 +932,7 @@ export function createNewsLayer({
         );
     }
   }
-  function showOutlines(detail) {
+  function showOutlines(detail, shown = enabled) {
     const developing = new Set(
       hotspots.flatMap((h) => (h.developing || []).map((d) => d.key)),
     );
@@ -982,17 +944,15 @@ export function createNewsLayer({
       const country = key.startsWith('developing:') ? key.slice(11) : null;
       const isLocal = key.startsWith('local:');
       const visible =
-        enabled &&
+        shown &&
         (isLocal
           ? key === localKey
           : country
             ? developing.has(country)
             : detail);
       const fill = visible && !country && !isLocal && filters.hotspot !== key;
-      for (const entity of parts.fills)
-        if (entity.show !== fill) entity.show = fill;
-      for (const entity of parts.borders)
-        if (entity.show !== visible) entity.show = visible;
+      parts.fillSet?.show(fill);
+      parts.borderSet?.show(visible);
     }
   }
 
@@ -1059,6 +1019,7 @@ export function createNewsLayer({
   // Each area is read once (its reports, minor news included, by the `at`
   // query) and again with each refresh; a pan inside it reads nothing.
   function scheduleInView() {
+    if (!engine || sceneContext?.viewReady === false) return;
     clearTimeout(settleTimer);
     settleTimer = setTimeout(() => {
       settleTimer = null;
@@ -1066,7 +1027,8 @@ export function createNewsLayer({
     }, NEWS_SETTLE_MS);
   }
   async function refreshInView({ force = false } = {}) {
-    if (!enabled || unavailable) return;
+    if (!enabled || unavailable || !engine || sceneContext?.viewReady === false)
+      return;
     const height = cameraHeight();
     if (!(height < NEWS_IN_VIEW_MAX_HEIGHT_M)) {
       if (inView.active) {
@@ -1079,7 +1041,7 @@ export function createNewsLayer({
       }
       return;
     }
-    const centre = getViewCentre(viewer);
+    const centre = getViewCentre({ engine });
     if (!centre) return;
     const cell = viewCell(centre);
     if (!force && inView.active && cell === inView.cell) return;
@@ -1233,75 +1195,85 @@ export function createNewsLayer({
     return 'read';
   }
 
+  const picks = {
+    owner: NEWS_LAYER_ID,
+    predicate: (id) => String(id).startsWith(NEWS_PICK_PREFIX),
+  };
   function installSelection() {
-    if (clickHandler || !viewer?.scene?.canvas) return;
-    clickHandler = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click) => {
-      if (!enabled || destroyed || !isPointerFree() || !click?.position) return;
-      const card = hitTestOverlay(click.position.x, click.position.y, {
-        sourceId: NEWS_OVERLAY_SOURCE_ID,
-      });
-      if (card?.entry?.activate) {
-        card.entry.activate();
-        return;
-      }
-      const picked = viewer.scene.pick(click.position);
-      const id = picked ? resolvePickId(picked) : null;
-      if (typeof id === 'string' && id.startsWith(REPORT_PREFIX)) {
-        const [reportId, pin] = id.slice(REPORT_PREFIX.length).split('~');
-        layer.setParams({ reportId, pin: Number(pin) || 0 });
-        return;
-      }
-      if (typeof id === 'string' && id.startsWith(DEVELOPING_PREFIX)) {
-        const [hotspotId, key] = id
-          .slice(DEVELOPING_PREFIX.length)
-          .split('~')[0]
-          .split(':');
-        const item = hotspots
-          .find((h) => h.id === hotspotId)
-          ?.developing?.find((d) => d.key === key);
-        layer.setParams({ filters: { hotspot: hotspotId } });
-        if (item) {
-          const { lat, lon } = item.focus;
-          focusRectangle([
-            lon - 5,
-            Math.max(-85, lat - 3.5),
-            lon + 5,
-            Math.min(85, lat + 3.5),
-          ]);
-        }
-        return;
-      }
-      if (typeof id === 'string' && id.startsWith(COUNTRY_PREFIX)) {
-        // The country's news is the Local list with the view over it.
-        const group = countryBadges.get(id.slice(COUNTRY_PREFIX.length));
-        if (!group) return;
-        layer.setParams({ filters: { section: 'local' } });
-        focusRectangle([
-          group.lon - 5,
-          Math.max(-85, group.lat - 3.5),
-          group.lon + 5,
-          Math.min(85, group.lat + 3.5),
-        ]);
-        return;
-      }
-      if (typeof id === 'string' && id.startsWith(HOTSPOT_PREFIX)) {
-        const hotspotId = id.slice(HOTSPOT_PREFIX.length).split('~')[0];
-        // Clicking the hotspot already in focus steps out of a report.
-        if (filters.hotspot === hotspotId) {
-          if (selectedId) layer.setParams({ clear: true });
+    if (clickHandler || !engine) return;
+    clickHandler = selectionDispatcherFor(engine).register(picks.owner, {
+      owns: picks.predicate,
+      onClick(click) {
+        if (!enabled || destroyed || !click?.position) return;
+        const card = overlayHost.hitTest?.(click.position.x, click.position.y, {
+          sourceId: NEWS_OVERLAY_SOURCE_ID,
+        });
+        if (card?.entry?.activate) {
+          card.entry.activate();
           return;
         }
-        layer.setParams({ filters: { hotspot: hotspotId } });
-        return;
-      }
-      if (id && isOwnedByOtherLayer(NEWS_LAYER_ID, id)) return;
-      if (selectedId && !picked?.id) layer.setParams({ clear: true });
-    }, cesium.ScreenSpaceEventType.LEFT_CLICK);
+        const picked = click.picked;
+        const id = picked ? resolvePickId(picked) : null;
+        if (typeof id === 'string' && id.startsWith(REPORT_PREFIX)) {
+          const [reportId, pin] = id.slice(REPORT_PREFIX.length).split('~');
+          layer.setParams({ reportId, pin: Number(pin) || 0 });
+          return;
+        }
+        if (typeof id === 'string' && id.startsWith(DEVELOPING_PREFIX)) {
+          const [hotspotId, key] = id
+            .slice(DEVELOPING_PREFIX.length)
+            .split('~')[0]
+            .split(':');
+          const item = hotspots
+            .find((h) => h.id === hotspotId)
+            ?.developing?.find((d) => d.key === key);
+          layer.setParams({ filters: { hotspot: hotspotId } });
+          if (item) {
+            const { lat, lon } = item.focus;
+            focusRectangle([
+              lon - 5,
+              Math.max(-85, lat - 3.5),
+              lon + 5,
+              Math.min(85, lat + 3.5),
+            ]);
+          }
+          return;
+        }
+        if (typeof id === 'string' && id.startsWith(COUNTRY_PREFIX)) {
+          // The country's news is the Local list with the view over it.
+          const group = countryBadges.get(id.slice(COUNTRY_PREFIX.length));
+          if (!group) return;
+          layer.setParams({ filters: { section: 'local' } });
+          focusRectangle([
+            group.lon - 5,
+            Math.max(-85, group.lat - 3.5),
+            group.lon + 5,
+            Math.min(85, group.lat + 3.5),
+          ]);
+          return;
+        }
+        if (typeof id === 'string' && id.startsWith(HOTSPOT_PREFIX)) {
+          const hotspotId = id.slice(HOTSPOT_PREFIX.length).split('~')[0];
+          // Clicking the hotspot already in focus steps out of a report.
+          if (filters.hotspot === hotspotId) {
+            if (selectedId) layer.setParams({ clear: true });
+            return;
+          }
+          layer.setParams({ filters: { hotspot: hotspotId } });
+          return;
+        }
+        if (
+          id &&
+          pickRegistryFor(engine).isOwnedByOtherLayer(NEWS_LAYER_ID, id)
+        )
+          return;
+        if (selectedId && !picked?.id) layer.setParams({ clear: true });
+      },
+    });
   }
 
   function removeSelection() {
-    if (clickHandler && !clickHandler.isDestroyed?.()) clickHandler.destroy();
+    clickHandler?.();
     clickHandler = null;
   }
 
@@ -1364,6 +1336,17 @@ export function createNewsLayer({
     };
   }
 
+  function bindScene() {
+    installSelection();
+    if (removeCameraListener || !engine) return;
+    removeCameraListener = engine.camera.moveEnd.addEventListener(() => {
+      if (!enabled || sceneContext?.viewReady === false) return;
+      if (detailMode() !== shownDetail) render();
+      updatePulse();
+      scheduleInView();
+    });
+  }
+
   const layer = {
     id: NEWS_LAYER_ID,
     name: 'News',
@@ -1371,15 +1354,59 @@ export function createNewsLayer({
     source: 'GEV news',
     updateInterval: 120_000,
 
-    init(nextViewer) {
-      viewer = nextViewer;
-      dataSource = new cesium.CustomDataSource(NEWS_LAYER_ID);
-      outlineSource = new cesium.CustomDataSource(`${NEWS_LAYER_ID}-outlines`);
-      dataSource.show = false;
-      outlineSource.show = false;
-      viewer.dataSources?.add(outlineSource);
-      viewer.dataSources?.add(dataSource);
-      overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, false);
+    picks,
+    init(_viewer, context) {
+      this.attachRenderer(context);
+    },
+    attachRenderer(context = {}) {
+      engine = context.engine;
+      sceneContext = context;
+      credited.clear();
+      markers = createMapMarkers(engine, { id: NEWS_LAYER_ID, drawAtlas });
+      fallbackOutlines = engine.ground.createSet({
+        id: 'news-bounds',
+        kind: 'corridor',
+        pickable: true,
+      });
+      for (const [key, parts] of outlineParts) attachOutline(key, parts);
+      this.show(enabled);
+      if (enabled) bindScene();
+      if (context.viewReady !== false) this.resumeViewport();
+    },
+    detachRenderer() {
+      removeSelection();
+      removeCameraListener?.();
+      removeCameraListener = null;
+      clearTimeout(settleTimer);
+      settleTimer = null;
+      clearInterval(pulseTimer);
+      pulseTimer = null;
+      overlayHost.clearSource(NEWS_OVERLAY_SOURCE_ID);
+      context.removeEntityContextsForLayer(NEWS_LAYER_ID);
+      contextEntities.clear();
+      markers?.destroy();
+      markers = null;
+      fallbackOutlines?.destroy();
+      fallbackOutlines = null;
+      for (const parts of outlineParts.values()) {
+        parts.fillSet?.destroy();
+        parts.borderSet?.destroy();
+        parts.fillSet = parts.borderSet = null;
+      }
+      engine = null;
+      sceneContext = null;
+    },
+    resumeViewport() {
+      if (!enabled || !engine) return;
+      render();
+      if (selectedId) select(selectedId, selectedPin);
+      scheduleInView();
+    },
+    show(value) {
+      markers?.show(value);
+      fallbackOutlines?.show(value);
+      overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, value);
+      showOutlines(detailMode(), value);
     },
     attachShellServices(services) {
       runNavigation =
@@ -1390,21 +1417,8 @@ export function createNewsLayer({
     enable() {
       if (destroyed || enabled) return;
       enabled = true;
-      if (dataSource) dataSource.show = true;
-      if (outlineSource) outlineSource.show = true;
-      overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, true);
-      registerPickOwner(
-        NEWS_LAYER_ID,
-        (id) => enabled && String(id).startsWith(NEWS_PICK_PREFIX),
-      );
-      installSelection();
-      // Re-render only when a camera move crosses the detail threshold.
-      removeCameraListener =
-        viewer?.camera?.moveEnd?.addEventListener?.(() => {
-          if (!enabled) return;
-          if (detailMode() !== shownDetail) render();
-          scheduleInView();
-        }) || null;
+      this.show(true);
+      bindScene();
     },
     disable() {
       enabled = false;
@@ -1419,27 +1433,22 @@ export function createNewsLayer({
       clearTimeout(settleTimer);
       settleTimer = null;
       loading = false;
-      unregisterPickOwner(NEWS_LAYER_ID);
       removeSelection();
       removeCameraListener?.();
       removeCameraListener = null;
-      horizon.stop();
       cullTargets = [];
       clearInterval(pulseTimer);
       pulseTimer = null;
-      if (outlineSource) outlineSource.show = false;
+      this.show(false);
       selectedId = null;
-      clearSelectedEntityContextForLayer(NEWS_LAYER_ID);
-      removeEntityContextsForLayer(NEWS_LAYER_ID);
+      context.clearSelectedEntityContextForLayer(NEWS_LAYER_ID);
+      context.removeEntityContextsForLayer(NEWS_LAYER_ID);
       contextEntities.clear();
       feed = emptyFeed();
       inView = emptyInView();
       needs = { conflicts: null, local: null };
       mapReports = [];
-      if (dataSource) {
-        dataSource.entities.removeAll();
-        dataSource.show = false;
-      }
+      void markers?.replace([]);
       overlayHost.clearSource(NEWS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, false);
       requestRender();
@@ -1556,7 +1565,7 @@ export function createNewsLayer({
         if (reread) void loadFeed('replace');
         if (sectionChanged) void refreshInView({ force: true });
         // The hotspot counts are the server's, so a new window reads them again.
-        if (windowMs !== previousWindowMs) void layer.update(viewer);
+        if (windowMs !== previousWindowMs) void layer.update();
         notify();
       }
       if (params.loadMore === true) void loadFeed('append');
@@ -1606,14 +1615,9 @@ export function createNewsLayer({
       if (destroyed) return;
       layer.disable();
       destroyed = true;
-      if (viewer && dataSource) viewer.dataSources?.remove(dataSource, true);
-      if (viewer && outlineSource)
-        viewer.dataSources?.remove(outlineSource, true);
-      dataSource = null;
-      outlineSource = null;
+      layer.detachRenderer();
       outlineParts.clear();
       outlineDisputed.clear();
-      viewer = null;
       listener = null;
       runNavigation = null;
     },

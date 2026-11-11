@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // src/ui/displayPanel.test.mjs â€” the Display panel renders bloom and sharpen
 // from what VisualSettings publishes, and shows its initial markup before.
 import '../testSupport/registerDom.mjs';
@@ -11,7 +12,7 @@ import DrawControls from './views/panels/DrawControls.vue';
 import GeoImport from './views/panels/GeoImport.vue';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
-import { initGeoFileImport } from './geoFileImport.js';
+import { createGeoFileImport } from './geoFileImport.js';
 import { CockpitDisplayPortal } from './cockpitDisplayPortal.js';
 // Core's classes on an element, without the kit's `ui-` classes.
 const coreClasses = (el) =>
@@ -108,7 +109,11 @@ test('bloom and sharpen render their state, slider and readout', async (t) => {
   await nextTick();
   assert.equal($('bloom-toggle').classList.contains('active'), false);
   assert.equal($('bloom-slider-row').classList.contains('visible'), false);
-  assert.equal($('bloom-intensity-value').textContent, '140%', 'the amount stays');
+  assert.equal(
+    $('bloom-intensity-value').textContent,
+    '140%',
+    'the amount stays',
+  );
 });
 
 test('a publish never rewrites a slider the user is dragging', async (t) => {
@@ -141,6 +146,7 @@ test('a publish never rewrites a slider the user is dragging', async (t) => {
 /** VisualSettings with a stand-in detection engine. */
 function detectionSettings(store) {
   const { owner } = settings(store);
+  // This is detection state, not a globe engine.
   const engine = {
     mode: 'OFF',
     tuning: { densityPct: 50, allocationStrategy: 'ELASTIC' },
@@ -331,7 +337,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(coreClasses(button), 'pp-toggle-btn active');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(row.classList.contains('visible'), true);
-  assert.equal($('models3d-mode-proximity').getAttribute('aria-checked'), 'true');
+  assert.equal(
+    $('models3d-mode-proximity').getAttribute('aria-checked'),
+    'true',
+  );
 
   // The button leaves the row to its own sync.
   owner._setModels3dEnabled(false);
@@ -347,7 +356,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   await nextTick();
   assert.equal(all.classList.contains('active'), true);
   assert.equal(all.getAttribute('aria-checked'), 'true');
-  assert.equal($('models3d-mode-proximity').classList.contains('active'), false);
+  assert.equal(
+    $('models3d-mode-proximity').classList.contains('active'),
+    false,
+  );
   assert.deepEqual(params.at(-1), ['military', { models3dMode: 'all' }]);
 
   owner._syncModels3dFromLayerState({
@@ -376,12 +388,18 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
   assert.equal(segment('area').getAttribute('aria-label'), 'Area');
   assert.equal(segment('area').title, 'Area');
   assert.equal(segment('area').textContent, 'pentagon');
-  const swatch = (color) => document.querySelector(`#draw-colors [data-color="${color}"]`);
+  const swatch = (color) =>
+    document.querySelector(`#draw-colors [data-color="${color}"]`);
   assert.equal(swatch('primary').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('amber').getAttribute('aria-label'), 'Amber');
   assert.equal($('draw-hint').textContent, '');
 
-  store.publishDraw({ active: true, shape: 'line', color: 'amber', hint: 'Click to add points.' });
+  store.publishDraw({
+    active: true,
+    shape: 'line',
+    color: 'amber',
+    hint: 'Click to add points.',
+  });
   await nextTick();
   assert.equal(swatch('amber').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('primary').classList.contains('active'), false);
@@ -408,15 +426,24 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(list.children.length, 0);
   assert.equal($('geo-import-hint').textContent, '');
 
-  const viewer = {
-    container: document.createElement('div'),
-    scene: { requestRender() {} },
-    dataSources: { add: async (ds) => ds, remove: () => true },
-  };
-  const tool = initGeoFileImport({
-    viewer,
+  // A globe engine double the files draw on.
+  const engine = createFakeEngine({ container: document.createElement('div') });
+  const tool = createGeoFileImport({
+    drawFile: async () => ({
+      report: { undrawn: 0 },
+      setShow() {},
+      refreshGround: async () => {},
+      footprint: () => [],
+      destroy() {},
+    }),
     load: async (file) => ({
-      dataSource: { show: true },
+      records: {
+        points: [],
+        lines: [],
+        polygons: [],
+        overlays: [],
+        undrawn: {},
+      },
       name: file.name,
       format: file.name.endsWith('.kml') ? 'kml' : 'geojson',
       entityCount: 2,
@@ -430,6 +457,7 @@ test('the imported files render what the file import publishes and keep focus', 
       return () => store.detach(token);
     },
   });
+  tool.attachScene({ engine });
   t.after(() => tool.destroy());
   await tool.importFiles([{ name: '<b>a</b>.geojson' }, { name: 'b.kml' }]);
   await nextTick();
@@ -477,7 +505,10 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(document.activeElement === button(first, 'toggle'), true);
   assert.equal(button(first, 'toggle').getAttribute('aria-pressed'), 'true');
   assert.equal(button(first, 'fly').title, 'Fly to <b>a</b>.geojson');
-  assert.equal(button(first, 'remove').getAttribute('aria-label'), 'Remove <b>a</b>.geojson');
+  assert.equal(
+    button(first, 'remove').getAttribute('aria-label'),
+    'Remove <b>a</b>.geojson',
+  );
 
   await press(button(first, 'remove'));
   assert.equal(rowsNow().length, 1);
@@ -593,7 +624,11 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
   assert.equal(store.parameters, null, 'the sliders go with their owner');
   assert.equal($('param-slider-panel').classList.contains('active'), false);
   assert.equal(store.act('setStyleParameter', 'grainAmt', 0.2), undefined);
-  assert.equal(owner.stages.noir.uniforms.grainAmt, 0.3, 'a stopped owner no longer answers');
+  assert.equal(
+    owner.stages.noir.uniforms.grainAmt,
+    0.3,
+    'a stopped owner no longer answers',
+  );
   // An older owner's stop leaves a newer owner's rows.
   const newer = { style: 'noir', rows: [] };
   owner._parameters = { style: 'noir', rows: [] };
@@ -605,10 +640,16 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
 test('the four Cockpit groups teleport to the published slots and back to their places', async (t) => {
   const { store, $ } = fixture(t);
   const groupOf = (id) => $(id).closest('.pp-toggle-group') ?? $(id);
-  const ids = ['hud-toggle', 'detection-toggle', 'param-slider-panel', 'models3d-toggle'];
+  const ids = [
+    'hud-toggle',
+    'detection-toggle',
+    'param-slider-panel',
+    'models3d-toggle',
+  ];
   const body = $('pp-toggles').querySelector('.pp-panel-body');
   const order = () =>
-    [...body.children].filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
+    [...body.children]
+      .filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
       .map((el) => el.id || el.querySelector('[id]')?.id);
   const home = order();
   const popover = document.body.appendChild(document.createElement('div'));

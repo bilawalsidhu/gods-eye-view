@@ -7,9 +7,10 @@ import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from './resolver.js';
 import { polygonsContain } from '../data/adminBoundaries.js';
 import { streetFootprint } from './outlineRungs.js';
+import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 function viewerAt(lat, lon, height = 20_000) {
-  return {
+  return cameraOnlyEngine({
     camera: {
       positionCartographic: {
         latitude: (lat * Math.PI) / 180,
@@ -17,7 +18,7 @@ function viewerAt(lat, lon, height = 20_000) {
         height,
       },
     },
-  };
+  });
 }
 
 /** A resolver whose boundary lookups and geocoder record every call. */
@@ -47,7 +48,7 @@ function harness(place = null, { outlineRungs } = {}) {
   const resolve = (target, viewer, extra = {}) =>
     resolveAnnotationTarget({
       placeSearch,
-      viewer,
+      engine: viewer,
       target,
       footprint: true,
       deferFootprint: true,
@@ -710,7 +711,7 @@ test('configured OSM geometry retains its origin through inline, deferred and ca
   });
   for (const deferFootprint of [false, true]) {
     const result = await resolver.resolveAnnotationTarget({
-      viewer: viewerAt(31, -99, 3000),
+      engine: viewerAt(31, -99, 3000),
       latitude: 31,
       longitude: -99,
       target: 'Library',

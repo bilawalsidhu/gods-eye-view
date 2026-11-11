@@ -21,14 +21,18 @@ export function featureReference(feature) {
   collectLonLat(geometry.coordinates, coords);
   if (!coords.length) return null;
 
+  // Longitudes are averaged around the first one, so a cable split at the
+  // antimeridian (179.9 / -179.9) keeps its reference there, not at 0.
+  const west = coords[0][0];
   let lonSum = 0;
   let latSum = 0;
   for (const [lon, lat] of coords) {
-    lonSum += lon;
+    lonSum += lon - 360 * Math.round((lon - west) / 360);
     latSum += lat;
   }
+  const lon = lonSum / coords.length;
   return {
-    lon: lonSum / coords.length,
+    lon: lon - 360 * Math.round(lon / 360),
     lat: latSum / coords.length,
   };
 }

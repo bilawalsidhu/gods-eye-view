@@ -1,7 +1,14 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Event } from 'cesium';
-import { createLaunchHover } from './lifecycle.js';
+import { createLaunchHover } from './render/display.js';
+
+// What the hover reads of an engine: its canvas, drillPick and camera motion.
+function hoverEngine(drillPick, style = { cursor: '' }) {
+  const engine = createFakeEngine({ canvas: { style } });
+  engine.fake.script('drillPick', drillPick);
+  return engine;
+}
 
 function fakeTimers() {
   const timers = new Map();
@@ -31,20 +38,14 @@ function hoverRig({ overMarker }) {
     enabled = true,
     free = true;
   const timers = fakeTimers();
-  const viewer = {
-    camera: { moveStart: new Event(), moveEnd: new Event() },
-    scene: {
-      canvas: { style: { cursor: '' } },
-      drillPick(position) {
-        picks++;
-        return overMarker(position) ? [{ id: 'launch' }] : [];
-      },
-    },
-  };
+  const engine = hoverEngine((position) => {
+    picks++;
+    return overMarker(position) ? [{ id: 'launch' }] : [];
+  });
   const hover = createLaunchHover({
-    viewer,
+    engine,
     enabled: () => enabled,
-    entityLaunchId: (id) => id === 'launch',
+    isLaunchPick: (id) => id === 'launch',
     now: () => at,
     documentRef: { hidden: false },
     pointerFree: () => free,
@@ -54,8 +55,8 @@ function hoverRig({ overMarker }) {
   return {
     hover,
     timers,
-    viewer,
-    cursor: () => viewer.scene.canvas.style.cursor,
+    engine,
+    cursor: () => engine.host.canvas.style.cursor,
     picks: () => picks,
     setTime: (value) => (at = value),
     setEnabled: (value) => (enabled = value),
@@ -74,7 +75,7 @@ test('mission hover runs one trailing check for a pointer that stops on empty sp
   rig.setTime(50);
   const movement = empty();
   rig.hover.move(movement);
-  // Cesium reuses its movement object; the trailing check must use a copy.
+  // The engine may reuse its movement object; the trailing check must use a copy.
   movement.endPosition.x = 1;
   assert.equal(rig.picks(), 1);
   assert.deepEqual(
@@ -110,7 +111,7 @@ test('mission hover trailing check is cancelled by reset, destroy, and camera mo
   for (const cancel of [
     (rig) => rig.hover.reset(),
     (rig) => rig.hover.destroy(),
-    (rig) => rig.viewer.camera.moveStart.raiseEvent(),
+    (rig) => rig.engine.camera.moveStart.raiseEvent(),
   ]) {
     const rig = hoverRig({ overMarker: onMarker });
     rig.hover.move(empty());
@@ -153,20 +154,14 @@ test('mission hover throttles, clears on motion/hidden, and releases listeners',
     addEventListener: (_n, fn) => listeners.add(fn),
     removeEventListener: (_n, fn) => listeners.delete(fn),
   };
-  const viewer = {
-    camera: { moveStart: new Event(), moveEnd: new Event() },
-    scene: {
-      canvas: { style: {} },
-      drillPick() {
-        picks++;
-        return [{ id: 'launch' }];
-      },
-    },
-  };
+  const engine = hoverEngine(() => {
+    picks++;
+    return [{ id: 'launch' }];
+  }, {});
   const hover = createLaunchHover({
-    viewer,
+    engine,
     enabled: () => enabled,
-    entityLaunchId: (id) => id === 'launch',
+    isLaunchPick: (id) => id === 'launch',
     now: () => at,
     documentRef: doc,
     pointerFree: () => true,
@@ -174,59 +169,53 @@ test('mission hover throttles, clears on motion/hidden, and releases listeners',
   });
   for (at = 0; at < 120; at++) hover.move({ endPosition: {} });
   assert.equal(picks, 1);
-  assert.equal(viewer.scene.canvas.style.cursor, 'pointer');
+  assert.equal(engine.host.canvas.style.cursor, 'pointer');
   hover.move({ endPosition: {} });
   assert.equal(picks, 2);
-  viewer.camera.moveStart.raiseEvent();
+  engine.camera.moveStart.raiseEvent();
   at = 500;
   hover.move({ endPosition: {} });
   assert.equal(picks, 2);
-  assert.equal(viewer.scene.canvas.style.cursor, '');
-  viewer.camera.moveEnd.raiseEvent();
+  assert.equal(engine.host.canvas.style.cursor, '');
+  engine.camera.moveEnd.raiseEvent();
   hover.move({ endPosition: {} });
   assert.equal(picks, 3);
   doc.hidden = true;
   for (const fn of listeners) fn();
   hover.move({ endPosition: {} });
   assert.equal(picks, 3);
-  assert.equal(viewer.scene.canvas.style.cursor, '');
+  assert.equal(engine.host.canvas.style.cursor, '');
   doc.hidden = false;
   enabled = false;
   hover.move({ endPosition: {} });
   assert.equal(picks, 3);
   hover.destroy();
   assert.equal(listeners.size, 0);
-  assert.equal(viewer.camera.moveStart.numberOfListeners, 0);
-  assert.equal(viewer.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(engine.camera.moveStart.numberOfListeners, 0);
+  assert.equal(engine.camera.moveEnd.numberOfListeners, 0);
 });
 
 test('mission hover preserves the cursor of a pointer-owning tool', () => {
   let free = true,
     picks = 0;
-  const viewer = {
-    camera: { moveStart: new Event(), moveEnd: new Event() },
-    scene: {
-      canvas: { style: { cursor: '' } },
-      drillPick() {
-        picks++;
-        return [{ id: 'launch' }];
-      },
-    },
-  };
+  const engine = hoverEngine(() => {
+    picks++;
+    return [{ id: 'launch' }];
+  });
   const hover = createLaunchHover({
-    viewer,
+    engine,
     enabled: () => true,
-    entityLaunchId: () => true,
+    isLaunchPick: () => true,
     documentRef: null,
     pointerFree: () => free,
   });
   hover.move({ endPosition: {} });
-  assert.equal(viewer.scene.canvas.style.cursor, 'pointer');
+  assert.equal(engine.host.canvas.style.cursor, 'pointer');
   free = false;
-  viewer.scene.canvas.style.cursor = 'crosshair';
+  engine.host.canvas.style.cursor = 'crosshair';
   hover.move({ endPosition: {} });
-  viewer.camera.moveStart.raiseEvent();
+  engine.camera.moveStart.raiseEvent();
   hover.destroy();
   assert.equal(picks, 1);
-  assert.equal(viewer.scene.canvas.style.cursor, 'crosshair');
+  assert.equal(engine.host.canvas.style.cursor, 'crosshair');
 });

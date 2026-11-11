@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { ENGINE_KINDS } from '../../globe/contract.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createWildlifeSightingsLayer } from './index.js';
+import { WILDLIFE_BADGE_SET_ID } from './rendering.js';
+import { WILDLIFE_DENSITY_SET_ID } from './density.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
 import { ICONIC_LEGEND_ORDER, WILDLIFE_MAX_ROWS } from './policy.js';
@@ -38,96 +42,81 @@ const photographed = {
   },
 };
 
-function event() {
-  const listeners = new Set();
-  return {
-    addEventListener(fn) {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    emit(value) {
-      for (const fn of [...listeners]) fn(value);
-    },
-    count: () => listeners.size,
-  };
-}
+const toRadians = geo.math.toRadians;
+const toDegrees = geo.math.toDegrees;
+const cartographicOf = (position) => geo.cartographic.fromCartesian(position);
+const heightOf = (position) => cartographicOf(position).height;
+const lonOf = (position) => toDegrees(cartographicOf(position).longitude);
+const latOf = (position) => toDegrees(cartographicOf(position).latitude);
 
-function primitives() {
-  const values = [];
-  const primitiveAdded = event();
-  const primitiveRemoved = event();
-  return {
-    values,
-    primitiveAdded,
-    primitiveRemoved,
-    get length() {
-      return values.length;
-    },
-    get: (index) => values[index],
-    add(value) {
-      values.push(value);
-      primitiveAdded.emit(value);
-      return value;
-    },
-    remove(value) {
-      const index = values.indexOf(value);
-      if (index < 0) return false;
-      values.splice(index, 1);
-      primitiveRemoved.emit(value);
-      value.destroy?.();
-      return true;
-    },
-  };
-}
-
-class PointCollection {
-  values = [];
-  show = false;
-  add(point) {
-    this.values.push(point);
-    return point;
-  }
-  remove(point) {
-    const index = this.values.indexOf(point);
-    if (index < 0) return false;
-    this.values.splice(index, 1);
-    return true;
-  }
-  removeAll() {
-    this.values = [];
-  }
-  destroy() {
-    this.destroyed = true;
-  }
-}
-class Ground {
-  constructor(options) {
-    Object.assign(this, options);
-    this.ready = false;
-  }
-  destroy() {
-    this.destroyed = true;
-  }
-  isDestroyed() {
-    return !!this.destroyed;
-  }
-}
-
+/**
+ * The layer on a fake globe engine above Seattle. `extra.project(_, position)`
+ * and `extra.occluderFactory()` script the engine's projection and horizon
+ * test; the rest goes to the layer.
+ */
 function harness(
   source = { getSnapshot: async () => [base] },
   extra = {},
   { autoEnable = true, width = 2000, height = 1200 } = {},
 ) {
+  const { project, occluderFactory, ...layerExtra } = extra;
   let time = NOW;
-  let picked = null;
+  let picked;
   let cardHit = null;
   let pointerFree = true;
+  let tilesLoaded = true;
   let rectangle = { south: 47.4, west: -122.7, north: 47.9, east: -122.1 };
   const events = new EventTarget();
-  const moveEnd = event();
-  const postRender = event();
-  const pointOwners = primitives();
-  const groundOwners = primitives();
+  // Camera heights are set exactly; the pose stays above Seattle.
+  const camera = { height: 30_000 };
+  const projectRow =
+    project ??
+    ((_scene, position) => ({
+      x: 400 + (lonOf(position) - (rectangle.west + rectangle.east) / 2) * 1000,
+      y:
+        400 +
+        ((rectangle.south + rectangle.north) / 2 - latOf(position)) * 1000,
+    }));
+  // Input registrations the layer holds, on every engine.
+  let inputs = 0;
+  /** A fake engine of `kind` that sees and projects the fixture view. */
+  function globe(kind) {
+    const engine = createFakeEngine({ kind, width, height });
+    engine.fake.setPose({
+      position: geo.cartesian3.fromDegrees(-122, 47, 30_000),
+    });
+    // Settle the camera so later frames raise no camera events.
+    engine.fake.frames(2);
+    engine.camera.height = () => camera.height;
+    engine.fake.script('viewRectangle', () =>
+      Object.fromEntries(
+        Object.entries(rectangle).map(([key, value]) => [
+          key,
+          toRadians(value),
+        ]),
+      ),
+    );
+    engine.projector.horizonVisible = (position) =>
+      occluderFactory ? occluderFactory().isPointVisible(position) : true;
+    engine.fake.script('worldToWindow', (position) =>
+      projectRow(null, position),
+    );
+    engine.fake.script('pick', () => picked ?? undefined);
+    engine.fake.script('tilesLoaded', () => tilesLoaded);
+    const on = engine.input.on;
+    engine.input.on = (type, listener, options) => {
+      const off = on(type, listener, options);
+      inputs++;
+      let removed = false;
+      return () => {
+        if (!removed) inputs--;
+        removed = true;
+        off();
+      };
+    };
+    return engine;
+  }
+  const engine = globe();
   const owners = new Map();
   const overlay = {
     entries: new Map(),
@@ -137,47 +126,12 @@ function harness(
   const renders = [];
   const focus = [];
   const links = [];
-  const credits = new Set();
   const store = { entities: new Map(), selectedEntityId: null };
-  const clicks = {};
   const timers = new Map();
   const idleTasks = new Map();
   let nextTimer = 0;
   let nextIdle = 0;
   const images = [];
-  const viewer = {
-    scene: {
-      primitives: pointOwners,
-      groundPrimitives: groundOwners,
-      postRender,
-      canvas: { clientWidth: width, clientHeight: height },
-      globe: {
-        tileLoadProgressEvent: event(),
-        terrainProviderChanged: event(),
-      },
-      sampleHeightSupported: true,
-      sampleHeight: () =>
-        assert.fail('scene.sampleHeight renders per call; use groundFloor'),
-      pick: () => picked,
-      requestRender: () => assert.fail('must use render governor'),
-    },
-    camera: {
-      positionCartographic: { height: 30_000 },
-      positionWC: Cesium.Cartesian3.fromDegrees(-122, 47, 30_000),
-      moveEnd,
-      computeViewRectangle: () =>
-        Object.fromEntries(
-          Object.entries(rectangle).map(([key, value]) => [
-            key,
-            Cesium.Math.toRadians(value),
-          ]),
-        ),
-    },
-    creditDisplay: {
-      addStaticCredit: (credit) => credits.add(credit),
-      removeStaticCredit: (credit) => credits.delete(credit),
-    },
-  };
   const ground = { sample: () => 123, resolves: 0 };
   const layer = createWildlifeSightingsLayer({
     source,
@@ -186,12 +140,6 @@ function harness(
       resolveGroundFloorCellsBounded: async () => {
         ground.resolves++;
       },
-    },
-    cesium: {
-      ...Cesium,
-      BillboardCollection: PointCollection,
-      GroundPrimitive: Ground,
-      GroundPolylinePrimitive: Ground,
     },
     now: () => time,
     setTimer(fn, delay) {
@@ -212,24 +160,6 @@ function harness(
       return image;
     },
     eventTarget: events,
-    occluderFactory: () => ({
-      isPointVisible: (position) => position.visible !== false,
-    }),
-    project: (_scene, position) => {
-      const cartographic = Cesium.Cartographic.fromCartesian(position);
-      return {
-        x:
-          400 +
-          (Cesium.Math.toDegrees(cartographic.longitude) -
-            (rectangle.west + rectangle.east) / 2) *
-            1000,
-        y:
-          400 +
-          ((rectangle.south + rectangle.north) / 2 -
-            Cesium.Math.toDegrees(cartographic.latitude)) *
-            1000,
-      };
-    },
     overlayHost: {
       setEntries: (id, entries, options) => {
         assert.equal(options.moving, false);
@@ -241,32 +171,12 @@ function harness(
       hitTest: (_x, _y, { sourceId }) =>
         cardHit?.sourceId === sourceId ? cardHit : null,
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(fn) {
-        clicks.callback = fn;
-      },
-      destroy() {
-        clicks.destroyed = true;
-        clicks.callback = null;
-      },
-    }),
     pointer: { isPointerFree: () => pointerFree },
     picking: {
       registerPickOwner: (id, fn) => owners.set(id, fn),
       unregisterPickOwner: (id) => owners.delete(id),
-      resolvePickId: (pick) => pick?.id ?? pick?.primitive?.id,
+      resolvePickId: (pick) => pick?.id ?? null,
       isOwnedByOtherLayer: (_layerId, id) => id?.startsWith('other:'),
-    },
-    sprites: {
-      registerSpriteCollection: (_id, collection) => {
-        clicks.collection = collection;
-      },
-      unregisterSpriteCollection: () => {
-        clicks.unregistered = true;
-      },
-      restoreSpriteOrderOnEnable: (id) => {
-        assert.equal(id, 'wildlife-sightings');
-      },
     },
     render: { governorRequestRender: (reason) => renders.push(reason) },
     focus: { requestWorldFocus: (request) => focus.push(request) },
@@ -288,11 +198,12 @@ function harness(
       },
       removeEntityContextsForLayer: () => store.entities.clear(),
     },
-    ...extra,
+    ...layerExtra,
   });
+  const init = () => layer.init(null, { engine });
   if (autoEnable) {
-    layer.init(viewer);
-    layer.enable(viewer);
+    init();
+    layer.enable();
   }
   function flushIdle() {
     for (let steps = 0; idleTasks.size; steps++) {
@@ -302,9 +213,53 @@ function harness(
       fn({ timeRemaining: () => 10 });
     }
   }
+  const badgeSet = (target = engine) =>
+    target.fake.moverSet(WILDLIFE_BADGE_SET_ID);
+  // One badge as the engine draws it, read live from the mover store.
+  const badge = (id, target) => {
+    const index = () => {
+      const set = badgeSet(target);
+      if (!set) return -1;
+      for (let at = 0; at < set.store.count; at++)
+        if (set.store.pickIds[at] === id) return at;
+      return -1;
+    };
+    const read = (fn) => {
+      const at = index();
+      return at < 0 ? undefined : fn(badgeSet(target).store, at);
+    };
+    return {
+      id,
+      get position() {
+        return read((store, at) =>
+          geo.cartesian3.create(
+            store.positions[at * 3],
+            store.positions[at * 3 + 1],
+            store.positions[at * 3 + 2],
+          ),
+        );
+      },
+      get show() {
+        return read((store, at) => store.shows[at] === 1);
+      },
+      get scale() {
+        return read((store, at) => store.scales[at]);
+      },
+      get color() {
+        return read((store, at) => [
+          ...store.colors.subarray(at * 4, at * 4 + 4),
+        ]);
+      },
+      get cell() {
+        return read((store, at) => store.cellKeys[store.cells[at]]);
+      },
+    };
+  };
   return {
+    engine,
     ground,
     layer,
+    init,
     async update(...args) {
       // Explicit refreshes stand for successive poll batches, not push bursts.
       time += 500;
@@ -313,22 +268,48 @@ function harness(
       return result;
     },
     flushIdle,
-    viewer,
     overlay,
-    clicks,
     owners,
     renders,
     focus,
     links,
-    credits,
     images,
-    groundOwners,
-    pointOwners,
     events,
-    postRender,
-    moveEnd,
     store,
     timers,
+    /** The badges an engine draws, in instance order. */
+    badges(target = engine) {
+      const set = badgeSet(target);
+      return set
+        ? Array.from({ length: set.store.count }, (_, at) =>
+            badge(set.store.pickIds[at], target),
+          )
+        : [];
+    },
+    globe,
+    badgeSet,
+    glow: () => engine.fake.moverSet(WILDLIFE_DENSITY_SET_ID),
+    moveEnd: {
+      emit: () => engine.fake.emit('camera.moveEnd'),
+      count: () => engine.camera.moveEnd.numberOfListeners,
+    },
+    /** Listeners that run on every drawn frame. */
+    frameWork: () => engine.frames.preRender.numberOfListeners,
+    /** The surface-loading watch (one per enabled scene). */
+    surfaceWatch: () => engine.frames.preRender.numberOfListeners,
+    /** Surface loading as the engine reports it, then one frame. */
+    tiles(loaded) {
+      tilesLoaded = loaded;
+      engine.fake.frame();
+    },
+    credits: () => engine.fake.credits.length,
+    inputs: () => inputs,
+    click(event) {
+      engine.fake.input('click', event);
+    },
+    height: (value) => {
+      camera.height = value;
+    },
     pick: (value) => {
       picked = value;
     },
@@ -355,8 +336,9 @@ function harness(
 test('construction validates source and does not acquire; double init throws', () => {
   assert.throws(() => createWildlifeSightingsLayer(), TypeError);
   const h = harness({ getSnapshot: () => assert.fail('enable fetched') });
-  assert.throws(() => h.layer.init(h.viewer), /already initialized/);
-  assert.equal(h.clicks.collection.show, true);
+  assert.throws(() => h.init(), /already initialized/);
+  assert.equal(h.badgeSet(), undefined, 'no badge set before any badge');
+  assert.deepEqual(h.engine.movers.list(), []);
   h.layer.destroy();
 });
 
@@ -377,41 +359,36 @@ test('terrain warming resamples unchanged point, card and context anchors withou
     samples++;
     return height;
   };
-  h.layer.init(h.viewer);
-  h.layer.enable(h.viewer);
+  h.init();
+  h.layer.enable();
   await h.update();
   h.layer.selectSighting('inat:1');
-  const point = h.clicks.collection.values[0];
-  const sea = h.clicks.collection.values[1];
+  const [point, sea] = h.badges();
   const before = samples;
   height = 600;
   await h.update();
   h.moveEnd.emit();
   assert.equal(
     samples,
-    before,
-    'unchanged snapshots and camera movement do not resample per point',
+    before + 1,
+    'camera rest resamples the land anchor once',
   );
-  h.viewer.scene.globe.tileLoadProgressEvent.emit(1);
-  assert.equal(samples, before, 'wait for terrain loading to settle');
-  h.viewer.scene.globe.tileLoadProgressEvent.emit(0);
-  assert.ok(
-    Math.abs(Cesium.Cartographic.fromCartesian(point.position).height - 600) <
-      0.01,
-  );
+  h.tiles(false);
+  assert.equal(samples, before + 1, 'wait for terrain loading to settle');
+  h.tiles(true);
+  assert.ok(Math.abs(cartographicOf(point.position).height - 600) < 0.01);
   assert.equal(
     samples,
-    before + 1,
+    before + 2,
     'Acartia sea anchors are never terrain-sampled',
   );
-  assert.ok(
-    Math.abs(Cesium.Cartographic.fromCartesian(sea.position).height) < 0.01,
-  );
+  assert.ok(Math.abs(cartographicOf(sea.position).height) < 0.01);
   assert.equal(
-    h.clicks.collection.values[0],
-    point,
-    'resampling preserves the point primitive',
+    h.badges()[0].id,
+    point.id,
+    'resampling preserves the badge instance',
   );
+  assert.equal(h.badges().length, 2);
   assert.deepEqual(
     h.overlay.entries.get('wildlife-sightings')[0].position,
     point.position,
@@ -419,83 +396,61 @@ test('terrain warming resamples unchanged point, card and context anchors withou
   assert.ok(
     h.overlay.entries
       .get('wildlife-sightings-selected')
-      .every((entry) =>
-        Cesium.Cartesian3.equals(entry.position, point.position),
-      ),
+      .every((entry) => geo.cartesian3.equals(entry.position, point.position)),
   );
   assert.deepEqual(
     h.store.entities.get('inat:1').entity.__localBaseCartesian,
     point.position,
   );
   assert.ok(h.renders.includes('wildlife-sightings-terrain'));
-  assert.equal(h.postRender.count(), 0);
+  assert.equal(h.frameWork(), 1);
   h.layer.disable();
-  assert.equal(h.viewer.scene.globe.tileLoadProgressEvent.count(), 0);
-  assert.equal(h.viewer.scene.globe.terrainProviderChanged.count(), 0);
+  assert.equal(h.surfaceWatch(), 0);
   const disabledSamples = samples;
-  h.viewer.scene.globe.tileLoadProgressEvent.emit(0);
+  h.tiles(false);
+  h.tiles(true);
   assert.equal(samples, disabledSamples);
   height = 900;
-  h.layer.enable(h.viewer);
+  h.layer.enable();
   assert.ok(
-    Math.abs(
-      Cesium.Cartographic.fromCartesian(h.clicks.collection.values[0].position)
-        .height - 900,
-    ) < 0.01,
+    Math.abs(cartographicOf(h.badges()[0].position).height - 900) < 0.01,
   );
-  assert.equal(h.viewer.scene.globe.tileLoadProgressEvent.count(), 1);
+  assert.equal(h.surfaceWatch(), 1);
   h.layer.destroy();
-  assert.equal(h.viewer.scene.globe.tileLoadProgressEvent.count(), 0);
+  assert.equal(h.surfaceWatch(), 0);
 });
 
-test('terrain provider, loaded tilesets and map-source changes refresh anchors and release listeners', async () => {
+test('surface loading and map-source changes refresh anchors and release listeners', async () => {
   const h = harness(undefined, {}, { autoEnable: false });
-  const tileset = { allTilesLoaded: event() };
-  h.pointOwners.add(tileset);
   let height = 20;
   h.ground.sample = () => height;
-  h.layer.init(h.viewer);
-  h.layer.enable(h.viewer);
+  h.init();
+  h.layer.enable();
   await h.update();
-  const point = h.clicks.collection.values[0];
+  const point = h.badges()[0];
   const assertHeight = (expected) =>
-    assert.ok(
-      Math.abs(
-        Cesium.Cartographic.fromCartesian(point.position).height - expected,
-      ) < 0.01,
-    );
+    assert.ok(Math.abs(heightOf(point.position) - expected) < 0.01);
   height = 200;
-  h.viewer.scene.globe.terrainProviderChanged.emit({});
+  h.tiles(false);
+  assertHeight(20);
+  h.tiles(true);
   assertHeight(200);
   height = 400;
-  tileset.allTilesLoaded.emit();
+  h.tiles(true);
+  assertHeight(200);
+  h.tiles(false);
+  h.tiles(true);
   assertHeight(400);
-  const nextTileset = { allTilesLoaded: event() };
-  height = 600;
-  h.pointOwners.add(nextTileset);
-  assert.equal(
-    nextTileset.allTilesLoaded.count(),
-    1,
-    'new tilesets are subscribed without polling',
-  );
-  nextTileset.allTilesLoaded.emit();
-  assertHeight(600);
   height = 800;
   h.events.dispatchEvent(new Event('gev:map-stack-changed'));
   assertHeight(800);
-  height = 0;
-  h.pointOwners.remove(nextTileset);
-  assertHeight(0);
-  assert.equal(nextTileset.allTilesLoaded.count(), 0);
   h.layer.disable();
-  assert.equal(tileset.allTilesLoaded.count(), 0);
-  assert.equal(h.pointOwners.primitiveAdded.count(), 0);
-  assert.equal(h.pointOwners.primitiveRemoved.count(), 0);
+  assert.equal(h.surfaceWatch(), 0);
   height = 1000;
   h.events.dispatchEvent(new Event('gev:map-stack-changed'));
-  assertHeight(0);
+  assert.equal(h.badges().length, 0);
   h.layer.destroy();
-  assert.equal(h.postRender.count(), 0);
+  assert.equal(h.frameWork(), 0);
 });
 
 test('camera rebuilds expire unselected sightings while a selected observation stays pinned', async () => {
@@ -518,7 +473,7 @@ test('camera rebuilds expire unselected sightings while a selected observation s
     h.rectangle({ south: 47.4, west: -122.7, north: 47.9, east: -122.1 });
     h.moveEnd.emit();
     assert.equal(
-      h.clicks.collection.values[0].id,
+      h.badges()[0].id,
       'wildlife:inat:1',
       'the prior area is retained in the LRU',
     );
@@ -527,7 +482,7 @@ test('camera rebuilds expire unselected sightings while a selected observation s
     h.time(NOW + windowHours * 3_600_000);
     h.moveEnd.emit();
     assert.equal(
-      h.clicks.collection.values.length,
+      h.badges().length,
       1,
       `${taxa} keeps the explicitly selected observation beyond its window`,
     );
@@ -538,11 +493,7 @@ test('camera rebuilds expire unselected sightings while a selected observation s
     );
     h.layer.clearSightingSelection();
     h.moveEnd.emit();
-    assert.equal(
-      h.clicks.collection.values.length,
-      0,
-      'expired rows retire on deselection',
-    );
+    assert.equal(h.badges().length, 0, 'expired rows retire on deselection');
     assert.equal(requests, 2, 'expiry needs no new source success');
     h.layer.destroy();
   }
@@ -559,7 +510,7 @@ test('pending filter changes retain the accepted recency window until their resu
   h.layer.setParams({ taxa: 'all' });
   assert.equal(h.layer.selectSighting('inat:1'), true);
   assert.equal(
-    h.clicks.collection.values.length,
+    h.badges().length,
     1,
     'three-day whale remains while ALL is pending',
   );
@@ -580,33 +531,26 @@ test('sampled ground and sea heights keep badges on top and update them in place
   ];
   const h = harness({ getSnapshot: async () => rows });
   await h.update();
-  const first = h.clicks.collection.values[0];
-  assert.equal(first.disableDepthTestDistance, Infinity);
-  assert.ok(
-    Math.abs(Cesium.Cartographic.fromCartesian(first.position).height - 123) <
-      0.01,
-  );
-  assert.ok(
-    Math.abs(
-      Cesium.Cartographic.fromCartesian(h.clicks.collection.values[1].position)
-        .height,
-    ) < 0.01,
-  );
+  const first = h.badges()[0];
+  assert.equal(h.badgeSet().options.depthTest, 'always');
+  assert.ok(Math.abs(cartographicOf(first.position).height - 123) < 0.01);
+  assert.ok(Math.abs(cartographicOf(h.badges()[1].position).height) < 0.01);
   await h.update();
-  assert.equal(h.clicks.collection.values[0], first);
+  assert.equal(h.badges()[0].id, first.id);
   for (const change of [
     { lon: -122.3 },
     { iconic: 'Fungi' },
     { quality: 'needs_id' },
   ]) {
-    const before = h.clicks.collection.values[0];
+    const before = h.badgeSet().store.count;
     rows = [{ ...rows[0], ...change }];
     await h.update();
     assert.equal(
-      h.clicks.collection.values[0],
-      before,
+      h.badges()[0].id,
+      first.id,
       'changed contacts update in place',
     );
+    assert.ok(h.badgeSet().store.count <= before);
   }
   assert.ok(h.renders.length > 0);
   h.layer.destroy();
@@ -614,11 +558,7 @@ test('sampled ground and sea heights keep badges on top and update them in place
   unsupported.ground.sample = () => null;
   await unsupported.update();
   assert.ok(
-    Math.abs(
-      Cesium.Cartographic.fromCartesian(
-        unsupported.clicks.collection.values[0].position,
-      ).height,
-    ) < 0.01,
+    Math.abs(cartographicOf(unsupported.badges()[0].position).height) < 0.01,
   );
   unsupported.layer.destroy();
 });
@@ -627,7 +567,7 @@ test('a painted card hides its anchored badge across rebuilds while retaining it
   const h = harness({ getSnapshot: async () => [photographed] });
   t.after(() => h.layer.destroy());
   await h.update();
-  const point = h.clicks.collection.values[0];
+  const point = h.badges()[0];
   assert.equal(point.show, true);
   const visibility =
     h.overlay.options.get('wildlife-sightings').onVisibilityChange;
@@ -687,9 +627,9 @@ test('dot, ambient card and context clicks focus the true sighting; cards win ov
   );
   await h.update();
   h.pick({ id: 'wildlife:inat:1' });
-  h.clicks.callback({ position: { x: 20, y: 30 } });
+  h.click({ position: { x: 20, y: 30 } });
   assert.equal(h.focus.length, 1);
-  assert.equal(h.clicks.collection.values[0].scale, 1);
+  assert.equal(h.badges()[0].scale, 1);
   assert.equal(h.store.selectedEntityId, 'inat:1');
   assert.deepEqual(selections.at(-1), {
     row: photographed,
@@ -720,7 +660,7 @@ test('dot, ambient card and context clicks focus the true sighting; cards win ov
   );
   h.hit({ sourceId: 'wildlife-sightings', entry: ambient });
   h.pick({ id: 'other:aircraft' });
-  h.clicks.callback({ position: {} });
+  h.click({ position: {} });
   assert.deepEqual(h.links, [], 'canvas cards select; they never open links');
   assert.equal(h.focus.length, 3);
   assert.equal(
@@ -729,11 +669,11 @@ test('dot, ambient card and context clicks focus the true sighting; cards win ov
     'ambient cards win over scene picks',
   );
   h.hit(null);
-  h.clicks.callback({ position: {} });
+  h.click({ position: {} });
   assert.equal(h.store.selectedEntityId, 'inat:1', 'sibling picks yield');
   h.free(false);
   h.pick(null);
-  h.clicks.callback({ position: {} });
+  h.click({ position: {} });
   assert.equal(h.store.selectedEntityId, 'inat:1');
   h.contextSelect('inat:1');
   assert.equal(
@@ -743,7 +683,7 @@ test('dot, ambient card and context clicks focus the true sighting; cards win ov
   );
   assert.deepEqual(selections.at(-1).metadata, { explicitSelection: true });
   h.free(true);
-  h.clicks.callback({ position: {} });
+  h.click({ position: {} });
   assert.equal(h.store.selectedEntityId, null);
   h.layer.disable();
   assert.equal(ambient.activate(), false);
@@ -808,14 +748,8 @@ test('selection subscriptions publish current rows, accepted refreshes, reselect
   assert.equal(seen.at(-1), null);
   assert.deepEqual(metadata.at(-1), { explicitSelection: false });
   assert.equal(h.store.selectedEntityId, null);
-  assert.equal(h.clicks.collection.values[0].scale, 1);
-  assert.equal(
-    Cesium.Color.equals(
-      h.clicks.collection.values[0].color,
-      Cesium.Color.WHITE,
-    ),
-    true,
-  );
+  assert.equal(h.badges()[0].scale, 1);
+  assert.deepEqual(h.badges()[0].color, [1, 1, 1, 1]);
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-selected'), []);
   assert.equal(h.layer.clearSightingSelection(), false);
   h.layer.selectSighting('inat:1');
@@ -867,7 +801,7 @@ test('selection subscriptions retain omitted rows and clear on disable and destr
   assert.equal(seen.at(-1), null);
   assert.equal(eventListeners.get('gev:entity-selected').size, 0);
   const disabledCount = seen.length;
-  h.layer.enable(h.viewer);
+  h.layer.enable();
   assert.equal(eventListeners.get('gev:entity-selected').size, 1);
   await h.update();
   h.layer.selectSighting('inat:1');
@@ -878,7 +812,7 @@ test('selection subscriptions retain omitted rows and clear on disable and destr
   );
   h.layer.destroy();
   assert.equal(seen.at(-1), null);
-  assert.equal(h.clicks.callback, null);
+  assert.equal(h.inputs(), 0, 'no click listener remains');
   assert.equal(eventListeners.get('gev:entity-selected').size, 0);
   const destroyedCount = seen.length;
   h.layer.clearSightingSelection();
@@ -902,7 +836,22 @@ test('selection subscriptions retain omitted rows and clear on disable and destr
   unsubscribe();
 });
 
-test('privacy cells stage nonempty batches, request frames until ready, supersede and cancel cleanly', async () => {
+function watchCells(engine) {
+  let current;
+  const createSet = engine.ground.createSet.bind(engine.ground);
+  engine.ground.createSet = (options) => {
+    const set = createSet(options);
+    const { replace } = set;
+    set.replace = (items) => {
+      replace(items);
+      current = { set, items };
+    };
+    return set;
+  };
+  return () => current;
+}
+
+test('privacy cells draw on ground, replace changed batches and release them', async () => {
   let rows = [
     {
       ...base,
@@ -911,37 +860,27 @@ test('privacy cells stage nonempty batches, request frames until ready, supersed
     },
   ];
   const h = harness({ getSnapshot: async () => rows });
+  const cells = watchCells(h.engine);
   await h.update();
-  assert.equal(h.groundOwners.values.length, 2);
-  assert.equal(h.postRender.count(), 1);
-  const pending = [...h.groundOwners.values];
-  h.postRender.emit();
-  assert.equal(h.renders.at(-1), 'wildlife-sightings-staging');
+  const first = cells();
+  assert.equal(h.engine.ground.list().length, 1);
+  assert.equal(h.frameWork(), 1, 'only the shared surface observer');
   rows = [{ ...rows[0], iconic: 'Fungi' }];
   await h.update();
-  assert.ok(pending.every((primitive) => primitive.destroyed));
-  assert.equal(h.groundOwners.values.length, 2);
-  for (const primitive of h.groundOwners.values) primitive.ready = true;
-  h.postRender.emit();
-  assert.ok(h.groundOwners.values.every((primitive) => primitive.show));
-  assert.equal(h.postRender.count(), 0);
+  const second = cells();
+  assert.equal(h.engine.ground.list().length, 1);
+  assert.notEqual(second.set, first.set, 'a new accent replaces the geometry');
+  assert.notDeepEqual(second.items[0].fill, first.items[0].fill);
+  assert.throws(() => first.set.commit(), /destroyed/);
   h.layer.selectSighting(base.stableId);
   assert.equal(h.focus.at(-1).kind, 'sighting-area');
-  const selectedRing = h.clicks.collection.values[0];
-  assert.equal(
-    Cesium.Color.equals(selectedRing.color, Cesium.Color.WHITE),
-    true,
-  );
+  const selectedRing = h.badges()[0];
+  assert.deepEqual(selectedRing.color, [1, 1, 1, 1]);
   assert.equal(selectedRing.scale, 1);
-  assert.match(selectedRing.image, /^data:image\/svg/);
-  assert.equal(
-    h.postRender.count(),
-    0,
-    'selection reuses unchanged privacy geometry',
-  );
+  assert.match(h.badgeSet().options.sprite.atlas.url, /^data:image\/svg/);
+  assert.equal(cells(), second, 'selection reuses unchanged privacy geometry');
   h.layer.disable();
-  assert.equal(h.postRender.count(), 0);
-  assert.equal(h.groundOwners.values.length, 0);
+  assert.deepEqual(h.engine.ground.list(), []);
   h.layer.destroy();
 });
 
@@ -964,15 +903,16 @@ test('disable ignores late successes and failures, unregisters owners and hides 
     settle(reject ? Error('iNaturalist HTTP 502') : [photographed]);
     assert.equal(await pending, false);
     assert.equal(h.layer.getStats().error, null);
-    assert.equal(h.clicks.collection.values.length, 0);
+    assert.equal(h.badges().length, 0);
     assert.equal(h.owners.size, 0);
-    assert.equal(h.credits.size, 0);
+    assert.equal(h.credits(), 0);
     assert.deepEqual([...h.overlay.visible.values()], [false, false, false]);
     assert.equal(h.overlay.entries.size, 0);
     assert.equal(h.moveEnd.count(), 0);
     h.layer.destroy();
-    assert.equal(h.pointOwners.values.length, 0);
-    assert.equal(h.clicks.unregistered, true);
+    assert.deepEqual(h.engine.movers.list(), []);
+    assert.equal(h.badgeSet(), undefined);
+    assert.equal(h.inputs(), 0);
   }
 });
 
@@ -1135,7 +1075,7 @@ test('the real manager keeps first enable on after a pan supersedes either a suc
         {},
         { autoEnable: false },
       );
-      const manager = new LayerLifecycle(h.viewer);
+      const manager = new LayerLifecycle(null, { engine: h.engine });
       manager.register(h.layer);
       h.layer.attachDataManager(manager);
       const fireCameraTimer = () => {
@@ -1239,7 +1179,7 @@ test('first enable settles once and publishes badges within two seconds without 
     {},
     { autoEnable: false },
   );
-  const manager = new LayerLifecycle(h.viewer);
+  const manager = new LayerLifecycle(null, { engine: h.engine });
   manager.register(h.layer);
   h.layer.attachDataManager(manager);
   try {
@@ -1262,7 +1202,7 @@ test('first enable settles once and publishes badges within two seconds without 
     h.time(NOW + 550); // Ordinary upstream response after 150 ms.
     finishObservations([row]);
     assert.equal(await enabling, true);
-    assert.equal(h.clicks.collection.values[0]?.id, 'wildlife:inat:1');
+    assert.equal(h.badges()[0]?.id, 'wildlife:inat:1');
     assert.equal(requests.length, 1);
     assert.equal(gridSets, 1);
     assert.equal(
@@ -1294,7 +1234,7 @@ test('the real manager does not report a refresh error when a pan supersedes per
     {},
     { autoEnable: false },
   );
-  const manager = new LayerLifecycle(h.viewer);
+  const manager = new LayerLifecycle(null, { engine: h.engine });
   manager.register(h.layer);
   h.layer.attachDataManager(manager);
   try {
@@ -1491,7 +1431,7 @@ test('global fallback hides cards and upstream totals, and caps retained observa
       }));
     },
   });
-  h.viewer.camera.positionCartographic.height = 5_000_000;
+  h.height(5_000_000);
   await h.update();
   assert.equal(options.scope, 'global');
   assert.equal(options.boxes, null);
@@ -1521,11 +1461,11 @@ test('a successful empty page keeps the selected observation until explicit dese
   h.layer.selectSighting(base.stableId);
   rows = [];
   await h.update();
-  assert.equal(h.clicks.collection.values.length, 1);
+  assert.equal(h.badges().length, 1);
   assert.equal(h.store.selectedEntityId, base.stableId);
   h.layer.clearSightingSelection();
   await h.update();
-  assert.equal(h.clicks.collection.values.length, 0);
+  assert.equal(h.badges().length, 0);
   assert.equal(h.store.selectedEntityId, null);
   h.layer.destroy();
 });
@@ -1548,7 +1488,8 @@ test('provider credits sit in the layer row, never on the globe; Acartia failure
   });
   await h.update();
   const onGlobe = () =>
-    [...h.credits].filter((credit) => credit.showOnScreen).length;
+    h.engine.fake.credits.filter((credit) => credit.onScreen).length;
+  assert.equal(h.credits(), 1, 'the Acartia credit joins the attribution');
   assert.equal(onGlobe(), 0, 'no credit on the globe credit line');
   assert.equal(
     h.layer.getRowControls().info,
@@ -1652,19 +1593,14 @@ test('ambient cards prefilter the horizon, spread over screen regions and retain
     {
       occluderFactory: () => ({
         isPointVisible: (position) =>
-          Cesium.Math.toDegrees(
-            Cesium.Cartographic.fromCartesian(position).longitude,
-          ) > -122.55,
+          toDegrees(cartographicOf(position).longitude) > -122.55,
       }),
       project: (_scene, position) =>
         screens.get(
           rows.find(
             (row) =>
               Math.abs(
-                row.lon -
-                  Cesium.Math.toDegrees(
-                    Cesium.Cartographic.fromCartesian(position).longitude,
-                  ),
+                row.lon - toDegrees(cartographicOf(position).longitude),
               ) < 1e-7,
           )?.stableId,
         ),
@@ -1698,11 +1634,9 @@ test('ambient cards prefilter the horizon, spread over screen regions and retain
     }
   };
   assertCohort(entries);
-  const farDot = h.clicks.collection.values.find(
-    (point) => point.id === 'wildlife:inat:far',
-  );
+  const farDot = h.badges().find((point) => point.id === 'wildlife:inat:far');
   assert.ok(!farDot || farDot.show === false);
-  assert.equal(h.postRender.count(), 0);
+  assert.equal(h.frameWork(), 1);
   h.layer.selectSighting('inat:01');
   const selected = h.overlay.entries.get('wildlife-sightings-selected');
   h.moveEnd.emit();
@@ -1744,9 +1678,9 @@ test('observations publish real badges while grid acquisition is still pending',
   const updating = h.layer.update();
   try {
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(h.clicks.collection.values[0]?.id, 'wildlife:inat:1');
+    assert.equal(h.badges()[0]?.id, 'wildlife:inat:1');
     assert.equal(h.layer.getStats().count, 1);
-    assert.equal(h.postRender.count(), 0, 'acquisition adds no frame work');
+    assert.equal(h.frameWork(), 1, 'only the shared surface observer');
   } finally {
     finishGrid({ cells: [], totalResults: 0, fetchedAt: NOW });
     await updating;
@@ -1787,21 +1721,19 @@ test('each arriving tile extends the density glow before the remaining tiles fin
       { tile: tiles[0] },
     );
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(h.clicks.collection.values.length, 0);
-    const glow = h.pointOwners.values.find(
-      (collection) => collection.allowPicking === false,
-    );
-    assert.equal(glow.values.length, 1);
+    assert.equal(h.badges().length, 0);
+    assert.equal(h.glow().options.pickable, false);
+    assert.equal(h.glow().store.count, 1);
     assert.equal(h.layer.getStats().countLabel, '12 sightings in view');
     publishTile?.(
       { cells: [cells[1]], totalResults: 9, fetchedAt: NOW },
       { tile: tiles[1] || tiles[0] },
     );
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(h.clicks.collection.values.length, 0);
-    assert.equal(glow.values.length, 2);
+    assert.equal(h.badges().length, 0);
+    assert.equal(h.glow().store.count, 2);
     assert.equal(h.layer.getStats().countLabel, '21 sightings in view');
-    assert.equal(h.postRender.count(), 0);
+    assert.equal(h.frameWork(), 2, 'glow and the shared surface observer');
   } finally {
     finishGrid({ cells, totalResults: 21, fetchedAt: NOW });
     await updating;
@@ -1819,37 +1751,34 @@ test('grid-only views draw nonpickable glow without observation badges, labels o
       fetchedAt: NOW,
     }),
   });
-  h.viewer.camera.positionCartographic.height = 1_500_000;
+  h.height(1_500_000);
   await h.update();
-  assert.equal(h.clicks.collection.values.length, 0);
-  const glow = h.pointOwners.values.find(
-    (collection) => collection.allowPicking === false,
-  );
+  assert.equal(h.badges().length, 0);
+  const glow = h.glow();
   assert.ok(glow);
-  assert.equal(glow.values.length, 1);
-  assert.equal(glow.values[0].id, undefined, 'density has no pick identity');
+  assert.equal(glow.options.pickable, false);
+  assert.equal(glow.store.count, 1);
+  assert.equal(
+    glow.store.pickIds[0],
+    undefined,
+    'density has no pick identity',
+  );
   assert.equal(h.layer.getStats().countLabel, '12 sightings in view');
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-labels'), []);
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-selected'), []);
   assert.equal(h.focus.length, 0);
-  assert.equal(h.postRender.count(), 0);
+  assert.equal(h.frameWork(), 2, 'glow and the shared surface observer');
   h.layer.disable();
-  assert.equal(glow.destroyed, true);
+  assert.equal(h.glow(), undefined);
+  assert.equal(h.frameWork(), 0);
   assert.equal(h.timers.size, 0);
-  assert.equal(
-    h.pointOwners.values.length,
-    1,
-    'only the empty observation collection remains',
-  );
-  h.layer.enable(h.viewer);
+  assert.deepEqual(h.engine.movers.list(), [], 'no glow remains');
+  h.layer.enable();
   await h.update();
-  const restored = h.pointOwners.values.find(
-    (collection) => collection.allowPicking === false,
-  );
-  assert.ok(restored);
+  assert.ok(h.glow());
   h.layer.destroy();
-  assert.equal(restored.destroyed, true);
-  assert.equal(h.pointOwners.values.length, 0);
+  assert.equal(h.glow(), undefined);
+  assert.deepEqual(h.engine.movers.list(), []);
   assert.equal(h.timers.size, 0);
 });
 
@@ -1873,20 +1802,20 @@ test('height and upstream sample totals retain the same loaded sighting and grid
     },
   });
   await h.update();
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
-  h.viewer.camera.positionCartographic.height = 450_000;
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
+  h.height(450_000);
   await h.update();
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
-  h.viewer.camera.positionCartographic.height = 410_000;
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
+  h.height(410_000);
   h.moveEnd.emit();
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
-  h.viewer.camera.positionCartographic.height = 350_000;
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
+  h.height(350_000);
   await h.update();
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
-  h.viewer.camera.positionCartographic.height = 30_000;
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
+  h.height(30_000);
   partialSample = true;
   await h.update();
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
   assert.equal(gridRequests, 4);
   assert.equal(h.layer.getStats().countLabel, '12 sightings in view');
   assert.equal(layerFeedState(h.layer.getStats()), 'nominal');
@@ -1913,9 +1842,9 @@ test('close and wide views wait for loaded common-name labels without unnamed la
       },
     );
     t.after(() => h.layer.destroy());
-    h.viewer.camera.positionCartographic.height = heightM;
+    h.height(heightM);
     await h.update();
-    const point = h.clicks.collection.values[0];
+    const point = h.badges()[0];
     assert.ok(point, `${heightM}m: unnamed contacts still have icons`);
     assert.deepEqual(h.overlay.entries.get('wildlife-sightings-labels'), []);
     // Only observation icons require screen projections; unnamed contacts
@@ -1925,13 +1854,12 @@ test('close and wide views wait for loaded common-name labels without unnamed la
       1,
       'only the real observation is projected; unnamed rows add no label pass',
     );
-    assert.equal(h.postRender.count(), 0);
 
     rows = [{ ...base, commonName: 'Red-tailed Hawk' }];
     await h.update();
     assert.equal(
-      h.clicks.collection.values[0],
-      point,
+      h.badges()[0].id,
+      point.id,
       `${heightM}m: a newly known name reuses the icon`,
     );
     const labels = h.overlay.entries.get('wildlife-sightings-labels');
@@ -1941,7 +1869,7 @@ test('close and wide views wait for loaded common-name labels without unnamed la
     assert.equal(labels[0].protected, undefined);
     assert.equal(labels[0].selected, undefined);
     const settled = projections;
-    for (let frame = 0; frame < 10; frame++) h.postRender.emit();
+    h.engine.fake.frames(10);
     assert.equal(
       projections,
       settled,
@@ -1963,8 +1891,8 @@ test('selecting an unnamed observation preserves the selection without inventing
   const selections = [];
   h.layer.subscribeSelection((row) => selections.push(row));
   await h.update();
-  h.pick({ id: h.clicks.collection.values[0].id });
-  h.clicks.callback({ position: { x: 400, y: 400 } });
+  h.pick({ id: h.badges()[0].id });
+  h.click({ position: { x: 400, y: 400 } });
   assert.equal(selections.at(-1).stableId, base.stableId);
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-selected'), []);
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-labels'), []);
@@ -1982,10 +1910,10 @@ test('unavailable grids fail closed to visible sampled sprites without a global 
       throw Error('Malformed iNaturalist grid response');
     },
   });
-  h.viewer.camera.positionCartographic.height = 5_000_000;
+  h.height(5_000_000);
   await h.update();
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
-  assert.ok(h.clicks.collection.values[0].width * 0.5 >= 8);
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
+  assert.ok(h.badgeSet().options.sprite.sizePx * 0.5 >= 8);
   assert.equal(h.layer.getStats().count, 1);
   assert.match(h.layer.getStats().countLabel, /sightings in view/);
   assert.equal(h.layer.getStats().partial, undefined);
@@ -2020,10 +1948,10 @@ test('an oversized view coarsens to a complete grid within the six-tile cap', as
     { width: 4000, height: 4000 },
   );
   h.rectangle({ south: -85, west: -180, north: 85, east: 180 });
-  h.viewer.camera.positionCartographic.height = 7_000_000;
+  h.height(7_000_000);
   await h.update();
-  assert.equal(h.clicks.collection.values.length, 1);
-  assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
+  assert.equal(h.badges().length, 1);
+  assert.equal(h.badges()[0].id, 'wildlife:inat:1');
   assert.match(h.layer.getStats().countLabel, /sightings in view/);
   assert.equal(layerFeedState(h.layer.getStats()), 'nominal');
   h.layer.destroy();
@@ -2042,16 +1970,11 @@ test('label candidates are bounded after on-screen and horizon filtering, with n
     {
       project: (_scene, position) => ({
         x:
-          Cesium.Cartographic.fromCartesian(position).latitude >
-          Cesium.Math.toRadians(47.6)
+          cartographicOf(position).latitude > toRadians(47.6)
             ? 3000
             : 30 +
               (Math.round(
-                (Cesium.Math.toDegrees(
-                  Cesium.Cartographic.fromCartesian(position).latitude,
-                ) -
-                  47.5) *
-                  2000,
+                (toDegrees(cartographicOf(position).latitude) - 47.5) * 2000,
               ) %
                 50) *
                 28,
@@ -2059,19 +1982,14 @@ test('label candidates are bounded after on-screen and horizon filtering, with n
           30 +
           Math.floor(
             Math.round(
-              (Cesium.Math.toDegrees(
-                Cesium.Cartographic.fromCartesian(position).latitude,
-              ) -
-                47.5) *
-                2000,
+              (toDegrees(cartographicOf(position).latitude) - 47.5) * 2000,
             ) / 50,
           ) *
             28,
       }),
       occluderFactory: () => ({
         isPointVisible: (position) =>
-          Cesium.Cartographic.fromCartesian(position).latitude <
-          Cesium.Math.toRadians(47.59),
+          cartographicOf(position).latitude < toRadians(47.59),
       }),
     },
   );
@@ -2087,12 +2005,10 @@ test('label candidates are bounded after on-screen and horizon filtering, with n
   );
   assert.ok(
     labels.every(
-      (entry) =>
-        Cesium.Cartographic.fromCartesian(entry.position).latitude <
-        Cesium.Math.toRadians(47.59),
+      (entry) => cartographicOf(entry.position).latitude < toRadians(47.59),
     ),
   );
-  assert.equal(h.postRender.count(), 0);
+  assert.equal(h.frameWork(), 1);
   h.layer.destroy();
 });
 
@@ -2100,22 +2016,20 @@ test('accepted observation refreshes publish immediately and disable clears thei
   let rows = [base];
   const h = harness({ getSnapshot: async () => rows });
   await h.update();
-  const point = h.clicks.collection.values[0];
+  const point = h.badges()[0];
   for (const lon of [-122.35, -122.3, -122.25]) {
     rows = [{ ...base, lon }];
     await h.layer.update();
-    assert.equal(h.clicks.collection.values[0], point);
+    assert.equal(h.badges()[0].id, point.id);
     assert.ok(
-      Math.abs(
-        Cesium.Cartographic.fromCartesian(point.position).longitude -
-          Cesium.Math.toRadians(lon),
-      ) < 1e-12,
+      Math.abs(cartographicOf(point.position).longitude - toRadians(lon)) <
+        1e-12,
     );
     assert.equal(h.timers.size, 0, 'observation rendering adds no batch delay');
   }
   h.layer.disable();
   assert.equal(h.timers.size, 0);
-  assert.equal(h.clicks.collection.values.length, 0);
+  assert.equal(h.badges().length, 0);
   h.layer.destroy();
 });
 
@@ -2136,7 +2050,7 @@ test('a grid result for the previous global view cannot mark new camera tiles lo
       });
     },
   });
-  h.viewer.camera.positionCartographic.height = 5_000_000;
+  h.height(5_000_000);
   h.time(NOW + 500);
   const updating = h.layer.update();
   await new Promise((resolve) => setImmediate(resolve));
@@ -2144,9 +2058,7 @@ test('a grid result for the previous global view cannot mark new camera tiles lo
   settle();
   await updating;
   assert.equal(
-    h.clicks.collection.values.filter((point) =>
-      point.id.startsWith('wildlife:grid:'),
-    ).length,
+    h.badges().filter((point) => point.id.startsWith('wildlife:grid:')).length,
     0,
     'old tile result is rejected before moveEnd',
   );
@@ -2169,7 +2081,7 @@ test('clearing a selected contact restores its cached ambient label without proj
   assert.equal(h.overlay.entries.get('wildlife-sightings-labels').length, 1);
   h.pick({ id: 'wildlife:inat:1' });
   const renders = h.renders.length;
-  h.clicks.callback({ position: { x: 1, y: 1 } });
+  h.click({ position: { x: 1, y: 1 } });
   assert.equal(h.renders.length - renders, 1);
   assert.equal(h.overlay.entries.get('wildlife-sightings-labels').length, 0);
   assert.equal(h.overlay.entries.get('wildlife-sightings-selected').length, 1);
@@ -2191,10 +2103,7 @@ test('visible photo cards survive a pan into the same icon bucket and a differen
     {
       project: (_scene, position) => ({
         x:
-          collapsed ||
-          Cesium.Math.toDegrees(
-            Cesium.Cartographic.fromCartesian(position).longitude,
-          ) < -122.3
+          collapsed || toDegrees(cartographicOf(position).longitude) < -122.3
             ? 400
             : 700,
         y: 400,
@@ -2212,11 +2121,7 @@ test('visible photo cards survive a pan into the same icon bucket and a differen
   assert.equal(initial.length, 2);
   collapsed = true;
   h.moveEnd.emit();
-  assert.equal(
-    h.clicks.collection.values.length,
-    1,
-    'one icon in the shared bucket',
-  );
+  assert.equal(h.badges().length, 1, 'one icon in the shared bucket');
   assert.deepEqual(
     ids(),
     initial,
@@ -2245,21 +2150,145 @@ test('cold ground cells start on the ellipsoid and one bounded resolve per batch
     reads++;
     return warm ? 250 : null;
   };
-  h.layer.init(h.viewer);
-  h.layer.enable(h.viewer);
+  h.init();
+  h.layer.enable();
   await h.update();
-  const point = h.clicks.collection.values[0];
-  const heightOf = () =>
-    Cesium.Cartographic.fromCartesian(point.position).height;
-  assert.ok(Math.abs(heightOf()) < 0.01, 'cold cell anchors on the ellipsoid');
+  const point = h.badges()[0];
+  const pointHeight = () => heightOf(point.position);
+  assert.ok(
+    Math.abs(pointHeight()) < 0.01,
+    'cold cell anchors on the ellipsoid',
+  );
   assert.equal(h.ground.resolves, 1, 'one bounded resolve for the batch');
   warm = true;
   await new Promise((resolve) => setImmediate(resolve));
-  assert.ok(Math.abs(heightOf() - 250) < 0.01, 'resolved cell lifts in place');
-  assert.equal(h.clicks.collection.values[0], point);
+  assert.ok(
+    Math.abs(pointHeight() - 250) < 0.01,
+    'resolved cell lifts in place',
+  );
+  assert.equal(h.badges()[0].id, point.id);
   const before = reads;
   h.moveEnd.emit();
-  assert.ok(reads - before <= h.clicks.collection.values.length);
+  assert.ok(reads - before <= h.badges().length);
   assert.equal(h.ground.resolves, 1, 'warm cells do not resolve again');
   h.layer.destroy();
+});
+
+test('an engine switch keeps the data and selection and redraws the same badges and glow on the next engine', async () => {
+  let requests = 0;
+  const rows = [
+    photographed,
+    { ...base, stableId: 'inat:2', lon: -122.3, iconic: 'Mammalia' },
+    {
+      ...base,
+      stableId: 'inat:3',
+      lon: -122.2,
+      obscured: true,
+      cell: { south: 47.5, west: -122.3, north: 47.7, east: -122.1 },
+    },
+  ];
+  const h = harness({
+    getSnapshot: async () => {
+      requests++;
+      return rows;
+    },
+    getGridSnapshot: async ({ tiles }) => ({
+      cells: [gridCell(tiles[0].z)],
+      totalResults: 12,
+      fetchedAt: NOW,
+    }),
+  });
+  const firstCells = watchCells(h.engine);
+  await h.update();
+  assert.equal(h.layer.selectSighting('inat:1'), true);
+  const drawn = (engine) =>
+    h.badges(engine).map((badge) => ({
+      id: badge.id,
+      position: badge.position,
+      cell: badge.cell,
+      show: badge.show,
+      scale: badge.scale,
+      color: badge.color,
+    }));
+  const style = (engine) => {
+    const { options } = h.badgeSet(engine);
+    return {
+      order: options.order,
+      depthTest: options.depthTest,
+      pickable: options.pickable,
+      sizePx: options.sprite.sizePx,
+      scaleByDistance: [...options.sprite.scaleByDistance],
+      cells: options.sprite.atlas.cells,
+    };
+  };
+  const glow = (engine) => {
+    const set = engine.fake.moverSet(WILDLIFE_DENSITY_SET_ID);
+    return {
+      count: set.store.count,
+      pickable: set.options.pickable,
+      positions: [...set.store.positions.subarray(0, set.store.count * 3)],
+    };
+  };
+  const first = h.engine;
+  const before = drawn(first);
+  assert.equal(before.length, 3);
+  const beforeStyle = style(first);
+  const beforeGlow = glow(first);
+  assert.equal(beforeGlow.count, 1);
+  const cell = firstCells();
+  const stats = h.layer.getStats();
+
+  h.layer.detachRenderer();
+  assert.deepEqual(first.movers.list(), [], 'nothing stays drawn');
+  assert.deepEqual(first.lines.list(), []);
+  assert.deepEqual(first.ground.list(), []);
+  assert.equal(first.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(first.frames.preRender.numberOfListeners, 0);
+  assert.equal(first.frames.postRender.numberOfListeners, 0);
+  assert.equal(h.inputs(), 0, 'no click listener on the old engine');
+  assert.equal(h.owners.size, 0);
+  assert.equal(h.overlay.visible.get('wildlife-sightings-selected'), false);
+
+  const other = ENGINE_KINDS.find((kind) => kind !== h.engine.kind);
+  const next = h.globe(other);
+  const nextCells = watchCells(next);
+  assert.equal(h.layer.attachRenderer({ engine: next }), true);
+  h.flushIdle();
+  assert.deepEqual(drawn(next), before, 'the same badges, drawn the same');
+  assert.deepEqual(style(next), beforeStyle);
+  assert.deepEqual(glow(next), beforeGlow);
+  assert.deepEqual(
+    nextCells().items,
+    cell.items,
+    'same draped cell colours and bounds',
+  );
+  assert.equal(requests, 1, 'the retained view needs no new request');
+  assert.equal(h.layer.getStats().count, stats.count);
+  assert.equal(
+    h.overlay.entries.get('wildlife-sightings-selected')[0].id,
+    'wildlife-sightings-label:inat:1',
+    'the selection carries over',
+  );
+  assert.equal(h.overlay.visible.get('wildlife-sightings-selected'), true);
+  assert.equal(h.owners.size, 1);
+  assert.equal(h.inputs(), 1);
+
+  h.pick({ id: 'wildlife:inat:2' });
+  next.fake.input('click', { position: { x: 1, y: 1 } });
+  assert.equal(
+    h.store.selectedEntityId,
+    'inat:2',
+    'clicks reach the new engine',
+  );
+  // The camera debounce is the one timer of 600 ms or more.
+  const debounces = () =>
+    [...h.timers.values()].filter(({ delay }) => delay >= 600).length;
+  h.rectangle({ south: 48, west: -123, north: 48.4, east: -122.6 });
+  first.fake.emit('camera.moveEnd');
+  assert.equal(debounces(), 0, 'the old camera is no longer followed');
+  next.fake.emit('camera.moveEnd');
+  assert.equal(debounces(), 1, 'the new camera schedules acquisition');
+  h.layer.destroy();
+  assert.deepEqual(next.movers.list(), []);
+  assert.deepEqual(next.lines.list(), []);
 });

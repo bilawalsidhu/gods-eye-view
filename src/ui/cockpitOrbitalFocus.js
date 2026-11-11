@@ -8,7 +8,7 @@
  * (src/ui/cockpitOrbitalView.js); its state lives on the orbital session, so
  * it ends with the session.
  */
-import * as Cesium from 'cesium';
+import { cartesian3 } from '../geo/index.js';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
 import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
 import {
@@ -117,7 +117,7 @@ function sitePosition(site) {
 function siteAt(controller, position) {
   let picked = null;
   try {
-    picked = controller.viewer.scene?.pick?.(position) ?? null;
+    picked = controller.host.pick(position) ?? null;
   } catch {
     picked = null;
   }
@@ -263,21 +263,7 @@ export function onOrbitalClick(position) {
  *   (the draw tool borrows it) has replaced ours since.
  */
 export function routeSceneClick() {
-  const handler = this.viewer.screenSpaceEventHandler;
-  if (typeof handler?.setInputAction !== 'function') return () => {};
-  const type = Cesium.ScreenSpaceEventType.LEFT_CLICK;
-  const stock = handler.getInputAction?.(type) ?? null;
-  const routed = (event) => {
-    this.onOrbitalClick(event?.position);
-    stock?.(event);
-  };
-  handler.setInputAction(routed, type);
-  return () => {
-    if (handler.isDestroyed?.() || handler.getInputAction?.(type) !== routed)
-      return;
-    if (stock) handler.setInputAction(stock, type);
-    else handler.removeInputAction(type);
-  };
+  return this.host.routeClick((position) => this.onOrbitalClick(position));
 }
 
 /**
@@ -408,7 +394,7 @@ export function orbitalSitesInReach(info) {
   let sites = [];
   try {
     sites = layer.getNearby(
-      Cesium.Cartesian3.fromDegrees(info.longitude, info.latitude, 0),
+      cartesian3.fromDegrees(info.longitude, info.latitude, 0),
       rangeM,
       SITE_QUERY_MAX,
     );

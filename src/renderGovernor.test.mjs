@@ -1,100 +1,107 @@
-import { test, beforeEach } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  installRenderGovernor,
-  holdContinuousRender,
-  releaseContinuousRender,
-  governorRequestRender,
-  getRenderGovernorDiagnostics,
-  _resetRenderGovernorForTest,
-} from './renderGovernor.js';
+import { OrbitController } from './orbit.js';
+import { GROUND_HARNESSES } from './testSupport/groundDisplayEngines.mjs';
+import { createSceneServices, sceneServicesFor } from './data/sceneServices.js';
+import { renderGovernorFor, governorRequestRender } from './renderGovernor.js';
 
-function makeViewer() {
-  const calls = { requestRender: 0 };
-  const scene = {
-    requestRenderMode: false,
-    maximumRenderTimeChange: 0,
-    requestRender() { calls.requestRender += 1; },
-  };
-  return { viewer: { scene }, scene, calls };
+for (const makeHarness of GROUND_HARNESSES) {
+  test(`${makeHarness.name}: owner holds, installation and idle requests`, (t) => {
+    const harness = makeHarness();
+    const { engine } = harness;
+    const services = createSceneServices(engine);
+    const governor = services.render;
+    t.after(() => { services.destroy(); harness.destroy(); });
+    const requests = [];
+    const request = engine.render.request;
+    engine.render.request = (reason) => { requests.push(reason); request(reason); };
+    assert.equal(renderGovernorFor(engine), governor);
+    governor.holdContinuousRender('flights');
+    governor.governorRequestRender('before-install');
+    assert.equal(requests.length, 0);
+    governor.install();
+    assert.equal(engine.render.isContinuous(), true);
+    governor.holdContinuousRender('flights');
+    governor.holdContinuousRender('satellites');
+    governor.governorRequestRender('while-held');
+    assert.equal(requests.at(-1), 'while-held', 'requests forward even while held');
+    assert.deepEqual(governor.getRenderGovernorDiagnostics().recentRequests, []);
+    governor.releaseContinuousRender('flights');
+    assert.equal(engine.render.isContinuous(), true);
+    assert.deepEqual(governor.getRenderGovernorDiagnostics().holds, ['satellites']);
+    governor.releaseContinuousRender('satellites');
+    assert.equal(engine.render.isContinuous(), false);
+    assert.equal(requests.at(-1), 'governor-idle', 'last release paints a settling frame');
+    const settled = requests.length;
+    governor.releaseContinuousRender('satellites');
+    governor.releaseContinuousRender('absent');
+    assert.equal(requests.length, settled, 'absent releases do not wake an idle engine');
+    for (let i = 0; i < 20; i++) governorRequestRender(`tick-${i}`, engine);
+    const diagnostics = governor.getRenderGovernorDiagnostics();
+    assert.equal(diagnostics.recentRequests.length, 16);
+    assert.equal(diagnostics.recentRequests[0].reason, 'tick-4');
+    diagnostics.holds.push('external');
+    assert.deepEqual(governor.getRenderGovernorDiagnostics().holds, []);
+  });
+
+  test(`${makeHarness.name}: identical owners and teardown stay in their scene`, (t) => {
+    const first = makeHarness();
+    const second = makeHarness();
+    const a = createSceneServices(first.engine);
+    const b = createSceneServices(second.engine);
+    t.after(() => { sceneServicesFor(first.engine).destroy(); b.destroy(); first.destroy(); second.destroy(); });
+    a.render.install();
+    b.render.install();
+    a.render.holdContinuousRender('flights');
+    b.render.holdContinuousRender('flights');
+    a.render.releaseContinuousRender('flights');
+    assert.equal(first.engine.render.isContinuous(), false);
+    assert.equal(second.engine.render.isContinuous(), true);
+    a.destroy();
+    const replacement = createSceneServices(first.engine);
+    replacement.render.install();
+    replacement.render.holdContinuousRender('flights');
+    const oldRelease = a.render.releaseContinuousRender;
+    oldRelease('flights');
+    a.render.install();
+    a.render.holdContinuousRender('late');
+    a.render.governorRequestRender('late');
+    a.destroy();
+    assert.deepEqual(a.render.getRenderGovernorDiagnostics(), {
+      installed: false, mode: 'idle', holds: [], recentRequests: [],
+    });
+    assert.equal(first.engine.render.isContinuous(), true);
+    assert.equal(second.engine.render.isContinuous(), true);
+    b.destroy();
+    assert.equal(second.engine.render.isContinuous(), false);
+    assert.equal(first.engine.render.isContinuous(), true);
+    replacement.destroy();
+    assert.equal(first.engine.render.isContinuous(), false);
+    assert.equal(sceneServicesFor(first.engine), replacement, 'late lookups cannot revive a detached scene');
+  });
 }
 
-beforeEach(() => _resetRenderGovernorForTest());
-
-test('install with zero holds enters idle mode and pins maximumRenderTimeChange', () => {
-  const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
-  assert.equal(scene.requestRenderMode, true);
-  assert.equal(scene.maximumRenderTimeChange, Infinity);
-  assert.equal(getRenderGovernorDiagnostics().mode, 'idle');
-});
-
-test('a hold flips to continuous; releasing the last hold returns to idle with a settling frame', () => {
-  const { viewer, scene, calls } = makeViewer();
-  installRenderGovernor(viewer);
-  const settleBaseline = calls.requestRender;
-  holdContinuousRender('flights');
-  assert.equal(scene.requestRenderMode, false);
-  assert.equal(getRenderGovernorDiagnostics().mode, 'continuous');
-  releaseContinuousRender('flights');
-  assert.equal(scene.requestRenderMode, true);
-  // Entering idle renders one settling frame.
-  assert.equal(calls.requestRender, settleBaseline + 1);
-});
-
-test('holds are identity-keyed: double-hold cannot leak, double-release cannot corrupt', () => {
-  const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
-  holdContinuousRender('traffic');
-  holdContinuousRender('traffic');
-  releaseContinuousRender('traffic');
-  assert.equal(scene.requestRenderMode, true, 'single release clears an idempotent double-hold');
-  releaseContinuousRender('traffic');
-  releaseContinuousRender('never-held');
-  assert.equal(scene.requestRenderMode, true);
-});
-
-test('mode stays continuous until the LAST holder releases', () => {
-  const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
-  holdContinuousRender('flights');
-  holdContinuousRender('satellites');
-  releaseContinuousRender('flights');
-  assert.equal(scene.requestRenderMode, false);
-  assert.deepEqual(getRenderGovernorDiagnostics().holds, ['satellites']);
-  releaseContinuousRender('satellites');
-  assert.equal(scene.requestRenderMode, true);
-});
-
-test('governorRequestRender forwards to the scene and records reasons only in idle mode', () => {
-  const { viewer, calls } = makeViewer();
-  installRenderGovernor(viewer);
-  const baseline = calls.requestRender;
-  governorRequestRender('layer-tick:earthquakes');
-  assert.equal(calls.requestRender, baseline + 1);
-  assert.equal(getRenderGovernorDiagnostics().recentRequests.at(-1).reason, 'layer-tick:earthquakes');
-  holdContinuousRender('flights');
-  const idleRequests = getRenderGovernorDiagnostics().recentRequests.length;
-  governorRequestRender('slider');
-  assert.equal(
-    getRenderGovernorDiagnostics().recentRequests.length,
-    idleRequests,
-    'continuous-mode requests are not recorded as idle diagnostics',
-  );
-});
-
-test('hold/release/request are safe no-ops before install (test environments without a viewer)', () => {
-  holdContinuousRender('flights');
-  releaseContinuousRender('flights');
-  governorRequestRender('noop');
-  assert.equal(getRenderGovernorDiagnostics().installed, false);
-});
-
-test('holds registered before install apply at install time', () => {
-  holdContinuousRender('flights');
-  const { viewer, scene } = makeViewer();
-  installRenderGovernor(viewer);
-  assert.equal(scene.requestRenderMode, false, 'pre-install hold keeps continuous mode');
-  releaseContinuousRender('flights');
-  assert.equal(scene.requestRenderMode, true);
-});
+for (const makeHarness of GROUND_HARNESSES) {
+  test(`${makeHarness.name}: an old orbit release cannot idle a replacement attachment`, (t) => {
+    const harness = makeHarness();
+    const { engine } = harness;
+    const first = createSceneServices(engine);
+    first.render.install();
+    const oldOrbit = new OrbitController(engine);
+    const newOrbit = new OrbitController(engine);
+    t.after(() => {
+      oldOrbit.stop(); newOrbit.stop(); sceneServicesFor(engine).destroy(); harness.destroy();
+    });
+    oldOrbit.start({ x: 6378137, y: 0, z: 0 });
+    assert.equal(engine.render.isContinuous(), true);
+    first.destroy();
+    const next = createSceneServices(engine);
+    next.render.install();
+    newOrbit.start({ x: 6378137, y: 0, z: 0 });
+    oldOrbit.stop();
+    assert.deepEqual(next.render.getRenderGovernorDiagnostics().holds, ['camera-orbit']);
+    assert.equal(engine.render.isContinuous(), true);
+    newOrbit.stop();
+    assert.equal(engine.render.isContinuous(), false);
+  });
+}

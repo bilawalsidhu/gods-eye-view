@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 import { createMotion } from './motion.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
@@ -15,9 +17,9 @@ const T0 = Date.UTC(2026, 10, 9, 21, 0);
 
 function fix(timeMs, lat, lon, heightM, velocity, track) {
   return {
-    time: Cesium.JulianDate.fromDate(new Date(timeMs)),
+    timeMs,
     epochMs: timeMs,
-    position: Cesium.Cartesian3.fromDegrees(lon, lat, heightM),
+    position: geo.cartesian3.fromDegrees(lon, lat, heightM),
     velocity,
     track,
   };
@@ -25,6 +27,7 @@ function fix(timeMs, lat, lon, heightM, velocity, track) {
 
 function services(trail, ground) {
   const names = [
+    'selection',
     'picking',
     'sprites',
     'aircraftPresentation',
@@ -98,26 +101,19 @@ function harness({ fixes, info, nowMs, ground = () => null }) {
   let frameNumber = 0;
   const added = [];
   let entityChanges = 0;
-  flightState._viewer = {
-    isDestroyed: () => false,
-    scene: {
-      frameState: {
-        get frameNumber() {
-          return frameNumber;
-        },
-      },
+  flightState._renderer = recordingAircraftRenderer(createFakeEngine());
+  flightState._renderer.trails = {
+    create: svc.trails.createTrail,
+    createHead(definition) {
+      entityChanges += 1;
+      added.push(definition);
+      return definition;
     },
-    entities: {
-      add(definition) {
-        entityChanges += 1;
-        added.push(definition);
-        return definition;
-      },
-      remove() {
-        entityChanges += 1;
-      },
+    removeHead() {
+      entityChanges += 1;
     },
   };
+  flightState._renderer.view.frameNumber = () => frameNumber;
   flightState._trackedIcao = ICAO;
   let clock = nowMs;
   flightState.now = () => clock;
@@ -147,7 +143,7 @@ function harness({ fixes, info, nowMs, ground = () => null }) {
     const before = entityChanges;
     inHead = true;
     try {
-      return headEntity().polyline.positions.getValue();
+      return headEntity().positions();
     } finally {
       inHead = false;
       assert.equal(
@@ -163,7 +159,7 @@ function harness({ fixes, info, nowMs, ground = () => null }) {
     frameNumber += 1;
     tracking._trailTick();
     const icon = parts.motion._trackedDisplayPosition(ICAO);
-    if (icon) drawn.push(Cesium.Cartesian3.clone(icon));
+    if (icon) drawn.push(geo.cartesian3.clone(icon));
     if (readHead) head();
   };
   const run = (toMs, { frameMs = 100, readHead = true } = {}) => {
@@ -190,39 +186,39 @@ function harness({ fixes, info, nowMs, ground = () => null }) {
 /** Distance from p to the nearest point of a polyline. */
 function distanceToPath(p, path) {
   let best = Infinity;
-  const ab = new Cesium.Cartesian3();
-  const ap = new Cesium.Cartesian3();
-  const closest = new Cesium.Cartesian3();
-  if (path.length === 1) return Cesium.Cartesian3.distance(p, path[0]);
+  const ab = geo.cartesian3.create();
+  const ap = geo.cartesian3.create();
+  const closest = geo.cartesian3.create();
+  if (path.length === 1) return geo.cartesian3.distance(p, path[0]);
   for (let i = 1; i < path.length; i++) {
-    Cesium.Cartesian3.subtract(path[i], path[i - 1], ab);
-    Cesium.Cartesian3.subtract(p, path[i - 1], ap);
-    const len2 = Cesium.Cartesian3.magnitudeSquared(ab);
+    geo.cartesian3.subtract(path[i], path[i - 1], ab);
+    geo.cartesian3.subtract(p, path[i - 1], ap);
+    const len2 = geo.cartesian3.magnitudeSquared(ab);
     const t =
       len2 > 0
-        ? Math.max(0, Math.min(1, Cesium.Cartesian3.dot(ap, ab) / len2))
+        ? Math.max(0, Math.min(1, geo.cartesian3.dot(ap, ab) / len2))
         : 0;
-    Cesium.Cartesian3.add(
+    geo.cartesian3.add(
       path[i - 1],
-      Cesium.Cartesian3.multiplyByScalar(ab, t, closest),
+      geo.cartesian3.multiplyByScalar(ab, t, closest),
       closest,
     );
-    best = Math.min(best, Cesium.Cartesian3.distance(p, closest));
+    best = Math.min(best, geo.cartesian3.distance(p, closest));
   }
   return best;
 }
 
 /** No vertex turns the line back sharper than 120° over a short step. */
 function assertNoSpur(line, label) {
-  const u = new Cesium.Cartesian3();
-  const v = new Cesium.Cartesian3();
+  const u = geo.cartesian3.create();
+  const v = geo.cartesian3.create();
   for (let i = 1; i < line.length - 1; i++) {
-    Cesium.Cartesian3.subtract(line[i], line[i - 1], u);
-    Cesium.Cartesian3.subtract(line[i + 1], line[i], v);
-    const lu = Cesium.Cartesian3.magnitude(u);
-    const lv = Cesium.Cartesian3.magnitude(v);
+    geo.cartesian3.subtract(line[i], line[i - 1], u);
+    geo.cartesian3.subtract(line[i + 1], line[i], v);
+    const lu = geo.cartesian3.magnitude(u);
+    const lv = geo.cartesian3.magnitude(v);
     if (!(lu > 0 && lv > 0) || Math.min(lu, lv) > 500) continue;
-    const cos = Cesium.Cartesian3.dot(u, v) / (lu * lv);
+    const cos = geo.cartesian3.dot(u, v) / (lu * lv);
     assert.ok(
       cos >= -0.5,
       `${label}: spur at vertex ${i} of ${line.length} (turn ${(
@@ -234,7 +230,7 @@ function assertNoSpur(line, label) {
 }
 
 const indexOfPoint = (line, p) =>
-  line.findIndex((q) => Cesium.Cartesian3.distance(p, q) < 0.01);
+  line.findIndex((q) => geo.cartesian3.distance(p, q) < 0.01);
 
 // A departing jet: four northbound climb reports, then a left turn through
 // west to south with no report while the icon flies it.
@@ -275,14 +271,14 @@ test('military: a report newer than the display time arrives mid-turn, and the t
     // onto it.
     const at60 = h.motion._deadReckon(
       ICAO,
-      new Cesium.Cartesian3(),
-      Cesium.JulianDate.fromDate(new Date(T0 + 150 * SEC)),
+      geo.cartesian3.create(),
+      T0 + 150 * SEC,
     );
-    const c = Cesium.Cartographic.fromCartesian(at60);
+    const c = geo.cartographic.fromCartesian(at60);
     const report = fix(
       T0 + 150 * SEC,
-      Cesium.Math.toDegrees(c.latitude),
-      Cesium.Math.toDegrees(c.longitude),
+      geo.math.toDegrees(c.latitude),
+      geo.math.toDegrees(c.longitude),
       c.height,
       112,
       220,
@@ -290,7 +286,7 @@ test('military: a report newer than the display time arrives mid-turn, and the t
     fixes.push(report);
     info.track = 220;
     h.tracking._appendTrailFix(
-      Cesium.Cartesian3.clone(report.position),
+      geo.cartesian3.clone(report.position),
       report.epochMs,
     );
     // The display passes the new report.
@@ -337,14 +333,14 @@ test('military: a report the display already passed replaces the guess drawn aft
     // A report for 10 s before the display time, 400 m inside the drawn arc.
     const guess = h.motion._deadReckon(
       ICAO,
-      new Cesium.Cartesian3(),
-      Cesium.JulianDate.fromDate(new Date(T0 + 120 * SEC)),
+      geo.cartesian3.create(),
+      T0 + 120 * SEC,
     );
-    const c = Cesium.Cartographic.fromCartesian(guess);
+    const c = geo.cartographic.fromCartesian(guess);
     const report = fix(
       T0 + 120 * SEC,
-      Cesium.Math.toDegrees(c.latitude) - 400 / 111_320,
-      Cesium.Math.toDegrees(c.longitude),
+      geo.math.toDegrees(c.latitude) - 400 / 111_320,
+      geo.math.toDegrees(c.longitude),
       c.height,
       112,
       250,
@@ -352,7 +348,7 @@ test('military: a report the display already passed replaces the guess drawn aft
     fixes.push(report);
     info.track = 250;
     h.tracking._appendTrailFix(
-      Cesium.Cartesian3.clone(report.position),
+      geo.cartesian3.clone(report.position),
       report.epochMs,
     );
     h.run(start + 55 * SEC);
@@ -449,16 +445,12 @@ test('military: a plane that stops reporting keeps moving dimmed as STALE from i
     assert.equal(h.tracking._trackedIconColor().alpha, STALE_ALPHA);
     // Still moving well past 90 s.
     h.run(pastReport(200));
-    assert.ok(
-      Cesium.Cartesian3.distance(h.drawn.at(-1), h.drawn.at(-11)) > 100,
-    );
+    assert.ok(geo.cartesian3.distance(h.drawn.at(-1), h.drawn.at(-11)) > 100);
     // The coast ends 300 s past the report; the plane stops there.
     h.run(pastReport(310));
     const recorded = h.flightState._trailFixes.filter((e) => e.drawn).length;
     h.run(pastReport(330));
-    assert.ok(
-      Cesium.Cartesian3.distance(h.drawn.at(-1), h.drawn.at(-50)) < 0.01,
-    );
+    assert.ok(geo.cartesian3.distance(h.drawn.at(-1), h.drawn.at(-50)) < 0.01);
     assert.equal(
       h.flightState._trailFixes.filter((e) => e.drawn).length,
       recorded,
@@ -511,23 +503,19 @@ test('military: a report arriving 200 s into a coast: the plane eases onto it an
     // Heard again: the report is for 10 s before the display time, 2 km north
     // of where the coast put it.
     const at = T0 + 30 * SEC + 190 * SEC;
-    const guess = h.motion._deadReckon(
-      ICAO,
-      new Cesium.Cartesian3(),
-      Cesium.JulianDate.fromDate(new Date(at)),
-    );
-    const c = Cesium.Cartographic.fromCartesian(guess);
+    const guess = h.motion._deadReckon(ICAO, geo.cartesian3.create(), at);
+    const c = geo.cartographic.fromCartesian(guess);
     const report = fix(
       at,
-      Cesium.Math.toDegrees(c.latitude) + 2_000 / 111_320,
-      Cesium.Math.toDegrees(c.longitude),
+      geo.math.toDegrees(c.latitude) + 2_000 / 111_320,
+      geo.math.toDegrees(c.longitude),
       c.height,
       140,
       90,
     );
     fixes.push(report);
     h.tracking._appendTrailFix(
-      Cesium.Cartesian3.clone(report.position),
+      geo.cartesian3.clone(report.position),
       report.epochMs,
     );
     assert.deepEqual(
@@ -541,11 +529,11 @@ test('military: a report arriving 200 s into a coast: the plane eases onto it an
     const after = h.drawn.slice(from - 1);
     for (let i = 1; i < after.length; i++)
       assert.ok(
-        Cesium.Cartesian3.distance(after[i], after[i - 1]) < 400,
+        geo.cartesian3.distance(after[i], after[i - 1]) < 400,
         'the plane jumped instead of easing',
       );
     // Eased onto the path from the report: 13 s on from it at 140 m/s.
-    const off = Cesium.Cartesian3.distance(after.at(-1), report.position);
+    const off = geo.cartesian3.distance(after.at(-1), report.position);
     assert.ok(
       Math.abs(off - 140 * 13) < 150,
       `${off.toFixed(0)} m from the report`,
@@ -582,7 +570,7 @@ test('military: a tracked plane that stops reporting: STALE from the first misse
       }
       polls.set(afterSec, {
         cue: h.tracking._trackedStaleCue(ICAO),
-        drawn: Cesium.Cartesian3.clone(h.drawn.at(-1)),
+        drawn: geo.cartesian3.clone(h.drawn.at(-1)),
       });
     }
     // Wall time when the display reaches the end of the coast.
@@ -602,7 +590,7 @@ test('military: a tracked plane that stops reporting: STALE from the first misse
       }
     }
     const moved = (a, b) =>
-      Cesium.Cartesian3.distance(polls.get(a).drawn, polls.get(b).drawn);
+      geo.cartesian3.distance(polls.get(a).drawn, polls.get(b).drawn);
     // Moving through the coast, still at its last speed at four minutes.
     assert.ok(Math.abs(moved(230, 240) - 140 * 10) < 20);
     // Stopped once the coast has ended.
@@ -669,14 +657,14 @@ test('military: a report arriving after the plane has stopped: it eases in with 
   try {
     h.tracking._startTrail(ICAO);
     h.run(pastReport(360));
-    const stop = Cesium.Cartesian3.clone(h.drawn.at(-1));
-    assert.ok(Cesium.Cartesian3.distance(stop, h.drawn.at(-100)) < 0.01);
+    const stop = geo.cartesian3.clone(h.drawn.at(-1));
+    assert.ok(geo.cartesian3.distance(stop, h.drawn.at(-100)) < 0.01);
     const kept = h.flightState._trailFixes
       .filter((e) => e.drawn)
-      .map((e) => Cesium.Cartesian3.clone(e.position));
+      .map((e) => geo.cartesian3.clone(e.position));
     // The thinned straight coast, recorded up to where the plane stopped.
     assert.ok(kept.length >= 2);
-    assert.ok(Cesium.Cartesian3.distance(kept.at(-1), stop) < 300);
+    assert.ok(geo.cartesian3.distance(kept.at(-1), stop) < 300);
     // Heard again, for 20 s before the display time: the plane flew on, a
     // little north of its old heading.
     const at = T0 + 30 * SEC + 340 * SEC;
@@ -685,7 +673,7 @@ test('military: a report arriving after the plane has stopped: it eases in with 
     const report = fix(at, 43 + 1_000 / 111_320, lonDeg, 6_400, 140, 90);
     fixes.push(report);
     h.tracking._appendTrailFix(
-      Cesium.Cartesian3.clone(report.position),
+      geo.cartesian3.clone(report.position),
       report.epochMs,
     );
     // Nothing was recorded after the stop, so nothing is dropped.
@@ -694,19 +682,19 @@ test('military: a report arriving after the plane has stopped: it eases in with 
       .map((e) => e.position);
     assert.equal(after.length, kept.length);
     kept.forEach((p, i) =>
-      assert.ok(Cesium.Cartesian3.distance(p, after[i]) < 0.01),
+      assert.ok(geo.cartesian3.distance(p, after[i]) < 0.01),
     );
     const from = h.drawn.length;
     h.run(pastReport(365));
     const eased = h.drawn.slice(from - 1);
-    const jump = Cesium.Cartesian3.distance(eased[0], eased.at(-1));
+    const jump = geo.cartesian3.distance(eased[0], eased.at(-1));
     for (let i = 1; i < eased.length; i++)
       assert.ok(
-        Cesium.Cartesian3.distance(eased[i], eased[i - 1]) < jump / 2,
+        geo.cartesian3.distance(eased[i], eased[i - 1]) < jump / 2,
         'the plane jumped instead of easing',
       );
     // On the path from the report: 25 s on from it at 140 m/s.
-    const off = Cesium.Cartesian3.distance(eased.at(-1), report.position);
+    const off = geo.cartesian3.distance(eased.at(-1), report.position);
     assert.ok(Math.abs(off - 140 * 25) < 150, `${off.toFixed(0)} m`);
     assertNoSpur(h.bodyPoints(), 'trail');
     assertNoSpur(h.head(), 'head');

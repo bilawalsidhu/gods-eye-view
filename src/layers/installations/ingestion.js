@@ -69,11 +69,11 @@ export function createIngestion({
     if (layerState.status === status && layerState.error === error) return;
     layerState.status = status;
     layerState.error = error;
-    governorRequestRender('installations-status');
+    governorRequestRender('installations-status', layerState.engine);
   }
 
   async function loadInstallations() {
-    if (!layerState.enabled || !layerState.viewer) return;
+    if (!layerState.enabled) return;
     const { box, coverage } = parts.viewport.loadArea(layerState.viewer);
     // Guidance, not a fault: the layer chose not to query because the view is
     // unbounded (a global view, or Cockpit looking at the horizon). Keep it out
@@ -260,8 +260,8 @@ export function createIngestion({
               ? msg('Too many mapped sites in view to list them all')
               : placesError,
         );
-        parts.rendering.renderRecords();
-        parts.rendering.warmInstallationFloors(
+        parts.display?.renderRecords();
+        parts.display?.warmInstallationFloors(
           layerState.records.filter((r) => !r.pointOnly),
         );
       };

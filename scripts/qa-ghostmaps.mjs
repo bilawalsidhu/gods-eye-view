@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive failure injection tests the Cesium paint path.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-ghostmaps.mjs — headless proof for the S2 Underground GhostMaps layer
  * (id `s2-ghostmaps`): S2's public KMZ intel products, kept current from
@@ -8,7 +11,8 @@
  *
  *   (i)   LIVE — enabling the layer loads the default products (Common
  *         Intelligence Picture and the 30-day kinetic pull) from the live
- *         repository through /api/ghostmaps, one data source per product,
+ *         repository through /api/ghostmaps, one drawn edition per product
+ *         (its globe-contract sets),
  *         matching the proxy's catalog commit; the row shows one chip per
  *         catalog product with the defaults active, and the page holds an
  *         open event stream to /api/ghostmaps/events.
@@ -17,12 +21,12 @@
  *         and clicking empty ground clears it.
  *   (iii) PUSH (synthetic) — the event stream is replaced in the page and a
  *         catalog naming a new edition of one product is pushed: only that
- *         product reloads (a new data source replaces the old one, no
- *         duplicates), the other keeps its data source. A catalog without a
+ *         product reloads (a new edition replaces the old one, no
+ *         duplicates), the other keeps its edition. A catalog without a
  *         product removes it.
  *   (iv)  CHIPS — clicking an active product chip removes that product,
  *         clicking it again restores it; the choice survives a reload.
- *   (v)   DISABLE — every GhostMaps data source leaves the viewer.
+ *   (v)   DISABLE — every GhostMaps set leaves the globe.
  *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its chips
  *         fit the panel width with no horizontal overflow.
  *   (vii) FAR SIDE — pins skip the depth test, so they are horizon-culled:
@@ -38,7 +42,7 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,7 +67,6 @@ function record(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function boot(page) {
   await page.goto(`${APP_URL}/?welcome=0`, {
@@ -71,22 +74,71 @@ async function boot(page) {
     timeout: TIMEOUT_MS,
   });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: TIMEOUT_MS },
   );
-  await sleep(5000);
+  await whenSettled(page);
+  await whenFramesDrawn(page);
   await page.keyboard.press('Escape');
 }
 
-/** GhostMaps data sources on the viewer: name → entity count. */
+/**
+ * GhostMaps product editions on the globe contract: one row per drawn
+ * edition, as one data source per product used to be. The display
+ * (render/display.js) gives each edition three sets named
+ * `${prefix}${productId}:${edition}:{polygons,lines,pins}`; `count` sums their
+ * items.
+ */
 function ghostSources(prefix) {
-  const { dataSources } = window.__godsEyeView.viewer;
-  const out = [];
-  for (let i = 0; i < dataSources.length; i++) {
-    const ds = dataSources.get(i);
-    if (ds.name?.startsWith(prefix))
-      out.push({ name: ds.name, count: ds.entities.values.length });
+  const { engine } = window.__godsEyeView;
+  const editions = new Map();
+  for (const set of [...engine.ground.list(), ...engine.movers.list()]) {
+    if (!set.id.startsWith(prefix)) continue;
+    const [productId, edition] = set.id.slice(prefix.length).split(':');
+    const key = `${productId}:${edition}`;
+    const row = editions.get(key) || {
+      name: `${prefix}${productId}`,
+      edition: Number(edition),
+      count: 0,
+    };
+    row.count += set.count;
+    editions.set(key, row);
   }
+  return [...editions.values()];
+}
+
+/**
+ * The drawn placemarks of the GhostMaps sprite sets (`...:pins`), from the
+ * Cesium engine's own billboards for those sets (the contract has no
+ * per-instance read-back): { id, show, position } each.
+ */
+function ghostPins(prefix) {
+  const gev = window.__godsEyeView;
+  const counts = new Map(
+    gev.engine.movers.list().map((set) => [set.id, set.count]),
+  );
+  const out = [];
+  const walk = (collection, depth) => {
+    for (let i = 0; i < (collection?.length || 0); i++) {
+      const primitive = collection.get(i);
+      const setId = primitive?.gevMoverSet;
+      if (typeof setId === 'string') {
+        if (!setId.startsWith(prefix) || !setId.endsWith(':pins')) continue;
+        const count = Math.min(counts.get(setId) ?? 0, primitive.length);
+        for (let j = 0; j < count; j++) {
+          const billboard = primitive.get(j);
+          out.push({
+            set: setId,
+            id: String(billboard.id),
+            show: billboard.show,
+            position: billboard.position,
+          });
+        }
+      } else if (depth < 3 && typeof primitive?.get === 'function')
+        walk(primitive, depth + 1);
+    }
+  };
+  walk(gev.viewer.scene.primitives, 0);
   return out;
 }
 
@@ -127,6 +179,9 @@ const stats = (page) =>
   );
 const sources = (page) =>
   page.evaluate(`(${ghostSources})(${JSON.stringify(`${LAYER_ID}:`)})`);
+// Installs ghostPins() in the page (the evaluate callbacks below call it).
+const installPins = (page) =>
+  page.evaluate(`window.__qaGhostPins = ${ghostPins}`);
 
 async function showRow(page) {
   await page.evaluate((id) => {
@@ -134,14 +189,14 @@ async function showRow(page) {
       .querySelector(`[data-layer-id="${id}"]`)
       ?.scrollIntoView({ block: 'center' });
   }, LAYER_ID);
-  await sleep(400);
+  await whenFramesDrawn(page);
 }
 
 async function main() {
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: !HEADFUL,
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--enable-unsafe-swiftshader'],
     defaultViewport: { width: 1440, height: 900 },
   });
   try {
@@ -278,6 +333,7 @@ async function main() {
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
       timeout: TIMEOUT_MS,
     });
+    await whenSettled(page);
     await enableAndSettle(page);
     const persistedAge = await stats(page);
     record(
@@ -298,59 +354,52 @@ async function main() {
     );
 
     // ---- (ii) PICK ----------------------------------------------------------
-    const target = await page.evaluate((id) => {
-      const gev = window.__godsEyeView;
-      const ds = [...Array(gev.viewer.dataSources.length).keys()]
-        .map((i) => gev.viewer.dataSources.get(i))
-        .find((item) => item.name === `${id}:cip`);
-      const entity = ds.entities.values.find((e) => e.billboard);
-      const carto = gev.viewer.scene.globe.ellipsoid.cartesianToCartographic(
-        entity.position.getValue(gev.viewer.clock.currentTime),
-      );
-      try {
-        gev.viewer.camera.cancelFlight();
-      } catch {
-        /* no flight */
-      }
-      gev.viewer.camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
-          longitude: carto.longitude,
-          latitude: carto.latitude,
-          height: 40000,
-        }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-      gev.viewer.scene.requestRender?.();
-      return entity.id;
-    }, LAYER_ID);
-    await page
-      .waitForFunction(
-        () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-        { timeout: 30000 },
-      )
-      .catch(() => {});
+    await installPins(page);
+    const target = await evaluateWithGeo(
+      page,
+      async (qaGeo, id) => {
+        const pin = window.__qaGhostPins(`${id}:cip:`)[0];
+        const carto = qaGeo.cartographic.fromCartesian(pin.position);
+        try {
+          window.__godsEyeView.engine.camera.cancelFlight();
+        } catch {
+          /* no flight */
+        }
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: carto.longitude,
+            latitude: carto.latitude,
+            height: 40000,
+          }),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        window.__godsEyeView.engine.render.request?.();
+        return pin.id;
+      },
+      LAYER_ID,
+    );
+    await whenTilesLoaded(page, { timeoutMs: 30000 }).catch(() => {});
+    await whenSettled(page);
     // The horizon cull reveals the pin on the frame after the camera moves.
     await page
       .waitForFunction(
         () => {
-          const v = window.__godsEyeView.viewer;
-          v.scene.requestRender?.();
-          const c = v.scene.canvas;
-          return v.scene
+          const { engine } = window.__godsEyeView;
+          window.__godsEyeView.engine.render.request?.();
+          const c = window.__godsEyeView.engine.host.canvas;
+          return engine.picker
             .drillPick({ x: c.clientWidth / 2, y: c.clientHeight / 2 }, 8)
-            .some((p) =>
-              String(p?.id?.id ?? p?.id ?? '').startsWith('ghostmaps:cip:'),
-            );
+            .some((p) => String(p?.id ?? '').startsWith('ghostmaps:cip:'));
         },
         { timeout: 15000, polling: 500 },
       )
       .catch(() => {});
     const probe = await page.evaluate(() => {
-      const v = window.__godsEyeView.viewer;
-      const c = v.scene.canvas;
+      const { engine } = window.__godsEyeView;
+      const c = window.__godsEyeView.engine.host.canvas;
       const box = c.getBoundingClientRect();
       const centre = { x: c.clientWidth / 2, y: c.clientHeight / 2 };
-      const picked = v.scene.drillPick(centre, 8);
+      const picked = engine.picker.drillPick(centre, 8);
       // Empty ground: the first point below the marker (the card is drawn
       // above it) that picks nothing at all; markers can be dense in a city.
       let empty = null;
@@ -360,14 +409,14 @@ async function main() {
             x: centre.x + r * Math.cos((a * Math.PI) / 4),
             y: centre.y + r * Math.sin((a * Math.PI) / 4),
           };
-          if (!v.scene.pick(p)) {
+          if (engine.picker.pick(p)?.id == null) {
             empty = p;
             break;
           }
         }
       empty ||= { x: centre.x + 400, y: centre.y + 300 };
       return {
-        ids: picked.map((p) => String(p?.id?.id ?? p?.id ?? '')),
+        ids: picked.map((p) => String(p?.id ?? '')),
         centre: { x: centre.x + box.left, y: centre.y + box.top },
         empty: { x: empty.x + box.left, y: empty.y + box.top },
       };
@@ -438,47 +487,41 @@ async function main() {
     // far side. A pin clearly behind the planet (sphere test with margin) must
     // be hidden, and pins facing the camera must still show.
     const horizonCounts = (lon, lat) =>
-      page.evaluate(
-        async (id, lo, la) => {
-          const gev = window.__godsEyeView;
+      evaluateWithGeo(
+        page,
+        async (qaGeo, id, lo, la) => {
           const d2r = Math.PI / 180;
           try {
-            gev.viewer.camera.cancelFlight();
+            window.__godsEyeView.engine.camera.cancelFlight();
           } catch {
             /* no flight */
           }
-          gev.viewer.camera.setView({
-            destination:
-              gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
-                longitude: lo * d2r,
-                latitude: la * d2r,
-                height: 18_000_000,
-              }),
+          window.__godsEyeView.engine.camera.setView({
+            destination: qaGeo.cartographic.toCartesian({
+              longitude: lo * d2r,
+              latitude: la * d2r,
+              height: 18_000_000,
+            }),
             orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
           });
-          gev.viewer.scene.requestRender?.();
+          window.__godsEyeView.engine.render.request?.();
           await new Promise((r) => setTimeout(r, 1200));
-          const c = gev.viewer.camera.positionWC;
+          const c = window.__godsEyeView.engine.camera.pose().position;
           const norm = (v) => Math.hypot(v.x, v.y, v.z);
           let far = 0;
           let nearShown = 0;
-          for (let i = 0; i < gev.viewer.dataSources.length; i++) {
-            const ds = gev.viewer.dataSources.get(i);
-            if (!ds.name?.startsWith(`${id}:`)) continue;
-            for (const e of ds.entities.values) {
-              if (!e.billboard) continue;
-              const p = e.position.getValue(gev.viewer.clock.currentTime);
-              // Angle from the camera's nadir to the pin, against the
-              // geometric horizon angle; the cull's 1 km margin shows pins up
-              // to about 1° past it, so "clearly behind" is beyond 2°.
-              const angle = Math.acos(
-                (p.x * c.x + p.y * c.y + p.z * c.z) / (norm(p) * norm(c)),
-              );
-              const horizon = Math.acos(norm(p) / norm(c));
-              const margin = (2 * Math.PI) / 180;
-              if (e.show && angle > horizon + margin) far++;
-              if (e.show && angle < horizon - margin) nearShown++;
-            }
+          for (const e of window.__qaGhostPins(`${id}:`)) {
+            const p = e.position;
+            // Angle from the camera's nadir to the pin, against the
+            // geometric horizon angle; the cull's 1 km margin shows pins up
+            // to about 1° past it, so "clearly behind" is beyond 2°.
+            const angle = Math.acos(
+              (p.x * c.x + p.y * c.y + p.z * c.z) / (norm(p) * norm(c)),
+            );
+            const horizon = Math.acos(norm(p) / norm(c));
+            const margin = (2 * Math.PI) / 180;
+            if (e.show && angle > horizon + margin) far++;
+            if (e.show && angle < horizon - margin) nearShown++;
           }
           return { far, nearShown };
         },
@@ -540,7 +583,8 @@ async function main() {
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
       timeout: TIMEOUT_MS,
     });
-    await sleep(3000);
+    await whenSettled(page);
+    await whenFramesDrawn(page);
     await enableAndSettle(page);
     const kept = await stats(page);
     record(
@@ -569,7 +613,7 @@ async function main() {
       (id) => window.__godsEyeView.dataManager.setEnabled(id, false),
       LAYER_ID,
     );
-    await sleep(500);
+    await whenFramesDrawn(page);
     record(
       'DISABLE: every GhostMaps data source leaves the viewer',
       (await sources(page)).length === 0,
@@ -605,21 +649,13 @@ async function main() {
     });
     await boot(push);
     await enableAndSettle(push);
-    const identity = () =>
-      push.evaluate((id) => {
-        const { dataSources } = window.__godsEyeView.viewer;
-        window.__qaIds ||= new WeakMap();
-        window.__qaNext ||= 1;
-        const out = {};
-        for (let i = 0; i < dataSources.length; i++) {
-          const ds = dataSources.get(i);
-          if (!ds.name?.startsWith(`${id}:`)) continue;
-          if (!window.__qaIds.has(ds))
-            window.__qaIds.set(ds, window.__qaNext++);
-          out[ds.name] = window.__qaIds.get(ds);
-        }
-        return out;
-      }, LAYER_ID);
+    // Each product's drawn edition (its sets' sequence number): a reload
+    // draws a new edition in place of the old one.
+    const identity = async () => {
+      const out = {};
+      for (const row of await sources(push)) out[row.name] = row.edition;
+      return out;
+    };
     const first = await identity();
     const pushed = Date.now();
     await push.evaluate(async (id) => {
@@ -644,7 +680,7 @@ async function main() {
       { timeout: 20000, polling: 100 },
       LAYER_ID,
     );
-    await sleep(500);
+    await whenFramesDrawn(page);
     const second = await identity();
     record(
       'PUSH: a new edition reloads only that product',
@@ -663,7 +699,7 @@ async function main() {
         .filter((s) => !s.closed)
         .forEach((s) => s.emit(catalog));
     });
-    await sleep(1000);
+    await whenFramesDrawn(page);
     const third = await identity();
     record(
       'PUSH: a product leaving the catalog leaves the globe',
@@ -703,7 +739,7 @@ async function main() {
     });
     await phone.close();
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
   const failed = results.filter((r) => !r.ok);
   console.log(

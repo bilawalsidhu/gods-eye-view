@@ -19,14 +19,6 @@ test('abort releases an in-flight image URL before the decoder settles or the vi
     revoked.push(url);
     priorRevoke(url);
   };
-  const viewer = {
-    scene: { requestRender() {} },
-    entities: {
-      remove() {
-        assert.fail('No entity should be acquired');
-      },
-    },
-  };
   const signalOwner = new AbortController();
   const bytes = new Uint8Array(24);
   bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
@@ -34,7 +26,7 @@ test('abort releases an in-flight image URL before the decoder settles or the vi
   header.setUint32(16, 8);
   header.setUint32(20, 8);
   try {
-    const rendering = createPackPresentations(viewer).image({
+    const rendering = createPackPresentations(null).image({
       pack: {},
       asset: { bytes, mimeType: 'image/png' },
       signal: signalOwner.signal,

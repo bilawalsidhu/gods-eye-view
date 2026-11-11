@@ -44,9 +44,6 @@ export const WILDLIFE_RENDER_LIMIT = 5_000;
 // Bound candidates before the overlay host's final declutter.
 export const WILDLIFE_LABEL_LIMIT = 150;
 export const WILDLIFE_LABEL_NAME_SEPARATION_PX = 80;
-// Hidden ground batches may need several render passes to compile. Retire a
-// failed staging batch after a bounded number instead of holding rendering.
-export const WILDLIFE_GROUND_READY_MAX_CHECKS = 16;
 
 // Camera-height thresholds use +/-10% hysteresis to keep representations still
 // while a camera settles near a boundary.

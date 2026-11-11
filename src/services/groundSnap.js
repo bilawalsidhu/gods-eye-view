@@ -1,3 +1,4 @@
+import { readSurface } from '../globe/surfacePlacement.js';
 /**
  * groundSnap.js — one-shot cached ground-height snap for MODELED grounded aircraft.
  *
@@ -46,7 +47,8 @@
  * are per-layer, keyed by that layer's icao space).
  */
 
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { MAX_FLOOR_TILE_SIZE_M } from './meshFloorSampler.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -131,37 +133,28 @@ const SAMPLE_BUDGET_PER_WINDOW = 4;
 const SAMPLE_WINDOW_MS = 250;
 
 /**
- * True when the active photoreal tileset has finished streaming the tiles in
- * view (cctv.js's projectionTilesReady pattern: first Cesium3DTileset found in
- * scene.primitives, duck-typed via its boolean tilesLoaded). Sampling before
- * that both blows the frame budget on forced synchronous loads and produces
- * misses that would burn retry backoff for nothing. With NO tileset present
- * (OSM fallback) this returns true so the sample path is not permanently
- * blocked — the sample just misses and backs off.
- * @param {Cesium.Viewer} viewer
- * @returns {boolean}
+ * The first shown primitive that reports a boolean `tilesLoaded` (a 3D
+ * tileset, duck-typed), or null.
+ * @param {{ length: number, get: (index: number) => any }} primitives
+ * @returns {object | null}
  */
-function _tilesReady(viewer) {
-  const prims = viewer?.scene?.primitives;
-  if (!prims) return false;
-  for (let i = 0; i < prims.length; i++) {
+export function firstVisibleTileset(primitives) {
+  for (let i = 0; i < primitives.length; i++) {
     let p = null;
     try {
-      p = prims.get(i);
+      p = primitives.get(i);
     } catch {
       continue;
     }
-    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') {
-      return p.tilesLoaded === true;
-    }
+    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') return p;
   }
-  return true;
+  return null;
 }
 
 /**
  * Create a per-layer ground-snap cache.
  * @returns {{
- *   heightFor: (viewer: Cesium.Viewer, icao: string, pos: Cesium.Cartesian3,
+ *   heightFor: (engine: object, icao: string, pos: Cesium.Cartesian3,
  *               getExclusions?: () => Array<unknown>) => number|null,
  *   forget: (icao: string) => void,
  *   clear: () => void,
@@ -178,13 +171,13 @@ export function createGroundSnap({ groundFloor }) {
   const entries = new Map();
   let windowStartMs = 0;
   let windowCount = 0;
-  const scratchCarto = new Cesium.Cartographic();
-  const scratchSurfacePos = new Cesium.Cartesian3();
+  const scratchCarto = geo.cartographic.create();
+  const scratchSurfacePos = geo.cartesian3.create();
   /** Separate from `scratchCarto`: the held-evidence check runs on paths that
    *  return BEFORE the sample writes `scratchCarto`, and on the sampling path it
    *  must not disturb the cartographic that `reportValidatedMeshFloorCell` reads
    *  back after the sample lands. */
-  const scratchHeldCarto = new Cesium.Cartographic();
+  const scratchHeldCarto = geo.cartographic.create();
 
   /**
    * The last measurement for a contact whose fresh snap has been demoted — it
@@ -205,7 +198,7 @@ export function createGroundSnap({ groundFloor }) {
     if (!entry || !entry.held || entry.h == null || !entry.samplePos)
       return null;
     if (
-      Cesium.Cartesian3.distanceSquared(surfacePos, entry.samplePos) >
+      geo.cartesian3.distanceSquared(surfacePos, entry.samplePos) >
       HELD_SNAP_MAX_DRIFT_M * HELD_SNAP_MAX_DRIFT_M
     ) {
       return dropHold(entry);
@@ -253,15 +246,15 @@ export function createGroundSnap({ groundFloor }) {
    * @returns {number|null}
    */
   function freshMeasuredFloorAt(surfacePos) {
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       surfacePos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       scratchHeldCarto,
     );
     if (!carto) return null;
     return cachedMeshFloor(
-      Cesium.Math.toDegrees(carto.latitude),
-      Cesium.Math.toDegrees(carto.longitude),
+      geo.math.toDegrees(carto.latitude),
+      geo.math.toDegrees(carto.longitude),
     );
   }
 
@@ -272,19 +265,20 @@ export function createGroundSnap({ groundFloor }) {
    * A contact that HAS resolved once keeps that answer through a resample outage;
    * see `heldSnapM`.
    *
-   * @param {Cesium.Viewer} viewer - Live viewer (sampling + tiles-ready check).
+   * @param {object} engine - The globe engine (`engine.surface`:
+   *   sampleHeightDetailed and tilesLoaded); without one, no sample.
    * @param {string} icao - Cache key (per-layer icao space).
    * @param {Cesium.Cartesian3} pos - Current display position. Cache movement
    *   is measured after projecting this input to the WGS84 ellipsoid, so a
    *   poll-time altitude/datum change cannot invalidate a stationary snap.
    * @param {(() => Array<unknown>)|undefined} getExclusions - Lazily builds the
-   *   scene.sampleHeight objectsToExclude list (own billboards/models/entities —
-   *   the vertical pick ray at a plane's OWN lat/lon lands on its icon/model
-   *   otherwise). Only invoked when a sample actually fires.
+   *   surface `exclude` list (the layer's mover sets, or its own Cesium
+   *   billboards/models/entities — the vertical ray at a plane's OWN lat/lon
+   *   lands on its icon/model otherwise). Only invoked when a sample fires.
    * @returns {number|null}
    */
-  function heightFor(viewer, icao, pos, getExclusions) {
-    const surfacePos = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
+  function heightFor(engine, icao, pos, getExclusions) {
+    const surfacePos = geo.ellipsoid.WGS84.scaleToGeodeticSurface(
       pos,
       scratchSurfacePos,
     );
@@ -292,7 +286,7 @@ export function createGroundSnap({ groundFloor }) {
     const cached = entries.get(icao);
     if (cached && cached.h != null && cached.samplePos && !cached.held) {
       if (
-        Cesium.Cartesian3.distanceSquared(surfacePos, cached.samplePos) <=
+        geo.cartesian3.distanceSquared(surfacePos, cached.samplePos) <=
         MOVE_INVALIDATE_M * MOVE_INVALIDATE_M
       ) {
         return cached.h;
@@ -345,20 +339,24 @@ export function createGroundSnap({ groundFloor }) {
       entries.set(icao, next);
       return heldSnapM(next, surfacePos);
     };
-    if (!_tilesReady(viewer)) return miss();
+    if (!engine || engine.isDestroyed?.() || !engine.surface.tilesLoaded())
+      return miss();
     windowCount += 1;
     let sampled;
     try {
-      const carto = Cesium.Cartographic.fromCartesian(
+      const carto = geo.cartographic.fromCartesian(
         pos,
-        Cesium.Ellipsoid.WGS84,
+        geo.ellipsoid.WGS84,
         scratchCarto,
       );
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
-      sampled = viewer.scene.sampleHeight(
-        carto,
-        getExclusions ? getExclusions() : undefined,
-      );
+      const exclusions = getExclusions ? getExclusions() : undefined;
+      // A coarse tile's answer, or only terrain, is a miss.
+      sampled = readSurface(engine, carto, {
+        exclude: exclusions,
+        prefer: 'tiles',
+        maxTileSizeM: MAX_FLOOR_TILE_SIZE_M,
+      });
     } catch {
       sampled = undefined;
     }
@@ -367,8 +365,8 @@ export function createGroundSnap({ groundFloor }) {
     if (!Number.isFinite(sampled) || sampled < -150) return miss();
     if (meshFloorPreferred()) {
       reportValidatedMeshFloorCell(
-        Cesium.Math.toDegrees(scratchCarto.latitude),
-        Cesium.Math.toDegrees(scratchCarto.longitude),
+        geo.math.toDegrees(scratchCarto.latitude),
+        geo.math.toDegrees(scratchCarto.longitude),
         sampled,
       );
     }
@@ -376,7 +374,7 @@ export function createGroundSnap({ groundFloor }) {
     // contact is now, and it outranks a memory of where it was.
     entries.set(icao, {
       h: sampled,
-      samplePos: Cesium.Cartesian3.clone(surfacePos),
+      samplePos: geo.cartesian3.clone(surfacePos),
       held: false,
       nextRetryMs: 0,
       misses: 0,

@@ -1,3 +1,4 @@
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import assert from 'node:assert/strict';
 import { createVoiceSession } from '../voice/session.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
@@ -100,8 +101,11 @@ export function nativeIntegrationFixture(t) {
       },
     },
   };
+  // A Viewer's canvas is its scene's.
+  viewer.canvas = viewer.scene.canvas;
   const dataManager = { layers: new Map() };
   const actualRunner = createGevActionRunner({
+    engine: createCesiumEngine(viewer),
     viewer,
     dataManager,
     styleManager: {},

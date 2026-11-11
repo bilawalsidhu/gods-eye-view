@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 import {
   DEFAULT_DATA_MODE,
@@ -7,6 +8,8 @@ import {
   isHardwareRenderer,
   isHeadfulMode,
   parseDataMode,
+  vesselCardCaptureUrl,
+  installSyntheticVesselFeed,
   vesselCardManifestFilename,
   vesselCardProvenanceLines,
   vesselCardScreenshotFilename,
@@ -88,4 +91,81 @@ test('vessel-card QA distinguishes hardware evidence from software rendering', (
   assert.equal(isHardwareRenderer({ vendor: 'Apple', renderer: 'ANGLE Metal Renderer: Apple M3' }), true);
   assert.equal(isHardwareRenderer({ vendor: 'Google Inc.', renderer: 'ANGLE (SwiftShader)' }), false);
   assert.equal(isHardwareRenderer({ vendor: 'unavailable', renderer: 'unavailable' }), false);
+});
+
+test('synthetic card URL removes competing qaFeed while live mode preserves it', () => {
+  const input =
+    'http://127.0.0.1:4193/?engine=navara&qaFeed=vessels:fixture#v=2';
+  const synthetic = new URL(vesselCardCaptureUrl(input, 'synthetic'));
+  assert.equal(synthetic.searchParams.has('qaFeed'), false);
+  assert.equal(synthetic.searchParams.get('engine'), 'navara');
+  assert.equal(synthetic.hash, '#v=2');
+  assert.equal(
+    new URL(vesselCardCaptureUrl(input, 'live')).searchParams.get('qaFeed'),
+    'vessels:fixture',
+  );
+});
+
+function fixtureWindow() {
+  const rows = [{ mmsi: '990100000', lat: 51.95, lon: 4.1, name: 'QA' }];
+  const clock = { nowMs: 1000 };
+  const calls = [];
+  const window = {
+    fetch: (...args) => {
+      calls.push(args);
+      return Promise.resolve('passthrough');
+    },
+  };
+  runInNewContext(`(${installSyntheticVesselFeed.toString()})(rows)`, {
+    rows,
+    window,
+    location: {
+      href: 'http://127.0.0.1:4193/',
+      origin: 'http://127.0.0.1:4193',
+    },
+    URL,
+    Response,
+    Date: { now: () => clock.nowMs },
+  });
+  return { rows, clock, calls, window };
+}
+
+test('a late vessel refresh retains the exact card fixture with fresh receipt stamps', async () => {
+  const { window, rows, clock, calls } = fixtureWindow();
+  const first = await (await window.fetch('/api/vessels?lat=51.95')).json();
+  clock.nowMs = 5000;
+  const late = await (
+    await window.fetch(
+      new Request('http://127.0.0.1:4193/api/vessels?lat=29.7'),
+    )
+  ).json();
+  assert.deepEqual(
+    first.rows.map((row) => row.mmsi),
+    ['990100000'],
+  );
+  assert.deepEqual(
+    late.rows.map((row) => row.mmsi),
+    ['990100000'],
+  );
+  assert.equal(late.newestPositionAt, 5000);
+  assert.equal(late.rows[0].last_position_epoch, 5);
+  const urlInput = await (
+    await window.fetch(new URL('http://127.0.0.1:4193/api/vessels'))
+  ).json();
+  assert.deepEqual(
+    urlInput.rows.map((row) => row.mmsi),
+    ['990100000'],
+  );
+  assert.equal(rows[0].last_position_epoch, undefined);
+  assert.equal(calls.length, 0);
+});
+
+test('the card fixture leaves other paths and external origins to the original fetch', async () => {
+  const { window, calls } = fixtureWindow();
+  assert.equal(await window.fetch('/api/vessels/track'), 'passthrough');
+  assert.equal(
+    await window.fetch('https://example.invalid/api/vessels'),
+    'passthrough',
+  );
+  assert.equal(calls.length, 2);
 });

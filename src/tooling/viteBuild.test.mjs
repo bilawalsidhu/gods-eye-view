@@ -333,6 +333,19 @@ test('the CSP admits the event media embeds and the Maps JavaScript API, and no 
   assert.ok(frames.includes('https://platform.twitter.com'));
 });
 
+test('the dev server leaves Navara and its wasm workers out of dependency pre-bundling', () => {
+  const { optimizeDeps } = createBrowserViteConfig({});
+  for (const name of [
+    '@navaramap/three',
+    '@navaramap/three-default-plugin',
+    '@navaramap/engine',
+    '@navaramap/engine-api',
+    '@navaramap/engine-worker',
+    '@navaramap/engine-font-worker',
+  ])
+    assert.ok(optimizeDeps.exclude?.includes(name), name);
+});
+
 /** A raw GET, so the Host header and an absolute-form target are sent as given. */
 function rawGet(port, target, headers = {}) {
   return new Promise((resolve, reject) => {

@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { CYAN } from '../shared/color.js';
 import { gstime } from 'satellite.js';
 import {
   ISS_NORAD,
@@ -12,6 +13,7 @@ export function createRendering({
   services,
   parts,
   source,
+  getRenderer,
 }) {
   const {
     focusNowMs,
@@ -25,73 +27,45 @@ export function createRendering({
   /**
    * Show orbital path for a satellite.
    *
-   * RING FLICKER FIX: this is a one-instance Cesium.Primitive built
-   * synchronously ONCE (asynchronous: false), then re-aligned to current GMST
-   * each tick via its modelMatrix. The previous Entity-polyline approach
-   * rebuilt geometry ASYNCHRONOUSLY on every positions assignment, which made
-   * both the selected ring and the ISS ring blink once per second while the
-   * rebuild was in flight. A rigid Z-rotation needs no rebuild at all.
-   *
-   * Why not a CallbackProperty entity (dynamic mode)? Verified in Cesium
-   * 1.138 source: the dynamic polyline updater renders through a shared
-   * PolylineCollection and applies only the fill material —
-   * `depthFailMaterial` is silently dropped, losing the dimmed behind-Earth
-   * segment. The Primitive keeps it via depthFailAppearance + the per-instance
-   * depthFailColor attribute (same mechanism the entity STATIC batch uses):
-   * bright where above the horizon, dimmed where behind the globe.
+   * The ring is one engine line built once from the baked positions, then
+   * re-aligned to current GMST each tick through its model matrix: a rigid
+   * Z-rotation, so its geometry is never rebuilt (no blink while a rebuild
+   * is in flight). It is bright where the scene does not hide it and dimmed
+   * where it passes behind the globe (the line's depth-fail alpha).
    */
 
   function _showOrbitPath(noradId, color) {
     if (layerState._orbitPaths.has(noradId)) return; // already showing
 
     const sat = layerState._catalog.get(noradId);
-    if (!sat || !layerState._viewer) return;
+    if (!sat || !getRenderer()) return;
 
     const bakeDate = new Date(layerState.now());
     const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
     if (basePositions.length < 2) return;
 
-    const pathColor = color || Cesium.Color.CYAN;
-    // Kept so the Cockpit's orbit dim (cockpitSubject.js) restores exactly.
-    const baseColor = pathColor.withAlpha(0.6);
-    const baseDepthFailColor = pathColor.withAlpha(0.35);
-    const instanceId = `satellite-orbit:${noradId}`;
+    const pathColor = color || CYAN;
 
-    const primitive = new Cesium.Primitive({
-      geometryInstances: new Cesium.GeometryInstance({
-        id: instanceId,
-        geometry: new Cesium.PolylineGeometry({
-          positions: basePositions,
-          width: noradId === ISS_NORAD ? 2.5 : 2.0,
-          vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
-        }),
-        attributes: {
-          color: Cesium.ColorGeometryInstanceAttribute.fromColor(baseColor),
-          depthFailColor:
-            Cesium.ColorGeometryInstanceAttribute.fromColor(baseDepthFailColor),
-        },
-      }),
-      appearance: new Cesium.PolylineColorAppearance({ translucent: true }),
-      depthFailAppearance: new Cesium.PolylineColorAppearance({
-        translucent: true,
-      }),
-      asynchronous: false, // build this frame — no async-rebuild blink window
-      allowPicking: false, // ring clicks fall through to satellites/deselect
+    // Kept so the Cockpit orbit dim restores exactly.
+    const baseColor = pathColor.withAlpha(0.6);
+
+    const primitive = getRenderer().createOrbit({
+      positions: basePositions,
+      width: noradId === ISS_NORAD ? 2.5 : 2.0,
+      color: pathColor,
     });
-    layerState._viewer.scene.primitives.add(primitive);
 
     layerState._orbitPaths.set(noradId, {
       primitive,
+      basePositions,
       color: pathColor,
       bakeMs: bakeDate.getTime(),
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.
       gmstAtBake: gstime(bakeDate),
-      instanceId,
       baseColor,
-      baseDepthFailColor,
-      // The alpha multiple last written to the instance (1: as built).
+      // The alpha multiple last written to the line (1: as built).
       alphaFactor: 1,
     });
   }
@@ -114,13 +88,11 @@ export function createRendering({
    * rotation cannot distinguish. Tiny negative deltas right after bake are
    * likewise harmless. No unwrapping needed.
    *
-   * No SGP4 here — the rotation is applied as the ring primitive's modelMatrix
-   * (exact compensation; WGS84 is rotationally symmetric about Z, so rotating
-   * the baked curve rigidly equals rebaking from rotated points). modelMatrix
-   * updates are synchronous uniforms — no geometry rebuild, no flicker. Post-
-   * creation modelMatrix changes are supported for one-instance primitives in
-   * 3D mode, which these rings are. In-place mutation is safe: Primitive.update
-   * diffs modelMatrix against an internal clone.
+   * No SGP4 here — the rotation is applied as the ring's modelMatrix (exact
+   * compensation; WGS84 is rotationally symmetric about Z, so rotating the
+   * baked curve rigidly equals rebaking from rotated points). The matrix is
+   * written in place and handed to the line (commitOrbit): no geometry
+   * rebuild, no flicker.
    * @param {Date} nowDate Epoch used for current GMST.
    */
 
@@ -134,6 +106,9 @@ export function createRendering({
       if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
         _hideOrbitPath(noradId);
         _showOrbitPath(noradId, path.color);
+        const rebuilt = layerState._orbitPaths.get(noradId);
+        if (rebuilt) rebuilt.primitive.show = path.primitive.show;
+        parts.cockpit?._syncCockpitSubjectVisuals();
         continue;
       }
       parts.orbits.orbitFrameModelMatrix(
@@ -141,6 +116,7 @@ export function createRendering({
         nowDate,
         path.primitive.modelMatrix,
       );
+      getRenderer()?.commitOrbit(path.primitive);
     }
   }
 
@@ -151,8 +127,7 @@ export function createRendering({
   function _hideOrbitPath(noradId) {
     const path = layerState._orbitPaths.get(noradId);
     if (path) {
-      if (layerState._viewer)
-        layerState._viewer.scene.primitives.remove(path.primitive); // remove() destroys
+      if (path.primitive) getRenderer()?.removeOrbit(path.primitive);
       layerState._orbitPaths.delete(noradId);
     }
   }
@@ -173,7 +148,7 @@ export function createRendering({
       const pos = parts.orbits.propagatePosition(sat.satrec, now);
       if (!pos) continue;
 
-      const cartesian = Cesium.Cartesian3.fromDegrees(
+      const cartesian = geo.cartesian3.fromDegrees(
         pos.longitude,
         pos.latitude,
         pos.altitude,
@@ -253,8 +228,8 @@ export function createRendering({
       return;
     if (nowMs - layerState._lastFocusUpdate < 80) return;
     layerState._lastFocusUpdate = nowMs;
-    const scene = layerState._viewer.scene;
-    const camera = layerState._viewer.camera;
+    const camera = getRenderer()?.view.camera;
+    if (!camera) return;
     const result = applySatellitePointFocusDeemphasis({
       points: layerState._points,
       trackedId: layerState._trackedNorad,
@@ -262,13 +237,9 @@ export function createRendering({
       previousActiveCount: layerState._activeFocusCount,
       nowMs,
       screenPositionFor: (position) =>
-        Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          layerState._scratchFocusScreen,
-        ),
+        getRenderer().project(position, layerState._scratchFocusScreen),
       cameraDistanceFor: (position) =>
-        Cesium.Cartesian3.distance(camera.positionWC, position),
+        geo.cartesian3.distance(camera.positionWC, position),
       baseColorFor: (noradId) =>
         parts.controls._pointStyleFor(
           noradId,

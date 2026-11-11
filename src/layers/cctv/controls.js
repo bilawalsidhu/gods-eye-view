@@ -153,9 +153,9 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._gizmo?.setEnabled(true);
           // ADJUST mode: gizmo drags mutate entity geometry from pointer events,
           // which don't trigger renders in requestRenderMode. (perf wave 2)
-          holdContinuousRender('cctv-adjust');
+          holdContinuousRender('cctv-adjust', parts.renderer?.engine);
         } else {
-          releaseContinuousRender('cctv-adjust');
+          releaseContinuousRender('cctv-adjust', parts.renderer?.engine);
           layerState._gizmo?.setEnabled(false);
         }
       }

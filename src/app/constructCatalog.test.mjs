@@ -201,6 +201,62 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
   );
 });
 
+test('the catalog includes every layer on both engines', async (t) => {
+  const { APPLICATION_LAYER_DIRECTORY } = await import('./layers/directory.js');
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  const build = (options) =>
+    createApplicationCatalog({
+      sources: createStandaloneLayerSources(),
+      signal: controller.signal,
+      surface: fixtureSurface(controller.signal),
+      ...options,
+    });
+  const cesium = build({});
+  // The directory is the catalog Cesium builds: ids, names and order.
+  assert.deepEqual(
+    cesium.layers.map(({ id, name }) => ({ id, name })),
+    APPLICATION_LAYER_DIRECTORY.map(({ id, name }) => ({ id, name })),
+  );
+  assert.equal(cesium.engineKind, 'cesium');
+
+  const navara = build({ engineKind: 'navara' });
+  assert.equal(navara.layers.length, 40);
+  assert.ok(navara.get('news'));
+  assert.ok(navara.get('shipwrecks'));
+  assert.deepEqual(
+    navara.layers.map(({ id }) => id),
+    cesium.layers.map(({ id }) => id),
+  );
+});
+
+test('both engines attach to the same 40 session models', async (t) => {
+  const { loadLayerRenderers } = await import('./layers/renderers.js');
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const options = {
+    layerSession: { lifetime },
+    sources: createStandaloneLayerSources(),
+    signal: lifetime.signal,
+    surface: fixtureSurface(lifetime.signal),
+  };
+  const cesium = createApplicationCatalog(options);
+  await loadLayerRenderers('navara');
+  const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
+  assert.equal(cesium.layers.length, 40);
+  const shared = cesium.layers;
+  assert.deepEqual(
+    navara.layers.map(({ id }) => id),
+    shared.map(({ id }) => id),
+  );
+  assert.deepEqual(navara.metadata, cesium.metadata);
+  for (const layer of shared) {
+    assert.equal(navara.get(layer.id), layer, layer.id);
+    assert.equal(typeof layer.attachRenderer, 'function', layer.id);
+    assert.equal(typeof layer.detachRenderer, 'function', layer.id);
+  }
+});
+
 test('a GNSS integrity source can set the layer evidence window', (t) => {
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());

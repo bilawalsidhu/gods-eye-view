@@ -1,15 +1,27 @@
-import puppeteer from 'puppeteer';
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { hookRenderErrors } from './qa-browserEvidence.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { transitQaBase } from './qa-transit-browser.mjs';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 /** Prove parked and moving headings in the real scene, without live feeds. */
 export async function runTransitHeadingRegression(base, check) {
-  const browser = await puppeteer.launch({
+  base = transitQaBase(base);
+  const browser = await launchBrowser({
     headless: true,
-    executablePath: chromeExecutablePath(),
-    args: ['--no-sandbox', '--disable-background-timer-throttling'],
+    args: [
+      '--no-sandbox',
+      '--disable-background-timer-throttling',
+      ...(process.platform === 'darwin' ? [] : []),
+      '--enable-gpu',
+    ],
   });
   try {
     const page = await browser.newPage();
+    await hookRenderErrors(page);
+    await blockPaidQaMaps(page);
     await page.setViewport({ width: 1280, height: 800 });
     await page.goto(
       `${base}/?welcome=0#lat=42.3601&lon=-71.0589&alt=1200&heading=0&pitch=-90`,
@@ -19,7 +31,7 @@ export async function runTransitHeadingRegression(base, check) {
       () => window.__godsEyeView?.dataManager?.layers?.has('transit'),
       { timeout: 90000 },
     );
-    await new Promise((resolve) => setTimeout(resolve, 6000));
+    await whenSettled(page);
     await page.evaluate(async () => {
       const app = window.__godsEyeView;
       await app.dataManager.setEnabled('transit', true, { source: 'qa' });
@@ -54,26 +66,25 @@ export async function runTransitHeadingRegression(base, check) {
         parts.rendering.schedulePlayback(entry);
       }
       parts.rendering.syncRenderHold();
-      window.__headingErrors = [];
-      app.viewer.scene.renderError.addEventListener((scene, error) =>
-        window.__headingErrors.push(error.message),
-      );
+      window.__headingErrors = window.__qaRenderErrors;
     });
     const pose = async (heading) => {
-      await page.evaluate((heading) => {
-        const camera = window.__godsEyeView.viewer.camera;
-        const C = camera.positionCartographic.constructor;
-        camera.setView({
-          destination: C.toCartesian(C.fromDegrees(-71.0589, 42.3601, 1200)),
-          orientation: { heading, pitch: -Math.PI / 2, roll: 0 },
-        });
-      }, heading);
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await evaluateWithGeo(
+        page,
+        async (qaGeo, heading) => {
+          const C = qaGeo.cartographic;
+          window.__godsEyeView.engine.camera.setView({
+            destination: C.toCartesian(C.fromDegrees(-71.0589, 42.3601, 1200)),
+            orientation: { heading, pitch: -Math.PI / 2, roll: 0 },
+          });
+        },
+        heading,
+      );
+      await whenSettled(page);
     };
     const sample = () =>
       page.evaluate(async () => {
-        const app = window.__godsEyeView,
-          scene = app.viewer.scene;
+        const app = window.__godsEyeView;
         const state = app.dataManager.layers
           .get('transit')
           .module._transitStateForTest();
@@ -87,12 +98,18 @@ export async function runTransitHeadingRegression(base, check) {
           );
         const project = (p) => {
           const clip = mul(
-            scene.camera.frustum.projectionMatrix,
-            mul(scene.camera.viewMatrix, [p.x, p.y, p.z, 1]),
+            window.__godsEyeView.engine.projector.viewProjection(),
+            [p.x, p.y, p.z, 1],
           );
           return {
-            x: ((clip[0] / clip[3] + 1) * scene.canvas.clientWidth) / 2,
-            y: ((1 - clip[1] / clip[3]) * scene.canvas.clientHeight) / 2,
+            x:
+              ((clip[0] / clip[3] + 1) *
+                window.__godsEyeView.engine.host.canvas.clientWidth) /
+              2,
+            y:
+              ((1 - clip[1] / clip[3]) *
+                window.__godsEyeView.engine.host.canvas.clientHeight) /
+              2,
           };
         };
         return [0, 1, 2, 3].map((i) => {
@@ -130,7 +147,7 @@ export async function runTransitHeadingRegression(base, check) {
       'unknown parked course remains screen-up',
       before[2].rotation === 0 && after[2].rotation === 0,
     );
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await whenSettled(page);
     const moved = (await sample())[3];
     const dx = moved.x - after[3].x,
       dy = moved.y - after[3].y;
@@ -151,6 +168,6 @@ export async function runTransitHeadingRegression(base, check) {
       (await page.evaluate(() => window.__headingErrors)).length === 0,
     );
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 }

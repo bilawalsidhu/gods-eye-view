@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-vessel-datum.mjs — assertion harness for the AIS vessel vertical-datum
  * pass (docs/superpowers/specs/2026-07-27-vessel-datum-design.md).
@@ -17,10 +18,17 @@
  * Usage:
  *   node scripts/qa-vessel-datum.mjs
  *   node scripts/qa-vessel-datum.mjs --ports rotterdam --url http://localhost:4173
+ *   node scripts/qa-vessel-datum.mjs --engine navara --url 'http://localhost:PORT/?qaFeed=vessels:fixture'
+ *
+ * Both engines take the engine-neutral path, through window.__godsEyeView.engine
+ * and the dev server's QA probe (layers.drawn: each chevron's drawn position
+ * and depth-test flag); the vessels layer owns no Cesium billboards any more.
+ * --engine cesium|navara puts ?engine= on the URL; without it, the app's
+ * default engine.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -31,6 +39,13 @@ const getOpt = (name, dflt) => {
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const PORT_KEYS = getOpt('--ports', 'rotterdam,houston').split(',').map((s) => s.trim()).filter(Boolean);
 const OUT_DIR = getOpt('--out', 'qa-shots');
+const ENGINE = getOpt('--engine', null);
+const PAGE_URL = (() => {
+  if (!ENGINE) return APP_URL;
+  const url = new URL(APP_URL);
+  url.searchParams.set('engine', ENGINE);
+  return url.href;
+})();
 
 /**
  * Camera framings match qa-vessel-cards.mjs; heightBand is the expected
@@ -53,75 +68,38 @@ const NEAR_DEG = 1.0;
 /** Max billboards sampled for the depth-test sweep. */
 const SAMPLE_CAP = 500;
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch { /* fall through to Puppeteer's cache */ }
-  }
-  return null;
-}
 
 /**
- * In-page probe: locate the vessel BillboardCollection (duck-typed — its
- * billboards carry the vessel record as `id`, so `id.mmsi` exists), then
- * report depth-test flags across a sample and ellipsoidal heights of
- * near-port billboards.
+ * In-page probe on either engine (the QA probe): the chevrons the layer
+ * draws, their depth-test flag and the ellipsoidal heights of those near the
+ * port.
  */
-function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
+async function probeVesselsEngine({ portLat, portLon, nearDeg, sampleCap }) {
   const gev = window.__godsEyeView;
-  const viewer = gev?.viewer;
-  if (!viewer) return { error: 'no viewer' };
-  const ellipsoid = viewer.scene.globe.ellipsoid;
-  const prims = viewer.scene.primitives;
-
-  let collection = null;
-  for (let i = 0; i < prims.length; i += 1) {
-    const p = prims.get(i);
-    if (!p || typeof p.get !== 'function' || typeof p.length !== 'number' || p.length === 0) continue;
-    const first = p.get(0);
-    if (first && first.id && typeof first.id === 'object' && 'mmsi' in first.id
-        && first.disableDepthTestDistance !== undefined) {
-      collection = p;
-      break;
-    }
-  }
-  if (!collection) return { error: 'vessel billboard collection not found' };
-
+  const drawn = gev?.layers?.drawn('ais-live-vessels');
+  if (!drawn) return { error: 'vessels layer not drawn' };
+  const geo = await import('/src/geo/index.js');
+  const chevrons = drawn.chevrons;
   let depthFreeCount = 0;
   let depthTestedCount = 0;
   const nearHeights = [];
-  const step = Math.max(1, Math.floor(collection.length / sampleCap));
-  for (let i = 0; i < collection.length; i += step) {
-    const b = collection.get(i);
-    if (!b) continue;
-    if (b.disableDepthTestDistance === Number.POSITIVE_INFINITY) depthFreeCount += 1;
+  const step = Math.max(1, Math.floor(chevrons.length / sampleCap));
+  for (let i = 0; i < chevrons.length; i += step) {
+    const row = chevrons[i];
+    if (row.depthFree) depthFreeCount += 1;
     else depthTestedCount += 1;
-    const rec = b.id;
-    if (Number.isFinite(rec?.lat) && Number.isFinite(rec?.lon)
-        && Math.abs(rec.lat - portLat) <= nearDeg && Math.abs(rec.lon - portLon) <= nearDeg) {
-      const carto = ellipsoid.cartesianToCartographic(b.position);
-      if (carto) nearHeights.push(carto.height);
-    }
+    const carto = geo.cartographic.fromCartesian(row.position);
+    if (!carto) continue;
+    const lat = geo.math.toDegrees(carto.latitude);
+    const lon = geo.math.toDegrees(carto.longitude);
+    if (Math.abs(lat - portLat) <= nearDeg && Math.abs(lon - portLon) <= nearDeg)
+      nearHeights.push(carto.height);
   }
   nearHeights.sort((a, b) => a - b);
   const median = nearHeights.length ? nearHeights[Math.floor(nearHeights.length / 2)] : null;
   return {
-    total: collection.length,
+    total: chevrons.length,
     sampled: depthFreeCount + depthTestedCount,
     depthFreeCount,
     depthTestedCount,
@@ -132,9 +110,23 @@ function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
   };
 }
 
+/** Frames a port through the engine (either engine). */
+async function frameEngine(p, enable) {
+  const geo = await import('/src/geo/index.js');
+  const gev = window.__godsEyeView;
+  gev.engine.camera.cancelFlight?.();
+  gev.engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(p.lon, p.lat, p.height),
+    orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
+  });
+  if (enable) await gev.dataManager.setEnabled('ais-live-vessels', true);
+  gev.engine.render.request('qa-vessel-datum');
+}
+
 async function main() {
   console.log(`\nAIS Vessel Datum — assertion harness`);
   console.log(`  App URL : ${APP_URL}`);
+  console.log(`  Engine  : ${ENGINE ?? 'the app default'}`);
   console.log(`  Ports   : ${PORT_KEYS.join(', ')}\n`);
 
   try {
@@ -148,20 +140,9 @@ async function main() {
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1600,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1600,900'],
   });
 
   let failures = 0;
@@ -179,26 +160,11 @@ async function main() {
       await page.setViewport({ width: 1600, height: 900 });
       page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
 
-      await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 60000 });
+      await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.waitForFunction(() => !!window.__godsEyeView?.layers, { timeout: 180000 });
 
       // Frame the port (kill the intro flight first) and enable the layer.
-      await page.evaluate(async (p) => {
-        const gev = window.__godsEyeView;
-        const v = gev.viewer;
-        v.camera.cancelFlight?.();
-        v.scene.tweens?.removeAll?.();
-        const carto = {
-          longitude: (p.lon * Math.PI) / 180,
-          latitude: (p.lat * Math.PI) / 180,
-          height: p.height,
-        };
-        v.camera.setView({
-          destination: v.scene.globe.ellipsoid.cartographicToCartesian(carto),
-          orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
-        });
-        await gev.dataManager.setEnabled('ais-live-vessels', true);
-      }, port);
+      await page.evaluate(frameEngine, port, true);
 
       // Wait for rows + the geoid re-floor: poll until near-port anchors sit
       // inside the expected band (both ports' bands exclude the pre-fix 0–3 m
@@ -208,7 +174,7 @@ async function main() {
       let probe = null;
       let settled = false;
       while (Date.now() < deadline) {
-        probe = await page.evaluate(probeVessels, probeArgs);
+        probe = await page.evaluate(probeVesselsEngine, probeArgs);
         if (probe && !probe.error && probe.nearCount >= 3
             && probe.medianHeight !== null
             && probe.medianHeight >= port.heightBand[0]
@@ -245,31 +211,17 @@ async function main() {
 
       // Visual proof — re-assert the framing (the app's intro flight can land
       // mid-probe on slow runs), wait for the photoreal tileset, screenshot.
-      await page.evaluate((p) => {
-        const v = window.__godsEyeView.viewer;
-        v.camera.cancelFlight?.();
-        v.scene.tweens?.removeAll?.();
-        const carto = {
-          longitude: (p.lon * Math.PI) / 180,
-          latitude: (p.lat * Math.PI) / 180,
-          height: p.height,
-        };
-        v.camera.setView({
-          destination: v.scene.globe.ellipsoid.cartographicToCartesian(carto),
-          orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
-        });
-      }, port);
-      await page
-        .waitForFunction(() => window.__godsEyeView?.tileset?.tilesLoaded, { timeout: 60000, polling: 500 })
+      await page.evaluate(frameEngine, port, false);
+      await whenTilesLoaded(page, { timeoutMs: 60000 })
         .catch(() => console.log('    (tileset settle timeout — screenshotting anyway)'));
-      await new Promise((r) => setTimeout(r, 2500));
-      const outPath = path.join(OUT_DIR, `vessel-datum-${key}.png`);
+      await whenSettled(page);
+      const outPath = path.join(OUT_DIR, `vessel-datum-${ENGINE ? `${ENGINE}-` : ''}${key}.png`);
       await page.screenshot({ path: outPath });
       console.log(`    [SHOT] ${outPath}`);
       await page.close();
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   console.log(failures ? `\n\x1b[31m${failures} failure(s)\x1b[0m` : '\n\x1b[32mAll datum checks passed\x1b[0m');

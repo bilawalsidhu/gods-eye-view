@@ -114,30 +114,34 @@ test('every scene click handler consults ownership before it picks', () => {
   // find and edit each of these. If a layer grows a click handler it has to
   // appear here too.
   const guarded = [
-    ['src/data/trackingClickGesture.js', 'onClick(click, gesture);'],
-    ['src/data/localGeojsonCore.js', 'viewer.scene.pick(click.position)'],
-    ['src/data/cctvGizmo.js', 'pickGizmoPart(event.position)'],
-    ['src/layers/alpr/presentation.js', 'viewer.scene.pick(click.position)'],
-    ['src/layers/bikeshare/selection.js', 'viewer.scene.pick(click.position)'],
-    ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
+    ['src/data/trackingGesture.js', 'onClick(click, gesture);'],
     [
-      'src/layers/installations/selection.js',
-      'viewer.scene.pick(click.position)',
+      'src/layers/infrastructure/render/display.js',
+      'const picked = event.picked;',
     ],
-    ['src/layers/launches/lifecycle.js', 'drillPick(movement.position'],
-    ['src/layers/radio/interaction.js', 'pickedRadioStationAt(click.position)'],
+    ['src/data/cctvGizmo.js', 'pickGizmoPart(event)'],
+    // ALPR and bikeshare take the engine's click with its pick.
+    ['src/layers/shared/selectionKeeper.js', 'const id = pickId(event);'],
+    ['src/layers/bikeshare/render/display.js', 'const picked = event.picked;'],
+    // FIRMS takes the engine dispatcher's click with its pick.
+    ['src/layers/firms/selection.js', 'const picked = click.picked;'],
+    ['src/layers/launches/render/display.js', '[ctx.picked, ...ctx.drilled]'],
+    [
+      'src/layers/radio/interaction.js',
+      'const stationId = pickedRadioStationAt(position);',
+    ],
+    // Satellites take the engine dispatcher's pick too.
     [
       'src/layers/satellites/interaction.js',
-      'viewer.scene.pick(click.position)',
+      'getRenderer().isTrackedPick(picked',
     ],
     [
-      'src/layers/submarineCables/interaction.js',
-      'viewer.scene.pick(click.position)',
+      'src/layers/submarineCables/render/display.js',
+      'const picked = event.picked;',
     ],
-    [
-      'src/layers/vessels/selection.js',
-      'pickContact(viewer.scene, click.position)',
-    ],
+    // Vessels take the engine dispatcher's pick: the guard
+    // comes before the click rule reads it.
+    ['src/layers/vessels/selection.js', 'resolvePickId(picked)'],
   ];
   for (const [file, firstPick] of guarded) {
     const source = read(file);
@@ -164,8 +168,8 @@ test('ambient selection handlers never claim the pointer themselves', () => {
   // Claiming from a selection handler would deadlock every other layer the
   // moment a user clicked anything. Only tools claim.
   for (const file of [
-    'src/data/trackingClickGesture.js',
-    'src/data/localGeojsonCore.js',
+    'src/data/trackingGesture.js',
+    'src/layers/infrastructure/render/display.js',
     'src/data/cctvGizmo.js',
     'src/layers/vessels/selection.js',
     'src/layers/satellites/interaction.js',

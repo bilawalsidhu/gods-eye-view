@@ -1,12 +1,15 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+  const { setEntries, setVisible, clearSource } = bindOverlayHost(
+    services.overlays,
+    () => layerState._engine,
+  );
   const layerState = {};
 
   layerState.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
   });
 
   layerState._overlayHost = layerState.DEFAULT_OVERLAY_HOST;
@@ -15,17 +18,13 @@ export function createState({ services }) {
   // Module-level mutable state
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.Viewer|null} Active Cesium viewer instance. */
+  /** The globe engine the stations draw on, or null. */
 
-  layerState._viewer = null;
+  layerState._engine = null;
 
   /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} Manager that repaints the layer's row. */
 
   layerState._dataManager = null;
-
-  /** @type {Cesium.PointPrimitiveCollection|null} Primitive collection for station dots. */
-
-  layerState._pointCollection = null;
 
   /** Whether the bikeshare layer is currently enabled. */
 
@@ -75,17 +74,9 @@ export function createState({ services }) {
 
   layerState._stationRenderMap = new Map();
 
-  /** @type {Cesium.ScreenSpaceEventHandler|null} Click handler for station selection. */
-
-  layerState._clickHandler = null;
-
   /** @type {string|null} Key of the currently selected station, or null. */
 
   layerState._selectedKey = null;
-
-  /** @type {Cesium.Entity|null} Entity used to display the selected-station point highlight. */
-
-  layerState._selectedEntity = null;
 
   /** Total number of currently rendered station points. */
 

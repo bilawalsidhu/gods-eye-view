@@ -1,5 +1,7 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as geo from '../../geo/index.js';
 import {
   windFrom,
   formatWindSpeed,
@@ -26,22 +28,11 @@ test('center inspection uses a fixed forecast reading without double-converting 
       values: Float32Array.from([20, 20, 20, 20]),
     },
   };
-  const viewer = {
-    camera: { pickEllipsoid: () => ({ longitude: 0, latitude: 0 }) },
-    scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
-  };
-  const cesium = {
-    Cartesian2: class {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-      }
-    },
-    Ellipsoid: { WGS84: {} },
-    Cartographic: { fromCartesian: (p) => p },
-    Math: { toDegrees: (x) => (x * 180) / Math.PI },
-  };
-  const result = inspectWindAtCenter(snapshot, viewer, cesium, {
+  const engine = createFakeEngine({
+    canvas: { clientWidth: 800, clientHeight: 600 },
+  });
+  engine.fake.script('pickEllipsoid', () => geo.cartesian3.fromDegrees(0, 0));
+  const result = inspectWindAtCenter(snapshot, engine, {
     overlay: 'temperature',
     units: 'km/h',
     model: 'GFS',
@@ -52,9 +43,9 @@ test('center inspection uses a fixed forecast reading without double-converting 
   assert.equal(result.scalarValue, '20.0 °C');
   assert.equal(result.validTime, 'fixed');
   assert.equal(result.coordinates, '0.00°N · 0.00°E');
-  viewer.camera.pickEllipsoid = () => null;
+  engine.camera.pickEllipsoid = () => null;
   assert.equal(
-    inspectWindAtCenter(snapshot, viewer, cesium).coordinates,
+    inspectWindAtCenter(snapshot, engine).coordinates,
     'No surface reading',
   );
 });

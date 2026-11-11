@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Pure-logic unit tests for the voice-lifecycle size guards (Batch 11, M13).
 // These helpers are DOM/WebRTC-free so they pin the screenshot down-scaling and
 // payload-byte estimation that keep an oversized dc.send from stranding a turn.
@@ -235,6 +236,26 @@ test('push-to-talk starts from Cesium canvases and the document background', (t)
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
   assert.equal(f.controller.pushToTalkKeyHeld, true);
   assert.equal(f.key('keyup', background).defaultPrevented, true);
+});
+
+test('push-to-talk starts from the Navara canvas inside its renderer host', (t) => {
+  // src/standalone/rendererCache.js mounts each engine in a .globe-renderer
+  // div inside #cesiumContainer; Navara's canvas has no tabindex.
+  const f = createPushToTalkFixture(t);
+  const host = pushToTalkTarget({ tagName: 'DIV', id: 'cesiumContainer' });
+  const renderer = pushToTalkTarget({ tagName: 'DIV', parentElement: host });
+  const navaraCanvas = pushToTalkTarget({
+    tagName: 'CANVAS',
+    parentElement: renderer,
+  });
+  assert.equal(isPushToTalkSurface(navaraCanvas), true);
+  assert.equal(isInteractiveSpaceTarget(navaraCanvas), false);
+  assert.equal(f.key('keydown', navaraCanvas).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 1);
+  assert.equal(f.controller.pushToTalkKeyHeld, true);
+  assert.equal(f.key('keyup', navaraCanvas).defaultPrevented, true);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
 });
 
 test('short Space on a focused control preserves release activation', (t) => {
@@ -1240,7 +1261,7 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -1367,7 +1388,7 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
     radioLayer,
     runner: (name, args, options) => (
       name === 'control_radio'
-        ? controlRadio({}, dataManager, args, options)
+        ? controlRadio(dataManager, args, options)
         : genericRunner(name, args, options)
     ),
   });
@@ -1482,7 +1503,7 @@ test('same-response Pause aborts a real manager enable already in flight', async
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -1610,7 +1631,7 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
                 radioLayer,
                 runner: (name, args, options) => (
                   name === 'control_radio'
-                    ? controlRadio({}, dataManager, args, options)
+                    ? controlRadio(dataManager, args, options)
                     : genericRunner(name, args, options)
                 ),
               });
@@ -1736,7 +1757,7 @@ test('successful same- or newer-response Stop aborts Select across real manager 
       const controller = new GevRealtimeController({
         ui,
         radioLayer,
-        runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+        runner: (_name, args, options) => controlRadio(dataManager, args, options),
       });
       controller.debugLog = () => {};
       controller.sendVisualContextIfUseful = async () => false;
@@ -1998,7 +2019,7 @@ test('failed same-response stop does not suppress a successful playback request'
   const controller = new GevRealtimeController({
     ui,
     runner: async (_name, args) => {
-      const result = await controlRadio({}, dataManager, args);
+      const result = await controlRadio(dataManager, args);
       if (args.action === 'play') await playGate;
       return result;
     },
@@ -2102,7 +2123,7 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -2186,7 +2207,7 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
         dataManager,
         radioLayer: dataManager.layers.get('radio').module,
         runner: async (_name, args) => {
-          const result = await controlRadio({}, dataManager, args);
+          const result = await controlRadio(dataManager, args);
           if (args.action === 'play') await playGate;
           return result;
         },
@@ -2332,7 +2353,7 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -2840,13 +2861,11 @@ test('isBenignViewportDeleteError is false for non-error payloads and junk', () 
 test('hidden document yields no fresh frame — capture must not label a stale canvas Current', async () => {
   const originalDocument = globalThis.document;
   let requested = 0;
-  const scene = {
-    postRender: { addEventListener() { return () => {}; } },
-    requestRender() { requested += 1; },
-  };
+  const engine = createFakeEngine();
+  engine.render.request = () => { requested += 1; };
   try {
     globalThis.document = { hidden: true };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'hidden capture reports non-fresh');
     assert.equal(requested, 0, 'no secret render restart while hidden');
   } finally {
@@ -2859,11 +2878,10 @@ test('visible document with a rendering scene reports a fresh frame', async () =
   try {
     globalThis.document = { hidden: false };
     let fire = null;
-    const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { queueMicrotask(() => fire?.()); },
-    };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const engine = createFakeEngine();
+    engine.frames.postRender.addEventListener = (listener) => { fire = listener; return () => { fire = null; }; };
+    engine.render.request = () => { queueMicrotask(() => fire?.()); };
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, true);
   } finally {
     globalThis.document = originalDocument;
@@ -2876,11 +2894,10 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
     const doc = { hidden: false };
     globalThis.document = doc;
     let fire = null;
-    const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { doc.hidden = true; queueMicrotask(() => fire?.()); },
-    };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const engine = createFakeEngine();
+    engine.frames.postRender.addEventListener = (listener) => { fire = listener; return () => { fire = null; }; };
+    engine.render.request = () => { doc.hidden = true; queueMicrotask(() => fire?.()); };
+    const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'freshness rechecked after the await');
   } finally {
     globalThis.document = originalDocument;
@@ -3654,7 +3671,7 @@ test('a claimed Space hold barges in on the assistant; a short tap never does', 
 
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
-function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
+function controlRadio(manager, args, options) { return runControlRadio(manager, args, { placeSearch: testPlaceSearch(), ...options }); }
 
 test('voice runs app actions itself and other tools through the catalog', async () => {
   const actions = [];

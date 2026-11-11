@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { WHITE } from '../shared/color.js';
+import { vesselChevronIcon, VESSEL_SELECTED_CSS } from './icons.js';
 import { t } from '../../i18n/index.js';
 import {
   vesselTypeCss,
@@ -55,11 +57,11 @@ export function createRendering({
       components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
     );
-    visual.position = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
-    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
-    visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
+    visual.position = geo.cartesian3.fromDegrees(lon, lat, heightM);
+    visual.surfacePosition = geo.cartesian3.fromDegrees(lon, lat, 0);
+    visual.normal = geo.ellipsoid.WGS84.geodeticSurfaceNormal(
       visual.position,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
     return visual;
   }
@@ -68,7 +70,6 @@ export function createRendering({
     visualRecords = new WeakMap();
   }
 
-  const { registerSpriteCollection } = services.sprites;
   const {
     forgetSpriteFocus,
     focusNowMs,
@@ -100,14 +101,13 @@ export function createRendering({
     return Math.min(DEFAULT_ACTIVE_LABELS, renderRowLimit());
   }
 
-  function ensureCollections(viewer) {
-    if (!viewer || state.billboardCollection) return;
-    state.billboardCollection = new Cesium.BillboardCollection({
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
-    });
-    state.billboardCollection.show = state.feed.enabled;
-    viewer.scene.primitives.add(state.billboardCollection);
-    registerSpriteCollection('ais', state.billboardCollection);
+  // The renderer's chevron fleet, once a scene is there (the argument: the
+  // scene the caller holds — the viewer, or the renderer's view). Its draw
+  // order is the fleet's own (data/spriteOrder's 'ais' slot).
+  function ensureCollections(scene) {
+    const fleet = state.renderer?.fleet;
+    if (!scene || !fleet || fleet.attached()) return;
+    fleet.attach({ show: state.feed.enabled });
   }
 
   /**
@@ -115,28 +115,23 @@ export function createRendering({
    * are canvas cards (vesselLabels.js) rebuilt by the declutter pass — no
    * per-record label primitive exists anymore.
    * @param {Object} record - Normalized vessel record.
-   * @param {Cesium.EllipsoidalOccluder|null} occluder - Horizon occluder for initial visibility.
+   * @param {{isPointVisible: Function}|null} occluder - Horizon occluder for initial visibility.
    */
 
   function addRecordPrimitives(record, occluder) {
+    if (!state.renderer) return;
+    const selected = record === state.selectedRecord;
     const visible =
       state.feed.enabled &&
       isVisible(getVisual(record).surfacePosition, occluder);
-    getVisual(record).billboard = state.billboardCollection.add({
+    // Depth-test-free, centred, screen-aligned (the renderer's sprite).
+    getVisual(record).billboard = state.renderer.fleet.add({
       position: getVisual(record).position,
       show: visible,
-      image: shipIcon(record, false),
-      scale: shipScale(record),
+      image: shipIcon(record, selected),
+      scale: shipScale(record) * (selected ? 1.2 : 1),
       // Screen-projected rotation lands on the next visibility/rotation pass.
       rotation: 0,
-      alignedAxis: Cesium.Cartesian3.ZERO,
-      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-      verticalOrigin: Cesium.VerticalOrigin.CENTER,
-      // Locked height-datum principle #2: contacts are ALWAYS visible —
-      // depth-test-free sprites; the EllipsoidalOccluder handles the far side.
-      // (The tile sea mesh ≠ the geoid exactly, so a depth-tested chevron at
-      // the geoid still clips out behind local tide/mesh noise.)
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
       id: record,
     });
   }
@@ -148,9 +143,9 @@ export function createRendering({
 
   function removeRecordPrimitives(record) {
     if (!record) return;
-    if (getVisual(record).billboard && state.billboardCollection) {
+    if (getVisual(record).billboard && state.renderer?.fleet.attached()) {
       forgetSpriteFocus(getVisual(record).billboard);
-      state.billboardCollection.remove(getVisual(record).billboard);
+      state.renderer.fleet.remove(getVisual(record).billboard);
     }
     getVisual(record).billboard = null;
   }
@@ -186,19 +181,14 @@ export function createRendering({
    */
 
   function shipIcon(record, selected) {
-    const cssColor = selected ? '#ffffff' : vesselTypeCss(record.type);
+    const cssColor = selected
+      ? VESSEL_SELECTED_CSS
+      : vesselTypeCss(record.type);
     const key = `${cssColor}:${selected ? 'selected' : 'normal'}`;
     if (vesselState.shipIconCache.has(key))
       return vesselState.shipIconCache.get(key);
 
-    const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
-    const strokeWidth = selected ? 1.1 : 0.7;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <g transform="translate(16,16)">
-      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
-    </g>
-  </svg>`;
-    const icon = 'data:image/svg+xml;base64,' + btoa(svg);
+    const icon = vesselChevronIcon(cssColor, selected);
     vesselState.shipIconCache.set(key, icon);
     return icon;
   }
@@ -212,8 +202,8 @@ export function createRendering({
   // animating. The trailing frame is keyed to camera motion alone: the pass's
   // own label publication requests a frame, and scheduling on that would loop.
   function installRuntime(viewer) {
-    if (state.preRenderRemover || !viewer) return;
-    state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
+    if (state.preRenderRemover || !viewer || !state.renderer) return;
+    state.preRenderRemover = state.renderer.view.on('preRender', () => {
       if (followsClock(vesselState)) followClockPositions();
       updateVisibility();
     });
@@ -244,7 +234,8 @@ export function createRendering({
     );
     state.trailingVisibilityTimer = vesselState._aisRuntime.setTimeout(() => {
       state.trailingVisibilityTimer = null;
-      if (state.feed.enabled) governorRequestRender('ais-vessels-visibility');
+      if (state.feed.enabled)
+        governorRequestRender('ais-vessels-visibility', state.renderer?.engine);
     }, waitMs);
   }
 
@@ -254,9 +245,15 @@ export function createRendering({
     state.trailingVisibilityTimer = null;
   }
 
+  // The camera a pass reads: the renderer's view, else the viewer's.
+  function passCamera() {
+    return state.renderer?.view?.camera ?? state.viewer?.camera ?? null;
+  }
+
   function updateVisibility(force = false) {
-    if (!state.feed.enabled) return;
-    if (force) governorRequestRender('ais-vessels-update');
+    if (!state.feed.enabled || (!state.renderer && !state.viewer)) return;
+    if (force)
+      governorRequestRender('ais-vessels-update', state.renderer?.engine);
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
     const regularPass =
@@ -264,10 +261,11 @@ export function createRendering({
     const focusPass =
       focusPassIsNeeded(focusTarget, state.activeFocusCount) &&
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
+    const poseCamera = passCamera();
     if (
       !regularPass &&
-      state.viewer?.camera &&
-      cameraPoseSignature(state.viewer.camera) !== vesselState._lastCamPoseSig
+      poseCamera &&
+      cameraPoseSignature(poseCamera) !== vesselState._lastCamPoseSig
     )
       scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
@@ -278,21 +276,20 @@ export function createRendering({
       // Still record the pose this pass evaluated, or every later frame that
       // falls inside the cadence would schedule another trailing frame.
       if (regularPass) {
-        if (state.viewer?.camera)
-          vesselState._lastCamPoseSig = cameraPoseSignature(
-            state.viewer.camera,
-          );
+        if (poseCamera)
+          vesselState._lastCamPoseSig = cameraPoseSignature(poseCamera);
         updateClusteredLabels([]);
       }
       if (focusPass) {
         state.activeFocusCount = 0;
-        releaseContinuousRender('ais-vessels');
+        releaseContinuousRender('ais-vessels', state.renderer?.engine);
       }
       return;
     }
 
-    const scene = state.viewer?.scene;
-    const camera = state.viewer?.camera;
+    const view = state.renderer?.view;
+    const scene = view?.scene;
+    const camera = view?.camera;
     if (regularPass) {
       // Candidate construction stays on the original 800 ms selector cadence.
       // The 80 ms focus-only pass below never allocates label candidates.
@@ -334,18 +331,14 @@ export function createRendering({
         previousActiveCount: state.activeFocusCount,
         nowMs: now,
         screenPositionFor: (position) =>
-          Cesium.SceneTransforms.worldToWindowCoordinates(
-            scene,
-            position,
-            vesselState._scratchFocusScreen,
-          ),
+          view.worldToWindow(position, vesselState._scratchFocusScreen),
         cameraDistanceFor: (position) =>
-          Cesium.Cartesian3.distance(camera.positionWC, position),
+          geo.cartesian3.distance(camera.positionWC, position),
       });
       state.activeFocusCount = result.activeCount;
       if (result.activeCount > 0 || result.transitioning)
-        holdContinuousRender('ais-vessels');
-      else releaseContinuousRender('ais-vessels');
+        holdContinuousRender('ais-vessels', state.renderer?.engine);
+      else releaseContinuousRender('ais-vessels', state.renderer?.engine);
     }
   }
 
@@ -406,7 +399,7 @@ export function createRendering({
         // the non-zero floor while it competes with the tracked target. Preserve
         // the billboard's existing base RGB, matching the other layer patterns,
         // rather than repainting every chevron from a hard-coded WHITE base.
-        const baseColor = bb.color || Cesium.Color.WHITE;
+        const baseColor = bb.color || WHITE;
         bb.color = baseColor.withAlpha(focus.factor);
         writes += 1;
       }
@@ -415,12 +408,7 @@ export function createRendering({
   }
 
   function makeOccluder() {
-    const cameraPosition = state.viewer?.camera?.positionWC;
-    if (!cameraPosition) return null;
-    return new Cesium.EllipsoidalOccluder(
-      Cesium.Ellipsoid.WGS84,
-      cameraPosition,
-    );
+    return state.renderer?.view.horizon() ?? null;
   }
 
   function isVisible(surfacePosition, occluder) {
@@ -440,8 +428,8 @@ export function createRendering({
    */
 
   function updateClusteredLabels(records) {
-    const viewer = state.viewer;
-    const scene = viewer?.scene;
+    const view = state.renderer?.view;
+    const scene = view?.scene;
     const selected = state.selectedRecord;
     // From the bridge, the selected vessel is the viewer; its card would be
     // pinned to the camera position.
@@ -461,10 +449,7 @@ export function createRendering({
     for (const record of records) {
       const visual = getVisual(record);
       if (record === selected) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        visual.position,
-      );
+      const screen = view.worldToWindow(visual.position);
       if (!screen) continue;
       const key = `${Math.floor(screen.x / LABEL_GRID_PX)}:${Math.floor(screen.y / LABEL_GRID_PX)}`;
       const candidate = {
@@ -483,8 +468,7 @@ export function createRendering({
     // selected card's anchor seeds the accepted set so ambient cards keep clear.
     const accepted = [];
     if (selectedCarded) {
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
+      const screen = view.worldToWindow(
         getVisual(selected).billboard?.position || getVisual(selected).position,
       );
       if (screen) accepted.push({ x: screen.x, y: screen.y });
@@ -515,14 +499,17 @@ export function createRendering({
    */
 
   function publishVesselOverlayEntries(entries) {
-    const canvas = state.viewer?.scene?.canvas || state.viewer?.canvas;
-    const width = Number(canvas?.clientWidth) || 0;
-    const height = Number(canvas?.clientHeight) || 0;
+    const { width, height } = state.renderer?.view.canvasSize() ?? {
+      width: 0,
+      height: 0,
+    };
     const ambientLimit = vesselOverlayCohortLimit(
       width,
       height,
       labelRowLimit(),
     );
+    // The cards published last (QA: qaDrawn).
+    vesselState._publishedCards = entries;
     vesselState._vesselOverlayHost.setEntries(
       VESSEL_OVERLAY_SOURCE_ID,
       entries.map((entry) => {
@@ -579,9 +566,7 @@ export function createRendering({
   }
 
   function setVisible(show) {
-    if (state.billboardCollection) {
-      state.billboardCollection.show = show;
-    }
+    state.renderer?.fleet.setVisible(show);
     vesselState._vesselOverlayHost.setVisible(VESSEL_OVERLAY_SOURCE_ID, show);
   }
   return {

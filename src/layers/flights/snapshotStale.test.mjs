@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { WHITE } from '../shared/color.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 import { createFlightSnapshotRenderer } from './snapshotRenderer.js';
 
 // A poll that repeats a contact's last position with new speed or course
@@ -24,27 +27,27 @@ function harness({ ground = () => null }) {
     _trackedIcao: ICAO,
     _trackedEntity: null,
     _positionHistory: new Map([[ICAO, history]]),
-    _billboards: new Map([[ICAO, { position: new Cesium.Cartesian3() }]]),
-    _billboardCollection: stub(),
+    _billboards: new Map([[ICAO, { position: geo.cartesian3.create() }]]),
+    _renderer: recordingAircraftRenderer(createFakeEngine()),
     _cullPositions: new Map(),
     _displayCourse: new Map(),
     _groundSnap: stub(),
     _displayFloorState: new Map(),
     _models: new Map(),
-    _viewer: null,
     _cockpitContactMode: false,
     records: { data: new Map() },
   };
   let meta = null;
   let fixEpochMs = 0;
   const records = stub({
+    data: flightState.records.data,
     receive: () => {
       flightState.records.data.set(ICAO, meta);
       return { prevMeta: meta, meta, groundFlipped: false, fixEpochMs };
     },
     absence: () => 'retain',
   });
-  const apply = createFlightSnapshotRenderer({
+  const { applySnapshot: apply } = createFlightSnapshotRenderer({
     flightState,
     records,
     militaryRegistry: stub({ isMilitaryIcao: () => false }),
@@ -52,7 +55,7 @@ function harness({ ground = () => null }) {
     meshFloor: stub(),
     rendering: stub({
       _modelOwnsVisual: () => false,
-      _fleetBillboardColor: () => Cesium.Color.WHITE,
+      _fleetBillboardColor: () => WHITE,
     }),
     tracking: stub({
       _militaryLayerSuppresses: () => false,
@@ -69,7 +72,7 @@ function harness({ ground = () => null }) {
     poll(nextMeta, epochMs) {
       meta = nextMeta;
       fixEpochMs = epochMs;
-      apply({ records: [{ id: ICAO }], complete: true }, null);
+      apply({ records: [{ id: ICAO }], complete: true });
     },
   };
 }
@@ -121,7 +124,7 @@ test('a cruising contact whose position repeats coasts no further than the stale
   t.mock.timers.tick(300 * SEC);
   h.poll(cruise(200, 100), t0);
   assert.equal(h.history.length, 2);
-  const moved = Cesium.Cartesian3.distance(report, h.history[1].position);
+  const moved = geo.cartesian3.distance(report, h.history[1].position);
   assert.ok(
     moved <= 220 * 300 + 1,
     `the synthetic fix coasted ${moved.toFixed(0)} m`,

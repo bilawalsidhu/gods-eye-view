@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Camera-panel browser acceptance with controlled sources, images and terrain. */
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 const origin = process.env.QA_BASE_URL || 'http://localhost:4173';
 const selectAllModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
 const sources = [
@@ -31,13 +32,11 @@ const sources = [
   rangeM: 300,
   mountHeightM: 8,
 }));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -108,10 +107,10 @@ try {
   await page.waitForFunction(
     () =>
       window.__godsEyeView?.styleManager?._cctvControls &&
-      window.__godsEyeView?.dataManager?.layers?.has('cctv') &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+      window.__godsEyeView?.dataManager?.layers?.has('cctv'),
     { timeout: 60000 },
   );
+  await whenSettled(page);
   await page.$eval('[data-collapse-target="cctv-panel"]', (button) =>
     button.click(),
   );
@@ -280,6 +279,8 @@ try {
         .classList.contains('has-frame'),
   );
   await page.setCacheEnabled(false);
+  // Keep both options while selecting A flies the view away from B.
+  await page.focus('#cctv-camera-select');
   delayCameraA = true;
   await page.select('#cctv-camera-select', 'qa-camera-a');
   await page.waitForFunction(
@@ -357,22 +358,23 @@ try {
   fs.mkdirSync('qa-shots/camera-controls', { recursive: true });
   await page.screenshot({ path: 'qa-shots/camera-controls/desktop.png' });
   await page.evaluate(() => {
-    const camera = window.__godsEyeView.viewer.camera;
-    camera.setView({
+    window.__godsEyeView.engine.camera.setView({
+      destination: window.__godsEyeView.engine.camera.pose().position,
       orientation: {
-        heading: camera.heading + Math.PI / 3,
+        heading:
+          window.__godsEyeView.engine.camera.pose().heading + Math.PI / 3,
         pitch: -0.6,
         roll: 0,
       },
     });
   });
-  await new Promise((resolve) => setTimeout(resolve, 700));
+  await whenUiSettled(page);
   await page.screenshot({ path: 'qa-shots/camera-controls/angle.png' });
   await page.setViewport({ width: 390, height: 844 });
-  await new Promise((resolve) => setTimeout(resolve, 700));
+  await whenUiSettled(page);
   // Phones present CCTV in the Cameras tab's sheet.
   await page.click('#mobile-tab-bar [data-mobile-sheet="cameras"]');
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await whenUiSettled(page);
   await page.screenshot({ path: 'qa-shots/camera-controls/narrow.png' });
   check(
     'narrow camera panel remains within the viewport',
@@ -411,6 +413,6 @@ try {
   );
 } finally {
   await Promise.all([...delayedFrames].map((respond) => respond()));
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (failures) process.exitCode = 1;

@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 /**
  * Browser QA for the Street Level layer against a running server:
  * `npm run qa:street-level -- --url http://localhost:4173`.
@@ -124,7 +128,7 @@ const KEYLESS_HOSTS = [
  * `fixture`, which steps may change mid-run. `configured: undefined` lets the
  * server's real status route answer.
  */
-async function serveFixtures(page, fixture) {
+export async function serveFixtures(page, fixture) {
   // CDP Fetch on just these URLs: page-wide interception stalls Cesium workers.
   const cdp = await page.createCDPSession();
   await cdp.send('Fetch.enable', {
@@ -205,7 +209,7 @@ async function serveFixtures(page, fixture) {
   });
 }
 
-function newFixture(overrides = {}) {
+export function newFixture(overrides = {}) {
   return {
     configured: undefined,
     rejected: false,
@@ -222,6 +226,7 @@ async function boot(page, url) {
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.dataManager), {
     timeout: 150_000,
   });
+  await whenSettled(page);
   await page.evaluate(() =>
     document.querySelector('.first-run-explore')?.click(),
   );
@@ -337,8 +342,9 @@ async function assertKeyRequired(page) {
 const findPick = (page, prefix, { box = null, step = 3 } = {}) =>
   page.evaluate(
     (want, area, stride) => {
-      const { scene } = window.__godsEyeView.viewer;
-      const rect = scene.canvas.getBoundingClientRect();
+      const { engine } = window.__godsEyeView;
+      const rect =
+        window.__godsEyeView.engine.host.canvas.getBoundingClientRect();
       const { x, y, w, h } = area || {
         x: 0,
         y: Math.round(rect.height / 2),
@@ -347,7 +353,7 @@ const findPick = (page, prefix, { box = null, step = 3 } = {}) =>
       };
       for (let py = y; py < y + h; py += stride)
         for (let px = x; px < x + w; px += stride) {
-          const id = scene.pick({ x: px, y: py })?.id;
+          const id = engine.picker.pick({ x: px, y: py })?.id;
           if (typeof id === 'string' && id.startsWith(want))
             return {
               x: rect.left + px,
@@ -377,30 +383,33 @@ async function findPickUntil(
   for (;;) {
     const hit = await findPick(page, prefix, { box, step });
     if (hit || Date.now() >= deadline) return hit;
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await whenSettled(page);
   }
 }
 
 /** Park the camera at `at`; a late startup flight can move it. */
 async function park(page, at = PARK) {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const stayed = await page.evaluate(async (at) => {
-      const v = window.__godsEyeView.viewer;
-      v.camera.cancelFlight?.();
-      const C = v.camera.positionCartographic.constructor;
-      v.camera.setView({
-        destination: v.scene.globe.ellipsoid.cartographicToCartesian(
-          C.fromDegrees(at.lon, at.lat, at.height),
-        ),
-        orientation: { heading: 0, pitch: at.pitch, roll: 0 },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      const c = v.camera.positionCartographic;
-      return (
-        Math.abs((c.longitude * 180) / Math.PI - at.lon) < 0.001 &&
-        Math.abs((c.latitude * 180) / Math.PI - at.lat) < 0.001
-      );
-    }, at);
+    const stayed = await evaluateWithGeo(
+      page,
+      async (qaGeo, at) => {
+        window.__godsEyeView.engine.camera.cancelFlight?.();
+        const C = qaGeo.cartographic;
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian(
+            C.fromDegrees(at.lon, at.lat, at.height),
+          ),
+          orientation: { heading: 0, pitch: at.pitch, roll: 0 },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const c = window.__godsEyeView.engine.camera.pose().cartographic;
+        return (
+          Math.abs((c.longitude * 180) / Math.PI - at.lon) < 0.001 &&
+          Math.abs((c.latitude * 180) / Math.PI - at.lat) < 0.001
+        );
+      },
+      at,
+    );
     if (stayed) return;
   }
   throw new Error(`the camera would not stay parked at ${JSON.stringify(at)}`);
@@ -413,14 +422,11 @@ async function main() {
   const url = urlIndex >= 0 ? args[urlIndex + 1] : 'http://localhost:4173';
   const fixtures = args.includes('--fixtures');
   const strict = args.includes('--strict');
-  const browser = await puppeteer.launch({
+  const browser = await launchBrowser({
     headless: true,
-    executablePath:
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      (await puppeteer.executablePath()),
     defaultViewport: VIEWPORT,
     protocolTimeout: 300_000,
-    args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader'],
+    args: ['--no-sandbox'],
   });
   let count = 0;
   const skips = [];
@@ -442,6 +448,7 @@ async function main() {
   // The layer only warns on listener exceptions, so count those as errors.
   const open = async (name, fixture) => {
     const page = await browser.newPage();
+    await blockPaidQaMaps(page);
     monitors.push(
       watchPage(page, {
         name,
@@ -492,7 +499,7 @@ async function main() {
           box === 'column'
             ? await page.evaluate(() => {
                 const { height, width } =
-                  window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect();
+                  window.__godsEyeView.engine.host.canvas.getBoundingClientRect();
                 return { x: Math.round(width * 0.3), y: 0, w: 1, h: height };
               })
             : null;
@@ -558,7 +565,7 @@ async function main() {
         'keyless server: the MAPILLARY chip explains its key instead of switching',
         async () => {
           await press(page, '#sl-provider-chips [data-chip-id="mapillary"]');
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await whenSettled(page);
           assert.ok(litAlone(await getUI(page), 'kartaview'));
         },
       );
@@ -829,7 +836,7 @@ async function main() {
     if (dir) console.error(`failure evidence saved in ${dir}/`);
     throw error;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 }
 

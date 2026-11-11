@@ -162,3 +162,44 @@ test('NearFarScalar rendered-size interpolation matches Cesium clamp endpoints',
   const middle = nearFarScalarValueAtDistance(scalar, 1_000_000);
   assert.ok(middle > 0.5 && middle < 3);
 });
+
+test('a focus target projects through the projector its scene carries', async () => {
+  const { publishFocusTargetFromCachedPosition, clearFocusTarget } =
+    await import('./focusDeemphasis.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  const projected = [];
+  engine.projector.worldToWindow = (position, result = {}) => {
+    projected.push(position);
+    return Object.assign(result, { x: 300, y: 200 });
+  };
+  // A scene with no Cesium behind it (a layer's engine view).
+  const scene = {
+    frameState: { frameNumber: 7 },
+    projector: engine.projector,
+  };
+  try {
+    const target = publishFocusTargetFromCachedPosition({
+      ownerLayer: 'flights',
+      id: 'abc123',
+      scene,
+      camera: { positionWC: { x: 0, y: 0, z: 1000 } },
+      displayPosition: { x: 0, y: 0, z: 0 },
+      widthPx: 20,
+      heightPx: 20,
+      params: { paddingPx: 0 },
+    });
+    assert.equal(projected.length, 1);
+    assert.deepEqual(target.screenRect, {
+      left: 290,
+      top: 190,
+      right: 310,
+      bottom: 210,
+    });
+    assert.equal(target.cameraDistance, 1000);
+    assert.equal(target.frameNumber, 7);
+  } finally {
+    clearFocusTarget('flights');
+    engine.destroy();
+  }
+});

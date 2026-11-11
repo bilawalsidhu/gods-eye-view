@@ -1,12 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import * as context from '../../data/contextStore.js';
-import { createSelection } from './selection.js';
-import { createRendering } from './rendering.js';
-import { createNamedMarkers } from './namedMarkers.js';
+import { SELECTION_FILL_SET_ID } from './render/display.js';
+import { createDisplayHarness } from './render/displayHarness.mjs';
+import { GROUND_HARNESSES } from '../../testSupport/groundDisplayEngines.mjs';
 
-function harness(t) {
+function harness(t, makeHarness = GROUND_HARNESSES[0]) {
   const previousWindow = globalThis.window;
   const previousDocument = globalThis.document;
   globalThis.window = new EventTarget();
@@ -29,51 +28,8 @@ function harness(t) {
       ],
     ],
   };
-  const state = {
-    enabled: true,
-    selectedId: null,
-    records: [record],
-    recordById: new Map([[record.id, record]]),
-    renderedKeys: new Map(),
-    dataSource: new Cesium.CustomDataSource(),
-    viewer: {
-      camera: { positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 1e6) },
-      scene: {
-        globe: { show: false },
-        canvas: Object.assign(new EventTarget(), {
-          clientWidth: 1280,
-          clientHeight: 800,
-        }),
-        primitives: { add: (p) => p, remove() {} },
-      },
-    },
-  };
-  t.mock.method(
-    Cesium.SceneTransforms,
-    'worldToWindowCoordinates',
-    (_scene, _point, scratch) => {
-      scratch.x = 640;
-      scratch.y = 400;
-      return scratch;
-    },
-  );
   let labels = [];
-  const services = {
-    context,
-    anchors: {},
-    ground: { floorAltitudeM: () => 0, cachedGroundFloor: () => 0 },
-    render: { governorRequestRender() {} },
-  };
-  const parts = {
-    model: {
-      colorFor: () => Cesium.Color.ORANGE,
-      installationSourceLabel: () => 'OpenStreetMap',
-    },
-  };
-  const ctx = {
-    state,
-    services,
-    parts,
+  const h = createDisplayHarness(makeHarness, {
     overlayHost: {
       setEntries(_id, entries) {
         labels = entries;
@@ -81,33 +37,30 @@ function harness(t) {
       clearSource() {},
       setVisible() {},
     },
-  };
-  parts.rendering = createRendering(ctx);
-  parts.namedMarkers = createNamedMarkers(ctx);
-  const selection = createSelection(ctx);
-  selection.installInteraction(state.viewer);
+  });
+  h.setRecords([record]);
+  h.setPhotoreal(true);
+  h.start();
+  const selection = h.parts.display;
   t.after(() => {
-    selection.destroy();
-    state.clickHandler.destroy();
-    parts.namedMarkers.destroy();
-    parts.rendering.clearRendered();
+    h.destroy();
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
   });
   const assertSelected = (selected) => {
-    assert.equal(state.selectedId, selected ? record.id : null);
+    assert.equal(h.state.selectedId, selected ? record.id : null);
     assert.equal(labels[0].selected, selected);
     assert.equal(labels[0].variant, selected ? 'selected' : 'card');
     assert.equal(
-      state.dataSource.entities.values.filter((e) => e.polygon).length,
+      h.set(SELECTION_FILL_SET_ID)?.items.length ?? 0,
       selected ? 1 : 0,
     );
   };
   assert.equal(selection.selectRecord(record.id), true);
   assertSelected(true);
-  return { state, selection, assertSelected };
+  return { state: h.state, selection, assertSelected };
 }
 
 for (const layerId of ['flights', 'military', 'satellites']) {
@@ -140,7 +93,7 @@ test('entity selection and clear still release the installation card and fill', 
 
 test('destroy removes all installation context listeners', (t) => {
   const h = harness(t);
-  h.selection.destroy();
+  h.selection.destroyInteraction();
   context.selectTrackedSubjectContext({ id: 'other', layerId: 'flights' });
   for (const type of [
     'gev:entity-selected',

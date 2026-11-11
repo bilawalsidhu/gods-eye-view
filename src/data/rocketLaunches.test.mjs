@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { gstime } from 'satellite.js';
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createCesiumMoversEngine } from '../testSupport/cesiumMoversEngine.mjs';
 import { worldClock } from '../time/worldClock.js';
 import { createModel } from '../layers/launches/model.js';
 import rocketLaunchesLayer, {
@@ -64,6 +67,11 @@ import {
   satelliteCatalogModeChanged,
   scoreSatelliteNameMatch,
 } from './satellites.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const NOW = new Date('2026-07-27T00:00:00Z');
 
@@ -1096,13 +1104,40 @@ test('finds a newly launched payload in the active TLE fallback catalog', () => 
   assert.equal(typeof track?.positionAt, 'function');
 });
 
-test('real mission build, select, refresh, deselect, disable, and destroy paths publish no native labels', async () => {
+// The layer on the fake engine and on the Cesium engine over a stub scene:
+// a frame, a frame start alone (preUpdate) and the end of the layer's flights.
+const MISSION_HARNESSES = [
+  () => {
+    const engine = createFakeEngine({ width: 1600, height: 900 });
+    return {
+      name: 'the fake engine',
+      engine,
+      frame: () => engine.fake.frame(),
+      frameStart: () => engine.fake.emit('frames.preUpdate', 0),
+      land: () => engine.fake.frames(400),
+    };
+  },
+  () => {
+    const { engine, viewer, frame } = createCesiumMoversEngine();
+    viewer.scene.globe.getHeight = () => 0;
+    // The stub scene runs no flight tweens: the layer's flights land at once.
+    const fly = viewer.camera.flyTo.bind(viewer.camera);
+    viewer.camera.flyTo = (options) => fly({ ...options, duration: 0 });
+    return {
+      name: 'the Cesium engine',
+      engine,
+      frame,
+      frameStart: () =>
+        viewer.scene.preUpdate.raiseEvent(viewer.scene, viewer.clock.currentTime),
+      land: () => {},
+    };
+  },
+];
+
+for (const makeHarness of MISSION_HARNESSES)
+test(`real mission build, select, refresh, deselect, disable, and destroy paths publish no native labels (${makeHarness().name})`, async () => {
   const realDocument = globalThis.document;
   const realFetch = globalThis.fetch;
-  const realHtmlCanvasElement = globalThis.HTMLCanvasElement;
-  const realHtmlImageElement = globalThis.HTMLImageElement;
-  const realImageBitmap = globalThis.ImageBitmap;
-  const realOffscreenCanvas = globalThis.OffscreenCanvas;
   const listeners = new Map();
   const context = {
     strokeStyle: '',
@@ -1157,37 +1192,15 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     addEventListener(type, handler) { listeners.set(`document:${type}`, handler); },
     removeEventListener(type) { listeners.delete(`document:${type}`); },
   };
-  const canvas = new FakeElement('canvas');
-  const dataSources = [];
-  const camera = {
-    positionCartographic: null,
-    positionWC: Cesium.Cartesian3.fromDegrees(-80.604, 28.608, 18_000_000),
-    cancelFlight() {},
-    lookAtTransform() {},
-  };
-  const scene = {
-    canvas,
-    camera,
-    frameState: { frameNumber: 1 },
-    postRender: new Cesium.Event(),
-    preRender: new Cesium.Event(),
-    preUpdate: new Cesium.Event(),
-    primitives: { add: (primitive) => primitive, remove: () => true },
-    drillPick: () => [],
-  };
-  const viewer = {
-    camera,
-    scene,
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
-    },
-    selectedEntity: undefined,
-  };
+  const harness = makeHarness();
+  const { engine } = harness;
+  const lookFrom = (lon, lat) =>
+    engine.camera.setView({ destination: geo.cartesian3.fromDegrees(lon, lat, 18_000_000) });
+  lookFrom(-80.604, 28.608);
+  const plain = (p) => (p ? { x: p.x, y: p.y, z: p.z } : null);
+  const drawnPoint = (id) =>
+    rocketLaunchesLayer.qaDrawn().points.find((point) => point.id === id);
+  const element = (id) => rocketLaunchesLayer._missionElementForTest(id);
   const hostCalls = [];
   const host = {
     setEntries: (...args) => hostCalls.push(['entries', ...args]),
@@ -1224,10 +1237,6 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     },
   }] });
   globalThis.document = document;
-  globalThis.HTMLCanvasElement = FakeElement;
-  globalThis.HTMLImageElement = class {};
-  globalThis.ImageBitmap = class {};
-  globalThis.OffscreenCanvas = class {};
   globalThis.fetch = async (url) => {
     if (url === '/api/celestrak/active') {
       return { ok: true, text: async () => '' };
@@ -1238,18 +1247,21 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
   _setRocketMissionOverlayHostForTest(host);
   let initialized = false;
   try {
-    rocketLaunchesLayer.init(viewer);
+    rocketLaunchesLayer.init(null, { engine });
     initialized = true;
     await rocketLaunchesLayer.enable();
     assert.equal(worldClock.coverage(), null, 'nothing loaded, no time to show');
     await rocketLaunchesLayer.update();
+    // The full-globe entry flight lands before the camera moves.
+    harness.land();
     const at = Date.parse(launchTime);
     assert.deepEqual(worldClock.coverage(), { start: at, end: at, marks: [at] });
     assert.equal(worldClock.isSupported(), true, 'loaded launches bring up the timeline');
 
-    const entities = dataSources[0].entities.values;
-    assert.ok(entities.length >= 7, 'runtime guard requires the populated mission build path');
-    assert.ok(entities.every((entity) => entity.label === undefined));
+    const drawn = rocketLaunchesLayer.qaDrawn();
+    assert.ok(drawn.points.length + drawn.paths.length >= 6, 'runtime guard requires the populated mission build path');
+    // Only dots, the reticle and lines: the labels are the host's.
+    assert.ok(engine.movers.list().every(({ kind }) => kind === 'point' || kind === 'sprite'));
     const ambientPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID
     ));
@@ -1261,26 +1273,25 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       collisionCapacity: ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
       moving: false,
     });
-    const launchEntity = dataSources[0].entities.getById('rocket-launch:mission-runtime');
-    assert.deepEqual(
-      ambientPublication[2][0].position,
-      launchEntity.position.getValue(Cesium.JulianDate.now()),
-      'ambient host marker must reuse the entity anchor Cartesian',
-    );
-    const frameTime = Cesium.JulianDate.now();
-    scene.preRender.raiseEvent(scene, frameTime);
-    assert.equal(launchEntity.point.show.getValue(frameTime), true);
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(99.396, -28.608, 18_000_000);
-    scene.preRender.raiseEvent(scene, frameTime);
+    const launchElement = element('rocket-launch:mission-runtime');
     assert.equal(
-      launchEntity.point.show.getValue(frameTime),
+      ambientPublication[2][0].position,
+      launchElement.position,
+      'ambient host marker must reuse the element anchor Cartesian',
+    );
+    harness.frame();
+    assert.equal(drawnPoint('rocket-launch:mission-runtime').show, true);
+    lookFrom(99.396, -28.608);
+    harness.frame();
+    assert.equal(
+      drawnPoint('rocket-launch:mission-runtime').show,
       false,
       'pre-render horizon pass must hide a rear-side depth-free mission dot before draw and pick',
     );
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(-80.604, 28.608, 18_000_000);
-    scene.preRender.raiseEvent(scene, frameTime);
+    lookFrom(-80.604, 28.608);
+    harness.frame();
     assert.equal(
-      launchEntity.point.show.getValue(frameTime),
+      drawnPoint('rocket-launch:mission-runtime').show,
       true,
       'mission dot must return when its surface anchor faces the camera again',
     );
@@ -1306,17 +1317,16 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       && entry.paintLane === 'selected'
       && entry.edgeFade === 'keyhole'
     )));
-    const satelliteEntity = dataSources[0].entities.getById('rocket-satellite:mission-runtime');
-    const satellitePosition = satelliteEntity.position.getValue(Cesium.JulianDate.now());
+    const satellite = element('rocket-satellite:mission-runtime');
     assert.equal(
       selectedPublication[2][2].position(),
-      satellitePosition,
+      satellite.position(),
       'payload host getter must return the exact per-frame live-position cache',
     );
 
     // Jitter regression net: live-state propagation advances at most once per
-    // frameNumber, and the host getter is a pure read that never advances it.
-    // Without both halves, the host label and the native dot can propagate to
+    // engine frame, and the host getter is a pure read that never advances it.
+    // Without both halves, the host label and the dot can propagate to
     // different wall-clock instants inside one frame — the documented
     // label-separation jitter class.
     const payloadEntry = selectedPublication[2][2];
@@ -1324,52 +1334,55 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     try {
       let nowMs = realDateNow();
       Date.now = () => nowMs;
-      scene.frameState.frameNumber = 41;
-      const frameA = Cesium.Cartesian3.clone(
-        satelliteEntity.position.getValue(Cesium.JulianDate.now()),
-      );
+      // The frame's dot reads the payload position.
+      harness.frame();
+      const frameA = plain(satellite.position());
       nowMs += 30_000;
       assert.deepEqual(
-        Cesium.Cartesian3.clone(satelliteEntity.position.getValue(Cesium.JulianDate.now())),
+        plain(satellite.position()),
         frameA,
-        'a second native read in the same frame must not re-propagate',
+        'a second read in the same frame must not re-propagate',
       );
       nowMs += 30_000;
-      scene.frameState.frameNumber = 42;
+      // A new frame that nothing has drawn yet.
+      harness.frameStart();
       assert.deepEqual(
-        Cesium.Cartesian3.clone(payloadEntry.position()),
+        plain(payloadEntry.position()),
         frameA,
         'host getter must not advance propagation, even on a new frame',
       );
-      const frameB = Cesium.Cartesian3.clone(
-        satelliteEntity.position.getValue(Cesium.JulianDate.now()),
-      );
-      assert.notDeepEqual(frameB, frameA, 'native read on a new frame propagates (non-vacuous)');
+      const frameB = plain(satellite.position());
+      assert.notDeepEqual(frameB, frameA, 'a read on a new frame propagates (non-vacuous)');
       assert.deepEqual(
-        Cesium.Cartesian3.clone(payloadEntry.position()),
+        plain(payloadEntry.position()),
         frameB,
-        'host getter reads the advanced cache after native propagation',
+        'host getter reads the advanced cache after propagation',
+      );
+      harness.frame();
+      assert.deepEqual(
+        plain(drawnPoint('rocket-satellite:mission-runtime').position),
+        plain(payloadEntry.position()),
+        'the drawn dot and the host label share the frame position',
       );
     } finally {
       Date.now = realDateNow;
-      scene.frameState.frameNumber = 1;
     }
-    const reentryEntity = dataSources[0].entities.getById('rocket-reentry:mission-runtime:0');
+    const reentry = element('rocket-reentry:mission-runtime:0');
     assert.deepEqual(
       selectedPublication[2][1].position,
-      reentryEntity.polyline.positions.getValue(Cesium.JulianDate.now())[0],
+      reentry.positions[0],
       're-entry host label must reuse the recovery-path interface Cartesian',
     );
-    const transferEntity = dataSources[0].entities.getById('rocket-transfer:mission-runtime');
+    const transfer = element('rocket-transfer:mission-runtime');
     assert.deepEqual(
       selectedPublication[2][3].position,
-      transferEntity.polyline.positions.getValue(Cesium.JulianDate.now()).at(-1),
+      transfer.positions.at(-1),
       'orbit host label must reuse the insertion Cartesian',
     );
 
     launchName = 'Mission Refresh | Gauntlet Payload';
     await rocketLaunchesLayer.update();
-    assert.ok(dataSources[0].entities.values.every((entity) => entity.label === undefined));
+    assert.ok(engine.movers.list().every(({ kind }) => kind === 'point' || kind === 'sprite'));
     const refreshPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID
     ));
@@ -1391,9 +1404,10 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       ['clear', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false],
     ]);
-    await rocketLaunchesLayer.destroy(viewer);
+    await rocketLaunchesLayer.destroy();
     initialized = false;
-    assert.equal(dataSources.length, 0);
+    assert.deepEqual(engine.movers.list(), []);
+    assert.deepEqual(engine.lines.list(), []);
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false],
@@ -1401,14 +1415,11 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       ['visible', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false],
     ]);
   } finally {
-    if (initialized) await rocketLaunchesLayer.destroy(viewer);
+    if (initialized) await rocketLaunchesLayer.destroy();
+    engine.destroy();
     _setRocketMissionOverlayHostForTest();
     globalThis.fetch = realFetch;
     globalThis.document = realDocument;
-    globalThis.HTMLCanvasElement = realHtmlCanvasElement;
-    globalThis.HTMLImageElement = realHtmlImageElement;
-    globalThis.ImageBitmap = realImageBitmap;
-    globalThis.OffscreenCanvas = realOffscreenCanvas;
   }
 });
 

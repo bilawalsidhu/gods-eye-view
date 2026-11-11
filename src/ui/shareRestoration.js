@@ -1,7 +1,23 @@
 import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
+import { APPLICATION_LAYER_DIRECTORY } from '../app/layers/directory.js';
+
+/** How long the "kept in the link" notice stays up (ms). */
+const NOT_ON_THIS_ENGINE_DWELL_MS = 15_000;
+
+/** Names of the layers a link turned on that this engine does not have. */
+export function layersNotOnThisEngine(results) {
+  return results
+    .filter(({ phase, targetEnabled }) => phase === 'missing' && targetEnabled)
+    .map(
+      ({ layerId }) =>
+        APPLICATION_LAYER_DIRECTORY.find(({ id }) => id === layerId)?.name ??
+        layerId,
+    );
+}
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { t, msg, formatDate } from '../i18n/index.js';
+import { localizeLayerName } from './layerNames.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
 import { isWorldTime, worldClock } from '../time/worldClock.js';
@@ -157,7 +173,9 @@ export function sharedFixNotice(entity, observedAtMs, nowMs = Date.now()) {
 /** Own initial share restoration, durable layer state and restoration notices. */
 export class ShareRestoration {
   constructor({
-    viewer,
+    engine,
+    canvas = engine?.host.canvas,
+    handoff = null,
     navigation,
     syncShareState,
     syncModels3d,
@@ -167,14 +185,16 @@ export class ShareRestoration {
     applyFollowOffset = null,
   }) {
     Object.assign(this, {
-      viewer,
+      engine,
+      canvas,
+      handoff,
       navigation,
       syncShareState,
       syncModels3d,
       showStatus,
       feedback,
       updateFeedback,
-      // (entity, offset) => disposer: frame a followed entity from a shared
+      // (handle, offset) => disposer: frame a followed entity from a shared
       // follow offset (shareFollow.js).
       applyFollowOffset,
     });
@@ -200,7 +220,7 @@ export class ShareRestoration {
     this.shareLinkManager = shareLinkManager;
     this._initialShareState = shareLinkManager.parseInitialHash();
   }
-  start() {
+  start({ engineSwitch = false, retainScene = false } = {}) {
     // Restore from URL hash if present
     const savedState = this._initialShareState;
     this._initialShareRestorePromise = savedState
@@ -217,20 +237,29 @@ export class ShareRestoration {
         this.navigation._beginDeferredNavigation('shared view', {
           cancelPendingSelection: false,
         });
+      const delay = engineSwitch ? 0 : 1500;
       this._initialShareRestoreTimeout = setTimeout(() => {
         this._initialShareRestoreTimeout = null;
         if (this._disposed) return;
         const generation = this._initialShareNavigationGeneration;
+        const retained =
+          engineSwitch && this._layerStateCoordinator?.retainedTrackingTarget();
         const applyCamera =
           Number.isInteger(generation) &&
-          this.navigation._reassertNavigationHandoff(generation);
+          this.navigation._reassertNavigationHandoff(generation, {
+            trackingOrigin: engineSwitch ? 'share-restore' : 'tool',
+            keepTracking: retainScene || Boolean(retained),
+          });
         void this._runShareRestore(savedState, {
           applyCamera,
+          instant: engineSwitch,
+          retained,
+          retainScene,
           navigationToken: generation,
           layersPromise: this._layerStateRestorePromise,
           settle: (result) => this._settleInitialShareRestore(result),
         });
-      }, 1500);
+      }, delay);
     } else {
       this.syncShareState();
       if (this.shareLinkManager?.rejectedShareCode)
@@ -259,20 +288,16 @@ export class ShareRestoration {
         this.navigation._stampNavigation(options),
       );
     };
-    this.viewer?.canvas?.addEventListener(
+    this.canvas?.addEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
       {
         passive: true,
       },
     );
-    this.viewer?.canvas?.addEventListener(
-      'wheel',
-      this._initialShareGestureHandler,
-      {
-        passive: true,
-      },
-    );
+    this.canvas?.addEventListener('wheel', this._initialShareGestureHandler, {
+      passive: true,
+    });
     // A different share opened in this tab later (pasted address, link,
     // Back/Forward) runs the same restore as start-up.
     this.shareLinkManager?.watchNavigation?.((state) =>
@@ -288,7 +313,15 @@ export class ShareRestoration {
    */
   async _runShareRestore(
     state,
-    { applyCamera, navigationToken, layersPromise, settle },
+    {
+      applyCamera,
+      instant = false,
+      retained,
+      retainScene = false,
+      navigationToken,
+      layersPromise,
+      settle,
+    },
   ) {
     const generation = this._shareRestoreGeneration;
     const current = () =>
@@ -296,13 +329,18 @@ export class ShareRestoration {
     try {
       const share = await this.shareLinkManager.applyState(state, {
         applyCamera,
+        instant,
         navigationToken,
       });
       const layers = await (layersPromise || Promise.resolve([]));
       if (!current()) return;
+      if (retainScene && !retained)
+        retained = this._layerStateCoordinator?.retainedTrackingTarget();
       const tracking =
         share.camera === 'applied'
-          ? await this._layerStateCoordinator?.restoreShareTrackingSelection?.()
+          ? (retained &&
+              this._layerStateCoordinator.resumeRetainedTracking(retained)) ||
+            (await this._layerStateCoordinator?.restoreShareTrackingSelection?.())
           : {
               status: 'superseded',
               cleared:
@@ -412,21 +450,43 @@ export class ShareRestoration {
       );
       this._layerStateRestorePromise = this._layerStateCoordinator.start({
         shareLayerState: this._initialShareState?.layerState || null,
+        handoff: this.handoff,
         shareCreatedAtMs: this._initialShareState?.sharedAtMs ?? null,
         // Any valid camera/style share isolates recipient-local preferences,
         // including legacy and malformed-v2 layer payloads.
         allowLocalState: !this._initialShareState,
       });
+      this.handoff = null;
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(
           'superseded-before-layer-coordinator-start',
           { clearSelection: true },
         );
       }
-      void this._layerStateRestorePromise.then(() => {
+      void this._layerStateRestorePromise.then((results) => {
         this.syncModels3d(this._layerStateCoordinator?.getDurableState());
+        this._noticeLayersNotOnThisEngine(results);
       });
     }
+  }
+  /**
+   * A link that turns on layers this engine's catalog leaves out (Navara):
+   * they stay off here, their state stays in the link, and the notice names
+   * them.
+   */
+  _noticeLayersNotOnThisEngine(results) {
+    if (this._disposed || !Array.isArray(results)) return;
+    const names = layersNotOnThisEngine(results);
+    if (!names.length) return;
+    this.showStatus(t('NOT ON THIS ENGINE'), {
+      state: 'retry',
+      detail: t('Kept in the link: {layers}', {
+        layers: names.map(localizeLayerName).join(', '),
+      }),
+      // Long enough to read a list of layer names; the engine's own
+      // persistent notice comes back afterwards (ShellFeedback).
+      dwellMs: NOT_ON_THIS_ENGINE_DWELL_MS,
+    });
   }
   /** The shared vessel a share's thing view selects, if it names one. */
   _sharedVessel(state) {
@@ -451,6 +511,7 @@ export class ShareRestoration {
     try {
       while (live()) {
         const vessels = this._dataManager?.layers?.get?.(layerId)?.module;
+        if (vessels?.getSelectedInfo?.()?.mmsi === id) return true;
         if (vessels?.hasContact?.(id) && vessels.selectById(id)) return true;
         if (Date.now() >= deadline) break;
         await new Promise((resolve) =>
@@ -485,17 +546,17 @@ export class ShareRestoration {
   /** Frame a shared entity the camera now follows from the shared offset. */
   _applySharedFollowOffset(result) {
     const view = this._sharedThingFor(result);
-    const entity = this.viewer?.trackedEntity;
+    const handle = this.engine?.camera.following();
     // Only a link made while following carries a real offset (with the fix);
     // a long link's follow keeps the app's own framing.
     if (
       !view?.lastKnown ||
-      String(entity?.gevTrackedId || '') !==
+      String(handle?.label?.id || handle?.native?.gevTrackedId || '') !==
         `${result.layerId}:${result.targetId}`
     )
       return;
     this._stopFollowOffset?.();
-    this._stopFollowOffset = this.applyFollowOffset?.(entity, view.offset);
+    this._stopFollowOffset = this.applyFollowOffset?.(handle, view.offset);
   }
 
   cancelSelection() {
@@ -659,14 +720,11 @@ export class ShareRestoration {
       share: null,
       layers: [],
     });
-    this.viewer?.canvas?.removeEventListener(
+    this.canvas?.removeEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
     );
-    this.viewer?.canvas?.removeEventListener(
-      'wheel',
-      this._initialShareGestureHandler,
-    );
+    this.canvas?.removeEventListener('wheel', this._initialShareGestureHandler);
     this._initialShareGestureHandler = null;
     this._lifetime.destroy();
   }

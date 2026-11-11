@@ -11,7 +11,7 @@ import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
  * owner ruled: draw it explicitly on a canvas, make the edge featherable
  * (like the NVG/FLIR tube masks), and free the six shader passes for real.
  *
- * Implementation: one fixed canvas parented into the viewer container
+ * Implementation: one fixed canvas parented into the globe container
  * BELOW the detection surface (z-index 2 < 5) so detection's
  * mix-blend-mode still composites over the masked scene, exactly like the
  * old in-scene artifact. The mask is a radial gradient — fully transparent
@@ -86,7 +86,11 @@ const SCOPE_TERMINUS_SAMPLE_MS = 120;
 
 let _canvas = null;
 let _container = null;
-let _viewer = null;
+/**
+ * The globe the mask sits over: { height(), preRender, moveEnd } from its
+ * globe engine.
+ */
+let _globe = null;
 let _enabled = true;
 let _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
 let _resizeObserver = null;
@@ -421,15 +425,32 @@ function syncScopeMaskAppearance(enabled = _enabled) {
 }
 
 /**
- * Install the scope mask into the viewer container. Idempotent.
- * @param {Cesium.Viewer} viewer
+ * The camera height and frame/camera events of a globe engine, and the
+ * container the mask goes into.
+ */
+function globeOf(engine) {
+  return {
+    container: engine?.host?.container,
+    height: () => engine?.camera?.height?.(),
+    preRender: engine?.frames?.preRender,
+    moveEnd: engine?.camera?.moveEnd,
+  };
+}
+
+/**
+ * Install the scope mask into the globe engine's host container.
+ * Idempotent.
+ * @param {import('./globe/contract.js').GlobeEngine} engine
  * @returns {void}
  */
-export function installScopeMask(viewer) {
-  if (_canvas || !viewer?.container) return;
+export function installScopeMask(engine) {
+  if (_canvas) return;
+  const globe = globeOf(engine);
+  // Only a DOM container can hold the mask (an engine double's cannot).
+  if (typeof globe.container?.appendChild !== 'function') return;
   syncScopeMaskAppearance();
-  _container = viewer.container;
-  _viewer = viewer;
+  _container = globe.container;
+  _globe = globe;
   _canvas = document.createElement('canvas');
   _canvas.id = 'scope-mask';
   _canvas.setAttribute('aria-hidden', 'true');
@@ -437,7 +458,7 @@ export function installScopeMask(viewer) {
   _resizeObserver = new ResizeObserver(() => draw());
   _resizeObserver.observe(_container);
   watchDevicePixelRatio();
-  watchCameraHeight(viewer);
+  watchCameraHeight(globe);
   // Seed from the live camera so the first paint is already correct for the
   // restored/initial altitude instead of flashing the globe-scale terminus.
   _terminusAlpha = currentTerminusTarget();
@@ -446,7 +467,12 @@ export function installScopeMask(viewer) {
 
 /** @returns {number} Live camera height above the ellipsoid, or +Inf if unknown. */
 function currentCameraHeightM() {
-  const height = _viewer?.camera?.positionCartographic?.height;
+  let height;
+  try {
+    height = _globe?.height();
+  } catch {
+    height = undefined;
+  }
   return Number.isFinite(height) ? height : Number.POSITIVE_INFINITY;
 }
 
@@ -456,11 +482,11 @@ function currentCameraHeightM() {
  * warranted. Two cheap compares per rendered frame; under the idle governor a
  * parked camera renders no frames at all, so this costs nothing at rest.
  * moveEnd additionally pins the exact settled value.
- * @param {Cesium.Viewer} viewer
+ * @param {{ preRender?: object, moveEnd?: object }} globe
  * @returns {void}
  */
-function watchCameraHeight(viewer) {
-  const preRender = viewer?.scene?.preRender;
+function watchCameraHeight(globe) {
+  const preRender = globe.preRender;
   if (preRender?.addEventListener) {
     _cameraSampleRemover = preRender.addEventListener(() => {
       // SCOPE OFF paints nothing, so it samples nothing: no height read, no
@@ -474,7 +500,7 @@ function watchCameraHeight(viewer) {
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
   }
-  const moveEnd = viewer?.camera?.moveEnd;
+  const moveEnd = globe.moveEnd;
   if (moveEnd?.addEventListener) {
     _cameraMoveEndRemover = moveEnd.addEventListener(() => {
       if (!_enabled) return;
@@ -550,7 +576,7 @@ export function destroyScopeMask() {
   _canvas?.remove();
   _canvas = null;
   _container = null;
-  _viewer = null;
+  _globe = null;
   _painted = false;
 }
 
@@ -564,7 +590,7 @@ export function _resetScopeMaskForTest() {
   _canvas?.remove();
   _canvas = null;
   _container = null;
-  _viewer = null;
+  _globe = null;
   _enabled = true;
   _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
   _terminusAlpha = SCOPE_OUTSIDE_ALPHA;

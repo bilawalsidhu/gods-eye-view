@@ -44,12 +44,8 @@ export function boxIntersects(a, b) {
 }
 
 /** Split a local camera rectangle into noncrossing observation query boxes. */
-export function wildlifeViewportBoxes(viewer) {
-  const camera = viewer?.camera;
-  if (typeof camera?.computeViewRectangle !== 'function') return null;
-  const rectangle = camera.computeViewRectangle(
-    viewer?.scene?.globe?.ellipsoid,
-  );
+export function wildlifeViewportBoxes(engine) {
+  const rectangle = engine?.camera?.viewRectangle();
   if (!rectangle) return null;
   const box = Object.fromEntries(
     ['south', 'west', 'north', 'east'].map((key) => [

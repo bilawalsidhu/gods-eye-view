@@ -14,6 +14,13 @@ export const CLICK_PICK_WINDOW_PX = 9;
 /** Pick id of the viewer position marker; the core owns it, not a provider. */
 export const POSITION_PICK_ID = 'sl:pos';
 
+/**
+ * Sprite order (engine.movers): under the moving contacts, as map data; a
+ * sequence's image cones over the position marker.
+ */
+export const MARKER_SPRITE_ORDER = -1;
+export const CONE_SPRITE_ORDER = -0.9;
+
 /** One colour per imagery source: chip, coverage lines and cones. */
 export const PROVIDER_COLORS = Object.freeze({
   mapillary: '#05cb63',

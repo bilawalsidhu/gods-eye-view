@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import * as Cesium from 'cesium';
+import { createCockpitEngine } from '../testSupport/cockpitEngine.mjs';
 import { CockpitViewController } from './cockpitController.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useHudStore } from './stores/hud.js';
@@ -102,16 +103,21 @@ function stockEventHandler(viewer) {
   return handler;
 }
 
+let disposeFixture = null;
+
 function fixture(
   t,
   {
     satellite = ISS,
+    kind = 'cesium',
+    nativeViewer = true,
     orbitAllowed = true,
     reducedMotion = true,
     aircraftInfo = null,
     vessel = null,
   } = {},
 ) {
+  disposeFixture?.();
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
@@ -132,14 +138,12 @@ function fixture(
   const listeners = () => ({ addEventListener: () => () => {} });
   const shots = [];
   const aircraftPosition = Cesium.Cartesian3.fromDegrees(10.2, 54.5, 3000);
-  const aircraft = {
-    position: {
-      getValue: (time, result) =>
-        Cesium.Cartesian3.clone(aircraftPosition, result),
-    },
-    show: true,
+  const globe = createCockpitEngine({ kind });
+  const { engine } = globe;
+  const aircraft = globe.aircraft({
+    position: aircraftPosition,
     gevTrackedId: aircraftInfo ? `flights:${aircraftInfo.icao24}` : '',
-  };
+  });
   const viewer = {
     trackedEntity: undefined,
     clock: { currentTime: null },
@@ -165,7 +169,35 @@ function fixture(
   // is not an Entity; the Cockpit routes it.
   viewer.screenSpaceEventHandler = stockEventHandler(viewer);
   const satellites = satelliteLayer(satellite);
-  const cockpit = new CockpitViewController(viewer, {
+  // Layer tracking and the first-person camera share the engine follow.
+  Object.defineProperty(viewer, 'trackedEntity', {
+    get: () => globe.following() ?? undefined,
+    set: (target) => target ? globe.ride(target) : engine.camera.following()?.stop(),
+  });
+  engine.camera.setView = (options) => viewer.camera.setView(options);
+  const pose = engine.camera.pose;
+  engine.camera.pose = () => ({
+    ...pose(),
+    heading: viewer.camera.heading ?? 0,
+    fovy: 2 * Math.atan(Math.tan(viewer.camera.frustum.fov / 2) / Math.max(1, viewer.camera.frustum.aspectRatio)),
+    aspectRatio: viewer.camera.frustum.aspectRatio,
+  });
+  engine.camera.setFovy = (radians) => {
+    viewer.camera.frustum.fov = cesiumFrustumFovRad(radians, viewer.camera.frustum.aspectRatio);
+  };
+  engine.surface.tilesLoaded = () => !viewer.scene.globe?.show || viewer.scene.globe.tilesLoaded !== false;
+  engine.projector.worldToWindow = (position) =>
+    viewer.scene.cartesianToCanvasCoordinates?.(position, {}) ?? null;
+  engine.surface.sampleHeight = (position) => viewer.scene.sampleHeight?.(position);
+  engine.surface.sampleHeightDetailed = (position) => {
+    const height = viewer.scene.sampleHeight?.(position);
+    return Number.isFinite(height) ? { height, source: 'tiles' } : undefined;
+  };
+  Object.defineProperty(viewer.scene.screenSpaceCameraController, 'enableInputs', {
+    get: () => engine.input.cameraInputsEnabled(),
+  });
+  const cockpit = new CockpitViewController(engine, {
+    viewer: nativeViewer ? viewer : null,
     services: {
       flightsLayer: { getTrackedInfo: () => aircraftInfo },
       militaryFlightsLayer: { getTrackedInfo: () => null },
@@ -216,9 +248,13 @@ function fixture(
   const events = [];
   const onMode = (event) => events.push(event.detail);
   window.addEventListener('gev:cockpit-mode-changed', onMode);
-  t.after(() => {
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     window.removeEventListener('gev:cockpit-mode-changed', onMode);
     cockpit.stop();
+    engine.destroy();
     app.unmount();
     globalThis.matchMedia = previousMatchMedia;
     document.body.classList.remove(
@@ -226,11 +262,14 @@ function fixture(
       'cockpit-bridge',
       'cockpit-orbit',
     );
-  });
+  };
+  disposeFixture = dispose;
+  t.after(dispose);
   const $ = (selector) => document.querySelector(selector);
   return {
     $,
     cockpit,
+    engine,
     viewer,
     satellites,
     store,
@@ -1620,4 +1659,35 @@ test('back to nadir from past the limb, the sensor waits for the view', async (t
   }
   await settle();
   assert.ok(store.orbital.sensor, 'back on the Earth');
+});
+
+test('Navara orbital entry, zoom, look and exit need only the contract', async (t) => {
+  const { cockpit, engine, shots, satellites } = fixture(t, {
+    kind: 'navara', nativeViewer: false,
+  });
+  const saved = engine.camera.pose().fovy;
+  assert.equal(cockpit.enter({ kind: 'satellite' }), true);
+  cockpit.updateOrbital(performance.now());
+  assert.equal(cockpit.subjectKind, 'satellite');
+  assert.equal(engine.input.cameraInputsEnabled(), false);
+  assert.ok(shots.length > 0);
+  const first = engine.camera.pose().fovy;
+  cockpit.stepOrbitalZoom(1);
+  assert.ok(engine.camera.pose().fovy < first);
+  cockpit.turnOrbitalLook({ axis: 'yaw', sign: 1, stepDeg: 10 });
+  cockpit.updateOrbital(performance.now());
+  assert.ok(cockpit.orbital.lookTarget.yawDeg > 0);
+  cockpit.exit();
+  assert.equal(cockpit.active, false);
+  assert.equal(engine.input.cameraInputsEnabled(), true);
+  near(engine.camera.pose().fovy, saved, 'restored lens');
+  assert.ok(satellites.calls.some(([name, id]) => name === 'subject' && id === ISS.noradId));
+});
+
+test('leaving orbit after a resize restores the wider-side lens angle', async (t) => {
+  const { cockpit, viewer } = await orbitAt(t);
+  viewer.camera.frustum.aspectRatio = 0.75;
+  cockpit.updateOrbital(performance.now());
+  cockpit.exit();
+  near(viewer.camera.frustum.fov, SAVED_FOV, 'restored lens after resize');
 });

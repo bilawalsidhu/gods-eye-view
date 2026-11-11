@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { createWindRendering } from './rendering.js';
+import { createWindDisplay } from './render/display.js';
 import { WIND_FIELDS } from './fields.js';
 import {
   formatWindReading,
@@ -50,21 +49,22 @@ export function windStats(manifest) {
   };
 }
 
-/** Construct one wind layer with an explicit source and owned animation. */
+/** Construct one wind layer with an explicit source and owned animation. It
+ * draws through its display (render/display.js) on the engine it is attached
+ * to: `createNativeRendering(engine, options)`, the application's, which
+ * passes each engine's streamlines in, or the display made here, which draws
+ * the colour field alone. */
 export function createWindLayer({
   feed,
   clock,
-  cesium = Cesium,
-  container,
-  createRendering = createWindRendering,
+  createNativeRendering = createWindDisplay,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Wind requires a snapshot source');
-  let viewer = null;
+  let engine = null;
   let request = null;
   let enabled = false;
   let rendering = null;
-  let imageryHost = null;
   let manifest = null;
   let error = null;
   let loading = false;
@@ -81,7 +81,7 @@ export function createWindLayer({
     inspectionMarker?.clear();
   };
   const sample = (position) => {
-    reading = inspectWindAtCenter(manifest, viewer, cesium, {
+    reading = inspectWindAtCenter(manifest, engine, {
       position,
       units,
       overlay,
@@ -106,37 +106,37 @@ export function createWindLayer({
   const unsubscribeClock = clock?.subscribe(notify);
   const layer = {
     id: 'wind',
+    sessionState: ['reading'],
     name: 'Wind',
     icon: '🌬',
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
-    init(nextViewer) {
-      viewer = nextViewer;
-      rendering = createRendering({
-        cesium,
-        container: container ?? nextViewer.container,
-        getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
-        onStatusChange: notify,
-      });
-      rendering.attach();
-      rendering.setOptions?.({ overlay, paused });
-      const target = container ?? nextViewer.container;
-      inspectionMarker = createWindInspectionMarker({
-        container: target,
-        viewer,
-        cesium,
-      });
+    init(nextViewer, options) {
+      layer.attachRenderer(options);
     },
-    attachShellServices(services) {
-      imageryHost =
-        typeof services?.imageryHost === 'function'
-          ? services.imageryHost
-          : null;
+    attachRenderer({ engine: nextEngine = null } = {}) {
+      engine = nextEngine;
+      if (!engine) return;
+      rendering = createNativeRendering(engine, { onStatusChange: notify });
+      rendering?.attach();
+      rendering?.setOptions?.({ overlay, paused });
+      inspectionMarker = createWindInspectionMarker({
+        container: engine.host.container,
+        engine,
+      });
+      if (enabled && manifest && !manifest.unavailable) {
+        rendering?.setField(manifest);
+        rendering?.start();
+      }
+      if (sampledPosition) inspectionMarker.show(sampledPosition);
+    },
+    detachRenderer() {
+      inspectionMarker?.destroy();
+      inspectionMarker = null;
+      rendering?.destroy();
+      rendering = engine = null;
+    },
+    attachShellServices() {
       rendering?.rehome?.();
     },
     enable() {
@@ -182,12 +182,12 @@ export function createWindLayer({
         error = null;
         if (sampledPosition) sample(sampledPosition);
         if (snapshot.unavailable) {
-          rendering.stop();
-          rendering.clear();
+          rendering?.stop();
+          rendering?.clear();
         } else {
-          rendering.setOptions?.({ overlay, paused });
-          rendering.setField(snapshot);
-          rendering.start();
+          rendering?.setOptions?.({ overlay, paused });
+          rendering?.setField(snapshot);
+          rendering?.start();
         }
         return true;
       } catch (cause) {
@@ -245,7 +245,7 @@ export function createWindLayer({
         loading = enabled && needsField;
         if (enabled && needsField)
           queueMicrotask(() => {
-            if (enabled && generation === current) void layer.update(viewer);
+            if (enabled && generation === current) void layer.update();
           });
         else if (enabled && manifest && !manifest.unavailable)
           rendering?.start();
@@ -438,13 +438,8 @@ export function createWindLayer({
     destroy() {
       layer.disable();
       unsubscribeClock?.();
-      rendering?.destroy();
-      rendering = null;
-      imageryHost = null;
-      viewer = null;
+      layer.detachRenderer();
       rowControlsListener = null;
-      inspectionMarker?.destroy();
-      inspectionMarker = null;
     },
     getStats() {
       const diagnostic = rendering?.getDiagnostics?.();

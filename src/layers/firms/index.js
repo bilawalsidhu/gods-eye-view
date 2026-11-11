@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createModel } from './model.js';
 import { createIngestion } from './ingestion.js';
 import { createRendering } from './rendering.js';
@@ -17,7 +18,16 @@ export function createFirmsHelpers({ services }) {
 export function createFirmsHeatmapLayer({ services, feed, ...config }) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Fires require a snapshot source');
+  if (typeof config.renderer?.create !== 'function')
+    throw new TypeError('Fires require a renderer factory');
   const layerState = createFirmsState({ services, config });
+  config = {
+    ...config,
+    overlayHost: bindOverlayHost(
+      config.overlayHost,
+      () => layerState._renderer?.engine,
+    ),
+  };
   const components = {};
   const context = { layerState, services, config, components, feed };
   components.model = createModel(context);

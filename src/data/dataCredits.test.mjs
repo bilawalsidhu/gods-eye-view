@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -92,17 +93,24 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
+// A Cesium engine's credits over a viewer double's credit display.
+async function cesiumCreditsEngine(viewer) {
+  const { createCesiumCredits } = await import('../globe/cesium/credits.js');
+  return Object.assign(createFakeEngine(), {
+    credits: createCesiumCredits(viewer).credits,
+  });
+}
+
 test('inline OSM attribution persists until its last display owner leaves', async (t) => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const visible = new Set();
-  const viewer = {
+  const viewer = await cesiumCreditsEngine({
     creditDisplay: {
       addStaticCredit: (c) => visible.add(c),
       removeStaticCredit: (c) => visible.delete(c),
     },
-    scene: { requestRender() {} },
-  };
+  });
   assert.equal(showOsmCredit(viewer, 'alpr'), true);
   assert.equal(showOsmCredit(viewer, 'alpr'), false);
   assert.equal(visible.size, 1);
@@ -132,29 +140,120 @@ test('inline OSM attribution persists until its last display owner leaves', asyn
   assert.equal(visible.size, 1, 'reenabling restores the short credit');
 });
 
-test('tile attribution follows source changes and viewers have independent ownership', async () => {
+test('tile attribution follows source changes and engines have independent ownership', async () => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
-  const create = () => {
+  const create = async () => {
     const credits = new Set();
     return {
-      credits,
-      creditDisplay: {
-        addStaticCredit: (c) => credits.add(c),
-        removeStaticCredit: (c) => credits.delete(c),
-      },
+      shown: credits,
+      ...(await cesiumCreditsEngine({
+        creditDisplay: {
+          addStaticCredit: (c) => credits.add(c),
+          removeStaticCredit: (c) => credits.delete(c),
+        },
+      })),
     };
   };
-  const a = create(),
-    b = create();
+  const a = await create(),
+    b = await create();
   showOsmCredit(a, 'installations', { openMapTiles: true });
   showOsmCredit(b, 'installations');
-  assert.equal(a.credits.size, 2);
-  assert.equal(b.credits.size, 1);
+  assert.equal(a.shown.size, 2);
+  assert.equal(b.shown.size, 1);
   showOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 1, 'wide names no longer use tiles');
+  assert.equal(a.shown.size, 1, 'wide names no longer use tiles');
   hideOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 0);
-  assert.equal(b.credits.size, 1);
+  assert.equal(a.shown.size, 0);
+  assert.equal(b.shown.size, 1);
+});
+
+test('data credits go through the globe engine credits', async () => {
+  const {
+    registerDataCredits,
+    registerDynamicCredit,
+    showOsmCredit,
+    hideOsmCredit,
+  } = await import('./dataCredits.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  registerDataCredits(engine, [{ html: 'A' }, { html: 'B' }]);
+  assert.deepEqual(engine.fake.credits, [
+    { html: 'A', onScreen: false },
+    { html: 'B', onScreen: false },
+  ]);
+  assert.equal(
+    registerDynamicCredit(engine, { key: 'engine-dyn', html: 'D' }),
+    true,
+  );
+  assert.equal(
+    registerDynamicCredit(engine, { key: 'engine-dyn', html: 'D' }),
+    true,
+  );
+  assert.equal(
+    engine.fake.credits.filter(({ html }) => html === 'D').length,
+    1,
+  );
+  const other = createFakeEngine();
+  registerDynamicCredit(other, { key: 'engine-dyn', html: 'D' });
+  assert.equal(other.fake.credits.filter(({ html }) => html === 'D').length, 1);
+  engine.fake.resetCalls();
+  assert.equal(showOsmCredit(engine, 'alpr', { openMapTiles: true }), true);
+  const inline = engine.fake.credits.filter(({ onScreen }) => onScreen);
+  assert.equal(inline.length, 2);
+  assert.match(inline[0].html, /© OpenStreetMap/);
+  assert.ok(engine.fake.callsOf('render.request').length > 0);
+  assert.equal(hideOsmCredit(engine, 'alpr'), true);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    0,
+  );
+});
+
+test('Google Places attribution is visible only while a layer displays Places data', async () => {
+  const { showGooglePlacesCredit, hideGooglePlacesCredit } =
+    await import('./dataCredits.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  assert.equal(showGooglePlacesCredit(engine, 'installations'), true);
+  assert.equal(showGooglePlacesCredit(engine, 'installations'), false);
+  assert.equal(showGooglePlacesCredit(engine, 'other-layer'), true);
+  const visible = engine.fake.credits.filter(({ onScreen }) => onScreen);
+  assert.equal(visible.length, 1);
+  assert.match(visible[0].html, /Google Maps Places/);
+  assert.match(
+    visible[0].html,
+    /developers\.google\.com\/maps\/documentation\/places/,
+  );
+  assert.ok(engine.fake.callsOf('render.request').length > 0);
+  assert.equal(hideGooglePlacesCredit(engine, 'installations'), true);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    1,
+  );
+  assert.equal(hideGooglePlacesCredit(engine, 'other-layer'), true);
+  assert.equal(hideGooglePlacesCredit(engine, 'installations'), false);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    0,
+  );
+});
+
+test('without a viewer or engine the OSM and dynamic credits skip cleanly', async () => {
+  const {
+    registerDataCredits,
+    registerDynamicCredit,
+    showOsmCredit,
+    hideOsmCredit,
+    showGooglePlacesCredit,
+    hideGooglePlacesCredit,
+  } = await import('./dataCredits.js');
+  // The Navara mode has no viewer; a layer-side call with it must not throw.
+  assert.doesNotThrow(() => registerDataCredits(null, [{ html: 'A' }]));
+  assert.equal(showOsmCredit(null, 'owner'), false);
+  assert.equal(hideOsmCredit(null, 'owner'), false);
+  assert.equal(showGooglePlacesCredit(null, 'owner'), false);
+  assert.equal(hideGooglePlacesCredit(null, 'owner'), false);
+  assert.equal(registerDynamicCredit(null, { key: 'k', html: 'K' }), false);
 });
 
 test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {

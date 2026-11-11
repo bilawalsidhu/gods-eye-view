@@ -7,6 +7,7 @@
  */
 import { createGevActionRunner } from './gevActions.js';
 import { createReferentRegistry } from './referents.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';
 import {
   fakeCatalog,
@@ -131,6 +132,7 @@ export function harness({
   osmHits = HOSPITALS,
   osmSearch = null,
   on = ['flights', 'recent-imagery'],
+  runnerOptions = {},
 } = {}) {
   const imagery = realImageryLayer();
   const modules = {
@@ -165,11 +167,18 @@ export function harness({
       },
     },
   };
+  // The runner reads the view through the globe engine: the same box.
+  const engine = createFakeEngine();
+  engine.fake.script('viewRectangle', () =>
+    viewer.camera.computeViewRectangle(),
+  );
+  imagery.layer.attachRenderer({ engine });
   const referents = createReferentRegistry();
   let snapshot = pointer;
   const osmCalls = [];
   const runner = createGevActionRunner({
     viewer,
+    engine,
     styleManager: {},
     annotations: fakeAnnotations(),
     annotationResolver: {
@@ -209,6 +218,7 @@ export function harness({
         return true;
       },
     },
+    ...runnerOptions,
   });
   return {
     runner,

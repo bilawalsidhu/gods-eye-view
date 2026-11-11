@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import {
   coverageZoom,
   createLineCoverage,
@@ -10,7 +9,11 @@ import {
 import { resolveFilter } from './filter.js';
 import { encodeCoverageTile } from './providers/mapillary/coverageFixture.mjs';
 import { decodeCoverageTile } from './providers/mapillary/decode.js';
-import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
+import {
+  cameraEngine,
+  coverageMap,
+  streetLevelMap,
+} from '../../testSupport/streetLevelFakes.mjs';
 import {
   COLORS,
   COVERAGE_TUNING,
@@ -50,26 +53,9 @@ function createCoverage({ state, source, zoomFor = coverageZoomForHeight }) {
 }
 
 const RAD = Math.PI / 180;
-// Node has no WebGL context to report line-width limits; a browser's
-// context sets these on startup, and appearances validate against them.
-Cesium.ContextLimits._minimumAliasedLineWidth = 1;
-Cesium.ContextLimits._maximumAliasedLineWidth = 10;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-/** A scene collection that remembers what is on the globe. */
-function collection() {
-  const items = new Set();
-  return {
-    items,
-    add(primitive) {
-      items.add(primitive);
-      return primitive;
-    },
-    remove(primitive) {
-      return items.delete(primitive);
-    },
-  };
-}
+/** Ground sets of the Mapillary coverage (and its highlight). */
+const PREFIX = 'mapillary-coverage:';
 
 /** The centre of the z14 tile holding a point, so a small view is one tile. */
 function tileCentre(lon, lat) {
@@ -80,34 +66,6 @@ function tileCentre(lon, lat) {
     tile: { x, y, z: 14 },
     lon: (west + east) / 2,
     lat: (south + north) / 2,
-  };
-}
-
-/** A viewer looking straight down on a 0.004° square around `view`. */
-function fakeViewer(view) {
-  return {
-    view,
-    scene: {
-      canvas: { clientWidth: 100, clientHeight: 100 },
-      globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      groundPrimitives: collection(),
-      primitives: collection(),
-    },
-    camera: {
-      get positionCartographic() {
-        return {
-          longitude: view.lon * RAD,
-          latitude: view.lat * RAD,
-          height: view.height,
-        };
-      },
-      pickEllipsoid(point) {
-        return Cesium.Cartesian3.fromDegrees(
-          view.lon - 0.002 + (point.x / 100) * 0.004,
-          view.lat + 0.002 - (point.y / 100) * 0.004,
-        );
-      },
-    },
   };
 }
 
@@ -124,12 +82,17 @@ function deferredSource() {
   };
 }
 
-function setup({ zoomFor } = {}) {
+/**
+ * Coverage over a display looking straight down on a 0.004° square at a z14
+ * tile centre (`harness`: another display), its tile requests deferred.
+ */
+function setup({ zoomFor, harness = null } = {}) {
   const centre = tileCentre(-121.4944, 38.5816);
-  const viewer = fakeViewer({ lon: centre.lon, lat: centre.lat, height: 900 });
+  const viewer =
+    harness ?? coverageMap({ lon: centre.lon, lat: centre.lat, height: 900 });
   const source = deferredSource();
   const state = {
-    viewer,
+    map: viewer.map,
     services: {},
     enabled: true,
     providerOn: true,
@@ -141,9 +104,8 @@ function setup({ zoomFor } = {}) {
     },
     coverage: {
       ...freshCoverage(),
-      // The key status is in; skip Cesium's one-time terrain table download.
+      // The key status is in.
       blocked: null,
-      terrainReady: Promise.resolve(),
     },
     sequence: { selectedId: null },
   };
@@ -162,11 +124,21 @@ function setup({ zoomFor } = {}) {
     ],
   });
   const tileKey = `14/${centre.tile.x}/${centre.tile.y}`;
-  const onGlobe = () =>
-    viewer.scene.groundPrimitives.items.size +
-    viewer.scene.primitives.items.size;
+  const onGlobe = () => viewer.groundSets().length + viewer.moverSets().length;
   return { viewer, source, state, coverage, bytes, tileKey, onGlobe, centre };
 }
+
+test('coverage waits for the shared view readiness before requesting tiles', () => {
+  const { state, source, coverage } = setup();
+  let ready = false;
+  state.context.viewReady = () => ready;
+  coverage.refresh();
+  assert.equal(source.calls.length, 0);
+  ready = true;
+  coverage.refresh();
+  assert.ok(source.calls.length > 0);
+  coverage.clear();
+});
 
 test('a superseded tile request cannot strand lines on the globe', async () => {
   const { viewer, source, state, coverage, bytes, tileKey, onGlobe } = setup();
@@ -205,18 +177,47 @@ test('a superseded tile request cannot strand lines on the globe', async () => {
 });
 
 test('sequence lines are draped on the globe and on 3D tiles alike', async () => {
-  const { viewer, source, coverage, bytes } = setup();
+  const { viewer, source, coverage, bytes, centre, tileKey } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const { groundPrimitives, primitives } = viewer.scene;
-  assert.equal(primitives.items.size, 0);
-  assert.equal(groundPrimitives.items.size, 1);
-  const [line] = groundPrimitives.items;
-  assert.ok(line instanceof Cesium.GroundPolylinePrimitive);
-  assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
+  assert.equal(viewer.moverSets().length, 0);
+  const sets = viewer.groundSets(PREFIX);
+  assert.equal(sets.length, 1);
+  const [line] = sets;
+  assert.ok(line.id.startsWith(`${PREFIX}${tileKey}#`), line.id);
+  assert.deepEqual(line.options, {
+    id: line.id,
+    kind: 'corridor',
+    order: 0,
+    pickable: true,
+    drape: 'both',
+  });
+  // The provider colour at 0.92, 2.5 px, every part picking its sequence.
+  const [r, g, b] = [0x05 / 255, 0xcb / 255, 0x63 / 255];
+  assert.equal(line.items.length, 1);
+  const [item] = line.items;
+  assert.deepEqual(
+    { ...item, positions: undefined },
+    {
+      positions: undefined,
+      color: [r, g, b, 0.92],
+      widthPx: COVERAGE_TUNING.lineWidthPx,
+      pickId: `${PICK_PREFIX.sequence}seq-1`,
+    },
+  );
+  // The decoded line, as the tile encodes it (to its quantisation).
+  const expected = [
+    [centre.lon - 0.001, centre.lat],
+    [centre.lon + 0.001, centre.lat],
+  ];
+  assert.equal(item.positions.length, 2);
+  item.positions.forEach(([lon, lat], index) => {
+    assert.ok(Math.abs(lon - expected[index][0]) < 1e-5);
+    assert.ok(Math.abs(lat - expected[index][1]) < 1e-5);
+  });
   coverage.clear();
-  assert.equal(groundPrimitives.items.size, 0);
+  assert.equal(viewer.groundSets().length, 0);
 });
 
 test('panning off a tile that is still loading stops counting it as loading', async () => {
@@ -254,7 +255,7 @@ test('a zoomFor in the older {zoom, kind} shape still draws its lines', async ()
   assert.equal(source.calls[0].z, 14);
   source.calls[0].resolve(bytes);
   await settle();
-  assert.equal(viewer.scene.groundPrimitives.items.size, 1, 'its line drawn');
+  assert.equal(viewer.groundSets(PREFIX).length, 1, 'its line drawn');
   assert.equal(coverage.stats().hint, '');
   coverage.clear();
 });
@@ -276,11 +277,11 @@ test('from orbit nothing is requested or drawn, and the hint says to zoom in', a
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  assert.ok(viewer.scene.groundPrimitives.items.size > 0, 'street lines');
+  assert.ok(viewer.groundSets(PREFIX).length > 0, 'street lines');
   viewer.view.height = 20_000_000;
   coverage.refresh();
   assert.equal(source.calls.length, 1, 'no tile is asked for');
-  assert.equal(viewer.scene.groundPrimitives.items.size, 0, 'nothing drawn');
+  assert.equal(viewer.groundSets(PREFIX).length, 0, 'nothing drawn');
   assert.equal(state.coverage.zoom, null);
   assert.equal(coverage.stats().hint, ZOOM_IN_HINT);
   viewer.view.height = 900;
@@ -447,24 +448,10 @@ test('a sequence that crosses a tile edge is counted once', async () => {
   coverage.clear();
 });
 
-/** A camera over a 100×100 canvas with a 60°×40° view (see rayCamera). */
-function tiltedCamera({ lon, lat, height, heading, pitch }) {
-  return rayCamera({
-    lon,
-    lat,
-    altitude: height,
-    heading,
-    pitch,
-    width: 100,
-    height: 100,
-    fovX: 60,
-    fovY: 40,
-  });
-}
-
 /**
  * Denver: 300 m above a street 1,600 m up, at a z14 tile centre, looking east
- * at ground `aheadM` metres out; the globe terrain knows the ground.
+ * at ground `aheadM` metres out, with a 60°×40° view; the globe terrain knows
+ * the ground.
  */
 function denverStreetView(aheadM) {
   const z = 14;
@@ -475,20 +462,21 @@ function denverStreetView(aheadM) {
   const lat = (tile.south + tile.north) / 2;
   const ground = 1600;
   const above = 300;
-  const context = setup();
-  context.viewer.scene.globe = {
-    show: true,
-    ellipsoid: Cesium.Ellipsoid.WGS84,
-    getHeight: () => ground,
-  };
   const tileWidthM = (tile.east - tile.west) * 111_320 * Math.cos(lat * RAD);
-  context.viewer.camera = tiltedCamera({
+  // 40° high; the width keeps 60° across.
+  const aspect = Math.tan(30 * RAD) / Math.tan(20 * RAD);
+  const engine = cameraEngine({
     lon,
     lat,
-    height: ground + above,
+    altitude: ground + above,
     heading: 90,
     pitch: -Math.atan(above / aheadM(tileWidthM)) / RAD,
+    width: Math.round(1000 * aspect),
+    height: 1000,
+    fovY: 40,
   });
+  engine.fake.script('terrainHeight', () => ground);
+  const context = setup({ harness: streetLevelMap({ engine }) });
   context.coverage.refresh();
   const keys = context.source.calls.map((call) => call.key);
   /** Requested tiles as [dx, dy] from the tile under the camera. */
@@ -531,13 +519,22 @@ test('the selected sequence is drawn over the coverage, and goes with the select
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const lines = () => [...viewer.scene.groundPrimitives.items];
+  const lines = () => viewer.groundSets(PREFIX);
   assert.equal(lines().length, 1, 'the coverage');
   coverage.highlight('seq-1');
   assert.equal(lines().length, 2);
   const highlight = lines().at(-1);
-  assert.equal(state.coverage.highlight, highlight, 'drawn last, on top');
-  assert.equal(highlight.classificationType, Cesium.ClassificationType.BOTH);
+  assert.deepEqual(state.coverage.highlight.ids(), [highlight.id]);
+  assert.ok(highlight.id.startsWith(`${PREFIX}selected#`));
+  // Over the coverage, in the selection colour, a pixel wider.
+  assert.ok(highlight.options.order > lines()[0].options.order, 'on top');
+  assert.equal(highlight.options.drape, 'both');
+  assert.deepEqual(
+    highlight.items.map((item) => item.color),
+    [[0, 0xd4 / 255, 1, 1]],
+  );
+  assert.equal(highlight.items[0].widthPx, COVERAGE_TUNING.lineWidthPx + 1);
+  assert.equal(highlight.items[0].pickId, `${PICK_PREFIX.sequence}seq-1`);
   coverage.highlight('not-drawn');
   assert.equal(lines().length, 1, 'nothing to highlight off the map');
   coverage.highlight(null);
@@ -554,10 +551,9 @@ test('a tile that lands with the selected sequence draws the highlight again, on
   source.calls[0].resolve(bytes);
   await settle();
   assert.ok(state.coverage.highlight, 'highlighted once its tile is in');
-  assert.equal(
-    [...viewer.scene.groundPrimitives.items].at(-1),
-    state.coverage.highlight,
-  );
+  const [coverageSet, highlightSet] = viewer.groundSets(PREFIX);
+  assert.deepEqual(state.coverage.highlight.ids(), [highlightSet.id]);
+  assert.ok(highlightSet.options.order > coverageSet.options.order);
   coverage.clear();
 });
 
@@ -566,12 +562,12 @@ test("a zoom change drops the old zoom's lines", async () => {
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const [old] = viewer.scene.groundPrimitives.items;
+  const [old] = viewer.groundSets(PREFIX);
   assert.ok(old, 'the z14 lines are drawn');
   viewer.view.height = 3000; // zoom out to z13
   coverage.refresh();
   assert.equal(state.coverage.zoom, 13);
-  assert.equal(viewer.scene.groundPrimitives.items.has(old), false);
+  assert.equal(old.live, false);
   assert.ok(state.coverage.pending.size > 0, 'the new zoom is loading');
   coverage.clear();
 });
@@ -600,12 +596,8 @@ test('a rate limit holds every refresh inside its wait, not only the first', asy
   coverage.unblock();
 });
 
-test('a tile that fails before the terrain table loads is reported at once, never unhandled', async () => {
+test('a tile that fails is reported at once, never unhandled', async () => {
   const { source, state, coverage, tileKey } = setup();
-  let terrainLoaded;
-  state.coverage.terrainReady = new Promise((resolve) => {
-    terrainLoaded = resolve;
-  });
   const unhandled = [];
   const onUnhandled = (reason) => unhandled.push(reason);
   process.on('unhandledRejection', onUnhandled);
@@ -618,8 +610,6 @@ test('a tile that fails before the terrain table loads is reported at once, neve
     assert.equal(state.coverage.lastError, 'Mapillary tiles HTTP 500');
     assert.deepEqual(unhandled, []);
   } finally {
-    terrainLoaded();
-    await settle();
     process.off('unhandledRejection', onUnhandled);
   }
 });

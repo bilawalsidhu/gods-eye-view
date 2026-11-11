@@ -80,7 +80,7 @@ test('Wildlife docs record queue failure isolation and the complete badge mappin
 });
 
 test('Wildlife docs separate density from real observation icons and define persistent selection', () => {
-  assert.match(section, /dedicated, nonpickable billboard/);
+  assert.match(section, /dedicated, nonpickable sprite/);
   assert.match(section, /view-relative density ramp/);
   assert.match(section, /four logical cell widths/);
   assert.match(
@@ -107,7 +107,7 @@ test('Wildlife docs describe one source link, name declutter and globe glow limi
   assert.match(section, /3,000 km/);
   assert.match(section, /8,000 km/);
   assert.match(section, /5% radius margin/);
-  assert.match(section, /add no per-frame work/);
+  assert.match(section, /only on frames where the camera moved/);
 });
 
 test('Wildlife docs cite the documented UTFGrid endpoint and the Acartia key request', () => {

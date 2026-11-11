@@ -10,7 +10,7 @@
  * `detectionOcclusion.js`. That checks everything around the shader; the
  * shader itself is checked against `scene.pickPosition` in a real browser.
  */
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { depthToViewDistance, unpackDepth } from '../detectionOcclusion.js';
 
 /** Inverse of `unpackDepth`: four base-255 digits, most significant first. */
@@ -321,10 +321,10 @@ export function createFakeDepthScene({
   logDepth = true,
   fovy = Math.PI / 2,
   aspectRatio = 1,
-  viewMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+  viewMatrix = geo.matrix4.clone(geo.matrix4.IDENTITY),
 }) {
   return {
-    mode: Cesium.SceneMode.SCENE3D,
+    mode: 3,
     useDepthPicking: true,
     opaqueFrustumNearOffset: 0.9999,
     context: { _gl: gl, depthTexture: true, webgl2: !!gl.createQuery },

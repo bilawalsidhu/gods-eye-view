@@ -9,7 +9,7 @@ import {
 import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
 import * as contextStore from '../../data/contextStore.js';
 import { createGevActionRunner } from '../../voice/gevActions.js';
-import * as Cesium from 'cesium';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
@@ -47,142 +47,135 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+// A fake engine whose canvas takes the layer's release capture and whose
+// picks the test scripts; `clicks()` counts click subscriptions.
+function clickEngine() {
+  const canvas = new EventTarget();
+  canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
+  const engine = createFakeEngine({ canvas });
+  let picked;
+  let picks = 0;
+  engine.fake.script('pick', () => {
+    picks++;
+    return picked;
+  });
+  return {
+    engine,
+    canvas,
+    click: (click) => engine.fake.input('click', click),
+    setPicked(value) {
+      picked = value;
+    },
+    get picks() {
+      return picks;
+    },
+    subscriptions: () => engine.fake.callsOf('input.on').length,
+  };
+}
+
 test('map selection yields to pointer owners and owns only its enabled handler', async () => {
-  const handlers = [],
-    pickedEntity = {},
-    foreignEntity = {};
-  let picked = { id: pickedEntity },
-    overlayHit = null,
+  const pickedStorm = { id: 'cyclone:ep162026:center', owner: 'cyclones' },
+    foreignPick = { id: 'aircraft:abc', owner: 'flights' };
+  let overlayHit = null,
     overlayTests = 0,
-    picks = 0,
     notices = 0;
   const rendering = {
     setSnapshot: async () => true,
     setSelection() {},
     clear() {},
     destroy() {},
-    pickStorm: (value) => (value?.id === pickedEntity ? 'ep162026' : null),
+    pickStorm: (value) => (value === pickedStorm ? 'ep162026' : null),
     ownsPickId: (id) => id === 'cyclone:ep162026:center',
     getDiagnostics: () => ({}),
   };
-  const cesium = {
-    ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-    ScreenSpaceEventHandler: class {
-      constructor(canvas) {
-        assert.ok(canvas);
-        handlers.push(this);
-        this.destroyed = false;
-      }
-      setInputAction(callback, type) {
-        assert.equal(type, 'left');
-        this.click = callback;
-      }
-      destroy() {
-        this.destroyed = true;
-      }
-      isDestroyed() {
-        return this.destroyed;
-      }
-    },
-  };
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium,
     createRendering: () => rendering,
     hitTestOverlay: () => {
       overlayTests++;
       return overlayHit;
     },
   });
-  const canvas = new EventTarget();
-  canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
-  const viewer = {
-    scene: {
-      canvas,
-      pick() {
-        picks++;
-        return picked;
-      },
-    },
-    trackedEntity: null,
-    camera: {
-      flyToBoundingSphere() {
-        assert.fail('Click must not move the camera');
-      },
-    },
-  };
-  layer.init(viewer);
+  const h = clickEngine();
+  h.engine.camera.flyToSphere = () =>
+    assert.fail('Click must not move the camera');
+  layer.init(null, { engine: h.engine });
   layer.setRowControlsListener(() => notices++);
-  assert.equal(handlers.length, 0, 'disabled module installs no handler');
+  assert.equal(h.subscriptions(), 0, 'disabled module installs no handler');
   layer.enable();
   layer.enable();
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'),
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
     true,
     'flight tracking recognizes the cyclone pick and leaves the camera alone',
   );
-  assert.equal(isOwnedByOtherLayer('vessels', 'cyclone:ep162026:center'), true);
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:foreign'),
+    isOwnedByOtherLayer('vessels', 'cyclone:ep162026:center', h.engine),
+    true,
+  );
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:foreign', h.engine),
     false,
     'registration recognizes exact current IDs, not a prefix',
   );
-  assert.equal(handlers.length, 1, 'enable is idempotent');
+  assert.equal(h.subscriptions(), 1, 'enable is idempotent');
   await layer.update();
   const click = { position: { x: 10, y: 20 } };
+  h.setPicked(pickedStorm);
   const owner = claimPointer('director');
   assert.ok(owner);
   try {
-    handlers[0].click(click);
-    assert.equal(picks, 0, 'claimed pointer is checked before picking');
+    h.click(click);
     assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
   } finally {
     releasePointer(owner);
   }
-  picked = { id: foreignEntity };
-  handlers[0].click(click);
+  h.setPicked(foreignPick);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  picked = { primitive: {} };
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectionIntent, 'auto');
-  picked = { id: pickedEntity };
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  const beforeCard = picks;
-  handlers[0].click(click);
+  h.setPicked({ object: {} });
+  h.click(click);
   assert.equal(
-    picks,
-    beforeCard,
-    'foreground AIS card wins before scene picking',
+    layer.getDiagnostics().selectionIntent,
+    'auto',
+    'an unnamed pick without tile content is not empty map',
   );
-  assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
+  h.setPicked(pickedStorm);
+  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
+  h.click(click);
+  assert.equal(
+    layer.getDiagnostics().selectedId,
+    'ep152026',
+    'foreground AIS card wins before the scene pick',
+  );
   // A native capture runs before an earlier sibling handler clears hit rects.
   const up = new Event('pointerup');
   Object.assign(up, { clientX: 110, clientY: 220 });
-  canvas.dispatchEvent(up);
+  h.canvas.dispatchEvent(up);
   overlayHit = null;
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep152026',
     'captured AIS hit survives synchronous sibling overlay rebuild',
   );
   // A captured background hit remains background even if a sibling adds a card.
-  canvas.dispatchEvent(up);
+  h.canvas.dispatchEvent(up);
   overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   layer.setParams({ stormId: 'ep152026' });
   // A new gesture clears an unconsumed release snapshot.
-  canvas.dispatchEvent(up);
-  canvas.dispatchEvent(new Event('pointerdown'));
+  h.canvas.dispatchEvent(up);
+  h.canvas.dispatchEvent(new Event('pointerdown'));
   overlayHit = null;
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   layer.setParams({ stormId: 'ep152026' });
   overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  canvas.dispatchEvent(up);
+  h.canvas.dispatchEvent(up);
   overlayHit = null;
-  handlers[0].click({ position: { x: 15, y: 25 } });
+  h.click({ position: { x: 15, y: 25 } });
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep162026',
@@ -191,32 +184,32 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   layer.setParams({ stormId: 'ep152026' });
   overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   const before = notices;
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   assert.match(layer.getRowControls().summary.detail, /Another system/);
   assert.equal(layer.getRowControls().list.items[1].active, true);
   assert.ok(notices > before);
-  assert.equal(viewer.trackedEntity, null);
-  picked = undefined;
+  assert.equal(h.engine.camera.following(), null);
+  h.setPicked(undefined);
   overlayHit = { sourceId: 'ais-live-vessels' };
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   overlayHit = null;
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, null);
   assert.equal(layer.getDiagnostics().selectionIntent, 'cleared');
-  picked = { id: pickedEntity };
-  handlers[0].click(click);
+  h.setPicked(pickedStorm);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  picked = { id: 'flight:abc', primitive: {} };
-  handlers[0].click(click);
+  h.setPicked({ id: 'flight:abc', owner: 'flights' });
+  h.click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep162026',
     "another layer's pick leaves the selection alone",
   );
-  picked = { content: {}, primitive: {} };
-  handlers[0].click(click);
+  h.setPicked({ id: undefined, content: {} });
+  h.click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     null,
@@ -232,59 +225,51 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   layer.disable();
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'),
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
     false,
   );
-  assert.equal(handlers[0].destroyed, true);
   assert.equal(layer.getDiagnostics().selectionActive, false);
-  const afterDisable = picks;
+  const afterDisable = h.picks;
   const afterDisableOverlay = overlayTests;
-  canvas.dispatchEvent(up);
+  h.canvas.dispatchEvent(up);
   assert.equal(
     overlayTests,
     afterDisableOverlay,
     'disable removes native capture listeners',
   );
-  handlers[0].click(click);
-  assert.equal(picks, afterDisable, 'queued disabled callback is inert');
+  h.click(click);
+  assert.equal(h.picks, afterDisable, 'disable removes the click listener');
   layer.enable();
   await layer.update();
-  assert.equal(isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'), true);
-  handlers[0].click(click);
   assert.equal(
-    picks,
-    afterDisable,
-    'superseded handler remains inert after re-enable',
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
+    true,
   );
-  assert.equal(handlers.length, 2);
+  h.click(click);
+  assert.equal(
+    h.picks,
+    afterDisable + 1,
+    're-enable listens once; the removed listener stays inert',
+  );
+  assert.equal(h.subscriptions(), 2);
   layer.destroy();
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'),
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
     false,
   );
-  assert.equal(handlers[1].destroyed, true);
+  const afterDestroy = h.picks;
+  h.click(click);
+  assert.equal(h.picks, afterDestroy, 'destroy removes the click listener');
 });
-test('a click on a storm card or lead-hour label selects that storm without picking', async () => {
-  const handlers = [];
-  let picks = 0,
-    overlayHit = null,
-    hostArgument;
+test('a click on a storm card or lead-hour label selects that storm whatever lies under it', async () => {
+  let overlayHit = null,
+    hostArgument,
+    engineArgument;
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium: {
-      ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-      ScreenSpaceEventHandler: class {
-        constructor() {
-          handlers.push(this);
-        }
-        setInputAction(callback) {
-          this.click = callback;
-        }
-        destroy() {}
-      },
-    },
     overlayHost: 'host',
-    createRendering: ({ overlayHost }) => {
+    createRendering: (engine, { overlayHost }) => {
+      engineArgument = engine;
       hostArgument = overlayHost;
       return {
         setSnapshot: async () => true,
@@ -298,44 +283,36 @@ test('a click on a storm card or lead-hour label selects that storm without pick
     },
     hitTestOverlay: () => overlayHit,
   });
-  const canvas = new EventTarget();
-  canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
-  layer.init({
-    scene: {
-      canvas,
-      pick() {
-        picks++;
-        return { content: {} };
-      },
-    },
-  });
+  const h = clickEngine();
+  h.canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
+  h.setPicked({ id: undefined, content: {} });
+  layer.init(null, { engine: h.engine });
   assert.equal(hostArgument, 'host', 'the overlay host reaches the renderer');
+  assert.equal(engineArgument, h.engine, 'the renderer draws on the engine');
   layer.enable();
   await layer.update();
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
   const click = { position: { x: 10, y: 20 } };
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   assert.equal(layer.getDiagnostics().selectionIntent, 'user');
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'lead:ep152026:24' };
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
   // A card from a superseded advisory is not empty map.
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:al019999' };
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
   // The native release snapshot carries the card identity too.
   const up = new Event('pointerup');
   Object.assign(up, { clientX: 10, clientY: 20 });
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
-  canvas.dispatchEvent(up);
+  h.canvas.dispatchEvent(up);
   overlayHit = null;
-  handlers[0].click(click);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  assert.equal(picks, 0, 'card clicks never fall through to the scene');
-  handlers[0].click(click);
-  assert.equal(picks, 1);
+  h.click(click);
   assert.equal(layer.getDiagnostics().selectedId, null, 'empty map clears');
   layer.destroy();
 });
@@ -376,13 +353,10 @@ function harness(
     matchMedia: () => ({ matches: reducedMotion }),
     openLink: (url) => opened.push(url),
   });
-  const viewer = {
-    camera: {
-      flyToBoundingSphere: (sphere, options) =>
-        navigation.push({ sphere, options }),
-    },
-  };
-  layer.init(viewer);
+  const engine = createFakeEngine();
+  engine.camera.flyToSphere = (sphere, options) =>
+    navigation.push({ sphere, options });
+  layer.init(null, { engine });
   layer.attachShellServices({
     runNavigation: (fn) => {
       navigation.push('claimed');
@@ -432,19 +406,12 @@ async function withSharedContext(t, body) {
   );
   // The voice runner bounds its basemap wait with the window timers.
   Object.assign(host, { setTimeout, clearTimeout });
-  const position = Cesium.Cartesian3.fromDegrees(-125.8, 15.5, 5_000_000);
   const runner = createGevActionRunner({
-    viewer: {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: {
-        moveEnd: { addEventListener() {} },
-        positionWC: position,
-        positionCartographic: Cesium.Cartographic.fromCartesian(position),
-        heading: 0,
-        pitch: 0,
-      },
-    },
+    engine: createFakeEngine({
+      longitude: -125.8,
+      latitude: 15.5,
+      altitude: 5_000_000,
+    }),
     styleManager: {},
     dataManager: {
       layers: new Map(),
@@ -712,7 +679,7 @@ test('clearing while a refreshed data source is staging cannot reselect a storm'
       destroy() {},
     }),
   });
-  layer.init({});
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   await layer.update();
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
@@ -927,4 +894,63 @@ test('external cancellation and acquisition failure cannot install or retain unl
   assert.match(h.layer.getStats().error, /Network/);
   assert.ok(h.cleared > 0);
   h.layer.destroy();
+});
+
+test('advisories delivered between scenes keep a deliberate selection without another feed read', async () => {
+  const pending = deferred();
+  let reads = 0;
+  const drawn = [];
+  const first = createFakeEngine();
+  const second = createFakeEngine();
+  const layer = createCyclonesLayer({
+    feed: {
+      getSnapshot: () =>
+        ++reads === 1 ? snapshot([storm()]) : pending.promise,
+    },
+    createRendering: () => ({
+      ownsPickId: (id) => id === 'cyclone:ep152026:center',
+      setSnapshot(next) {
+        drawn.push(next.storms.map((s) => s.advisoryNumber));
+        return true;
+      },
+      setSelection() {},
+      clear() {},
+      destroy() {},
+    }),
+  });
+  layer.init(null, { engine: first });
+  layer.enable();
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', first),
+    true,
+  );
+  await layer.update();
+  layer.setParams({ stormId: 'ep152026' });
+  const refresh = layer.update();
+  layer.detachRenderer();
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', first),
+    false,
+  );
+  pending.resolve(snapshot([{ ...storm(), advisoryNumber: '11' }]));
+  await refresh;
+  assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
+  await layer.attachRenderer({ engine: second });
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', second),
+    true,
+  );
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', first),
+    false,
+  );
+  assert.deepEqual(drawn, [['10'], ['11']]);
+  assert.equal(reads, 2);
+  layer.destroy();
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', second),
+    false,
+  );
+  first.destroy();
+  second.destroy();
 });

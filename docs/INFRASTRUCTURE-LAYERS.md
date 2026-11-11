@@ -3,7 +3,7 @@
 `gods-eye-view/infrastructure` exports `createInfrastructureLayers(services)`.
 It returns fresh datacenter and dam layers in that order, with the existing IDs,
 appearance, label budgets and bundled public datasets. Importing the module or
-calling the factory does not load data, create a viewer, or start the application.
+calling the factory does not load data, create an engine, or start the application.
 The asset URLs resolve relative to the module; Vite rewrites them for production
 base paths. This browser source export expects a Vite-compatible asset build.
 
@@ -21,7 +21,13 @@ const layers = createInfrastructureLayers({
   governorRequestRender,
 });
 
-// Register these layers with the existing data-layer manager and viewer.
+// Attach each layer to the current engine, then enable it when requested.
+for (const layer of layers) layer.init(null, { engine });
+await layers[0].enable();
+
+// On a scene switch, keep the parsed data and replace only its display.
+for (const layer of layers) layer.detachRenderer();
+for (const layer of layers) await layer.attachRenderer(null, { engine: nextEngine });
 ```
 
 | Function | Arguments / responsibility |
@@ -35,28 +41,39 @@ const layers = createInfrastructureLayers({
 | `removeEntityContextsForLayer` | `(layerId)`; remove records owned by the layer on destruction or failed setup |
 | `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
 
-Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
-`update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()` and
-`getAnalystRecords()`.
-Use the same viewer for the instance's entire lifetime. Each viewer/context/overlay
-host permits one live instance per layer ID; destroy an old instance before
-replacing it. Separate applications may use identical IDs with separate hosts.
-Callbacks must be ready before enable and remain usable through destruction.
+Each returned session layer supports `init(null, { engine })`,
+`attachRenderer(null, { engine, signal })`, `detachRenderer()`, `enable()`,
+`disable()`, `update()`, `destroy()`, `getStats()`, `getLodDiagnostics()` and
+`getAnalystRecords(limit)`. The first argument is retained for lifecycle
+compatibility; drawing uses the engine passed in the options. Attach once per
+scene, detach before attaching another engine, and destroy when the session ends.
+Separate applications may use identical IDs with separate context/overlay hosts.
+Callbacks must remain usable through destruction.
 
-Disable retains the loaded dataset for reuse and clears selection and listeners.
-Concurrent enables share one load. Destroy is permanent, aborts pending fetches,
-discards late results, and clears the owned data source, context records, overlays,
-input handler and listeners. The layer never creates an application context store,
-overlay host, viewer, or render scheduler. The consumer must resolve one compatible
-Cesium installation shared with its viewer; it must not bundle separate copies.
+`src/layers/infrastructure/index.js` owns the parsed dataset, shared in-flight
+load, enabled intention and selection across scene switches. Enable loads on
+first use. Disable hides the drawing and clears selection but retains parsed
+data. Detach destroys scene resources and retains the dataset and selected ID;
+reattach redraws enabled data and restores selection when no other selection
+owns the context. The attachment signal cancels that scene's wait, not the
+session's fetch. Destroy aborts the fetch, discards late results and releases
+both data and drawing.
 
-`gods-eye-view/infrastructure/geojson` exports the lower-level
-`createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay
-helpers. `gods-eye-view/infrastructure/lod` exports the existing LOD policy helpers.
-Consumers use the package exports, which do not import standalone application
-globals.
+`src/layers/infrastructure/render/display.js` draws the same records on every
+engine: point movers for tips and pins, lines for stems, ground polygons for
+footprints and ground corridors for paths. It owns the LOD walk, surface-height
+refresh, picks, context handles and overlay publications. Destruction releases
+its primitives and frame, camera and input subscriptions. The layer never
+creates an overlay host, engine or render scheduler and does not import Cesium.
+
+`gods-eye-view/infrastructure/geojson` exports the overlay publication,
+selection, label and error helpers in `src/data/localGeojsonCore.js`; it no
+longer exports `createLocalGeoJsonLayer`. `gods-eye-view/infrastructure/lod`
+exports the LOD policy helpers. The package exports do not import standalone
+application globals.
 
 Dataset files and source/license notices remain under `src/data/local_data/`.
-Their input counts are 4,352 datacenter features and 704 dam features. Cesium may
-expand multipart geometries into multiple entities; entity and stem counts are
-different measurements. This change does not refresh or relicense the datasets.
+Their input counts are 4,352 datacenter features and 704 dam features. The session
+splits multipart geometries using Cesium's stable repeated-id suffixes on every
+engine. Feature, mover and stem counts are different measurements. These files
+and licenses are independent of the renderer implementation.

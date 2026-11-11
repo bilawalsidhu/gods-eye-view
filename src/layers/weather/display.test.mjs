@@ -1,11 +1,10 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
-import { GeographicTilingScheme } from 'cesium';
+import * as geo from '../../geo/index.js';
+import { imageryDisplayTests } from '../../testSupport/imageryDisplayEngines.mjs';
+const { test, createEngine } = imageryDisplayTests();
 import { createWeatherLayer } from './index.js';
-import { createWeatherRendering } from './rendering.js';
+import { createWeatherDisplay } from './render/display.js';
 import { weatherDisplay, insideExtent, escapeCreditText } from './display.js';
-import { createShellCesium, createShellScene } from './shellFixture.mjs';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 
 const times = ['2026-09-15T20:00:00.000Z', '2026-09-15T20:05:00.000Z'];
@@ -25,14 +24,29 @@ const quiet = () => ({
   removeEventListener() {},
 });
 
+/** A rectangle in degrees as the engine camera takes it, in radians. */
+const radians = (west, south, east, north) => ({
+  west: geo.math.toRadians(west),
+  south: geo.math.toRadians(south),
+  east: geo.math.toRadians(east),
+  north: geo.math.toRadians(north),
+});
+
 /**
- * A layer whose renderer shows every requested frame at once. `center` is the
- * map centre as [lon, lat]; `manifests` maps a product to its manifest, and
- * may be changed between updates.
+ * A layer on the fake and headless Cesium engines whose renderer shows every requested frame at
+ * once. `center` is the map centre as [lon, lat]; `manifests` maps a product
+ * to its manifest, and may be changed between updates.
  */
 async function shownLayer(id, manifest, params, view = {}) {
   let time = null;
   const flights = [];
+  const engine = createEngine({
+    canvas: { clientWidth: 800, clientHeight: 600 },
+  });
+  engine.fake.script('pickEllipsoid', () =>
+    view.center ? geo.cartesian3.fromDegrees(...view.center) : undefined,
+  );
+  engine.camera.flyTo = ({ destination }) => flights.push(destination);
   const snapshots = [];
   const manifests = { [manifest.product]: manifest };
   const layer = createWeatherLayer({
@@ -41,7 +55,7 @@ async function shownLayer(id, manifest, params, view = {}) {
     documentRef: quiet(),
     eventTarget: quiet(),
     matchMedia: () => quiet(),
-    createRendering: () => ({
+    createNativeRendering: () => ({
       rehome() {},
       setAlpha() {},
       setHidden() {},
@@ -58,18 +72,7 @@ async function shownLayer(id, manifest, params, view = {}) {
       getDiagnostics: () => ({ time, loading: false, error: null }),
     }),
   });
-  layer.init({
-    camera: {
-      moveEnd: { addEventListener: () => () => {} },
-      flyTo: ({ destination }) => flights.push(destination),
-      pickEllipsoid: () =>
-        view.center ? Cesium.Cartesian3.fromDegrees(...view.center) : undefined,
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-    },
-  });
+  layer.init(null, { engine });
   if (params) layer.setParams(params);
   layer.enable();
   await layer.update();
@@ -215,10 +218,7 @@ for (const [id, product, params] of PRODUCTS) {
     );
     assertBuiltIn(layer, product);
     layer.setParams({ focus: true });
-    assert.deepEqual(
-      flights[0],
-      Cesium.Rectangle.fromDegrees(...BUILT_IN[product].focus),
-    );
+    assert.deepEqual(flights[0], radians(...BUILT_IN[product].focus));
     layer.destroy();
   });
 }
@@ -288,10 +288,7 @@ test('valid display metadata describes the product in the row, legend and stats'
   assert.equal(stats.source, 'Example network');
   assert.equal(stats.sourceVerbatim, true);
   layer.setParams({ focus: true });
-  assert.deepEqual(
-    flights[0],
-    Cesium.Rectangle.fromDegrees(-180, -52, 180, 52),
-  );
+  assert.deepEqual(flights[0], radians(-180, -52, 180, 52));
   layer.destroy();
 });
 
@@ -593,101 +590,77 @@ function mockCanvas() {
   return canvas;
 }
 
-/** A globe viewer whose imagery collection records providers. */
-function globeViewer() {
-  const providers = [];
-  const layers = [];
-  const collection = {
-    addImageryProvider(provider) {
-      providers.push(provider);
-      const layer = { imageryProvider: provider, alpha: 1, show: true };
-      layers.push(layer);
-      return layer;
-    },
-    contains: (layer) => layers.includes(layer),
-    remove(layer) {
-      layers.splice(layers.indexOf(layer), 1);
-      return true;
-    },
-    get length() {
-      return layers.length;
-    },
-    get: (index) => layers[index],
-    indexOf: (layer) => layers.indexOf(layer),
-    lower() {},
-    raise() {},
-    raiseToTop() {},
-    isDestroyed: () => false,
-  };
-  const listeners = new Set();
-  const viewer = {
-    imageryLayers: collection,
-    camera: {
-      moveEnd: { addEventListener: () => () => {} },
-      flyTo() {},
-    },
-    scene: {
-      postRender: {
-        addEventListener(fn) {
-          listeners.add(fn);
-          return () => listeners.delete(fn);
-        },
-      },
-      primitives: createShellScene().primitives,
-      globe: { tilesLoaded: true },
-      requestRender() {},
-    },
-  };
-  class Provider {
-    constructor(options) {
-      this.options = options;
-      this.tilingScheme = new GeographicTilingScheme();
-      this.errorEvent = new Cesium.Event();
-    }
-    requestImage() {
-      return undefined;
-    }
-  }
-  const cesium = {
-    ...createShellCesium(),
-    UrlTemplateImageryProvider: Provider,
-    GeographicTilingScheme,
-    Event: Cesium.Event,
-    Credit: Cesium.Credit,
-    Rectangle: Cesium.Rectangle,
+/**
+ * The fake engine on the globe, its surface switchable to 3D tiles
+ * (`setSurface`); `stages` records every staged source of every imagery
+ * layer, and `options` are the display's source seams. Images decode at
+ * `size`: the global mosaic's, else a shell image's.
+ */
+function globeEngine({ size = [2048, 1024] } = {}) {
+  const engine = createEngine();
+  let surface = 'globe';
+  engine.imagery.surface = () => surface;
+  const stages = [];
+  const createLayer = engine.imagery.createLayer;
+  engine.imagery.createLayer = (layerOptions) => {
+    const layer = createLayer(layerOptions);
+    const setSource = layer.setSource;
+    layer.setSource = (source, sourceOptions) => {
+      if (sourceOptions?.staged) stages.push({ layer: layerOptions, source });
+      return setSource(source, sourceOptions);
+    };
+    return layer;
   };
   const options = {
-    cesium,
     fetchImpl: async () => ({
       ok: true,
       headers: new Headers(),
       arrayBuffer: async () => new ArrayBuffer(1),
     }),
-    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
+    decodeImage: async () => ({
+      width: size[0],
+      height: size[1],
+      close() {},
+    }),
     createCanvas: mockCanvas,
   };
   const settle = async () => {
-    await flush();
-    for (let i = 0; i < 2; i++) for (const fn of [...listeners]) fn();
-    await flush();
+    for (let i = 0; i < 4; i++) {
+      await flush();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   };
-  return { viewer, providers, options, settle };
+  /** The draped layers' staged sources, in order. */
+  const draped = () => stages.filter(({ layer }) => layer.raise == null);
+  const shown = () => {
+    const [id] = engine.fake.imageryLayers();
+    return id ? engine.fake.imageryLayer(id) : undefined;
+  };
+  return {
+    engine,
+    stages,
+    draped,
+    options,
+    settle,
+    setSurface(value) {
+      surface = value;
+    },
+    credit: () => shown()?.source.credit,
+    shown,
+  };
 }
 
-/** Show a frame of `manifest` and return the rendering and its globe. */
+/** Show a frame of `manifest` and return the display and its engine. */
 async function shownFrame(manifest) {
-  const globe = globeViewer();
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-  });
-  const shown = rendering.setFrame(manifest, times[1]);
+  const globe = globeEngine();
+  const display = createWeatherDisplay(globe.engine, globe.options);
+  const shown = display.setFrame(manifest, times[1]);
   await globe.settle();
   assert.equal(await shown, true);
-  return { ...globe, rendering };
+  return { ...globe, display };
 }
-
-const creditOf = (providers) => providers.at(-1).credit.html;
+const sameBox = (actual, { west, south, east, north }, message) =>
+  assert.deepEqual({ ...actual }, { west, south, east, north }, message);
 
 test('the imagery credit uses the source credit as plain text, else the built-in one', async () => {
   for (const product of ['radar', 'lightning', 'clouds-regional', 'clouds']) {
@@ -697,19 +670,16 @@ test('the imagery credit uses the source credit as plain text, else the built-in
         product,
         ...(display ? { display } : {}),
       });
-      assert.equal(creditOf(h.providers), BUILT_IN[product].credit, product);
-      h.rendering.clear();
+      assert.equal(h.credit(), BUILT_IN[product].credit, product);
+      h.display.clear();
     }
     const h = await shownFrame({
       ...base,
       product,
       display: { credit: 'Example <network> & partners' },
     });
-    assert.equal(
-      creditOf(h.providers),
-      'Example &lt;network&gt; &amp; partners',
-    );
-    h.rendering.clear();
+    assert.equal(h.credit(), 'Example &lt;network&gt; &amp; partners');
+    h.display.clear();
   }
 });
 
@@ -720,61 +690,44 @@ test('a refreshed manifest updates the credit of the frame already shown', async
       product,
       display: { credit: 'First credit' },
     });
-    assert.equal(creditOf(h.providers), 'First credit');
+    assert.equal(h.credit(), 'First credit');
     const again = (display) =>
-      h.rendering.setFrame(
+      h.display.setFrame(
         { ...base, product, ...(display ? { display } : {}) },
         times[1],
       );
     assert.equal(await again({ credit: 'Second credit' }), true);
-    assert.equal(h.providers.length, 1, 'the frame is not restaged');
-    assert.equal(creditOf(h.providers), 'Second credit');
+    assert.equal(h.stages.length, 1, 'the frame is not restaged');
+    assert.equal(h.credit(), 'Second credit');
     assert.equal(await again(), true);
-    assert.equal(creditOf(h.providers), BUILT_IN[product].credit);
-    h.rendering.updateSnapshot({
+    assert.equal(h.credit(), BUILT_IN[product].credit);
+    h.display.updateSnapshot({
       ...base,
       product,
       display: { credit: 'Third credit' },
     });
-    assert.equal(creditOf(h.providers), 'Third credit');
+    assert.equal(h.credit(), 'Third credit');
     // Another product's manifest leaves this frame alone.
-    h.rendering.updateSnapshot({
+    h.display.updateSnapshot({
       ...base,
       product: 'radar',
       display: { credit: 'Other' },
     });
-    assert.equal(creditOf(h.providers), 'Third credit');
-    h.rendering.clear();
+    assert.equal(h.credit(), 'Third credit');
+    assert.equal(h.stages.length, 1);
+    h.display.clear();
   }
 });
 
 test('a refreshed manifest leaves the shown snapshot for a host switch to restage', async () => {
-  const globe = globeViewer();
-  let host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  const staged = [];
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-    getHost: () => host,
-    createShell: ({ product }) => ({
-      product,
-      setAlpha() {},
-      setHidden() {},
-      rehome: () => false,
-      cancelPrefetch() {},
-      clear() {},
-      async setFrame(snapshot, time) {
-        staged.push([snapshot, time]);
-        return true;
-      },
-    }),
-  });
+  const globe = globeEngine({ size: [4096, 2048] });
+  const display = createWeatherDisplay(globe.engine, globe.options);
   const first = {
     ...base,
     product: 'lightning',
     display: { credit: 'First credit' },
   };
-  const shown = rendering.setFrame(first, times[0]);
+  const shown = display.setFrame(first, times[0]);
   await globe.settle();
   assert.equal(await shown, true);
   const refreshed = {
@@ -783,131 +736,101 @@ test('a refreshed manifest leaves the shown snapshot for a host switch to restag
     bounds: { west: -10, south: 0, east: 10, north: 5 },
     display: { credit: 'Second credit' },
   };
-  rendering.updateSnapshot(refreshed);
-  assert.equal(creditOf(globe.providers), 'Second credit');
-  host = { collection: {}, kind: 'tileset' };
-  assert.equal(rendering.rehome(), true);
-  await flush();
-  assert.deepEqual(staged, [[first, times[0]]]);
-  host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  assert.equal(rendering.rehome(), true);
+  display.updateSnapshot(refreshed);
+  assert.equal(globe.credit(), 'Second credit');
+  globe.setSurface('tiles');
+  assert.equal(display.rehome(), true);
   await globe.settle();
-  assert.equal(globe.providers.length, 2);
-  const { west, south, east, north } = first.bounds;
-  assert.ok(
-    Cesium.Rectangle.equals(
-      globe.providers.at(-1).options.rectangle,
-      Cesium.Rectangle.fromDegrees(west, south, east, north),
-    ),
+  // The shell restages the frame as it was staged: its time and bounds.
+  const shell = globe.shown();
+  assert.equal(shell.raise, 6_600);
+  sameBox(shell.source.rectangle, first.bounds);
+  assert.equal(display.getDiagnostics().host, 'shell');
+  assert.equal(display.getDiagnostics().time, times[0]);
+  globe.setSurface('globe');
+  assert.equal(display.rehome(), true);
+  await globe.settle();
+  assert.equal(globe.draped().length, 2);
+  const restaged = globe.shown();
+  assert.equal(restaged.raise, null);
+  sameBox(
+    restaged.source.rectangle,
+    first.bounds,
     'the restaged frame keeps the bounds it was staged from',
   );
-  assert.equal(creditOf(globe.providers), 'Second credit');
-  rendering.clear();
+  assert.match(restaged.source.url, /time=2026-09-15T20%3A00/);
+  assert.equal(globe.credit(), 'Second credit');
+  display.clear();
 });
 
 test('a refresh during a host-switch restage keeps the newest credit', async () => {
-  const globe = globeViewer();
-  let host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-    getHost: () => host,
-    createShell: ({ product }) => ({
-      product,
-      setAlpha() {},
-      setHidden() {},
-      rehome: () => false,
-      cancelPrefetch() {},
-      clear() {},
-      async setFrame() {
-        return true;
-      },
-    }),
-  });
+  const globe = globeEngine({ size: [4096, 2048] });
+  const display = createWeatherDisplay(globe.engine, globe.options);
   const first = {
     ...base,
     product: 'lightning',
     display: { credit: 'First credit' },
   };
-  const shown = rendering.setFrame(first, times[0]);
+  const shown = display.setFrame(first, times[0]);
   await globe.settle();
   assert.equal(await shown, true);
-  rendering.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
-  host = { collection: {}, kind: 'tileset' };
-  assert.equal(rendering.rehome(), true);
-  await flush();
-  host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  assert.equal(rendering.rehome(), true);
-  rendering.updateSnapshot({ ...first, display: { credit: 'Third credit' } });
+  display.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
+  globe.setSurface('tiles');
+  assert.equal(display.rehome(), true);
   await globe.settle();
-  assert.equal(globe.providers.length, 2);
-  assert.equal(creditOf(globe.providers), 'Third credit');
-  rendering.clear();
+  globe.setSurface('globe');
+  assert.equal(display.rehome(), true);
+  display.updateSnapshot({ ...first, display: { credit: 'Third credit' } });
+  await globe.settle();
+  assert.equal(globe.draped().length, 2);
+  assert.equal(globe.credit(), 'Third credit');
+  display.clear();
 });
 
 test('a refresh while a frame loads survives a later host switch', async () => {
-  const globe = globeViewer();
-  let host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-    getHost: () => host,
-    createShell: ({ product }) => ({
-      product,
-      setAlpha() {},
-      setHidden() {},
-      rehome: () => false,
-      cancelPrefetch() {},
-      clear() {},
-      async setFrame() {
-        return true;
-      },
-    }),
-  });
+  const globe = globeEngine({ size: [4096, 2048] });
+  const display = createWeatherDisplay(globe.engine, globe.options);
   const first = {
     ...base,
     product: 'lightning',
     display: { credit: 'First credit' },
   };
-  const shown = rendering.setFrame(first, times[0]);
-  rendering.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
+  const shown = display.setFrame(first, times[0]);
+  display.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
   await globe.settle();
   assert.equal(await shown, true);
-  assert.equal(creditOf(globe.providers), 'Second credit');
-  host = { collection: {}, kind: 'tileset' };
-  assert.equal(rendering.rehome(), true);
-  await flush();
-  host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  assert.equal(rendering.rehome(), true);
+  assert.equal(globe.credit(), 'Second credit');
+  globe.setSurface('tiles');
+  assert.equal(display.rehome(), true);
   await globe.settle();
-  assert.equal(globe.providers.length, 2);
-  assert.equal(creditOf(globe.providers), 'Second credit');
-  rendering.clear();
+  globe.setSurface('globe');
+  assert.equal(display.rehome(), true);
+  await globe.settle();
+  assert.equal(globe.draped().length, 2);
+  assert.equal(globe.credit(), 'Second credit');
+  display.clear();
 });
 
 test('a refresh before a frame is installed gives it the newest credit', async () => {
   for (const product of ['lightning', 'clouds']) {
-    const globe = globeViewer();
-    const rendering = createWeatherRendering({
-      viewer: globe.viewer,
-      ...globe.options,
-    });
+    const globe = globeEngine();
+    const display = createWeatherDisplay(globe.engine, globe.options);
     const first = { ...base, product, display: { credit: 'First credit' } };
-    const shown = rendering.setFrame(first, times[1]);
-    rendering.updateSnapshot({
+    const shown = display.setFrame(first, times[1]);
+    display.updateSnapshot({
       ...first,
       display: { credit: 'Second credit' },
     });
     await globe.settle();
     assert.equal(await shown, true);
-    assert.equal(creditOf(globe.providers), 'Second credit', product);
-    rendering.clear();
+    assert.equal(globe.credit(), 'Second credit', product);
+    display.clear();
   }
 });
 
 test('a layer refresh with the same latest frame updates the imagery credit', async (t) => {
   t.mock.method(Date, 'now', () => Date.parse(times[1]));
-  const globe = globeViewer();
+  const globe = globeEngine();
   let manifest = {
     ...base,
     product: 'lightning',
@@ -919,21 +842,21 @@ test('a layer refresh with the same latest frame updates the imagery credit', as
     documentRef: quiet(),
     eventTarget: quiet(),
     matchMedia: () => quiet(),
-    createRendering: (args) =>
-      createWeatherRendering({ ...args, ...globe.options }),
+    createNativeRendering: (engine, options) =>
+      createWeatherDisplay(engine, { ...options, ...globe.options }),
   });
-  layer.init(globe.viewer);
+  layer.init(null, { engine: globe.engine });
   layer.enable();
   const first = layer.update();
   await globe.settle();
   await first;
-  assert.equal(creditOf(globe.providers), 'First credit');
+  assert.equal(globe.credit(), 'First credit');
   manifest = { ...manifest, display: { credit: 'Second credit' } };
   await layer.update();
-  assert.equal(globe.providers.length, 1, 'the frame is not restaged');
-  assert.equal(creditOf(globe.providers), 'Second credit');
+  assert.equal(globe.stages.length, 1, 'the frame is not restaged');
+  assert.equal(globe.credit(), 'Second credit');
   manifest = { ...base, product: 'lightning' };
   await layer.update();
-  assert.equal(creditOf(globe.providers), BUILT_IN.lightning.credit);
+  assert.equal(globe.credit(), BUILT_IN.lightning.credit);
   layer.destroy();
 });

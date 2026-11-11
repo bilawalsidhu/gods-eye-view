@@ -5,6 +5,7 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
+import { rendererFor } from './layers/renderers.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -37,6 +38,7 @@ import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.j
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
+import { createInfrastructureSessionLayer } from '../layers/infrastructure/index.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
@@ -69,8 +71,12 @@ export function createApplicationCatalog({
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
   resolveAsset,
+  layerSession,
   nepalBoundaryResolver,
   streetLevelProviders,
+  engineKind = 'cesium',
+  // Supply display options and scene services without replacing layer models.
+  createDisplay = rendererFor,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -78,120 +84,284 @@ export function createApplicationCatalog({
   if (!surface?.groundFloor || !surface?.terrain)
     throw new TypeError('Application surface services are required');
 
+  const renderer = (id) => ({
+    create: ({ engine, ...options }) => createDisplay(id, engine, options),
+  });
+  const rendererFactory =
+    (id) =>
+    ({ engine, ...options }) =>
+      createDisplay(id, engine, options);
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
-  const militaryRegistry = createMilitaryRegistry();
-  const weatherClock = createWeatherClock({ world: worldClock });
+  const militaryRegistry =
+    layerSession?.militaryRegistry ?? createMilitaryRegistry();
+  const weatherClock =
+    layerSession?.weatherClock ?? createWeatherClock({ world: worldClock });
+  if (layerSession && !layerSession.weatherClock) {
+    layerSession.weatherClock = weatherClock;
+    layerSession.lifetime.signal.addEventListener(
+      'abort',
+      weatherClock.destroy,
+      { once: true },
+    );
+  }
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
-    militaryRegistry.dispose();
-    weatherClock.destroy();
+    if (!layerSession) militaryRegistry.dispose();
+    if (!layerSession) weatherClock.destroy();
   };
   signal.addEventListener('abort', dispose, { once: true });
   try {
-    if (sourceComposition.isConfigured('military'))
-      militaryRegistry.configureSource(sources.military, { signal });
-    const flights = createApplicationFlights({
-      surface,
-      source: sources.flights,
-      militaryRegistry,
-      resolveAsset,
-    });
-    const military = createApplicationMilitary({
-      surface,
-      source: sources.military,
-      militaryRegistry,
-      resolveAsset,
-    });
-    const vessels = createApplicationVessels({
-      source: sources.vessels,
-      options: vesselOptions,
-    });
-    const installations = createApplicationInstallations({
-      surface,
-      source: sources.installations,
-    });
-    const satellites = createApplicationSatellites({
-      source: sources.satellites,
-    });
-    const catalog = createLayerCatalog(
-      [
-        createBhoteKoshiEventLayer(),
+    if (!layerSession?.militaryRegistry) {
+      const lifetime = layerSession?.lifetime.signal ?? signal;
+      if (sourceComposition.isConfigured('military'))
+        militaryRegistry.configureSource(sources.military, {
+          signal: lifetime,
+        });
+      if (layerSession) {
+        layerSession.militaryRegistry = militaryRegistry;
+        lifetime.addEventListener('abort', militaryRegistry.dispose, {
+          once: true,
+        });
+      }
+    }
+    const sessionModel = (id, create) => {
+      if (!layerSession) return create();
+      const models = (layerSession.models ??= new Map());
+      if (!models.has(id)) models.set(id, create());
+      return models.get(id);
+    };
+    const flights = sessionModel('flights', () =>
+      createApplicationFlights({
+        renderer: renderer('flights'),
+        surface,
+        source: sources.flights,
+        militaryRegistry,
+        resolveAsset,
+      }),
+    );
+    const military = sessionModel('military', () =>
+      createApplicationMilitary({
+        renderer: renderer('military'),
+        surface,
+        source: sources.military,
+        militaryRegistry,
+        resolveAsset,
+      }),
+    );
+    const vessels = sessionModel('ais-live-vessels', () =>
+      createApplicationVessels({
+        renderer: renderer('ais-live-vessels'),
+        source: sources.vessels,
+        options: vesselOptions,
+      }),
+    );
+    const installations = sessionModel('military-installations', () =>
+      createApplicationInstallations({
+        surface,
+        source: sources.installations,
+      }),
+    );
+    const satellites = sessionModel('satellites', () =>
+      createApplicationSatellites({
+        renderer: renderer('satellites'),
+        source: sources.satellites,
+      }),
+    );
+    const layers = [
+      sessionModel('bhote-koshi-2026', () =>
+        createBhoteKoshiEventLayer({
+          createNativeRenderer: (engine) =>
+            createDisplay('bhote-koshi-2026', engine),
+        }),
+      ),
+      sessionModel('bhote-koshi-locator', () =>
         createBhoteKoshiLocatorLayer({
           boundaryResolver: nepalBoundaryResolver,
+          createNativeRenderer: (engine, data) =>
+            createDisplay('bhote-koshi-locator', engine, { data }),
         }),
-        flights,
-        military,
+      ),
+      flights,
+      military,
+      sessionModel('local-adsb', () =>
         createApplicationLocalAdsb({
+          renderer: renderer('local-adsb'),
           surface,
+          // QA fixture receivers (?qaFeed=local-adsb:fixture, dev only).
+          ...(sources.localAdsbFeeds ? { feeds: sources.localAdsbFeeds } : {}),
           enrichment: sources.flights,
           displayParams: () => flights.getParams(),
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
-        createApplicationEarthquakes({ source: sources.earthquakes }),
-        createApplicationAirQuality({ source: sources['air-quality'] }),
+      ),
+      sessionModel('earthquakes', () =>
+        createApplicationEarthquakes({
+          rendererFactory: rendererFactory('earthquakes'),
+          source: sources.earthquakes,
+        }),
+      ),
+      sessionModel('air-quality', () =>
+        createApplicationAirQuality({
+          rendererFactory: rendererFactory('air-quality'),
+          source: sources['air-quality'],
+        }),
+      ),
+      sessionModel('fire-perimeters', () =>
         createApplicationFirePerimeters({
+          createRenderer: rendererFactory('fire-perimeters'),
           source: sources['fire-perimeters'],
         }),
+      ),
+      sessionModel('gnss-integrity', () =>
         createApplicationGnssIntegrity({
+          rendererFactory: rendererFactory('gnss-integrity'),
           source: sources['gnss-integrity'],
           windowMs: sources['gnss-integrity'].windowMs,
         }),
+      ),
+      sessionModel('s2-ghostmaps', () =>
         createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+      ),
+      sessionModel('shipwrecks', () =>
         createApplicationShipwrecks({ source: sources.shipwrecks }),
+      ),
+      sessionModel('drone-airspace', () =>
         createApplicationDroneAirspace({
+          rendererFactory: rendererFactory('drone-airspace'),
           source: sources['drone-airspace'],
         }),
+      ),
+      sessionModel('news', () =>
         createApplicationNews({ source: sources.news }),
+      ),
+      sessionModel('wildlife-sightings', () =>
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
         }),
-        createApplicationAlpr({ surface, source: sources.alpr }),
+      ),
+      sessionModel('alpr-cameras', () =>
+        createApplicationAlpr({
+          rendererFactory: rendererFactory('alpr-cameras'),
+          surface,
+          source: sources.alpr,
+        }),
+      ),
+      sessionModel('street-level', () =>
         createApplicationStreetLevel({
           surface,
+          nativeRenderer: (engine) => createDisplay('street-level', engine),
           sources: { mapillary: sources.mapillary },
           providers: streetLevelProviders,
         }),
-        satellites,
-        createApplicationLaunches({ source: sources.launches, satellites }),
-        createApplicationTraffic({ source: sources.traffic, surface }),
-        createApplicationCctv({ surface, source: sources.cctv }),
-        createApplicationRadio({ surface, source: sources.radio }),
-        createApplicationTransit({ surface, source: sources.transit }),
+      ),
+      satellites,
+      sessionModel('rocket-launches', () =>
+        createApplicationLaunches({
+          renderer: renderer('rocket-launches'),
+          source: sources.launches,
+          satellites: satellites,
+        }),
+      ),
+      sessionModel('traffic', () =>
+        createApplicationTraffic({
+          source: sources.traffic,
+          surface,
+        }),
+      ),
+      sessionModel('cctv', () =>
+        createApplicationCctv({
+          rendererFactory: rendererFactory('cctv'),
+          surface,
+          source: sources.cctv,
+        }),
+      ),
+      sessionModel('radio', () =>
+        createApplicationRadio({
+          rendererFactory: rendererFactory('radio'),
+          surface,
+          source: sources.radio,
+        }),
+      ),
+      sessionModel('transit', () =>
+        createApplicationTransit({
+          rendererFactory: rendererFactory('transit'),
+          surface,
+          source: sources.transit,
+        }),
+      ),
+      sessionModel('bikeshare', () =>
         createApplicationBikeshare({ source: sources.bikeshare }),
-        createApplicationDirections({ source: sources.directions }),
-        createApplicationRecentImagery({ source: sources['recent-imagery'] }),
-        createApplicationOsmPlaces(),
-        vessels,
-        installations,
+      ),
+      sessionModel('directions', () =>
+        createApplicationDirections({
+          source: sources.directions,
+          surface,
+        }),
+      ),
+      sessionModel('recent-imagery', () =>
+        createApplicationRecentImagery({
+          source: sources['recent-imagery'],
+        }),
+      ),
+      sessionModel('osm-places', () => createApplicationOsmPlaces()),
+      vessels,
+      installations,
+      sessionModel('military-awareness', () =>
         createApplicationAwareness({
-          flights,
-          military,
-          vessels,
-          installations,
+          flights: flights,
+          military: military,
+          vessels: vessels,
+          installations: installations,
         }),
-        createWindLayer({ feed: sources.wind, clock: weatherClock }),
-        createWeatherLayer({
-          feed: sources.weather,
-          id: 'weather-radar',
+      ),
+      sessionModel('wind', () =>
+        createWindLayer({
+          feed: sources.wind,
           clock: weatherClock,
+          createNativeRendering: (engine, options) =>
+            createDisplay('wind', engine, options),
         }),
-        createWeatherLayer({
-          feed: sources.weather,
-          id: 'weather-satellite',
-          clock: weatherClock,
+      ),
+      ...['weather-radar', 'weather-satellite', 'weather-lightning'].map((id) =>
+        sessionModel(id, () =>
+          createWeatherLayer({
+            feed: sources.weather,
+            id,
+            clock: weatherClock,
+            createNativeRendering: (engine, options) =>
+              createDisplay(id, engine, options),
+          }),
+        ),
+      ),
+      sessionModel('weather-cyclones', () =>
+        createApplicationCyclones({
+          feed: sources.cyclones,
+          createNativeRendering: (engine, options) =>
+            createDisplay('weather-cyclones', engine, options),
         }),
-        createWeatherLayer({
-          feed: sources.weather,
-          id: 'weather-lightning',
-          clock: weatherClock,
-        }),
-        createApplicationCyclones({ feed: sources.cyclones }),
-        ...createOsmOverlayLayers(),
-        ...createInfrastructureLayers(localGeoJsonServices),
-        createApplicationCables({ source: sources.cables }),
+      ),
+      ...sessionModel('osm-overlays', () => createOsmOverlayLayers()),
+      ...sessionModel('local-infrastructure', () =>
+        createInfrastructureLayers(localGeoJsonServices, (config, services) =>
+          createInfrastructureSessionLayer(
+            config,
+            services,
+            (engine, descriptor, ops) =>
+              createDisplay(config.id, engine, {
+                config: descriptor,
+                services: ops,
+              }),
+          ),
+        ),
+      ),
+      sessionModel('telegeography-submarine-cables', () =>
+        createApplicationCables({ source: sources.cables, session: true }),
+      ),
+      sessionModel('local-firms', () =>
         createApplicationFirms({
+          renderer: renderer('local-firms'),
           surface,
           id: 'local-firms',
           name: 'FIRMS Active Fires',
@@ -199,11 +369,12 @@ export function createApplicationCatalog({
           source: 'NASA FIRMS · LIVE',
           feed: sources.firms,
         }),
-      ],
-      metadata,
-    );
+      ),
+    ];
+    const catalog = createLayerCatalog(layers, metadata);
     return Object.freeze({
       ...catalog,
+      engineKind,
       getSourceAvailability: sourceComposition.createAvailabilityLookup(
         catalog.layers,
       ),

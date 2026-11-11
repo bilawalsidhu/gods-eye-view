@@ -16,7 +16,9 @@ export function startApplicationChrome({
   const minimumDelay = new Promise((resolve) => {
     resolveDelay = resolve;
   });
-  const delayTimer = setTimeout(resolveDelay, 1000);
+  const switching = loadingScreen.classList.contains?.('hidden');
+  const delayTimer = switching ? null : setTimeout(resolveDelay, 1000);
+  if (switching) resolveDelay();
   const revealFirstRun = () => {
     if (disposed || signal.aborted || firstRun) return;
     firstRun = initializeWelcome?.({ styleManager, dataManager });
@@ -28,7 +30,7 @@ export function startApplicationChrome({
       /* Restoration reports its own outcome through the controls. */
     })
     .then(() => {
-      if (disposed || signal.aborted) return;
+      if (disposed || signal.aborted || switching) return;
       loadingScreen.classList.add('hidden');
       loadingScreen.addEventListener('transitionend', revealFirstRun, {
         once: true,

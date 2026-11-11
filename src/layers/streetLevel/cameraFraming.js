@@ -1,5 +1,9 @@
-import * as Cesium from 'cesium';
-import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
+import * as geo from '../../geo/index.js';
+import {
+  plausibleSurfaceHeight,
+  sampledSurfaceHeight,
+  terrainSurfaceHeight,
+} from './view.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
@@ -8,7 +12,7 @@ export function createCameraFraming({ state }) {
    * nothing newer took the camera. Without it, framing flies directly.
    */
   let navigation = null;
-  /** Our framing flight while it is current; Cesium calls `cancel` when another flight starts. */
+  /** Our framing flight while it is current; the engine calls `cancel` when another flight starts. */
   let flight = null;
 
   function attachNavigation(next) {
@@ -27,10 +31,10 @@ export function createCameraFraming({ state }) {
    * ellipsoid before tiles load, so only a plausible height counts.
    */
   function groundHeightAt(lon, lat, fallback) {
-    const scene = state.viewer?.scene;
-    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-    let height = sampledSurfaceHeight(scene, carto);
-    if (height === null) height = scene?.globe?.getHeight?.(carto);
+    const engine = state.map?.engine;
+    const carto = geo.cartographic.fromDegrees(lon, lat);
+    let height = sampledSurfaceHeight(engine, carto);
+    if (height === null) height = terrainSurfaceHeight(engine, carto);
     if (!plausibleSurfaceHeight(height)) height = fallback;
     return plausibleSurfaceHeight(height) ? height : 0;
   }
@@ -41,7 +45,8 @@ export function createCameraFraming({ state }) {
    */
   function frame(ticket) {
     const { position, bearing, altitude } = state.street;
-    if (!ticket || !position || !state.viewer) return;
+    const engine = state.map?.engine;
+    if (!ticket || !position || !engine) return;
     // Detached (shell teardown) since the ticket was issued: nothing to frame for.
     if (ticket.generation !== null && !navigation?.reassert(ticket.generation))
       return;
@@ -53,17 +58,19 @@ export function createCameraFraming({ state }) {
     const release = () => {
       if (flight === current) flight = null;
     };
-    state.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(
-        Cesium.Cartesian3.fromDegrees(position.lon, position.lat, ground + 2),
-        4,
-      ),
+    engine.camera.flyToSphere(
       {
-        offset: new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(bearing || 0),
-          Cesium.Math.toRadians(-32),
-          140,
+        center: geo.cartesian3.fromDegrees(
+          position.lon,
+          position.lat,
+          ground + 2,
         ),
+        radius: 4,
+      },
+      {
+        heading: geo.math.toRadians(bearing || 0),
+        pitch: geo.math.toRadians(-32),
+        range: 140,
         duration: 1.6,
         complete: release,
         cancel: release,
@@ -76,7 +83,7 @@ export function createCameraFraming({ state }) {
     if (!flight) return;
     // Give up ownership first: cancelFlight delivers `cancel` synchronously.
     flight = null;
-    state.viewer?.camera?.cancelFlight?.();
+    state.map?.engine?.camera.cancelFlight();
   }
 
   return { attachNavigation, begin, frame, cancel };

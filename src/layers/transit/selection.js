@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   SELECTED_CARD_REFRESH_MS,
   TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
@@ -107,88 +106,26 @@ export function createSelection({ state, services, parts }) {
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);
     refreshSelectedCard(true);
-    governorRequestRender('transit-select');
+    governorRequestRender('transit-select', parts.renderer?.engine);
   }
 
   function onKeyDown(event) {
     if (event.key === 'Escape' && state._selectedKey) clearSelection();
   }
 
-  function installClickHandler(viewer) {
+  function installClickHandler() {
     if (state._clickHandler) return;
-    state._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state._clickHandler.setInputAction((click) => {
-      // Ambient selection never competes for a pointer a tool has claimed:
-      // placing a draw vertex on top of a bus must not also select the bus.
-      if (!isPointerFree()) return;
-      const scene = viewer.scene;
-      // Pick buffers precede post-processing. Map a sensor pixel back through
-      // the active shader's barrel distortion and quantization before picking.
-      const position = Cesium.Cartesian2.clone(click.position);
-      const style = state._stylePreset;
-      const stage = scene.postProcessStages?.getStageByName?.(
-        `godsEyeView_${style}`,
-      );
-      if (stage?.enabled && (style === 'thermal' || style === 'surveillance')) {
-        const intensity = stage.uniforms.intensity;
-        const canvas = scene.canvas,
-          w = canvas.clientWidth,
-          h = canvas.clientHeight;
-        let u = position.x / w,
-          v = 1 - position.y / h;
-        if (style === 'surveillance') {
-          const x = u * 2 - 1,
-            y = v * 2 - 1,
-            r2 = x * x + y * y;
-          const d = 1 + r2 * intensity * 0.25 + r2 * r2 * intensity * 0.075;
-          u = (x * d + 1) / 2;
-          v = (y * d + 1) / 2;
-        }
-        const grid = 1 + (stage.uniforms.pixelation - 1) * intensity;
-        u +=
-          ((Math.floor((u * canvas.width) / grid) * grid) / canvas.width - u) *
-          intensity;
-        v +=
-          ((Math.floor((v * canvas.height) / grid) * grid) / canvas.height -
-            v) *
-          intensity;
-        position.x = u * w;
-        position.y = (1 - v) * h;
-      }
-      const picked = scene.pick(position);
-      state._lastPickForTest = {
-        id: typeof picked?.id === 'string' ? picked.id : null,
-        primitiveId:
-          typeof picked?.primitive?.id === 'string'
-            ? picked.primitive.id
-            : null,
-        x: position.x,
-        y: position.y,
-        collection:
-          picked?.primitive?._billboardCollection === state._animatedMarkers
-            ? 'animated'
-            : picked?.primitive?._billboardCollection === state._markers
-              ? 'stationary'
-              : null,
-      };
-      if (picked) {
-        const primitiveId = picked.primitive?.id;
-        if (
-          typeof primitiveId === 'string' &&
-          state._vehicles.has(primitiveId)
-        ) {
-          selectVehicle(primitiveId);
-          return;
-        }
-        if (typeof picked.id === 'string' && state._vehicles.has(picked.id)) {
-          selectVehicle(picked.id);
-          return;
-        }
+    state._clickHandler = parts.renderer.bindClick((picked) => {
+      state._lastPickForTest = picked;
+      const key = state._vehicles.has(picked.primitiveId)
+        ? picked.primitiveId
+        : picked.id;
+      if (typeof key === 'string' && state._vehicles.has(key)) {
+        selectVehicle(key);
+        return;
       }
       if (state._selectedKey) clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }, isPointerFree);
     document.addEventListener('keydown', onKeyDown);
   }
 

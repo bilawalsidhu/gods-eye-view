@@ -19,7 +19,9 @@ export function createIngestion({
      * tick ever samples anything again.
      */
     async update() {
-      if (!layerState._enabled) return;
+      if (!layerState._enabled) return { changed: false };
+      let changed = false;
+      const previousActiveId = layerState._activeCameraId;
       const now = Date.now();
       layerState._lastUpdate = now;
       if (
@@ -27,6 +29,17 @@ export function createIngestion({
         parts.model.projectionTilesReady()
       ) {
         layerState._tilesReadyReenqueued = true;
+        const active = parts.selection.getActiveRecord();
+        if (active?.surfaceProbePending) {
+          active.surfaceProbePending = false;
+          parts.geometry.runActivationObstructionProbe(active);
+          parts.geometry.applyFrustumGeometry(
+            active,
+            parts.ground.groundAltFor(active),
+          );
+          active.activationDone = true;
+          changed = true;
+        }
         // Per-regime resolution (Task 5): only records unresolved for the
         // CURRENT surface regime need the completion pass. On globe stacks
         // projectionTilesReady() is false while a (hidden) Google tileset
@@ -34,22 +47,29 @@ export function createIngestion({
         // terrain-globe records resolve from the prior in their drain pass.
         const unresolved = parts.geometryQueue
           .geometryWorkingSet()
-          .filter(
-            (record) =>
-              !parts.ground.isGroundResolved(record) &&
-              parts.geometryQueue.withinViewBudget(record),
-          );
-        if (unresolved.length)
+          .filter((record) => !parts.ground.isGroundResolved(record));
+        if (unresolved.length) {
           parts.geometryQueue.enqueueGeometryRefresh(unresolved);
+          changed = true;
+        }
       }
       await parts.health.syncHealthState();
-      // New health can change which camera wins a crowded cell.
-      if (layerState._enabled && parts.rendering.refreshHorizonCulling()) {
-        parts.geometryQueue.enqueueViewGeometry();
-        parts.cards.refreshAmbientCards();
+      // An engine switch can release the renderer while health loads. The
+      // scene work waits for the next renderer; health itself is kept.
+      if (parts.renderer) {
+        // New health can change which camera wins a crowded cell.
+        if (layerState._enabled && parts.rendering.refreshHorizonCulling()) {
+          parts.geometryQueue.enqueueViewGeometry();
+          parts.cards.refreshAmbientCards();
+        }
+        parts.navigation.maybeAutoHop(now);
       }
-      parts.navigation.maybeAutoHop(now);
       parts.presentation.notifyListeners();
+      // Health and frame URL notifications update the panel directly. Media
+      // requests its own frames; only actual scene changes need a tick frame.
+      return {
+        changed: changed || previousActiveId !== layerState._activeCameraId,
+      };
     },
   };
 

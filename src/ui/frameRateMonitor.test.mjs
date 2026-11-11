@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
@@ -17,17 +18,12 @@ function fixture(t) {
     addEventListener: (name, handler) => keys.add(handler),
     removeEventListener: (name, handler) => keys.delete(handler),
   };
-  const viewer = {
-    scene: {
-      postRender: {
-        addEventListener(handler) {
-          frames.add(handler);
-          return () => frames.delete(handler);
-        },
-      },
-    },
+  const engine = createFakeEngine();
+  engine.frames.postRender.addEventListener = (handler) => {
+    frames.add(handler);
+    return () => frames.delete(handler);
   };
-  const monitor = createFrameRateMonitor({ viewer, documentRef, store });
+  const monitor = createFrameRateMonitor({ engine, documentRef, store });
   t.after(() => monitor.destroy());
   return {
     monitor,
@@ -108,7 +104,7 @@ test('a page without the title bar gets no readout and keeps the key', () => {
   let listened = false;
   const store = { publishFps: () => assert.fail('nothing to show it in') };
   const monitor = createFrameRateMonitor({
-    viewer: { scene: { postRender: { addEventListener: () => () => {} } } },
+    engine: createFakeEngine(),
     documentRef: {
       getElementById: () => null,
       addEventListener: () => (listened = true),
@@ -130,11 +126,9 @@ test("destroying an earlier monitor leaves a newer one's readout", () => {
     addEventListener() {},
     removeEventListener() {},
   };
-  const viewer = {
-    scene: { postRender: { addEventListener: () => () => {} } },
-  };
-  const first = createFrameRateMonitor({ viewer, documentRef, store });
-  const second = createFrameRateMonitor({ viewer, documentRef, store });
+  const engine = createFakeEngine();
+  const first = createFrameRateMonitor({ engine, documentRef, store });
+  const second = createFrameRateMonitor({ engine, documentRef, store });
   const shown = store.fps;
   first.destroy();
   assert.ok(store.fps === shown);

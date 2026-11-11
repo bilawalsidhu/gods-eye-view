@@ -1,4 +1,4 @@
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
 export const BOSTON = {
   id: 'boston',
   feedId: 'mbta',
@@ -69,7 +69,7 @@ export function chooseLiveCities(now = new Date()) {
  * @param {Record<string, number>} [params] aria-label → slider value
  * @returns {Promise<string>} how the style was set
  */
-export async function selectStyle(page, name, params = {}, wait = pause) {
+export async function selectStyle(page, name, params = {}) {
   let how = 'button';
   // The presets live in the bottom control panel, which auto-dismisses when
   // the pointer leaves it: pin it open the way a user does, once.
@@ -86,7 +86,7 @@ export async function selectStyle(page, name, params = {}, wait = pause) {
       { explicit: true },
     );
   });
-  await wait(400);
+  await whenUiSettled(page);
   try {
     await page.$eval(`.style-btn[data-style="${name}"]`, (el) =>
       el.scrollIntoView({ block: 'center' }),
@@ -118,7 +118,7 @@ export async function selectStyle(page, name, params = {}, wait = pause) {
     { timeout: 10000 },
     name,
   );
-  await wait(1_800);
+  await whenUiSettled(page);
   for (const [label, value] of Object.entries(params)) {
     const selector = `#param-sliders input.param-slider[aria-label="${label}"]`;
     await page.waitForSelector(selector, { timeout: 10000 });
@@ -130,7 +130,7 @@ export async function selectStyle(page, name, params = {}, wait = pause) {
       },
       value,
     );
-    await wait(700);
+    await whenUiSettled(page);
   }
   return how;
 }
@@ -141,7 +141,7 @@ export async function selectStyle(page, name, params = {}, wait = pause) {
  * @param {import('puppeteer').Page} page
  * @returns {Promise<string>} the profile reached
  */
-export async function detectOn(page, wait = pause) {
+export async function detectOn(page) {
   // The real button toggles OFF/restore. Density determines its on-profile.
   const mode = () =>
     page.evaluate(() => {
@@ -153,11 +153,7 @@ export async function detectOn(page, wait = pause) {
       };
     });
   // The loading screen swallows the first click of a fresh page.
-  await page
-    .waitForFunction(() => !document.getElementById('loading-screen'), {
-      timeout: 30_000,
-    })
-    .catch(() => {});
+  await whenSettled(page);
   // The DISPLAY rail starts collapsed on a first run: open it the way a user
   // does, then press DETECT until it reports on.
   await page.evaluate(() => {
@@ -175,7 +171,7 @@ export async function detectOn(page, wait = pause) {
   );
   if (!(await mode()).on) {
     await page.click('#detection-toggle');
-    await wait(300);
+    await whenUiSettled(page);
   }
   await page.$eval('#detection-density-slider', (el) => {
     el.value = '100';

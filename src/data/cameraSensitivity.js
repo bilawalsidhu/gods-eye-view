@@ -30,6 +30,13 @@ const _cameras = new WeakMap();
 /** The value Cesium starts a camera at, used when the camera reports nothing. */
 const DEFAULT_PERCENTAGE_CHANGED = 0.5;
 
+/**
+ * One key per camera: a globe engine claims through its camera, and so does
+ * a viewer; anything else is the camera itself (a camera has no `camera` of
+ * its own). Every layer on one globe claims through its engine.
+ */
+const cameraOf = (target) => target?.camera ?? target;
+
 function ledgerFor(camera) {
   let ledger = _cameras.get(camera);
   if (!ledger) {
@@ -53,12 +60,14 @@ function applyLedger(camera, ledger) {
 
 /**
  * Ask for a camera-change sensitivity at least as fine as `value`.
- * @param {object|null|undefined} camera A Cesium camera (or anything with `percentageChanged`).
+ * @param {object|null|undefined} target A globe engine or its camera, or a
+ *   camera (anything with `percentageChanged`) where no engine is given.
  * @param {string} owner Stable claim name, usually the layer id.
  * @param {number} value Requested `percentageChanged`.
  * @returns {number|null} The value now in force, or null when there is no camera.
  */
-export function claimCameraSensitivity(camera, owner, value) {
+export function claimCameraSensitivity(target, owner, value) {
+  const camera = cameraOf(target);
   if (!camera || !owner || !Number.isFinite(value)) return null;
   const ledger = ledgerFor(camera);
   ledger.claims.set(owner, value);
@@ -68,11 +77,12 @@ export function claimCameraSensitivity(camera, owner, value) {
 /**
  * Give up one claim. The camera keeps the finest value still claimed by
  * somebody else, and returns to its original only when none are left.
- * @param {object|null|undefined} camera
+ * @param {object|null|undefined} target A globe engine or a camera.
  * @param {string} owner
  * @returns {number|null} The value now in force, or null when there is no camera.
  */
-export function releaseCameraSensitivity(camera, owner) {
+export function releaseCameraSensitivity(target, owner) {
+  const camera = cameraOf(target);
   if (!camera || !owner) return null;
   const ledger = _cameras.get(camera);
   if (!ledger) return null;
@@ -84,10 +94,11 @@ export function releaseCameraSensitivity(camera, owner) {
 
 /**
  * Who currently holds a claim. For tests and diagnostics only.
- * @param {object|null|undefined} camera
+ * @param {object|null|undefined} target A globe engine or a camera.
  * @returns {Array<string>}
  */
-export function cameraSensitivityClaims(camera) {
+export function cameraSensitivityClaims(target) {
+  const camera = cameraOf(target);
   const ledger = camera ? _cameras.get(camera) : null;
   return ledger ? [...ledger.claims.keys()] : [];
 }

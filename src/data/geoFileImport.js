@@ -1,23 +1,26 @@
 /** Session-local geodata loading with bounded geometry and local-only file references. */
-import * as Cesium from 'cesium';
 import { createImportImageBudget } from './geoImportImages.js';
-import { createImportedPins } from './geoImportPins.js';
+import { readKmlRecords } from './geoImportKml.js';
+import {
+  geoJsonRecords,
+  importFeatureName,
+  recordCount,
+} from './geoImportRecords.js';
 import { msg } from '../i18n/marker.js';
 
-/** Largest file accepted, in bytes. */
-const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
-/** Largest total a KMZ may inflate to — a zip bomb stops here. */
-const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
-/** Most files on the globe at once. */
-export const MAX_IMPORTED_FILES = 12;
-/** Most entities one file may create before it is refused. */
-export const MAX_IMPORT_ENTITIES = 20_000;
-/** Most vertices (points of every line, ring and marker) in one file. */
-export const MAX_IMPORT_POSITIONS = 250_000;
-/** Most normalized style definitions and local image links in one KML/KMZ. */
-const MAX_KML_LINKS = 2_000;
-/** Longest plain-text name kept from a file's features. */
-const MAX_IMPORT_NAME_LENGTH = 120;
+import {
+  MAX_IMPORT_BYTES,
+  MAX_KMZ_INFLATED_BYTES,
+  MAX_IMPORT_ENTITIES,
+  MAX_IMPORT_POSITIONS,
+  MAX_KML_LINKS,
+  MAX_IMPORT_HEIGHT_M,
+  IMPORT_TIMEOUT_MS,
+  MAX_IMPORT_DISPLAY_NAME_LENGTH,
+} from './geoImportLimits.js';
+
+export { importFeatureName };
+
 /** What the file picker offers. */
 export const GEO_FILE_ACCEPT = '.geojson,.json,.kml,.kmz,.gpx';
 
@@ -118,7 +121,9 @@ export function importDisplayName(name) {
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .trim();
   if (!clean) return 'Imported file';
-  return clean.length > 60 ? `${clean.slice(0, 57)}…` : clean;
+  return clean.length > MAX_IMPORT_DISPLAY_NAME_LENGTH
+    ? `${clean.slice(0, MAX_IMPORT_DISPLAY_NAME_LENGTH - 3)}…`
+    : clean;
 }
 
 /**
@@ -212,8 +217,8 @@ export function countGeoJsonGeometry(
       MultiPolygon: 3,
     }[node.type];
     if (depth !== undefined) {
-      // Multipart geometries create one Cesium entity per component, even
-      // when the document wraps them in just one Feature.
+      // Multipart geometries create one record per component, even when
+      // the document wraps them in just one Feature.
       entities += node.type.startsWith('Multi')
         ? Array.isArray(node.coordinates)
           ? node.coordinates.length
@@ -236,7 +241,7 @@ export function countGeoJsonGeometry(
             !c.every(Number.isFinite) ||
             Math.abs(c[0]) > 180 ||
             Math.abs(c[1]) > 90 ||
-            (c.length === 3 && Math.abs(c[2]) > 1_000_000)
+            (c.length === 3 && Math.abs(c[2]) > MAX_IMPORT_HEIGHT_M)
           )
             throw new GeoImportError(
               msg('That GeoJSON has invalid coordinates.'),
@@ -293,7 +298,7 @@ function overLimitError({ over, features }) {
 }
 
 // The import uses WGS84 ground footprints and a short name only. Remove
-// loader-sensitive metadata before Cesium allocates properties or entity IDs.
+// everything else before the records are built.
 function prepareGeoJson(geojson) {
   const stack = [geojson];
   while (stack.length) {
@@ -520,7 +525,7 @@ export function kmzImageResolver(
  * Strip everything from a parsed KML document that would make the page reach
  * outside the file. `resolveLocal(href)` returns a URL for an image packed in
  * the same KMZ (or null); every other href is removed, so icons fall back to
- * Cesium's default pin and a ground overlay without a local image is dropped.
+ * the default pin and a ground overlay without a local image is dropped.
  * @param {Document} doc
  * @param {(href: string) => string|null} [resolveLocal]
  * @returns {{removed: number}} How many elements were taken out.
@@ -557,8 +562,8 @@ export function sanitizeKmlDocument(doc, resolveLocal = () => null) {
         drop(overlay);
         continue;
       }
-      // An empty Icon explicitly hides the billboard in Cesium. Remove the
-      // blocked icon definition so the loader supplies its local default pin.
+      // An empty Icon explicitly hides the billboard. Remove the blocked
+      // icon definition so the reader supplies its local default pin.
       // Authored empty Icons (with no blocked href) still mean no marker.
       drop(
         icon?.localName === 'Icon' && icon.parentNode?.localName === 'IconStyle'
@@ -754,8 +759,8 @@ export function deduplicateKmlStyles(
 }
 
 /**
- * Count placemarks and vertices in a parsed KML document before Cesium reads
- * it: every `<coordinates>` tuple and every `gx:coord`, plus normalized
+ * Count placemarks and vertices in a parsed KML document before it is
+ * read: every `<coordinates>` tuple and every `gx:coord`, plus normalized
  * style definitions and distinct image `<href>` values (`links`).
  * Inline StyleMaps are references, not additional shared style definitions.
  * @param {Document} doc
@@ -796,7 +801,7 @@ export function countKmlGeometry(
       const limit = ['north', 'south'].includes(name)
         ? 90
         : name === 'altitude'
-          ? 1_000_000
+          ? MAX_IMPORT_HEIGHT_M
           : 360;
       if (
         !el.textContent.trim() ||
@@ -805,8 +810,9 @@ export function countKmlGeometry(
       )
         throw new GeoImportError(msg('That KML has invalid geometry bounds.'));
     }
-    // Cesium creates entities for folders, a parent for every placemark, and
-    // a child for each geometry in a MultiGeometry, including nested containers.
+    // The budget counts what Cesium made entities of: folders, a parent for
+    // every placemark, and a child for each geometry in a MultiGeometry,
+    // including nested containers.
     if (
       name === 'Placemark' ||
       name === 'Folder' ||
@@ -858,7 +864,7 @@ function checkKmlPosition(tuple) {
     !numbers.every(Number.isFinite) ||
     Math.abs(numbers[0]) > 180 ||
     Math.abs(numbers[1]) > 90 ||
-    (numbers.length === 3 && Math.abs(numbers[2]) > 1_000_000)
+    (numbers.length === 3 && Math.abs(numbers[2]) > MAX_IMPORT_HEIGHT_M)
   )
     throw new GeoImportError(msg('That KML has invalid coordinates.'));
 }
@@ -950,95 +956,6 @@ export function gpxToGeoJson(
       });
   }
   return { type: 'FeatureCollection', features };
-}
-
-/** A feature name as short plain text (no control characters), or undefined. */
-export function importFeatureName(value) {
-  const text = String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!text) return undefined;
-  return text.length > MAX_IMPORT_NAME_LENGTH
-    ? `${text.slice(0, MAX_IMPORT_NAME_LENGTH - 1)}…`
-    : text;
-}
-
-/**
- * Make every entity of an imported data source inert: no description,
- * balloon, extended data or properties, no native label, and a name that is
- * short plain text. Generated pin canvases share a data URL so Cesium uploads
- * each image once, rather than allocating a texture entry for every entity.
- * Returns how many entities were touched.
- * @param {{entities: {values: object[]}}} dataSource
- * @returns {number}
- */
-export function scrubImportedEntities(dataSource) {
-  const collection = dataSource?.entities;
-  const list = collection?.values || [];
-  const images = new Map();
-  collection?.suspendEvents?.();
-  try {
-    for (let i = 0; i < list.length; i++) {
-      const entity = list[i];
-      let name;
-      try {
-        name = importFeatureName(
-          typeof entity.name === 'string' ? entity.name : undefined,
-        );
-      } catch {
-        name = undefined;
-      }
-      entity.name = name;
-      entity.description = undefined;
-      entity.label = undefined;
-      entity.properties = undefined;
-      if (entity.kml && typeof entity.kml === 'object') entity.kml = undefined;
-      if (
-        entity.billboard?.heightReference?.getValue?.() ===
-        Cesium.HeightReference.CLAMP_TO_GROUND
-      )
-        entity.billboard.disableDepthTestDistance = Number.POSITIVE_INFINITY;
-      const property = entity.billboard?.image;
-      if (property?.isConstant === false) continue;
-      const image = property?.getValue?.();
-      if (image?.tagName === 'CANVAS') {
-        let url = images.get(image);
-        if (!url) {
-          url = image.toDataURL();
-          images.set(image, url);
-        }
-        entity.billboard.image = url;
-      }
-    }
-  } finally {
-    collection?.resumeEvents?.();
-  }
-  return list.length;
-}
-
-/**
- * Take time out of an imported data source so adding it cannot move the app's
- * shared clock: the data source reports no clock (the viewer adopts the clock
- * of every added source that has one), every entity is available for all
- * time. KML tracks have already become their original static vertices in
- * `sanitizeKmlDocument`, so no sampled-position fallback is needed here.
- * @param {object} dataSource
- * @returns {object} The same data source.
- */
-export function detachImportedTime(dataSource) {
-  Object.defineProperty(dataSource, 'clock', {
-    configurable: true,
-    enumerable: false,
-    get: () => undefined,
-    set: () => {},
-  });
-  const list = dataSource?.entities?.values || [];
-  for (let i = 0; i < list.length; i++) {
-    const entity = list[i];
-    entity.availability = undefined;
-  }
-  return dataSource;
 }
 
 /** Repair only the first KML opening tag, scanning its delimiter once. */
@@ -1195,144 +1112,6 @@ function checkLocalImages(doc, entries = new Map(), main = '') {
   }
 }
 
-// Cesium also processes KML in deferred tasks; an exception there does not
-// reject its load promise. Keep a failed file from blocking the serial queue.
-async function loadKml(doc, viewer, signal) {
-  let removeError;
-  try {
-    return await boundedImport(
-      Promise.race([
-        Cesium.KmlDataSource.load(doc, {
-          camera: viewer.scene.camera,
-          canvas: viewer.scene.canvas,
-          clampToGround: true,
-        }),
-        new Promise((_, reject) => {
-          const failed = () => {
-            reject(new GeoImportError(msg('That KML could not be read.')));
-          };
-          globalThis.addEventListener?.('error', failed);
-          removeError = () => globalThis.removeEventListener?.('error', failed);
-        }),
-      ]),
-      signal,
-    );
-  } finally {
-    removeError?.();
-  }
-}
-
-// Resolve a static file's ground pins in batches before they are visualized.
-// Per-billboard CLAMP_TO_GROUND subscriptions scale poorly on large imports.
-const groundPins = new WeakMap();
-async function settleGroundPins(dataSource, viewer, signal) {
-  let pins = groundPins.get(dataSource);
-  if (!pins) {
-    pins = [];
-    for (const entity of dataSource.entities.values) {
-      const reference = entity.billboard?.heightReference?.getValue?.();
-      if (
-        reference === Cesium.HeightReference.CLAMP_TO_GROUND ||
-        reference === Cesium.HeightReference.RELATIVE_TO_GROUND
-      ) {
-        const position = entity.position?.getValue?.(Cesium.JulianDate.now());
-        if (!position) continue;
-        const cartographic = Cesium.Cartographic.fromCartesian(position);
-        if (!cartographic)
-          throw new GeoImportError(
-            msg('That file has invalid point coordinates.'),
-          );
-        pins.push({
-          entity,
-          original: position,
-          cartographic,
-          offset:
-            reference === Cesium.HeightReference.RELATIVE_TO_GROUND
-              ? cartographic.height
-              : 0,
-        });
-        entity.billboard.heightReference = Cesium.HeightReference.NONE;
-        entity.billboard.disableDepthTestDistance = Number.POSITIVE_INFINITY;
-      }
-    }
-    groundPins.set(dataSource, pins);
-  }
-  for (let at = 0; at < pins.length; at += 256) {
-    signal?.throwIfAborted();
-    const batch = pins.slice(at, at + 256);
-    const positions = batch.map(
-      ({ cartographic: c }) =>
-        new Cesium.Cartographic(c.longitude, c.latitude, 0),
-    );
-    const mesh =
-      viewer.scene?.globe?.show === false &&
-      viewer.scene?.clampToHeightSupported;
-    // A coarse rendered ellipsoid mesh can report a height kilometres below
-    // zero. Its provider's exact height is zero even while a 3D map hides it;
-    // a buried starting point can make the downward mesh ray miss the surface.
-    const ellipsoid =
-      viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider;
-    for (let i = 0; i < positions.length; i++) {
-      const sampled = ellipsoid
-        ? 0
-        : viewer.scene?.globe?.getHeight?.(positions[i]);
-      positions[i].height = mesh
-        ? (batch[i].groundHeight ??
-          Math.max(0, Number.isFinite(sampled) ? sampled : 0))
-        : Number.isFinite(sampled)
-          ? sampled
-          : batch[i].groundHeight || 0;
-    }
-    const points = positions.map((c) =>
-      Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, c.height),
-    );
-    const height = viewer.camera?.positionCartographic?.height;
-    if (mesh && Number.isFinite(height) && height < 250_000) {
-      const rectangle = viewer.camera.computeViewRectangle?.();
-      const indices = [];
-      for (let i = 0; i < positions.length; i++)
-        if (rectangle && Cesium.Rectangle.contains(rectangle, positions[i]))
-          indices.push(i);
-      if (indices.length) {
-        const resolved = await boundedImport(
-          viewer.scene.clampToHeightMostDetailed(
-            indices.map((i) => {
-              const c = positions[i];
-              return Cesium.Cartesian3.fromRadians(
-                c.longitude,
-                c.latitude,
-                Math.max(0, c.height),
-              );
-            }),
-          ),
-          signal,
-        );
-        for (let i = 0; i < indices.length; i++)
-          if (resolved[i]) points[indices[i]] = resolved[i];
-      }
-    }
-    signal?.throwIfAborted();
-    for (let i = 0; i < batch.length; i++) {
-      const item = batch[i];
-      const c = points[i] && Cesium.Cartographic.fromCartesian(points[i]);
-      if (!c)
-        throw new GeoImportError(
-          msg(
-            'Ground heights are not available for that file. Try again when the map has loaded.',
-          ),
-        );
-      item.groundHeight = c.height;
-      c.height += item.offset;
-      item.entity.position =
-        Math.abs(c.height - item.cartographic.height) < 1e-6
-          ? item.original
-          : Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, c.height);
-    }
-    if (at + batch.length < pins.length)
-      await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}
-
 async function boundedImport(promise, signal) {
   let timer, abort;
   try {
@@ -1345,7 +1124,7 @@ async function boundedImport(promise, signal) {
         timer = setTimeout(
           () =>
             reject(new GeoImportError(msg('That file took too long to read.'))),
-          60_000,
+          IMPORT_TIMEOUT_MS,
         );
       }),
     ]);
@@ -1356,20 +1135,21 @@ async function boundedImport(promise, signal) {
 }
 
 /**
- * Load a ground footprint, retaining explicit KML altitude modes. Call mount after
- * adding the source; revoke owns pin and blob cleanup.
+ * Read a file into the import's plain records (src/data/geoImportRecords.js),
+ * keeping explicit KML altitude modes; no engine is involved, and the
+ * drawing is src/data/geoImportDisplay.js's. `revoke` releases the blob URLs
+ * of a KMZ's packed images, which the records name.
  * @param {File|Blob & {name?: string}} file
- * @param {{viewer: Cesium.Viewer, color?: string}} options `color` is a CSS color.
- * @returns {Promise<{dataSource: Cesium.DataSource, name: string,
- *   format: string, entityCount: number, removed: number, mount: Function, revoke: Function}>}
+ * @param {{color?: string, signal?: AbortSignal}} [options] `color` is the
+ *   row's `#rrggbb`: GeoJSON and GPX draw in it; KML keeps its own styles.
+ * @returns {Promise<{records: import('./geoImportRecords.js').ImportedRecords,
+ *   name: string, format: string, entityCount: number, removed: number,
+ *   revoke: Function}>}
  */
-export async function loadGeoFile(
-  file,
-  { viewer, color = '#39d0ff', signal } = {},
-) {
+export async function loadGeoFile(file, { color = '#39d0ff', signal } = {}) {
   signal = signal
-    ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
-    : AbortSignal.timeout(60_000);
+    ? AbortSignal.any([signal, AbortSignal.timeout(IMPORT_TIMEOUT_MS)])
+    : AbortSignal.timeout(IMPORT_TIMEOUT_MS);
   signal?.throwIfAborted();
   if (!file || !Number.isFinite(file.size))
     throw new GeoImportError(msg('Nothing to import.'));
@@ -1385,15 +1165,12 @@ export async function loadGeoFile(
     throw new GeoImportError(
       msg('Only GeoJSON, KML, KMZ and GPX files can be imported.'),
     );
-  const stroke = Cesium.Color.fromCssColorString(color);
   const urls = [];
-  let pins;
   const revoke = () => {
-    pins?.destroy();
     urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
   };
   const name = importDisplayName(file.name);
-  let dataSource;
+  let records;
   let removed = 0;
   try {
     if (format === 'geojson' || format === 'gpx') {
@@ -1409,18 +1186,7 @@ export async function loadGeoFile(
         throw new GeoImportError(msg('That file has nothing to draw.'));
       prepareGeoJson(geojson);
       bytes = null;
-      dataSource = await boundedImport(
-        Cesium.GeoJsonDataSource.load(geojson, {
-          clampToGround: true,
-          stroke,
-          fill: stroke.withAlpha(0.25),
-          strokeWidth: 3,
-          markerColor: stroke,
-          // No HTML description table is built from the file's properties.
-          describe: () => undefined,
-        }),
-        signal,
-      );
+      records = geoJsonRecords(geojson, color);
     } else {
       let text;
       let entries;
@@ -1449,7 +1215,7 @@ export async function loadGeoFile(
       deduplicateKmlStyles(doc);
       const normalizedSize = countKmlGeometry(doc);
       if (normalizedSize.over) throw overLimitError(normalizedSize);
-      dataSource = await loadKml(doc, viewer, signal);
+      records = readKmlRecords(doc);
     }
   } catch (error) {
     revoke();
@@ -1460,7 +1226,7 @@ export async function loadGeoFile(
       { format: format.toUpperCase() },
     );
   }
-  const entityCount = dataSource.entities.values.length;
+  const entityCount = recordCount(records);
   if (entityCount > MAX_IMPORT_ENTITIES) {
     revoke();
     throw new GeoImportError(
@@ -1472,57 +1238,11 @@ export async function loadGeoFile(
       },
     );
   }
-  const now = Cesium.JulianDate.now();
-  const drawable = dataSource.entities.values.some(
-    (e) =>
-      e.billboard?.image?.getValue(now) ||
-      e.point ||
-      e.rectangle ||
-      e.polyline?.positions?.getValue(now)?.length >= 2 ||
-      e.wall?.positions?.getValue(now)?.length >= 2 ||
-      e.polygon?.hierarchy?.getValue(now)?.positions?.length >= 3,
-  );
-  if (!drawable) {
+  if (!entityCount) {
     revoke();
     throw new GeoImportError(msg('That file has nothing to draw.'));
   }
-  scrubImportedEntities(dataSource);
-  try {
-    await settleGroundPins(dataSource, viewer, signal);
-  } catch (error) {
-    revoke();
-    throw error instanceof GeoImportError
-      ? error
-      : new GeoImportError(
-          msg('Ground heights could not be read. Try that file again.'),
-        );
-  }
-  // Keep the clock invariant explicit even though unused KML dates have
-  // already been stripped and all supported geometries are static.
-  detachImportedTime(dataSource);
-  try {
-    pins = createImportedPins(dataSource, viewer);
-  } catch {
-    revoke();
-    throw new GeoImportError(msg('That file has invalid point graphics.'));
-  }
-  // The display name travels beside the data source (the file name, not
+  // The display name travels beside the records (the file name, not
   // anything the document says about itself).
-  return {
-    dataSource,
-    name,
-    format,
-    entityCount,
-    removed,
-    revoke,
-    mount: () => pins.mount(),
-    refreshGround: (refreshSignal) =>
-      settleGroundPins(
-        dataSource,
-        viewer,
-        refreshSignal
-          ? AbortSignal.any([refreshSignal, AbortSignal.timeout(15_000)])
-          : AbortSignal.timeout(15_000),
-      ).then(() => pins.sync()),
-  };
+  return { records, name, format, entityCount, removed, revoke };
 }

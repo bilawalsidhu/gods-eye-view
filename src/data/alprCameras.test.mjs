@@ -1,8 +1,11 @@
 // src/data/alprCameras.test.mjs
-// Pure helpers and actual layer lifecycle with a minimal viewer/input harness.
+// Pure helpers and the actual layer lifecycle, drawn by its display on the
+// fake engine.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createAlprDisplay } from '../layers/alpr/render/display.js';
 import alprCamerasLayer, {
   createAlprCamerasLayer,
   configureAlprSource,
@@ -251,8 +254,8 @@ const cameraResponse = (elements = [cameraNode()], stale = false) => ({
   json: async () => ({ elements }),
 });
 
-// Real layer, Cesium entities and context store. Only the DOM, upstream fetch,
-// camera rectangle and input event delivery are substituted (no GL in Node).
+// Real layer, display and context store on the fake engine. Only the DOM,
+// upstream fetch and the view's centre and range are substituted.
 function cameraHarness(layer = alprCamerasLayer) {
   const originals = {
     document: globalThis.document,
@@ -307,80 +310,88 @@ function cameraHarness(layer = alprCamerasLayer) {
         };
       },
     });
-  let box = { south: 30.26, west: -97.75, north: 30.28, east: -97.73 };
-  let source, click, picked;
-  const credits = new Set();
-  const viewer = {
-    creditDisplay: {
-      addStaticCredit: (credit) => credits.add(credit),
-      removeStaticCredit: (credit) => credits.delete(credit),
-    },
-    camera: {
-      moveEnd: new Cesium.Event(),
-      computeViewRectangle: () =>
-        box
-          ? Cesium.Rectangle.fromDegrees(
-              box.west,
-              box.south,
-              box.east,
-              box.north,
-            )
-          : null,
-    },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      postRender: new Cesium.Event(),
-      pick: () => picked,
-    },
-    dataSources: {
-      add: (value) => {
-        source = value;
-      },
-      remove() {},
-    },
+  const engine = createFakeEngine();
+  // The view: the ground point at the canvas centre and the camera straight
+  // above it.
+  const focus = (latitude, longitude, range) => {
+    if (latitude == null) {
+      engine.fake.script('pickEllipsoid', undefined);
+      return;
+    }
+    engine.fake.setPose({
+      latitude: geo.math.toRadians(latitude),
+      longitude: geo.math.toRadians(longitude),
+      height: range,
+      heading: 0,
+      pitch: -Math.PI / 2,
+      roll: 0,
+    });
+    engine.fake.script(
+      'pickEllipsoid',
+      geo.cartesian3.fromDegrees(longitude, latitude),
+    );
   };
-  const setInput = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
-  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (
-    fn,
-    type,
-    modifier,
-  ) {
-    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) click = fn;
-    return setInput.call(this, fn, type, modifier);
+  // The camera range whose nearby box (alprFocusBox) spans `box`.
+  const setBox = (box) => {
+    if (!box) return focus(null);
+    const east = box.east < box.west ? box.east + 360 : box.east;
+    const latitude = (box.south + box.north) / 2;
+    const longitude = (((box.west + east) / 2 + 540) % 360) - 180;
+    const halfSpan = Math.max(
+      (box.north - box.south) / 2,
+      ((east - box.west) / 2) * Math.cos(geo.math.toRadians(latitude)),
+    );
+    focus(latitude, longitude, (halfSpan * 111000) / 2);
   };
-  try {
-    layer.init(viewer);
-  } finally {
-    Cesium.ScreenSpaceEventHandler.prototype.setInputAction = setInput;
-  }
+  setBox({ south: 30.26, west: -97.75, north: 30.28, east: -97.73 });
+  let picked;
+  engine.fake.script('pick', () => picked);
+  const markerSet = () => engine.fake.moverSet('alpr-cameras');
+  const selectedSet = () => engine.fake.moverSet('alpr-selected');
+  const shownIds = () => {
+    const set = markerSet();
+    return set ? [...set.store.pickIds].slice(0, set.store.count) : [];
+  };
+  layer.init(null, { engine });
   layer.enable();
   return {
-    viewer,
+    engine,
     requests,
-    credits,
-    get source() {
-      return source;
-    },
+    credits: engine.fake.credits,
+    focus,
     setFetch(fn) {
       response = fn;
     },
-    setBox(value) {
-      box = value;
-    },
+    setBox,
     expire() {
       now += QUERY_REUSE_MS + 1;
     },
     advance(ms) {
       now += ms;
     },
-    click(id) {
-      const entity = typeof id === 'string' ? source.entities.getById(id) : id;
-      picked = entity ? { id: entity } : undefined;
-      click({ position: new Cesium.Cartesian2() });
+    /** The ids of the displayed badges, in draw order. */
+    shownIds,
+    /** A displayed camera's marker handle (its entity context). */
+    marker: (id) => getContextStore().entities.get(id)?.entity,
+    /** The size a camera's badge draws at (0 when hidden). */
+    badgeSize: (id) => {
+      const chosen = selectedSet()?.store;
+      if (chosen?.count && chosen.pickIds[0] === id && chosen.shows[0])
+        return selectedSet().options.sprite.sizePx;
+      const { store, options } = markerSet();
+      const index = shownIds().indexOf(id);
+      return index >= 0 && store.shows[index] ? options.sprite.sizePx : 0;
+    },
+    /** A click on a camera's badge (id) or on the map (null). */
+    click: (id) => {
+      picked =
+        typeof id === 'string'
+          ? { id, owner: 'alpr-cameras', instance: shownIds().indexOf(id) }
+          : undefined;
+      engine.fake.input('click', { position: { x: 1, y: 1 } });
     },
     restore() {
-      layer.destroy(viewer);
+      layer.destroy();
       Date.now = originals.now;
       for (const name of ['window', 'document', 'fetch']) {
         if (originals[name] === undefined) delete globalThis[name];
@@ -390,24 +401,32 @@ function cameraHarness(layer = alprCamerasLayer) {
   };
 }
 
+/** A renderer factory that keeps the display it made, for its markers. */
+function trackedDisplay() {
+  const made = { display: null };
+  made.factory = ({ engine, ...context }) =>
+    (made.display = createAlprDisplay(engine, context));
+  return made;
+}
+
 test('OSM attribution stays inline while ALPR displays and follows toggles', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = cameraHarness();
   try {
-    assert.equal(h.credits.size, 0);
+    assert.equal(h.credits.length, 0);
     await alprCamerasLayer.update();
-    assert.equal(h.credits.size, 1);
+    assert.equal(h.credits.length, 1);
     const [credit] = h.credits;
-    assert.equal(credit.showOnScreen, true);
+    assert.equal(credit.onScreen, true);
     assert.match(credit.html, />© OpenStreetMap</);
     assert.doesNotMatch(credit.html, /OpenMapTiles|Map and place data/);
     t.mock.timers.tick(6000);
-    assert.equal(h.credits.size, 1);
+    assert.equal(h.credits.length, 1);
     alprCamerasLayer.disable();
-    assert.equal(h.credits.size, 0);
+    assert.equal(h.credits.length, 0);
     alprCamerasLayer.enable();
     await alprCamerasLayer.update();
-    assert.equal(h.credits.size, 1);
+    assert.equal(h.credits.length, 1);
     assert.match(
       DATA_CREDITS.find((entry) => entry.key === 'openstreetmap').html,
       /OpenStreetMap contributors.*ODbL/,
@@ -440,15 +459,16 @@ test('all manufacturers share one ALPR title and color; only supplied metadata a
       ]),
     );
     await alprCamerasLayer.update();
-    const entities = h.source.entities.values;
+    const entities = h.shownIds().map(h.marker);
     assert.equal(alprCamerasLayer.name, 'ALPR Cameras');
     assert.deepEqual(
       entities.map((entity) => entity.gevLabelModel.title),
       ['ALPR-0042', 'ALPR-0043', 'ALPR-0044'],
     );
-    assert.equal(
-      new Set(entities.map((entity) => entity.billboard.image.getValue())).size,
-      1,
+    assert.deepEqual(
+      h.shownIds().map(h.badgeSize),
+      [38, 38, 38],
+      'one badge for every manufacturer',
     );
     assert.deepEqual(entities[0].gevLabelModel.details, [
       'OSM MAPPED',
@@ -486,7 +506,7 @@ test('the camera label stays English data in a translated interface', async () =
       ]),
     );
     await alprCamerasLayer.update();
-    h.click(h.source.entities.values[0].id);
+    h.click(h.shownIds()[0]);
     assert.equal(getSelectedEntityContext().label, 'ALPR camera');
     assert.equal(
       shownEntityLabel(getSelectedEntityContext().label),
@@ -523,10 +543,7 @@ test('clicking the selected camera or empty map deselects, including after refre
       h.expire();
       await alprCamerasLayer.update();
       assert.equal(getSelectedEntityContext(), null);
-      assert.equal(
-        h.source.entities.getById('alpr:42').billboard.width.getValue(),
-        38,
-      );
+      assert.equal(h.badgeSize('alpr:42'), 38);
     }
   } finally {
     h.restore();
@@ -582,10 +599,7 @@ test('disable removes contexts and highlight; cache reuse after re-enable does n
     alprCamerasLayer.enable();
     await alprCamerasLayer.update();
     assert.equal(getSelectedEntityContext(), null);
-    assert.equal(
-      h.source.entities.getById('alpr:42').billboard.width.getValue(),
-      38,
-    );
+    assert.equal(h.badgeSize('alpr:42'), 38);
   } finally {
     h.restore();
   }
@@ -674,7 +688,7 @@ test('duplicate nodes render once with a count that agrees with the entity set',
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'ready');
     assert.equal(alprCamerasLayer.getStats().count, 1);
-    assert.equal(h.source.entities.values.length, 1);
+    assert.equal(h.shownIds().length, 1);
   } finally {
     h.restore();
   }
@@ -690,7 +704,7 @@ test('zooming out hides local markers, releases selection and makes no unbounded
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
     assert.equal(alprCamerasLayer.getStats().count, 0);
     assert.equal(getSelectedEntityContext(), null);
-    assert.equal(h.source.entities.values.length, 0);
+    assert.equal(h.shownIds().length, 0);
     assert.equal(h.requests.length, 1);
   } finally {
     h.restore();
@@ -712,7 +726,7 @@ test('state, country and dateline views never request data; returning to the cit
       await alprCamerasLayer.update();
       assert.equal(h.requests.length, 0, 'fresh wide view must not query');
       assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
-      assert.equal(h.credits.size, 0, 'no data presentation has occurred');
+      assert.equal(h.credits.length, 0, 'no data presentation has occurred');
     }
     h.setBox(city);
     await alprCamerasLayer.update();
@@ -746,13 +760,11 @@ test('nearby camera moves reuse the snapped query but count and register only in
     );
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().count, 1);
-    h.setBox({ south: 30.26, west: -97.72, north: 30.28, east: -97.7 });
+    // Still inside the snapped query box (east of it at -97.70).
+    h.setBox({ south: 30.26, west: -97.722, north: 30.28, east: -97.702 });
     await alprCamerasLayer.update();
     assert.equal(h.requests.length, 1);
-    assert.deepEqual(
-      h.source.entities.values.map((e) => e.id),
-      ['alpr:43'],
-    );
+    assert.deepEqual(h.shownIds(), ['alpr:43']);
     assert.deepEqual([...getContextStore().entities.keys()], ['alpr:43']);
     h.expire();
     await alprCamerasLayer.update();
@@ -796,12 +808,15 @@ test('selected readout samples the rendered ground, not zero elevation or the di
   const h = cameraHarness();
   try {
     let samples = 0;
-    h.viewer.scene.sampleHeightSupported = true;
-    h.viewer.scene.sampleHeight = (point, excluded) => {
+    h.engine.fake.script('sampleHeight', (point, excluded) => {
       samples += 1;
-      assert.equal(excluded[0].id, 'alpr:42');
+      assert.deepEqual(
+        excluded.map((set) => set.id),
+        ['alpr-cameras', 'alpr-selected'],
+        'the badges are not the ground',
+      );
       return 187;
-    };
+    });
     h.setFetch(async () =>
       cameraResponse([
         cameraNode(42, {
@@ -811,25 +826,21 @@ test('selected readout samples the rendered ground, not zero elevation or the di
     );
     await alprCamerasLayer.update();
     h.click('alpr:42');
-    const entity = h.source.entities.getById('alpr:42');
-    const anchor = Cesium.Cartographic.fromCartesian(
-      entity.gevDisplayPosition(),
-    );
+    const entity = h.marker('alpr:42');
+    const anchor = geo.cartographic.fromCartesian(entity.gevDisplayPosition());
     assert.ok(Math.abs(anchor.height - 187) < 0.001);
-    assert.ok(
-      Math.abs(Cesium.Math.toDegrees(anchor.longitude) + 97.7431) < 1e-7,
-    );
+    assert.ok(Math.abs(geo.math.toDegrees(anchor.longitude) + 97.7431) < 1e-7);
     for (let i = 0; i < 60; i++) {
-      h.viewer.scene.postRender.raiseEvent();
+      h.engine.fake.frame();
       entity.gevDisplayPosition();
     }
     assert.equal(samples, 1, 'no per-frame raycasts');
     h.advance(1000);
-    h.viewer.scene.postRender.raiseEvent();
+    h.engine.fake.frame();
     assert.equal(samples, 2);
     h.click(null);
     h.advance(1000);
-    h.viewer.scene.postRender.raiseEvent();
+    h.engine.fake.frame();
     assert.equal(samples, 2, 'no terrain sampling without a selection');
   } finally {
     h.restore();
@@ -878,7 +889,9 @@ test('two factories keep their requests, records and destruction independent', a
     },
   };
   let resolveFirst, firstSignal;
+  const shownB = trackedDisplay();
   const first = createAlprCamerasLayer({
+    rendererFactory: trackedDisplay().factory,
     services,
     source: {
       fetch: (_box, signal) => {
@@ -890,6 +903,7 @@ test('two factories keep their requests, records and destruction independent', a
     },
   });
   const second = createAlprCamerasLayer({
+    rendererFactory: shownB.factory,
     services,
     source: {
       label: 'Test camera directory',
@@ -918,22 +932,24 @@ test('two factories keep their requests, records and destruction independent', a
     await pending;
     assert.equal(first.getStats().count, 0);
     assert.equal(second.getStats().count, 1);
-    assert.equal(b.source.entities.values[0].id, 'directory:99');
+    const [marker] = shownB.display.markers();
+    assert.equal(marker.id, 'directory:99');
     assert.equal(second.source, 'Test camera directory');
-    assert.ok(
-      b.source.entities.values[0].gevLabelModel.details.includes(
-        'Source: Test directory',
-      ),
+    assert.ok(marker.gevLabelModel.details.includes('Source: Test directory'));
+    assert.equal(a.engine.camera.moveEnd.numberOfListeners, 0);
+    assert.equal(a.engine.frames.preRender.numberOfListeners, 0);
+    assert.deepEqual(
+      a.engine.movers.list(),
+      [],
+      'the destroyed layer leaves no sets',
     );
-    assert.equal(a.viewer.camera.moveEnd.numberOfListeners, 0);
-    assert.equal(a.viewer.scene.postRender.numberOfListeners, 0);
   } finally {
     b.restore();
     a.restore();
   }
 });
 
-test('markers sit on the cached floor; unknown floors clamp only until they resolve', async () => {
+test('markers sit on the cached floor; unknown floors wait on the terrain until they resolve', async () => {
   // Ground clamping re-samples every marker whenever a photoreal tile streams
   // in; a whole-city view (about 1,000 cameras) stuttered while zooming.
   const floors = new Map([['30.2672', 150]]);
@@ -962,7 +978,9 @@ test('markers sit on the cached floor; unknown floors clamp only until they reso
       selectEntityContext() {},
     },
   };
+  const shown = trackedDisplay();
   const layer = createAlprCamerasLayer({
+    rendererFactory: shown.factory,
     services,
     source: {
       fetch: async () => ({
@@ -976,41 +994,38 @@ test('markers sit on the cached floor; unknown floors clamp only until they reso
     },
   });
   const h = cameraHarness(layer);
+  h.engine.fake.script('terrainHeight', 140);
+  const marker = (id) => shown.display.markers().find((m) => m.id === id);
+  const height = (m) => geo.cartographic.fromCartesian(m.position).height;
   try {
     await layer.update();
-    const known = h.source.entities.getById('directory:1');
-    const unknown = h.source.entities.getById('directory:2');
-    assert.equal(
-      known.billboard.heightReference.getValue(),
-      Cesium.HeightReference.NONE,
-    );
-    assert.ok(
-      Math.abs(
-        Cesium.Cartographic.fromCartesian(known.position.getValue()).height -
-          151.5,
-      ) < 0.01,
-    );
-    assert.equal(
-      unknown.billboard.heightReference.getValue(),
-      Cesium.HeightReference.CLAMP_TO_GROUND,
-    );
+    const known = marker('directory:1');
+    const unknown = marker('directory:2');
+    assert.equal(known.clamped, false);
+    assert.ok(Math.abs(height(known) - 151.5) < 0.01);
+    assert.equal(unknown.clamped, true);
+    assert.ok(Math.abs(height(unknown) - 141.5) < 0.01, 'on the terrain');
     assert.equal(resolveCalls, 1);
     releaseResolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(unknown.clamped, false);
+    assert.ok(Math.abs(height(unknown) - 161.5) < 0.01);
     assert.equal(
-      unknown.billboard.heightReference.getValue(),
-      Cesium.HeightReference.NONE,
-    );
-    assert.ok(
-      Math.abs(
-        Cesium.Cartographic.fromCartesian(unknown.position.getValue()).height -
-          161.5,
-      ) < 0.01,
-    );
-    assert.equal(
-      h.source.entities.getById('directory:2'),
+      marker('directory:2'),
       unknown,
       'placed in place, not rebuilt',
+    );
+    const { store } = h.engine.fake.moverSet('alpr-cameras');
+    const index = h.shownIds().indexOf('directory:2');
+    assert.ok(
+      Math.abs(
+        geo.cartographic.fromCartesian({
+          x: store.positions[index * 3],
+          y: store.positions[index * 3 + 1],
+          z: store.positions[index * 3 + 2],
+        }).height - 161.5,
+      ) < 0.01,
+      'and its badge with it',
     );
   } finally {
     h.restore();
@@ -1021,30 +1036,22 @@ test('loaded cameras outside the view say so instead of looking unloaded', async
   // Field review: "nearby" spans twice the camera-to-ground range, so a view
   // could hold cameras with none on screen and read as a failed load.
   const h = cameraHarness();
-  const project = Cesium.SceneTransforms.worldToWindowCoordinates;
   let inView = false;
-  Cesium.SceneTransforms.worldToWindowCoordinates = () =>
-    inView ? new Cesium.Cartesian2(100, 100) : new Cesium.Cartesian2(-500, 100);
+  h.engine.fake.script('worldToWindow', () =>
+    inView ? { x: 100, y: 100 } : { x: -500, y: 100 },
+  );
   try {
-    h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      -97.7431,
-      30.2672,
-      2000,
-    );
-    h.viewer.scene.canvas.clientWidth = 800;
-    h.viewer.scene.canvas.clientHeight = 600;
     await alprCamerasLayer.update();
     let stats = alprCamerasLayer.getStats();
     assert.equal(stats.onScreen, 0);
     assert.match(stats.countLabel, /1 nearby · 0 on screen/);
     assert.match(stats.loadingLabel, /None on screen/);
     inView = true;
-    h.viewer.camera.moveEnd.raiseEvent();
+    h.engine.camera.moveEnd.raiseEvent();
     stats = alprCamerasLayer.getStats();
     assert.equal(stats.onScreen, 1);
     assert.doesNotMatch(stats.loadingLabel, /None on screen/);
   } finally {
-    Cesium.SceneTransforms.worldToWindowCoordinates = project;
     h.restore();
   }
 });
@@ -1061,23 +1068,16 @@ test('orbit cache hits and metadata refreshes preserve marker geometry and selec
     );
     await alprCamerasLayer.update();
     h.click('alpr:42');
-    const entity = h.source.entities.getById('alpr:42');
-    const position = entity.position,
-      line = entity.polyline;
+    const entity = h.marker('alpr:42');
+    const position = entity.position;
     // Ground-clamped native wedges cost ~40 ms per frame for a downtown view;
     // bearings are painted by the overlay for the nearest cameras instead.
-    assert.equal(line, undefined);
-    assert.equal(entity.polygon, undefined);
+    assert.deepEqual(h.engine.lines.list(), [], 'no native wedge lines');
     let selections = 0,
-      clears = 0,
-      collectionChanges = 0;
+      clears = 0;
+    const revision = alprCamerasLayer.getStats().renderRevision;
     window.addEventListener('gev:entity-selected', () => selections++);
     window.addEventListener('gev:entity-selection-cleared', () => clears++);
-    h.source.entities.collectionChanged.addEventListener(
-      (_collection, added, removed) => {
-        collectionChanges += added.length + removed.length;
-      },
-    );
     h.setBox({ south: 30.261, west: -97.749, north: 30.279, east: -97.731 });
     await alprCamerasLayer.update();
     h.expire();
@@ -1093,32 +1093,32 @@ test('orbit cache hits and metadata refreshes preserve marker geometry and selec
       ]),
     );
     await alprCamerasLayer.update();
-    assert.equal(h.source.entities.getById('alpr:42'), entity);
+    assert.equal(h.marker('alpr:42'), entity);
     assert.equal(entity.position, position);
-    assert.equal(entity.polyline, line);
     assert.equal(
       getSelectedEntityContext().properties.operator,
       'Updated directory',
     );
     assert.equal(selections, 0);
     assert.equal(clears, 0);
-    assert.equal(collectionChanges, 0);
+    assert.equal(
+      alprCamerasLayer.getStats().renderRevision,
+      revision,
+      'no marker was added or removed',
+    );
     assert.equal(h.requests.length, 2, 'only expiry needs another request');
     h.expire();
     h.setFetch(async () => cameraResponse([cameraNode(42, { lon: -97.742 })]));
     await alprCamerasLayer.update();
-    assert.equal(h.source.entities.getById('alpr:42'), entity);
+    assert.equal(h.marker('alpr:42'), entity);
     assert.equal(
-      entity.polyline,
-      undefined,
+      entity.gevAlprWedge,
+      null,
       'removed direction must not persist',
     );
-    assert.ok(
-      Cesium.Cartesian3.equals(
-        entity.position.getValue(),
-        Cesium.Cartesian3.fromDegrees(-97.742, 30.2672),
-      ),
-    );
+    const moved = geo.cartographic.fromCartesian(entity.position);
+    assert.ok(Math.abs(geo.math.toDegrees(moved.longitude) + 97.742) < 1e-9);
+    assert.ok(Math.abs(geo.math.toDegrees(moved.latitude) - 30.2672) < 1e-9);
   } finally {
     h.restore();
   }
@@ -1155,47 +1155,37 @@ test('moves inside a pending query do not restart it; moving to another city can
     );
     resolve(cameraResponse([cameraNode(43, { lat: 51.495, lon: -0.13 })]));
     await second;
-    assert.deepEqual(
-      h.source.entities.values.map((e) => e.id),
-      ['alpr:43'],
-    );
+    assert.deepEqual(h.shownIds(), ['alpr:43']);
   } finally {
     h.restore();
   }
 });
 
-test('ground-centered orbits ignore horizon rectangles while sky, distant and dateline views stay bounded', async () => {
+test('the nearby box follows the ground under the view centre: horizon rectangles never matter, sky, distant and dateline views stay bounded', async () => {
   const h = cameraHarness();
-  const camera = h.viewer.camera;
-  const focus = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672);
-  h.viewer.scene.canvas.clientWidth = 1440;
-  h.viewer.scene.canvas.clientHeight = 900;
-  camera.pickEllipsoid = () => focus;
-  camera.positionWC = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 1200);
+  h.focus(30.2672, -97.7431, 1200);
   try {
     await alprCamerasLayer.update();
-    const entity = h.source.entities.getById('alpr:42');
+    const entity = h.marker('alpr:42');
     h.click('alpr:42');
-    for (const box of [null, { south: 31, west: -99, north: 36, east: -95 }]) {
-      h.setBox(box);
+    for (const rectangle of [
+      null,
+      { south: 0.54, west: -1.73, north: 0.63, east: -1.66 },
+    ]) {
+      h.engine.fake.script('viewRectangle', rectangle);
       await alprCamerasLayer.update();
-      assert.equal(h.source.entities.getById('alpr:42'), entity);
+      assert.equal(h.marker('alpr:42'), entity);
       assert.equal(getSelectedEntityContext().id, 'alpr:42');
       assert.equal(h.requests.length, 1);
     }
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      -97.7431,
-      30.2672,
-      800000,
-    );
+    h.focus(30.2672, -97.7431, 800000);
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
-    assert.equal(h.source.entities.values.length, 0);
-    camera.pickEllipsoid = () => undefined;
+    assert.equal(h.shownIds().length, 0);
+    h.focus(null);
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
-    camera.pickEllipsoid = () => Cesium.Cartesian3.fromDegrees(179.999, 0);
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(179.999, 0, 1200);
+    h.focus(0, 179.999, 1200);
     await alprCamerasLayer.update();
     assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
     assert.equal(h.requests.length, 1);
@@ -1206,47 +1196,52 @@ test('ground-centered orbits ignore horizon rectangles while sky, distant and da
 
 test('nearby count and discovery control frame a real loaded camera without fetching or stealing tracking', async () => {
   const h = cameraHarness();
-  const flights = [];
-  h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-    -97.7431,
-    30.2672,
-    600,
-  );
-  h.viewer.camera.flyToBoundingSphere = (sphere, options) =>
-    flights.push({ sphere, options });
-  h.viewer.scene.globe.show = true;
-  h.viewer.scene.globe.getHeight = () => 312;
+  h.focus(30.2672, -97.7431, 600);
+  const flights = () =>
+    h.engine.fake
+      .callsOf('camera.flyToSphere')
+      .map(({ args: [sphere, options] }) => ({ sphere, options }));
+  // A keyless basemap: no rendered tiles under the camera, the globe's terrain.
+  h.engine.fake.script('terrainHeight', 312);
   try {
     assert.equal(alprCamerasLayer.getRowControls().chips[0].disabled, true);
     await alprCamerasLayer.update();
-    assert.equal(alprCamerasLayer.getStats().countLabel, '1 nearby');
+    assert.equal(
+      alprCamerasLayer.getStats().countLabel,
+      '1 nearby · 1 on screen',
+    );
     const controls = alprCamerasLayer.getRowControls();
     assert.equal(controls.legend[0].label, 'Camera badges');
     assert.equal(controls.chips[0].onClick(), true);
-    assert.equal(flights.length, 1);
+    assert.equal(flights().length, 1);
     assert.equal(getSelectedEntityContext().id, 'alpr:42');
-    const center = Cesium.Cartographic.fromCartesian(flights[0].sphere.center);
-    assert.ok(
-      Math.abs(Cesium.Math.toDegrees(center.latitude) - 30.2672) < 1e-9,
-    );
+    const [flight] = flights();
+    const center = geo.cartographic.fromCartesian(flight.sphere.center);
+    assert.ok(Math.abs(geo.math.toDegrees(center.latitude) - 30.2672) < 1e-9);
     assert.ok(
       Math.abs(center.height - 312) < 1e-6,
       'use the rendered globe floor on keyless basemaps',
     );
-    assert.equal(flights[0].options.offset.range, 800);
+    assert.equal(flight.sphere.radius, 30);
+    assert.equal(flight.options.range, 800);
+    assert.equal(flight.options.pitch, -Math.PI / 4);
+    assert.equal(flight.options.duration, 1.2);
     assert.equal(h.requests.length, 1);
-    h.viewer.trackedEntity = {};
+    const follow = h.engine.camera.follow({
+      position: () => geo.cartesian3.fromDegrees(-97.7, 30.2, 3000),
+      viewFrom: { x: 0, y: -500, z: 300 },
+    });
     assert.equal(alprCamerasLayer.getRowControls().chips[0].disabled, true);
     assert.equal(
       controls.chips[0].onClick(),
       false,
       'a stale button cannot steal the follow camera',
     );
-    h.viewer.trackedEntity = undefined;
+    follow.stop();
     alprCamerasLayer.disable();
     assert.equal(alprCamerasLayer.getStats().countLabel, '');
     assert.equal(controls.chips[0].onClick(), false);
-    assert.equal(flights.length, 1);
+    assert.equal(flights().length, 1);
   } finally {
     h.restore();
   }
@@ -1296,6 +1291,11 @@ test('unsupported ALPR coverage suppresses the nearby count and names the extrac
 import { createGroundFloor } from '../services/groundFloor.js';
 import { createTerrainHeights } from '../services/terrainHeights.js';
 import { createApplicationRequestServices } from '../services/requests.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 test('slow ALPR floors share real terrain requests across preparation, render and pans; disable aborts', async () => {
   const requests = [];
@@ -1329,7 +1329,9 @@ test('slow ALPR floors share real terrain requests across preparation, render an
     latitude: 30.261 + Math.floor(i / 15) * 0.001,
     longitude: -97.749 + (i % 15) * 0.001,
   }));
+  const shown = trackedDisplay();
   const layer = createAlprCamerasLayer({
+    rendererFactory: shown.factory,
     source: {
       fetch: async () => ({ records, stale: false, saturated: false }),
     },
@@ -1385,7 +1387,7 @@ test('slow ALPR floors share real terrain requests across preparation, render an
     requests[1].release();
     await new Promise((done) => setTimeout(done, 0));
     assert.equal(requests.length, 2, 'queued final cells are discarded');
-    assert.equal(h.source.entities.values.length, 0);
+    assert.equal(shown.display.markers().length, 0);
     layer.enable();
     await layer.update();
     assert.equal(
@@ -1404,7 +1406,7 @@ test('slow ALPR floors share real terrain requests across preparation, render an
   }
 });
 
-test('map-source changes reposition all ALPR entities and saved native appearances in place', async () => {
+test('map-source changes reposition every ALPR marker in place and return canvas-owned badges at the new floor', async () => {
   let floor = 180;
   let listener;
   let removed = 0;
@@ -1414,7 +1416,9 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
     longitude: -97.7431,
     directionDeg: i === 0 ? null : 90,
   }));
+  const shown = trackedDisplay();
   const layer = createAlprCamerasLayer({
+    rendererFactory: shown.factory,
     source: {
       fetch: async () => ({ records, stale: false, saturated: false }),
     },
@@ -1440,42 +1444,48 @@ test('map-source changes reposition all ALPR entities and saved native appearanc
     },
   });
   const h = cameraHarness(layer);
+  h.engine.fake.script('terrainHeight', 90);
+  const drawnHeight = (marker) => {
+    const { positions } = h.engine.fake.moverSet('alpr-cameras').store;
+    const at = marker.index * 3;
+    return geo.cartographic.fromCartesian({
+      x: positions[at],
+      y: positions[at + 1],
+      z: positions[at + 2],
+    }).height;
+  };
   try {
     await layer.update();
-    const entities = [...h.source.entities.values];
-    const saved = entities[1];
-    saved.gevAlprNativeAppearance = {
-      position: saved.position,
-      heightReference: saved.billboard.heightReference,
-    };
-    saved.position = Cesium.Cartesian3.fromDegrees(-97.7431, 30.26721, 190);
-    saved.gevAlprPickPosition = saved.position;
+    const markers = shown.display.markers();
+    // The overlay owns one badge: a pick target at its canvas anchor.
+    const owned = markers[1];
+    owned.gevAlprCanvasPosition = geo.cartesian3.fromDegrees(
+      -97.7431,
+      30.26721,
+      190,
+    );
+    owned.canvasOwned = true;
+    owned.drawn = null;
     for (const next of [150, 120, null, 180]) {
       floor = next;
-      // Includes a provider switch with the same globe.show value.
-      h.viewer.scene.globe.show = next !== 180;
       listener({ detail: { status: 'ready' } });
-      for (const entity of entities) {
-        assert.equal(h.source.entities.getById(entity.id), entity);
+      h.engine.fake.frame();
+      const expected = (next ?? 90) + 1.5;
+      assert.deepEqual(shown.display.markers(), markers, 'no marker rebuilt');
+      for (const marker of markers) {
         assert.ok(
           Math.abs(
-            Cesium.Cartographic.fromCartesian(entity.position.getValue())
-              .height - (next == null ? 0 : next + 1.5),
+            geo.cartographic.fromCartesian(marker.position).height - expected,
           ) < 0.01,
-          `${entity.id} refreshes at ${next}`,
+          `${marker.id} refreshes at ${next}`,
         );
-        assert.equal(
-          entity.billboard.heightReference.getValue(),
-          next == null
-            ? Cesium.HeightReference.CLAMP_TO_GROUND
-            : Cesium.HeightReference.NONE,
-        );
-        assert.equal(entity.gevAlprCanvasPosition, null);
+        assert.equal(marker.clamped, next == null);
+        assert.equal(marker.gevAlprCanvasPosition, null);
       }
-      assert.equal(
-        saved.gevAlprNativeAppearance,
-        null,
-        'saved appearance restores at the new floor',
+      assert.equal(owned.canvasOwned, false);
+      assert.ok(
+        Math.abs(drawnHeight(owned) - expected) < 0.01,
+        'the owned badge returns to its own place at the new floor',
       );
     }
   } finally {
@@ -1488,7 +1498,7 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
   const h = cameraHarness();
   try {
     await alprCamerasLayer.update();
-    const previous = h.source.entities.getById('alpr:42');
+    const previous = h.marker('alpr:42');
     const revision = alprCamerasLayer.getStats().renderRevision;
     let release;
     h.setFetch(
@@ -1501,7 +1511,7 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
     const pending = alprCamerasLayer.update();
     await alprCamerasLayer.update();
     assert.equal(
-      h.source.entities.getById('alpr:42'),
+      h.marker('alpr:42'),
       previous,
       'do not show an intermediate filtered snapshot while the new query prepares',
     );
@@ -1510,10 +1520,7 @@ test('a repeated move inside an outstanding query keeps the displayed marker set
     release(cameraResponse([cameraNode(43, { lat: 31.01, lon: -97.99 })]));
     await pending;
     assert.equal(alprCamerasLayer.getStats().renderRevision, revision + 1);
-    assert.deepEqual(
-      h.source.entities.values.map((e) => e.id),
-      ['alpr:43'],
-    );
+    assert.deepEqual(h.shownIds(), ['alpr:43']);
   } finally {
     h.restore();
   }

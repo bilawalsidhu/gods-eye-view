@@ -39,10 +39,39 @@ export const MILITARY_DETECTION_PRESET = Object.freeze({
   densityPct: 75,
 });
 
+/** The Sharpen slider's default (%) on each globe engine. */
+export const SHARPEN_INTENSITY_DEFAULTS = Object.freeze({
+  cesium: 49,
+  navara: 80,
+});
+
+/**
+ * A preset's sharpen intensity that means "the engine's default"
+ * (SHARPEN_INTENSITY_DEFAULTS): the baseline and every style preset use it,
+ * so Cesium opens and switches styles at 49 % and Navara at 80 %.
+ */
+export const ENGINE_SHARPEN_DEFAULT = 'engine-default';
+
+/**
+ * The intensity (%) a preset sets on an engine: its engine's default for
+ * ENGINE_SHARPEN_DEFAULT (Cesium's for an unknown engine), else the explicit
+ * value as given. Share links and scene shots carry explicit values and do
+ * not come through here.
+ */
+export function presetSharpenIntensity(intensity, engineKind) {
+  if (intensity !== ENGINE_SHARPEN_DEFAULT) return intensity;
+  return (
+    SHARPEN_INTENSITY_DEFAULTS[engineKind] ?? SHARPEN_INTENSITY_DEFAULTS.cesium
+  );
+}
+
+/** The unsharp mask's `amount` for a slider value normalized to 0..1. */
+export const sharpenAmount = (value) => 0.1 + value * 2.0;
+
 /** Baseline post-processing settings applied on first load (before share-link restore). */
 export const GLOBAL_POST_DEFAULTS = {
   bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-  sharpen: { enabled: true, intensity: 49 },
+  sharpen: { enabled: true, intensity: ENGINE_SHARPEN_DEFAULT },
   hudVariant: 'tactical',
   hudVisible: true,
   // Detection is ON for EVERY style on a first run, Normal included (owner
@@ -68,7 +97,7 @@ export const GLOBAL_POST_DEFAULTS = {
 export const STYLE_PRESET_DEFAULTS = {
   retro: {
     bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-    sharpen: { enabled: true, intensity: 49 },
+    sharpen: { enabled: true, intensity: ENGINE_SHARPEN_DEFAULT },
     styleParams: {
       retro: {
         pixelation: 1.0,
@@ -82,7 +111,7 @@ export const STYLE_PRESET_DEFAULTS = {
   },
   surveillance: {
     bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-    sharpen: { enabled: true, intensity: 49 },
+    sharpen: { enabled: true, intensity: ENGINE_SHARPEN_DEFAULT },
     styleParams: {
       surveillance: {
         gain: 0.18,
@@ -97,7 +126,7 @@ export const STYLE_PRESET_DEFAULTS = {
   },
   thermal: {
     bloom: { enabled: false, intensity: BLOOM_INTENSITY_DEFAULT },
-    sharpen: { enabled: true, intensity: 49 },
+    sharpen: { enabled: true, intensity: ENGINE_SHARPEN_DEFAULT },
     styleParams: {
       thermal: {
         sensitivity: 0.85,

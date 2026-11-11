@@ -6,6 +6,7 @@ import { setLocale, t } from '../../i18n/index.js';
 import { layerNameForId, localizeLayerName } from '../../ui/layerNames.js';
 import { LayerPanel } from '../../ui/layerPanel.js';
 import { translateFeedError } from '../../ui/statusText.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createAirQualityLayer } from './index.js';
 
 function inLocale(locale, run) {
@@ -22,9 +23,8 @@ function harness(source) {
     source,
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  const viewer = { dataSources: { add() {}, remove() {} } };
-  layer.init(viewer);
-  layer.enable(viewer);
+  layer.init(null, { engine: createFakeEngine() });
+  layer.enable();
   return layer;
 }
 

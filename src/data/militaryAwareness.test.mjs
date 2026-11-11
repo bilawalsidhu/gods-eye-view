@@ -1,9 +1,65 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import militaryAwarenessLayer, {
+import { createAwarenessLayer, AWARENESS_QUERY_LIMIT } from '../layers/awareness/index.js';
+import * as navigation from '../navigationPolicy.js';
+import * as geometry from '../celestialRing.js';
+import * as render from '../renderGovernor.js';
+import flightsLayer, {
+  _setTrackedFlightRefreshStateForTest,
+} from './flights.js';
+import militaryFlightsLayer, {
+  _setTrackedMilitaryRefreshStateForTest,
+} from './militaryFlights.js';
+import aisLiveVesselsLayer, {
+  _setVesselStateForTest,
+} from './aisLiveVessels.js';
+import militaryInstallationsLayer from './militaryInstallations.js';
+import {
+  getRenderGovernorDiagnostics,
+  renderGovernorFor,
+} from '../renderGovernor.js';
+import {
+  AWARENESS_RADIUS_M,
+  formatAwarenessLabel,
+  getAwarenessNavigationTargets,
+} from './militaryAwarenessEngine.js';
+import {
+  formatAwarenessCount,
+  presentAwarenessDistance,
+} from '../layers/awareness/panel.js';
+import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
+
+const createTestDisplay = (engine) => {
+    const { viewer } = engine;
+    return {
+    engine,
+    container: viewer.container,
+    canvas: viewer.canvas,
+    get camera() {
+      return viewer.camera;
+    },
+    get trackedEntity() {
+      return viewer.trackedEntity;
+    },
+    cameraHeight: () => viewer.camera?.positionCartographic?.height ?? NaN,
+    onFrame: (run) => viewer.scene.preRender.addEventListener(run),
+    onFrameEnd: () => () => {},
+    frameContact: (center, radius, duration) =>
+      viewer.camera.flyToBoundingSphere({ center, radius }, { duration }),
+    createRim: () => ({ move() {}, setAlpha() {}, destroy() {} }),
+    createPulses: () => null,
+  };
+};
+const militaryAwarenessLayer = createAwarenessLayer({ services: {
+  flights: flightsLayer, military: militaryFlightsLayer, vessels: aisLiveVesselsLayer,
+  installations: militaryInstallationsLayer, navigation, geometry, render, renderer: createTestDisplay,
+} });
+const {
   _getAwarenessNavigationStateForTest,
   _getAwarenessPanelRendersForTest,
   awarenessClearMatchesSubject,
@@ -18,34 +74,20 @@ import militaryAwarenessLayer, {
   contextTargetFlyToAllowed,
   summarizeInstallationViewport,
   findCompatibleHistoryIndex,
-  AWARENESS_QUERY_LIMIT,
   historySubjectSnapshot,
-} from './militaryAwareness.js';
-import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
-} from './flights.js';
-import militaryFlightsLayer, {
-  _setTrackedMilitaryRefreshStateForTest,
-} from './militaryFlights.js';
-import aisLiveVesselsLayer, {
-  _setVesselStateForTest,
-} from './aisLiveVessels.js';
-import militaryInstallationsLayer from './militaryInstallations.js';
-import {
-  _resetRenderGovernorForTest,
-  getRenderGovernorDiagnostics,
-  installRenderGovernor,
-} from '../renderGovernor.js';
-import {
-  AWARENESS_RADIUS_M,
-  formatAwarenessLabel,
-  getAwarenessNavigationTargets,
-} from './militaryAwarenessEngine.js';
-import {
-  formatAwarenessCount,
-  presentAwarenessDistance,
-} from '../layers/awareness/panel.js';
-import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
+} = militaryAwarenessLayer;
+const viewerEngines = new WeakMap();
+const viewerEngine = (viewer) => {
+  if (!viewerEngines.has(viewer)) {
+    const engine = createFakeEngine();
+    engine.viewer = viewer;
+    engine.render.request = () => viewer.scene.requestRender?.();
+    engine.render.setContinuous = (enabled) => { viewer.scene.requestRenderMode = !enabled; };
+    engine.render.isContinuous = () => viewer.scene.requestRenderMode === false;
+    viewerEngines.set(viewer, engine);
+  }
+  return viewerEngines.get(viewer);
+};
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -219,7 +261,7 @@ function installAwarenessRuntime({
     ...(subscribe ? { subscribe } : {}),
   });
   militaryAwarenessLayer.setParams({ passive: true });
-  militaryAwarenessLayer.init(viewer);
+  militaryAwarenessLayer.init(viewer, { engine: viewerEngine(viewer) });
   const panelViews = [];
   const unsubscribePanel = militaryAwarenessLayer.subscribePanel((view) =>
     panelViews.push(view),
@@ -938,6 +980,9 @@ test('Contacts activation adopts the production military tracked-subject descrip
 
   try {
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1020,6 +1065,9 @@ test('Contacts activation adopts the production military tracked-subject descrip
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1047,6 +1095,9 @@ test('production military tracked-subject label falls back to registration befor
 
   try {
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1100,6 +1151,9 @@ test('production military tracked-subject label falls back to registration befor
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1141,6 +1195,9 @@ test('the tracked airliner’s photo reaches the Contacts panel when it lands af
 
   try {
     _setTrackedFlightRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+        fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+      }),
       icao24: id,
       entity: null,
       billboard: { position, color: Cesium.Color.WHITE, show: true },
@@ -1192,6 +1249,9 @@ test('the tracked airliner’s photo reaches the Contacts panel when it lands af
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedFlightRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+        fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+      }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1232,6 +1292,9 @@ test('a cached Context subject re-reads its label when enrichment lands after se
 
   try {
     _setTrackedFlightRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, color: Cesium.Color.WHITE, show: true },
@@ -1320,6 +1383,9 @@ test('a cached Context subject re-reads its label when enrichment lands after se
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedFlightRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1342,6 +1408,9 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
 
   try {
     _setTrackedFlightRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1431,6 +1500,9 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
   } finally {
     restores.reverse().forEach((restore) => restore());
     _setTrackedFlightRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: id,
       entity: null,
       billboard: { position, show: true },
@@ -1794,21 +1866,13 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   // disable() hides the collection but keeps the records, so a map lookup
   // alone would report a preserved subject as FRESH from hidden stale data.
   for (const [name, source, guard] of [
-    [
-      'flights',
-      readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'militaryFlights',
-      readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'aisLiveVessels',
-      readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*id,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byId\s*\|\|\s*state\.records\.byId\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
+    // Both aircraft layers answer from enabled observation models.
+    ['flights', readLayerSource(new URL('./flights.js', import.meta.url)),
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*if\s*\(\s*!flightState\.enabled\s*\|\|\s*flightState\.records\.data\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+    ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*if\s*\(\s*!flightState\.enabled\s*\|\|\s*flightState\.records\.data\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+    ['aisLiveVessels', readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
+      /hasContact\(\s*id,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byId\s*\|\|\s*state\.records\.byId\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
   ]) {
     assert.match(
       source,
@@ -2126,18 +2190,6 @@ test('cockpit blocks only non-aircraft Context camera flights', () => {
     }),
     true,
   );
-});
-
-test('vessel entry and selection framing both use the 3 km focus radius', () => {
-  assert.match(
-    militaryAwarenessSource,
-    /const\s*VESSEL_FOCUS_RADIUS_M\s*=\s*3000;/,
-  );
-  const focusRadiusUses =
-    militaryAwarenessSource.match(
-      /new\s*Cesium\.BoundingSphere\(\s*vessel\.position,\s*VESSEL_FOCUS_RADIUS_M,?\s*\)/g,
-    ) || [];
-  assert.equal(focusRadiusUses.length, 2);
 });
 
 test('awareness rescans only for invalidation, source change, or meaningful movement', () => {
@@ -3225,6 +3277,7 @@ test('every Context camera flight without a tracked entity takes navigation auth
     assert.deepEqual(taken, ['context-vessel-focus']);
     // The announcement precedes the flight, never trails it.
     assert.equal(runtime.cameraFlights.length, 1);
+    assert.equal(runtime.cameraFlights[0].sphere.radius, 3000);
 
     militaryAwarenessLayer.focusTarget('military-installations', 'inst-1');
     assert.deepEqual(taken, [
@@ -3263,6 +3316,7 @@ test('Contacts vessel autofocus takes navigation authority before it frames', as
     // Activation enables dependencies before it auto-focuses.
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(runtime.cameraFlights.length, 1, 'autofocus framed a vessel');
+    assert.equal(runtime.cameraFlights[0].sphere.radius, 3000);
     assert.deepEqual(taken, [
       {
         reason: 'context-vessel-autofocus',
@@ -3842,7 +3896,7 @@ test('runtime listeners exist only while the awareness layer is enabled', () => 
 
   try {
     militaryAwarenessLayer.setParams({ passive: true });
-    militaryAwarenessLayer.init(viewer);
+    militaryAwarenessLayer.init(viewer, { engine: viewerEngine(viewer) });
     assert.equal(
       [...listeners.values()].reduce((count, set) => count + set.size, 0),
       0,
@@ -3991,13 +4045,12 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
       { icao24: 'neighbour-flight', position: neighbour, distanceM: 4000 },
     ],
   });
-  _resetRenderGovernorForTest();
   const runtime = installAwarenessRuntime();
-  const holds = () => getRenderGovernorDiagnostics().holds;
+  const holds = () => getRenderGovernorDiagnostics(viewerEngine(runtime.viewer)).holds;
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
+    renderGovernorFor(viewerEngine(runtime.viewer)).install();
     runtime.viewer.camera = {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
@@ -4072,7 +4125,6 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
     Date.now = realNow;
     runtime.restore();
     restoreCollections();
-    _resetRenderGovernorForTest();
   }
 });
 
@@ -4127,13 +4179,12 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
   // Every dependency reports unavailable, so every cohort summarizes to count
   // null — the exact state the old Boolean(state.results) gate still held for.
   const restoreCollections = stubAwarenessCollections({});
-  _resetRenderGovernorForTest();
   const runtime = installAwarenessRuntime({ isEnabled: () => false });
-  const holds = () => getRenderGovernorDiagnostics().holds;
+  const holds = () => getRenderGovernorDiagnostics(viewerEngine(runtime.viewer)).holds;
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
+    renderGovernorFor(viewerEngine(runtime.viewer)).install();
     runtime.viewer.camera = {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
@@ -4165,7 +4216,6 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
     Date.now = realNow;
     runtime.restore();
     restoreCollections();
-    _resetRenderGovernorForTest();
   }
 });
 

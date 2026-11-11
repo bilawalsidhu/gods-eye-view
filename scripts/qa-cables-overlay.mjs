@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// Cesium-only probes: native DataSource counts and scene-render timing measure the Cesium cable adapter.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { measureIdleRender } from './qa/idle.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /**
  * qa-cables-overlay — submarine-cable label path measurement + contract gate.
  *
@@ -8,10 +13,11 @@
  *       a. per-frame `scene.render` cost over a ~10 s driven-orbit window
  *          (mean / p50 / p95 / max — relative numbers, SwiftShader surface),
  *       b. toggle-ON → first-labels-visible latency,
- *       c. entity / native-label / host-entry counts,
+ *       c. contract set (ground paths, mover tips, stems) / host-entry counts,
  *       d. parked-idle postRender fires over 5 s (render-governor honesty).
  *  2. GATE (unified build only): assert the migration contract —
- *       zero native `LabelGraphics` on cable reference entities, host entries
+ *       no layer-owned Cesium data source (paths, pins and tips are globe
+ *       contract sets), host entries
  *       present for the source, idle stays near-zero, and a clean OFF→ON cycle
  *       (no orphan host entries after disable).
  *
@@ -19,7 +25,6 @@
  * Requires a running dev server. Headless; rAF throttling disabled so the
  * frame clock is honest (hidden-pane gotcha).
  */
-import puppeteer from 'puppeteer';
 
 const argv = process.argv;
 const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4214';
@@ -39,35 +44,26 @@ function report(name, detail) {
   console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
 }
 
-const browser = await puppeteer.launch({
-  headless: 'new',
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--window-size=1440,900',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-    '--disable-background-timer-throttling',
-  ],
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
 });
 
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
-  await new Promise((r) => setTimeout(r, 12_000)); // boot flyTo + deferred init
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, { timeout: 90_000 });
+  await whenSettled(page); // boot flyTo + deferred init
 
   // Park mid-Atlantic (many cables + both coasts' landings in range) and
   // disable every layer so the cables layer is measured in isolation.
-  await page.evaluate(async () => {
+  await evaluateWithGeo(page, async (qaGeo) => {
     const gev = window.__godsEyeView;
-    const v = gev.viewer;
-    v.camera.cancelFlight();
-    const ell = v.scene.globe.ellipsoid;
-    v.camera.setView({
-      destination: ell.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: -40 * Math.PI / 180, latitude: 35 * Math.PI / 180, height: 4_500_000,
       }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -76,7 +72,7 @@ try {
       if (entry.enabled) { try { await gev.dataManager.setEnabled(id, false, { origin: 'user' }); } catch { /* measured via counts */ } }
     }
   });
-  await new Promise((r) => setTimeout(r, 6_000)); // tiles + fades settle
+  await whenSettled(page); // tiles + fades settle
 
   // ── b. toggle-ON → labels visible ─────────────────────────────────────
   if (!control) {
@@ -95,45 +91,58 @@ try {
       };
       while (performance.now() < deadline) {
         if (labelsUp()) return { ms: Math.round(performance.now() - t0), timedOut: false };
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
         await new Promise((r) => setTimeout(r, 100));
       }
       return { ms: 60_000, timedOut: true };
     }, LAYER_ID, legacy);
     report('toggle-ON -> labels visible (ms)', labelLatency);
     check('labels became visible after enable', labelLatency.timedOut === false, labelLatency);
-    await new Promise((r) => setTimeout(r, 3_000)); // let load/labels settle
+    await whenSettled(page); // let load/labels settle
   }
 
-  // ── c. entity / label / host counts ───────────────────────────────────
-  const counts = await page.evaluate((layerId) => {
+  // ── c. drawn-set / label / host counts ────────────────────────────────
+  // The layer draws through the globe contract (render/display.js): cable
+  // paths in one engine.ground corridor set, landing points and reference
+  // tips in mover sets, stems in engine.lines, labels on the world-overlay
+  // host. It owns no Cesium DataSource or Entity any more.
+  const counts = await page.evaluate((layerId, legacy) => {
     const gev = window.__godsEyeView;
     const v = gev.viewer;
+    const engine = gev.engine;
     const out = {
-      dataSources: {}, nativeLabels: 0, dynamicPositionEntities: 0,
-      referenceEntities: 0, hostEntries: 0, hostPainted: 0,
+      layerDataSources: 0, layerEntities: 0,
+      pathSets: 0, pathItems: 0, markers: 0, tipSets: 0, tips: 0, stems: 0,
+      hostEntries: 0, hostPainted: 0,
     };
-    for (let i = 0; i < v.dataSources.length; i++) {
+    for (let i = 0; i < (v?.dataSources?.length ?? 0); i++) {
       const ds = v.dataSources.get(i);
       if (!/TeleGeography/.test(ds.name || '')) continue;
-      const list = ds.entities.values;
-      out.dataSources[ds.name] = list.length;
-      for (const e of list) {
-        if (e.label !== undefined) out.nativeLabels++;
-        if (e.position && e.position.isConstant === false) out.dynamicPositionEntities++;
-        if (e.polyline?.positions && e.polyline.positions.isConstant === false) {
-          out.dynamicPositionEntities++;
-        }
-      }
-      if (/References/.test(ds.name)) out.referenceEntities = list.length;
+      out.layerDataSources++;
+      out.layerEntities += ds.entities.values.length;
     }
+    if (legacy) return out;
+    for (const set of engine.ground.list()) {
+      if (set.id !== `${layerId}-paths`) continue;
+      out.pathSets++;
+      out.pathItems += set.count;
+    }
+    for (const set of engine.movers.list()) {
+      if (set.id === `${layerId}-markers`) out.markers += set.count;
+      else if (set.id.startsWith(`${layerId}-`) && set.id.endsWith('-tips')) {
+        out.tipSets++;
+        out.tips += set.count;
+      }
+    }
+    out.stems = (engine.lines.list().find((line) =>
+      line.id === `${layerId}-stems` && line.shown)?.points ?? 0) / 2;
     const diag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
     out.hostEntries = diag.entriesBySource?.[layerId] || 0;
     out.hostPainted = diag.paintedBySource?.[layerId] || 0;
     const stats = gev.dataManager.layers.get(layerId)?.module?.getStats?.() || {};
     out.referenceLabelCount = stats.referenceLabelCount ?? null;
     return out;
-  }, LAYER_ID);
+  }, LAYER_ID, legacy);
   report(control ? 'counts (control, cables OFF)' : 'counts with cables ON', counts);
 
   // ── a. per-frame scene.render cost over a ~10 s driven orbit ─────────
@@ -176,21 +185,18 @@ try {
     : 'scene.render cost, cables ON, 10s orbit', frameCost);
 
   // ── d. parked idle honesty (labels must not force continuous render) ──
-  await new Promise((r) => setTimeout(r, 4_000)); // orbit stop + fades settle
-  const idle = await page.evaluate(() => new Promise((resolve) => {
-    const scene = window.__godsEyeView.viewer.scene;
-    let renders = 0;
-    const remove = scene.postRender.addEventListener(() => { renders += 1; });
-    setTimeout(() => { remove(); resolve({ renders }); }, 5_000);
-  }));
+  await whenSettled(page);
+  const idle = await measureIdleRender(page);
   report(control
     ? 'parked idle, control (postRender fires / 5s)'
     : 'parked idle with cables ON (postRender fires / 5s)', idle);
 
   if (!legacy && !control) {
     // ── unified-build contract gates ────────────────────────────────────
-    check('zero native LabelGraphics on cable entities', counts.nativeLabels === 0, counts.nativeLabels);
-    check('zero per-frame CallbackProperty cable entities', counts.dynamicPositionEntities === 0, counts.dynamicPositionEntities);
+    // Paths, pins and tips belong to contract sets; labels belong to the host.
+    check('no layer-owned Cesium data source or entities', counts.layerDataSources === 0 && counts.layerEntities === 0, counts);
+    check('cable paths drawn as an engine.ground corridor set', counts.pathSets === 1 && counts.pathItems > 0, counts);
+    check('reference tips drawn as mover sets', counts.tipSets > 0 && counts.tips > 0, counts);
     check('host has cable entries', counts.hostEntries > 0, counts.hostEntries);
     check('host painted cable labels', counts.hostPainted > 0, counts.hostPainted);
     // The cables source never republishes an unchanged cohort (unit pin), and
@@ -208,7 +214,7 @@ try {
     const cycle = await page.evaluate(async (layerId) => {
       const gev = window.__godsEyeView;
       await gev.dataManager.setEnabled(layerId, false, { origin: 'user' });
-      gev.viewer.scene.requestRender?.();
+      window.__godsEyeView.engine.render.request?.();
       await new Promise((r) => setTimeout(r, 1_200));
       const offDiag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
       const offEntries = offDiag.entriesBySource?.[layerId] || 0;
@@ -220,7 +226,7 @@ try {
         const diag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
         onPainted = diag.paintedBySource?.[layerId] || 0;
         if (onPainted > 0) break;
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
         await new Promise((r) => setTimeout(r, 100));
       }
       return { offEntries, offPainted, onPainted };
@@ -229,7 +235,7 @@ try {
     check('re-enable restores painted labels', cycle.onPainted > 0, cycle);
   }
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 const passed = results.filter((r) => r.pass).length;

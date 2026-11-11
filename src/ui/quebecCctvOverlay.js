@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../data/iconOrientation.js';
+import * as geo from '../geo/index.js';
 import { t } from '../i18n/index.js';
 
 function isQuebecCamera(camera) {
@@ -72,8 +71,8 @@ function mediaRefreshUrl(value) {
  * for that camera; selecting it (by click, auto-hop, a scene or voice) only
  * shows its details and the play control.
  */
-export function createQuebecCctvOverlay(viewer) {
-  if (!viewer?.scene || typeof document === 'undefined') return null;
+export function createQuebecCctvOverlay(engine) {
+  if (!engine || typeof document === 'undefined') return null;
 
   const controller = new AbortController();
   const { signal } = controller;
@@ -170,7 +169,7 @@ export function createQuebecCctvOverlay(viewer) {
 
   function startRender() {
     if (!removeRender)
-      removeRender = viewer.scene.postRender.addEventListener(updateMarker);
+      removeRender = engine.frames.postRender.addEventListener(updateMarker);
   }
 
   function stopRender() {
@@ -249,7 +248,7 @@ export function createQuebecCctvOverlay(viewer) {
     if (changed || reselected) closedWindowCameraId = null;
     selected = camera;
     startRender();
-    selectedPosition = Cesium.Cartesian3.fromDegrees(
+    selectedPosition = geo.cartesian3.fromDegrees(
       Number(camera.lon),
       Number(camera.lat),
       Number(camera.elevationM) || 10,
@@ -331,11 +330,11 @@ export function createQuebecCctvOverlay(viewer) {
       marker.hidden = true;
       return;
     }
-    const canvas = viewer.scene.canvas;
-    const point = viewer.scene.cartesianToCanvasCoordinates(selectedPosition);
+    const canvas = engine.host.canvas;
+    const point = engine.projector.worldToWindow(selectedPosition);
     const visible =
       point &&
-      horizonOccluder(viewer.camera).isPointVisible(selectedPosition) &&
+      engine.projector.horizonVisible(selectedPosition) &&
       point.x >= 0 &&
       point.y >= 0 &&
       point.x <= canvas.clientWidth &&
@@ -348,8 +347,8 @@ export function createQuebecCctvOverlay(viewer) {
     const rect = canvasRect;
     marker.style.left = `${rect.left + point.x}px`;
     marker.style.top = `${rect.top + point.y}px`;
-    const distance = Cesium.Cartesian3.distance(
-      viewer.camera.positionWC,
+    const distance = geo.cartesian3.distance(
+      engine.camera.livePosition,
       selectedPosition,
     );
     marker.style.setProperty(

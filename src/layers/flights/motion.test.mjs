@@ -16,7 +16,7 @@ function fixture() {
   };
   const motion = createMotion({
     flightState,
-    services: { groundFloor: {}, camera: {}, focus: {} },
+    services: { groundFloor: {}, camera: {}, focus: {}, fixedFrame: (...args) => Cesium.Transforms.eastNorthUpToFixedFrame(...args) },
     parts: {},
   });
   return { flightState, motion };
@@ -98,22 +98,17 @@ test('stationary fixes do not build a frame until motion needs it', (t) => {
 
 test('fleet render time is shared without resampling or mutating the supplied instant', (t) => {
   const { flightState, motion } = fixture();
-  const start = Cesium.JulianDate.fromIso8601('2026-10-24T12:00:00Z');
-  const end = Cesium.JulianDate.addSeconds(start, 60, new Cesium.JulianDate());
-  const renderTime = Cesium.JulianDate.addSeconds(
-    start,
-    30,
-    new Cesium.JulianDate(),
-  );
-  const savedTime = Cesium.JulianDate.clone(renderTime);
+  const start = Date.parse('2026-10-24T12:00:00Z');
+  const end = start + 60_000;
+  const renderTime = start + 30_000;
   const history = [
     {
-      time: start,
+      timeMs: start,
       position: Cesium.Cartesian3.fromDegrees(-97, 30, 1000),
       track: 90,
     },
     {
-      time: end,
+      timeMs: end,
       position: Cesium.Cartesian3.fromDegrees(-96.99, 30, 1000),
       track: 90,
     },
@@ -122,7 +117,7 @@ test('fleet render time is shared without resampling or mutating the supplied in
     flightState.records.data.set(id, { velocity: 100, true_track: 90 });
     flightState._positionHistory.set(id, history);
   }
-  t.mock.method(Cesium.JulianDate, 'now', () => {
+  t.mock.method(flightState, 'now', () => {
     throw new Error('unexpected per-contact clock read');
   });
   const expected = Cesium.Cartesian3.lerp(
@@ -136,20 +131,19 @@ test('fleet render time is shared without resampling or mutating the supplied in
       motion._deadReckon(id, new Cesium.Cartesian3(), renderTime),
       expected,
     );
-  assert.ok(Cesium.JulianDate.equals(renderTime, savedTime));
 });
 
 test('tracked callers still sample a fresh delayed time without a fleet epoch', () => {
   const { flightState, motion } = fixture();
-  const start = Cesium.JulianDate.fromIso8601('2026-10-24T12:00:00Z');
+  const start = Date.parse('2026-10-24T12:00:00Z');
   const history = [
     {
-      time: start,
+      timeMs: start,
       position: Cesium.Cartesian3.fromDegrees(-97, 30, 1000),
       track: 90,
     },
     {
-      time: Cesium.JulianDate.addSeconds(start, 60, new Cesium.JulianDate()),
+      timeMs: start + 60_000,
       position: Cesium.Cartesian3.fromDegrees(-96.99, 30, 1000),
       track: 90,
     },
@@ -160,7 +154,7 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
   let reads = 0;
   flightState.now = () => {
     reads += 1;
-    return Cesium.JulianDate.toDate(start).getTime() + elapsed * 1000;
+    return start + elapsed * 1000;
   };
   const out = new Cesium.Cartesian3();
   close(

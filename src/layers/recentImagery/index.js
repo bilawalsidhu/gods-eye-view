@@ -14,7 +14,7 @@
  * map is never retried in a loop.
  */
 import { searchHls } from './catalog.js';
-import { NO_IMAGERY_HOST, resolveImageryHost } from '../../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../shared/imageryHost.js';
 import {
   CATALOG_DAYS,
   PRODUCTS,
@@ -23,7 +23,6 @@ import {
   boxFromRectangle,
   boxSideKm,
   dequantizeBox,
-  fitViewHeightM,
   formatCandidateReadout,
   parseCandidateKey,
   quantizeBox,
@@ -53,7 +52,6 @@ const COMPARISON_UNAVAILABLE = msg('Esri map unavailable · no swipe');
 const COMPARISON_NEEDS_GLOBE = msg('Swipe needs a globe map');
 const ESRI_KEPT = msg('Imagery stays on Esri · CLEAR to use Google 3D');
 /** ZOOM IN's flight time, in seconds. */
-const ZOOM_FIT_SECONDS = 1.2;
 const DEFAULT_SPLIT = 0.5;
 const SLOT_IDS = ['a', 'b'];
 const BOX_EDGES = ['west', 'south', 'east', 'north'];
@@ -67,32 +65,6 @@ const boxSignature = (box) =>
   box ? BOX_EDGES.map((edge) => Number(box[edge]).toFixed(6)).join(',') : '';
 const sourceOf = (product) => PRODUCTS[product]?.source || null;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
-const ellipsoidOf = (viewer) =>
-  viewer?.scene?.ellipsoid || viewer?.scene?.globe?.ellipsoid || null;
-
-/**
- * The ground under the canvas centre, in degrees; null when the centre is
- * sky or the viewer cannot pick.
- * @param {object} viewer
- * @returns {{ lon: number, lat: number } | null}
- */
-function viewCentre(viewer) {
-  const ellipsoid = ellipsoidOf(viewer);
-  const canvas = viewer?.scene?.canvas;
-  const width = Number(canvas?.clientWidth);
-  const height = Number(canvas?.clientHeight);
-  if (!ellipsoid?.cartesianToCartographic || !(width > 0) || !(height > 0))
-    return null;
-  const hit = viewer.camera?.pickEllipsoid?.(
-    { x: width / 2, y: height / 2 },
-    ellipsoid,
-  );
-  const ground = hit ? ellipsoid.cartesianToCartographic(hit) : null;
-  return ground
-    ? { lon: toDegrees(ground.longitude), lat: toDegrees(ground.latitude) }
-    : null;
-}
 const modeFrom = (value) =>
   MODES.includes(value)
     ? value
@@ -102,20 +74,19 @@ const modeFrom = (value) =>
 
 /**
  * Create the layer.
- * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
+ * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
  */
 export function createRecentImageryLayer({
   catalog = { searchHls },
   renderer,
+  rendererFactory,
   thumbnails,
-  host = resolveImageryHost,
   now = () => new Date(),
   days = CATALOG_DAYS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimeoutImpl = (id) => globalThis.clearTimeout(id),
 } = {}) {
-  let _viewer = null;
-  let _tileset = null;
+  let _engine = null;
   let _mapStackController = null;
   let _dataManager = null;
   let _enabled = false;
@@ -372,14 +343,14 @@ export function createRecentImageryLayer({
   }
 
   function syncHost() {
-    const next = host({ viewer: _viewer, tileset: _tileset }) || {
-      collection: null,
-      kind: 'none',
-    };
+    if (!renderer) return false;
+    const next = renderer.resolveHost();
     const changed =
-      next.collection !== _hostInfo.collection || next.kind !== _hostInfo.kind;
+      (next.identity || next.collection) !==
+        (_hostInfo.identity || _hostInfo.collection) ||
+      next.kind !== _hostInfo.kind;
     _hostInfo = next;
-    renderer.rebind(next);
+    renderer?.rebind(next);
     return changed;
   }
 
@@ -533,15 +504,16 @@ export function createRecentImageryLayer({
   }
 
   function syncRender({ comparison = true } = {}) {
-    if (_destroyed) return;
+    if (_destroyed || !renderer) return;
     syncHost();
     pruneEmpty();
     const shown = plan();
     trackSwipeStart(shown.swipe);
     const live = swipeLive(shown);
+    renderer.setSplit?.(_split);
     for (const slotId of SLOT_IDS) {
       const candidate = candidateFor(shown[slotId]);
-      if (candidate && _hostInfo.collection) {
+      if (candidate && (_hostInfo.identity || _hostInfo.collection)) {
         renderer.showSlot(slotId, candidate, _box, {
           alpha: _alpha,
           splitDirection: !live
@@ -802,14 +774,34 @@ export function createRecentImageryLayer({
     source: 'NASA GIBS · HLS + VIIRS',
     updateInterval: 0,
 
-    init(viewer) {
-      _viewer = viewer || null;
+    init(_viewer, options) {
+      return this.attachRenderer(options);
+    },
+
+    attachRenderer({ engine } = {}) {
+      _engine = engine || null;
+      if (rendererFactory && !renderer) renderer = rendererFactory({ engine });
+      if (!renderer) throw new TypeError('Recent imagery requires a renderer');
+      if (_enabled) syncRender();
       return true;
     },
 
-    enable(viewer) {
+    async detachRenderer() {
+      _unsubscribeMap?.();
+      _unsubscribeMap = null;
+      _mapStackController = null;
+      const lease = _lease;
+      forgetLease();
+      renderer?.destroy();
+      renderer = null;
+      _hostInfo = { collection: null, kind: 'none' };
+      _engine = null;
+      _keptGeneration = null;
+      await Promise.all([lease?.release(), _releasing]);
+    },
+
+    enable() {
       if (_destroyed) return false;
-      if (viewer) _viewer = viewer;
       _enabled = true;
       _comparisonError = null;
       _unsubscribeThumbnails?.();
@@ -826,7 +818,7 @@ export function createRecentImageryLayer({
           applyPreview(_followKey);
         // A pinned or previewed day that was still being probed drapes now.
         const shown = plan();
-        const owned = renderer.getOwned?.() || {};
+        const owned = renderer?.getOwned?.() || {};
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
@@ -857,7 +849,7 @@ export function createRecentImageryLayer({
       resetCatalog();
       _previewKey = null;
       _swipeKind = 'none';
-      for (const slotId of SLOT_IDS) renderer.hideSlot(slotId);
+      for (const slotId of SLOT_IDS) renderer?.hideSlot(slotId);
       releaseComparison();
       notify();
       return true;
@@ -873,13 +865,12 @@ export function createRecentImageryLayer({
       clearSplitTimer();
       _unsubscribeMap?.();
       _unsubscribeMap = null;
-      renderer.destroy();
+      renderer?.destroy();
       thumbnails.destroy();
       _listeners.clear();
       _rowListener = null;
       _toolHandler = null;
-      _viewer = null;
-      _tileset = null;
+      _engine = null;
       _mapStackController = null;
       _dataManager = null;
       _destroyed = true;
@@ -906,8 +897,7 @@ export function createRecentImageryLayer({
     },
 
     /** The photoreal tileset, for draping while the globe is hidden. */
-    attachTileset(tileset) {
-      _tileset = tileset || null;
+    attachTileset() {
       if (_enabled && syncHost()) {
         syncRender();
         notify();
@@ -951,11 +941,10 @@ export function createRecentImageryLayer({
     /**
      * Use the camera's view rectangle as the box. A view wider than the cap
      * is refused with its size, never silently shrunk.
-     * @param {object} [viewer]
      * @returns {boolean}
      */
-    useCurrentView(viewer = _viewer) {
-      const rectangle = viewer?.camera?.computeViewRectangle?.();
+    useCurrentView() {
+      const rectangle = _engine.camera.viewRectangle();
       if (!rectangle)
         return refuseBox('Point the camera at the ground to use the view');
       const box = boxFromRectangle(rectangle);
@@ -963,7 +952,7 @@ export function createRecentImageryLayer({
         const { width, height } = boxSideKm(box);
         return refuseBox(
           viewTooLargeMessage(Math.max(width, height)),
-          viewCentre(viewer) || boxCentre(box),
+          renderer.viewCentre() || boxCentre(box),
         );
       }
       return chooseBox(box);
@@ -977,26 +966,12 @@ export function createRecentImageryLayer({
      */
     zoomToFit() {
       const target = _boxError ? _refusalTarget : null;
-      const camera = _viewer?.camera;
-      const ellipsoid = ellipsoidOf(_viewer);
-      if (!target || !camera?.flyTo || !ellipsoid?.cartographicToCartesian)
-        return null;
-      const canvas = _viewer.scene?.canvas;
-      const height = fitViewHeightM({
-        width: canvas?.clientWidth,
-        height: canvas?.clientHeight,
-        fovy: camera.frustum?.fovy,
-      });
-      camera.flyTo({
-        destination: ellipsoid.cartographicToCartesian({
-          longitude: toRadians(target.lon),
-          latitude: toRadians(target.lat),
-          height,
-        }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        duration: ZOOM_FIT_SECONDS,
-      });
-      return height;
+      return target ? renderer.zoomToFit(target) : null;
+    },
+
+    /** The box tool's transient ground preview, owned by the renderer. */
+    setBoxPreview(box) {
+      renderer?.setBoxPreview?.(box);
     },
 
     /** A 10 km box centred on a point. */
@@ -1178,6 +1153,7 @@ export function createRecentImageryLayer({
       const next = clampUnit(value, _split);
       if (next === _split) return;
       _split = next;
+      renderer?.setSplit?.(next);
       clearSplitTimer();
       _splitTimer = setTimeoutImpl(() => {
         _splitTimer = null;
@@ -1205,7 +1181,7 @@ export function createRecentImageryLayer({
       const next = clampUnit(value, _alpha);
       if (next === _alpha) return;
       _alpha = next;
-      for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, next);
+      for (const slotId of SLOT_IDS) renderer?.setAlpha(slotId, next);
       notify('alpha');
     },
 
@@ -1243,7 +1219,7 @@ export function createRecentImageryLayer({
       _swapped = false;
       if (_alpha !== 1) {
         _alpha = 1;
-        for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, 1);
+        for (const slotId of SLOT_IDS) renderer?.setAlpha(slotId, 1);
       }
       _notice = msg('Box and images cleared');
       syncRender();
@@ -1457,7 +1433,8 @@ export function createRecentImageryLayer({
       const shown = plan();
       return {
         host: _hostInfo.kind,
-        ownedCount: renderer.ownedCount(),
+        ownedCount: renderer?.ownedCount() || 0,
+        renderer: renderer?.diagnostics?.(),
         lease: Boolean(_lease),
         releasing: Boolean(_releasing),
         mode: _mode,

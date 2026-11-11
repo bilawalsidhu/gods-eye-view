@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
@@ -41,13 +41,14 @@ export function createFocus({ state: layerState, services, parts, source }) {
     if (
       !parts.model.contextTargetFlyToAllowed(layerId) ||
       !vessel?.position ||
-      !layerState.viewer
+      !layerState.display
     )
       return true;
     announceNavigationAuthority('context-vessel-focus');
-    layerState.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(vessel.position, VESSEL_FOCUS_RADIUS_M),
-      { duration: 1.4 },
+    layerState.display.frameContact(
+      vessel.position,
+      VESSEL_FOCUS_RADIUS_M,
+      1.4,
     );
     return true;
   }
@@ -74,7 +75,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
       layerId,
       id: String(known.id || known.mmsi),
       label: known.label || known.name || known.callsign || String(id),
-      position: Cesium.Cartesian3.clone(known.position),
+      position: geo.cartesian3.clone(known.position),
     });
     return true;
   }
@@ -112,7 +113,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
 
   function closestToCurrentView(candidates) {
     if (!Array.isArray(candidates) || !candidates.length) return null;
-    const cameraPosition = layerState.viewer?.camera?.positionWC;
+    const cameraPosition = layerState.display?.camera?.positionWC;
     if (!cameraPosition)
       return candidates.find((candidate) => candidate?.position) || null;
 
@@ -120,7 +121,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
     let closestDistance = Infinity;
     for (const candidate of candidates) {
       if (!candidate?.position) continue;
-      const distance = Cesium.Cartesian3.distance(
+      const distance = geo.cartesian3.distance(
         cameraPosition,
         candidate.position,
       );
@@ -145,7 +146,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
     if (
       !layerState.enabled ||
       layerState.subject ||
-      !layerState.viewer ||
+      !layerState.display ||
       layerState.autoFocusAttempted
     )
       return false;
@@ -180,9 +181,10 @@ export function createFocus({ state: layerState, services, parts, source }) {
     announceNavigationAuthority('context-vessel-autofocus', {
       cancelPendingSelection: false,
     });
-    layerState.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(vessel.position, VESSEL_FOCUS_RADIUS_M),
-      { duration: 1.6 },
+    layerState.display.frameContact(
+      vessel.position,
+      VESSEL_FOCUS_RADIUS_M,
+      1.6,
     );
     return true;
   }

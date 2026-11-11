@@ -1,21 +1,19 @@
-import test from 'node:test';
+// The weather shell on the fake and headless Cesium engines: each surface is the display's raised
+// imagery layer (render/display.js), whose staged image and detail draw on
+// the next microtask. A surface's settle waits for `render()`, as a drawn
+// frame waits for the engine to draw it.
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { imageryDisplayTests } from '../../testSupport/imageryDisplayEngines.mjs';
+const { test, createEngine } = imageryDisplayTests();
 import {
-  createShellSurface,
   createWeatherShell,
   detailWindow,
-  orderWeatherShells,
-  shellLift,
   WEATHER_SHELL_CACHE_BYTES,
   WEATHER_SHELL_HEIGHTS,
 } from './shellRendering.js';
-import { NO_IMAGERY_HOST } from './imageryHost.js';
-import {
-  createShellCesium,
-  createShellScene,
-  renderShells,
-} from './shellFixture.mjs';
+import { createRaisedWeatherSurface } from './render/display.js';
+import { NO_IMAGERY_HOST } from '../shared/imageryHost.js';
 
 const times = [
   '2026-09-15T20:00:00.000Z',
@@ -59,24 +57,48 @@ const response = () => ({
   headers: new Headers(),
   arrayBuffer: async () => new ArrayBuffer(1),
 });
-// The detail window uniform; NONE is the empty window.
-const NONE = { x: 0, y: 0, z: -1, w: -1 };
-const windowOf = (primitive) => {
-  const { x, y, z, w } = primitive.appearance.material.uniforms.window;
-  return { x, y, z, w };
-};
+const radians = ([west, south, east, north]) => ({
+  west: geo.math.toRadians(west),
+  south: geo.math.toRadians(south),
+  east: geo.math.toRadians(east),
+  north: geo.math.toRadians(north),
+});
+const box = (west, south, east, north) => ({ west, south, east, north });
+/** A detail rectangle (degrees) equals `expected`, within radian round trips. */
+function assertBox(actual, expected, message) {
+  assert.ok(actual, message ?? 'a detail is drawn');
+  for (const edge of ['west', 'south', 'east', 'north'])
+    assert.ok(
+      Math.abs(actual[edge] - expected[edge]) < 1e-9,
+      `${message ?? 'detail'}: ${edge} ${actual[edge]} ≠ ${expected[edge]}`,
+    );
+}
 
-function harness({ product = 'radar', camera, ...options } = {}) {
-  const cesium = options.cesium ?? createShellCesium();
-  const scene = createShellScene();
+/**
+ * The shell over the fake and headless Cesium engines. `view` is the camera's footprint in
+ * degrees (none: no footprint); `look(...)` moves it and ends the move.
+ */
+function harness({ product = 'radar', view = null, ...options } = {}) {
+  const engine = createEngine();
+  let footprint = view;
+  engine.fake.script('viewRectangle', () =>
+    footprint ? radians(footprint) : null,
+  );
   const fetches = [];
   const decoded = [];
+  const settles = [];
   let host = { collection: null, kind: 'tileset' };
   const shell = createWeatherShell({
-    viewer: { scene, camera },
-    cesium,
     product,
     getHost: () => host,
+    requestRender: () => engine.render.request('weather'),
+    viewRectangle: () => engine.camera.viewRectangle(),
+    moveEnd: engine.camera.moveEnd,
+    createSurface: (frame) =>
+      createRaisedWeatherSurface(engine, product, {
+        ...frame,
+        onSettled: () => settles.push(frame.onSettled),
+      }),
     fetchImpl: async (url, init) => {
       fetches.push({ url, signal: init.signal });
       return response();
@@ -99,24 +121,38 @@ function harness({ product = 'radar', camera, ...options } = {}) {
     createCanvas: canvas,
     ...options,
   });
+  const ids = () => engine.fake.imageryLayers();
+  const layer = (id = ids().at(-1)) =>
+    id ? engine.fake.imageryLayer(id) : undefined;
   return {
     shell,
-    cesium,
-    scene,
+    engine,
     fetches,
     decoded,
     setHost(value) {
       host = value;
     },
-    render: (count) => renderShells(cesium, scene, count),
-    primitives: () => scene.primitives.items,
-    material: () => scene.primitives.items.at(-1)?.appearance.material,
+    look(...edges) {
+      footprint = edges;
+      engine.camera.moveEnd.raiseEvent();
+    },
+    listeners: () => engine.camera.moveEnd.numberOfListeners,
+    /** Draws what is staged and settles the surfaces that have drawn. */
+    async render() {
+      await flush();
+      for (const settle of settles.splice(0)) settle();
+      await flush();
+    },
+    ids,
+    layer,
+    image: (id) => layer(id)?.source.image,
+    detail: (id) => layer(id)?.detail ?? null,
   };
 }
 async function show(h, time, options) {
   const pending = h.shell.setFrame(snapshot(h.shell.product), time, options);
   await flush();
-  h.render();
+  await h.render();
   return pending;
 }
 
@@ -131,337 +167,20 @@ test('shell heights stack every product with lightning highest', () => {
   assert.equal(WEATHER_SHELL_CACHE_BYTES, 128 * 1024 * 1024);
 });
 
-test('surface builds a flat raised rectangle drawn in primitive order without depth writes', () => {
-  const cesium = createShellCesium();
-  const scene = createShellScene();
-  const rectangle = Cesium.Rectangle.fromDegrees(-130, 20, -60, 55);
-  const surface = createShellSurface({
-    viewer: { scene },
-    cesium,
-    rectangle,
-    height: 6_200,
-  });
-  const template = cesium.templates.get('WeatherFrame');
-  assert.ok(!(template instanceof cesium.Material), 'plain template');
-  assert.deepEqual(template.fabric.uniforms, {
-    image: Cesium.Material.DefaultImageId,
-    detail: Cesium.Material.DefaultImageId,
-    alpha: 1,
-    window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
-  });
-  const { source } = template.fabric;
-  assert.match(
-    source,
-    /material\.alpha = c\.a \* alpha \* step\(1\.5, float\(imageDimensions\.x\)\);/,
-    'nothing draws before the full-extent image',
-  );
-  assert.match(
-    source,
-    /float useDetail = inside \* step\(1\.5, float\(detailDimensions\.x\)\);/,
-    'the detail image is sampled only once it has arrived',
-  );
-  assert.match(
-    source,
-    /all\(greaterThanEqual\(st, window\.xy\)\) && all\(lessThanEqual\(st, window\.zw\)\)/,
-  );
-  assert.match(
-    source,
-    /mix\(coarse, texture\(detail, clamp\(dst, 0\.0, 1\.0\)\), useDetail\)/,
-  );
-  assert.match(source, /material\.diffuse = czm_gammaCorrect\(c\.rgb\);/);
-  const [primitive] = scene.primitives.items;
-  const appearance = primitive.appearance;
-  assert.equal(appearance.material.options.translucent, false);
-  assert.deepEqual(
-    { ...appearance.options, material: undefined },
-    {
-      aboveGround: true,
-      flat: true,
-      translucent: false,
-      material: undefined,
-    },
-  );
-  assert.deepEqual(appearance.getRenderState(), {
-    depthTest: { enabled: true },
-    depthMask: false,
-    blending: Cesium.BlendingState.ALPHA_BLEND,
-  });
-  const geometry = primitive.options.geometryInstances.geometry.options;
-  assert.equal(geometry.rectangle, rectangle);
-  assert.equal(geometry.height, 6_200);
-  assert.equal(geometry.granularity, Cesium.Math.toRadians(0.5));
-  assert.equal(
-    geometry.vertexFormat,
-    Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
-  );
-  assert.equal(primitive.options.asynchronous, true);
-  assert.equal(primitive.options.allowPicking, false);
-  const lower = createShellSurface({
-    viewer: { scene },
-    cesium,
-    rectangle,
-    height: 5_000,
-  });
-  assert.equal(cesium.templates.size, 1, 'the template registers once');
-  assert.deepEqual(
-    scene.primitives.items.map(
-      (item) => item.options.geometryInstances.geometry.options.height,
-    ),
-    [5_000, 6_200],
-  );
-  lower.destroy();
-  surface.destroy();
-});
-
-test('a surface applies a new detail window only once its image has drawn; the same window swaps only the image', () => {
-  const cesium = createShellCesium();
-  const scene = createShellScene();
-  const surface = createShellSurface({
-    viewer: { scene },
-    cesium,
-    rectangle: Cesium.Rectangle.fromDegrees(-130, 20, -60, 55),
-    height: 6_200,
-  });
-  const [primitive] = scene.primitives.items;
-  const { uniforms } = primitive.appearance.material;
-  const render = (count) => renderShells(cesium, scene, count);
-  const image = () => ({ width: 4096, height: 2048 });
-  surface.setImage(image());
-  render();
-  assert.deepEqual(surface.getDiagnostics().detail, {
-    uploaded: false,
-    window: null,
-  });
-  const a = { west: 0.25, south: 0.5, east: 0.5, north: 0.75 };
-  const first = image();
-  surface.setDetail(first, a);
-  assert.equal(uniforms.detail, first);
-  assert.deepEqual(windowOf(primitive), NONE, 'the full-extent image covers');
-  assert.equal(scene.postRender.size, 1, 'renders until the detail has drawn');
-  render(2);
-  assert.deepEqual(windowOf(primitive), NONE);
-  render(1);
-  assert.deepEqual(windowOf(primitive), { x: 0.25, y: 0.5, z: 0.5, w: 0.75 });
-  assert.ok(uniforms.window instanceof Cesium.Cartesian4);
-  assert.deepEqual(surface.getDiagnostics().detail, {
-    uploaded: true,
-    window: a,
-  });
-  assert.equal(scene.postRender.size, 0);
-
-  // A time change in the same window: Cesium keeps drawing the previous
-  // texture until the new one is uploaded, so the window stays.
-  const applied = uniforms.window;
-  const second = image();
-  surface.setDetail(second, { ...a });
-  assert.equal(uniforms.detail, second);
-  assert.equal(uniforms.window, applied, 'only the image is written');
-  assert.equal(surface.getDiagnostics().detail.uploaded, false);
-  render();
-  assert.equal(surface.getDiagnostics().detail.uploaded, true);
-  assert.equal(uniforms.window, applied);
-  const renders = scene.renders;
-  surface.setDetail(second, { ...a });
-  assert.equal(scene.renders, renders, 'an unchanged detail costs nothing');
-  assert.equal(scene.postRender.size, 0);
-
-  // A different window empties at once and applies once its image has drawn.
-  const b = { west: 0.5, south: 0.25, east: 0.75, north: 0.5 };
-  surface.setDetail(image(), b);
-  assert.deepEqual(windowOf(primitive), NONE);
-  render(2);
-  assert.deepEqual(windowOf(primitive), NONE);
-  render(1);
-  assert.deepEqual(windowOf(primitive), { x: 0.5, y: 0.25, z: 0.75, w: 0.5 });
-
-  surface.setDetail(null);
-  assert.equal(uniforms.detail, Cesium.Material.DefaultImageId);
-  assert.deepEqual(windowOf(primitive), NONE);
-  assert.deepEqual(surface.getDiagnostics().detail, {
-    uploaded: false,
-    window: null,
-  });
-  render();
-  assert.deepEqual(
-    { ...uniforms.detailDimensions },
-    { type: 'ivec3', x: 1, y: 1 },
-  );
-  // Counted renders alone are not enough: the bound texture must be this image.
-  surface.setDetail(image(), a);
-  for (let i = 0; i < 4; i++) scene.postRender.emit();
-  assert.deepEqual(windowOf(primitive), NONE, 'still the 1×1 default');
-  render(1);
-  assert.deepEqual(windowOf(primitive), { x: 0.25, y: 0.5, z: 0.5, w: 0.75 });
-  surface.destroy();
-  surface.setDetail(image(), b);
-  assert.deepEqual(windowOf(primitive), { x: 0.25, y: 0.5, z: 0.5, w: 0.75 });
-  assert.equal(scene.postRender.size, 0);
-});
-
-test('shells rise with the camera over coarse 3D tiles, in steps, up to 60 km', () => {
-  assert.equal(shellLift(undefined), 0);
-  assert.equal(shellLift(1_200), 0, 'city views keep the shell heights');
-  assert.equal(shellLift(3_000_000), 12_000);
-  assert.equal(shellLift(8_000_000), 32_000);
-  assert.equal(shellLift(18_500_000), 60_000);
-  const camera = { positionCartographic: { height: 1_200 } };
-  const scene = {
-    primitives: new Cesium.PrimitiveCollection(),
-    preRender: new Cesium.Event(),
-    postRender: new Cesium.Event(),
-    camera,
-    requestRender() {},
-  };
-  const surface = createShellSurface({
-    viewer: { scene },
-    cesium: Cesium,
-    rectangle: Cesium.Rectangle.fromDegrees(-130, 20, -60, 55),
-    height: 5_800,
-  });
-  const primitive = scene.primitives.get(0);
-  const identity = primitive.modelMatrix;
-  scene.preRender.raiseEvent();
-  assert.equal(primitive.modelMatrix, identity, 'no lift, no new matrix');
-  camera.positionCartographic.height = 8_000_000;
-  scene.preRender.raiseEvent();
-  const radius = Cesium.Ellipsoid.WGS84.maximumRadius;
-  assert.ok(
-    Math.abs(primitive.modelMatrix[0] * radius - (radius + 32_000)) < 1e-3,
-  );
-  const lifted = primitive.modelMatrix;
-  camera.positionCartographic.height = 8_010_000;
-  scene.preRender.raiseEvent();
-  assert.equal(primitive.modelMatrix, lifted, 'the same step keeps the matrix');
-  surface.destroy();
-  assert.equal(scene.preRender.numberOfListeners, 0);
-});
-
-test('real Cesium builds the two-texture material, the opaque-pass appearance and the rectangle primitive', () => {
-  const scene = {
-    primitives: new Cesium.PrimitiveCollection(),
-    postRender: new Cesium.Event(),
-    requestRender() {},
-  };
-  const surface = createShellSurface({
-    viewer: { scene },
-    cesium: Cesium,
-    rectangle: Cesium.Rectangle.fromDegrees(-130, 20, -60, 55),
-    height: 6_600,
-  });
-  const cached = Cesium.Material._materialCache.getMaterial('WeatherFrame');
-  assert.ok(cached && !(cached instanceof Cesium.Material));
-  const primitive = scene.primitives.get(0);
-  const material = primitive.appearance.material;
-  assert.ok(primitive instanceof Cesium.Primitive);
-  assert.equal(material.type, 'WeatherFrame');
-  assert.equal(material.isTranslucent(), false);
-  assert.equal(primitive.appearance.isTranslucent(), false, 'opaque pass');
-  assert.equal(primitive.appearance.getRenderState().depthMask, false);
-  assert.equal(
-    Cesium.Appearance.prototype.getRenderState.call(primitive.appearance)
-      .depthMask,
-    true,
-    'the default opaque render state would write depth',
-  );
-  assert.deepEqual(
-    [material.uniforms.imageDimensions.x, material.uniforms.detailDimensions.x],
-    [1, 1],
-    'Cesium tracks both bound texture sizes',
-  );
-  const shader = material.shaderSource;
-  for (const declaration of [
-    /uniform sampler2D image_\d+;/,
-    /uniform sampler2D detail_\d+;/,
-    /uniform float alpha_\d+;/,
-    /uniform vec4 window_\d+;/,
-    /uniform ivec3 imageDimensions_\d+;/,
-    /uniform ivec3 detailDimensions_\d+;/,
-  ])
-    assert.match(shader, declaration);
-  assert.match(shader, /texture\(image_\d+, st\)/);
-  assert.match(shader, /texture\(detail_\d+, clamp\(dst, 0\.0, 1\.0\)\)/);
-  assert.match(shader, /lessThanEqual\(st, window_\d+\.zw\)/);
-  assert.match(shader, /step\(1\.5, float\(detailDimensions_\d+\.x\)\)/);
-  assert.match(
-    shader,
-    /material\.alpha = c\.a \* alpha_\d+ \* step\(1\.5, float\(imageDimensions_\d+\.x\)\);/,
-    'the uniform is renamed, the material field is not',
-  );
-  assert.match(shader, /float useDetail = inside \* step/, 'locals keep names');
-  const detail = { width: 4096, height: 2048 };
-  surface.setDetail(detail, { west: 0.1, south: 0.2, east: 0.3, north: 0.4 });
-  assert.equal(material.uniforms.detail, detail);
-  assert.deepEqual(
-    [material.uniforms.window.z, material.uniforms.window.w],
-    [-1, -1],
-    'no window before the image has drawn',
-  );
-  surface.setDetail(null);
-  assert.equal(material.uniforms.detail, Cesium.Material.DefaultImageId);
-  surface.setAlpha(0.4);
-  assert.equal(material.uniforms.alpha, 0.4);
-  surface.destroy();
-  assert.equal(scene.primitives.length, 0);
-  assert.equal(primitive.isDestroyed(), true);
-  assert.equal(material.isDestroyed(), true);
-  assert.equal(scene.postRender.numberOfListeners, 0);
-});
-
-test('shells draw first, in height order, regardless of add order', () => {
-  const scene = createShellScene();
-  const other = { name: 'other' };
-  scene.primitives.add(other);
-  const add = (name, height) => {
-    const primitive = { name };
-    scene.primitives.add(primitive);
-    orderWeatherShells(scene.primitives, primitive, height);
-    return primitive;
-  };
-  add('lightning', 6_600);
-  add('radar', 6_200);
-  add('wind', 5_000);
-  const later = { name: 'later' };
-  scene.primitives.add(later);
-  add('regional', 5_800);
-  assert.deepEqual(
-    scene.primitives.items.map(({ name }) => name),
-    ['wind', 'regional', 'radar', 'lightning', 'other', 'later'],
-  );
-  const primitives = new Cesium.PrimitiveCollection({
-    destroyPrimitives: false,
-  });
-  const real = (name) => ({ name, update() {}, isDestroyed: () => false });
-  const tileset = primitives.add(real('tileset'));
-  const lightning = primitives.add(real('lightning'));
-  orderWeatherShells(primitives, lightning, 6_600);
-  const radar = primitives.add(real('radar'));
-  orderWeatherShells(primitives, radar, 6_200);
-  assert.deepEqual(
-    [0, 1, 2].map((i) => primitives.get(i).name),
-    ['radar', 'lightning', 'tileset'],
-    'real Cesium collection order',
-  );
-  assert.equal(tileset.name, 'tileset');
-});
-
-test('first frame stages invisibly, requests renders until drawable and then commits', async () => {
+test('first frame stages invisibly, then commits once drawn', async () => {
   const h = harness();
   const pending = h.shell.setFrame(snapshot(), times[0]);
   assert.equal(h.shell.getDiagnostics().loading, true);
   await flush();
-  const material = h.material();
-  assert.equal(h.primitives().length, 1);
-  assert.equal(material.uniforms.alpha, 0, 'staging surface is invisible');
-  assert.equal(material.uniforms.image.width, 4096);
-  assert.equal(h.scene.postRender.size, 1, 'render loop while not drawable');
-  const before = h.scene.renders;
-  h.scene.postRender.emit();
-  assert.ok(h.scene.renders > before, 'each render asks for another');
+  assert.equal(h.ids().length, 1);
+  const staged = h.layer();
+  assert.equal(staged.alpha, 0, 'staging surface is invisible');
+  assert.equal(staged.raise, 6_200);
+  assert.equal(h.image().width, 4096);
   assert.equal(h.shell.getDiagnostics().time, null);
-  h.render();
+  await h.render();
   assert.equal(await pending, true);
-  assert.equal(material.uniforms.alpha, 0.7);
-  assert.equal(h.scene.postRender.size, 0, 'render loop ends');
+  assert.equal(h.layer().alpha, 0.7);
   const diagnostics = h.shell.getDiagnostics();
   assert.equal(diagnostics.host, 'shell');
   assert.equal(diagnostics.height, 6_200);
@@ -484,7 +203,7 @@ test('first frame stages invisibly, requests renders until drawable and then com
       enabled: false,
     },
   });
-  assert.equal(h.fetches.length, 1, 'no camera, no detail window');
+  assert.equal(h.fetches.length, 1, 'no footprint, no detail window');
   assert.equal(
     new URL(h.fetches[0].url, 'https://example.test').search,
     `?product=radar&time=${encodeURIComponent(times[0])}`,
@@ -492,7 +211,7 @@ test('first frame stages invisibly, requests renders until drawable and then com
   h.shell.clear();
 });
 
-test('a new frame keeps the previous image until decoded, then swaps the uniform', async () => {
+test('a new frame keeps the previous image until decoded, then swaps it on the same surface', async () => {
   const decode = deferred();
   let first = true;
   const h = harness({
@@ -502,11 +221,11 @@ test('a new frame keeps the previous image until decoded, then swaps the uniform
         : decode.promise,
   });
   assert.equal(await show(h, times[0]), true);
-  const material = h.material();
-  const previous = material.uniforms.image;
+  const [id] = h.ids();
+  const previous = h.image();
   const pending = h.shell.setFrame(snapshot(), times[1]);
   await flush();
-  assert.equal(material.uniforms.image, previous, 'previous image stays');
+  assert.equal(h.image(), previous, 'previous image stays');
   assert.equal(h.shell.getDiagnostics().time, times[0]);
   assert.equal(h.shell.getDiagnostics().loading, true);
   let closed = false;
@@ -519,13 +238,11 @@ test('a new frame keeps the previous image until decoded, then swaps the uniform
   });
   assert.equal(await pending, true);
   assert.equal(closed, true, 'decoded image is released');
-  assert.notEqual(material.uniforms.image, previous);
-  assert.equal(material.uniforms.image.source.width, 4096, 'canvas copy');
-  assert.equal(h.primitives().length, 1, 'same extent reuses the surface');
+  await flush();
+  assert.notEqual(h.image(), previous);
+  assert.equal(h.image().source.width, 4096, 'canvas copy');
+  assert.deepEqual(h.ids(), [id], 'same extent reuses the surface');
   assert.equal(h.shell.getDiagnostics().time, times[1]);
-  assert.equal(h.scene.postRender.size, 1, 'renders until the upload');
-  h.render();
-  assert.equal(h.scene.postRender.size, 0);
   h.shell.clear();
 });
 
@@ -549,13 +266,13 @@ for (const outcome of ['fetch', 'decode', 'dimensions', 'timeout']) {
       },
     });
     assert.equal(await show(h, times[0]), true);
-    const image = h.material().uniforms.image;
+    const image = h.image();
     fail = true;
     const pending = h.shell.setFrame(snapshot(), times[1]);
     await flush();
     if (outcome === 'timeout') t.mock.timers.tick(25_000);
     assert.equal(await pending, false);
-    assert.equal(h.material().uniforms.image, image);
+    assert.equal(h.image(), image);
     assert.equal(h.shell.getDiagnostics().time, times[0]);
     assert.equal(
       h.shell.getDiagnostics().error,
@@ -568,21 +285,19 @@ for (const outcome of ['fetch', 'decode', 'dimensions', 'timeout']) {
   });
 }
 
-test('alpha writes the uniform and hidden hides without losing the frame', async () => {
+test('alpha restyles the surface and hidden hides without losing the frame', async () => {
   const h = harness();
   h.shell.setAlpha(0.4);
   assert.equal(await show(h, times[0]), true);
-  const material = h.material();
-  assert.equal(material.uniforms.alpha, 0.4);
-  const renders = h.scene.renders;
+  assert.equal(h.layer().alpha, 0.4);
+  const renders = h.engine.fake.renderRequests;
   h.shell.setAlpha(0.8);
-  assert.equal(material.uniforms.alpha, 0.8);
-  assert.ok(h.scene.renders > renders);
-  const primitive = h.primitives()[0];
+  assert.equal(h.layer().alpha, 0.8);
+  assert.ok(h.engine.fake.renderRequests > renders);
   const pending = h.shell.setFrame(snapshot(), times[1]);
   h.shell.setHidden(true);
   assert.equal(await pending, false, 'hiding cancels a stage');
-  assert.equal(primitive.show, false);
+  assert.equal(h.layer().shown, false);
   assert.equal(h.shell.getDiagnostics().time, null);
   assert.equal(h.shell.getDiagnostics().hidden, true);
   assert.equal(
@@ -591,25 +306,22 @@ test('alpha writes the uniform and hidden hides without losing the frame', async
     'hidden frames do not prefetch',
   );
   h.shell.setHidden(false);
-  assert.equal(primitive.show, true);
+  assert.equal(h.layer().shown, true);
   assert.equal(h.shell.getDiagnostics().time, times[0]);
   h.shell.clear();
 });
 
-test('clear destroys the primitive, material, listeners, timers and decoded images', async (t) => {
+test('clear destroys the surface, listeners, timers and decoded images', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const h = harness();
+  const h = harness({ view: [-100, 35, -98, 36] });
   assert.equal(await show(h, times[0]), true);
-  const [primitive] = h.primitives();
-  const material = primitive.appearance.material;
+  assert.equal(h.listeners(), 1);
   const pending = h.shell.setFrame(snapshot(), times[1]);
   const signal = h.fetches.at(-1)?.signal;
   h.shell.clear();
   assert.equal(await pending, false);
-  assert.equal(h.primitives().length, 0);
-  assert.equal(primitive.destroyed, true);
-  assert.equal(material.destroyed, true, 'the material is destroyed too');
-  assert.equal(h.scene.postRender.size, 0);
+  assert.deepEqual(h.ids(), [], 'the surface is destroyed');
+  assert.equal(h.listeners(), 0);
   assert.equal(signal?.aborted ?? true, true);
   assert.deepEqual(h.shell.getDiagnostics().cache, {
     mosaics: 0,
@@ -618,28 +330,27 @@ test('clear destroys the primitive, material, listeners, timers and decoded imag
   });
   assert.equal(h.shell.getDiagnostics().time, null);
   t.mock.timers.tick(30_000);
-  assert.equal(h.primitives().length, 0);
+  assert.deepEqual(h.ids(), []);
 });
 
-test('a new extent stages a second surface and retires the first only once drawable', async () => {
+test('a new extent stages a second surface and retires the first only once drawn', async () => {
   const h = harness();
   assert.equal(await show(h, times[0]), true);
-  const [first] = h.primitives();
+  const [first] = h.ids();
   const pending = h.shell.setFrame(
     snapshot('radar', { bounds: { ...bounds, south: 21 } }),
     times[0],
   );
   await flush();
-  assert.equal(h.primitives().length, 2);
-  const second = h.primitives()[1];
-  assert.equal(second.appearance.material.uniforms.alpha, 0);
+  assert.equal(h.ids().length, 2);
+  const second = h.ids()[1];
+  assert.equal(h.layer(second).alpha, 0);
   assert.equal(h.shell.getDiagnostics().imageryCount, 2);
-  h.render();
+  await h.render();
   assert.equal(await pending, true);
-  assert.deepEqual(h.primitives(), [second]);
-  assert.equal(first.destroyed, true);
-  assert.equal(first.appearance.material.destroyed, true);
-  assert.equal(second.appearance.material.uniforms.alpha, 0.7);
+  assert.deepEqual(h.ids(), [second]);
+  assert.equal(h.layer(first), undefined, 'the first is destroyed');
+  assert.equal(h.layer(second).alpha, 0.7);
   h.shell.clear();
 });
 
@@ -656,7 +367,7 @@ test('decoded frames are a byte-bounded LRU that never evicts the displayed fram
   for (const time of all.slice(0, 6)) {
     const pending = clouds.shell.setFrame(sample, time);
     await flush();
-    clouds.render();
+    await clouds.render();
     assert.equal(await pending, true);
   }
   assert.deepEqual(clouds.shell.getDiagnostics().cache, {
@@ -666,7 +377,7 @@ test('decoded frames are a byte-bounded LRU that never evicts the displayed fram
   });
   const pending = clouds.shell.setFrame(sample, all[6]);
   await flush();
-  clouds.render();
+  await clouds.render();
   assert.equal(await pending, true);
   assert.equal(clouds.shell.getDiagnostics().cache.mosaics, 6);
   const fetches = clouds.fetches.length;
@@ -710,7 +421,7 @@ test('prefetch warms a decoded frame without staging and cancels cleanly', async
   const warm = h.shell.prefetch(snapshot(), times[1]);
   assert.equal(h.shell.getDiagnostics().cache.prefetching, true);
   assert.equal(await warm, true);
-  assert.equal(h.primitives().length, 1);
+  assert.equal(h.ids().length, 1);
   assert.equal(h.shell.getDiagnostics().time, times[0]);
   assert.equal(
     await h.shell.prefetch(snapshot(), times[1]),
@@ -753,18 +464,19 @@ test('infrared frames get the display transfer; radar and lightning keep their p
     const h = harness({ product });
     const pending = h.shell.setFrame(snapshot(product), times[0]);
     await flush();
-    const image = h.material().uniforms.image;
+    const image = h.image();
     assert.equal(image.source, h.decoded[0], 'drawn into a canvas');
     assert.equal(h.decoded[0].closed, true);
     assert.equal(image.pixels !== undefined, transfer, product);
     if (transfer)
       assert.deepEqual([...image.pixels], [194, 0, 0, 98], 'clouds only');
-    h.render();
+    await h.render();
     assert.equal(await pending, true);
     assert.equal(
       h.shell.getDiagnostics().height,
       WEATHER_SHELL_HEIGHTS[product],
     );
+    assert.equal(h.layer().raise, WEATHER_SHELL_HEIGHTS[product]);
     h.shell.clear();
   }
 });
@@ -772,33 +484,29 @@ test('infrared frames get the display transfer; radar and lightning keep their p
 test('an infrared mode change restages the same time with its own cached canvas', async () => {
   const h = harness({ product: 'clouds' });
   assert.equal(await show(h, times[0]), true);
-  const filtered = h.material().uniforms.image;
+  const filtered = h.image();
   assert.equal(await show(h, times[0]), true, 'same frame is a no-op');
   assert.equal(h.fetches.length, 1);
   assert.equal(await show(h, times[0], { infrared: 'full' }), true);
-  const full = h.material().uniforms.image;
+  const full = h.image();
   assert.notEqual(full, filtered);
   assert.deepEqual([...full.pixels], [194, 0, 0, 200]);
   assert.equal(h.shell.getDiagnostics().infrared, 'full');
   assert.equal(await show(h, times[0], { infrared: 'filtered' }), true);
-  assert.equal(h.material().uniforms.image, filtered, 'cache hit');
+  assert.equal(h.image(), filtered, 'cache hit');
   assert.equal(h.fetches.length, 2);
   h.shell.clear();
 });
 
-test('image size follows the product maximum and halves for small texture limits', async () => {
-  for (const [product, limit, size, query] of [
-    ['radar', 0, [4096, 2048], null],
-    ['clouds-regional', 16_384, [4096, 2048], null],
-    ['radar', 2048, [2048, 1024], '2048x1024'],
-    ['lightning', 0, [4096, 2048], null],
-    ['lightning', 4096, [4096, 2048], null],
-    ['clouds', 0, [2048, 1024], null],
-    ['clouds', 1024, [1024, 512], '1024x512'],
+test('image size follows the product maximum', async () => {
+  for (const [product, size] of [
+    ['radar', [4096, 2048]],
+    ['clouds-regional', [4096, 2048]],
+    ['lightning', [4096, 2048]],
+    ['clouds', [2048, 1024]],
   ]) {
     const h = harness({
       product,
-      cesium: createShellCesium({ maximumTextureSize: limit }),
       decodeImage: async () => ({
         width: size[0],
         height: size[1],
@@ -809,32 +517,43 @@ test('image size follows the product maximum and halves for small texture limits
       width: size[0],
       height: size[1],
     });
-    const pending = h.shell.setFrame(snapshot(product), times[0]);
-    await flush();
-    h.render();
-    assert.equal(await pending, true);
+    assert.equal(await show(h, times[0]), true);
     const url = new URL(h.fetches[0].url, 'https://example.test');
     assert.equal(url.pathname, '/api/weather/image');
     assert.equal(url.searchParams.get('product'), product);
-    assert.equal(url.searchParams.get('size'), query);
+    assert.equal(url.searchParams.get('size'), null);
     h.shell.clear();
   }
+});
+
+test('a GPU with a 2048 px texture limit gets 2048 px images', async () => {
+  const h = harness({
+    maxTextureSize: 2048,
+    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
+  });
+  assert.deepEqual(h.shell.getDiagnostics().imageSize, {
+    width: 2048,
+    height: 1024,
+  });
+  assert.equal(await show(h, times[0]), true);
+  const url = new URL(h.fetches[0].url, 'https://example.test');
+  assert.equal(url.searchParams.get('size'), '2048x1024');
+  h.shell.clear();
 });
 
 test('a host without imagery hides the shell, keeps the frame and refuses work', async () => {
   const h = harness();
   assert.equal(await show(h, times[0]), true);
-  const [primitive] = h.primitives();
   h.setHost({ collection: null, kind: 'none' });
   assert.equal(h.shell.rehome(), true);
-  assert.equal(primitive.show, false);
+  assert.equal(h.layer().shown, false);
   assert.equal(h.shell.getDiagnostics().time, times[0]);
   assert.equal(h.shell.getDiagnostics().error, NO_IMAGERY_HOST);
   assert.equal(await h.shell.setFrame(snapshot(), times[1]), false);
   assert.equal(await h.shell.prefetch(snapshot(), times[1]), false);
   h.setHost({ collection: null, kind: 'tileset' });
   h.shell.rehome();
-  assert.equal(primitive.show, true);
+  assert.equal(h.layer().shown, true);
   assert.equal(h.shell.getDiagnostics().error, null);
   h.shell.clear();
 });
@@ -854,7 +573,7 @@ test('an unowned restage is joined by the next request for the same frame', asyn
   assert.equal(await restage, false, 'an owned stage is not joined');
   assert.equal(await joined, false);
   await flush();
-  h.render();
+  await h.render();
   assert.equal(await other, true);
   const cancelled = h.shell.setFrame(snapshot(), times[1]);
   const abort = new AbortController();
@@ -869,41 +588,6 @@ test('an unowned restage is joined by the next request for the same frame', asyn
 });
 
 const footprint = (west, south, east, north) => ({ west, south, east, north });
-const box = (west, south, east, north) => ({ west, south, east, north });
-
-test('hidden frames do not count towards a pending detail window', () => {
-  const cesium = createShellCesium();
-  const scene = createShellScene();
-  const surface = createShellSurface({
-    viewer: { scene },
-    cesium,
-    rectangle: Cesium.Rectangle.fromDegrees(-130, 20, -60, 55),
-    height: 6_200,
-  });
-  const [primitive] = scene.primitives.items;
-  const render = (count) => renderShells(cesium, scene, count);
-  const image = () => ({ width: 4096, height: 2048 });
-  surface.setImage(image());
-  const a = { west: 0.25, south: 0.5, east: 0.5, north: 0.75 };
-  surface.setDetail(image(), a);
-  render();
-  assert.deepEqual(windowOf(primitive), { x: 0.25, y: 0.5, z: 0.5, w: 0.75 });
-  // A different window with a same-sized image: the dimensions alone cannot
-  // tell the textures apart, so only shown frames may count.
-  const b = { west: 0.5, south: 0.25, east: 0.75, north: 0.5 };
-  surface.setDetail(image(), b);
-  assert.deepEqual(windowOf(primitive), NONE);
-  for (let i = 0; i < 3; i++) {
-    surface.setShow(false);
-    scene.postRender.emit();
-    surface.setShow(true);
-  }
-  assert.deepEqual(windowOf(primitive), NONE, 'hidden frames counted nothing');
-  render(2);
-  assert.deepEqual(windowOf(primitive), NONE);
-  render(1);
-  assert.deepEqual(windowOf(primitive), { x: 0.5, y: 0.25, z: 0.75, w: 0.5 });
-});
 
 test('detail windows are sized from the footprint, snapped to 0.5° and clamped inside the product', () => {
   // max(2 × the longitude span, 6°) wide, half as tall.
@@ -1023,67 +707,35 @@ test('detail windows hold while the view stays in their inner half and the span 
   );
 });
 
-function camera(west, south, east, north) {
-  const listeners = new Set();
-  let rectangle = Cesium.Rectangle.fromDegrees(west, south, east, north);
-  return {
-    moveEnd: {
-      addEventListener(listener) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      get size() {
-        return listeners.size;
-      },
-    },
-    computeViewRectangle: () => rectangle,
-    look(...edges) {
-      rectangle = Cesium.Rectangle.fromDegrees(...edges);
-      for (const listener of [...listeners]) listener();
-    },
-  };
-}
-// A window in degrees, in the full-extent image's texture coordinates.
-const windowFor = (w) => ({
-  x: (w.west - bounds.west) / (bounds.east - bounds.west),
-  y: (w.south - bounds.south) / (bounds.north - bounds.south),
-  z: (w.east - bounds.west) / (bounds.east - bounds.west),
-  w: (w.north - bounds.south) / (bounds.north - bounds.south),
-});
 const query = (url) => new URL(url, 'https://example.test').searchParams;
+const WINDOW = box(-102, 34, -96, 37);
 
 test('a detail window follows the view after the full-extent frame, on the same surface', async () => {
-  const view = camera(-100, 35, -98, 36);
-  const h = harness({ camera: view });
+  const h = harness({ view: [-100, 35, -98, 36] });
   const pending = h.shell.setFrame(snapshot(), times[0]);
   await flush();
   assert.equal(h.fetches.length, 1, 'the full-extent image comes first');
-  h.render();
+  assert.equal(h.detail(), null);
+  await h.render();
   assert.equal(await pending, true);
-  assert.equal(view.moveEnd.size, 1);
-  await flush();
+  assert.equal(h.listeners(), 1);
   assert.equal(h.fetches.length, 2);
   assert.equal(query(h.fetches[1].url).get('bbox'), '-102,34,-96,37');
   assert.equal(query(h.fetches[1].url).get('time'), times[0]);
   assert.equal(query(h.fetches[1].url).get('size'), null);
-  const [shell] = h.primitives();
-  assert.equal(h.primitives().length, 1, 'no second surface');
-  const { uniforms } = shell.appearance.material;
-  assert.equal(uniforms.detail.source, h.decoded[1]);
-  assert.deepEqual(windowOf(shell), NONE, 'the full-extent image covers');
+  const [shell] = h.ids();
+  assert.equal(h.ids().length, 1, 'no second surface');
+  assert.equal(h.detail().image.source, h.decoded[1]);
+  assertBox(h.detail().rectangle, WINDOW);
   assert.deepEqual(h.shell.getDiagnostics().shell.detail, {
     bbox: [-102, 34, -96, 37],
     size: { width: 4096, height: 2048 },
-    ready: false,
+    ready: true,
     enabled: true,
   });
-  h.render();
-  assert.deepEqual(windowOf(shell), windowFor(box(-102, 34, -96, 37)));
-  assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
   assert.equal(h.shell.getDiagnostics().imageryCount, 1);
-  assert.equal(h.scene.postRender.size, 0);
 
-  view.look(-99.5, 35.2, -97.5, 36.2);
+  h.look(-99.5, 35.2, -97.5, 36.2);
   await flush();
   assert.equal(
     h.fetches.length,
@@ -1091,13 +743,8 @@ test('a detail window follows the view after the full-extent frame, on the same 
     'panning inside the window fetches nothing',
   );
 
-  view.look(-90, 40, -88, 41);
-  assert.equal(
-    uniforms.detail,
-    Cesium.Material.DefaultImageId,
-    'a moved window clears at once',
-  );
-  assert.deepEqual(windowOf(shell), NONE);
+  h.look(-90, 40, -88, 41);
+  assert.equal(h.detail(), null, 'a moved window clears at once');
   assert.deepEqual(h.shell.getDiagnostics().shell.detail, {
     bbox: [-92, 39, -86, 42],
     size: { width: 4096, height: 2048 },
@@ -1106,20 +753,12 @@ test('a detail window follows the view after the full-extent frame, on the same 
   });
   await flush();
   assert.equal(query(h.fetches[2].url).get('bbox'), '-92,39,-86,42');
-  assert.equal(uniforms.detail.source, h.decoded[2]);
-  assert.deepEqual(windowOf(shell), NONE, 'until the new image has drawn');
-  assert.equal(h.shell.getDiagnostics().shell.detail.ready, false);
-  h.render();
-  assert.deepEqual(windowOf(shell), windowFor(box(-92, 39, -86, 42)));
+  assert.equal(h.detail().image.source, h.decoded[2]);
+  assertBox(h.detail().rectangle, box(-92, 39, -86, 42));
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
 
-  view.look(-120, 25, -100, 50);
-  assert.equal(
-    uniforms.detail,
-    Cesium.Material.DefaultImageId,
-    'a wide view needs no window',
-  );
-  assert.deepEqual(windowOf(shell), NONE);
+  h.look(-120, 25, -100, 50);
+  assert.equal(h.detail(), null, 'a wide view needs no window');
   assert.deepEqual(h.shell.getDiagnostics().shell.detail, {
     bbox: null,
     size: { width: 4096, height: 2048 },
@@ -1128,56 +767,44 @@ test('a detail window follows the view after the full-extent frame, on the same 
   });
   await flush();
   assert.equal(h.fetches.length, 3);
-  assert.deepEqual(h.primitives(), [shell]);
+  assert.deepEqual(h.ids(), [shell]);
   assert.equal(h.shell.getDiagnostics().imageryCount, 1);
   h.shell.clear();
-  assert.equal(view.moveEnd.size, 0);
+  assert.equal(h.listeners(), 0);
 });
 
 test('a new extent restages the surface and the detail follows onto it', async () => {
-  const h = harness({ camera: camera(-100, 35, -98, 36) });
+  const h = harness({ view: [-100, 35, -98, 36] });
   assert.equal(await show(h, times[0]), true);
-  await flush();
-  h.render();
-  const [first] = h.primitives();
-  const detail = first.appearance.material.uniforms.detail;
+  await h.render();
+  const [first] = h.ids();
+  const detail = h.detail().image;
   const wider = { ...bounds, west: -140 };
   const pending = h.shell.setFrame(
     snapshot('radar', { bounds: wider }),
     times[0],
   );
   await flush();
-  const [, second] = h.primitives();
-  assert.equal(
-    second.appearance.material.uniforms.detail,
-    Cesium.Material.DefaultImageId,
-  );
+  const [, second] = h.ids();
+  assert.equal(h.detail(second), null);
   assert.equal(h.shell.getDiagnostics().imageryCount, 2, 'staged, no detail');
-  h.render();
+  await h.render();
   assert.equal(await pending, true);
-  assert.deepEqual(h.primitives(), [second]);
-  assert.equal(first.destroyed, true);
-  assert.equal(second.appearance.material.uniforms.detail, detail);
-  assert.deepEqual(windowOf(second), NONE, 'a new mesh uploads it first');
-  h.render();
-  const x = (edge) => (edge - wider.west) / (wider.east - wider.west);
-  assert.deepEqual(windowOf(second), {
-    x: x(-102),
-    y: windowFor(box(-102, 34, -96, 37)).y,
-    z: x(-96),
-    w: windowFor(box(-102, 34, -96, 37)).w,
-  });
+  assert.deepEqual(h.ids(), [second]);
+  assert.equal(h.layer(first), undefined);
+  assert.equal(h.detail(second).image, detail, 'the same detail image');
+  assertBox(h.detail(second).rectangle, WINDOW);
+  assert.equal(h.fetches.length, 2, 'nothing fetched again');
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
   h.shell.clear();
 });
 
 test('a new frame swaps the full-extent image first and keeps the detail until its own image decodes', async () => {
-  const view = camera(-100, 35, -98, 36);
   const urls = [];
   let gate = null;
   let offline = false;
   const h = harness({
-    camera: view,
+    view: [-100, 35, -98, 36],
     fetchImpl: async (url) => {
       urls.push(url);
       if (offline && url.includes('bbox=')) throw new Error('offline');
@@ -1189,31 +816,26 @@ test('a new frame swaps the full-extent image first and keeps the detail until i
     },
   });
   assert.equal(await show(h, times[0]), true);
-  await flush();
-  h.render();
-  const [shell] = h.primitives();
-  const { uniforms } = shell.appearance.material;
-  const previous = { image: uniforms.image, detail: uniforms.detail };
-  const applied = uniforms.window;
+  await h.render();
+  const previous = { image: h.image(), detail: h.detail().image };
   gate = deferred();
   assert.equal(await h.shell.setFrame(snapshot(), times[1]), true);
   await flush();
-  assert.notEqual(uniforms.image, previous.image);
+  assert.notEqual(h.image(), previous.image);
   assert.equal(h.shell.getDiagnostics().time, times[1]);
   assert.equal(query(urls.at(-1)).get('time'), times[1]);
   assert.equal(query(urls.at(-1)).get('bbox'), '-102,34,-96,37');
-  assert.equal(uniforms.detail, previous.detail, 'the previous detail stays');
-  assert.equal(uniforms.window, applied);
+  assert.equal(h.detail().image, previous.detail, 'the previous detail stays');
+  assertBox(h.detail().rectangle, WINDOW);
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, false);
   gate.resolve();
   await flush();
-  assert.notEqual(uniforms.detail, previous.detail);
-  assert.equal(
-    uniforms.window,
-    applied,
+  assert.notEqual(h.detail().image, previous.detail);
+  assertBox(
+    h.detail().rectangle,
+    WINDOW,
     'the same window swaps only the image',
   );
-  h.render();
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
 
   gate = null;
@@ -1221,11 +843,10 @@ test('a new frame swaps the full-extent image first and keeps the detail until i
   assert.equal(await h.shell.setFrame(snapshot(), times[2]), true);
   await flush();
   assert.equal(
-    uniforms.detail,
-    Cesium.Material.DefaultImageId,
+    h.detail(),
+    null,
     'a failed detail leaves no older one over the frame',
   );
-  assert.deepEqual(windowOf(shell), NONE);
   assert.equal(h.shell.getDiagnostics().time, times[2]);
   assert.equal(h.shell.getDiagnostics().error, null);
   h.shell.clear();
@@ -1237,11 +858,10 @@ test('an older detail stays over at most one newer frame; a warmed detail follow
     new Date(Date.parse(times[0]) + i * 300_000).toISOString(),
   );
   const playback = snapshot('radar', { times: all, latest: all.at(-1) });
-  const rect = windowFor(box(-102, 34, -96, 37));
   const advance = async (h, time) => {
     const pending = h.shell.setFrame(playback, time);
     await flush();
-    h.render();
+    await h.render();
     assert.equal(await pending, true);
     await flush();
   };
@@ -1249,7 +869,7 @@ test('an older detail stays over at most one newer frame; a warmed detail follow
   const requests = [];
   let slow = false;
   const h = harness({
-    camera: camera(-100, 35, -98, 36),
+    view: [-100, 35, -98, 36],
     fetchImpl: async (url, init) => {
       requests.push({ url, signal: init.signal });
       return response();
@@ -1260,27 +880,18 @@ test('an older detail stays over at most one newer frame; a warmed detail follow
         : { width: 4096, height: 2048, close() {} },
   });
   await advance(h, all[0]);
-  h.render();
-  const [shell] = h.primitives();
-  const { uniforms } = shell.appearance.material;
-  const first = uniforms.detail;
-  assert.deepEqual(windowOf(shell), rect);
+  const first = h.detail().image;
+  assertBox(h.detail().rectangle, WINDOW);
   slow = true;
   await advance(h, all[1]);
-  assert.equal(uniforms.detail, first, 'over one newer frame');
-  assert.deepEqual(windowOf(shell), rect);
+  assert.equal(h.detail().image, first, 'over one newer frame');
+  assertBox(h.detail().rectangle, WINDOW);
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, false);
   await advance(h, all[2]);
-  assert.equal(
-    uniforms.detail,
-    Cesium.Material.DefaultImageId,
-    'cleared at the second',
-  );
-  assert.deepEqual(windowOf(shell), NONE);
+  assert.equal(h.detail(), null, 'cleared at the second');
   for (const time of all.slice(3)) {
     await advance(h, time);
-    assert.equal(uniforms.detail, Cesium.Material.DefaultImageId);
-    assert.deepEqual(windowOf(shell), NONE);
+    assert.equal(h.detail(), null);
   }
   const details = requests.filter(({ url }) => url.includes('bbox='));
   assert.deepEqual(
@@ -1294,79 +905,76 @@ test('an older detail stays over at most one newer frame; a warmed detail follow
   assert.equal(details.at(-1).signal.aborted, false);
   h.shell.clear();
 
-  const warm = harness({ camera: camera(-100, 35, -98, 36) });
+  const warm = harness({ view: [-100, 35, -98, 36] });
   await advance(warm, all[0]);
-  warm.render();
-  const [surface] = warm.primitives();
-  const material = surface.appearance.material;
-  const applied = material.uniforms.window;
-  assert.deepEqual(windowOf(surface), rect);
+  assertBox(warm.detail().rectangle, WINDOW);
+  // The window never empties: every detail the surface is handed is an image.
+  let emptied = 0;
+  const id = warm.ids()[0];
   for (const time of all.slice(1)) {
     assert.equal(await warm.shell.prefetch(playback, time), true);
     const fetches = warm.fetches.length;
-    const previous = material.uniforms.detail;
-    await advance(warm, time);
+    const previous = warm.detail().image;
+    const pending = warm.shell.setFrame(playback, time);
+    for (let i = 0; i < 30; i++) {
+      if (warm.detail(id) === null) emptied++;
+      await Promise.resolve();
+    }
+    await warm.render();
+    assert.equal(await pending, true);
     assert.equal(warm.fetches.length, fetches, 'both images from the cache');
-    assert.notEqual(material.uniforms.detail, previous, time);
-    assert.equal(material.uniforms.window, applied, 'the window never empties');
+    assert.notEqual(warm.detail().image, previous, time);
+    assertBox(warm.detail().rectangle, WINDOW);
     assert.equal(warm.shell.getDiagnostics().shell.detail.ready, true);
   }
+  assert.equal(emptied, 0, 'the window never empties');
   warm.shell.clear();
 });
 
 test('hiding, a host without imagery and clear hide or release the detail with its surface', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const view = camera(-100, 35, -98, 36);
-  const h = harness({ camera: view });
+  const h = harness({ view: [-100, 35, -98, 36] });
   assert.equal(await show(h, times[0]), true);
-  await flush();
-  h.render();
-  const [shell] = h.primitives();
-  const rect = windowFor(box(-102, 34, -96, 37));
+  await h.render();
+  const [shell] = h.ids();
   h.shell.setHidden(true);
-  assert.equal(shell.show, false);
-  assert.deepEqual(windowOf(shell), rect, 'the detail hides with its surface');
+  assert.equal(h.layer().shown, false);
+  assertBox(h.detail().rectangle, WINDOW, 'the detail hides with its surface');
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, false);
   h.shell.setHidden(false);
-  assert.equal(shell.show, true);
-  assert.deepEqual(windowOf(shell), rect);
+  assert.equal(h.layer().shown, true);
+  assertBox(h.detail().rectangle, WINDOW);
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
   h.shell.setAlpha(0.4);
-  assert.equal(shell.appearance.material.uniforms.alpha, 0.4);
+  assert.equal(h.layer().alpha, 0.4);
   h.setHost({ collection: null, kind: 'none' });
   h.shell.rehome();
-  assert.equal(shell.show, false);
-  view.look(-90, 40, -88, 41);
+  assert.equal(h.layer().shown, false);
+  h.look(-90, 40, -88, 41);
   await flush();
   assert.equal(h.fetches.length, 2, 'no window work without a host');
-  assert.deepEqual(windowOf(shell), NONE, 'the moved window is dropped');
+  assert.equal(h.detail(), null, 'the moved window is dropped');
   h.setHost({ collection: null, kind: 'tileset' });
   h.shell.rehome();
   await flush();
   assert.equal(query(h.fetches[2].url).get('bbox'), '-92,39,-86,42');
-  h.render();
-  assert.deepEqual(windowOf(shell), windowFor(box(-92, 39, -86, 42)));
-  assert.deepEqual(h.primitives(), [shell]);
+  assertBox(h.detail().rectangle, box(-92, 39, -86, 42));
+  assert.deepEqual(h.ids(), [shell]);
 
   // Frames shown while hidden leave no older detail to reappear.
   h.shell.setHidden(true);
   for (const time of [times[1], times[2]])
     assert.equal(await h.shell.setFrame(snapshot(), time), true);
   h.shell.setHidden(false);
-  assert.equal(
-    shell.appearance.material.uniforms.detail,
-    Cesium.Material.DefaultImageId,
-  );
+  assert.equal(h.detail(), null);
   await flush();
   assert.equal(query(h.fetches.at(-1).url).get('time'), times[2]);
-  h.render();
+  await h.render();
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
 
   h.shell.clear();
-  assert.equal(shell.destroyed, true);
-  assert.equal(shell.appearance.material.destroyed, true);
-  assert.equal(view.moveEnd.size, 0);
-  assert.equal(h.scene.postRender.size, 0);
+  assert.deepEqual(h.ids(), []);
+  assert.equal(h.listeners(), 0);
   assert.deepEqual(h.shell.getDiagnostics().cache, {
     mosaics: 0,
     bytes: 0,
@@ -1377,7 +985,7 @@ test('hiding, a host without imagery and clear hide or release the detail with i
   const gate = deferred();
   const requests = [];
   const late = harness({
-    camera: camera(-100, 35, -98, 36),
+    view: [-100, 35, -98, 36],
     fetchImpl: async (url, init) => {
       requests.push({ url, signal: init.signal });
       return response();
@@ -1394,19 +1002,17 @@ test('hiding, a host without imagery and clear hide or release the detail with i
   assert.equal(requests[1].signal.aborted, true);
   gate.resolve();
   await flush();
-  assert.equal(late.primitives().length, 0);
+  assert.deepEqual(late.ids(), []);
   assert.equal(late.shell.getDiagnostics().cache.mosaics, 0);
   t.mock.timers.tick(30_000);
-  assert.equal(h.primitives().length, 0);
+  assert.deepEqual(h.ids(), []);
 });
 
 test('full-extent and detail images share one byte budget; prefetch warms both', async () => {
-  const view = camera(-100, 35, -98, 36);
-  const h = harness({ camera: view });
+  const h = harness({ view: [-100, 35, -98, 36] });
   const MiB = 1024 * 1024;
   assert.equal(await show(h, times[0]), true);
-  await flush();
-  h.render();
+  await h.render();
   assert.deepEqual(h.shell.getDiagnostics().cache, {
     mosaics: 2,
     bytes: 64 * MiB,
@@ -1433,8 +1039,7 @@ test('full-extent and detail images share one byte budget; prefetch warms both',
     'completed work is not repeated',
   );
   assert.equal(await show(h, times[1]), true);
-  await flush();
-  h.render();
+  await h.render();
   assert.equal(h.fetches.length, 4, 'both images came from the cache');
   assert.equal(h.shell.getDiagnostics().mosaic.cached, true);
   assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
@@ -1453,8 +1058,7 @@ test('full-extent and detail images share one byte budget; prefetch warms both',
   });
   for (const time of [times[2], times[1]]) {
     assert.equal(await show(h, time), true);
-    await flush();
-    h.render();
+    await h.render();
     assert.equal(h.fetches.length, 6, `${time} full-extent and detail cached`);
     assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
   }
@@ -1464,7 +1068,7 @@ test('full-extent and detail images share one byte budget; prefetch warms both',
   assert.equal(h.shell.getDiagnostics().cache.bytes, 128 * MiB);
   h.shell.clear();
 
-  const wide = harness({ camera: camera(-120, 25, -100, 50) });
+  const wide = harness({ view: [-120, 25, -100, 50] });
   assert.equal(await show(wide, times[0]), true);
   assert.equal(await wide.shell.prefetch(snapshot(), times[1]), true);
   assert.equal(wide.fetches.length, 2, 'no window, no detail prefetch');
@@ -1472,43 +1076,64 @@ test('full-extent and detail images share one byte budget; prefetch warms both',
   wide.shell.clear();
 });
 
-test('global infrared keeps one full-extent image; detail images halve for small texture limits', async () => {
-  const view = camera(-100, 35, -98, 36);
-  const clouds = harness({ product: 'clouds', camera: view });
+test('global infrared keeps one full-extent image and no detail window', async () => {
+  const clouds = harness({ product: 'clouds', view: [-100, 35, -98, 36] });
   assert.equal(await show(clouds, times[0]), true);
   await flush();
-  assert.equal(view.moveEnd.size, 0);
+  assert.equal(clouds.listeners(), 0);
   assert.equal(clouds.fetches.length, 1);
   assert.equal(clouds.shell.getDiagnostics().shell.detail.enabled, false);
   assert.equal(await clouds.shell.prefetch(snapshot('clouds'), times[1]), true);
   assert.ok(clouds.fetches.every(({ url }) => !url.includes('bbox=')));
   clouds.shell.clear();
+});
 
-  const small = harness({
-    camera: camera(-100, 35, -98, 36),
-    cesium: createShellCesium({ maximumTextureSize: 2048 }),
-    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
+test('the shell hands its surface the height and the extent in radians', async () => {
+  const surfaces = [];
+  const shell = createWeatherShell({
+    product: 'radar',
+    viewRectangle: () => ({ west: -1.8, south: 0.5, east: -1.6, north: 0.6 }),
+    moveEnd: { addEventListener: () => () => {} },
+    requestRender: () => {},
+    fetchImpl: async () => response(),
+    decodeImage: async () => ({
+      width: 4096,
+      height: 2048,
+      close() {},
+    }),
+    createCanvas: canvas,
+    createSurface: (options) => {
+      surfaces.push(options);
+      return {
+        setAlpha() {},
+        setImage() {},
+        setDetail() {},
+        setShow: () => false,
+        destroy() {},
+        getDiagnostics: () => null,
+      };
+    },
   });
-  assert.equal(await show(small, times[0]), true);
+  shell.setFrame(snapshot('radar'), times[0]);
   await flush();
-  small.render();
-  assert.equal(query(small.fetches[1].url).get('size'), '2048x1024');
-  assert.equal(query(small.fetches[1].url).get('bbox'), '-102,34,-96,37');
-  assert.deepEqual(small.shell.getDiagnostics().shell.detail, {
-    bbox: [-102, 34, -96, 37],
-    size: { width: 2048, height: 1024 },
-    ready: true,
-    enabled: true,
-  });
-  small.shell.clear();
+  assert.equal(surfaces.length, 1);
+  assert.deepEqual(Object.keys(surfaces[0]).sort(), [
+    'height',
+    'onSettled',
+    'rectangle',
+  ]);
+  assert.equal(surfaces[0].height, WEATHER_SHELL_HEIGHTS.radar);
+  for (const side of ['west', 'south', 'east', 'north'])
+    assert.equal(surfaces[0].rectangle[side], geo.math.toRadians(bounds[side]));
+  shell.clear();
 });
 
 test('a frame source supplies the full-extent and detail images, the detail through its bbox', async () => {
-  const view = camera(-100, 35, -98, 36);
+  const view = [-100, 35, -98, 36];
   const requests = [];
   const supplied = [];
   const h = harness({
-    camera: view,
+    view,
     fetchImpl: () => assert.fail('supplied images are not fetched'),
     decodeImage: () => assert.fail('supplied images are not decoded'),
     frameSource: {
@@ -1528,7 +1153,7 @@ test('a frame source supplies the full-extent and detail images, the detail thro
   });
   const pending = h.shell.setFrame(snapshot(), times[0]);
   await flush();
-  h.render();
+  await h.render();
   assert.equal(await pending, true);
   await flush();
   assert.deepEqual(
@@ -1554,12 +1179,10 @@ test('a frame source supplies the full-extent and detail images, the detail thro
     ],
   );
   assert.ok(supplied.every(({ closed }) => closed === 1));
-  const [shell] = h.primitives();
-  const { uniforms } = shell.appearance.material;
-  assert.equal(uniforms.image.source, supplied[0]);
-  assert.equal(uniforms.detail.source, supplied[1]);
-  h.render();
-  assert.deepEqual(windowOf(shell), windowFor(box(-102, 34, -96, 37)));
+  assert.equal(h.image().source, supplied[0]);
+  assert.equal(h.detail().image.source, supplied[1]);
+  await h.render();
+  assertBox(h.detail().rectangle, box(-102, 34, -96, 37));
   h.shell.clear();
 });
 
@@ -1597,6 +1220,6 @@ test('cancelling a supplied frame aborts the frame source request', async () => 
     1,
     'a frame arriving after cancellation is released',
   );
-  assert.equal(h.primitives().length, 0);
+  assert.equal(h.ids().length, 0);
   h.shell.clear();
 });

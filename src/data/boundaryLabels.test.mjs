@@ -1,3 +1,4 @@
+import { installDomClasses } from '../testSupport/domClasses.mjs';
 // Outline names are drawn by the DOM annotation overlay, never as Cesium
 // text labels: the boundary data modules, the outline resolver and the
 // annotation renderers must not import or construct Cesium label primitives,
@@ -8,7 +9,8 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
-import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
+import { createWorldAnnotationRenderer } from '../globe/cesium/annotations/worldAnnotationRenderer.js';
+import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -24,12 +26,14 @@ const DATA_MODULES = [
 /** Modules that use Cesium for outlines but must not draw text with it. */
 const CESIUM_MODULES = [
   '../annotations/resolver.js',
-  '../annotations/worldAnnotationRenderer.js',
+  '../globe/cesium/annotations/worldAnnotationRenderer.js',
   '../annotations/hybridAnnotationRenderer.js',
 ];
 
 /** The DOM overlay: callout elements, never Cesium label primitives. */
-const OVERLAY_MODULES = ['../annotations/screenAnnotationRenderer.js'];
+const OVERLAY_MODULES = [
+  '../globe/cesium/annotations/screenAnnotationRenderer.js',
+];
 
 const LABEL_PRIMITIVES = [
   /\bLabelCollection\b/,
@@ -92,16 +96,7 @@ test('the static check catches a Cesium label however it is written', () => {
 
 test('drawing bundled place and neighborhood outlines creates no Cesium label', async (t) => {
   // Cesium's material setup checks for these browser image types.
-  for (const name of [
-    'HTMLCanvasElement',
-    'HTMLImageElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ]) {
-    if (name in globalThis) continue;
-    globalThis[name] = class {};
-    t.after(() => delete globalThis[name]);
-  }
+  installDomClasses(t);
   const featureSource = {};
   for (const method of FEATURE_SOURCE_METHODS)
     featureSource[method] = async () => null;
@@ -135,8 +130,8 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
       3000,
     );
     const resolved = await resolveAnnotationTarget({
-      // The resolver reads only the camera (no scene to pick from).
-      viewer: { camera: viewer.camera },
+      // The resolver reads only the camera (no canvas to pick from).
+      engine: cameraOnlyEngine({ camera: viewer.camera }),
       target,
       footprint: true,
       deferFootprint: true,

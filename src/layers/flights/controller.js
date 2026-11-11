@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createController({
   flightState,
@@ -13,12 +13,13 @@ export function createController({
     flightState.feed._activeUpdateControllers.clear();
   }
 
-  function _flightQuery(viewer) {
-    const cartographic = viewer?.camera?.positionCartographic;
+  /** The feed query around the camera of `view` (a viewer or the renderer's view). */
+  function _flightQuery(view) {
+    const cartographic = view?.camera?.positionCartographic;
     return cartographic
       ? {
-          latitude: Cesium.Math.toDegrees(cartographic.latitude),
-          longitude: Cesium.Math.toDegrees(cartographic.longitude),
+          latitude: geo.math.toDegrees(cartographic.latitude),
+          longitude: geo.math.toDegrees(cartographic.longitude),
         }
       : {};
   }

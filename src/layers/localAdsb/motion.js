@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   COURSE_HOLD_SPEED_MPS,
   TURN_MIN_SPEED_MPS,
@@ -38,8 +38,8 @@ const COAST_MAXIMUM_SEC = 60;
 const KT_TO_MPS = 1852 / 3600;
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEG = Math.PI / 180;
-const _chordFrom = new Cesium.Cartesian3();
-const _chordTo = new Cesium.Cartesian3();
+const _chordFrom = geo.cartesian3.create();
+const _chordTo = geo.cartesian3.create();
 
 function finite(value) {
   return Number.isFinite(value) ? value : null;
@@ -58,8 +58,8 @@ function telemetryTime(record) {
 }
 
 function chordCourse(from, to) {
-  Cesium.Cartesian3.fromDegrees(from.lon, from.lat, 0, undefined, _chordFrom);
-  Cesium.Cartesian3.fromDegrees(to.lon, to.lat, 0, undefined, _chordTo);
+  geo.cartesian3.fromDegrees(from.lon, from.lat, 0, undefined, _chordFrom);
+  geo.cartesian3.fromDegrees(to.lon, to.lat, 0, undefined, _chordTo);
   return courseBetweenCartesians(_chordFrom, _chordTo);
 }
 

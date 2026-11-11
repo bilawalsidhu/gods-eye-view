@@ -1,15 +1,15 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const state = {};
 
-  state.distanceEndpointScratch = new Cesium.Cartographic();
+  state.distanceEndpointScratch = geo.cartographic.create();
 
-  state.distanceGeodesicScratch = new Cesium.EllipsoidGeodesic();
+  state.distanceGeodesicScratch = geo.ellipsoidGeodesic.create();
 
   Object.assign(state, {
     viewer: null,
-    dataSource: null,
+    engine: null,
     enabled: false,
     records: [],
     recordById: new Map(),
@@ -29,7 +29,6 @@ export function createState({ services }) {
     retryAt: 0,
     failureReason: null,
     moveEndRemove: null,
-    clickHandler: null,
     timer: null,
     googleSearchRequested: false,
     /** Contacts subject position; when set, it replaces the camera viewport. */
@@ -38,8 +37,6 @@ export function createState({ services }) {
     contextPosition: null,
     /** Coverage of the last successful load: viewport, or radius around a subject. */
     coverage: { kind: 'viewport' },
-    /** Per-record geometry keys of the rendered entities, for in-place updates. */
-    renderedKeys: new Map(),
   });
   return state;
 }

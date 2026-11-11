@@ -333,14 +333,18 @@ export function createQueries({
       components.rendering.applyHandoffFade();
     },
 
-    /** Test seam: entities drawn by the layer's data source. */
-    _entityCountForTest() {
-      return layerState._dataSource?.entities?.values?.length ?? 0;
+    /** Test seam: ground cells the renderer drew. */
+    _cellCountForTest() {
+      return layerState._renderer?.cellCount?.() ?? 0;
     },
 
-    /** Test seam that binds the production click path and indexes. */
-    _bindInteractionForTest(viewer, fires = []) {
-      layerState._viewer = viewer;
+    /**
+     * Test seam that binds the production click path and indexes, on the
+     * renderer of `engine` (attached here when there is none yet).
+     */
+    _bindInteractionForTest(engine, fires = []) {
+      if (!layerState._renderer) this.attachRenderer({ engine });
+      layerState._renderer.setVisible(true);
       layerState._enabled = true;
       layerState._allFires = fires;
       layerState._allFiresByFrp = [...fires];

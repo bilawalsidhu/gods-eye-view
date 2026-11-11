@@ -1,5 +1,6 @@
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import { paintTransitBracket } from './detectionDraw.js';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   DETECTION_ENABLE_FADE_MS,
@@ -21,10 +22,7 @@ import {
   getKeyholeFadeTuning,
   keyholeLabelAlphaFromGeometry,
 } from '../celestialRing.js';
-import {
-  getQueuedOverlayEntryAlpha,
-  registerWorldOverlayPaintLane,
-} from '../overlays/worldOverlay.js';
+
 import {
   DETECTION_STYLE,
   DETECTION_THEME_MAP,
@@ -204,11 +202,16 @@ export function countFadingRenderEntries(renderEntries) {
   return count;
 }
 // ---------------------------------------------------------------------------
-// Module-level state — singleton lifecycle tied to the Cesium viewer
+// Module-level state — singleton lifecycle tied to the globe engine
 // ---------------------------------------------------------------------------
 
-/** @type {Cesium.Viewer|null} */
-let _viewer = null;
+/** @type {import('../globe/contract.js').GlobeEngine|null} */
+let _engine = null;
+
+/** The camera height (m), or undefined before init. */
+function cameraHeight() {
+  return _engine?.camera.height();
+}
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
 /** @type {HTMLCanvasElement|null} Shared host canvas used for QA diagnostics. */
@@ -311,11 +314,12 @@ let _cockpitModeListener = null;
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
- * @param {Cesium.Viewer} viewer - The active Cesium viewer instance.
+ * @param {import('../globe/contract.js').GlobeEngine} engine - The globe
+ *   engine; only its camera height is read.
  * @param {Array} layers - Data layer modules that may implement getDetectableObjects().
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
-export function initDetection(viewer, layers, onModeChange) {
+export function initDetection(engine, layers, onModeChange) {
   if (_cockpitModeListener && typeof window !== 'undefined') {
     window.removeEventListener(
       'gev:cockpit-mode-changed',
@@ -324,7 +328,7 @@ export function initDetection(viewer, layers, onModeChange) {
   }
   _hostLane?.unregister?.();
   _calloutLane?.unregister?.();
-  _viewer = viewer;
+  _engine = engine;
   _layers = layers;
   _onModeChange = onModeChange;
   _debugBanner = detectionDebugRequested(
@@ -332,21 +336,29 @@ export function initDetection(viewer, layers, onModeChange) {
   );
   _hostLayoutRevision = -1;
   _calloutCount = 0;
-  _hostLane = registerWorldOverlayPaintLane('detection', _paintDetectionLane, {
-    id: 'detection',
-    active: _mode !== MODE_OFF && !_suspended,
-    target: 'detection',
-    shouldPaint: _shouldPaintDetectionLane,
-  });
+  _hostLane = worldOverlayFor(engine)?.registerPaintLane(
+    'detection',
+    _paintDetectionLane,
+    {
+      id: 'detection',
+      active: _mode !== MODE_OFF && !_suspended,
+      target: 'detection',
+      shouldPaint: _shouldPaintDetectionLane,
+    },
+  );
   // Registered AFTER the sensor lane so it replays the callouts that lane just
   // solved. Both sit in the 'detection' lane — the host's bottom slot — so
   // callouts still paint under every ordinary overlay card and under the
   // tracked readout, exactly where they sat before.
-  _calloutLane = registerWorldOverlayPaintLane('detection', _paintCalloutLane, {
-    id: 'detection-callouts',
-    active: _mode !== MODE_OFF && !_suspended,
-    target: 'shared',
-  });
+  _calloutLane = worldOverlayFor(engine)?.registerPaintLane(
+    'detection',
+    _paintCalloutLane,
+    {
+      id: 'detection-callouts',
+      active: _mode !== MODE_OFF && !_suspended,
+      target: 'shared',
+    },
+  );
   _hostSurface = _hostLane.surface;
   _cockpitModeListener = (event) => {
     _cockpitActive = event?.detail?.active === true;
@@ -380,7 +392,7 @@ export function destroyDetection() {
   _calloutLane = null;
   _transitBracketPaths.clear();
   _calloutCount = 0;
-  _viewer = null;
+  _engine = null;
   _layers = [];
   _onModeChange = null;
   _hostCanvas = null;
@@ -420,7 +432,7 @@ function _scheduleCyberSonarRender(nowMs) {
   _cyberSonarRenderTimer = globalThis.setTimeout(() => {
     _cyberSonarRenderTimer = null;
     if (isCyberSonarActive()) {
-      governorRequestRender('cyber-sonar-cadence');
+      governorRequestRender('cyber-sonar-cadence', _engine);
     }
   }, delay);
 }
@@ -676,7 +688,7 @@ function _syncSurfaceVisibility() {
   // owes itself follow-up frames only while a bounded animation is in flight
   // (see `detectionRenderDemand.js` for why a hold was wrong here, and why
   // removing it is safe).
-  governorRequestRender('detection-visibility');
+  governorRequestRender('detection-visibility', _engine);
   if (!_hostSurface) return;
   _hostSurface.style.display = _mode === MODE_OFF ? 'none' : 'block';
   _hostSurface.style.opacity = _suspended ? '0' : '1';
@@ -774,7 +786,7 @@ function _shouldPaintDetectionLane(frame) {
     if (_lastDiagnostics)
       _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
     if (decision.requestFollowUp)
-      governorRequestRender('detection-paint-skipped');
+      governorRequestRender('detection-paint-skipped', _engine);
     return false;
   }
   return true;
@@ -839,7 +851,7 @@ function _paintDetectionLane(frame) {
       solvePending: result.solvePending === true,
     })
   ) {
-    governorRequestRender('detection-animation');
+    governorRequestRender('detection-animation', _engine);
   }
 }
 
@@ -1174,7 +1186,10 @@ function _paintCalloutLane(frame) {
     const cardAlpha =
       row.cardEntryId === ''
         ? 0
-        : getQueuedOverlayEntryAlpha(row.cardSourceId, row.cardEntryId);
+        : (worldOverlayFor(_engine)?.getQueuedEntryAlpha(
+            row.cardSourceId,
+            row.cardEntryId,
+          ) ?? 0);
     row.paintAlpha =
       row.alpha * Math.max(0, 1 - cardAlpha / CARD_ALPHA_HIDING_CALLOUT);
     if (row.paintAlpha > 0.001) paintDetectionCallout(ctx, row, row.paintAlpha);
@@ -1318,9 +1333,7 @@ function _drawOverlay(frame) {
       profile: MODE_LABELS[_mode],
       densityPct: _densityPct,
       allocationStrategy: _allocationStrategy,
-      viewScale: viewScaleForAltitude(
-        _viewer?.camera?.positionCartographic?.height,
-      ),
+      viewScale: viewScaleForAltitude(cameraHeight()),
       candidateCount: 0,
       observationCount: 0,
       visibleCount: 0,
@@ -1363,7 +1376,10 @@ function _drawOverlay(frame) {
   const camPos = frame.cameraPosition;
   // Answers to the occlusion tests started on earlier frames land here.
   _surfaceOcclusion.beginFrame(now);
-  _occlusionProbe.beginFrame(_viewer?.scene, _surfaceOcclusion.now);
+  _occlusionProbe.beginFrame(
+    _engine?.extensions?.cesium?.viewer.scene,
+    _surfaceOcclusion.now,
+  );
   const keyhole = frame.keyhole;
   // Read the OUTSIDE setting ONCE per paint, from the same module state the
   // host's own keyhole alpha comes from, so a bracket and its callout can never
@@ -1451,7 +1467,7 @@ function _drawOverlay(frame) {
     let halfH;
     if (obj.type === 'AIR') {
       const bscale = nearFarScale(
-        Cesium.Cartesian3.distance(camPos, obj.position),
+        geo.cartesian3.distance(camPos, obj.position),
         BILL_NEAR,
         BILL_NEAR_SCALE,
         BILL_FAR,
@@ -1600,7 +1616,7 @@ function _drawOverlay(frame) {
   // Start this frame's occlusion tests; nothing here waits for them.
   _occlusionProbe.endFrame();
 
-  const altitude = _viewer?.camera?.positionCartographic?.height ?? 1e9;
+  const altitude = cameraHeight() ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
   const ambientBudget = Math.max(
     0,

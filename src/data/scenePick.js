@@ -52,29 +52,33 @@ export function isPickedWorldPosition(position) {
  * The world position under a screen point: the rendered surface where the
  * depth buffer has it, else the ellipsoid; null over the sky.
  *
- * @param {object} viewer A Cesium viewer.
+ * @param {object} engine The globe engine (`engine.picker.pickPosition`,
+ *   then `engine.camera.pickEllipsoid`); without one, null.
  * @param {{x: number, y: number}} screenPosition
  * @returns {{x: number, y: number, z: number}|null} A Cartesian3.
  */
-export function pickGroundPosition(viewer, screenPosition) {
-  const scene = viewer?.scene;
+export function pickGroundPosition(engine, screenPosition) {
+  if (!engine) return null;
+  const { picker, camera } = engine;
+  return groundUnder(
+    screenPosition,
+    picker.pickPositionSupported ? picker : null,
+    camera,
+  );
+}
+
+function groundUnder(screenPosition, depth, ellipsoid) {
   let position = null;
-  if (
-    scene?.pickPositionSupported &&
-    typeof scene.pickPosition === 'function'
-  ) {
+  if (depth) {
     try {
-      position = scene.pickPosition(screenPosition);
+      position = depth.pickPosition(screenPosition);
     } catch {
       position = null;
     }
   }
-  if (
-    !isPickedWorldPosition(position) &&
-    typeof viewer?.camera?.pickEllipsoid === 'function'
-  ) {
+  if (!isPickedWorldPosition(position) && ellipsoid) {
     try {
-      position = viewer.camera.pickEllipsoid(screenPosition);
+      position = ellipsoid.pickEllipsoid(screenPosition);
     } catch {
       position = null;
     }
@@ -83,8 +87,8 @@ export function pickGroundPosition(viewer, screenPosition) {
 }
 
 /**
- * Whether a `scene.pick()` result is the map itself: nothing, or 3D tile
- * content (which has no id).
+ * Whether a pick result (`engine.picker.pick()` or `scene.pick()`) is the
+ * map itself: nothing, or 3D tile content (which has no id).
  *
  * @param {object|null|undefined} picked
  * @returns {boolean}

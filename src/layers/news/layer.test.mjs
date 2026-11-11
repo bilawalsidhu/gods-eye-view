@@ -1,3 +1,6 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { sceneServicesFor } from '../../data/sceneServices.js';
+import { markerRows, testMarkerAtlas } from '../../testSupport/mapMarkers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -91,25 +94,21 @@ function fixture(
     clearSource: () => entries.push([]),
   };
   const flights = [];
+  const engine = createFakeEngine();
+  engine.fake.setPose({ longitude: 36 * Math.PI / 180, latitude: 49 * Math.PI / 180, height, heading: 0, pitch: -Math.PI / 2, roll: 0 });
   const camera = {
-    positionCartographic: { height },
-    positionWC: Cesium.Cartesian3.fromDegrees(36, 49, height),
-    moveEnd: new Cesium.Event(),
-    flyTo: (options) => flights.push(options),
-  };
-  const viewer = {
-    camera,
-    scene: { requestRender() {}, preRender: new Cesium.Event() },
-    added: [],
-    dataSources: {
-      add(source) {
-        viewer.added.push(source);
-      },
-      remove() {},
+    positionCartographic: {
+      get height() { return engine.camera.pose().cartographic.height; },
+      set height(value) { engine.fake.setPose({ ...engine.camera.pose().cartographic, height: value, heading: 0, pitch: -Math.PI / 2, roll: 0 }); },
     },
+    moveEnd: { raiseEvent: () => engine.fake.emit('camera.moveEnd') },
   };
+  const flyTo = engine.camera.flyTo;
+  engine.camera.flyTo = (options) => { flights.push(options); flyTo(options); };
+  const viewer = engine;
   const layer = createNewsLayer({
     source,
+    drawAtlas: testMarkerAtlas,
     overlayHost,
     now,
     matchMedia: () => ({ matches: reduced }),
@@ -122,10 +121,12 @@ function fixture(
   // The context store announces selections on `window`, which Node lacks.
   const originalWindow = globalThis.window;
   globalThis.window = new EventTarget();
-  layer.init(viewer);
+  layer.init(null, { engine });
   layer.attachShellServices({ runNavigation: (navigate) => navigate() });
   t.after(() => {
     layer.destroy();
+    sceneServicesFor(engine).destroy();
+    engine.destroy();
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   });
@@ -161,6 +162,36 @@ const ukraine = {
   disputed: [],
 };
 const noArea = { area: null, polygons: [], borders: [], disputed: [] };
+
+test('renderer switching retains reports and selection until the restored view is ready', async (t) => {
+  const { layer, viewer, calls, entries } = fixture(t);
+  layer.enable();
+  await layer.update();
+  layer.setParams({ reportId: 'major' });
+  await flush();
+  const before = markerRows(viewer, 'news-');
+  assert.ok(before.length);
+  const reads = calls.feed.length;
+  layer.detachRenderer();
+  assert.deepEqual(viewer.movers.list(), []);
+  assert.deepEqual(viewer.ground.list(), []);
+  const next = createFakeEngine({ kind: 'navara' });
+  next.fake.setPose({ ...viewer.camera.pose().cartographic, heading: 0, pitch: -Math.PI / 2, roll: 0 });
+  t.after(() => { sceneServicesFor(next).destroy(); next.destroy(); });
+  const context = { engine: next, viewReady: false };
+  layer.attachRenderer(context);
+  assert.deepEqual(next.movers.list(), []);
+  assert.equal(calls.feed.length, reads);
+  context.viewReady = true;
+  layer.resumeViewport();
+  await flush();
+  const after = markerRows(next, 'news-');
+  assert.deepEqual(after.map(({ position, ...row }) => row), before.map(({ position, ...row }) => row));
+  after.forEach((row, index) => assert.ok(Cesium.Cartesian3.distance(row.position, before[index].position) < 1e-6));
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  assert.ok(entries.at(-1).some(({ id }) => id === 'selected-report:major'));
+  assert.equal(calls.feed.length, reads);
+});
 
 test('the feed shows the last 24 h at significant and above, beacons when zoomed out', async (t) => {
   const { layer, calls, entries } = fixture(t);
@@ -207,6 +238,21 @@ test('choosing a card selects it and flies straight down from 150 km; reduced mo
   assert.equal(layer.getRowControls().feed.selected.id, 'major');
   layer.setParams({ clear: true });
   assert.equal(layer.getRowControls().feed.selected, null);
+});
+
+test('choosing a hotspot flies to its bounds through the camera contract', async (t) => {
+  const { layer, flights } = fixture(t, { reduced: true });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ hotspotId: 'ua-ru-war' });
+  assert.equal(flights.length, 1);
+  assert.deepEqual(flights[0].destination, {
+    west: Cesium.Math.toRadians(22),
+    south: Cesium.Math.toRadians(44),
+    east: Cesium.Math.toRadians(42),
+    north: Cesium.Math.toRadians(56),
+  });
+  assert.equal(flights[0].duration, 0);
 });
 
 test('the severity floor changes what is shown, not what is read', async (t) => {
@@ -259,8 +305,7 @@ test('Local reads every report once, lists those near the view and takes the map
     },
   });
   const markers = () =>
-    // The layer adds its outlines' source first, then its markers'.
-    viewer.added[1].entities.values
+    markerRows(viewer, 'news-')
       .map((entity) => String(entity.id))
       .filter((id) => /~\d+$/.test(id))
       .map((id) => id.replace(/^.*:/, '').replace(/~\d+$/, ''));
@@ -359,9 +404,7 @@ test('Local reads the area at the view centre, lists its reports and outlines it
     },
   });
   const outline = () =>
-    viewer.added[0].entities.values.filter((e) =>
-      String(e.id).includes('local:UA'),
-    );
+    viewer.ground.list().filter((e) => String(e.id).includes('local:UA'));
   layer.enable();
   await layer.update();
   await flush();
@@ -382,7 +425,7 @@ test('Local reads the area at the view centre, lists its reports and outlines it
   );
   assert.ok(outline().length > 0);
   assert.ok(
-    outline().every((e) => e.show && e.polyline.width.getValue() === 1.5),
+    outline().every((e) => e.shown && viewer.fake.groundSet(e.id).items.every((item) => item.widthPx === 1.5)),
   );
   // A pan inside the area reads it again only once the centre leaves it.
   centre = { lat: 50, lon: 36.5 };
@@ -400,16 +443,16 @@ test('Local reads the area at the view centre, lists its reports and outlines it
   view = layer.getRowControls().feed;
   assert.equal(view.inView.area, null);
   assert.equal(view.inView.radiusKm, 500);
-  assert.ok(outline().every((e) => !e.show));
+  assert.ok(outline().every((e) => !e.shown));
   // Conflicts hides the area's outline too.
   centre = { lat: 49, lon: 36 };
   camera.moveEnd.raiseEvent();
   t.mock.timers.tick(800);
   await flush();
-  assert.ok(outline().every((e) => e.show));
+  assert.ok(outline().every((e) => e.shown));
   layer.setParams({ filters: { section: 'conflicts' } });
   await flush();
-  assert.ok(outline().every((e) => !e.show));
+  assert.ok(outline().every((e) => !e.shown));
 });
 
 test('a shorter window narrows the feed and reads the hotspot counts for it', async (t) => {
@@ -864,7 +907,7 @@ test("a country's own news is one badge with a count, not markers piled on its c
     },
   });
   const ids = () =>
-    viewer.added[1].entities.values.map((entity) => String(entity.id));
+    markerRows(viewer, 'news-').map((entity) => String(entity.id));
   layer.enable();
   await layer.update();
   layer.setParams({ filters: { section: 'local' } });

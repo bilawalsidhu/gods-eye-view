@@ -52,7 +52,6 @@ export const _viewRecordIdsForTest = layer._viewRecordIdsForTest;
 export const clearProbeClampOnDeactivation =
   layer.clearProbeClampOnDeactivation;
 export const cctvRecordNeedsActivation = layer.cctvRecordNeedsActivation;
-export const bindCctvWorldClickGesture = layer.bindCctvWorldClickGesture;
 export const setActiveCamera = layer.setActiveCamera;
 export const deactivateActiveCamera = layer.deactivateActiveCamera;
 export const cctvEmptyClickDeselects = layer.cctvEmptyClickDeselects;
@@ -65,7 +64,6 @@ export const materializeCctvVisibleCoverageEntities =
 export const _extractPickedCameraIdForTest =
   layer._extractPickedCameraIdForTest;
 export const _setCctvCoverageStateForTest = layer._setCctvCoverageStateForTest;
-export const focusCctvRecord = layer.focusCctvRecord;
 export const maybeAutoHop = layer.maybeAutoHop;
 export const openingCameraId = layer.openingCameraId;
 export const reopenNearestCamera = layer.reopenNearestCamera;

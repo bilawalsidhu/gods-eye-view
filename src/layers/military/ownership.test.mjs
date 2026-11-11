@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 
 function services() {
   const names = [
     'picking',
-    'sprites',
-    'trails',
+    'selection',
+    'renderer',
     'aircraftPresentation',
     'camera',
     'militaryRegistry',
@@ -31,10 +32,13 @@ function services() {
 // The application's own scene services, as src/app/layers/militaryFlights.js
 // composes them; only the surface samplers and registry are stubbed.
 async function sceneServices() {
+  // The application's own scene services, as src/app/layers/militaryFlights.js
+  // composes them; only the surface samplers and registry are stubbed.
   return {
     picking: await import('../../data/pickRegistry.js'),
-    sprites: await import('../../data/spriteOrder.js'),
-    trails: await import('../../data/trailRenderer.js'),
+    selection: await import('../../data/selectionDispatcher.js'),
+    // Seeded through the testing seam with the test's own renderer.
+    renderer: { create: () => null },
     aircraftPresentation: await import('../../data/tr3bRegistry.js'),
     camera: await import('../../data/trackedCamera.js'),
     labels: await import('../../data/detectionDraw.js'),
@@ -138,11 +142,9 @@ test('a normalized source can retain its stale reason without changing standalon
   assert.equal(layer.getStats().stale, true);
 });
 
-test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
-  // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
-  // contact's first displayed position is its fix projected back to that
-  // delayed time. Creating the billboard at the raw fix drew it ahead until
-  // the next fleet tick jumped it back.
+// A fresh contact's first billboard, with the layer clock `clockLagMs`
+// behind the wall clock (0: the live default).
+async function firstPlacement(clockLagMs) {
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
   const supplied = await sceneServices();
@@ -151,6 +153,11 @@ test('a newly seen military contact appears at its delayed position, not ahead o
   const speedMps = 200;
   const fixAgeMs = 2_000;
   const nowMs = Date.now();
+  const { worldClock } = await import('../../time/worldClock.js');
+  if (clockLagMs) {
+    worldClock.follow('military');
+    worldClock.seek(nowMs - clockLagMs);
+  }
   const layer = createMilitaryFlightLayer({
     services: supplied,
     source: {
@@ -179,6 +186,13 @@ test('a newly seen military contact appears at its delayed position, not ahead o
   });
   const added = [];
   layer.testing._setTrackedMilitaryRefreshStateForTest({
+    renderer: ({ billboardCollection }) =>
+      recordingAircraftRenderer(null, {
+        fleet: {
+          ...billboardCollection,
+          shown: billboardCollection?.show !== false,
+        },
+      }),
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
@@ -198,7 +212,12 @@ test('a newly seen military contact appears at its delayed position, not ahead o
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
   });
-  await layer.update({ camera: { positionCartographic: null }, scene: {} });
+  try {
+    await layer.update({ camera: { positionCartographic: null }, scene: {} });
+  } finally {
+    worldClock.follow('military', false);
+    worldClock.goLive();
+  }
   const billboard = added.find((entry) => entry.id === 'ae0001');
   assert.ok(billboard, 'the new contact gets a billboard');
   const shown = Cesium.Cartographic.fromCartesian(billboard.position);
@@ -206,11 +225,37 @@ test('a newly seen military contact appears at its delayed position, not ahead o
     Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 0),
     Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 0),
   );
+  return {
+    behindM,
+    westOfFix: Cesium.Math.toDegrees(shown.longitude) < fixLon,
+    speedMps,
+    fixAgeMs,
+    RENDER_DELAY_SEC,
+  };
+}
+
+test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
+  // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
+  // contact's first displayed position is its fix projected back to that
+  // delayed time. Creating the billboard at the raw fix drew it ahead until
+  // the next fleet tick jumped it back.
+  const { behindM, westOfFix, speedMps, fixAgeMs, RENDER_DELAY_SEC } =
+    await firstPlacement(0);
   const expectedM = speedMps * (RENDER_DELAY_SEC - fixAgeMs / 1000);
+  assert.ok(westOfFix, 'drawn behind the fix');
   assert.ok(
-    Cesium.Math.toDegrees(shown.longitude) < fixLon,
-    'drawn behind the fix',
+    Math.abs(behindM - expectedM) < speedMps * 3,
+    `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,
   );
+});
+
+test('the delayed position is read from the layer clock', async () => {
+  // With the layer clock 10 s behind the wall clock, the render time moves 10 s
+  // further back from the fix.
+  const { behindM, westOfFix, speedMps, fixAgeMs, RENDER_DELAY_SEC } =
+    await firstPlacement(10_000);
+  const expectedM = speedMps * (RENDER_DELAY_SEC + 10 - fixAgeMs / 1000);
+  assert.ok(westOfFix, 'drawn behind the fix');
   assert.ok(
     Math.abs(behindM - expectedM) < speedMps * 3,
     `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,
@@ -252,6 +297,13 @@ test('a vanished military contact fades while position-less rows keep theirs', a
   });
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   layer.testing._setTrackedMilitaryRefreshStateForTest({
+    renderer: ({ billboardCollection }) =>
+      recordingAircraftRenderer(null, {
+        fleet: {
+          ...billboardCollection,
+          shown: billboardCollection?.show !== false,
+        },
+      }),
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },

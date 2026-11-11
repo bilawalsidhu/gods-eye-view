@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createCalibration } from './calibration.js';
 import { createTesting } from './testing.js';
 import { createProjection } from './projection.js';
@@ -20,16 +21,20 @@ import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
-export function createCctvLayer({ services, source }) {
+export function createCctvLayer({ services, source, rendererFactory }) {
   if (
     !['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'].every(
       (key) => typeof source?.[key] === 'function',
     )
   )
     throw new TypeError('A camera source is required');
-  const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => parts.renderer?.engine),
+  };
+  const state = createState({ services });
+  const context = { state, services, parts, source, rendererFactory };
   parts.calibration = createCalibration(context);
   parts.testing = createTesting(context);
   parts.projection = createProjection(context);
@@ -97,7 +102,6 @@ export function createCctvLayer({ services, source }) {
       clearProbeClampOnDeactivation:
         parts.geometry.clearProbeClampOnDeactivation,
       cctvRecordNeedsActivation: parts.model.cctvRecordNeedsActivation,
-      bindCctvWorldClickGesture: parts.selection.bindCctvWorldClickGesture,
       setActiveCamera: parts.selection.setActiveCamera,
       deactivateActiveCamera: parts.selection.deactivateActiveCamera,
       cctvEmptyClickDeselects: parts.selection.cctvEmptyClickDeselects,
@@ -109,6 +113,7 @@ export function createCctvLayer({ services, source }) {
         parts.geometry.materializeCctvVisibleCoverageEntities,
       _extractPickedCameraIdForTest:
         parts.testing._extractPickedCameraIdForTest,
+      _cctvRecordsForTest: parts.testing._cctvRecordsForTest,
       _setCctvCoverageStateForTest: parts.testing._setCctvCoverageStateForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,

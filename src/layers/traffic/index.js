@@ -11,9 +11,14 @@ import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createRetention } from './retention.js';
 import { createState } from './state.js';
+import { createTrafficDisplay } from './render/display.js';
 
-/** Construct one layer with its own scene state and supplied application services. */
-export function createTrafficLayer({ services, source }) {
+/**
+ * Construct one layer with its own scene state and supplied application
+ * services. `services.createRenderer(engine)` gives the engine's traffic
+ * display (render/display.js by default, the same on every engine).
+ */
+export function createTrafficLayer({ services: given, source }) {
   if (
     ![
       'requestRoads',
@@ -24,6 +29,10 @@ export function createTrafficLayer({ services, source }) {
     ].every((key) => typeof source?.[key] === 'function')
   )
     throw new TypeError('A traffic source is required');
+  const services = {
+    ...given,
+    createRenderer: given?.createRenderer ?? createTrafficDisplay,
+  };
   const state = createState({ services, source });
   const parts = {};
   const context = { state, services, parts, source };

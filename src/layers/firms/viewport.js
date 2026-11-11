@@ -1,4 +1,9 @@
-import * as Cesium from 'cesium';
+import {
+  rectangleWidth,
+  rectangleHeight,
+  rectangleCenter,
+} from './rectangle.js';
+import * as geo from '../../geo/index.js';
 import {
   LOD_LEVELS,
   LOD_HYSTERESIS,
@@ -14,6 +19,11 @@ export function createViewport({
   feed,
 }) {
   const { governorRequestRender } = services.render;
+  let settleTimer = null;
+  function clearSettleTimer() {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+    settleTimer = null;
+  }
 
   /**
    * Ambient labels are placed via screen-space projection, so they need a
@@ -21,9 +31,9 @@ export function createViewport({
    */
 
   function installMoveEndWatcher() {
-    if (layerState._moveEndRemover || !layerState._viewer) return;
+    if (layerState._moveEndRemover || !layerState._view) return;
     layerState._moveEndRemover =
-      layerState._viewer.camera.moveEnd.addEventListener(() => {
+      layerState._renderer.engine.camera.moveEnd.addEventListener(() => {
         if (!layerState._enabled) return;
         // Settled-camera exactness for the horizon pass (the throttled preRender
         // watcher can last have run up to LOD_CHECK_MS before the camera
@@ -44,7 +54,7 @@ export function createViewport({
 
   function cameraHeight() {
     return (
-      layerState._viewer?.camera?.positionCartographic?.height ??
+      layerState._view?.camera?.positionCartographic?.height ??
       Number.POSITIVE_INFINITY
     );
   }
@@ -88,11 +98,9 @@ export function createViewport({
 
   function computeViewRect() {
     try {
-      const rect = layerState._viewer?.camera?.computeViewRectangle(
-        layerState._viewer?.scene?.globe?.ellipsoid,
-        layerState.scratchViewRect,
+      return (
+        layerState._renderer?.viewRectangle(layerState.scratchViewRect) ?? null
       );
-      return rect || null;
     } catch {
       return null;
     }
@@ -109,20 +117,20 @@ export function createViewport({
   function viewChangedEnough(viewRect) {
     if (!viewRect) return false; // sky/horizon — keep the current render
     if (!layerState._lastViewRect) return true; // previous render was global fallback
-    const lastWidth = Cesium.Rectangle.computeWidth(layerState._lastViewRect);
-    const lastHeight = Cesium.Rectangle.computeHeight(layerState._lastViewRect);
-    const width = Cesium.Rectangle.computeWidth(viewRect);
-    const height = Cesium.Rectangle.computeHeight(viewRect);
+    const lastWidth = rectangleWidth(layerState._lastViewRect);
+    const lastHeight = rectangleHeight(layerState._lastViewRect);
+    const width = rectangleWidth(viewRect);
+    const height = rectangleHeight(viewRect);
     if (width > lastWidth * 1.3 || width < lastWidth * 0.75) return true;
     if (height > lastHeight * 1.3 || height < lastHeight * 0.75) return true;
-    const lastCenter = Cesium.Rectangle.center(
+    const lastCenter = rectangleCenter(
       layerState._lastViewRect,
       layerState.scratchCenterA,
     );
-    const center = Cesium.Rectangle.center(viewRect, layerState.scratchCenterB);
+    const center = rectangleCenter(viewRect, layerState.scratchCenterB);
     const latShift = Math.abs(center.latitude - lastCenter.latitude);
     let lonShift = Math.abs(center.longitude - lastCenter.longitude);
-    if (lonShift > Math.PI) lonShift = Cesium.Math.TWO_PI - lonShift;
+    if (lonShift > Math.PI) lonShift = geo.math.TWO_PI - lonShift;
     return (
       latShift > lastHeight * VIEW_PADDING * 0.6 ||
       lonShift > lastWidth * VIEW_PADDING * 0.6
@@ -130,22 +138,27 @@ export function createViewport({
   }
 
   function installLodWatcher() {
-    if (layerState._preRenderRemover || !layerState._viewer) return;
+    if (layerState._preRenderRemover || !layerState._view) return;
     // The LOD sweep is throttle-gated inside preRender. When the camera
     // settles just inside the throttle window, the final rebuild would wait
     // for a frame that idle mode never produces — schedule one. (perf wave 2)
     if (!layerState._moveEndSettleRemover) {
       layerState._moveEndSettleRemover =
-        layerState._viewer.camera.moveEnd.addEventListener(() => {
+        layerState._renderer.engine.camera.moveEnd.addEventListener(() => {
           if (!layerState._enabled) return;
-          setTimeout(
-            () => governorRequestRender('firms-lod-settle'),
-            LOD_CHECK_MS + 40,
-          );
+          clearSettleTimer();
+          settleTimer = setTimeout(() => {
+            settleTimer = null;
+            if (layerState._enabled && !layerState._destroyed)
+              governorRequestRender(
+                'firms-lod-settle',
+                layerState._renderer?.engine,
+              );
+          }, LOD_CHECK_MS + 40);
         });
     }
     layerState._preRenderRemover =
-      layerState._viewer.scene.preRender.addEventListener(() => {
+      layerState._renderer.engine.frames.preRender.addEventListener(() => {
         // NOTE: `_loading`/empty-data are deliberately NOT part of this guard.
         // A refresh has no timeout, and sprites from the previous payload stay
         // on screen throughout it — so the horizon pass below must keep running
@@ -159,16 +172,16 @@ export function createViewport({
         layerState._lastLodCheck = now;
         // Idle camera: two scratch compares and out — no view-rect math, no
         // aggregation, no allocation while the user is parked.
-        const camera = layerState._viewer.camera;
+        const camera = layerState._view.camera;
         if (
           layerState._camSnapValid &&
-          Cesium.Cartesian3.equalsEpsilon(
+          geo.cartesian3.equalsEpsilon(
             camera.positionWC,
             layerState._camPos,
             0,
             0.5,
           ) &&
-          Cesium.Cartesian3.equalsEpsilon(
+          geo.cartesian3.equalsEpsilon(
             camera.directionWC,
             layerState._camDir,
             0,
@@ -177,8 +190,8 @@ export function createViewport({
         ) {
           return;
         }
-        Cesium.Cartesian3.clone(camera.positionWC, layerState._camPos);
-        Cesium.Cartesian3.clone(camera.directionWC, layerState._camDir);
+        geo.cartesian3.clone(camera.positionWC, layerState._camPos);
+        geo.cartesian3.clone(camera.directionWC, layerState._camDir);
         layerState._camSnapValid = true;
         // The camera moved, so the horizon moved. A rebuild culls its own fresh
         // sprites (renderDetections); an early-out — same LOD band and view
@@ -196,6 +209,7 @@ export function createViewport({
   }
 
   function removeLodWatcher() {
+    clearSettleTimer();
     if (layerState._preRenderRemover) {
       layerState._preRenderRemover();
       layerState._preRenderRemover = null;

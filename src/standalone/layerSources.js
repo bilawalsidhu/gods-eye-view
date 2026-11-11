@@ -73,6 +73,9 @@ export function createStandaloneLayerSources(
     mapillary: createMapillarySource({
       token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
     }),
+    // The local receivers' decoder-feed session: none here (the Local ADS-B
+    // layer makes its own); QA fixtures replace it (?qaFeed=local-adsb:fixture).
+    localAdsbFeeds: null,
   };
   for (const name of Object.keys(overrides)) {
     if (!Object.hasOwn(defaults, name))

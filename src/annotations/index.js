@@ -12,25 +12,54 @@ import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
  */
 export function initAnnotations({
   viewer,
+  engine: globe = null,
   tileset = null,
   placeSearch,
   resolver,
 }) {
-  // World-space footprint draping; clamped marks can use the photoreal tiles.
-  if (tileset) {
-    try {
-      tileset.enableCollision = true;
-    } catch {
-      /* older tileset */
-    }
-  }
-  const renderer = createHybridAnnotationRenderer(viewer);
+  const engine = createSessionAnnotations({ placeSearch, resolver });
+  engine.attachScene({ viewer, engine: globe, tileset });
+  return engine;
+}
+
+/**
+ * The page's annotation board, kept across globe engine switches: the marks
+ * belong to the page session, their drawing to the attached globe. The board
+ * works on the globe `engine` (camera, picks, surface); its drawing is the
+ * `renderer` built for that engine (Navara:
+ * src/annotations/navaraAnnotationRenderer.js, built by the caller so this
+ * module never loads it), or on a Cesium `viewer` the hybrid renderer built
+ * here. `attachScene({ engine, viewer, tileset })` or
+ * `attachScene({ engine, renderer })`; with neither the marks stay undrawn.
+ * `detachScene()` releases the drawing and keeps the marks.
+ */
+export function createSessionAnnotations({ placeSearch, resolver }) {
   const engine = createAnnotationEngine({
-    viewer,
-    renderer,
     placeSearch,
     resolveTarget: resolver?.resolveAnnotationTarget,
   });
+  engine.attachScene = ({
+    viewer = null,
+    tileset = null,
+    engine: globe = null,
+    renderer = null,
+  } = {}) => {
+    if (renderer) return engine.attachRenderer({ engine: globe, renderer });
+    if (!viewer) return engine.detachRenderer();
+    // World-space footprint draping; clamped marks can use the photoreal tiles.
+    if (tileset) {
+      try {
+        tileset.enableCollision = true;
+      } catch {
+        /* older tileset */
+      }
+    }
+    engine.attachRenderer({
+      engine: globe,
+      renderer: createHybridAnnotationRenderer(viewer, { engine: globe }),
+    });
+  };
+  engine.detachScene = () => engine.detachRenderer();
   window.__gevAnnotations = engine;
   return engine;
 }

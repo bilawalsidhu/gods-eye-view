@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
@@ -10,8 +10,7 @@ import { worldTimeFor } from '../../time/worldClock.js';
  * @returns {object}
  */
 export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+  const { setEntries, setVisible, clearSource } = services.overlays;
 
   const state = {};
   state._historyBudget = createHistoryBudget();
@@ -19,15 +18,14 @@ export function createState({ services }) {
   state.now = worldTimeFor('transit');
 
   state.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
   });
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  /** @type {Cesium.Viewer|null} */
-  state._viewer = null;
-  /** @type {Cesium.BillboardCollection|null} */
+  /** The viewer the layer was initialized with (its renderer draws). */
+  /** The renderer's marker collections: the fleet and the vehicles mid-glide. */
   state._markers = null;
   state._animatedMarkers = null;
   state._visible = new Set();
@@ -40,6 +38,7 @@ export function createState({ services }) {
   state._generation = 0;
 
   state._cameraChangedAttached = false;
+  state._cameraChangedRemove = null;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
   /** Camera sensitivity as we found it, so disable() can hand it back. */
@@ -50,7 +49,7 @@ export function createState({ services }) {
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;
   state._renderHeld = false;
-  /** @type {Cesium.ScreenSpaceEventHandler|null} */
+  /** @type {{ destroy: () => void }|null} The renderer's click binding. */
   state._clickHandler = null;
   /**
    * The vehicles currently mid-glide. The per-frame pass walks THIS, not the
@@ -123,7 +122,7 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  state._scratchCartesian = geo.cartesian3.create();
 
   return state;
 }

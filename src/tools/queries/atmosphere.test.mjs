@@ -186,6 +186,25 @@ test('wind is sampled from the model grid at the location', async () => {
   );
 });
 
+test('an empty wind field is no surface reading, never a NaN speed or calm', async () => {
+  const grid = { nx: 4, ny: 3, lo1: 0, la1: 90, dx: 90, dy: 90 };
+  for (const cells of [new Float32Array(0), new Float32Array(12).fill(NaN)]) {
+    const catalog = composeCatalog({
+      tools: coreTools,
+      services: {
+        wind: { getSnapshot: async () => ({ grid, u: cells, v: cells }) },
+      },
+    });
+    await assert.rejects(
+      catalog.call('get_wind', { location: { lat: 20, lon: 10 } }),
+      (error) =>
+        error.code === 'unavailable' &&
+        /No surface wind reading at 20\.0000, 10\.0000/.test(error.message) &&
+        !/calm|NaN|undefined/i.test(error.message),
+    );
+  }
+});
+
 test('a weather window that cannot cover the area falls back to the whole map', async () => {
   const world = { west: -180, south: -90, east: 180, north: 90 };
   // 100 km around 179.8° crosses the antimeridian.

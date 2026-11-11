@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /** Location UI acceptance; controlled search results isolate UI races from geocoder availability. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -26,11 +25,10 @@ try {
     { waitUntil: 'domcontentloaded' },
   );
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._locationControls &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._locationControls,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   await page.click('#location-bar-toggle');
   await page.click('[data-pin-target="location-bar"]');
   const cityId = await page.$eval(
@@ -114,10 +112,7 @@ try {
     },
     { timeout: 30000 },
   );
-  await page.waitForFunction(
-    () => !window.__godsEyeView.viewer.camera._currentFlight,
-    { timeout: 10000 },
-  );
+  await whenSettled(page);
   check(
     'native geo URI search shows the decimal coordinate readout',
     await page.evaluate(() => {
@@ -135,7 +130,7 @@ try {
   check(
     'geo URI navigation settles near the requested coordinate',
     await page.evaluate(() => {
-      const position = window.__godsEyeView.viewer.camera.positionCartographic;
+      const position = window.__godsEyeView.engine.camera.pose().cartographic;
       const degrees = 180 / Math.PI;
       return (
         Math.abs(position.latitude * degrees - 39.7392) < 0.05 &&
@@ -252,36 +247,17 @@ try {
     document.getElementById('poi-row').classList.contains('expanded'),
   );
   // Finish the camera's existing city flight before inspecting both layouts.
-  await page.waitForFunction(
-    () => !window.__godsEyeView.viewer.camera._currentFlight,
-    { timeout: 10000 },
-  );
+  await whenSettled(page);
   await page.evaluate(
     () =>
       new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       ),
   );
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const scene = window.__godsEyeView.viewer.scene;
-        for (let index = 0; index < scene.primitives.length; index++) {
-          const primitive = scene.primitives.get(index);
-          if (
-            typeof primitive.tilesLoaded === 'boolean' &&
-            !primitive.tilesLoaded
-          )
-            return false;
-        }
-        return true;
-      },
-      { timeout: 60000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
+  const settled = await whenTilesLoaded(page, { timeoutMs: 60000 }).then(
+    () => true,
+    () => false,
+  );
   check('visible city tiles settle before screenshots', settled);
   fs.mkdirSync('qa-shots/location-controls', { recursive: true });
   await page.screenshot({ path: 'qa-shots/location-controls/desktop.png' });
@@ -301,7 +277,8 @@ try {
       if (!pending) return false;
       await pending;
       return (
-        !ui.orbitController.active && !window.__godsEyeView.viewer.trackedEntity
+        !ui.orbitController.active &&
+        !window.__godsEyeView.engine.camera.following()
       );
     }),
   );
@@ -329,7 +306,7 @@ try {
   );
   check('no uncaught browser errors', errors.length === 0);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures} failures`);
 process.exitCode = failures ? 1 : 0;

@@ -1,9 +1,7 @@
-import * as Cesium from 'cesium';
-import { renderPackGeometry } from './geometry.js';
+import { createPackRenderer } from './display.js';
+import { decodePackGeoJSON } from '../../director/packs/geojson.js';
 import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
-
-const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
 // Key every panel and card on the page, so a new one never reuses an old
 // one's DOM.
@@ -13,21 +11,23 @@ let panelKeys = 0,
 /**
  * Create rendering adapters; data acquisition and authored placement stay
  * independent. Each pack's attribution card is presented to the data packs
- * store, which its view renders inside the viewer's container.
+ * store, which its view renders inside the engine's container.
  */
 export function createPackPresentations(
-  viewer,
+  engine,
   targets = new Map(),
-  { store = useDataPacksStore(applicationPinia()) } = {},
+  {
+    store = useDataPacksStore(applicationPinia()),
+    container = engine?.host?.container,
+  } = {},
 ) {
+  let renderer = engine ? createPackRenderer(engine) : null;
   const owner = {};
+  const resources = new Set();
   let key,
     cards = [];
   function present() {
-    store.publish(
-      owner,
-      cards.length ? { key, container: viewer.container, cards } : null,
-    );
+    store.publish(owner, cards.length ? { key, container, cards } : null);
   }
   function addCard(pack) {
     if (!cards.length) key = ++panelKeys;
@@ -53,30 +53,32 @@ export function createPackPresentations(
     present();
   }
   function resource(pack) {
-    const entities = [],
-      primitives = [],
-      materials = [],
-      urls = [];
+    const urls = [];
     const featureKeys = [];
     let card,
+      draw,
       destroyed = false;
-    return {
+    const removers = [];
+    const handle = {
+      own(remove) {
+        removers.push(remove);
+      },
+      display(render) {
+        draw = render;
+        if (renderer) draw(renderer);
+      },
+      redraw() {
+        if (!destroyed && renderer) draw?.(renderer);
+      },
+      detach() {
+        for (const key of featureKeys.splice(0)) targets.delete(key);
+        for (const remove of removers.splice(0).reverse()) remove();
+        engine?.render?.request('scene-pack');
+      },
       feature(id, pickedId) {
         const key = JSON.stringify([id.packId, id.featureId]);
         targets.set(key, pickedId);
         featureKeys.push(key);
-      },
-      add(spec) {
-        const entity = viewer.entities.add(spec);
-        entities.push(entity);
-        viewer.scene.requestRender();
-        return entity;
-      },
-      primitive(value) {
-        primitives.push(viewer.scene.primitives.add(value));
-        if (value.appearance?.material)
-          materials.push(value.appearance.material);
-        viewer.scene.requestRender();
       },
       card() {
         card ||= addCard(pack);
@@ -94,19 +96,14 @@ export function createPackPresentations(
       dispose() {
         if (destroyed) return;
         destroyed = true;
-        for (const key of featureKeys.splice(0)) targets.delete(key);
-        // The view stops a removed card's player as it goes.
+        handle.detach();
+        resources.delete(handle);
         if (card) removeCard(card);
-        for (const entity of entities.splice(0)) viewer.entities.remove(entity);
-        for (const primitive of primitives.splice(0))
-          viewer.scene.primitives.remove(primitive);
-        for (const material of materials.splice(0)) {
-          if (!material.isDestroyed()) material.destroy();
-        }
         for (const url of urls.splice(0)) URL.revokeObjectURL(url);
-        viewer.scene.requestRender();
       },
     };
+    resources.add(handle);
+    return handle;
   }
   function guarded(render) {
     return async (context) => {
@@ -128,7 +125,22 @@ export function createPackPresentations(
     };
   }
   return {
-    geojson: guarded(renderPackGeometry),
+    setScene(nextEngine, nextContainer) {
+      for (const handle of resources) handle.detach();
+      engine = nextEngine;
+      renderer = engine ? createPackRenderer(engine) : null;
+      if (nextContainer) container = nextContainer;
+      for (const handle of resources) handle.redraw();
+      if (cards.length) present();
+    },
+    geojson: guarded(({ asset, pack }, handle) => {
+      if (
+        !['application/json', 'application/geo+json'].includes(asset.mimeType)
+      )
+        throw new Error('Expected GeoJSON');
+      const features = decodePackGeoJSON(asset.bytes);
+      handle.display((renderer) => renderer.geometry(pack, features, handle));
+    }),
     image: guarded(async ({ asset, pack, signal }, handle) => {
       if (asset.mimeType !== 'image/png') throw new Error('Expected PNG image');
       const bytes = asset.bytes;
@@ -162,27 +174,7 @@ export function createPackPresentations(
       signal.throwIfAborted();
       if (image.naturalWidth * image.naturalHeight > 16 * 1024 * 1024)
         throw new Error('Image dimensions exceed limit');
-      handle.primitive(
-        new Cesium.Primitive({
-          asynchronous: false,
-          geometryInstances: new Cesium.GeometryInstance({
-            id: { packId: pack.id },
-            geometry: new Cesium.RectangleGeometry({
-              rectangle: Cesium.Rectangle.fromDegrees(...pack.placement.bounds),
-              height: pack.placement.height,
-              vertexFormat:
-                Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
-            }),
-          }),
-          appearance: new Cesium.MaterialAppearance({
-            material: Cesium.Material.fromType('Image', { image }),
-            materialSupport: Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
-            flat: true,
-            faceForward: true,
-            translucent: true,
-          }),
-        }),
-      );
+      handle.display((renderer) => renderer.image(pack, image, handle));
     }),
     media: guarded(({ asset, pack, anchors }, handle) => {
       if (
@@ -200,16 +192,7 @@ export function createPackPresentations(
         (item) => item.id === pack.placement.anchorId,
       );
       if (!anchor) throw new Error('Missing media anchor');
-      handle.add({
-        name: pack.id,
-        position: xyz([anchor.lon, anchor.lat, anchor.alt]),
-        point: { pixelSize: 16, color: Cesium.Color.YELLOW },
-        label: {
-          text: pack.id,
-          font: '14px sans-serif',
-          pixelOffset: new Cesium.Cartesian2(0, -24),
-        },
-      });
+      handle.display((renderer) => renderer.media(pack, anchor, handle));
       handle.media({
         kind: asset.mimeType.startsWith('video/') ? 'video' : 'audio',
         src: handle.url(new Blob([asset.bytes], { type: asset.mimeType })),

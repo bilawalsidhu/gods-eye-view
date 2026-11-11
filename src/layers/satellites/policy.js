@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { WHITE, rgbaFromCss } from '../shared/color.js';
 import { satelliteClassColor } from '../../data/satelliteClass.js';
 import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
 
@@ -91,7 +92,7 @@ export const DENSE_CREATE_CHUNK = 1500;
  * High orbits (MEO nav / GEO belt) scale this up so the ring stays in frame.
  */
 
-export const TRACK_VIEW_FROM_LEO = new Cesium.Cartesian3(
+export const TRACK_VIEW_FROM_LEO = geo.cartesian3.create(
   -450000,
   -450000,
   350000,
@@ -114,10 +115,9 @@ export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
  * attribute, so classification costs nothing per frame.
  */
 
-const POINT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.3);
+const POINT_OUTLINE = WHITE.withAlpha(0.3);
 
-const _classColor = (group) =>
-  Cesium.Color.fromCssColorString(satelliteClassColor(group));
+const _classColor = (group) => rgbaFromCss(satelliteClassColor(group));
 
 export const POINT_STYLES = {
   // The ISS keeps its own long-standing red hero styling rather than the
@@ -126,7 +126,7 @@ export const POINT_STYLES = {
   // Its card still reads "STATION · ISS", so the class stays legible.
   iss: {
     pixelSize: 12,
-    color: Cesium.Color.fromCssColorString('#ff4444'),
+    color: rgbaFromCss('#ff4444'),
     outlineColor: POINT_OUTLINE,
     outlineWidth: 2,
   },
@@ -180,7 +180,7 @@ export const POINT_STYLES = {
 const CLASS_COLORS = Object.fromEntries(
   SATELLITE_CLASS_IDS.map((id) => [
     id,
-    Cesium.Color.fromCssColorString(SATELLITE_CLASS_DISPLAY[id].color),
+    rgbaFromCss(SATELLITE_CLASS_DISPLAY[id].color),
   ]),
 );
 const _classStyles = new Map();

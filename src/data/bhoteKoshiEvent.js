@@ -1,11 +1,11 @@
+import { readSurface } from '../globe/surfacePlacement.js';
+import { bindOverlayHost } from '../overlays/bindOverlayHost.js';
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
+import { waitForSignal } from '../sources/requestDeadline.js';
 import * as Cesium from 'cesium';
+import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
 import { isPointerFree } from './inputOwnership.js';
-import {
-  clearOverlaySource,
-  hitTestWorldOverlay,
-  setOverlayEntries,
-  setOverlaySourceVisible,
-} from '../overlays/worldOverlay.js';
+
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
 import {
   governorRequestRender,
@@ -45,9 +45,12 @@ const SCENE_REVEAL_RENDER_HOLD = 'bhote-koshi-scene-beat-reveal';
 const SCENE_PATH_RENDER_HOLD = 'bhote-koshi-scene-path-travel';
 const SCENE_MEDIA_MIN_PLAYBACK_SECONDS = 6;
 const SCENE_MEDIA_EXIT_SECONDS = 0.65;
+// A camera this near an evidence anchor has the valley's terrain loaded.
+const EVIDENCE_REFINE_M = 25_000;
 const BHOTE_EVENT_ACCENT = WORLD_OVERLAY_STYLE.accent;
-const FLOOD_COLOR = Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
-const SURGE_COLOR = Cesium.Color.fromCssColorString('#e8b47c');
+const FLOOD_COLOR = () =>
+  Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
+const SURGE_COLOR = () => Cesium.Color.fromCssColorString('#e8b47c');
 const CINEMATIC_INPUT_EVENTS = Object.freeze(['pointerdown', 'wheel']);
 const CINEMATIC_VIEW_SPECS = Object.freeze([
   {
@@ -102,12 +105,7 @@ const PASSIVE_ENABLE_ORIGINS = new Set([
   'dependency-restore',
 ]);
 
-const DEFAULT_OVERLAY_HOST = Object.freeze({
-  setEntries: setOverlayEntries,
-  setVisible: setOverlaySourceVisible,
-  clearSource: clearOverlaySource,
-  hitTest: hitTestWorldOverlay,
-});
+const DEFAULT_OVERLAY_HOST = worldOverlayFor;
 const DEFAULT_RENDER_HOST = Object.freeze({
   request: governorRequestRender,
   hold: holdContinuousRender,
@@ -119,8 +117,6 @@ const DEFAULT_EVENT_LOADER = async () => {
     throw new Error(`Bhote Koshi event pack unavailable (${response.status})`);
   return response.json();
 };
-const DEFAULT_IMAGERY_PROVIDER_FACTORY = (url, options) =>
-  Cesium.SingleTileImageryProvider.fromUrl(url, options);
 const DEFAULT_TERRAIN_SAMPLER = async (viewer, observations) => {
   if (
     !viewer?.terrainProvider ||
@@ -889,7 +885,7 @@ function openExternal(url) {
   if (target) target.opener = null;
 }
 
-function focusView(viewer, viewpoint) {
+function focusView(engine, viewpoint) {
   announceNavigationAuthority('bhote-koshi-event-focus');
   const target = Cesium.Cartesian3.fromDegrees(
     viewpoint.lon,
@@ -901,15 +897,20 @@ function focusView(viewer, viewpoint) {
     Cesium.Math.toRadians(viewpoint.pitchDeg),
     viewpoint.rangeM,
   );
-  viewer.camera.cancelFlight?.();
-  viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 80), {
-    offset,
-    duration: 2.2,
-    complete: () => {
-      viewer.camera.lookAt(target, offset);
-      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  engine.camera.cancelFlight();
+  engine.camera.flyToSphere(
+    { center: target, radius: 80 },
+    {
+      heading: offset.heading,
+      pitch: offset.pitch,
+      range: offset.range,
+      duration: 2.2,
+      complete: () => {
+        engine.camera.lookAt(target, offset);
+        engine.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      },
     },
-  });
+  );
 }
 
 function setElementProperty(element, property, value) {
@@ -987,16 +988,27 @@ export function createBhoteKoshiEventLayer({
   overlayHost = DEFAULT_OVERLAY_HOST,
   renderHost = DEFAULT_RENDER_HOST,
   eventLoader = DEFAULT_EVENT_LOADER,
-  imageryProviderFactory = DEFAULT_IMAGERY_PROVIDER_FACTORY,
   terrainSampler = DEFAULT_TERRAIN_SAMPLER,
   mediaLoader = DEFAULT_MEDIA_LOADER,
+  imageLoader = DEFAULT_MEDIA_LOADER,
   evidenceFrameFactory = createEvidenceFrame,
   evidenceFrameUpdater = updateEvidenceFrame,
   videoFactory = DEFAULT_VIDEO_FACTORY,
   embeddedMediaFactory = createBhoteKoshiEmbeddedMedia,
+  createNativeRenderer,
   panelStore = useBhoteKoshiPanelStore(applicationPinia()),
 } = {}) {
   let _viewer = null;
+  let _attachmentContext = null;
+  overlayHost = bindOverlayHost(overlayHost, () => _engine);
+  let _engine = null;
+  let _native = null;
+  let _nativeFlood = null;
+  // The before and after images, decoded once for every engine the event
+  // is drawn on (as Cesium's providers were kept across switches).
+  let _imageryImages = null;
+  const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
+  const canvasForScene = () => _engine?.host.canvas ?? _viewer?.scene?.canvas;
   let _dataManager = null;
   let _mapStackController = null;
   let _event = null;
@@ -1011,9 +1023,6 @@ export function createBhoteKoshiEventLayer({
   let _panelFixed = null;
   let _offPanelLocale = null;
   let _splitControl = null;
-  let _beforeLayer = null;
-  let _afterLayer = null;
-  let _imageryLayerCollection = null;
   let _floodDataSource = null;
   let _floodSurfaceMode = null;
   let _floodHalo = null;
@@ -1033,6 +1042,9 @@ export function createBhoteKoshiEventLayer({
   let _evidenceTimeline = [];
   let _evidenceAnchors = [];
   let _evidenceFrameSlots = [];
+  let _evidenceEntries = [];
+  // Evidence anchors at the pack's elevations (no terrain sample).
+  const _fallbackAnchors = new WeakSet();
   let _evidenceVideo = null;
   let _evidenceVideoIndex = -1;
   let _evidenceVideoReady = false;
@@ -1052,8 +1064,8 @@ export function createBhoteKoshiEventLayer({
   let _cinematicKeyframes = [];
   let _cinematicActive = false;
   let _cinematicReplayArmed = false;
-  let _cinematicPose = { target: new Cesium.Cartesian3() };
-  let _cinematicOffset = new Cesium.HeadingPitchRange();
+  let _cinematicPose = { target: { x: 0, y: 0, z: 0 } };
+  let _cinematicOffset = { heading: 0, pitch: 0, range: 0 };
   let _lastCinematicProgress = null;
   let _cameraInputTarget = null;
   let _evidenceClickTarget = null;
@@ -1109,7 +1121,7 @@ export function createBhoteKoshiEventLayer({
     if (!_enabled || generation !== _comparisonSurfaceGeneration) return;
     syncFloodSurfaceMode();
     updateProgress(_progress);
-    renderHost.request('bhote-koshi-comparison-ready');
+    renderHost.request('bhote-koshi-comparison-ready', _engine);
   }
 
   function attachDataManager(dataManager) {
@@ -1153,32 +1165,35 @@ export function createBhoteKoshiEventLayer({
     return _event;
   }
 
-  async function createImagery(event) {
-    const rectangle = Cesium.Rectangle.fromDegrees(
-      event.imagery.rectangle.west,
-      event.imagery.rectangle.south,
-      event.imagery.rectangle.east,
-      event.imagery.rectangle.north,
+  async function createImagery(event, current = () => true) {
+    // The engine's display draws the images through engine.imagery.
+    _imageryImages ??= Promise.all(
+      [event.imagery.before.path, event.imagery.after.path].map((path) =>
+        imageLoader(eventAsset(path)),
+      ),
     );
-    const [beforeProvider, afterProvider] = await Promise.all([
-      imageryProviderFactory(eventAsset(event.imagery.before.path), {
-        rectangle,
-        credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
-      }),
-      imageryProviderFactory(eventAsset(event.imagery.after.path), {
-        rectangle,
-        credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
-      }),
-    ]);
-    if (!_enabled) return;
-    _imageryLayerCollection = _viewer.imageryLayers;
-    _beforeLayer = _imageryLayerCollection.addImageryProvider(beforeProvider);
-    _afterLayer = _imageryLayerCollection.addImageryProvider(afterProvider);
-    _beforeLayer.splitDirection = Cesium.SplitDirection.LEFT;
-    _afterLayer.splitDirection = Cesium.SplitDirection.RIGHT;
-    _beforeLayer.alpha = 0.96;
-    _afterLayer.alpha = 0.96;
-    setSplit(_split);
+    let images;
+    try {
+      images = await _imageryImages;
+    } catch {
+      _imageryImages = null;
+      throw new Error('Bhote Koshi imagery unavailable');
+    }
+    // These decoded images replace empty layers. Install them hidden so a
+    // tileset with no imagery requests cannot hold enable behind a drawn frame.
+    _native.setVisible(false);
+    await _native.loadImages(
+      event.imagery.rectangle,
+      images,
+      'Vantor WorldView Open Data · CC BY-NC 4.0',
+    );
+    if (_enabled && current()) {
+      _native.setVisible(
+        _presentation !== BHOTE_KOSHI_SCENE_PRESENTATION ||
+          _sceneControls.imageryComparison === true,
+      );
+      setSplit(_split);
+    }
   }
 
   async function resolveEvidenceAnchors(event, signal) {
@@ -1187,7 +1202,20 @@ export function createBhoteKoshiEventLayer({
       : [];
     let sampled = null;
     try {
-      sampled = await terrainSampler(_viewer, observations, { signal });
+      if (_engine && !_viewer) {
+        const revision = _engine.maps.terrainRevision();
+        const heights = await waitForSignal(
+          _engine.surface.sampleTerrainMostDetailed(
+            observations.map(({ lon, lat }) =>
+              Cesium.Cartographic.fromDegrees(lon, lat),
+            ),
+          ),
+          signal,
+        );
+        // Heights of a terrain replaced meanwhile are not the one shown.
+        if (_engine.maps.terrainRevision() === revision)
+          sampled = heights.map((height) => ({ height }));
+      } else sampled = await terrainSampler(_viewer, observations, { signal });
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       console.warn(
@@ -1199,12 +1227,35 @@ export function createBhoteKoshiEventLayer({
     return observations.map((observation, index) => {
       const sampledHeight = Number(sampled?.[index]?.height);
       const fallbackHeight = Number(observation.fallbackElevationM) || 0;
-      return Cesium.Cartesian3.fromDegrees(
+      const anchor = Cesium.Cartesian3.fromDegrees(
         observation.lon,
         observation.lat,
         (Number.isFinite(sampledHeight) ? sampledHeight : fallbackHeight) + 18,
       );
+      if (!Number.isFinite(sampledHeight)) _fallbackAnchors.add(anchor);
+      return anchor;
     });
+  }
+
+  // An anchor at the pack's elevation, on Navara, moves onto the terrain
+  // loaded under a near camera (the valley's, not an overview tile's), in
+  // place, so the card's cull position follows.
+  function refineEvidenceAnchor(index) {
+    const anchor = _evidenceAnchors[index];
+    if (!anchor || _viewer || !_engine || !_fallbackAnchors.has(anchor))
+      return anchor || null;
+    const live = _engine.camera.livePosition;
+    if (!live || Cesium.Cartesian3.distance(live, anchor) > EVIDENCE_REFINE_M)
+      return anchor;
+    const { lon, lat } = _evidenceTimeline[index]?.observation ?? {};
+    const height = Number.isFinite(lon)
+      ? readSurface(_engine, Cesium.Cartographic.fromDegrees(lon, lat), {
+          prefer: 'terrain',
+        })
+      : undefined;
+    if (Number.isFinite(height))
+      Cesium.Cartesian3.fromDegrees(lon, lat, height + 18, undefined, anchor);
+    return anchor;
   }
 
   function evidencePositionGetter(index, breadcrumb = false) {
@@ -1227,13 +1278,13 @@ export function createBhoteKoshiEventLayer({
           _sceneMediaPlaybackCompletedBeatId
         )
           return null;
-        return _evidenceAnchors[index] || null;
+        return refineEvidenceAnchor(index);
       }
       const activeIndex = activeEvidenceIndex(_progress, _evidenceTimeline);
       if (breadcrumb ? index >= activeIndex : index !== activeIndex)
         return null;
       if (!breadcrumb && index === _embeddedEvidenceIndex) return null;
-      return _evidenceAnchors[index] || null;
+      return refineEvidenceAnchor(index);
     };
   }
 
@@ -1374,7 +1425,8 @@ export function createBhoteKoshiEventLayer({
     }
     _sceneMediaPlaybackBeatId = null;
     if (pauseMedia) _embeddedMedia?.pause?.();
-    if (hadPlayback) renderHost.request('bhote-koshi-scene-media-hold');
+    if (hadPlayback)
+      renderHost.request('bhote-koshi-scene-media-hold', _engine);
   }
 
   function completeSceneMediaPlayback() {
@@ -1392,7 +1444,7 @@ export function createBhoteKoshiEventLayer({
         if (_sceneMediaPlaybackBeatId !== beatId) return;
         _sceneMediaPlaybackTimer = null;
         _sceneMediaPlaybackBeatId = null;
-        renderHost.request('bhote-koshi-scene-media-exit');
+        renderHost.request('bhote-koshi-scene-media-exit', _engine);
       }, exitDurationSec * 1000) ?? null;
   }
 
@@ -1574,13 +1626,17 @@ export function createBhoteKoshiEventLayer({
       if (_sceneControls.evidencePathElevation !== 'source') {
         // Sample once while preparing the shot, never from an animation frame.
         try {
-          height = _viewer?.scene?.sampleHeight?.(
-            position,
-            [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
-          );
+          height =
+            readSurface(_engine, position, { prefer: 'scene' }) ??
+            _viewer?.scene?.sampleHeight?.(
+              position,
+              [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
+            );
         } catch {}
         if (!Number.isFinite(height))
-          height = _viewer?.scene?.globe?.getHeight?.(position);
+          height =
+            readSurface(_engine, position, { prefer: 'terrain' }) ??
+            _viewer?.scene?.globe?.getHeight?.(position);
       }
       if (!Number.isFinite(height)) height = point.fallbackElevationM;
       return Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height + 8);
@@ -1711,7 +1767,8 @@ export function createBhoteKoshiEventLayer({
     if (_sceneRevealAnimationFrame != null)
       cancelAnimationFrame(_sceneRevealAnimationFrame);
     _sceneRevealAnimationFrame = null;
-    if (_sceneRevealHoldActive) renderHost.release(SCENE_REVEAL_RENDER_HOLD);
+    if (_sceneRevealHoldActive)
+      renderHost.release(SCENE_REVEAL_RENDER_HOLD, _engine);
     _sceneRevealHoldActive = false;
   }
 
@@ -1722,7 +1779,8 @@ export function createBhoteKoshiEventLayer({
     if (_scenePathDeadlineTimer != null)
       globalThis.window?.clearTimeout?.(_scenePathDeadlineTimer);
     _scenePathDeadlineTimer = null;
-    if (_scenePathHoldActive) renderHost.release(SCENE_PATH_RENDER_HOLD);
+    if (_scenePathHoldActive)
+      renderHost.release(SCENE_PATH_RENDER_HOLD, _engine);
     _scenePathHoldActive = false;
   }
 
@@ -1736,8 +1794,9 @@ export function createBhoteKoshiEventLayer({
     _scenePathRevealProgress = targetProgress;
     updateFloodTrace(_scenePathRevealProgress);
     updateSurgeFront(_scenePathRevealProgress);
-    renderHost.request(requestReason);
-    if (_scenePathHoldActive) renderHost.release(SCENE_PATH_RENDER_HOLD);
+    renderHost.request(requestReason, _engine);
+    if (_scenePathHoldActive)
+      renderHost.release(SCENE_PATH_RENDER_HOLD, _engine);
     _scenePathHoldActive = false;
   }
 
@@ -1908,7 +1967,7 @@ export function createBhoteKoshiEventLayer({
       lastTickAt = tickAt;
       return activeElapsedMs;
     };
-    renderHost.hold(SCENE_PATH_RENDER_HOLD);
+    renderHost.hold(SCENE_PATH_RENDER_HOLD, _engine);
     _scenePathHoldActive = true;
     // RAF normally paints every intermediate frame. This independent deadline
     // is registered before Cesium starts the flight, so a throttled or briefly
@@ -1957,7 +2016,7 @@ export function createBhoteKoshiEventLayer({
         startProgress + (targetProgress - startProgress) * eased;
       updateFloodTrace(_scenePathRevealProgress);
       updateSurgeFront(_scenePathRevealProgress);
-      renderHost.request('bhote-koshi-scene-path-travel');
+      renderHost.request('bhote-koshi-scene-path-travel', _engine);
       if (linear < 1) {
         _scenePathAnimationFrame = requestAnimationFrame(step);
       } else {
@@ -2015,7 +2074,7 @@ export function createBhoteKoshiEventLayer({
     if (sequenceWindow) updateProgress(sequenceWindow.startProgress);
     let lastTickAt = performance.now();
     let activeElapsedMs = 0;
-    renderHost.hold(SCENE_REVEAL_RENDER_HOLD);
+    renderHost.hold(SCENE_REVEAL_RENDER_HOLD, _engine);
     _sceneRevealHoldActive = true;
     const step = (now) => {
       if (
@@ -2046,12 +2105,12 @@ export function createBhoteKoshiEventLayer({
         updateFloodTrace(floodProgress);
         updateSurgeFront(floodProgress);
       }
-      renderHost.request('bhote-koshi-scene-beat-reveal');
+      renderHost.request('bhote-koshi-scene-beat-reveal', _engine);
       if (linear < 1) {
         _sceneRevealAnimationFrame = requestAnimationFrame(step);
       } else {
         _sceneRevealAnimationFrame = null;
-        renderHost.release(SCENE_REVEAL_RENDER_HOLD);
+        renderHost.release(SCENE_REVEAL_RENDER_HOLD, _engine);
         _sceneRevealHoldActive = false;
       }
     };
@@ -2096,7 +2155,7 @@ export function createBhoteKoshiEventLayer({
           ),
         })
       ) {
-        renderHost.request('bhote-koshi-evidence-video-frame');
+        renderHost.request('bhote-koshi-evidence-video-frame', _engine);
       }
       _evidenceVideoFrameHandle = video.requestVideoFrameCallback(drawFrame);
     };
@@ -2125,7 +2184,7 @@ export function createBhoteKoshiEventLayer({
       previousIndex >= 0 &&
       redrawEvidenceSlot(previousIndex)
     ) {
-      renderHost.request('bhote-koshi-evidence-poster-restore');
+      renderHost.request('bhote-koshi-evidence-poster-restore', _engine);
     }
   }
 
@@ -2153,7 +2212,7 @@ export function createBhoteKoshiEventLayer({
       )
         return;
       _evidenceVideoReady = true;
-      renderHost.request('bhote-koshi-evidence-video-ready');
+      renderHost.request('bhote-koshi-evidence-video-ready', _engine);
       syncEvidenceMedia();
     };
     video.addEventListener?.('loadeddata', markReady, { once: true });
@@ -2164,7 +2223,7 @@ export function createBhoteKoshiEventLayer({
         video !== _evidenceVideo
       )
         return;
-      renderHost.request('bhote-koshi-evidence-video-seek');
+      renderHost.request('bhote-koshi-evidence-video-seek', _engine);
     });
     video.src = eventAsset(videoPath);
     video.load?.();
@@ -2312,7 +2371,7 @@ export function createBhoteKoshiEventLayer({
         mediaProgress: presentation.localProgress,
       })
     ) {
-      renderHost.request('bhote-koshi-evidence-video-frame');
+      renderHost.request('bhote-koshi-evidence-video-frame', _engine);
     }
   }
 
@@ -2422,7 +2481,12 @@ export function createBhoteKoshiEventLayer({
         placement: 'above',
       });
     }
-    overlayHost.setEntries(BHOTE_KOSHI_OVERLAY_SOURCE_ID, entries, {
+    _evidenceEntries = entries;
+    restoreEvidenceEntries();
+  }
+
+  function restoreEvidenceEntries() {
+    overlayHost.setEntries(BHOTE_KOSHI_OVERLAY_SOURCE_ID, _evidenceEntries, {
       cohortLimit: 16,
       collisionCapacity: 12,
       moving: false,
@@ -2458,7 +2522,7 @@ export function createBhoteKoshiEventLayer({
           slot.poster = poster;
           poster = null;
           if (!redrawEvidenceSlot(index)) return;
-          renderHost.request('bhote-koshi-evidence-poster');
+          renderHost.request('bhote-koshi-evidence-poster', _engine);
         } catch (error) {
           closeFrame(poster);
           if (
@@ -2526,11 +2590,11 @@ export function createBhoteKoshiEventLayer({
     const tileSafe = usesPhotorealFloodSurface();
     _floodSurfaceMode = tileSafe ? 'tiles' : 'terrain';
     const haloMaterial = new Cesium.PolylineDashMaterialProperty({
-      color: FLOOD_COLOR.withAlpha(0.38),
+      color: FLOOD_COLOR().withAlpha(0.38),
       dashLength: 18,
     });
     const coreMaterial = new Cesium.PolylineGlowMaterialProperty({
-      color: FLOOD_COLOR.withAlpha(0.96),
+      color: FLOOD_COLOR().withAlpha(0.96),
       glowPower: 0.24,
       taperPower: 0.7,
     });
@@ -2575,20 +2639,27 @@ export function createBhoteKoshiEventLayer({
       position: Cesium.Cartesian3.ZERO,
       point: {
         pixelSize: 11,
-        color: SURGE_COLOR,
+        color: SURGE_COLOR(),
         outlineColor: Cesium.Color.BLACK.withAlpha(0.85),
         outlineWidth: 3,
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: tileSafe ? Number.POSITIVE_INFINITY : 0,
       },
     });
-    _viewer.dataSources.add(_floodDataSource);
+    // The engine's story display.
+    _nativeFlood = _native?.draw(_floodDataSource) ?? null;
   }
 
   function syncFloodSurfaceMode() {
     const nextMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
-    if (!_viewer || !_floodDataSource || _floodSurfaceMode === nextMode) return;
-    _viewer.dataSources.remove(_floodDataSource, true);
+    if (
+      (!_viewer && !_native) ||
+      !_floodDataSource ||
+      _floodSurfaceMode === nextMode
+    )
+      return;
+    _nativeFlood?.destroy();
+    _nativeFlood = null;
     _floodDataSource = null;
     _floodHalo = null;
     _floodCore = null;
@@ -2601,7 +2672,7 @@ export function createBhoteKoshiEventLayer({
 
   function createSplitControl(event) {
     _splitControl = createImagerySplit({
-      scene: _viewer.scene,
+      scene: _viewer?.scene,
       initialValue: _split,
       id: 'bhote-koshi-split-line',
       handleClass: 'bhote-koshi-split-handle',
@@ -2620,8 +2691,9 @@ export function createBhoteKoshiEventLayer({
 
   function applyCinematicCamera() {
     if (
+      _attachmentContext?.viewReady === false ||
       !_cinematicActive ||
-      !_viewer?.camera ||
+      !cameraForScene() ||
       _cinematicKeyframes.length === 0
     )
       return;
@@ -2635,7 +2707,7 @@ export function createBhoteKoshiEventLayer({
     _cinematicOffset.heading = Cesium.Math.toRadians(pose.headingDeg);
     _cinematicOffset.pitch = Cesium.Math.toRadians(pose.pitchDeg);
     _cinematicOffset.range = pose.rangeM;
-    _viewer.camera.lookAt(pose.target, _cinematicOffset);
+    cameraForScene().lookAt(pose.target, _cinematicOffset);
     _lastCinematicProgress = _progress;
   }
 
@@ -2705,7 +2777,7 @@ export function createBhoteKoshiEventLayer({
       _cinematicActive = true;
       _lastCinematicProgress = null;
       announceNavigationAuthority('bhote-koshi-cinematic');
-      _viewer?.camera?.cancelFlight?.();
+      cameraForScene()?.cancelFlight?.();
     }
     syncCinematicButton();
     return true;
@@ -2723,9 +2795,9 @@ export function createBhoteKoshiEventLayer({
     _cinematicActive = false;
     _lastCinematicProgress = null;
     if (releaseCamera)
-      _viewer?.camera?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
+      cameraForScene()?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
     syncCinematicButton();
-    renderHost.request('bhote-koshi-cinematic-stop');
+    renderHost.request('bhote-koshi-cinematic-stop', _engine);
   }
 
   function startCinematic({ play = true } = {}) {
@@ -2757,7 +2829,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   function attachCameraInputRelease() {
-    _cameraInputTarget = _viewer?.scene?.canvas || null;
+    _cameraInputTarget = canvasForScene() || null;
     for (const type of CINEMATIC_INPUT_EVENTS) {
       _cameraInputTarget?.addEventListener?.(type, handleManualCameraInput);
     }
@@ -2803,7 +2875,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   function attachEvidenceCardActivation() {
-    _evidenceClickTarget = _viewer?.scene?.canvas || null;
+    _evidenceClickTarget = canvasForScene() || null;
     _evidenceClickTarget?.addEventListener?.('click', handleEvidenceCardClick);
   }
 
@@ -3273,8 +3345,7 @@ export function createBhoteKoshiEventLayer({
     if (_panelRefs?.progressInput)
       _panelRefs.progressInput.hidden = !scrubberAvailable;
     _splitControl?.setVisible(imageryAvailable);
-    if (_beforeLayer) _beforeLayer.show = imageryAvailable;
-    if (_afterLayer) _afterLayer.show = imageryAvailable;
+    _native?.setVisible(imageryAvailable);
     if (_panelRefs?.caveat) {
       _panelRefs.caveat.textContent = imageryAvailable
         ? bhoteEventText(_event?.reconstruction?.caveat || '')
@@ -3385,14 +3456,15 @@ export function createBhoteKoshiEventLayer({
     applyCinematicCamera();
     syncEvidenceMedia();
     syncPanel();
-    renderHost.request('bhote-koshi-progress');
+    renderHost.request('bhote-koshi-progress', _engine);
   }
 
   function setSplit(split) {
     _split = clampUnit(split);
     _splitControl?.setValue(_split);
+    _native?.setSplit(_split);
     syncPanel();
-    renderHost.request('bhote-koshi-split');
+    renderHost.request('bhote-koshi-split', _engine);
   }
 
   function stopPlayback() {
@@ -3400,7 +3472,7 @@ export function createBhoteKoshiEventLayer({
     _playing = false;
     if (_animationFrame != null) cancelAnimationFrame(_animationFrame);
     _animationFrame = null;
-    renderHost.release(FLOOD_RENDER_HOLD);
+    renderHost.release(FLOOD_RENDER_HOLD, _engine);
     syncEvidenceMedia();
     syncPanel();
   }
@@ -3424,7 +3496,7 @@ export function createBhoteKoshiEventLayer({
     _playing = true;
     _playStartProgress = _progress;
     _playStartedAt = performance.now();
-    renderHost.hold(FLOOD_RENDER_HOLD);
+    renderHost.hold(FLOOD_RENDER_HOLD, _engine);
     syncEvidenceMedia();
     syncPanel();
     _animationFrame = requestAnimationFrame(animationTick);
@@ -3451,26 +3523,122 @@ export function createBhoteKoshiEventLayer({
     _embeddedEvidenceIndex = -1;
     _embeddedMedia?.hide?.();
     setSplit(0.5);
-    focusView(_viewer, _event.viewpoints.corridor);
+    if (_engine) focusView(_engine, _event.viewpoints.corridor);
   }
 
-  function removeImagery() {
-    if (_beforeLayer) _imageryLayerCollection?.remove(_beforeLayer, true);
-    if (_afterLayer) _imageryLayerCollection?.remove(_afterLayer, true);
-    _beforeLayer = null;
-    _afterLayer = null;
-    _imageryLayerCollection = null;
+  // Each attachment and release advances this. An attachment that resumes
+  // after a release, or after its scene signal aborted, stops right there;
+  // the release that follows it owns whatever it had already created.
+  let _attachGeneration = 0;
+
+  // Settle when `promise` does, or as soon as the scene signal aborts. The
+  // promise keeps running; the stale checks then ignore what it brings.
+  function untilSceneReleased(promise, signal) {
+    return waitForSignal(promise, signal).catch((error) => {
+      if (!signal?.aborted) throw error;
+    });
   }
 
-  async function init(viewer) {
-    _viewer = viewer;
-    _embeddedMedia = embeddedMediaFactory({ viewer });
+  async function attachRenderer(context = {}) {
+    const { engine = null, signal = null } = context;
+    _attachmentContext = context;
+    const generation = ++_attachGeneration;
+    const current = () =>
+      generation === _attachGeneration && signal?.aborted !== true;
+    const stack = _mapStackController;
+    _viewer = null;
+    _engine = engine;
+    // The engine's display (src/layers/bhoteKoshi/render/display.js).
+    _native = createNativeRenderer(engine);
+    _embeddedMedia?.attachScene?.(null, engine);
+    if (!_enabled) return;
+    // Its enable has loaded the SDK; a restored attachment waits for it too.
+    if (!cesiumSdkReady()) {
+      await untilSceneReleased(loadCesiumSdk(), signal);
+      if (!current()) return;
+    }
+    // The catalog has rebound the incoming map controller before this call.
+    if (_mapStackController) {
+      _comparisonLease = acquireImageryComparison(_mapStackController, {
+        owner: BHOTE_KOSHI_LAYER_ID,
+        switchPolicy:
+          _presentation === BHOTE_KOSHI_SCENE_PRESENTATION
+            ? 'preserve'
+            : 'esri',
+      });
+      // The incoming map can take long to switch; a released scene stops
+      // waiting (its release returns the lease).
+      await untilSceneReleased(_comparisonLease.ready, signal);
+      if (!current()) return;
+    }
+    // createImagery checks `current` itself before it adds anything.
+    await untilSceneReleased(createImagery(_event, current), signal);
+    if (!current()) return;
+    if (_floodDataSource) {
+      _nativeFlood = _native?.draw(_floodDataSource) ?? null;
+      if (!current()) return;
+    }
+    registerDynamicCredit(engine, BHOTE_KOSHI_CREDIT);
+    _scenePathPositionCache.clear();
+    _lastCinematicProgress = null;
+    const terrain = syncTerrainComparison();
+    await untilSceneReleased(terrain, signal);
+    if (!current()) {
+      // The release already cleared the comparison terrain; one this
+      // attachment set afterwards is removed when it lands, unless a newer
+      // attachment owns the same map stack again.
+      terrain.then(
+        () => {
+          if (stack && stack !== _mapStackController)
+            stack.clearTerrainComparison?.();
+        },
+        () => {},
+      );
+      return;
+    }
+    createSplitControl(_event);
+    restoreEvidenceEntries();
+    syncPresentationMode();
+    attachCameraInputRelease();
+    attachEvidenceCardActivation();
+    updateProgress(_progress);
+    setSplit(_split);
+  }
+
+  async function detachRenderer() {
+    ++_attachGeneration;
+    detachCameraInputRelease();
+    detachEvidenceCardActivation();
+    _splitControl?.destroy();
+    _splitControl = null;
+    _embeddedMedia?.attachScene?.(null, null);
+    _native?.clear();
+    _nativeFlood?.destroy();
+    _nativeFlood = null;
+    _native?.destroy();
+    _native = null;
+    _engine = _viewer = null;
+    _mapStackController?.clearTerrainComparison?.();
+    const lease = _comparisonLease;
+    _comparisonLease = _mapStackController = null;
+    await lease?.release();
+  }
+
+  async function init(viewer, options) {
+    await attachRenderer(options);
+    _embeddedMedia = embeddedMediaFactory({ viewer, engine: _engine });
     await loadEvent();
     console.log('[Data:BhoteKoshi] Event pack ready');
     return true;
   }
 
   async function enable(viewer, { origin = 'local-restore', signal } = {}) {
+    // The imagery, flood and corridor are Cesium entities on either globe, so
+    // a Navara page loads the Cesium SDK for them first.
+    if (!cesiumSdkReady()) {
+      await loadCesiumSdk();
+      throwIfEnableCancelled(signal, true);
+    }
     _viewer = viewer;
     _enabled = true;
     // Public lifecycle passes signal, not intent origin, to enable. Its atomic
@@ -3480,7 +3648,7 @@ export function createBhoteKoshiEventLayer({
     try {
       const event = await loadEvent();
       throwIfEnableCancelled(signal, _enabled);
-      registerDynamicCredit(viewer, BHOTE_KOSHI_CREDIT);
+      registerDynamicCredit(_engine, BHOTE_KOSHI_CREDIT);
       if (_mapStackController) {
         _comparisonLease = acquireImageryComparison(_mapStackController, {
           owner: BHOTE_KOSHI_LAYER_ID,
@@ -3601,7 +3769,7 @@ export function createBhoteKoshiEventLayer({
     _witnessEmbedActive = false;
     overlayHost.clearSource(BHOTE_KOSHI_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(BHOTE_KOSHI_OVERLAY_SOURCE_ID, false);
-    removeImagery();
+    _native?.clear();
     _terrainPositions = [];
     _sourceShotPaths.clear();
     _scenePathPositionCache.clear();
@@ -3612,13 +3780,17 @@ export function createBhoteKoshiEventLayer({
     _corridorPositionCache = { visibleCount: -1, positions: [] };
     _evidenceTimeline = [];
     _evidenceAnchors = [];
+    _evidenceEntries = [];
     _cinematicKeyframes = [];
     for (const slot of _evidenceFrameSlots) {
       closeFrame(slot.frame);
       closeFrame(slot.poster);
     }
     _evidenceFrameSlots = [];
-    if (_floodDataSource) _viewer.dataSources.remove(_floodDataSource, true);
+    _nativeFlood?.destroy();
+    _nativeFlood = null;
+    _native?.clear();
+    _imageryImages = null;
     _floodDataSource = null;
     _floodSurfaceMode = null;
     _floodHalo = null;
@@ -3660,7 +3832,7 @@ export function createBhoteKoshiEventLayer({
     try {
       await comparisonLease?.release();
     } finally {
-      renderHost.request('bhote-koshi-disable');
+      renderHost.request('bhote-koshi-disable', _engine);
     }
     return true;
   }
@@ -3672,7 +3844,8 @@ export function createBhoteKoshiEventLayer({
     _embeddedMedia?.destroy?.();
     _embeddedMedia = null;
     _event = null;
-    _viewer = null;
+    _native?.destroy();
+    _native = _engine = _viewer = null;
   }
 
   /**
@@ -3849,6 +4022,14 @@ export function createBhoteKoshiEventLayer({
     source: 'Vantor + GeoPera',
     updateInterval: 0,
     init,
+    attachRenderer,
+    cameraOwner: {
+      suspend() {
+        _lastCinematicProgress = null;
+      },
+      resume: applyCinematicCamera,
+    },
+    detachRenderer,
     enable,
     disable,
     update: async () => true,

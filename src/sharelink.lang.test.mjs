@@ -1,3 +1,4 @@
+import { viewerEngine } from './testSupport/viewerEngine.mjs';
 // A copied share link must not carry the sender's ?lang override: on the
 // recipient's side ?lang would beat their own stored choice.
 import { test } from 'node:test';
@@ -18,7 +19,7 @@ function makeManager(href) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(viewerEngine(viewer));
 }
 
 function installClipboard(writeText) {

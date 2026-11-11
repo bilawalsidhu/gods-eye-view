@@ -1,10 +1,7 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import * as geo from '../../geo/index.js';
 import {
   MARKER_LIFT_M,
-  RADIO_PREFIX,
   SELECTED_LIFT_M,
-  RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
   RADIO_OVERLAY_SOURCE_ID,
   RADIO_OVERLAY_COHORT_LIMIT,
   RADIO_OVERLAY_SOURCE_OPTIONS,
@@ -17,81 +14,45 @@ export function createRendering({
   parts,
   source,
 }) {
-  const { cachedGroundFloor } = services.ground;
-  const { clearOverlaySource, setOverlaySourceVisible, setOverlayEntries } =
-    services.overlays;
+  const { clearSource, setVisible, setEntries } = services.overlays;
   const { governorRequestRender } = services.render;
 
   function markerPosition(station, liftM = MARKER_LIFT_M) {
-    const floor = cachedGroundFloor(station.lat, station.lon);
-    return Cesium.Cartesian3.fromDegrees(
-      station.lon,
-      station.lat,
-      (Number.isFinite(floor) ? floor : 0) + liftM,
-    );
+    return parts.renderer.markerPosition(station, liftM);
   }
 
   function updateSelectionEntity() {
-    if (layerState._selectedEntity && layerState._viewer)
-      layerState._viewer.entities.remove(layerState._selectedEntity);
-    layerState._selectedEntity = null;
+    parts.renderer?.clearSelected();
+    layerState._selectedPosition = null;
     const station = parts.queries.selectedPresentationStation();
     if (
       !parts.interaction.radioPresentationAllowed() ||
-      !layerState._viewer ||
+      !parts.renderer?.ready ||
       !station
     ) {
       scheduleRadioOverlayPublish();
       return;
     }
-    const selectionColor = parts.model.radioCategoryColor(
+    const color = parts.model.radioCategoryColor(
       parts.model.radioStationCategoryId(station),
     );
-    const bracketImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(parts.labels.radioSelectionBracketSvg(selectionColor))}`;
-
-    layerState._selectedEntity = layerState._viewer.entities.add({
-      id: `${RADIO_PREFIX}selected:${station.id}`,
-      position: markerPosition(station, SELECTED_LIFT_M),
-      point: {
-        pixelSize: 14,
-        color: Cesium.Color.fromCssColorString(selectionColor),
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-          0,
-          RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-        ),
-      },
-      billboard: {
-        image: bracketImage,
-        width: 40,
-        height: 40,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-          0,
-          RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-        ),
-        scaleByDistance: new Cesium.NearFarScalar(100_000, 1, 12_000_000, 0.72),
-      },
-    });
+    const position = markerPosition(station, SELECTED_LIFT_M);
+    layerState._selectedPosition = position;
+    parts.renderer.addSelected(station, position, color);
     scheduleRadioOverlayPublish();
-  }
-
-  function clusterPointCollection() {
-    return layerState._dataSource?.clustering?._clusterPointCollection || null;
   }
 
   function publishRadioOverlayEntries() {
     layerState._overlayPublishTimer = null;
-    if (!parts.interaction.radioPresentationAllowed()) {
+    if (
+      !parts.renderer?.ready ||
+      !parts.interaction.radioPresentationAllowed()
+    ) {
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._overlayDiagnostics =
         parts.clustering.emptyRadioOverlayDiagnostics();
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      setVisible(RADIO_OVERLAY_SOURCE_ID, false);
       return;
     }
 
@@ -107,18 +68,8 @@ export function createRendering({
 
     const clusterCandidates = [];
     const clusteredStationIds = new Set();
-    const points = clusterPointCollection();
-    for (let index = 0; index < (points?.length || 0); index += 1) {
-      const point = points.get(index);
-      if (
-        !point?.show ||
-        !point.position ||
-        !Array.isArray(point.id) ||
-        point.id.length < 3
-      )
-        continue;
-      const stationIds = point.id
-        .map((entity) => String(entity?.id || '').slice(RADIO_PREFIX.length))
+    for (const point of parts.renderer?.clusters() || []) {
+      const stationIds = point.stationIds
         .filter((id) => {
           const station = layerState._stationById.get(id);
           return (
@@ -164,11 +115,9 @@ export function createRendering({
       if (clusterEntry) entries.push(clusterEntry);
     }
 
-    const cameraPosition = layerState._viewer?.camera?.positionWC;
+    const cameraPosition = parts.renderer?.cameraPosition();
     const singletonAllowance = Math.min(
-      parts.clustering.radioSingletonLabelLimit(
-        layerState._viewer?.camera?.positionCartographic?.height,
-      ),
+      parts.clustering.radioSingletonLabelLimit(parts.renderer?.cameraHeight()),
       Math.max(
         0,
         RADIO_OVERLAY_COHORT_LIMIT - selectedClusterCandidates.length,
@@ -178,14 +127,14 @@ export function createRendering({
       [...layerState._renderById.values()]
         .filter(
           (record) =>
-            record.entity?.show &&
+            record.visible &&
             record.station?.id !== station?.id &&
             !clusteredStationIds.has(record.station?.id),
         )
         .map((record) => ({
           ...record,
           distanceM: cameraPosition
-            ? Cesium.Cartesian3.distance(cameraPosition, record.position)
+            ? geo.cartesian3.distance(cameraPosition, record.position)
             : Number.POSITIVE_INFINITY,
         })),
       singletonAllowance,
@@ -202,12 +151,8 @@ export function createRendering({
       if (singletonEntry) entries.push(singletonEntry);
     }
 
-    setOverlayEntries(
-      RADIO_OVERLAY_SOURCE_ID,
-      entries,
-      RADIO_OVERLAY_SOURCE_OPTIONS,
-    );
-    setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, true);
+    setEntries(RADIO_OVERLAY_SOURCE_ID, entries, RADIO_OVERLAY_SOURCE_OPTIONS);
+    setVisible(RADIO_OVERLAY_SOURCE_ID, true);
     layerState._overlayDiagnostics = {
       entryCount: entries.length,
       selectedCount: entries.filter((entry) => entry.selected).length,
@@ -243,8 +188,8 @@ export function createRendering({
   }
 
   function updateRenderVisibility({ force = true } = {}) {
-    if (!layerState._viewer || !layerState._dataSource) return;
-    const cameraPosition = layerState._viewer.camera?.positionWC;
+    if (!parts.renderer?.ready) return;
+    const cameraPosition = parts.renderer.cameraPosition();
     if (
       !force &&
       !parts.navigation.radioCameraPositionChanged(
@@ -257,30 +202,28 @@ export function createRendering({
       ? { x: cameraPosition.x, y: cameraPosition.y, z: cameraPosition.z }
       : null;
     layerState._horizonScanCount += 1;
-    const occluder = horizonOccluder(layerState._viewer.camera);
     let visibilityChanged = false;
     for (const record of layerState._renderById.values()) {
       const matches = parts.categories.stationMatchesRadioCategory(
         record.station,
         layerState._filter,
       );
-      const visible = matches && occluder.isPointVisible(record.position);
-      if (record.entity.show !== visible) visibilityChanged = true;
-      record.entity.show = visible;
+      const visible = matches && parts.renderer.horizonVisible(record.position);
+      if (record.visible !== visible) visibilityChanged = true;
+      record.visible = visible;
+      parts.renderer.setStationVisible(record, visible);
     }
-    if (layerState._selectedEntity) {
-      const position = layerState._selectedEntity.position?.getValue?.(
-        Cesium.JulianDate.now(),
-      );
-      const selectedVisible = !position || occluder.isPointVisible(position);
-      if (layerState._selectedEntity.show !== selectedVisible)
-        visibilityChanged = true;
-      layerState._selectedEntity.show = selectedVisible;
+    if (layerState._selectedPosition) {
+      visibilityChanged =
+        parts.renderer.setSelectedVisible(
+          parts.renderer.horizonVisible(layerState._selectedPosition),
+        ) || visibilityChanged;
     }
     scheduleRadioOverlayPublish();
     // The horizon timer can commit AFTER the camera settles and the governor
     // parks the scene — a changed show flag needs one frame. (perf wave 2 fix)
-    if (visibilityChanged) governorRequestRender('radio-horizon');
+    if (visibilityChanged)
+      governorRequestRender('radio-horizon', parts.renderer?.engine);
   }
 
   function reconcileStations(stations) {
@@ -312,96 +255,32 @@ export function createRendering({
       layerState._selectedId = null;
     }
 
-    if (layerState._dataSource) layerState._dataSource.entities.removeAll();
+    drawStations(stations);
+  }
+
+  function drawStations(stations) {
+    if (!parts.renderer?.ready) return;
+    parts.renderer.clearStations();
     layerState._renderById.clear();
     for (const station of stations) {
       const position = markerPosition(station);
       const markerColor = parts.model.radioCategoryColor(
         parts.model.radioStationCategoryId(station),
       );
-      const entity = layerState._dataSource.entities.add({
-        id: `${RADIO_PREFIX}${station.id}`,
-        position,
-        point: {
-          pixelSize: 13,
-          color: Cesium.Color.fromCssColorString(markerColor).withAlpha(0.86),
-          outlineColor: Cesium.Color.fromCssColorString('#071b25'),
-          outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(
-            100_000,
-            1.15,
-            12_000_000,
-            1,
-          ),
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-            0,
-            RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-          ),
-        },
-      });
-      layerState._renderById.set(station.id, { station, entity, position });
+      const record = parts.renderer.addStation(station, position, markerColor);
+      layerState._renderById.set(station.id, record);
     }
     updateSelectionEntity();
     updateRenderVisibility();
   }
 
-  function installClusterStyling() {
-    if (!layerState._dataSource || layerState._removeClusterListener) return;
-    const clustering = layerState._dataSource.clustering;
-    clustering.enabled = true;
-    clustering.pixelRange = 42;
-    clustering.minimumClusterSize = 3;
-    clustering.clusterPoints = true;
-    clustering.clusterLabels = false;
-    clustering.clusterBillboards = false;
-    layerState._removeClusterListener =
-      clustering.clusterEvent.addEventListener((clusteredEntities, cluster) => {
-        const clusteredStations = [];
-        for (const entity of clusteredEntities) {
-          const stationId = String(entity.id || '').slice(RADIO_PREFIX.length);
-          const station = layerState._renderById.get(stationId)?.station;
-          if (station) clusteredStations.push(station);
-        }
-        const clusterCategory = parts.model.radioClusterCategoryId(
-          clusteredStations,
-          layerState._filter,
-        );
-        const clusterColor = Cesium.Color.fromCssColorString(
-          parts.model.radioCategoryColor(clusterCategory),
-        );
-        // Cesium assigns the entity-id array only to the generated cluster label.
-        // Mirror it to the visible point so clicking either part of the callout
-        // resolves the first station and remains a direct playback gesture.
-        cluster.point.id = clusteredEntities;
-        cluster.billboard.id = clusteredEntities;
-        cluster.label.show = false;
-        cluster.label.text = '';
-        cluster.point.show = true;
-        cluster.point.pixelSize = Math.min(
-          26,
-          12 + Math.log2(clusteredEntities.length) * 1.6,
-        );
-        cluster.point.color = clusterColor.withAlpha(0.9);
-        cluster.point.outlineColor = Cesium.Color.BLACK;
-        cluster.point.outlineWidth = 2;
-        cluster.point.disableDepthTestDistance = Number.POSITIVE_INFINITY;
-        cluster.point.distanceDisplayCondition =
-          new Cesium.DistanceDisplayCondition(
-            0,
-            RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-          );
-        scheduleRadioOverlayPublish();
-      });
-  }
   return {
     markerPosition,
     updateSelectionEntity,
-    clusterPointCollection,
     publishRadioOverlayEntries,
     scheduleRadioOverlayPublish,
     updateRenderVisibility,
     reconcileStations,
-    installClusterStyling,
+    drawStations,
   };
 }

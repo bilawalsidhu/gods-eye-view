@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import * as picking from '../../data/pickRegistry.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { sceneServicesFor } from '../../data/sceneServices.js';
+import { testMarkerAtlas, markerRows } from '../../testSupport/mapMarkers.mjs';
 import {
   createShipwrecksLayer,
   markerPixelSize,
@@ -36,46 +38,25 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** A fake billboard collection that records what the layer adds. */
-function fakeMarkers() {
-  const collection = {
-    show: true,
-    billboards: [],
-    rebuilds: 0,
-    add(options) {
-      const billboard = { show: true, ...options };
-      collection.billboards.push(billboard);
-      return billboard;
-    },
-    removeAll() {
-      collection.rebuilds++;
-      collection.billboards = [];
-    },
-  };
-  return collection;
-}
-
 function harness({ snapshots, now = () => 1 } = {}) {
-  const markers = fakeMarkers();
-  const primitives = [];
+  const engine = createFakeEngine();
+  engine.fake.setPose({
+    longitude: -Math.PI / 180,
+    latitude: (50 * Math.PI) / 180,
+    height: 2e6,
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
   const cards = [];
-  const handlers = [];
   const opened = [];
-  let pickResult = null;
-  const viewer = {
-    camera: { positionWC: Cesium.Cartesian3.fromDegrees(-1, 50, 2e6) },
-    scene: {
-      canvas: {},
-      requestRender() {},
-      pick: () => pickResult,
-      preRender: { addEventListener: () => () => {} },
-      primitives: {
-        add: (primitive) => primitives.push(primitive),
-        remove: (primitive) =>
-          primitives.splice(primitives.indexOf(primitive), 1),
-        raiseToTop() {},
-        contains: (primitive) => primitives.includes(primitive),
-      },
+  let rebuilds = 0;
+  const markers = {
+    get billboards() {
+      return markerRows(engine, 'shipwrecks-');
+    },
+    get rebuilds() {
+      return rebuilds;
     },
   };
   const queue = [...(snapshots || [])];
@@ -89,40 +70,29 @@ function harness({ snapshots, now = () => 1 } = {}) {
         return next instanceof Promise ? next : Promise.resolve(next);
       },
     },
-    createMarkers: () => markers,
+    drawAtlas(images) {
+      rebuilds++;
+      return testMarkerAtlas(images);
+    },
     overlayHost: {
       setEntries: (_source, entries) => cards.push(entries),
       setVisible() {},
       hitTest: () => null,
     },
-    screenSpaceEventHandlerFactory: () => {
-      const handler = {
-        setInputAction(callback) {
-          handler.click = callback;
-        },
-        destroy() {
-          handler.destroyed = true;
-        },
-      };
-      handlers.push(handler);
-      return handler;
-    },
-    picking,
-    pointer: { isPointerFree: () => true },
     openExternal: (url) => opened.push(url),
     now: () => now(),
   });
-  layer.init(viewer);
+  layer.init(null, { engine });
   return {
     layer,
     markers,
-    primitives,
+    engine,
     cards,
-    handlers,
     requests,
     opened,
     pick(id) {
-      pickResult = id ? { id: `shipwreck:${id}` } : null;
+      engine.fake.script('pick', id ? { id: `shipwreck:${id}` } : null);
+      engine.fake.input('click', { position: { x: 1, y: 1 } });
     },
     lastCard: () => cards.at(-1),
   };
@@ -130,18 +100,58 @@ function harness({ snapshots, now = () => 1 } = {}) {
 
 test('markers live in one collection, shown only while the layer is on', async () => {
   const h = harness({ snapshots: [snapshot([wreck('a'), wreck('b')])] });
-  assert.deepEqual(h.primitives, [h.markers]);
-  assert.equal(h.markers.show, false);
+  assert.deepEqual(h.engine.movers.list(), []);
   h.layer.enable();
-  assert.equal(h.markers.show, true);
   assert.equal(await h.layer.update(), true);
   assert.equal(h.markers.billboards.length, 2);
   assert.equal(h.layer.getStats().count, 2);
   h.layer.disable();
-  assert.equal(h.markers.show, false);
-  assert.equal(h.handlers[0].destroyed, true);
+  assert.ok(h.markers.billboards.every((marker) => !marker.show));
+  h.pick('a');
+  assert.deepEqual(h.lastCard(), [], 'disabled selection ignores clicks');
   h.layer.destroy();
-  assert.deepEqual(h.primitives, [], 'the collection leaves the scene');
+  assert.deepEqual(h.engine.movers.list(), [], 'the markers leave the scene');
+  sceneServicesFor(h.engine).destroy();
+  h.engine.destroy();
+});
+
+test('renderer switching preserves the snapshot, period and selected card without another fetch', async (t) => {
+  const h = harness({
+    snapshots: [snapshot([wreck('a'), wreck('b', { year: 1800 })])],
+  });
+  const next = createFakeEngine({ kind: 'navara' });
+  next.fake.setPose({
+    ...h.engine.camera.pose().cartographic,
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
+  t.after(() => {
+    h.layer.destroy();
+    for (const engine of [h.engine, next]) {
+      sceneServicesFor(engine).destroy();
+      engine.destroy();
+    }
+  });
+  h.layer.enable();
+  await h.layer.update();
+  h.layer.setParams({ from: 1900 });
+  h.pick('a');
+  const before = h.markers.billboards;
+  const card = h.lastCard();
+  assert.equal(card[0].id, 'shipwreck-card:a');
+  h.layer.detachRenderer();
+  assert.deepEqual(h.engine.movers.list(), []);
+  await h.layer.attachRenderer({ engine: next });
+  assert.deepEqual(markerRows(next, 'shipwrecks-'), before);
+  const { activate: oldAction, ...oldCard } = card[0];
+  const { activate: newAction, ...newCard } = h.lastCard()[0];
+  assert.deepEqual(newCard, oldCard);
+  oldAction();
+  newAction();
+  assert.equal(h.opened[0], h.opened[1]);
+  assert.equal(h.layer.getParams().from, 1900);
+  assert.equal(h.requests.length, 1);
 });
 
 test('markers sit on the wreck: no eye offset, bigger toll drawn last', async () => {
@@ -202,7 +212,6 @@ test('a click opens the card; a period that excludes the wreck closes it', async
   h.layer.enable();
   await h.layer.update();
   h.pick('old');
-  h.handlers[0].click({ position: { x: 1, y: 1 } });
   const [card] = h.lastCard();
   assert.equal(card.id, 'shipwreck-card:old');
   h.layer.setParams({ from: 1900, to: 1990 });

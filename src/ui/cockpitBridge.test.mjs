@@ -11,6 +11,7 @@ import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import * as Cesium from 'cesium';
+import { createCockpitEngine } from '../testSupport/cockpitEngine.mjs';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { VesselRecords } from '../layers/vessels/records.js';
 
@@ -89,10 +90,13 @@ function vesselLayer(record) {
   };
 }
 
+let disposeFixture = null;
+
 function fixture(
   t,
-  { bridgeAllowed = true, record = RECORD, aircraftInfo = null } = {},
+  { bridgeAllowed = true, record = RECORD, aircraftInfo = null, engineOnly = false } = {},
 ) {
+  disposeFixture?.();
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
@@ -103,14 +107,12 @@ function fixture(
   const store = useCockpitStore(pinia);
   const listeners = () => ({ addEventListener: () => () => {} });
   const aircraftPosition = Cesium.Cartesian3.fromDegrees(10.2, 54.5, 3000);
-  const aircraft = {
-    position: {
-      getValue: (time, result) =>
-        Cesium.Cartesian3.clone(aircraftPosition, result),
-    },
-    show: true,
+  const globe = createCockpitEngine({ kind: engineOnly ? 'navara' : 'cesium' });
+  const { engine } = globe;
+  const aircraft = globe.aircraft({
+    position: aircraftPosition,
     gevTrackedId: aircraftInfo ? `flights:${aircraftInfo.icao24}` : '',
-  };
+  });
   const views = [];
   // Each placed camera: where it is and where it looks.
   const shots = [];
@@ -142,7 +144,26 @@ function fixture(
   const disableFlights = () => {
     flightsEnabled = false;
   };
-  const cockpit = new CockpitViewController(viewer, {
+  // Layer tracking and the first-person camera share the engine follow.
+  Object.defineProperty(viewer, 'trackedEntity', {
+    get: () => globe.following() ?? undefined,
+    set: (target) => target ? globe.ride(target) : engine.camera.following()?.stop(),
+  });
+  engine.camera.setView = (options) => viewer.camera.setView(options);
+  const pose = engine.camera.pose;
+  engine.camera.pose = () => ({ ...pose(), heading: viewer.camera.heading ?? 0 });
+  engine.projector.worldToWindow = (position) =>
+    viewer.scene.cartesianToCanvasCoordinates?.(position, {}) ?? null;
+  engine.surface.sampleHeight = (position) => viewer.scene.sampleHeight?.(position);
+  engine.surface.sampleHeightDetailed = (position) => {
+    const height = viewer.scene.sampleHeight?.(position);
+    return Number.isFinite(height) ? { height, source: 'tiles' } : undefined;
+  };
+  Object.defineProperty(viewer.scene.screenSpaceCameraController, 'enableInputs', {
+    get: () => engine.input.cameraInputsEnabled(),
+  });
+  const cockpit = new CockpitViewController(engine, {
+    viewer: engineOnly ? null : viewer,
     services: {
       flightsLayer: {
         getTrackedInfo: () => (flightsEnabled ? aircraftInfo : null),
@@ -185,15 +206,22 @@ function fixture(
   // An aircraft session's Contact card and flight plan have their own tests.
   if (aircraftInfo)
     Object.assign(cockpit, { updateContext() {}, updateRoute() {} });
-  t.after(() => {
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     cockpit.stop();
+    engine.destroy();
     app.unmount();
     document.body.classList.remove('cockpit-mode');
-  });
+  };
+  disposeFixture = dispose;
+  t.after(dispose);
   const $ = (selector) => document.querySelector(selector);
   return {
     $,
     cockpit,
+    engine,
     viewer,
     vessels,
     aircraft,
@@ -378,6 +406,19 @@ test('tracking an aircraft from the bridge ends it without refocusing the vessel
     ['subject', RECORD.id],
     ['subject', null],
   ]);
+});
+
+test('following a non-aircraft target ends the bridge and keeps that follow', (t) => {
+  const { cockpit, engine, vessels } = fixture(t, { engineOnly: true });
+  assert.equal(cockpit.enter(), true);
+  const follow = engine.camera.follow({
+    position: () => Cesium.Cartesian3.fromDegrees(10, 54, 420_000),
+    viewFrom: { x: 0, y: -2400, z: 1650 },
+  });
+  cockpit.update();
+  assert.equal(cockpit.active, false);
+  assert.equal(engine.camera.following(), follow);
+  assert.equal(vessels.calls.some(([action]) => action === 'focus'), false);
 });
 
 test('a vessel that leaves the selection ends the bridge', async (t) => {
@@ -1565,4 +1606,25 @@ test("a double-click's second press keeps the first press's picture of the ship"
   assert.equal(cockpit.onSceneDoubleClick({ x: 400, y: 300 }, 1250), true);
   await settle();
   assert.equal(store.presence.active, true);
+});
+
+
+test('the bridge rides sampled terrain through the engine without a viewer', async (t) => {
+  const { cockpit, engine, shots } = fixture(t, { engineOnly: true });
+  let count = 0;
+  engine.surface.sampleTerrainMostDetailed = async (probes) => {
+    count = probes.length;
+    return probes.map(() => 27);
+  };
+  assert.equal(cockpit.enter(), true);
+  await settle();
+  cockpit.update();
+  await settle();
+  cockpit.lastCameraUpdateMs = 0;
+  cockpit.update();
+  assert.equal(count, 9);
+  assert.equal(cockpit.subjectKind, 'vessel');
+  assert.ok(eyeHeightM(shots.at(-1)) >= 56.5);
+  cockpit.exit();
+  assert.equal(engine.input.cameraInputsEnabled(), true);
 });

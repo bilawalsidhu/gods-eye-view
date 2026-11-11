@@ -68,26 +68,41 @@
  * "world-overlay honours occluder churn as paint work" in
  * the project roadmap.
  *
- * Usage: node scripts/qa-perf.mjs [--url http://localhost:4173]
+ * Usage: node scripts/qa-perf.mjs [--url http://localhost:4173] [--engine=cesium|navara]
+ * Engine-neutral: the camera, frames and layers go through the globe engine
+ * and the QA probe (window.__godsEyeView.layers); on an engine without a
+ * layer that layer's checks are SKIPPED, not failed.
  * Requires a running dev server. Headless; flags disable occlusion
  * throttling so rAF cadence is trustworthy (hidden-pane gotcha).
  */
 import puppeteer from 'puppeteer';
 
 const argv = process.argv;
-const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4173';
+const baseUrl = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4173';
+const engineKind = argv.find((value) => value.startsWith('--engine='))?.slice(9) ?? 'cesium';
+const url = (() => {
+  const parsed = new URL(baseUrl);
+  parsed.searchParams.set('engine', engineKind);
+  return parsed.href;
+})();
 
 const results = [];
+let skipped = 0;
 function check(name, pass, detail) {
   results.push({ name, pass });
   const tag = pass ? 'PASS' : 'FAIL';
   console.log(`  [${tag}] ${name}${detail ? ` — ${JSON.stringify(detail)}` : ''}`);
+}
+function skip(name, reason) {
+  skipped += 1;
+  console.log(`  [SKIP] ${name} — ${reason}`);
 }
 
 const browser = await puppeteer.launch({
   headless: 'new',
   protocolTimeout: 300_000,
   args: [
+    ...(process.env.QA_ANGLE ? [`--use-angle=${process.env.QA_ANGLE}`] : []),
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--window-size=1440,900',
@@ -103,20 +118,18 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
+  await page.waitForFunction(() => !!window.__godsEyeView?.layers, { timeout: 90_000 });
+  const layerAvailable = (id) => page.evaluate((layerId) => window.__godsEyeView.layers.available(layerId), id);
   // Boot flyTo + tile warm + all deferred init.
   await new Promise((r) => setTimeout(r, 15_000));
 
   // Park deterministically and disable every layer.
   await page.evaluate(async () => {
     const gev = window.__godsEyeView;
-    const v = gev.viewer;
-    v.camera.cancelFlight();
-    const ell = v.scene.globe.ellipsoid;
-    v.camera.setView({
-      destination: ell.cartographicToCartesian({
-        longitude: -97.74 * Math.PI / 180, latitude: 30.27 * Math.PI / 180, height: 60_000,
-      }),
+    const geo = await import('/src/geo/index.js');
+    gev.engine.camera.cancelFlight();
+    gev.engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(-97.74, 30.27, 60_000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
     for (const [id, entry] of gev.dataManager.layers) {
@@ -128,9 +141,9 @@ try {
 
   /** Count scene postRender fires and rAF ticks over windowMs. */
   const countFrames = (windowMs) => page.evaluate((ms) => new Promise((resolve) => {
-    const scene = window.__godsEyeView.viewer.scene;
+    const { frames } = window.__godsEyeView.engine;
     let renders = 0; let rafs = 0;
-    const remove = scene.postRender.addEventListener(() => { renders += 1; });
+    const remove = frames.postRender.addEventListener(() => { renders += 1; });
     const t0 = performance.now();
     const tick = () => {
       rafs += 1;
@@ -255,10 +268,10 @@ try {
   const detectMove = await Promise.all([
     countFrames(2_500),
     page.evaluate(() => new Promise((resolve) => {
-      const v = window.__godsEyeView.viewer;
+      const { camera } = window.__godsEyeView.engine;
       let steps = 0;
       const id = setInterval(() => {
-        v.camera.moveForward(50);
+        camera.zoomIn(50);
         steps += 1;
         if (steps >= 20) { clearInterval(id); resolve(true); }
       }, 60);
@@ -281,13 +294,13 @@ try {
     // identity is one painted frame. Sampling it per scene frame is enough to
     // tell "painting" from "silent" without reaching into module internals.
     let last = gev.styleManager.getDetectionDiagnostics?.();
-    const remove = gev.viewer.scene.postRender.addEventListener(() => {
+    const remove = gev.engine.frames.postRender.addEventListener(() => {
       const now = gev.styleManager.getDetectionDiagnostics?.();
       if (now && now !== last) { paints += 1; last = now; }
     });
     let steps = 0;
     const id = setInterval(() => {
-      gev.viewer.camera.moveForward(50);
+      gev.engine.camera.zoomIn(50);
       steps += 1;
       if (steps >= 20) {
         clearInterval(id);
@@ -325,9 +338,17 @@ try {
   await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('retro'); });
   await new Promise((r) => setTimeout(r, 900)); // crossfade + first ticks
   const dAnim = await diag();
-  check('animated style takes the style-anim hold (continuous)', dAnim?.mode === 'continuous' && dAnim.holds.includes('style-anim'), dAnim);
-  const animFrames = await countFrames(2_000);
-  check('animated style keeps frames flowing (≥50% rAF)', animFrames.renders >= animFrames.rafs * 0.5, animFrames);
+  // This assertion checks the Cesium style-anim render hold.
+  if (engineKind === 'cesium') {
+    check('animated style takes the style-anim hold (continuous)', dAnim?.mode === 'continuous' && dAnim.holds.includes('style-anim'), dAnim);
+    const animFrames = await countFrames(2_000);
+    check('animated style keeps frames flowing (≥50% rAF)', animFrames.renders >= animFrames.rafs * 0.5, animFrames);
+  } else {
+    skip(
+      'animated style takes the style-anim hold and keeps frames flowing',
+      `this check measures the Cesium style-anim hold, not ${engineKind} animation`,
+    );
+  }
   // Returning to normal keeps detection ON by design (it is the default, and
   // detection persists across style switches). Since 2026-08-22 detection holds
   // nothing, so this asserts the strictly harder thing: the scene returns to
@@ -349,26 +370,26 @@ try {
   );
 
   // ── 2c. satellites holder enters and leaves diagnostics ───────────────
-  await page.evaluate(async () => {
-    await window.__godsEyeView.dataManager.setEnabled('satellites', true, { origin: 'user' });
-  });
-  const dSat = await diag();
-  check('satellites enable registers its holder', dSat?.holds.includes('satellites'), dSat);
-  await page.evaluate(async () => {
-    await window.__godsEyeView.dataManager.setEnabled('satellites', false, { origin: 'user' });
-  });
-  await new Promise((r) => setTimeout(r, 2_000));
-  const dSatOff = await diag();
-  check('satellites disable releases its holder', !dSatOff?.holds.includes('satellites'), dSatOff);
+  if (await layerAvailable('satellites')) {
+    await page.evaluate(() => window.__godsEyeView.layers.enable('satellites'));
+    const dSat = await diag();
+    check('satellites enable registers its holder', dSat?.holds.includes('satellites'), dSat);
+    await page.evaluate(() => window.__godsEyeView.layers.disable('satellites'));
+    await new Promise((r) => setTimeout(r, 2_000));
+    const dSatOff = await diag();
+    check('satellites disable releases its holder', !dSatOff?.holds.includes('satellites'), dSatOff);
+  } else {
+    skip('satellites holder enters and leaves diagnostics', `no satellites layer on ${engineKind}`);
+  }
 
   // ── 3. camera movement renders (Cesium-native path) ───────────────────
   const duringMove = await Promise.all([
     countFrames(2_500),
     page.evaluate(() => new Promise((resolve) => {
-      const v = window.__godsEyeView.viewer;
+      const { camera } = window.__godsEyeView.engine;
       let steps = 0;
       const id = setInterval(() => {
-        v.camera.moveForward(50);
+        camera.zoomIn(50);
         steps += 1;
         if (steps >= 20) { clearInterval(id); resolve(true); }
       }, 60);
@@ -378,36 +399,40 @@ try {
   await new Promise((r) => setTimeout(r, 3_000)); // settle
 
   // ── 4. flights enabled → continuous ───────────────────────────────────
-  await page.evaluate(async () => {
-    await window.__godsEyeView.dataManager.setEnabled('flights', true, { origin: 'user' });
-  });
-  await new Promise((r) => setTimeout(r, 5_000));
-  const active = await countFrames(5_000);
-  const d4 = await diag();
-  check('governor reports continuous mode with flights on', d4?.mode === 'continuous', d4);
-  check('flights-on cadence ≈ rAF cadence (≥70%)', active.renders >= active.rafs * 0.7, active);
-  check('flights-on renders ≥5× idle renders', active.renders >= Math.max(1, idle.renders) * 5, { active: active.renders, idle: idle.renders });
+  if (await layerAvailable('flights')) {
+    await page.evaluate(async () => {
+      await window.__godsEyeView.layers.enable('flights');
+    });
+    await new Promise((r) => setTimeout(r, 5_000));
+    const active = await countFrames(5_000);
+    const d4 = await diag();
+    check('governor reports continuous mode with flights on', d4?.mode === 'continuous', d4);
+    check('flights-on cadence ≈ rAF cadence (≥70%)', active.renders >= active.rafs * 0.7, active);
+    check('flights-on renders ≥5× idle renders', active.renders >= Math.max(1, idle.renders) * 5, { active: active.renders, idle: idle.renders });
 
-  // ── 5. flights disabled → idle again ──────────────────────────────────
-  await page.evaluate(async () => {
-    await window.__godsEyeView.dataManager.setEnabled('flights', false, { origin: 'user' });
-  });
-  // Deselect flows, fades, and the chrome churn the overlay host re-evaluates
-  // its occluders against all have to drain first — and this teardown, like the
-  // one in the setup above, marks the HUD summary dirty, so the same deferred
-  // typewriter is still ahead of us. Same rule: hold a quiet run longer than one
-  // refresh period before counting anything.
-  const teardownSettle = await settleUntilQuiet();
-  const idleAgain = await countFrames(5_000);
-  const d5 = await diag();
-  check('the scene holds a settled quiet run again before the second idle window', teardownSettle.quiet, teardownSettle);
-  check('governor returns to idle after disable', d5?.mode === 'idle', d5);
-  check('scene stops rendering again (≤4 fires / 5s)', idleAgain.renders <= 4, idleAgain);
+    // ── 5. flights disabled → idle again ──────────────────────────────────
+    await page.evaluate(async () => {
+      await window.__godsEyeView.layers.disable('flights');
+    });
+    // Deselect flows, fades, and the chrome churn the overlay host re-evaluates
+    // its occluders against all have to drain first — and this teardown, like the
+    // one in the setup above, marks the HUD summary dirty, so the same deferred
+    // typewriter is still ahead of us. Same rule: hold a quiet run longer than one
+    // refresh period before counting anything.
+    const teardownSettle = await settleUntilQuiet();
+    const idleAgain = await countFrames(5_000);
+    const d5 = await diag();
+    check('the scene holds a settled quiet run again before the second idle window', teardownSettle.quiet, teardownSettle);
+    check('governor returns to idle after disable', d5?.mode === 'idle', d5);
+    check('scene stops rendering again (≤4 fires / 5s)', idleAgain.renders <= 4, idleAgain);
+  } else {
+    skip('flights on → continuous, off → idle again', `no flights layer on ${engineKind}`);
+  }
 } finally {
   await browser.close();
 }
 
 const passed = results.filter((r) => r.pass).length;
 console.log(`\nqa-perf: ${passed}/${results.length} passed`);
-console.log(`RESULT: ${passed} passed, ${results.length - passed} failed, 0 skipped`);
+console.log(`RESULT: ${passed} passed, ${results.length - passed} failed, ${skipped} skipped (engine ${engineKind})`);
 process.exit(passed === results.length ? 0 : 1);

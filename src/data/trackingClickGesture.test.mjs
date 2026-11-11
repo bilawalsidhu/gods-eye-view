@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -5,21 +6,21 @@ import {
   bindTrackingClickGesture,
   isTrackingClickGesture,
   isTrackingSelectionGesture,
-} from './trackingClickGesture.js';
+} from './trackingGesture.js';
 import { TRACKED_MODEL_MAX_PX as CIVIL_TRACKED_MODEL_MAX_PX } from './flights.js';
 import { TRACKED_MODEL_MAX_PX as MILITARY_TRACKED_MODEL_MAX_PX } from './militaryFlights.js';
 
 const TYPES = {
-  LEFT_DOWN: 'left-down',
-  MOUSE_MOVE: 'mouse-move',
-  LEFT_UP: 'left-up',
-  LEFT_CLICK: 'left-click',
+  LEFT_DOWN: 'down',
+  MOUSE_MOVE: 'move',
+  LEFT_UP: 'up',
+  LEFT_CLICK: 'click',
 };
 
 function makeHandler() {
   const actions = new Map();
   return {
-    setInputAction(callback, type) { actions.set(type, callback); },
+    on(type, callback) { actions.set(type, callback); return () => actions.delete(type); },
     fire(type, event) { actions.get(type)?.(event); },
   };
 }
@@ -48,7 +49,6 @@ test('synthetic drag-then-click sequence does not reach the untrack callback', (
     if (isTrackingClickGesture(gesture)) untrackCalls += 1;
   }, {
     now: () => timeMs,
-    eventTypes: TYPES,
   });
 
   handler.fire(TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
@@ -80,7 +80,6 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
     if (isTrackingClickGesture(gesture)) untracks += 1;
   }, {
     now: () => timeMs,
-    eventTypes: TYPES,
   });
 
   handler.fire(TYPES.LEFT_DOWN, { position: { x: 0, y: 0 } });
@@ -113,9 +112,19 @@ test('civilian and military click handlers apply duration only at the deselect b
     readLayerSource(new URL('./flights.js', import.meta.url)),
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   ];
-  for (const source of sources) {
-    assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);
-    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
+  // Flights and military use the selection dispatcher, whose
+  // source applies the same two rules: the selection gesture before a
+  // select, the full click classifier before the empty-space deselect, which
+  // each layer answers with a user-origin clear.
+  const dispatcher = readFileSync(new URL('./selectionDispatcher.js', import.meta.url), 'utf8');
+  assert.match(dispatcher, /if \(!isTrackingSelectionGesture\(gesture\)\) return;[\s\S]+onSelect/);
+  assert.match(dispatcher, /if \(!isTrackingClickGesture\(gesture\)\) return;\s*for \(const owner of \[\.\.\.owners\.values\(\)\]\.filter\(plain\)\)\s*owner\.onEmptyClick/);
+  for (const [layer, source] of [['flights', sources[0]], ['military', sources[1]]]) {
+    // Both layers register through the shared aircraft tracking, under their
+    // own layer id.
+    assert.match(source, /dispatcher\.register\(layerId, \{[\s\S]+onEmptyClick: _onEmptyClick/);
+    assert.match(source, new RegExp(`layerId: '${layer}'`));
+    assert.match(source, /function _onEmptyClick\(\) \{[\s\S]+?_clearTracking\(false, \{ origin: 'user' \}\)/);
   }
   assert.doesNotMatch(
     sources[0],

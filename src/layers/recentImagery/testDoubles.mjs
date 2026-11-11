@@ -1,6 +1,6 @@
 /**
  * Test doubles shared by the Recent Imagery tests: manual timers, fetch
- * responses, and the Cesium/viewer/document fakes the box tool needs.
+ * responses, and the engine and document fakes the box tool needs.
  */
 import { thumbnailOrder } from './model.js';
 
@@ -60,139 +60,121 @@ export function response({
   };
 }
 
-const EVENT_TYPES = {
-  LEFT_DOWN: 'down',
-  MOUSE_MOVE: 'move',
-  LEFT_UP: 'up',
-  LEFT_CLICK: 'click',
-  LEFT_DOUBLE_CLICK: 'dblclick',
-};
-
-/**
- * Cesium, viewer and document fakes for `initImageryBoxTool`. The canvas is
- * 1000 × 500 px mapped linearly onto 0.2° near Austin; y < 40 px is sky.
- */
-export function boxToolFakes() {
-  const handlers = [];
-  class ScreenSpaceEventHandler {
-    constructor(canvas) {
-      this.canvas = canvas;
-      this.actions = new Map();
-      this.destroyed = false;
-      handlers.push(this);
-    }
-    setInputAction(fn, type) {
-      this.actions.set(type, fn);
-    }
-    getInputAction(type) {
-      return this.actions.get(type);
-    }
-    removeInputAction(type) {
-      this.actions.delete(type);
-    }
-    destroy() {
-      this.destroyed = true;
-    }
-  }
-  class CustomDataSource {
-    constructor(name) {
-      this.name = name;
-      const values = [];
-      this.entities = {
-        values,
-        add: (entity) => (values.push(entity), entity),
-        removeAll: () => values.splice(0),
-      };
-    }
-  }
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const cesium = {
-    ScreenSpaceEventHandler,
-    ScreenSpaceEventType: EVENT_TYPES,
-    CustomDataSource,
-    CallbackProperty: class {},
-    PolylineDashMaterialProperty: class {},
-    ClassificationType: { BOTH: 'both' },
-    Color: { fromCssColorString: () => color },
-    Rectangle: { fromDegrees: () => ({}) },
-    Cartesian3: { fromDegreesArray: (values) => values },
-  };
-
-  const stock = new ScreenSpaceEventHandler('stock');
-  const originalClick = () => 'select';
-  const originalDouble = () => 'track';
-  stock.setInputAction(originalClick, EVENT_TYPES.LEFT_CLICK);
-  stock.setInputAction(originalDouble, EVENT_TYPES.LEFT_DOUBLE_CLICK);
-  const sources = [];
-  const viewer = {
-    renders: 0,
-    scene: {
-      canvas: { clientWidth: 1000, clientHeight: 500 },
-      screenSpaceCameraController: { enableInputs: true },
-      requestRender: () => {
-        viewer.renders += 1;
-      },
-    },
-    screenSpaceEventHandler: stock,
-    dataSources: {
-      sources,
-      add: (source) => (sources.push(source), Promise.resolve(source)),
-      remove: (source) => sources.splice(sources.indexOf(source), 1),
-    },
-  };
-
+/** A DOM event target that keeps its listeners by type. */
+function eventTarget(extra = {}) {
   const listeners = [];
-  const classes = new Set();
-  const documentRef = {
+  return {
     listeners,
-    classes,
     addEventListener: (type, fn) => listeners.push([type, fn]),
     removeEventListener: (type, fn) => {
-      const index = listeners.findIndex((entry) => entry[1] === fn);
+      const index = listeners.findIndex(
+        (entry) => entry[0] === type && entry[1] === fn,
+      );
       if (index >= 0) listeners.splice(index, 1);
     },
+    dispatch(type, event) {
+      for (const [name, fn] of [...listeners]) if (name === type) fn(event);
+      return event;
+    },
+    ...extra,
+  };
+}
+
+/** A pointer or key event that records whether it was consumed. */
+function domEvent(fields) {
+  return {
+    prevented: false,
+    stopped: false,
+    preventDefault() {
+      this.prevented = true;
+    },
+    stopImmediatePropagation() {
+      this.stopped = true;
+    },
+    ...fields,
+  };
+}
+
+/**
+ * Globe engine and document fakes for `initImageryBoxTool`. The canvas is
+ * 1000 × 500 px mapped linearly onto 0.2° near Austin; y < 40 px is sky.
+ * The engine input counts camera-input suspensions.
+ */
+export function boxToolFakes() {
+  const camera = {
+    choice: true,
+    suspended: 0,
+    get inputs() {
+      return camera.choice && camera.suspended === 0;
+    },
+  };
+  const captured = new Set();
+  const canvas = eventTarget({
+    getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    setPointerCapture: (id) => captured.add(id),
+    hasPointerCapture: (id) => captured.has(id),
+    releasePointerCapture: (id) => captured.delete(id),
+  });
+  const input = {
+    cameraInputsEnabled: () => camera.inputs,
+    suspendCameraInputs() {
+      camera.suspended += 1;
+      let resumed = false;
+      return () => {
+        if (resumed) return;
+        resumed = true;
+        camera.suspended -= 1;
+      };
+    },
+  };
+  const engine = {
+    host: { canvas, size: () => ({ width: 1000, height: 500 }) },
+    input,
+  };
+  const windowRef = eventTarget();
+  const classes = new Set();
+  const documentRef = eventTarget({
+    classes,
+    defaultView: windowRef,
     body: {
       classList: {
         add: (name) => classes.add(name),
         remove: (name) => classes.delete(name),
       },
     },
-  };
-
-  const pickWorld = (_viewer, nx, ny) =>
+  });
+  const pickWorld = (_engine, nx, ny) =>
     ny * 500 < 40 ? null : { lon: -97.9 + nx * 0.2, lat: 30.4 - ny * 0.2 };
-  /** The live (non-stock) canvas handler, if the tool has one bound. */
-  const handler = () =>
-    handlers.find((h) => h.canvas !== 'stock' && !h.destroyed) || null;
-  const fire = (type, event) =>
-    handler()?.actions.get(EVENT_TYPES[type])?.(event);
+  const pointer = (at, fields = {}) =>
+    domEvent({
+      button: 0,
+      pointerId: 1,
+      clientX: at.x,
+      clientY: at.y,
+      ...fields,
+    });
+  /** Pointer events as the browser sends them: a press on the canvas, moves and the release on the document. */
+  const down = (at, fields) =>
+    canvas.dispatch('pointerdown', pointer(at, fields));
+  const move = (at, fields) =>
+    documentRef.dispatch('pointermove', pointer(at, fields));
+  const up = (at, fields) =>
+    documentRef.dispatch('pointerup', pointer(at, fields));
   /** Dispatch a keydown to the tool's document listener. */
-  const key = (name) => {
-    const event = {
-      key: name,
-      prevented: false,
-      stopped: false,
-      preventDefault() {
-        this.prevented = true;
-      },
-      stopImmediatePropagation() {
-        this.stopped = true;
-      },
-    };
-    listeners.find(([type]) => type === 'keydown')?.[1](event);
-    return event;
-  };
+  const key = (name) =>
+    documentRef.dispatch('keydown', domEvent({ key: name }));
   return {
-    cesium,
-    viewer,
+    engine,
+    canvas,
+    camera,
+    captured,
     documentRef,
+    windowRef,
     pickWorld,
-    handler,
-    fire,
+    down,
+    move,
+    up,
     key,
-    types: EVENT_TYPES,
-    originalClick,
-    originalDouble,
   };
 }
 
@@ -240,6 +222,9 @@ export function fakeRenderer() {
   let peak = 0;
   return {
     calls,
+    resolveHost: () => ({ collection: {}, kind: 'globe' }),
+    viewCentre: () => null,
+    zoomToFit: () => false,
     rebind(next) {
       calls.push(['rebind', next.kind]);
       host = next;

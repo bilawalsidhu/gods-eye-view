@@ -1,7 +1,5 @@
-import * as Cesium from 'cesium';
 import { positionMarkerGlyph, viewConeMarkerGlyph } from './glyphs.js';
-import { COLORS, POSITION_PICK_ID } from './policy.js';
-import { createHorizonCull } from './view.js';
+import { COLORS, MARKER_SPRITE_ORDER, POSITION_PICK_ID } from './policy.js';
 
 const SPRITE_ID = 'street-level:marker';
 
@@ -21,28 +19,22 @@ function markerLook(style) {
   };
 }
 
-/** On-globe marker for the open image, clamped to the ground. */
+/**
+ * On-globe marker for the open image, on the ground, turned to its bearing
+ * (a sprite of the display, render/display.js).
+ */
 export function createMarker({ state }) {
-  const { render, sprites } = state.services;
+  const { render } = state.services;
 
   function requestRender() {
-    render?.governorRequestRender?.('street-level-marker');
+    render?.governorRequestRender?.('street-level-marker', state.map?.engine);
   }
 
-  // It skips the depth test: hide it while it is behind the globe.
-  const horizon = createHorizonCull({
-    getViewer: () => state.viewer,
-    items: () => (state.marker.billboard ? [state.marker.billboard] : []),
-    onChange: requestRender,
-  });
-
-  function ensure(viewer) {
-    if (state.marker.collection) return;
-    state.marker.collection = new Cesium.BillboardCollection({
-      scene: viewer.scene,
+  function ensure(view) {
+    if (state.marker.collection || !view?.sprites) return;
+    state.marker.collection = view.sprites(SPRITE_ID, {
+      order: MARKER_SPRITE_ORDER,
     });
-    viewer.scene.primitives.add(state.marker.collection);
-    sprites?.registerSpriteCollection?.(SPRITE_ID, state.marker.collection);
   }
 
   /** Move (or create) the marker; null removes it. `style`: the provider's `marker`. */
@@ -52,49 +44,39 @@ export function createMarker({ state }) {
     if (!position) {
       collection.removeAll();
       state.marker.billboard = null;
-      horizon.stop();
       requestRender();
       return;
     }
-    const cartesian = Cesium.Cartesian3.fromDegrees(position.lon, position.lat);
     const look = markerLook(style);
     if (state.marker.billboard && state.marker.look !== look.key) {
-      collection.remove?.(state.marker.billboard);
+      collection.remove(state.marker.billboard);
       state.marker.billboard = null;
     }
+    const place = {
+      lon: position.lon,
+      lat: position.lat,
+      bearing: bearing || 0,
+    };
     if (!state.marker.billboard) {
       state.marker.look = look.key;
       state.marker.billboard = collection.add({
-        id: POSITION_PICK_ID,
-        position: cartesian,
+        pickId: POSITION_PICK_ID,
         image: look.image,
-        imageId: `sl-position:${look.key}`,
-        width: look.size,
-        height: look.size,
-        alignedAxis: Cesium.Cartesian3.UNIT_Z,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        imageKey: `sl-position:${look.key}`,
+        sizePx: look.size,
+        ...place,
       });
-    } else {
-      state.marker.billboard.position = cartesian;
-    }
-    state.marker.billboard.rotation = -Cesium.Math.toRadians(bearing || 0);
-    horizon.update([state.marker.billboard]);
+    } else collection.move(state.marker.billboard, place);
     requestRender();
   }
 
   function setVisible(visible) {
-    if (state.marker.collection) state.marker.collection.show = visible;
+    state.marker.collection?.show(visible);
     requestRender();
   }
 
-  function destroy(viewer) {
-    horizon.stop();
-    const collection = state.marker.collection;
-    if (!collection) return;
-    sprites?.unregisterSpriteCollection?.(SPRITE_ID, collection);
-    viewer?.scene?.primitives?.remove(collection);
+  function destroy() {
+    state.marker.collection?.destroy();
     state.marker.collection = null;
     state.marker.billboard = null;
   }

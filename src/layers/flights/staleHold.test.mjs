@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 import { createMotion } from './motion.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
@@ -22,9 +24,9 @@ function motionFixture({ info, fixes, nowMs, ground = () => null }) {
     _positionHistory: new Map([['00a001', fixes]]),
     _focusEvidenceIds: new Set(),
     _scratchArc: {},
-    _scratchOffset: new Cesium.Cartesian3(),
-    _scratchRenderTime: new Cesium.JulianDate(),
-    _scratchCoastCarto: new Cesium.Cartographic(),
+    _scratchOffset: geo.cartesian3.create(),
+
+    _scratchCoastCarto: geo.cartographic.create(),
     now: () => nowMs,
   };
   const motion = createMotion({
@@ -45,15 +47,15 @@ function motionFixture({ info, fixes, nowMs, ground = () => null }) {
 
 function fix(timeMs, lat, lon, heightM, velocity, track) {
   return {
-    time: Cesium.JulianDate.fromDate(new Date(timeMs)),
+    timeMs,
     epochMs: timeMs,
-    position: Cesium.Cartesian3.fromDegrees(lon, lat, heightM),
+    position: geo.cartesian3.fromDegrees(lon, lat, heightM),
     velocity,
     track,
   };
 }
 
-const height = (position) => Cesium.Cartographic.fromCartesian(position).height;
+const height = (position) => geo.cartographic.fromCartesian(position).height;
 
 test('a stale contact holds at its last report when it reported on the ground or low', () => {
   assert.equal(staleHoldsAtLastReport({ onGround: true }), true);
@@ -134,9 +136,9 @@ test('a light aircraft on short final goes stale after a low, slow, descending r
       nowMs,
       ground: () => FIELD_GROUND_M,
     });
-    const drawn = motion._deadReckon('00a001', new Cesium.Cartesian3());
+    const drawn = motion._deadReckon('00a001', geo.cartesian3.create());
     assert.ok(
-      Cesium.Cartesian3.distance(drawn, fixes[2].position) < 0.01,
+      geo.cartesian3.distance(drawn, fixes[2].position) < 0.01,
       `${afterSec} s after the report the icon is at the report`,
     );
     assert.ok(height(drawn) >= FIELD_GROUND_M);
@@ -163,9 +165,9 @@ function cruiser(lastContactAfterSec) {
   const at = (afterSec) => {
     const nowMs = t0 + 15 * SEC + RENDER_DELAY_SEC * SEC + afterSec * SEC;
     const { motion } = motionFixture({ info, fixes, nowMs });
-    return motion._deadReckon('00a001', new Cesium.Cartesian3());
+    return motion._deadReckon('00a001', geo.cartesian3.create());
   };
-  const d = (p) => Cesium.Cartesian3.distance(p, fixes[1].position);
+  const d = (p) => geo.cartesian3.distance(p, fixes[1].position);
   return { at, d };
 }
 
@@ -177,14 +179,14 @@ test('a cruising contact still heard after its last position coasts past 90 s, f
   assert.ok(near(d(at(200)), 230 * 200), 'still moving at 200 s');
   assert.ok(near(d(at(300)), 230 * 300));
   assert.ok(near(d(at(400)), 230 * 300), 'stopped at 300 s');
-  assert.ok(Cesium.Cartesian3.distance(at(400), at(600)) < 0.01);
+  assert.ok(geo.cartesian3.distance(at(400), at(600)) < 0.01);
 });
 
 test('a cruising contact that stops reporting coasts five minutes, then stops', () => {
   const { at, d } = cruiser(0);
   assert.ok(Math.abs(d(at(60)) - 230 * 60) < 120);
   assert.ok(Math.abs(d(at(300)) - 230 * 300) < 600);
-  assert.ok(Cesium.Cartesian3.distance(at(301), at(420)) < 0.01);
+  assert.ok(geo.cartesian3.distance(at(301), at(420)) < 0.01);
 });
 
 test('a bad reported speed coasts no faster than the 1,500 kt continuity limit', () => {
@@ -206,9 +208,9 @@ test('a bad reported speed coasts no faster than the 1,500 kt continuity limit',
   };
   const nowMs = t0 + 15 * SEC + RENDER_DELAY_SEC * SEC + 300 * SEC;
   const { motion } = motionFixture({ info, fixes, nowMs });
-  const drawn = motion._deadReckon('00a001', new Cesium.Cartesian3());
+  const drawn = motion._deadReckon('00a001', geo.cartesian3.create());
   const limitMps = (TRAIL_CONTINUITY_MAX_SPEED_KT * 1852) / 3600;
-  const d = Cesium.Cartesian3.distance(drawn, fixes[1].position);
+  const d = geo.cartesian3.distance(drawn, fixes[1].position);
   assert.ok(Math.abs(d - limitMps * 300) < 1_500, `${d.toFixed(0)} m`);
 });
 
@@ -236,7 +238,7 @@ test('coasting never takes a contact below the ground', () => {
     nowMs,
     ground: (lat, lon) => (lon < -105.52 ? 3_600 : 3_000),
   });
-  const drawn = motion._deadReckon('00a001', new Cesium.Cartesian3());
+  const drawn = motion._deadReckon('00a001', geo.cartesian3.create());
   assert.ok(height(drawn) >= 3_600, `height ${height(drawn)}`);
 });
 
@@ -245,6 +247,7 @@ test('coasting never takes a contact below the ground', () => {
 
 function services(trail) {
   const names = [
+    'selection',
     'picking',
     'sprites',
     'aircraftPresentation',
@@ -292,15 +295,14 @@ function trailHarness({ fixes, nowMs, head }) {
     source: { label: 'Fixture aircraft' },
   });
   const added = [];
-  flightState._viewer = {
-    isDestroyed: () => false,
-    entities: {
-      add(definition) {
-        added.push(definition);
-        return definition;
-      },
-      remove() {},
+  flightState._renderer = recordingAircraftRenderer(createFakeEngine());
+  flightState._renderer.trails = {
+    create: svc.trails.createTrail,
+    createHead(definition) {
+      added.push(definition);
+      return definition;
     },
+    removeHead() {},
   };
   flightState._trackedIcao = '00a001';
   let clock = nowMs;
@@ -329,7 +331,7 @@ function trailHarness({ fixes, nowMs, head }) {
     tracking,
     flightState,
     drawn: () => (calls.at(-1) ?? []).flat(),
-    head: () => headEntity().polyline.positions.getValue(),
+    head: () => headEntity().positions(),
     setClock: (ms) => {
       clock = ms;
     },
@@ -352,7 +354,7 @@ test('a holding contact draws no head, and the trail ends at the last report, ne
   const h = trailHarness({
     fixes,
     nowMs: t0 + 90 * SEC + RENDER_DELAY_SEC * SEC + 120 * SEC,
-    head: Cesium.Cartesian3.clone(last),
+    head: geo.cartesian3.clone(last),
   });
   h.tracking._startTrail('00a001');
   // Every report, including the last, is in the trail: the head no longer
@@ -369,14 +371,14 @@ test('while the display is between reports, the trail stops at the report behind
     fix(t0 + i * 10 * SEC, 40, -100 + i * 0.03, 10_000, 230, 90),
   );
   const nowMs = t0 + 25 * SEC + RENDER_DELAY_SEC * SEC;
-  const icon = Cesium.Cartesian3.fromDegrees(-100 + 0.075, 40, 10_000);
+  const icon = geo.cartesian3.fromDegrees(-100 + 0.075, 40, 10_000);
   const h = trailHarness({ fixes, nowMs, head: icon });
   h.tracking._startTrail('00a001');
   // Reports at 0, 10 and 20 s are behind the icon (display time 25 s).
   assert.equal(h.drawn().length, 3);
   const head = h.head();
   assert.equal(head.length, 2);
-  assert.ok(Cesium.Cartesian3.distance(head[0], fixes[2].position) < 0.01);
+  assert.ok(geo.cartesian3.distance(head[0], fixes[2].position) < 0.01);
 });
 
 test('the hold-or-coast decision is made once per report: a floor that resolves mid-coast does not snap the icon back', () => {
@@ -407,9 +409,9 @@ test('the hold-or-coast decision is made once per report: a floor that resolves 
       nowMs,
       ground: (lat, lon) => ground(lat, lon),
     });
-    return motion._deadReckon('00a001', new Cesium.Cartesian3());
+    return motion._deadReckon('00a001', geo.cartesian3.create());
   };
-  const d = (p) => Cesium.Cartesian3.distance(p, fixes[1].position);
+  const d = (p) => geo.cartesian3.distance(p, fixes[1].position);
   const before = d(at(30));
   assert.ok(Math.abs(before - 70 * 30) < 50, `coasted ${before.toFixed(0)} m`);
   ground = () => 1_800;

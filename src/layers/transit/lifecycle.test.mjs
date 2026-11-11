@@ -1,7 +1,11 @@
+import { installDomClasses } from '../../testSupport/domClasses.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTransitLayer } from './index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createTransitDisplay } from './render/display.js';
+import { transitTestAtlas } from './render/testAtlas.mjs';
 import {
   FEED_EVICT_AFTER_MS,
   FEED_STALE_AFTER_MS,
@@ -34,13 +38,11 @@ import {
   releaseCameraSensitivity,
 } from '../../data/cameraSensitivity.js';
 import {
-  _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
   governorRequestRender,
   holdContinuousRender,
-  installRenderGovernor,
+  renderGovernorFor,
   releaseContinuousRender,
-  uninstallRenderGovernor,
 } from '../../renderGovernor.js';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
@@ -87,7 +89,7 @@ function vehicle(id, lat, lon, atSeconds, extra = {}) {
 }
 
 /**
- * A Transit layer wired to a stub scene and a scripted proxy.
+ * A Transit layer drawn on the fake globe engine, with a scripted proxy.
  *
  * The render governor is the real one, so "does this layer keep the render loop
  * awake?" is answered by the same code the app runs.
@@ -159,6 +161,7 @@ function harness(
       east: at.lon + 0.1,
       north: at.lat + 0.1,
     },
+    engineOptions = {},
   } = {},
 ) {
   const viewRect = { ...view };
@@ -166,25 +169,9 @@ function harness(
     apis: ['Date', 'setTimeout'],
     now: 1_789_000_000_000,
   });
-
-  for (const name of [
-    'HTMLCanvasElement',
-    'HTMLImageElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ]) {
-    const prior = globalThis[name];
-    globalThis[name] = class {};
-    t.after(() => {
-      if (prior === undefined) delete globalThis[name];
-      else globalThis[name] = prior;
-    });
-  }
   t.mock.method(performance, 'now', () => Date.now() - 1_789_000_000_000);
   const originalFetch = globalThis.fetch;
   const originalDocument = globalThis.document;
-  const primitives = [];
-  const sprites = new Map();
   const pickOwners = new Map();
   const overlaySources = new Map();
   const credits = [];
@@ -200,47 +187,39 @@ function harness(
   const originalWindow = globalThis.window;
   globalThis.window = new EventTarget();
 
-  const preRender = new Cesium.Event();
-  const cameraChanged = new Cesium.Event();
+  // The globe: a fake engine over `at`, looking straight down from
+  // `altitude`, whose view rectangle is `view` (lookAt moves it).
+  const engine = createFakeEngine(engineOptions);
+  engine.fake.setPose({
+    longitude: Cesium.Math.toRadians(at.lon),
+    latitude: Cesium.Math.toRadians(at.lat),
+    height: altitude,
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
+  let viewRectangle = () =>
+    Cesium.Rectangle.fromDegrees(
+      viewRect.west,
+      viewRect.south,
+      viewRect.east,
+      viewRect.north,
+    );
+  engine.fake.script('viewRectangle', () => viewRectangle());
+  // No terrain answers unless a test gives one (photoreal-style floors).
+  let terrain = () => undefined;
+  engine.fake.script('terrainHeight', (cartographic) => terrain(cartographic));
+  let frameTime = 0;
+  // The render governor's scene: requestRenderMode is what it switches.
   const viewer = {
-    camera: {
-      changed: cameraChanged,
-      percentageChanged: 0.5,
-      positionCartographic: {
-        height: altitude,
-        latitude: Cesium.Math.toRadians(at.lat),
-        longitude: Cesium.Math.toRadians(at.lon),
-      },
-      computeViewRectangle() {
-        return Cesium.Rectangle.fromDegrees(
-          viewRect.west,
-          viewRect.south,
-          viewRect.east,
-          viewRect.north,
-        );
-      },
-    },
+    camera: engine.camera,
     scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick: () => undefined,
       requestRenderMode: false,
       maximumRenderTimeChange: 0,
       requestRender() {},
-      preRender,
-      primitives: {
-        add(primitive) {
-          primitives.push(primitive);
-          return primitive;
-        },
-        remove(primitive) {
-          const index = primitives.indexOf(primitive);
-          if (index >= 0) primitives.splice(index, 1);
-          return index >= 0;
-        },
-        contains: (primitive) => primitives.includes(primitive),
-        raiseToTop() {},
-      },
+      // For the layers in a test that still bind a viewer's scene.
+      preRender: engine.frames.preRender,
+      postRender: engine.frames.postRender,
     },
   };
 
@@ -262,13 +241,21 @@ function harness(
   const ground = groundStub(floorAt);
   /** Every call the floor cycle makes to the rendered-mesh sampler. */
   const meshCalls = [];
+  let display = null;
   const layer = createTransitLayer({
+    rendererFactory: (context) => {
+      display = createTransitDisplay(engine, {
+        ...context,
+        drawAtlas: transitTestAtlas,
+      });
+      return display;
+    },
     source,
     services: {
       ground,
       mesh: {
-        sampleMeshFloorCells(scene, points, options) {
-          meshCalls.push({ scene, points: [...points], options });
+        sampleMeshFloorCells(target, points, options) {
+          meshCalls.push({ target, points: [...points], options });
         },
       },
       render: {
@@ -276,23 +263,17 @@ function harness(
         holdContinuousRender,
         releaseContinuousRender,
       },
-      sprites: {
-        registerSpriteCollection: (id, collection) =>
-          sprites.set(id, collection),
-        unregisterSpriteCollection: (id) => sprites.delete(id),
-        restoreSpriteOrder() {},
-      },
       picking: {
         registerPickOwner: (id, predicate) => pickOwners.set(id, predicate),
         unregisterPickOwner: (id) => pickOwners.delete(id),
       },
       overlays: {
-        setOverlayEntries: (id, entries) => overlaySources.set(id, entries),
-        setOverlaySourceVisible() {},
-        clearOverlaySource: (id) => overlaySources.delete(id),
+        setEntries: (id, entries) => overlaySources.set(id, entries),
+        setVisible() {},
+        clearSource: (id) => overlaySources.delete(id),
       },
       credits: {
-        registerDynamicCredit: (_viewer, credit) => credits.push(credit?.key),
+        registerDynamicCredit: (_engine, credit) => credits.push(credit?.key),
         transitFeedCredit: (feed) => ({
           key: `transit-${feed.id}`,
           html: feed.name,
@@ -301,8 +282,8 @@ function harness(
     },
   });
 
-  installRenderGovernor(viewer);
-  layer.init(viewer);
+  renderGovernorFor(engine).install();
+  layer.init(viewer, { engine });
 
   t.after(() => {
     try {
@@ -310,8 +291,9 @@ function harness(
     } catch {
       /* a test may already have destroyed it */
     }
-    uninstallRenderGovernor(viewer);
-    _resetRenderGovernorForTest();
+    engine.destroy();
+    renderGovernorFor(engine).destroy();
+
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
@@ -319,11 +301,31 @@ function harness(
     else globalThis.window = originalWindow;
   });
 
+  const frame = () => {
+    frameTime += 16;
+    engine.fake.emit('frames.preUpdate', frameTime);
+    engine.fake.emit('frames.preRender', frameTime);
+  };
+  const markerSets = () => {
+    const state = layer._transitStateForTest();
+    return new Map(
+      [
+        ['transit', state._markers],
+        ['transit-motion', state._animatedMarkers],
+      ].filter(([, collection]) => collection),
+    );
+  };
   return {
     layer,
     viewer,
-    primitives,
-    sprites,
+    engine,
+    get display() {
+      return display;
+    },
+    /** The marker collections by sprite-order id, while the layer has them. */
+    get sprites() {
+      return markerSets();
+    },
     pickOwners,
     overlaySources,
     credits,
@@ -336,9 +338,7 @@ function harness(
     },
     state: () => layer._transitStateForTest(),
     vehicles: () => [...layer._transitStateForTest()._vehicles.values()],
-    frame() {
-      preRender.raiseEvent();
-    },
+    frame,
     advance(ms) {
       t.mock.timers.tick(ms);
     },
@@ -353,14 +353,14 @@ function harness(
       const until = Date.now() + ms;
       while (Date.now() + step <= until) {
         t.mock.timers.tick(step);
-        preRender.raiseEvent();
+        frame();
       }
       if (Date.now() < until) {
         t.mock.timers.tick(until - Date.now());
-        preRender.raiseEvent();
+        frame();
       }
     },
-    holds: () => getRenderGovernorDiagnostics().holds,
+    holds: () => getRenderGovernorDiagnostics(engine).holds,
     ground,
     meshCalls,
     /**
@@ -379,7 +379,7 @@ function harness(
         // a test about how long a sweep waits.
         parts.rendering.refreshVisibility();
         t.mock.timers.tick(16);
-        preRender.raiseEvent();
+        frame();
       }
     },
     /** What the style manager dispatches when the user picks a preset. */
@@ -394,10 +394,47 @@ function harness(
         new CustomEvent('gev:vision-change', { detail: { style, cockpit } }),
       );
     },
-    /** Move the camera's view rectangle, the way a real camera move would. */
+    /**
+     * Pan the camera over the centre of `next` at its height and report
+     * `next` as its view rectangle, the way a real camera move would.
+     */
     lookAt(next) {
       Object.assign(viewRect, next);
-      cameraChanged.raiseEvent();
+      const height = engine.camera.height();
+      engine.fake.setPose({
+        longitude: Cesium.Math.toRadians((viewRect.west + viewRect.east) / 2),
+        latitude: Cesium.Math.toRadians((viewRect.south + viewRect.north) / 2),
+        height,
+      });
+      engine.fake.emit('camera.changed', 1);
+    },
+    /** The view rectangle the camera reports (undefined: none). */
+    setViewRectangle(next) {
+      viewRectangle = next;
+    },
+    /** The rendered terrain under a point (a globe with terrain shown). */
+    setTerrain(heightAt) {
+      terrain = (cartographic) =>
+        heightAt(
+          Cesium.Math.toDegrees(cartographic.latitude),
+          Cesium.Math.toDegrees(cartographic.longitude),
+        );
+    },
+    /** Places the camera (degrees and metres; angles in radians). */
+    aim({ lat, lon, height, heading = 0, pitch = -Math.PI / 2, roll = 0 }) {
+      engine.fake.setPose({
+        longitude: Cesium.Math.toRadians(lon),
+        latitude: Cesium.Math.toRadians(lat),
+        height,
+        heading,
+        pitch,
+        roll,
+      });
+    },
+    /** A click at `position` whose pick is `picked`. */
+    click(position, picked) {
+      engine.fake.script('pick', picked);
+      engine.fake.input('click', { position });
     },
   };
 }
@@ -676,19 +713,7 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
   const pending = new Promise((resolve) => {
     release = resolve;
   });
-  for (const name of [
-    'HTMLCanvasElement',
-    'HTMLImageElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ]) {
-    const prior = globalThis[name];
-    globalThis[name] = class {};
-    t.after(() => {
-      if (prior === undefined) delete globalThis[name];
-      else globalThis[name] = prior;
-    });
-  }
+  installDomClasses(t);
   t.mock.method(performance, 'now', () => Date.now() - 1_789_000_000_000);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -718,6 +743,7 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
     'a poll from the disabled generation never lands',
   );
   assert.equal(app.state()._inFlight.size, 0);
+  assert.deepEqual(app.engine.ground.list(), []);
   assert.equal(app.holds().includes('transit'), false);
 
   // Re-enabling starts a clean generation and does take data.
@@ -801,7 +827,7 @@ test('the render hold follows real motion, and is released when everything settl
   );
   app.frame();
   assert.equal(app.holds().includes('transit'), false);
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
 
   // A second fix IS motion to come: the vehicle is armed and the loop held.
   app.advance(TRANSIT_POLL_MS);
@@ -823,7 +849,7 @@ test('the render hold follows real motion, and is released when everything settl
     app.holds().includes('transit'),
     'a moving vehicle keeps the loop awake',
   );
-  assert.equal(app.viewer.scene.requestRenderMode, false);
+  assert.equal(!app.engine.render.isContinuous(), false);
 
   // Past the second fix it holds and the loop is released again.
   app.run(TRANSIT_POLL_MS);
@@ -832,7 +858,7 @@ test('the render hold follows real motion, and is released when everything settl
     false,
     'a settled fleet does not hold the GPU',
   );
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
 });
 test('disable hands back the camera sensitivity it borrowed', async (t) => {
   const app = harness(t);
@@ -908,34 +934,41 @@ test('destroy releases every shared registration this layer took', async (t) => 
   }));
   app.layer.enable(app.viewer);
   await app.layer.update();
+  await app.display.whenReady();
   assert.ok(app.sprites.has('transit'));
   assert.ok(app.pickOwners.has('transit'));
-  assert.equal(app.primitives.length, 2);
+  assert.deepEqual(
+    app.engine.movers.list().map(({ id, count }) => [id, count]),
+    [['transit-1', 1]],
+    'the stationary fleet is one sprite set',
+  );
 
   app.layer.destroy(app.viewer);
   assert.equal(
     app.sprites.has('transit'),
     false,
-    'the sprite collection is unregistered',
+    'the marker collections are released',
   );
   assert.equal(
     app.pickOwners.has('transit'),
     false,
     'the pick owner is released',
   );
-  assert.equal(
-    app.primitives.length,
-    0,
-    'the primitive collection leaves the scene',
+  assert.deepEqual(
+    app.engine.movers.list(),
+    [],
+    'the sprite sets leave the scene',
   );
+  assert.deepEqual(app.engine.lines.list(), []);
   assert.equal(app.holds().includes('transit'), false);
-  assert.equal(app.state()._viewer, null);
   assert.equal(app.state()._dataManager, null);
 });
 
 test('two layers built from the factory share no state', async (t) => {
   const app = harness(t);
   const second = createTransitLayer({
+    rendererFactory: ({ engine, ...context }) =>
+      createTransitDisplay(engine, { ...context, drawAtlas: transitTestAtlas }),
     services: {
       ground: groundStub(() => 12),
       render: {
@@ -943,16 +976,11 @@ test('two layers built from the factory share no state', async (t) => {
         holdContinuousRender,
         releaseContinuousRender,
       },
-      sprites: {
-        registerSpriteCollection() {},
-        unregisterSpriteCollection() {},
-        restoreSpriteOrder() {},
-      },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
       overlays: {
-        setOverlayEntries() {},
-        setOverlaySourceVisible() {},
-        clearOverlaySource() {},
+        setEntries() {},
+        setVisible() {},
+        clearSource() {},
       },
       credits: {
         registerDynamicCredit() {},
@@ -1071,7 +1099,7 @@ test('a parked fleet that keeps reporting the same position stops asking for fra
     );
     assert.equal(app.state()._moving.size, 0);
   }
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
   assert.equal(app.vehicles().length, 2, 'and the fleet is still on screen');
 
   // One vehicle finally moves: that IS work, and the hold comes back.
@@ -1157,7 +1185,7 @@ test('the last vehicle leaving mid-segment takes the render hold with it', async
     false,
     'no hold may outlive the fleet that justified it',
   );
-  assert.equal(app.viewer.scene.requestRenderMode, true);
+  assert.equal(!app.engine.render.isContinuous(), true);
   assert.ok(Date.now() - fetchedAt > FEED_EVICT_AFTER_MS);
 });
 test('only the vehicles near the view are animated frame by frame', async (t) => {
@@ -2304,16 +2332,16 @@ test('the floor cycle samples the rendered mesh for the cells it warms, with its
     'the sampler was asked after the floor resolved',
   );
   const call = app.meshCalls[0];
-  assert.equal(call.scene, app.viewer.scene);
+  assert.equal(call.target, app.engine);
   assert.deepEqual(
     call.points.map((p) => p.lat).sort(),
     [42.36, 42.37],
     'the in-view cells, and not the one off screen',
   );
-  assert.equal(
-    call.options.excludeObjects.length,
-    2,
-    'both in-view billboards excluded',
+  assert.deepEqual(
+    call.options.excludeObjects.map((set) => set.count()),
+    [3],
+    'the sprite set holding the fleet is excluded',
   );
   assert.ok(
     Math.abs(call.options.viewerLat - BOSTON.lat) < 1e-6,
@@ -2670,7 +2698,8 @@ test('a long selected history shortens its oldest geometry before sacrificing th
 });
 
 test('sparse rail reports preserve a bounded marker corridor with and without selection', async (t) => {
-  const app = harness(t);
+  // High enough that the 16 km run south of the camera stays in view.
+  const app = harness(t, { altitude: 50_000 });
   const parts = app.layer._transitPartsForTest();
   const { seek } = await import('../../data/contactPlayback.js');
   let latitude = 42.36 - 16000 / 111320;
@@ -2728,7 +2757,7 @@ test('sparse rail reports preserve a bounded marker corridor with and without se
 
 test('missing rectangle still rejects the far side, and frustum rejection wins', async (t) => {
   const app = harness(t, { altitude: 100_000 });
-  app.viewer.camera.computeViewRectangle = () => undefined;
+  app.setViewRectangle(() => undefined);
   app.serve('mbta', () => ({
     status: 200,
     body: snapshot(
@@ -2749,11 +2778,8 @@ test('missing rectangle still rejects the far side, and frustum rejection wins',
     [...app.state()._visible].map((e) => e.record.id),
     ['near'],
   );
-  app.viewer.camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  // The camera turns to the sky: the frustum holds no vehicle.
+  app.aim({ ...BOSTON, height: 100_000, pitch: 0.5 });
   app.advance(250);
   app.layer._transitPartsForTest().rendering.refreshVisibility();
   assert.equal(app.state()._visible.size, 0);
@@ -2824,7 +2850,11 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
   const entry = app.vehicles()[0],
     parts = app.layer._transitPartsForTest();
   const check = (hex, display) => {
-    assert.equal(entry.marker.color.toCssHexString().toUpperCase(), hex);
+    const { red, green, blue, alpha } = entry.marker.color;
+    assert.equal(
+      new Cesium.Color(red, green, blue, alpha).toCssHexString().toUpperCase(),
+      hex,
+    );
     const svg = Buffer.from(
       entry.marker.image.split(',')[1],
       'base64',
@@ -2874,11 +2904,8 @@ test('visible motion is recullable without a camera event and releases its hold 
   await app.layer.update();
   app.layer._loadTransitFleetForTest(1, BOSTON, 1);
   assert.equal(app.state()._moving.size, 1);
-  app.viewer.camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  // The camera turns to the sky: the frustum holds no vehicle.
+  app.aim({ ...BOSTON, height: 30000, pitch: 0.5 });
   app.layer._transitPartsForTest().rendering.maintainPresentation();
   app.advance(250);
   assert.equal(app.state()._moving.size, 0);
@@ -2920,6 +2947,13 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
       },
     },
     parts: {
+      renderer: {
+        cameraCartographic: () => state._viewer.camera.positionCartographic,
+        terrainHeight: () => undefined,
+        sampleMeshFloorCells(points) {
+          for (const point of points) probed.add(point.cell);
+        },
+      },
       trails: {
         prepareEntry(e, collect) {
           if (collect)
@@ -2969,13 +3003,15 @@ test('mesh refinement probes the latest point the path offers in a cell', async 
         cachedGroundFloor: () => 10,
         GROUND_FLOOR_LIFT_M: 1.5,
       },
-      mesh: {
-        sampleMeshFloorCells(scene, points) {
+    },
+    parts: {
+      renderer: {
+        cameraCartographic: () => ({ height: 100 }),
+        terrainHeight: () => undefined,
+        sampleMeshFloorCells(points) {
           probed.push(...points.map((p) => [p.lat, p.lon]));
         },
       },
-    },
-    parts: {
       trails: {
         prepareEntry(e, collect) {
           if (collect)
@@ -3024,13 +3060,15 @@ test('the selected vehicle is probed at its newest fix in its own cell', async (
         cachedGroundFloor: () => 10,
         GROUND_FLOOR_LIFT_M: 1.5,
       },
-      mesh: {
-        sampleMeshFloorCells(scene, points) {
+    },
+    parts: {
+      renderer: {
+        cameraCartographic: () => ({ height: 100 }),
+        terrainHeight: () => undefined,
+        sampleMeshFloorCells(points) {
           probed.push(...points.map((p) => [p.lat, p.lon]));
         },
       },
-    },
-    parts: {
       trails: {
         prepareEntry(e, collect) {
           if (collect)
@@ -3150,11 +3188,6 @@ test('tab visibility synchronizes playback before the returning frame and remove
 for (const bounds of ['null', 'stale']) {
   test(`browser visibility starts an injected fleet with ${bounds} bounds and an unsampled hidden marker`, async (t) => {
     const app = harness(t);
-    app.viewer.camera.frustum = {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
-    };
     app.layer.enable(app.viewer);
     const loaded = app.layer._loadTransitFleetForTest(4, BOSTON, 70, [
       'Red',
@@ -3176,7 +3209,7 @@ for (const bounds of ['null', 'stale']) {
     parts.rendering.refreshVisibility();
     assert.equal(state._visible.size, loaded.count);
     assert.equal(state._moving.size, loaded.count);
-    assert.equal(app.viewer.scene.requestRenderMode, false);
+    assert.equal(!app.engine.render.isContinuous(), false);
     const entry = app.vehicles()[0],
       before = Cesium.Cartesian3.clone(entry.marker.position);
     app.run(1000, 16);
@@ -3187,8 +3220,7 @@ for (const bounds of ['null', 'stale']) {
 test('keyless loaded terrain resolves a pending surface without needing a frame first', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   let floor;
-  app.viewer.scene.globe.show = true;
-  app.viewer.scene.globe.getHeight = () => floor;
+  app.setTerrain(() => floor);
   app.serve('mbta', () => ({
     status: 200,
     body: snapshot(
@@ -3215,7 +3247,6 @@ test('keyless loaded terrain resolves a pending surface without needing a frame 
 
 test('scripted keyless fleet keeps its known floor through selection and floor rereads', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
-  app.viewer.scene.globe.show = true;
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
   const parts = app.layer._transitPartsForTest(),
@@ -3232,27 +3263,11 @@ test('scripted keyless fleet keeps its known floor through selection and floor r
 for (const count of [800, 3000]) {
   test(`real perspective frustum admits all ${count} moving budget fixtures`, async (t) => {
     const altitude = count === 800 ? 600 : 30000;
-    const app = harness(t, { altitude, floorAt: () => undefined });
-    const camera = app.viewer.camera;
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      BOSTON.lon,
-      BOSTON.lat,
+    // Straight down over Boston, 60° across a 1920 × 1080 view.
+    const app = harness(t, {
       altitude,
-    );
-    camera.directionWC = Cesium.Cartesian3.negate(
-      Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-        camera.positionWC,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
-    );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(camera.positionWC);
-    camera.upWC = Cesium.Matrix4.getColumn(enu, 1, new Cesium.Cartesian3());
-    camera.frustum = new Cesium.PerspectiveFrustum({
-      fov: Math.PI / 3,
-      aspectRatio: 1920 / 1080,
-      near: 1,
-      far: 100000,
+      floorAt: () => undefined,
+      engineOptions: { width: 1920, height: 1080 },
     });
     app.layer.enable(app.viewer);
     const loaded = app.layer._loadTransitFleetForTest(
@@ -3266,33 +3281,31 @@ for (const count of [800, 3000]) {
       before = Cesium.Cartesian3.clone(entry.marker.position);
     app.run(1000, 16);
     assert.ok(Cesium.Cartesian3.distance(before, entry.marker.position) > 0.9);
-    assert.equal(app.viewer.scene.requestRenderMode, false);
+    assert.equal(!app.engine.render.isContinuous(), false);
   });
 }
 
-test('click handler selects a migrated scripted billboard and prepares a valid depth-fail trail', async (t) => {
+test('click handler selects a migrated scripted billboard and prepares a draped trail', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
   const entry = app.vehicles()[0];
   assert.equal(entry.markerCollection, app.state()._animatedMarkers);
-  app.viewer.scene.pick = () => ({ primitive: entry.marker, id: entry.key });
-  app
-    .state()
-    ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-    position: new Cesium.Cartesian2(500, 400),
-  });
-  assert.equal(app.state()._selectedKey, entry.key);
-  const body = app.layer._transitPartsForTest().trails.diagnostics().body;
-  assert.ok(body.geometryInstances.length > 0);
-  body._batchTableAttributeIndices = { color: 0, depthFailColor: 1 };
-  assert.doesNotThrow(() =>
-    Cesium.Primitive._updateColorAttribute(
-      body,
-      body.depthFailAppearance.vertexShaderSource,
-      true,
-    ),
+  await app.display.whenReady();
+  app.click(
+    { x: 500, y: 400 },
+    { id: entry.key, owner: 'transit-motion-1', instance: 0 },
   );
+  assert.equal(app.state()._selectedKey, entry.key);
+  const { body } = app.layer._transitPartsForTest().trails.diagnostics();
+  assert.ok(body.lines > 0);
+  app.frame();
+  const lanes = app.engine.ground
+    .list()
+    .map(({ id }) => app.engine.fake.groundSet(id));
+  assert.ok(lanes.length > 0);
+  assert.ok(lanes.every((lane) => lane.options.drape === 'both'));
+  assert.deepEqual(app.engine.lines.list(), []);
   assert.ok(entry.trailSegments.length > 0);
   app.run(1000, 16);
   assert.equal(entry.marker.show, true);
@@ -3322,7 +3335,7 @@ test('intercepted scripted reports resolve their explicit floor and wake without
   assert.equal(entry.surfaceReady, true);
   assert.equal(entry.marker.show, true);
   assert.ok(app.state()._moving.has(entry));
-  assert.equal(app.viewer.scene.requestRenderMode, false);
+  assert.equal(!app.engine.render.isContinuous(), false);
   const before = Cesium.Cartesian3.clone(entry.marker.position);
   app.run(1000, 16);
   assert.ok(Cesium.Cartesian3.distance(before, entry.marker.position) > 1);
@@ -3340,14 +3353,14 @@ test('hot path reuses sample outputs and reads camera altitude once per frame', 
   const out = new Cesium.Cartesian3();
   assert.equal(parts.trails.samplePosition(entry, entry.sample, out), out);
   const sample = entry.sample;
-  const carto = h.viewer.camera.positionCartographic;
+  const pose = h.engine.camera.pose;
   let reads = 0;
-  Object.defineProperty(h.viewer.camera, 'positionCartographic', {
-    configurable: true,
-    get() {
-      reads++;
-      return carto;
-    },
+  h.engine.camera.pose = () => {
+    reads++;
+    return pose();
+  };
+  t.after(() => {
+    h.engine.camera.pose = pose;
   });
   h.advance(17);
   h.frame();
@@ -3363,7 +3376,8 @@ test('hot path reuses sample outputs and reads camera altitude once per frame', 
 });
 
 test('scripted straight and changing delay preserve ordinary-frame speed through polls', async (t) => {
-  const h = harness(t, { altitude: 600 });
+  // A wide view keeps the 1.6 km run north of the camera on screen.
+  const h = harness(t, { altitude: 600, engineOptions: { fovy: 2.6 } });
   const start = Date.now();
   const modes = ['straight', 'gap', 'dup'];
   h.serve('mbta', () => {
@@ -3488,7 +3502,7 @@ test('selected anchor rejects nonfinite marker coordinates before sampling and d
   assert.equal(card.position(), null);
 });
 
-test('preset clicks preserve both pick id paths through moving and stationary collection migration', async (t) => {
+test('preset clicks select through moving and stationary collection migration', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
@@ -3507,13 +3521,11 @@ test('preset clicks preserve both pick id paths through moving and stationary co
         animated ? app.state()._animatedMarkers : app.state()._markers,
       );
       assert.equal(entry.marker.id, entry.key);
-      for (const pick of [{ id: entry.key }, { primitive: entry.marker }]) {
-        app.viewer.scene.pick = () => pick;
-        app
-          .state()
-          ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)(
-          { position: new Cesium.Cartesian2(500, 400) },
-        );
+      for (const owner of [
+        undefined,
+        animated ? 'transit-motion-1' : 'transit-1',
+      ]) {
+        app.click({ x: 500, y: 400 }, { id: entry.key, owner, instance: 0 });
         assert.equal(app.state()._selectedKey, entry.key);
         parts.selection.clearSelection();
       }
@@ -3540,36 +3552,42 @@ test('QA backwards seek reconstructs the pruned fixture paths before allocation 
 });
 
 test('sensor clicks map displayed pixels into the pre-shader pick buffer', async (t) => {
-  const app = harness(t, { floorAt: () => undefined });
+  // An engine that draws the sensor styles itself (render.style).
+  const app = harness(t, {
+    floorAt: () => undefined,
+    engineOptions: {
+      width: 1920,
+      height: 1080,
+      canvas: { width: 1920, height: 1080 },
+      visualStyles: {
+        surveillance: ['pixelation'],
+        thermal: ['pixelation'],
+      },
+    },
+  });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
-  const entry = app.vehicles()[0],
-    scene = app.viewer.scene;
+  const entry = app.vehicles()[0];
   let actual;
-  scene.pick = (p) => {
+  const pick = (p) => {
     actual = { x: p.x, y: p.y };
     return { id: entry.key };
   };
-  scene.canvas = {
-    width: 1920,
-    height: 1080,
-    clientWidth: 1920,
-    clientHeight: 1080,
-  };
-  const uniforms = { intensity: 1, pixelation: 1 };
-  scene.postProcessStages = {
-    getStageByName: () => ({ enabled: true, uniforms }),
-  };
-  const click = app
-    .state()
-    ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  const click = (position) => app.click(position, pick);
+  app.engine.render.setStyle('surveillance', {
+    intensity: 1,
+    uniforms: { pixelation: 1 },
+  });
   app.layer._transitPartsForTest().rendering.setStylePreset('surveillance');
-  click({ position: new Cesium.Cartesian2(1440, 540) });
+  click({ x: 1440, y: 540 });
   assert.ok(Math.abs(actual.x - 1472) < 1e-6);
   assert.equal(actual.y, 540);
   app.layer._transitPartsForTest().rendering.setStylePreset('thermal');
-  uniforms.pixelation = 1.5;
-  click({ position: new Cesium.Cartesian2(100.9, 200.1) });
+  app.engine.render.setStyle('thermal', {
+    intensity: 1,
+    uniforms: { pixelation: 1.5 },
+  });
+  click({ x: 100.9, y: 200.1 });
   assert.ok(Math.abs(actual.x - 100.5) < 1e-6);
   assert.ok(Math.abs(actual.y - 201) < 1e-6);
   assert.equal(app.state()._selectedKey, entry.key);
@@ -3670,12 +3688,21 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
 test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in every enable/disable order', async (t) => {
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
-  const { createLifecycle: bikeLifecycle } =
-    await import('../bikeshare/lifecycle.js');
+  const { createBikeshareDisplay } =
+    await import('../bikeshare/render/display.js');
   const app = harness(t);
   const noop = () => {};
+  // Traffic claims through its engine's camera, as bikeshare does: the
+  // viewer's. The stub has what binding its scene subscribes to.
+  const listeners = { addEventListener: () => noop };
+  const trafficEngine = createFakeEngine();
+  trafficEngine.camera = app.engine.camera;
+  trafficEngine.frames.preRender = listeners;
+  trafficEngine.frames.postRender = listeners;
+  trafficEngine.projector.viewProjection = noop;
+  trafficEngine.fake.script('tilesLoaded', false);
   const traffic = trafficLifecycle({
-    state: { _pointCollection: {}, _loadGeneration: 0 },
+    state: { _engine: trafficEngine, _loadGeneration: 0 },
     services: {
       render: { holdContinuousRender: noop, releaseContinuousRender: noop },
     },
@@ -3687,33 +3714,31 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
       ingestion: { cancelActiveFetch: noop },
     },
   }).methods;
-  const bike = bikeLifecycle({
+  // The bikeshare display claims through its engine's camera: the viewer's.
+  const bike = createBikeshareDisplay(app.engine, {
     state: {
-      _pointCollection: {},
+      _stationRenderMap: new Map(),
       _overlayHost: { setVisible: noop },
       _cityRuntime: new Map(),
       _failedCityIds: new Set(),
     },
     services: {
-      sprites: { restoreSpriteOrder: noop },
+      render: { governorRequestRender: noop },
       picking: { registerPickOwner: noop, unregisterPickOwner: noop },
     },
     source: {},
     parts: {
-      selection: {
+      display: {
         _installClickHandler: noop,
+        _uninstallClickHandler: noop,
         _clearSelection: noop,
-        _onKeyDown: noop,
-      },
-      viewport: {
         onCameraChanged: noop,
         runProximityCheck: noop,
         deactivateAllCities: noop,
       },
       ingestion: { abortAllInFlight: noop },
     },
-  }).methods;
-  app.viewer.camera.moveEnd = new Cesium.Event();
+  });
   const layers = { traffic, bikeshare: bike, transit: app.layer };
   const orders = [
     ['traffic', 'bikeshare', 'transit'],
@@ -3756,54 +3781,27 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
 });
 
 test('moving and stationary transit stay adjacent above CCTV and Bikeshare during migration', async (t) => {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = await import('../../data/spriteOrder.js');
+  const { SPRITE_LAYER_ORDER } = await import('../../data/spriteOrder.js');
   const app = harness(t);
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON, 70);
-  const cctv = {},
-    bike = {},
-    flights = {};
-  app.primitives.push(cctv, bike, flights);
-  app.viewer.scene.primitives.raiseToTop = (c) => {
-    app.primitives.splice(app.primitives.indexOf(c), 1);
-    app.primitives.push(c);
-  };
-  const collections = new Map([
-    ...app.sprites,
-    ['cctv', cctv],
-    ['bikeshare', bike],
-    ['flights', flights],
-  ]);
-  for (const [id, collection] of collections)
-    registerSpriteCollection(id, collection);
-  t.after(() => {
-    for (const [id, c] of collections) unregisterSpriteCollection(id, c);
-  });
+  await app.display.whenReady();
   const entry = app.vehicles()[0],
     parts = app.layer._transitPartsForTest();
+  const order = (id) => app.engine.fake.moverSet(id)?.options.order;
   for (const moving of [true, false, true]) {
     entry.sample.phase = moving ? 'playing' : 'held';
     entry.sample.segmentSpeedMps = moving ? 1 : 0;
     entry.sample.segmentCourseDeg = NaN;
     parts.rendering.schedulePlayback(entry);
-    restoreSpriteOrder(app.viewer);
-    const active = app.primitives.indexOf(entry.markerCollection);
-    assert.ok(active > app.primitives.indexOf(cctv));
-    assert.ok(active > app.primitives.indexOf(bike));
-    assert.ok(active < app.primitives.indexOf(flights));
-    assert.equal(
-      Math.abs(
-        app.primitives.indexOf(app.state()._markers) -
-          app.primitives.indexOf(app.state()._animatedMarkers),
-      ),
-      1,
-    );
+    const active = order(moving ? 'transit-motion-1' : 'transit-1');
+    assert.ok(active > SPRITE_LAYER_ORDER.indexOf('cctv'));
+    assert.ok(active > SPRITE_LAYER_ORDER.indexOf('bikeshare'));
+    assert.ok(active < SPRITE_LAYER_ORDER.indexOf('flights'));
     assert.equal(entry.marker.id, entry.key);
   }
+  // Both sets now exist, the moving one directly above the stationary one.
+  assert.equal(order('transit-motion-1') - order('transit-1'), 1);
 });
 
 test('transit polls the supplied source and cancels it when disabled', async (t) => {
@@ -3883,8 +3881,7 @@ for (const jump of ['setView', 'flyTo']) {
   test(`${jump} recovers a cold hidden vehicle within one visibility interval`, async (t) => {
     const app = harness(t, { floorAt: () => undefined });
     let floor;
-    app.viewer.scene.globe.show = true;
-    app.viewer.scene.globe.getHeight = () => floor;
+    app.setTerrain(() => floor);
     app.serve('mbta', () => ({
       status: 200,
       body: snapshot('mbta', 'MBTA', [
@@ -3900,11 +3897,15 @@ for (const jump of ['setView', 'flyTo']) {
     // timer or preRender is allowed to bootstrap the visibility recovery.
     clearTimeout(app.state()._floorTimer);
     app.state()._floorTimer = null;
-    app.viewer.camera[jump] = () => {
-      floor = 12;
-      app.viewer.camera.changed.raiseEvent();
-    };
-    app.viewer.camera[jump]();
+    floor = 12;
+    const destination = Cesium.Cartesian3.fromDegrees(
+      BOSTON.lon,
+      BOSTON.lat,
+      4_000,
+    );
+    if (jump === 'setView') app.engine.camera.setView({ destination });
+    else app.engine.camera.flyTo({ destination, duration: 0 });
+    app.engine.fake.emit('camera.changed', 1);
     app.advance(250);
     assert.equal(entry.marker.show, true);
     assert.equal(entry.heightPending, false);
@@ -3936,7 +3937,7 @@ test('selected history is prepared while its head is hidden and remains shown ou
   app.state()._vehicles.set(entry.key, entry);
 });
 
-test('selected draped history prepares geometry before surface heights resolve', async (t) => {
+test('selected history drapes before floors resolve while marker corridors still wait', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON);
@@ -3945,20 +3946,12 @@ test('selected draped history prepares geometry before surface heights resolve',
   delete entry.qaFloorM;
   entry.marker.show = false;
   entry.heightPending = true;
-  // Exercise the real GroundPolylinePrimitive branch, without a WebGL context.
-  const width = Cesium.ContextLimits._maximumAliasedLineWidth;
-  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
-  t.after(() => {
-    Cesium.ContextLimits._maximumAliasedLineWidth = width;
-  });
-  app.viewer.scene.frameState = { context: { depthTexture: true } };
-  app.viewer.scene.groundPrimitives = app.viewer.scene.primitives;
   parts.selection.selectVehicle(entry.key);
   const trail = parts.trails.diagnostics();
   assert.equal(trail.ground, true);
-  assert.ok(trail.body instanceof Cesium.GroundPolylinePrimitive);
-  assert.ok(trail.segments > 0);
-  assert.equal(trail.body.show, true);
+  assert.ok(trail.segments > 0, 'ground history does not wait for floors');
+  assert.ok(trail.body);
+  assert.deepEqual(app.engine.lines.list(), []);
   assert.equal(
     entry.displayPaths.size,
     0,
@@ -3972,43 +3965,19 @@ test('parked transit reprojects held and reported courses at the bounded camera 
   const { createRendering } = await import('./rendering.js');
   t.mock.timers.enable({ apis: ['Date'], now: 1000 });
   const position = Cesium.Cartesian3.fromDegrees(0, 0, 20);
-  const cameraPosition = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
-  const scene = {
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    canvas: { clientWidth: 1280, clientHeight: 800 },
-    camera: {
-      positionWC: cameraPosition,
-      heading: 0,
+  const engine = createFakeEngine({ width: 1280, height: 800 });
+  t.after(() => engine.destroy());
+  // Straight down from 1 km; each pose is a new frame.
+  const pose = (heading) => {
+    engine.fake.setPose({
+      longitude: 0,
+      latitude: 0,
+      height: 1000,
+      heading,
       pitch: -Math.PI / 2,
       roll: 0,
-      frustum: new Cesium.PerspectiveFrustum({
-        fov: Math.PI / 3,
-        aspectRatio: 1.6,
-        near: 1,
-        far: 1e7,
-      }),
-    },
-  };
-  const pose = (heading) => {
-    const camera = scene.camera;
-    camera.heading = heading;
-    camera.rightWC = new Cesium.Cartesian3(
-      0,
-      Math.cos(heading),
-      -Math.sin(heading),
-    );
-    camera.upWC = new Cesium.Cartesian3(
-      0,
-      Math.sin(heading),
-      Math.cos(heading),
-    );
-    camera.viewMatrix = Cesium.Matrix4.computeView(
-      cameraPosition,
-      new Cesium.Cartesian3(-1, 0, 0),
-      camera.upWC,
-      camera.rightWC,
-      new Cesium.Matrix4(),
-    );
+    });
+    engine.fake.emit('frames.preUpdate', 0);
   };
   pose(0);
   const make = (key, courseDeg, bearing) => ({
@@ -4023,7 +3992,6 @@ test('parked transit reprojects held and reported courses at the bounded camera 
   const unknown = make('unknown', null, null);
   const hidden = make('hidden', 90, 90);
   const state = {
-    _viewer: { scene },
     _enabled: true,
     _vehicles: new Map(
       [held, reportedOnly, unknown, hidden].map((e) => [e.key, e]),
@@ -4038,6 +4006,13 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     now: () => Date.now(),
   };
   const noop = () => {};
+  const renderer = createTransitDisplay(engine, {
+    state,
+    services: {},
+    drawAtlas: transitTestAtlas,
+  });
+  renderer.attach();
+  t.after(() => renderer.destroy());
   const rendering = createRendering({
     state,
     services: {
@@ -4047,7 +4022,11 @@ test('parked transit reprojects held and reported courses at the bounded camera 
         releaseContinuousRender: noop,
       },
     },
-    parts: { height: { nearGround: () => false }, trails: { update: noop } },
+    parts: {
+      renderer,
+      height: { nearGround: () => false },
+      trails: { update: noop },
+    },
   });
   rendering.onPreRender();
   const before = [held.marker.rotation, reportedOnly.marker.rotation];
@@ -4122,7 +4101,7 @@ test('a view with no feed reads its coverage prompt, not an undated feed', async
   assert.equal(away.coverage, away.statusMessage);
 
   // Above the altitude gate the prompt says how low to fly.
-  app.viewer.camera.positionCartographic.height = 10_000_000;
+  app.engine.fake.setPose({ height: 10_000_000 });
   app.lookAt({ west: -0.2, south: 51.45, east: -0.05, north: 51.55 });
   app.advance(1_000);
   assert.equal(
@@ -4141,4 +4120,31 @@ test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) 
     app.layer.getStats().statusMessage,
     'Fly below 2,850 km to a covered region',
   );
+});
+
+test('a renderer repaint retains the feed date in its credit', async (t) => {
+  const app = harness(t);
+  const fetchedAt = Date.now();
+  const feedTimestamp = fetchedAt / 1000 - 10;
+  app.serve('mbta', () => ({
+    status: 200,
+    body: {
+      ...snapshot(
+        'mbta',
+        'MBTA',
+        [vehicle('bus-1', 42.36, -71.06, feedTimestamp)],
+        { fetchedAt },
+      ),
+      feedTimestamp,
+    },
+  }));
+  const credited = [];
+  const parts = app.layer._transitPartsForTest();
+  parts.renderer.addCredit = (_feed, timestamps) => credited.push(timestamps);
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.deepEqual(credited.at(-1), { feedTimestamp, fetchedAt });
+  credited.length = 0;
+  app.layer.repaint();
+  assert.deepEqual(credited, [{ feedTimestamp, fetchedAt }]);
 });

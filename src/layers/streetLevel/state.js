@@ -36,7 +36,7 @@ export function freshStreet() {
 export function createState({ services }) {
   return {
     services,
-    viewer: null,
+    map: null,
     enabled: false,
     listeners: new Set(),
     notify: null,

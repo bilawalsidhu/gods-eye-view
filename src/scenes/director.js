@@ -20,7 +20,7 @@ import { SceneControls } from '../ui/scenes.js';
 import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -73,18 +73,19 @@ const STORAGE_CHECKPOINT_KEY = 'godsEyeView.sceneProject.checkpoint.v1';
  * Orchestrates deterministic cinematic scene playback.
  *
  * The director owns a mutable project (persisted in localStorage) containing
- * scenes and shots. It drives camera flights via Cesium, applies visual/style
- * state through the styleManager, toggles data layers via the dataManager, and
+ * scenes and shots. It drives camera flights through the globe engine, applies
+ * visual state through the styleManager, toggles data layers via the dataManager, and
  * records timestamped telemetry events during each run for later export.
  */
 export class SceneDirector {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {{ engine: import('../globe/contract.js').GlobeEngine, viewer?: object }} scene
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
+   * @param {Object} [options] Scene packs, data sources and map availability.
    */
   constructor(
-    viewer,
+    scene,
     styleManager,
     dataManager,
     {
@@ -93,16 +94,19 @@ export class SceneDirector {
       dataPacks = {},
     } = {},
   ) {
+    const { engine } = scene;
+    this._scene = scene;
     this._destroyed = false;
     this._pendingWork = new Set();
-    this.viewer = viewer;
+    this.engine = engine;
     this.styleManager = styleManager;
     this.dataManager = dataManager;
     this._isMapStackAvailable = isMapStackAvailable;
     this._scenePacks = scenePacks;
     this._bundleAssets = createBundleAssets();
-    this._dataPacks = createSceneDataPacks(viewer, {
+    this._dataPacks = createSceneDataPacks(engine, {
       ...dataPacks,
+      container: engine?.host?.container,
       sources: {
         ...dataPacks.sources,
         [BUNDLE_SOURCE]: this._bundleAssets.source,
@@ -110,16 +114,19 @@ export class SceneDirector {
     });
     this._sharing = createSceneSharing(this);
     this._interactionTransitions = 0;
-    this._interactions = createSceneInteractions(viewer, {
+    this._interactions = createSceneInteractions({
+      engine,
       available: () =>
-        !this._destroyed && !this._running && !this.viewer.trackedEntity,
+        !this._destroyed &&
+        !this._running &&
+        !this._scene?.engine?.camera.following(),
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });
     this._cameraMotion = createCameraMotion({
       applyPose: (pose) => this._setCameraView(pose),
     });
-    const yieldCamera = (event) => {
+    this._yieldCamera = (event) => {
       // A settled feature click belongs to the action picker, not a new camera gesture.
       if (
         event?.type === 'pointerdown' &&
@@ -129,15 +136,7 @@ export class SceneDirector {
       if (this._usesAuthoredCamera && !this._claimingCamera)
         this.stopScene(msg('Camera ownership changed'));
     };
-    this._cameraHandoffUnsubscribe =
-      styleManager.subscribeCameraHandoff?.(yieldCamera);
-    const canvas = viewer.scene?.canvas;
-    for (const event of ['pointerdown', 'wheel'])
-      canvas?.addEventListener(event, yieldCamera, { passive: true });
-    this._removeCameraInput = () => {
-      for (const event of ['pointerdown', 'wheel'])
-        canvas?.removeEventListener(event, yieldCamera);
-    };
+    this._bindCameraInput();
 
     /** @type {boolean} True while a scene run is in progress */
     this._running = false;
@@ -235,6 +234,93 @@ export class SceneDirector {
       });
   }
 
+  _bindCameraInput() {
+    const { engine, styleManager } = this;
+    this._cameraHandoffUnsubscribe = styleManager.subscribeCameraHandoff?.(
+      this._yieldCamera,
+    );
+    const canvas = engine?.host.canvas;
+    for (const event of ['pointerdown', 'wheel'])
+      canvas?.addEventListener?.(event, this._yieldCamera, { passive: true });
+    this._removeCameraInput = () => {
+      for (const event of ['pointerdown', 'wheel'])
+        canvas?.removeEventListener?.(event, this._yieldCamera);
+    };
+  }
+
+  suspendScene() {
+    if (this._destroyed || (this._sceneGate && !this.engine)) return;
+    this._sceneGate ??= new Promise((resolve) => {
+      this._resumeScene = resolve;
+    });
+    this._cameraHandoffUnsubscribe?.();
+    this._removeCameraInput?.();
+    this._interactions.setScene(null);
+    this._dataPacks.setScene(null);
+    this._flight?.suspend();
+    this._scene = null;
+    this.engine = null;
+  }
+
+  attachScene(scene, styleManager, isAvailable) {
+    const { engine } = scene;
+    this._scene = scene;
+    this.engine = engine;
+    this.styleManager = styleManager;
+    this._isMapStackAvailable = isAvailable;
+    try {
+      this._dataPacks.setScene(engine, engine.host.container);
+      this._interactions.setScene(engine, this._dataPacks.getTargets());
+    } catch (error) {
+      // Release any packs already drawn before the caller parks the failed globe.
+      this.suspendScene();
+      throw error;
+    }
+  }
+
+  resumeScene() {
+    if (!this._sceneGate || !this.engine) return;
+    const resume = this._resumeScene;
+    this._sceneGate = this._resumeScene = null;
+    try {
+      this._bindCameraInput();
+      if (this._running && this._previewRun)
+        this.styleManager.setRecordingMode(true, {
+          hidePanels: true,
+          hudMode: 'full',
+          safeFrame: '16:9',
+        });
+      if (this._pendingPose) this._setCameraView(this._pendingPose);
+      this._pendingPose = null;
+      this._flight?.resume();
+    } finally {
+      resume();
+    }
+  }
+
+  async _waitForScene(token) {
+    const signal = token?.signal;
+    while (
+      this._sceneGate &&
+      !this._destroyed &&
+      !token?.cancelled &&
+      !signal?.aborted
+    ) {
+      const gate = this._sceneGate;
+      if (!signal) await gate;
+      else
+        await new Promise((resolve) => {
+          const finish = () => {
+            signal.removeEventListener('abort', finish);
+            resolve();
+          };
+          signal.addEventListener('abort', finish, { once: true });
+          gate.then(finish);
+        });
+    }
+    return !this._destroyed && !token?.cancelled && !signal?.aborted;
+  }
+
   _trackWork(promise) {
     this._pendingWork ||= new Set();
     this._pendingWork.add(promise);
@@ -243,10 +329,13 @@ export class SceneDirector {
     return promise;
   }
 
-  /** Stop playback and pending loads before releasing their viewer. */
+  /** Stop playback and pending loads before releasing their engine. */
   destroy() {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
+    this._resumeScene?.();
+    this._sceneGate = this._resumeScene = null;
+    this._flight?.finish();
     this._bumpSceneSeekGeneration();
     this._visibilityUnsubscribe?.();
     this._cameraHandoffUnsubscribe?.();
@@ -263,7 +352,7 @@ export class SceneDirector {
       this.stopScene(msg('Stopped'));
       this._loadAbort?.abort();
       this._loadGeneration++;
-      this.viewer.camera.cancelFlight();
+      this.engine?.camera.cancelFlight();
       this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
@@ -1162,6 +1251,7 @@ export class SceneDirector {
     this._renderSceneSelect();
     this._renderShotList();
 
+    if (this._sceneGate && !(await this._waitForScene(token))) return;
     await this.styleManager.applyVisualState(this._visualStateForShot(shot), {
       isCurrent: () => !token.cancelled,
     });
@@ -1192,6 +1282,7 @@ export class SceneDirector {
       return { started: false, reason: 'data-packs-unavailable' };
     if (token.cancelled) return;
     if (seekState) {
+      if (this._sceneGate && !(await this._waitForScene(token))) return;
       this._setCameraView(
         seekState.camera || resolveCameraPose(scene, shot.camera),
       );
@@ -1361,7 +1452,7 @@ export class SceneDirector {
     return travel;
   }
 
-  /** Publish a travel phase only after Cesium has accepted the camera flight. */
+  /** Publish a travel phase only after the globe engine has accepted the camera flight. */
   _publishShotTravel(scene, shot, cameraTravel) {
     const states = this._layerStatesForShot(scene, shot, { cameraTravel });
     for (const [layerId, state] of Object.entries(states)) {
@@ -1726,7 +1817,7 @@ export class SceneDirector {
    * @returns {boolean} False when the camera is unavailable (Cockpit/disposed).
    */
   _claimCameraOwnership() {
-    cancelCameraArrival(this.viewer);
+    cancelCameraArrival(this.engine);
     // Older/headless style managers may predate the facade — proceed then.
     if (typeof this.styleManager?.runImmediateNavigation !== 'function')
       return true;
@@ -1746,20 +1837,24 @@ export class SceneDirector {
 
   /** Place the camera at an authored replay start pose without an intermediate flight. */
   _setCameraView(cameraState) {
-    if (!cameraState || typeof this.viewer?.camera?.setView !== 'function')
-      return false;
+    if (cameraState && this._sceneGate) {
+      this._pendingPose = cameraState;
+      return true;
+    }
+    const camera = this.engine?.camera;
+    if (!cameraState || !camera) return false;
     this.styleManager?.clearSearchedLocation?.();
-    this.viewer.camera.cancelFlight?.();
-    this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
+    camera.cancelFlight();
+    camera.setView({
+      destination: geo.cartesian3.fromDegrees(
         cameraState.lon,
         cameraState.lat,
         cameraState.alt,
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        heading: geo.math.toRadians(cameraState.heading || 0),
+        pitch: geo.math.toRadians(cameraState.pitch ?? -35),
+        roll: geo.math.toRadians(cameraState.roll || 0),
       },
     });
     return true;
@@ -2022,7 +2117,7 @@ export class SceneDirector {
     this._loadGeneration++;
     this._clock.stopShot();
     this._cancelActiveSceneTravel();
-    this.viewer.camera.cancelFlight();
+    this.engine?.camera.cancelFlight();
     this._clock.stop();
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
@@ -2057,6 +2152,8 @@ export class SceneDirector {
 
   /** Execute a validated action through the existing camera and layer admission paths. */
   async _executeInteraction(action, signal) {
+    if (this._sceneGate && !(await this._waitForScene({ signal })))
+      return false;
     if (signal.aborted || this._running || this._destroyed) return false;
     const { scene, shot } = this._getShot(
       this._selectedSceneId,
@@ -2273,7 +2370,11 @@ export class SceneDirector {
     const applied = [];
     const refused = [];
     const abort = () => ({ applied, refused, cancelled: true });
-    if (token?.cancelled) return abort();
+    if (
+      token?.cancelled ||
+      (this._sceneGate && !(await this._waitForScene(token)))
+    )
+      return abort();
 
     // Deliberately NOT aborted: leaving an isolating mode IS the restore to
     // the operator's pre-mode state, which is exactly where a stopped scene
@@ -2292,6 +2393,7 @@ export class SceneDirector {
       targetStates,
       registered,
     )) {
+      if (this._sceneGate && !(await this._waitForScene(token))) return abort();
       let settled;
       if (params && typeof this.dataManager.restoreLayerState === 'function') {
         const outcome = await this.dataManager.restoreLayerState(
@@ -2464,38 +2566,66 @@ export class SceneDirector {
       0.2,
       Number(durationSec) || DEFAULT_SHOT_DURATION_SEC,
     );
-    const destination = Cesium.Cartesian3.fromDegrees(
+    const destination = geo.cartesian3.fromDegrees(
       cameraState.lon,
       cameraState.lat,
       cameraState.alt,
     );
 
     await new Promise((resolve) => {
-      // Guard against double-resolve from both callback and timeout
-      let done = false;
-      let timer;
+      const deadline = performance.now() + duration * 1000;
+      let timer,
+        generation = 0;
       const finish = () => {
-        if (done) return;
-        done = true;
+        if (this._flight !== flight) return;
+        this._flight = null;
         clearTimeout(timer);
+        token.signal?.removeEventListener('abort', finish);
         resolve();
       };
-
-      this.viewer.camera.flyTo({
-        destination,
-        orientation: {
-          heading: Cesium.Math.toRadians(cameraState.heading || 0),
-          pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+      const flight = {
+        finish,
+        suspend: () => {
+          generation++;
+          clearTimeout(timer);
+          this.engine?.camera.cancelFlight();
         },
-        duration,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: finish,
-        cancel: finish,
-      });
-
-      // Safety timeout in case Cesium callbacks fail to fire
-      if (!done) timer = setTimeout(finish, (duration + 0.6) * 1000);
+        resume: () => {
+          if (this._sceneGate || this._flight !== flight) return;
+          if (!this.engine || token.cancelled) {
+            finish();
+            return;
+          }
+          const current = ++generation;
+          const done = () => {
+            if (generation === current) finish();
+          };
+          const remaining = Math.max(0, (deadline - performance.now()) / 1000);
+          if (!remaining) {
+            this._setCameraView(cameraState);
+            finish();
+            return;
+          }
+          this.engine.camera.flyTo({
+            destination,
+            orientation: {
+              heading: geo.math.toRadians(cameraState.heading || 0),
+              pitch: geo.math.toRadians(cameraState.pitch ?? -35),
+              roll: geo.math.toRadians(cameraState.roll || 0),
+            },
+            duration: remaining,
+            easing: 'cubicInOut',
+            complete: done,
+            cancel: done,
+          });
+          if (this._flight === flight)
+            timer = setTimeout(done, (remaining + 0.6) * 1000);
+        },
+      };
+      this._flight?.finish();
+      this._flight = flight;
+      token.signal?.addEventListener('abort', finish, { once: true });
+      flight.resume();
     });
   }
 

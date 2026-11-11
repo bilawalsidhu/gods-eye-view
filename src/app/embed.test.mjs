@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -10,17 +11,15 @@ import {
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { createView } from '../view/index.js';
 
-const fakeViewer = () => {
+const fakeEngine = () => {
   const flights = [];
-  return {
-    flights,
-    camera: {
-      flyTo(options) {
-        flights.push(options);
-        options.complete();
-      },
-    },
+  const engine = createFakeEngine();
+  engine.flights = flights;
+  engine.camera.flyTo = (options) => {
+    flights.push(options);
+    options.complete();
   };
+  return engine;
 };
 const fakeLayers = (enabled) => ({
   getAll: () =>
@@ -48,7 +47,7 @@ test('embed mode is opt-in by query parameter', () => {
 });
 
 test('a view is applied through the app actions in order', async () => {
-  const viewer = fakeViewer();
+  const engine = fakeEngine();
   const { calls, run } = recorder();
   const view = createView({
     camera: { lat: 25, lon: 121, altitude_m: 300000, pitch_deg: -40 },
@@ -58,7 +57,7 @@ test('a view is applied through the app actions in order', async () => {
     annotations: [{ type: 'pin', target: 'Taipei 101' }],
   });
   const steps = await applyView(view, {
-    viewer,
+    engine,
     dataManager: fakeLayers(new Set(['earthquakes'])),
     run,
   });
@@ -78,7 +77,7 @@ test('a view is applied through the app actions in order', async () => {
       ['annotate_map', null, null],
     ],
   );
-  assert.equal(viewer.flights.length, 1);
+  assert.equal(engine.flights.length, 1);
   assert.ok(steps.every((step) => step.ok));
   assert.ok(steps.some((step) => step.step === 'camera'));
 });
@@ -93,7 +92,7 @@ test('a followed entity is retried until its layer has it', async () => {
     follow: { kind: 'aircraft', id: 'abc123' },
   });
   const steps = await applyView(view, {
-    viewer: fakeViewer(),
+    engine: fakeEngine(),
     dataManager: fakeLayers(new Set()),
     run,
     retryMs: 1,
@@ -125,7 +124,7 @@ test('an embedded page takes views only from its parent and answers it', async (
   const { calls, run } = recorder();
   const remove = installViews({
     shell,
-    viewer: fakeViewer(),
+    engine: fakeEngine(),
     dataManager: fakeLayers(new Set()),
     run,
     location: { search: '?embed=1', hash: '' },
@@ -204,7 +203,7 @@ test('an app loaded inline into a panel page talks through its own window', asyn
     assert.equal(isEmbedded({ search: '' }), true);
     const remove = installViews({
       shell: { initialRestorePromise: Promise.resolve() },
-      viewer: fakeViewer(),
+      engine: fakeEngine(),
       dataManager: fakeLayers(new Set()),
       run: recorder().run,
       location: { search: '', hash: '' },
@@ -288,7 +287,7 @@ test('annotations in a link are drawn after it restores, embedded or not', async
   );
   installViews({
     shell: { initialRestorePromise: Promise.resolve() },
-    viewer: fakeViewer(),
+    engine: fakeEngine(),
     dataManager: fakeLayers(new Set()),
     run,
     location: { search: '', hash: `#v=2&lat=1&lon=2&an=${an}` },
@@ -368,17 +367,17 @@ test('a panel reports a render error in full and stops drawing', () => {
 });
 
 test('a followed aircraft owns the camera, and cockpit view is entered after it', async () => {
-  const viewer = fakeViewer();
+  const engine = fakeEngine();
   const { calls, run } = recorder();
   const steps = await applyView(
     createView({
       camera: { lat: 32.7, lon: -117.2 },
       follow: { kind: 'military_aircraft', id: 'AE1234', cockpit: true },
     }),
-    { viewer, dataManager: fakeLayers(new Set()), run, retryMs: 0 },
+    { engine, dataManager: fakeLayers(new Set()), run, retryMs: 0 },
   );
   // Following worked at once, so no camera flight ended it.
-  assert.equal(viewer.flights.length, 0);
+  assert.equal(engine.flights.length, 0);
   assert.deepEqual(calls.slice(-2), [
     ['track_entity', { query: 'ae1234', layerId: 'military' }],
     ['control_cockpit', { action: 'enter', targetLayer: 'military' }],

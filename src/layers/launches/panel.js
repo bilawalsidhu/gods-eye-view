@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
@@ -15,7 +15,13 @@ function accuracyLabel(accuracy) {
   return accuracy;
 }
 
-export function createPanel({ state: layerState, services, parts, source }) {
+export function createPanel({
+  state: layerState,
+  services,
+  parts,
+  source,
+  getRenderer,
+}) {
   /**
    * Preserve the user's globe scale for roster previews while avoiding an
    * accidental surface-level fly-to when the list is opened from a close view.
@@ -321,20 +327,19 @@ export function createPanel({ state: layerState, services, parts, source }) {
     if (
       !layerState._missionPanelReady ||
       !layerState._selectedLaunchId ||
-      !layerState._dataSource
+      !layerState._renderer
     )
       return;
     const now = performance.now();
     if (!force && now - layerState._lastPanelTelemetryMs < 250) return;
     layerState._lastPanelTelemetryMs = now;
-    const satellite = layerState._dataSource.entities.getById(
-      `rocket-satellite:${layerState._selectedLaunchId}`,
-    );
-    const position = satellite?.position?.getValue(
-      Cesium.JulianDate.now(layerState._declutterTime),
+    const position = parts.rendering.elementPosition(
+      layerState._missionElements.get(
+        `rocket-satellite:${layerState._selectedLaunchId}`,
+      ),
     );
     const altitudeM = position
-      ? Cesium.Cartographic.fromCartesian(position)?.height
+      ? geo.cartographic.fromCartesian(position)?.height
       : null;
     const speedMps = layerState._satelliteTelemetry.get(
       layerState._selectedLaunchId,

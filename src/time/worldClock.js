@@ -19,6 +19,8 @@
  * play goes to the newest that can play, pause to the one playing.
  */
 
+import { appClock } from './clock.js';
+
 /** The span a JS Date can hold, either side of 1970. */
 const MAX_DATE_MS = 8.64e15;
 
@@ -36,8 +38,8 @@ export const WORLD_CLOCK_TICK_MS = 250;
  * @param {{now?: () => number, monotonicNow?: () => number,
  *   setInterval?: typeof globalThis.setInterval,
  *   clearInterval?: typeof globalThis.clearInterval,
- *   requestFrame?: typeof globalThis.requestAnimationFrame | null,
- *   cancelFrame?: typeof globalThis.cancelAnimationFrame | null,
+ *   requestFrame?: ((callback: Function) => number) | null,
+ *   cancelFrame?: ((id: number) => void) | null,
  *   follow?: Iterable<string>}} [options] `follow` lists the layers that
  *   move with the cursor from the start. Playing, the clock tells its
  *   listeners of the time each animation frame, or each tick without frames.
@@ -49,8 +51,8 @@ export function createWorldClock({
   monotonicNow = () => globalThis.performance.now(),
   setInterval = globalThis.setInterval,
   clearInterval = globalThis.clearInterval,
-  requestFrame = globalThis.requestAnimationFrame?.bind(globalThis) ?? null,
-  cancelFrame = globalThis.cancelAnimationFrame?.bind(globalThis) ?? null,
+  requestFrame = null,
+  cancelFrame = null,
   follow = [],
 } = {}) {
   const listeners = new Set();
@@ -145,7 +147,7 @@ export function createWorldClock({
   // Playing, the time moves on smoothly: each frame, so the timeline and the
   // globe move with it and a layer's next frame is met as it comes, or each
   // tick where there are no frames.
-  const frames = Boolean(requestFrame && cancelFrame);
+  let frames = Boolean(requestFrame && cancelFrame);
   const frame = () => {
     ticker = requestFrame(frame);
     notify();
@@ -173,6 +175,22 @@ export function createWorldClock({
   };
 
   const api = {
+    /** Use the host's frame loop while attached, then restore the tick loop. */
+    setFrameScheduler(request, cancel) {
+      if (ticker !== null) {
+        if (frames) cancelFrame(ticker);
+        else clearInterval(ticker);
+        ticker = null;
+      }
+      requestFrame = request;
+      cancelFrame = cancel;
+      frames = Boolean(request && cancel);
+      syncTicker();
+      return () => {
+        if (requestFrame === request && cancelFrame === cancel)
+          api.setFrameScheduler(null, null);
+      };
+    },
     /** The live edge: the wall clock, whatever the cursor does. */
     wallNow: () => now(),
     /** The world time: the wall clock while live, else the cursor. */
@@ -422,6 +440,7 @@ export function createWorldClock({
  * move with it; weather holds each product it shows.
  */
 export const worldClock = createWorldClock({
+  now: () => appClock.now(),
   follow: ['sky', 'hud', 'satellites', 'rocket-launches'],
 });
 

@@ -169,29 +169,36 @@ function waitForTilesLoaded(page, timeoutMs = 15000) {
 
 /**
  * Reads a camera's placed mount-point cartographic height off its
- * `cctv-<id>-ray-tl` polyline entity (first position = the mount, per
- * cctv.js `buildCoverageEntities`/`applyFrustumGeometry`), returns
- * `{ mountAltM, groundM }` where `groundM = mountAltM - mountHeightM` — the
- * SAME arithmetic cctv.js itself uses in reverse
- * (`mountAlt = ground + mountHeightM` in `computeFrustumGeometry`).
+ * `cctv-<id>-ray-tl` corner ray (first position = the mount, per the CCTV
+ * geometry's `applyFrustumGeometry`), returns `{ mountAltM, groundM }` where
+ * `groundM = mountAltM - mountHeightM` — the SAME arithmetic the layer itself
+ * uses in reverse (`mountAlt = ground + mountHeightM` in
+ * `computeFrustumGeometry`). The ray is an engine line on the globe contract
+ * (src/layers/cctv/render/display.js): it must be live in
+ * `engine.lines.list()`, and its positions are the ones the layer's line
+ * handle (record.coverageEntities) gave it.
  * @param {import('puppeteer').Page} page
  * @param {string} camId
  * @returns {Promise<{mountAltM:number, mountHeightM:number, groundM:number}|null>}
  */
 async function readCameraGround(page, camId) {
   return page.evaluate((id) => {
-    const viewer = window.__godsEyeView.viewer;
-    const time = viewer.clock.currentTime;
-    const ent = viewer.entities.getById(`cctv-${id}-ray-tl`);
-    if (!ent || !ent.polyline) return null;
-    const positions = ent.polyline.positions.getValue(time);
-    if (!Array.isArray(positions) || positions.length < 1) return null;
+    const { viewer, engine, dataManager } = window.__godsEyeView;
+    const mod = dataManager.layers.get('cctv').module;
+    const lineId = `cctv-${id}-ray-tl`;
+    const line = engine.lines.list().find((entry) => entry.id === lineId);
+    const handle = mod
+      ._cctvRecordsForTest()
+      .find((record) => record.camera?.id === id)
+      ?.coverageEntities?.find((entry) => entry?.id === lineId);
+    const positions = handle?.polyline?.positions;
+    if (!line || !Array.isArray(positions) || positions.length < 1) return null;
+    if (line.points !== positions.length) return null;
     const mount = positions[0];
-    // No window.Cesium global (qa-cctv-v2 precedent) — borrow Cartographic's
-    // static fromCartesian off a live Cartographic instance's constructor.
+    // No window.Cesium global (qa-cctv-v2 precedent): the ellipsoid's own
+    // cartesianToCartographic reads the plain { x, y, z }.
     const carto = viewer.scene.globe.ellipsoid.cartesianToCartographic(mount);
     const mountAltM = carto.height;
-    const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
     const cam = mod.getUIState().cameras.find((c) => c.id === id);
     const mountHeightM = cam ? cam.mountHeightM : null;
     return {
@@ -213,7 +220,8 @@ async function readCameraGround(page, camId) {
  * @returns {Promise<number|null>} ellipsoid height in metres, or null on failure.
  */
 async function fetchReearthEllipsoid(lat, lon) {
-  const url = `${APP_URL}/api/terrain/heights?points=${encodeURIComponent(`${lon.toFixed(5)},${lat.toFixed(5)}`)}`;
+  const url = new URL('/api/terrain/heights', APP_URL);
+  url.searchParams.set('points', `${lon.toFixed(5)},${lat.toFixed(5)}`);
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) return null;
@@ -253,7 +261,7 @@ async function main() {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--use-gl=angle',
-      '--use-angle=swiftshader',
+      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -279,7 +287,9 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
+      // The QA probe (`layers`) exists on the dev server only; a built
+      // preview has the engine and the data manager without it.
+      () => window.__godsEyeView?.engine && window.__godsEyeView.dataManager,
       { timeout: 60000 }
     );
     await sleep(4000);
@@ -287,6 +297,13 @@ async function main() {
     // =========================================================================
     // Group 1: CCTV ground correctness
     // =========================================================================
+    const hasCctv = await page.evaluate(() => {
+      const gev = window.__godsEyeView;
+      return gev.layers ? gev.layers.available('cctv') : gev.dataManager.layers.has('cctv');
+    });
+    let allCameras = [], londonCams = [], austinCams = [];
+    if (!hasCctv) console.log('  [SKIP] CCTV ground/regime groups are outside the Navara W1 catalog');
+    if (hasCctv) {
     console.log('Enabling CCTV layer (full city-packs catalog)...');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
@@ -337,7 +354,7 @@ async function main() {
     // `nearbyPlace` string (NOT a stable "San Francisco" literal), so SF-area
     // Caltrans cameras are identified by proximity to the SF anchor instead
     // (same anchor vite.config.js's CALTRANS_ANCHORS uses for prioritization).
-    const allCameras = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState().cameras);
+    allCameras = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState().cameras);
     console.log(`Camera catalog: ${allCameras.length} total.`);
 
     const SF_ANCHOR = { lat: 37.7793, lon: -122.4193 };
@@ -349,8 +366,8 @@ async function main() {
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
-    const londonCams = allCameras.filter((c) => c.city === 'London').slice(0, 5);
-    const austinCams = allCameras.filter((c) => c.city === 'Austin').slice(0, 5);
+    londonCams = allCameras.filter((c) => c.city === 'London').slice(0, 5);
+    austinCams = allCameras.filter((c) => c.city === 'Austin').slice(0, 5);
     const sfCams = allCameras
       .filter((c) => c.provider === 'Caltrans' && haversineKm(c.lat, c.lon, SF_ANCHOR.lat, SF_ANCHOR.lon) < 60)
       .slice(0, 3);
@@ -372,13 +389,28 @@ async function main() {
 
     for (const { label, cams } of cityBuckets) {
       for (const cam of cams) {
+        // Coverage is built only in view; frame the camera before reading it.
+        await page.evaluate((camera) => {
+          const { viewer, engine } = window.__godsEyeView;
+          engine.camera.cancelFlight();
+          engine.camera.setView({
+            destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+              longitude: camera.lon * Math.PI / 180,
+              latitude: camera.lat * Math.PI / 180,
+              height: 5000,
+            }),
+            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          });
+          engine.render.request('qa-camera-datum');
+        }, cam);
+        await page.waitForFunction((id) => window.__godsEyeView.engine.lines.list().some(line => line.id === `cctv-${id}-ray-tl` && line.points > 0), { timeout: 20000 }, cam.id).catch(() => {});
         const state = await page.evaluate((id) => {
           const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
           return mod.getUIState().cameras.find((camera) => camera.id === id) || null;
         }, cam.id);
         const geom = await readCameraGround(page, cam.id);
         if (!geom || !Number.isFinite(geom.groundM)) {
-          record(`${label} ${cam.id}: record ground reads finitely`, false, 'ray-tl entity missing or non-finite height');
+          record(`${label} ${cam.id}: record ground reads finitely`, false, 'ray-tl line missing or non-finite height');
           continue;
         }
         record(`${label} ${cam.id}: rendered ground reads finitely`, true,
@@ -456,6 +488,8 @@ async function main() {
       record('Austin active camera google-3d ground ∈ [110,135]m', null, 'no Austin camera available to test');
     }
 
+    }
+
     // =========================================================================
     // Group 2: Aircraft render altitude
     // =========================================================================
@@ -511,7 +545,7 @@ async function main() {
       // returns everything currently shown regardless of viewer position.
       const nearbyList = await page.evaluate(() => {
         const mod = window.__godsEyeView.dataManager.layers.get('flights').module;
-        const center = window.__godsEyeView.viewer.camera.position;
+        const center = window.__godsEyeView.engine.camera.livePosition;
         return mod.getNearby(center, Number.MAX_VALUE, 200).map((a) => ({ icao24: a.icao24, altitudeM: a.altitudeM }));
       });
       const baroById = new Map(nearbyList.map((a) => [a.icao24, a.altitudeM]));
@@ -626,6 +660,7 @@ async function main() {
     // =========================================================================
     // Group 3: Regime C re-resolve
     // =========================================================================
+    if (hasCctv) {
     console.log('Switching map stack to keyless OSM (regime C)...');
     // Grab a London camera's ground BEFORE the switch (still whatever regime
     // we were in — Google-3D, given the app's default).
@@ -692,6 +727,8 @@ async function main() {
       }
     } else {
       record('CCTV grounds re-resolved for regime C', null, 'no test camera available');
+    }
+
     }
 
     // -----------------------------------------------------------------------

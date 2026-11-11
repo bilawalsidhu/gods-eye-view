@@ -40,7 +40,7 @@ function createProviderState(context) {
   return {
     context,
     services: context.services,
-    viewer: null,
+    map: null,
     coverage: freshCoverage(),
     sequence: {
       selectedId: null,
@@ -137,19 +137,29 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           return { configured };
         },
 
-        init(viewer) {
-          state.viewer = viewer;
-          parts.sequences.ensureCollections(viewer);
+        init(map) {
+          state.map = map;
+          parts.sequences.ensureCollections(map);
           parts.sequences.setVisible(false);
         },
 
-        activate(viewer) {
-          state.viewer = viewer;
+        activate(map) {
+          state.map = map;
           parts.sequences.setVisible(true);
-          parts.coverage.attach(viewer);
+          parts.coverage.attach(map);
         },
 
         /** Clear lines and cones, forget refusals. */
+        refreshCoverage: () => parts.coverage.refresh(),
+        detachMap() {
+          parts.coverage.releaseGraphics();
+          parts.sequences.releaseCollection();
+          state.map = null;
+        },
+        repaintMap() {
+          parts.coverage.rebuild();
+          parts.sequences.rerender();
+        },
         deactivate() {
           parts.coverage.detach();
           parts.coverage.clear();
@@ -158,10 +168,10 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           parts.sequences.setVisible(false);
         },
 
-        destroy(viewer) {
+        destroy() {
           parts.coverage.detach();
           parts.coverage.clear();
-          parts.sequences.destroy(viewer);
+          parts.sequences.destroy();
         },
 
         /** The filter changed: redraw. Each draw reads it from the context. */

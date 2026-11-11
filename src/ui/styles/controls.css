@@ -436,6 +436,39 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* A start error is steady text, not pulsing progress. */
+.loader-status[role='alert'] {
+  color: var(--text-primary);
+  animation: none;
+}
+
+/* After a failed globe switch: start an engine again without a reload. */
+.engine-switch-retry {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.engine-switch-retry p {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.engine-switch-retry button {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -766,6 +799,31 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 }
 
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
+#globe-engine-control label {
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#globe-engine:focus-visible {
+  outline: 2px solid currentColor;
+}
+
+/* While a switch runs the picker keeps focus (aria-disabled, not disabled). */
+#globe-engine[aria-busy='true'] {
+  opacity: var(--gev-field-disabled-opacity, 0.45);
+  cursor: progress;
+}
+
+/* Announces the switch to screen readers only. */
+#globe-engine-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .map-source-section {
   display: grid;
   gap: 6px;
@@ -786,7 +844,9 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* One row, whatever the number of sources (six with Sentinel-2). */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 4px;
 }
 
@@ -825,6 +885,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 
 @media (max-width: 620px) {
   .map-stack-chip-row {
+    grid-auto-flow: row;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

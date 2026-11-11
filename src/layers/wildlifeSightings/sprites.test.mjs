@@ -8,6 +8,7 @@ import {
   WILDLIFE_SPRITE_ICONIC,
   WILDLIFE_BADGE_GLYPHS,
   WILDLIFE_BADGE_OUTLINE_PX,
+  WILDLIFE_ATLAS_CELLS,
   createWildlifeSpriteCache,
   wildlifeSpriteCache,
   wildlifeSpriteGroup,
@@ -144,6 +145,57 @@ test('canvas badges wait for the icon font, paint once and notify existing consu
   await cache.load();
   assert.equal(canvases.length, WILDLIFE_SPRITE_GROUPS.length);
   unsubscribe();
+});
+
+test('one atlas holds every group: plain circles first, the painted badges once the font is ready', async () => {
+  const drawn = [];
+  const documentRef = {
+    fonts: { load: async () => [{}] },
+    createElement() {
+      const canvas = {
+        getContext: () => ({
+          scale() {},
+          beginPath() {},
+          arc() {},
+          fill() {},
+          stroke() {},
+          fillText() {},
+          drawImage: (...args) => drawn.push([canvas, ...args]),
+        }),
+      };
+      return canvas;
+    },
+  };
+  const cache = createWildlifeSpriteCache({ documentRef });
+  const plain = cache.atlas();
+  assert.equal(plain.cells, WILDLIFE_ATLAS_CELLS);
+  assert.deepEqual(Object.keys(plain.cells), [...WILDLIFE_SPRITE_GROUPS]);
+  const svg = decodeURIComponent(plain.url.slice(plain.url.indexOf(',') + 1));
+  assert.equal(svg.match(/<circle /g).length, WILDLIFE_SPRITE_GROUPS.length);
+  for (const group of WILDLIFE_SPRITE_GROUPS)
+    assert.ok(svg.includes(ICONIC_TINTS[WILDLIFE_SPRITE_ICONIC[group]]));
+  WILDLIFE_SPRITE_GROUPS.forEach((group, index) => {
+    const [u0, v0, u1, v1] = WILDLIFE_ATLAS_CELLS[group];
+    assert.equal(u0, index / WILDLIFE_SPRITE_GROUPS.length);
+    assert.equal(u1, (index + 1) / WILDLIFE_SPRITE_GROUPS.length);
+    assert.deepEqual([v0, v1], [0, 1]);
+  });
+  assert.equal(await cache.load(), true);
+  const painted = cache.atlas();
+  assert.equal(cache.atlas(), painted, 'painted once');
+  assert.equal(painted.cells, WILDLIFE_ATLAS_CELLS);
+  assert.equal(
+    painted.canvas.width,
+    WILDLIFE_SPRITE_PX * 2 * WILDLIFE_SPRITE_GROUPS.length,
+  );
+  assert.equal(painted.canvas.height, WILDLIFE_SPRITE_PX * 2);
+  assert.equal(drawn.length, WILDLIFE_SPRITE_GROUPS.length);
+  WILDLIFE_SPRITE_GROUPS.forEach((group, index) => {
+    const [canvas, image, x] = drawn[index];
+    assert.equal(canvas, painted.canvas);
+    assert.equal(image, cache.get(group));
+    assert.equal(x, index * WILDLIFE_SPRITE_PX * 2);
+  });
 });
 
 test('unavailable font keeps plain badges and does not paint a ligature word', async () => {

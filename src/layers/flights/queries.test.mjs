@@ -13,7 +13,7 @@ function fixture() {
   const bb = { show: true, position: new Cesium.Cartesian3(1, 2, 3) };
   const flightState = {
     feed: {},
-    _billboardCollection: { show: true },
+    _renderer: { fleet: { visible: () => true } },
     _billboards: new Map([['abc123', bb]]),
     _models: new Map(),
     _detectionObjects: new Map(),
@@ -101,14 +101,14 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   model.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
-  assert.deepEqual(candidate.position, new Cesium.Cartesian3(10, 20, 30));
+  assert.ok(Cesium.Cartesian3.equals(candidate.position, new Cesium.Cartesian3(10, 20, 30)));
   Cesium.Matrix4.setTranslation(
     model.modelMatrix,
     new Cesium.Cartesian3(40, 50, 60),
     model.modelMatrix,
   );
   f.queries.getDetectableObjects();
-  assert.deepEqual(candidate.position, new Cesium.Cartesian3(40, 50, 60));
+  assert.ok(Cesium.Cartesian3.equals(candidate.position, new Cesium.Cartesian3(40, 50, 60)));
   model.show = false;
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   f.bb.show = true;

@@ -10,10 +10,11 @@ import { VOICE_PROVIDERS } from './providerCapabilities.js';
 import { t, translateKnown } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
-  const element = pointer?.element;
-  if (!element?.ownerDocument) return null;
+  // A pointer may follow another element later (an engine switch), so the
+  // reticle reads it each time; a page without a document has none.
+  if (!pointer || !globalThis.document) return null;
   return new PointerReticle({
-    rectOf: () => element.getBoundingClientRect?.() || null,
+    rectOf: () => pointer.element?.getBoundingClientRect?.() || null,
   });
 }
 

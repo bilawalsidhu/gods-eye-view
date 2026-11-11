@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createCatalogModel } from './catalogModel.js';
 import { createLabels } from './labels.js';
 import { createClustering } from './clustering.js';
@@ -19,10 +20,14 @@ import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
-export function createRadioLayer({ services, source }) {
-  const state = createState({ services });
+export function createRadioLayer({ services, source, rendererFactory }) {
   const parts = {};
-  const context = { state, services, parts, source };
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => parts.renderer?.engine),
+  };
+  const state = createState({ services });
+  const context = { state, services, parts, source, rendererFactory };
   parts.catalogModel = createCatalogModel(context);
   parts.labels = createLabels(context);
   parts.clustering = createClustering(context);
@@ -47,6 +52,7 @@ export function createRadioLayer({ services, source }) {
     parts.lifecycle.methods,
     parts.ingestion?.methods,
     {
+      sessionState: ['selected', 'audioState'],
       radioGlobeLabel: parts.labels.radioGlobeLabel,
       createRadioSelectedOverlayEntry:
         parts.labels.createRadioSelectedOverlayEntry,

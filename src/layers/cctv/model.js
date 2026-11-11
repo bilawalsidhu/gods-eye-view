@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { greatCircleKm } from '../../geoDistance.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
@@ -14,7 +14,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function toRad(deg) {
-    return Cesium.Math.toRadians(deg);
+    return geo.math.toRadians(deg);
   }
 
   /**
@@ -308,8 +308,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     const lon2 = lon1 + Math.atan2(y, x);
 
     return {
-      lat: Cesium.Math.toDegrees(lat2),
-      lon: Cesium.Math.toDegrees(lon2),
+      lat: geo.math.toDegrees(lat2),
+      lon: geo.math.toDegrees(lon2),
     };
   }
 
@@ -346,10 +346,10 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function currentViewContext() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     if (!carto) return 'none';
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+    const lat = geo.math.toDegrees(carto.latitude);
+    const lon = geo.math.toDegrees(carto.longitude);
     const alt = carto.height || 0;
     const zoomBucket =
       alt < 1500
@@ -374,8 +374,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * Reports whether the active Google Photorealistic 3D Tileset (if any) has
    * finished loading the tiles in view. Shared mesh-floor sampling is gated on
    * this so a one-shot cell never bakes in a miss from still-streaming tiles.
-   * Discovers + caches the tileset lazily from scene
-   * primitives (the CCTV module holds only a `_viewer` reference). When no
+   * The renderer discovers and caches its active tileset. When no
    * tileset is present (OSM fallback) this returns true so ground sampling is
    * not permanently blocked.
    *
@@ -389,25 +388,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function projectionTilesReady() {
-    if (
-      !layerState._activeTileset ||
-      layerState._activeTileset.isDestroyed?.()
-    ) {
-      layerState._activeTileset = null;
-      const primitives = layerState._viewer?.scene?.primitives;
-      if (primitives && typeof primitives.get === 'function') {
-        for (let i = 0; i < primitives.length; i++) {
-          const p = primitives.get(i);
-          if (p instanceof Cesium.Cesium3DTileset && !p.isDestroyed?.()) {
-            layerState._activeTileset = p;
-            break;
-          }
-        }
-      }
-    }
-    if (!layerState._activeTileset) return true;
-    if (layerState._activeTileset.show === false) return false;
-    return layerState._activeTileset.tilesLoaded === true;
+    return parts.renderer?.tilesReady() ?? true;
   }
 
   /**
@@ -418,30 +399,30 @@ export function createModel({ state: layerState, services, parts, source }) {
    * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
    * computed only on slider/save/activation, never per frame (§2b).
    * @param {Object} camera - Camera pose.
-   * @param {Cesium.Cartesian3} capCenterPos - Plane center in ECEF.
-   * @returns {Cesium.Quaternion}
+   * @param {{x: number, y: number, z: number}} capCenterPos - Plane center in ECEF.
+   * @returns {{x: number, y: number, z: number, w: number}}
    */
 
   function planeOrientationFor(camera, capCenterPos) {
     const frame = parts.geometry.frustumFrameEcef(camera, capCenterPos);
-    const right = Cesium.Cartesian3.cross(
+    const right = geo.cartesian3.cross(
       frame.dir,
       frame.up,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const normal = Cesium.Cartesian3.negate(frame.dir, new Cesium.Cartesian3());
-    const m = new Cesium.Matrix3(
-      right.x,
-      frame.up.x,
-      normal.x,
-      right.y,
-      frame.up.y,
-      normal.y,
-      right.z,
-      frame.up.z,
-      normal.z,
-    );
-    return Cesium.Quaternion.fromRotationMatrix(m);
+    const normal = geo.cartesian3.negate(frame.dir, geo.cartesian3.create());
+    // Column-major rotation whose columns are right, up and normal.
+    const m = geo.matrix3.create();
+    m[0] = right.x;
+    m[1] = right.y;
+    m[2] = right.z;
+    m[3] = frame.up.x;
+    m[4] = frame.up.y;
+    m[5] = frame.up.z;
+    m[6] = normal.x;
+    m[7] = normal.y;
+    m[8] = normal.z;
+    return geo.quaternion.fromRotationMatrix(m, geo.quaternion.create());
   }
 
   /**
@@ -459,7 +440,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function projectionLoopIsNeeded() {
-    if (!layerState._enabled || !layerState._viewer) return false;
+    if (!layerState._enabled || !parts.renderer?.ready) return false;
     const active = parts.selection.getActiveRecord();
     if (
       layerState._showProjection &&

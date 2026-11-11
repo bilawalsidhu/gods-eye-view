@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   HORIZON_FEATHER_RAD,
-  horizonOccluder,
   screenProjectedRotation,
   skyBackdropFactor,
   stabilizeScreenRotation,
@@ -483,7 +482,7 @@ test('below the surface the backdrop test agrees with the occluder beside it', (
   // halves use that plane. The old fail-closed broke exactly this: the occluder
   // kept a contact against sky and the backdrop test called it ground.
   const camera = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, -18);
-  const occluder = horizonOccluder({ positionWC: camera });
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, camera);
   const enu = Cesium.Transforms.eastNorthUpToFixedFrame(camera);
   const offsetBy = (up) =>
     Cesium.Cartesian3.add(
@@ -744,4 +743,23 @@ test('the perspective helper is continuous through the sub-pixel band, not a 23Â
       Math.abs(wrappedDelta(s.rotation, s.exact)) < 1e-6,
       `exact alone at ${s.separation.toFixed(2)} px`,
     );
+});
+
+test('the exact projection asks the engine projector its scene carries', async () => {
+  const geo = await import('../geo/index.js');
+  const { perspectiveProjectedRotation: rotation } = await import('./iconOrientation.js');
+  const asked = [];
+  const scene = {
+    camera: { rightWC: { x: 0, y: 1, z: 0 }, upWC: { x: 0, y: 0, z: 1 } },
+    projector: {
+      // Screen-right for every point further east (the probe), so 90Â° on screen.
+      worldToWindow(position, result = geo.cartesian2.create()) {
+        asked.push(position);
+        return Object.assign(result, { x: asked.length === 1 ? 100 : 120, y: 100 });
+      },
+    },
+  };
+  const value = rotation(scene, geo.cartesian3.fromDegrees(0, 0, 0), 90, null);
+  assert.equal(asked.length, 2, 'the anchor and the probe');
+  assert.ok(Math.abs(value - -Math.PI / 2) < 1e-9, `rotation ${value}`);
 });

@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as credits from '../../data/dataCredits.js';
-import { createLifecycle } from './lifecycle.js';
 import { LAYER_ID } from './policy.js';
+import { OUTLINE_SET_ID } from './render/display.js';
+import { createDisplayHarness } from './render/displayHarness.mjs';
+import { createFakeGroundHarness } from '../../testSupport/groundDisplayEngines.mjs';
 
 for (const source of [
   { name: 'OpenStreetMap', id: 'tile:base' },
@@ -11,46 +13,20 @@ for (const source of [
   null,
 ]) {
   test(`enable restores cached installation credits before a refresh: ${source?.id || 'empty'}`, () => {
-    const visibleCredits = new Set();
-    const noop = () => {};
-    const viewer = {
-      camera: {},
-      creditDisplay: {
-        addStaticCredit: (credit) => visibleCredits.add(credit),
-        removeStaticCredit: (credit) => visibleCredits.delete(credit),
-      },
-    };
-    const state = {
-      viewer,
-      records: source ? [{ id: 'base', sources: [source] }] : [],
-      recordById: new Map(),
-      dataSource: { show: false },
-    };
-    let markersVisible = false;
-    const parts = {
-      namedMarkers: {
-        enable: () => {
-          markersVisible = true;
-        },
-        sync: noop,
-        hide: () => {
-          markersVisible = false;
-        },
-      },
-      rendering: {},
-      viewport: { clearUnavailableRetry: noop },
-      ingestion: { setInstallationStatus: noop },
-    };
-    const lifecycle = createLifecycle({
-      state,
-      services: {
-        credits,
-        picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-        context: { clearSelectedEntityContextForLayer: noop },
-      },
-      parts,
-      source: {},
-    }).methods;
+    const h = createDisplayHarness(createFakeGroundHarness);
+    h.services.credits = credits;
+    const { engine } = h;
+    const visibleCredits = () => engine.fake.credits.length;
+    h.setRecords(
+      source
+        ? [{ id: 'base', latitude: 0, longitude: 0, sources: [source] }]
+        : [],
+    );
+    h.state.recordById = new Map();
+    const lifecycle = h.parts.display;
+    lifecycle.init();
+    const outlinesShown = () =>
+      [0, 1].every((n) => h.set(`${OUTLINE_SET_ID}-${n}`).shown);
     const expected =
       source?.name === 'OpenStreetMap'
         ? source.id.startsWith('tile:')
@@ -60,23 +36,24 @@ for (const source of [
     try {
       for (let cycle = 0; cycle < 2; cycle++) {
         lifecycle.enable();
-        assert.equal(state.dataSource.show, true);
-        assert.equal(markersVisible, true);
+        assert.equal(outlinesShown(), true);
+        assert.equal(h.labels.visible, true);
         // No renderRecords or successful fetch occurs between toggles.
-        assert.equal(visibleCredits.size, expected);
+        assert.equal(visibleCredits(), expected);
         lifecycle.disable();
-        assert.equal(state.dataSource.show, false);
-        assert.equal(markersVisible, false);
-        assert.equal(visibleCredits.size, 0);
+        assert.equal(outlinesShown(), false);
+        assert.equal(h.labels.visible, false);
+        assert.equal(visibleCredits(), 0);
       }
-      credits.showOsmCredit(viewer, 'another-layer');
+      credits.showOsmCredit(engine, 'another-layer');
       lifecycle.enable();
       lifecycle.disable();
-      assert.equal(visibleCredits.size, 1, 'another owner retains its credit');
-      assert.equal(credits.hideOsmCredit(viewer, LAYER_ID), false);
+      assert.equal(visibleCredits(), 1, 'another owner retains its credit');
+      assert.equal(credits.hideOsmCredit(engine, LAYER_ID), false);
     } finally {
       lifecycle.disable();
-      credits.hideOsmCredit(viewer, 'another-layer');
+      credits.hideOsmCredit(engine, 'another-layer');
+      h.destroy();
     }
   });
 }

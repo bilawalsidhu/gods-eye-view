@@ -37,6 +37,7 @@ import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
   STYLES,
+  presetSharpenIntensity,
 } from '../ui/visualPresets.js';
 import {
   SHARE_VIEW_ENTITY_KINDS,
@@ -113,6 +114,7 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'bing-labels',
     'esri-imagery',
     'osm',
+    'sentinel2',
   ]),
   hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
@@ -558,7 +560,10 @@ export const SHARE_VIEW_STYLE_DEFAULTS = Object.freeze(
           bloom: preset.bloom?.enabled ?? g.bloom.enabled,
           bloomIntensity: preset.bloom?.intensity ?? g.bloom.intensity,
           sharpen: preset.sharpen?.enabled ?? g.sharpen.enabled,
-          sharpenIntensity: preset.sharpen?.intensity ?? g.sharpen.intensity,
+          sharpenIntensity: presetSharpenIntensity(
+            preset.sharpen?.intensity ?? g.sharpen.intensity,
+            'cesium',
+          ),
           hudVariant: preset.hudVariant ?? g.hudVariant,
           hudVisible: preset.hudVisible ?? g.hudVisible,
           detectionMode: detection.enabled ? detection.profile : 'OFF',

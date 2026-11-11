@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Mapped installations: isolated camera navigation, cached revisits and Contacts release. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 import { moveCamera } from './qa-journey-recorder.mjs';
 
 const args = process.argv.slice(2);
@@ -13,10 +14,9 @@ if (args.includes('--help')) {
 }
 const baseline = args.includes('--baseline');
 const result = { views: [], errors: [], forbidden: [], failures: [] };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-angle=metal', '--disable-background-timer-throttling'],
+  args: ['--disable-background-timer-throttling'],
   protocolTimeout: 120000,
 });
 try {
@@ -40,19 +40,28 @@ try {
   page.on('console', (m) => {
     if (m.type() === 'error') result.errors.push(m.text());
   });
-  await page.evaluateOnNewDocument(() =>
-    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed'),
-  );
+  await page.evaluateOnNewDocument(() => {
+    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+    // The sites drawn as discs, as their context handles: the layer draws
+    // through the globe contract and owns no Cesium entities.
+    window.__qaInstallationSites = () =>
+      [...(window.__gevContextStore?.entities.values() ?? [])]
+        .filter(
+          (r) =>
+            r.layerId === 'military-installations' &&
+            r.entity &&
+            !r.entity.record?.namedArea,
+        )
+        .map((r) => r.entity);
+  });
   await page.goto(
     args.find((a) => /^https?:/.test(a)),
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 120000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 120000,
+  });
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -61,13 +70,12 @@ try {
     const g = window.__godsEyeView;
     for (const [id] of g.dataManager.layers)
       await g.dataManager.setEnabled(id, false);
-    g.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
     window.installationEvents = { changed: 0, end: 0 };
     window.installationEntityRefs = new Map();
-    g.viewer.camera.changed.addEventListener(
+    window.__godsEyeView.engine.camera.changed.addEventListener(
       () => window.installationEvents.changed++,
     );
-    g.viewer.camera.moveEnd.addEventListener(
+    window.__godsEyeView.engine.camera.moveEnd.addEventListener(
       () => window.installationEvents.end++,
     );
   });
@@ -79,7 +87,7 @@ try {
     const fits = await page.evaluate(async () => {
       const { installationTileZoom } =
         await import('/src/layers/installations/source.js');
-      const r = window.__godsEyeView.viewer.camera.computeViewRectangle();
+      const r = window.__godsEyeView.engine.camera.viewRectangle();
       const d = 180 / Math.PI;
       return (
         r &&
@@ -156,8 +164,9 @@ try {
         .catch(() => {});
       const snapshot = await page.evaluate(() => {
         const g = window.__godsEyeView;
-        const ds = g.viewer.dataSources.getByName('military-installations')[0];
-        const points = ds.entities.values.filter((e) => e.point);
+        // The drawn sites' context handles (render/display.js keeps one per
+        // drawn record and prunes the rest); a named area draws no disc.
+        const points = window.__qaInstallationSites();
         const stable = points.every(
           (e) =>
             !window.installationEntityRefs.has(e.id) ||
@@ -236,7 +245,7 @@ try {
       });
       await page.type('#location-search', '33.33, -117.40');
       await page.keyboard.press('Enter');
-      await sleep(4500);
+      await whenSettled(page);
     } else {
       await moveCamera(
         page,
@@ -244,10 +253,7 @@ try {
         0.6,
       );
       await page.waitForFunction(
-        () =>
-          window.__godsEyeView.viewer.dataSources
-            .getByName('military-installations')[0]
-            .entities.values.some((e) => e.point),
+        () => window.__qaInstallationSites().length > 0,
         { timeout: 5000 },
       );
       await page.evaluate(() => {
@@ -265,11 +271,10 @@ try {
         },
         { timeout: 15000 },
       );
-      await sleep(1000);
+      await whenSettled(page);
       await page.evaluate(async () => {
         const g = window.__godsEyeView;
-        const ds = g.viewer.dataSources.getByName('military-installations')[0];
-        const id = ds.entities.values.find((e) => e.point).id;
+        const id = window.__qaInstallationSites()[0].id;
         window.installationSubjectId = id;
         await g.dataManager.layers
           .get('military-awareness')
@@ -290,10 +295,7 @@ try {
         },
         { timeout: 15000 },
       );
-      await page.waitForFunction(
-        () => !window.__godsEyeView.viewer.camera._currentFlight,
-        { timeout: 10000 },
-      );
+      await whenSettled(page);
       await page.waitForFunction(
         () =>
           window.__godsEyeView.dataManager.layers
@@ -353,11 +355,7 @@ try {
           { timeout: 30000 },
         );
       }
-      await page.waitForFunction(
-        () => !window.__godsEyeView.viewer.camera._currentFlight,
-        { timeout: 10000 },
-      );
-      await sleep(500);
+      await whenSettled(page);
       previous = await page.evaluate(
         () =>
           window.__godsEyeView.dataManager.layers
@@ -403,7 +401,7 @@ try {
     `qa-shots/installations-navigation-${baseline ? 'before' : 'after'}.json`,
     JSON.stringify(result, null, 2),
   );
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (
   !baseline &&

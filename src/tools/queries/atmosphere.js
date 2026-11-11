@@ -201,6 +201,13 @@ export const getWind = defineTool({
       point.lon,
       point.lat,
     );
+    // A field without cells samples to NaN: that is no surface reading, never
+    // a speed or calm (the wind layer's inspection says the same).
+    if (!Number.isFinite(vector.u) || !Number.isFinite(vector.v))
+      throw new ToolError(
+        'unavailable',
+        `No surface wind reading at ${point.label}: the ${model.toUpperCase()} forecast has no data there right now`,
+      );
     const speed = windSpeed(vector.u, vector.v);
     const from = windFrom(vector.u, vector.v);
     const kph = speed * 3.6;

@@ -1,3 +1,4 @@
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 // The HUD's passive place lookup spends paid Google requests on its own, so
 // it must look up the view center and one more point, and only again once the
 // view shows a different area.
@@ -25,7 +26,8 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
   const camera = {
     heading: 0,
     pitch: -Math.PI / 2,
-    frustum: { fov: Math.PI / 3, aspectRatio: 1.5 },
+    roll: 0,
+    frustum: { fovy: Math.PI / 3, aspectRatio: 1.5 },
     pickEllipsoid(point) {
       return Cesium.Cartesian3.fromDegrees(
         state.longitude +
@@ -63,7 +65,16 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
         state.groundM,
       ),
   };
-  return { viewer: { camera, scene }, state, degreesPerPixel };
+  return {
+    viewer: createCesiumEngine({
+      camera,
+      canvas,
+      scene,
+      clock: { onTick: new Cesium.Event() },
+    }),
+    state,
+    degreesPerPixel,
+  };
 }
 
 /** Answers every lookup with a label naming the point it was asked about. */
@@ -356,4 +367,18 @@ test('cached-only lookups read every cached viewport sample and never request', 
   const b = await getBasemapLabelContext(viewer, service, { cachedOnly: true });
   assert.ok(b.placeLabels.includes(cachedLabel));
   assert.deepEqual(service.calls, before);
+});
+
+test('basemap lookup measures the horizontal camera span', async () => {
+  const { viewer } = createViewer({
+    latitude: 30,
+    longitude: -97,
+    heightM: 1000,
+  });
+  const result = await getBasemapLabelContext(viewer, createService(), {
+    cachedOnly: true,
+  });
+  assert.ok(
+    Math.abs(result.view.spanM - 2 * 1000 * Math.tan(Math.PI / 6) * 1.5) < 1,
+  );
 });

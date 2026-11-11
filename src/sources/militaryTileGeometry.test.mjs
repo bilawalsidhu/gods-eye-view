@@ -186,9 +186,10 @@ test('distinct named bases separated by one seam quantization step retain separa
 });
 
 test('named A+B to B to A+B preserves canonical identity, parent title and selection', async () => {
-  const C = await import('cesium');
-  const { createRendering } =
-    await import('../layers/installations/rendering.js');
+  const { createDisplayHarness } =
+    await import('../layers/installations/render/displayHarness.mjs');
+  const { createFakeGroundHarness } =
+    await import('../testSupport/groundDisplayEngines.mjs');
   const aliases = new Map();
   const named = (n, footprint, areaM2) =>
     record(String(n * 10 + 2), footprint, {
@@ -208,36 +209,23 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
   const a = named(1, ring(0, 0, 1, 1), 100),
     b = named(2, ring(1, 0, 2, 1), 10);
   let selected = { id: 'osm:military:w1' };
-  const state = {
-    records: [],
-    recordById: new Map(),
-    selectedId: selected.id,
-    renderedKeys: new Map(),
-    dataSource: new C.CustomDataSource(),
-  };
-  const rendering = createRendering({
-    state,
-    source: {},
-    parts: {
-      model: {
-        colorFor: () => C.Color.ORANGE,
-        installationSourceLabel: () => 'OpenStreetMap',
+  const handles = new Map();
+  const h = createDisplayHarness(createFakeGroundHarness, {
+    context: {
+      getSelectedEntityContext: () => selected,
+      removeEntityContextsForLayer() {},
+      registerEntityContext: (entity, context) =>
+        handles.set(context.id, entity),
+      selectEntityContext: (entity) => {
+        selected = entity;
       },
-    },
-    services: {
-      ground: { floorAltitudeM: () => 0, cachedGroundFloor: () => 0 },
-      context: {
-        getSelectedEntityContext: () => selected,
-        removeEntityContextsForLayer() {},
-        registerEntityContext() {},
-        selectEntityContext: (entity) => {
-          selected = entity;
-        },
-      },
-      render: { governorRequestRender() {} },
-      anchors: {},
+      clearSelectedEntityContextForLayer() {},
     },
   });
+  h.parts.display.init();
+  const { state } = h;
+  state.selectedId = selected.id;
+  const rendering = h.parts.display;
   for (const members of [[a, b], [b], [a, b]]) {
     state.records = mergeMilitaryFragments(members, aliases);
     state.recordById = new Map(state.records.map((r) => [r.id, r]));
@@ -246,7 +234,10 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
     assert.deepEqual(state.records[0].memberNames, ['Site 2']);
     rendering.renderRecords();
     assert.equal(state.selectedId, 'osm:military:w1');
-    assert.ok(state.dataSource.entities.getById(state.selectedId));
+    assert.ok(
+      handles.has(state.selectedId),
+      'the selected site has its handle',
+    );
   }
   const [detail] = mergeMilitaryFragments([{ ...b, tileZoom: 12 }], aliases);
   assert.equal(detail.id, 'osm:military:w2');
@@ -255,12 +246,14 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
     'Site 2',
     'coarse parent metadata cannot override a detail split',
   );
+  h.destroy();
 });
 
 test('cold names reconcile selection through enrichment, identical groups at another zoom and wide-point handoff', async () => {
-  const C = await import('cesium');
-  const { createRendering } =
-    await import('../layers/installations/rendering.js');
+  const { createDisplayHarness } =
+    await import('../layers/installations/render/displayHarness.mjs');
+  const { createFakeGroundHarness } =
+    await import('../testSupport/groundDisplayEngines.mjs');
   const { retainNamedHandoff } =
     await import('../layers/installations/ingestion.js');
   const aliases = new Map();
@@ -287,47 +280,37 @@ test('cold names reconcile selection through enrichment, identical groups at ano
   const [warm] = mergeMilitaryFragments(named);
   let selected = null;
   const contexts = new Map();
-  const state = {
-    records: [],
-    recordById: new Map(),
-    selectedId: null,
-    renderedKeys: new Map(),
-    dataSource: new C.CustomDataSource(),
-  };
-  const rendering = createRendering({
-    state,
-    source: {},
-    parts: {
-      model: {
-        colorFor: () => C.Color.ORANGE,
-        installationSourceLabel: () => 'OpenStreetMap',
+  const handles = new Map();
+  const h = createDisplayHarness(createFakeGroundHarness, {
+    context: {
+      getSelectedEntityContext: () => selected,
+      removeEntityContextsForLayer: (_id, { retainIds } = {}) => {
+        for (const id of contexts.keys())
+          if (!retainIds?.has(id)) contexts.delete(id);
       },
-    },
-    services: {
-      ground: { floorAltitudeM: () => 0, cachedGroundFloor: () => 0 },
-      context: {
-        getSelectedEntityContext: () => selected,
-        removeEntityContextsForLayer: (_id, { retainIds } = {}) => {
-          for (const id of contexts.keys())
-            if (!retainIds?.has(id)) contexts.delete(id);
-        },
-        registerEntityContext: (_entity, context) =>
-          contexts.set(context.id, context),
-        selectEntityContext: (entity) => {
-          selected = contexts.get(entity.id);
-        },
+      registerEntityContext: (entity, context) => {
+        contexts.set(context.id, context);
+        handles.set(context.id, entity);
       },
-      render: { governorRequestRender() {} },
-      anchors: {},
+      selectEntityContext: (entity) => {
+        selected = contexts.get(entity.id);
+      },
+      clearSelectedEntityContextForLayer() {},
     },
   });
+  h.parts.display.init();
+  const { state } = h;
+  const rendering = h.parts.display;
   const publish = (records, claimSelection = false) => {
     state.records = records;
     state.recordById = new Map(records.map((r) => [r.id, r]));
     rendering.renderRecords({ claimSelection });
     assert.equal(state.selectedId, records[0].id);
     assert.equal(selected.id, records[0].id);
-    assert.ok(state.dataSource.entities.getById(state.selectedId));
+    assert.ok(
+      handles.has(state.selectedId),
+      'the selected site has its handle',
+    );
     assert.ok(contexts.has(selected.id));
   };
   const cold = mergeMilitaryFragments(unnamed, aliases);
@@ -380,4 +363,5 @@ test('cold names reconcile selection through enrichment, identical groups at ano
     'identity migration cannot reclaim another layer selection',
   );
   assert.equal(selected.id, 'aircraft:other');
+  h.destroy();
 });

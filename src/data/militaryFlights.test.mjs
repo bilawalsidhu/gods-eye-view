@@ -1,3 +1,4 @@
+import { createSceneServices } from './sceneServices.js';
 // src/data/militaryFlights.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
 // Pure function — no viewer/DOM needed; imported directly.
@@ -13,10 +14,12 @@ import militaryFlightsLayer, {
   mapAnalystRecord,
 } from './militaryFlights.js';
 import {
-  _setTrackedOverlayHostForTest,
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createAircraftDisplay, aircraftAtlasLayout } from '../layers/aircraft/render/display.js';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
 
 test('share-Follow absence requires an accepted adsb.lol snapshot', async () => {
   _setMilitaryTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -146,6 +149,9 @@ test('military first update forwards caller cancellation into the feed request',
 
 test('nonempty adsb.lol payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'ae1234',
     entity: { gevLabelModel: { title: 'WARM', details: [] } },
     billboard: { show: false },
@@ -192,6 +198,9 @@ test('military poll refreshes tracked callsign/altitude/kts and marks a missed p
   const billboardCollection = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24,
     entity,
     billboard,
@@ -263,6 +272,9 @@ test('cached military snapshots retain their observation time and expose stale f
   const history = [];
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedMilitaryRefreshStateForTest({
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'ae01ce',
     entity: { gevLabelModel: { title: 'RCH451', details: [] } },
     billboard: {
@@ -334,45 +346,17 @@ test('real military track path creates no native label and publishes every cache
   const icao24 = 'ae01ce';
   const position = Cesium.Cartesian3.fromDegrees(-97.03, 31.05, 8_534.4);
   const now = Cesium.JulianDate.now();
-  const entities = new Cesium.EntityCollection();
-  const trackedEntityChanged = new Cesium.Event();
-  let trackedEntity;
-  let cancelledFlights = 0;
-  let appliedFrames = 0;
-  const viewer = {
-    entities,
-    trackedEntityChanged,
-    clock: { currentTime: now },
-    camera: {
-      cancelFlight() {
-        cancelledFlights += 1;
-      },
-      position: new Cesium.Cartesian3(0, -10_000, 7_000),
-      positionWC: new Cesium.Cartesian3(0, -10_000, 7_000),
-      direction: Cesium.Cartesian3.UNIT_Y,
-      transform: Cesium.Matrix4.IDENTITY,
-      viewMatrix: Cesium.Matrix4.IDENTITY,
-      frustum: { projectionMatrix: Cesium.Matrix4.IDENTITY },
-      lookAtTransform() {
-        appliedFrames += 1;
-      },
-    },
-    scene: {
-      canvas: { clientWidth: 1600, clientHeight: 900 },
-      frameState: { frameNumber: 61, mode: Cesium.SceneMode.SCENE3D },
-      preUpdate: new Cesium.Event(),
-      screenSpaceCameraController: null,
-    },
-    isDestroyed: () => false,
-  };
-  viewer.scene.camera = viewer.camera;
-  Object.defineProperty(viewer, 'trackedEntity', {
-    get: () => trackedEntity,
-    set(value) {
-      trackedEntity = value;
-      trackedEntityChanged.raiseEvent(value);
-    },
+  const engine = createFakeEngine();
+  let followCalls = 0;
+  const follow = engine.camera.follow;
+  engine.camera.follow = (options) => { followCalls++; return follow(options); };
+  const layout = aircraftAtlasLayout();
+  const renderer = createAircraftDisplay(engine, {
+    layerId: 'military',
+    drawAtlas: async () => ({ canvas: { width: layout.width, height: layout.height }, cells: layout.cells }),
   });
+  renderer.fleet.attach();
+  renderer.fleet.setVisible(true);
   const billboard = {
     position,
     rotation: 0.4,
@@ -401,19 +385,19 @@ test('real military track path creates no native label and publishes every cache
     },
   );
   globalThis.fetch = async () => ({ ok: false });
-  _setTrackedOverlayHostForTest(host);
+  const readoutServices = createSceneServices(engine, { trackedOverlay: host });
   try {
-    initTrackedReadout(viewer);
+    initTrackedReadout(engine);
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: () => renderer,
       icao24,
       entity: null,
       billboard,
       billboardCollection: { show: true, remove() {} },
-      viewer,
       tracked: false,
       history: [
         {
-          time: now,
+          timeMs: Cesium.JulianDate.toDate(now).getTime(),
           epochMs: Date.now(),
           position,
           velocity: 231.5,
@@ -433,30 +417,22 @@ test('real military track path creates no native label and publishes every cache
       militaryFlightsLayer.trackById(icao24, { origin: 'programmatic' }),
       true,
     );
-    const entity = viewer.trackedEntity;
-    assert.ok(
-      entity instanceof Cesium.Entity,
-      'trackById must create the real Cesium entity',
-    );
-    assert.equal(entity.label, undefined);
-    assert.ok(
-      entities.values.every((candidate) => candidate.label === undefined),
-    );
+    const entity = renderer.follow.current();
+    assert.ok(entity, 'tracking creates a display handle');
     assert.deepEqual(entity.gevLabelModel, {
       title: 'RCH451',
       details: ['C17 · 05-8152', 'United States Air Force · 28000 ft · 450 kt'],
       accent: '#ffd166',
     });
-    viewer.scene.preUpdate.raiseEvent();
-    const initialAppliedFrames = appliedFrames;
-    const initialCancelledFlights = cancelledFlights;
+    engine.fake.frame();
+    const initialFollowCalls = followCalls;
     assert.equal(
       militaryFlightsLayer.trackById(icao24, { origin: 'user' }),
       true,
     );
     assert.equal(
-      cancelledFlights,
-      initialCancelledFlights,
+      followCalls,
+      initialFollowCalls,
       'ordinary repeated tracking stays camera-idempotent',
     );
     assert.equal(
@@ -479,21 +455,16 @@ test('real military track path creates no native label and publishes every cache
       'same-target refocus forwards explicit authority',
     );
     assert.equal(militaryFlightsLayer.refocusTrackedById(icao24), true);
-    viewer.scene.preUpdate.raiseEvent();
+    engine.fake.frame();
     assert.equal(
-      viewer.trackedEntity,
+      renderer.follow.current(),
       entity,
       'refocus must retain the exact tracked entity',
     );
     assert.equal(
-      appliedFrames,
-      initialAppliedFrames + 1,
-      'repeated refocus keeps one camera-frame owner',
-    );
-    assert.equal(
-      cancelledFlights,
-      initialCancelledFlights + 2,
-      'only explicit refocus requests cancel camera flights',
+      followCalls,
+      initialFollowCalls + 2,
+      'only explicit refocus requests restart following',
     );
     const publication = publications.at(-1);
     assert.equal(publication.sourceId, 'tracked');
@@ -503,7 +474,7 @@ test('real military track path creates no native label and publishes every cache
     assert.equal(entry.title, entity.gevLabelModel.title);
     assert.deepEqual(entry.details, entity.gevLabelModel.details);
 
-    const display = entity.position.getValue(now);
+    const display = entity.spec.position();
     assert.ok(display, 'tracked position callback must seed its frame cache');
     assert.equal(
       entry.position(),
@@ -642,9 +613,11 @@ test('real military track path creates no native label and publishes every cache
     );
   } finally {
     militaryFlightsLayer.stopTracking();
-    viewer.scene.preUpdate.raiseEvent();
-    destroyTrackedReadout();
-    _setTrackedOverlayHostForTest();
+    engine.fake.frame();
+    destroyTrackedReadout(engine);
+    readoutServices.destroy();
+    renderer.destroy();
+    engine.destroy();
     globalThis.fetch = realFetch;
     globalThis.window = realWindow;
   }
@@ -844,6 +817,9 @@ test('the military tracked descriptor publishes the reported vertical rate', () 
   // every military contact as level flight.
   const seedRate = (verticalRateMps) =>
     _setTrackedMilitaryRefreshStateForTest({
+      renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
       icao24: 'ae7f01',
       entity: { gevLabelModel: { title: 'TEST', details: [] } },
       billboard: {

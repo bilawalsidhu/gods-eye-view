@@ -120,6 +120,8 @@ const { computeInRangeCities } = createViewport({
   services: { render: { governorRequestRender() {} } },
   parts,
   source: null,
+  // The range check reads no camera.
+  camera: {},
 });
 
 /** Station information for `id` through the real ingestion path. */

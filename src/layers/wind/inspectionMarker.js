@@ -9,8 +9,7 @@ import { applicationPinia } from '../../ui/vueRuntime.js';
  */
 export function createWindInspectionMarker({
   container,
-  viewer,
-  cesium,
+  engine,
   store = useWindInspectionStore(applicationPinia()),
 }) {
   const owner = {};
@@ -27,42 +26,37 @@ export function createWindInspectionMarker({
     removeRender = null;
     if (shown()) store.publish(null);
     marker = null;
-    viewer?.scene?.requestRender?.();
+    engine.render.request('wind-inspection');
   };
   return {
     show(position) {
       clear();
-      const scene = viewer?.scene;
+      const canvas = engine.host.canvas;
+      const frames = engine.frames.postRender;
       if (
         !position ||
         !container?.ownerDocument ||
-        !scene?.postRender?.addEventListener ||
-        !scene.cartesianToCanvasCoordinates
+        !frames?.addEventListener ||
+        !engine.projector
       )
         return;
       present({ owner, container, visible: false, left: 0, top: 0 });
-      const occluder = new cesium.EllipsoidalOccluder(
-        scene.globe?.ellipsoid || cesium.Ellipsoid.WGS84,
-        viewer.camera.positionWC,
-      );
       const render = () => {
         if (!shown()) return;
-        occluder.cameraPosition = viewer.camera.positionWC;
-        const point = scene.cartesianToCanvasCoordinates(position);
+        const point = engine.projector.worldToWindow(position, {});
         const visible =
           point &&
           point.x >= 0 &&
           point.y >= 0 &&
-          point.x <= scene.canvas.clientWidth &&
-          point.y <= scene.canvas.clientHeight &&
-          (scene.mode !== cesium.SceneMode.SCENE3D ||
-            occluder.isPointVisible(position));
+          point.x <= canvas.clientWidth &&
+          point.y <= canvas.clientHeight &&
+          engine.projector.horizonVisible(position);
         if (!visible) {
           // A hidden marker keeps its last place, as the element did.
           if (marker.visible) present({ visible: false });
           return;
         }
-        const canvasRect = scene.canvas.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
         const left = point.x + canvasRect.left - containerRect.left;
         const top = point.y + canvasRect.top - containerRect.top;
@@ -70,9 +64,9 @@ export function createWindInspectionMarker({
           return;
         present({ visible: true, left, top });
       };
-      removeRender = scene.postRender.addEventListener(render);
+      removeRender = frames.addEventListener(render);
       render();
-      scene.requestRender?.();
+      engine.render.request('wind-inspection');
     },
     clear,
     destroy: clear,

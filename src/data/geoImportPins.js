@@ -1,128 +1,144 @@
-import * as Cesium from 'cesium';
+// The images of imported points (UTILITIES ▸ Import), without Cesium: the
+// map pin Cesium's PinBuilder drew for a GeoJSON point or a KML placemark
+// without an icon, and each point's look composed onto one square sprite
+// whose centre is the point (src/data/geoImportDisplay.js), so the pin's
+// tip, a KML hot spot or an icon's sub-region lands where Cesium put it.
 
-const STYLE = [
-  'image',
-  'scale',
-  'rotation',
-  'alignedAxis',
-  'horizontalOrigin',
-  'verticalOrigin',
-  'color',
-  'eyeOffset',
-  'pixelOffset',
-  'width',
-  'height',
-  'scaleByDistance',
-  'translucencyByDistance',
-  'pixelOffsetScaleByDistance',
-  'distanceDisplayCondition',
-  'sizeInMeters',
-  'disableDepthTestDistance',
-  'imageSubRegion',
-];
+import { MAX_ICON_SIDE } from './geoImportLimits.js';
 
-class ImportedBillboards extends Cesium.BillboardCollection {
-  update(frameState) {
-    // Height queries should find the map, never another imported marker.
-    // Ordinary click picks and rendered screenshots still include the pins.
-    if (frameState.passes.pick && frameState.passes.offscreen) return;
-    super.update(frameState);
-  }
+/** Cesium.Color's CSS form of rgba in 0..1 (its float-to-byte conversion). */
+export function cssOf([red, green, blue, alpha = 1]) {
+  const byte = (v) => (v === 1 ? 255 : (v * 256) | 0);
+  const rgb = `${byte(red)},${byte(green)},${byte(blue)}`;
+  return alpha === 1 ? `rgb(${rgb})` : `rgba(${rgb},${alpha})`;
 }
 
-/** Own static imported pins without a per-frame Entity visualizer walk. */
-export function createImportedPins(dataSource, viewer) {
-  const all = dataSource.entities.values.slice();
-  const now = Cesium.JulianDate.now();
-  const pins = all.filter((entity) => entity.billboard && entity.position);
-  if (!pins.length) return { mount() {}, sync() {}, destroy() {} };
-  const collection = new ImportedBillboards({ scene: viewer.scene });
-  const billboards = [];
-  try {
-    for (const entity of pins) {
-      const position = entity.position.getValue(now);
-      if (
-        !position ||
-        ![position.x, position.y, position.z].every(Number.isFinite)
-      )
-        throw new Error('Invalid imported point position.');
-      const options = {
-        id: entity,
-        position,
-        show:
-          entity.isShowing && entity.billboard.show?.getValue(now) !== false,
-        heightReference: Cesium.HeightReference.NONE,
-      };
-      for (const key of STYLE) {
-        const value = entity.billboard[key]?.getValue(now);
-        if (value !== undefined) options[key] = value;
+/** Cesium.Color#brighten. */
+const brighten = ([red, green, blue, alpha = 1], magnitude) => {
+  const keep = 1 - magnitude;
+  return [
+    1 - (1 - red) * keep,
+    1 - (1 - green) * keep,
+    1 - (1 - blue) * keep,
+    alpha,
+  ];
+};
+
+/**
+ * Draw Cesium's map pin (PinBuilder's drawPin, from its Assets/Textures/
+ * pin.svg) of `color` (rgba in 0..1) into a `size` square at the context's
+ * origin.
+ */
+export function drawPin(context, color, size) {
+  context.save();
+  context.scale(size / 24, size / 24);
+  context.fillStyle = cssOf(color);
+  context.strokeStyle = cssOf(brighten(color, 0.6));
+  context.lineWidth = 0.846;
+  context.beginPath();
+  context.moveTo(6.72, 0.422);
+  context.lineTo(17.28, 0.422);
+  context.bezierCurveTo(18.553, 0.422, 19.577, 1.758, 19.577, 3.415);
+  context.lineTo(19.577, 10.973);
+  context.bezierCurveTo(19.577, 12.63, 18.553, 13.966, 17.282, 13.966);
+  context.lineTo(14.386, 14.008);
+  context.lineTo(11.826, 23.578);
+  context.lineTo(9.614, 14.008);
+  context.lineTo(6.719, 13.965);
+  context.bezierCurveTo(5.446, 13.983, 4.422, 12.629, 4.422, 10.972);
+  context.lineTo(4.422, 3.416);
+  context.bezierCurveTo(4.423, 1.76, 5.447, 0.423, 6.718, 0.423);
+  context.closePath();
+  context.fill();
+  context.stroke();
+  context.restore();
+}
+
+/**
+ * Where an icon draws around its point, in CSS pixels, as Cesium placed the
+ * billboard: `width` × `height` (the icon's own size when the record gives
+ * none) times `scale`, centred on the point (`origin: 'center'`) or standing
+ * on it (`'bottom'`), then moved by `offsetPx` (+y down). Returns the box's
+ * centre ([x, y] from the point) and size, and the side of the square
+ * sprite centred on the point that holds it.
+ * @param {object} icon An imported point's icon (src/data/geoImportRecords.js).
+ * @param {{ width: number, height: number }} [natural] The image's own size.
+ */
+export function iconBox(icon, natural) {
+  const pinSize = icon.image?.pin ? icon.image.pinSize : 0;
+  const ownWidth = icon.subRegion?.[2] || natural?.width || pinSize || 32;
+  const ownHeight = icon.subRegion?.[3] || natural?.height || pinSize || 32;
+  const scale = icon.scale ?? 1;
+  const width = (icon.widthPx ?? ownWidth) * scale;
+  const height = (icon.heightPx ?? ownHeight) * scale;
+  const [dx, dy] = icon.offsetPx ?? [0, 0];
+  const center = [dx, dy - (icon.origin === 'bottom' ? height / 2 : 0)];
+  const side =
+    2 *
+    Math.max(
+      Math.abs(center[0]) + width / 2,
+      Math.abs(center[1]) + height / 2,
+      0.5,
+    );
+  return { center, width, height, side };
+}
+
+/**
+ * Compose one icon onto a square canvas centred on its point (see iconBox).
+ * `image` is the decoded image of a `url` icon (ignored for a pin);
+ * `ratio` canvas pixels per CSS pixel. Returns the canvas and the sprite's
+ * side in CSS pixels.
+ */
+export function composeIcon(
+  icon,
+  { image, createCanvas, ratio = 1, maxSide = MAX_ICON_SIDE } = {},
+) {
+  const natural = image
+    ? {
+        width: image.naturalWidth || image.width,
+        height: image.naturalHeight || image.height,
       }
-      billboards.push(collection.add(options));
-    }
-  } catch (error) {
-    collection.destroy();
-    throw error;
+    : undefined;
+  const box = iconBox(icon, natural);
+  // At least one canvas pixel per icon pixel, at most 512 a side.
+  const k = Math.min(ratio, maxSide / box.side);
+  const canvas = createCanvas();
+  canvas.width = Math.max(1, Math.ceil(box.side * k));
+  canvas.height = canvas.width;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Imported icons need a canvas');
+  const x = (box.side / 2 + box.center[0] - box.width / 2) * k;
+  const y = (box.side / 2 + box.center[1] - box.height / 2) * k;
+  if (icon.image?.pin) {
+    // PinBuilder draws the pin at its own size; the billboard then
+    // stretches that canvas over the box.
+    context.translate(x, y);
+    context.scale(
+      box.width / icon.image.pinSize,
+      box.height / icon.image.pinSize,
+    );
+    context.scale(k, k);
+    drawPin(context, icon.image.pin, icon.image.pinSize);
+  } else if (image) {
+    const [sx, sy, sw, sh] = icon.subRegion ?? [
+      0,
+      0,
+      natural.width,
+      natural.height,
+    ];
+    // Cesium's imageSubRegion counts y up from the image's bottom.
+    const top = icon.subRegion ? natural.height - sy - sh : sy;
+    context.drawImage(
+      image,
+      sx,
+      top,
+      sw,
+      sh,
+      x,
+      y,
+      box.width * k,
+      box.height * k,
+    );
   }
-  // Rebuild once before the source is added to DataSourceDisplay. Removing
-  // one entity at a time would itself make this transition quadratic.
-  dataSource.entities.suspendEvents();
-  try {
-    dataSource.entities.removeAll();
-    for (const entity of all)
-      if (!entity.billboard || !entity.position)
-        dataSource.entities.add(entity);
-  } finally {
-    dataSource.entities.resumeEvents();
-  }
-  Object.defineProperty(dataSource, 'importedEntities', {
-    value: all,
-    configurable: true,
-  });
-  Object.defineProperty(dataSource, 'importedBillboards', {
-    value: collection,
-    configurable: true,
-  });
-  let show = dataSource.show,
-    mounted = false,
-    destroyed = false;
-  Object.defineProperty(dataSource, 'show', {
-    configurable: true,
-    get: () => show,
-    set(value) {
-      show = Boolean(value);
-      dataSource.entities.show = show;
-      collection.show = show;
-    },
-  });
-  collection.show = show;
-  return {
-    mount() {
-      if (destroyed || mounted) return;
-      viewer.scene.primitives?.add(collection);
-      mounted = true;
-    },
-    sync() {
-      if (destroyed) return;
-      for (let i = 0; i < pins.length; i++) {
-        billboards[i].position = pins[i].position.getValue(now);
-        billboards[i].show =
-          pins[i].isShowing && pins[i].billboard.show?.getValue(now) !== false;
-      }
-      viewer.scene.requestRender?.();
-    },
-    destroy() {
-      if (destroyed) return;
-      destroyed = true;
-      if (viewer.trackedEntity && pins.includes(viewer.trackedEntity))
-        viewer.trackedEntity = undefined;
-      if (viewer.selectedEntity && pins.includes(viewer.selectedEntity))
-        viewer.selectedEntity = undefined;
-      if (mounted && !viewer.scene.primitives?.isDestroyed?.())
-        viewer.scene.primitives?.remove(collection);
-      if (!collection.isDestroyed()) collection.destroy();
-      all.length = 0;
-      pins.length = 0;
-      billboards.length = 0;
-    },
-  };
+  return { canvas, side: box.side };
 }

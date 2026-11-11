@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t, msg } from '../../i18n/index.js';
 import { vesselCockpitInfo } from './cockpitSubject.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
@@ -17,6 +16,7 @@ function localizeFeedLabel(raw) {
   const key = FEED_STATE_LABEL_KEYS[raw.trim()];
   return key ? t(key) : raw;
 }
+import * as geo from '../../geo/index.js';
 import {
   AIS_DEGRADED_STATUSES,
   AIS_HEALTHY_STATUSES,
@@ -371,7 +371,7 @@ export function createQueries({
           continue;
         const position = visual.billboard?.position || visual.position;
         if (!position) continue;
-        const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
+        const distanceM = geo.cartesian3.distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         entries.push({
           id: record.id,
@@ -641,12 +641,7 @@ export function createQueries({
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean, cardSourceId: string, cardEntryId: string}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !state.feed.enabled ||
-        !state.billboardCollection ||
-        !state.billboardCollection.show
-      )
-        return [];
+      if (!state.feed.enabled || !state.renderer?.fleet.attached()) return [];
       const records = state.records.all;
       if (!Array.isArray(records) || !records.length) return [];
 

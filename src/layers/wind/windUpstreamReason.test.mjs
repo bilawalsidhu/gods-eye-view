@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWindLayer, windStats } from './index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { setLocale, translateKnown } from '../../i18n/index.js';
 import { windProxy } from '../../../server/providers/wind.js';
 
@@ -17,8 +18,11 @@ function harness(feed) {
     ].map((name) => [name, () => {}]),
   );
   rendering.getDiagnostics = () => ({});
-  const layer = createWindLayer({ feed, createRendering: () => rendering });
-  layer.init({ container: {} });
+  const layer = createWindLayer({
+    feed,
+    createNativeRendering: () => rendering,
+  });
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   return layer;
 }

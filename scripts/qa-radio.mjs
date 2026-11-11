@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: native flight interception and entity sentinels verify Cesium camera ownership.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * Deterministic browser proof for the Radio companion layer.
  *
@@ -9,12 +11,15 @@
  * independence, restoration without autoplay, responsive UI, and a clean
  * console. Screenshots are written under the gitignored `qa-shots/radio/`.
  *
- * Run: node scripts/qa-radio.mjs --url http://localhost:4173
+ * Run: node scripts/qa-radio.mjs --url http://localhost:4193
  */
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
+import { stations } from './fixtures/layers/radio.mjs';
+import { isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -24,53 +29,17 @@ const option = (name, fallback) => {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
-const APP_URL = option('--url', process.env.QA_BASE_URL || 'http://localhost:4173');
+const APP_URL = option('--url', process.env.QA_BASE_URL);
+if (!APP_URL) throw new Error('Radio QA requires an explicit --url or QA_BASE_URL');
 const APP_ORIGIN = new URL(APP_URL).origin;
+const expectedPreviewErrors = [];
 // Radio owns this harness's keyboard and pointer actions; the welcome dialog
 // has its own acceptance harness and must not intercept those gestures.
 const RADIO_URL = new URL(APP_URL);
 RADIO_URL.searchParams.set('welcome', '0');
 const HEADFUL = args.includes('--headful');
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-const chrome = chromeCandidates.find((candidate) => {
-  try { return fs.existsSync(candidate); } catch { return false; }
-});
 
-const tags = [
-  'news', 'talk', 'weather,emergency', 'public safety,scanner',
-  'aviation,atc', 'marine,maritime', 'traffic,transit',
-  'music,jazz', 'music,rock', 'community',
-];
-const stations = Array.from({ length: 750 }, (_, index) => {
-  const row = Math.floor(index / 30);
-  const column = index % 30;
-  return {
-    id: `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
-    name: index === 360
-      ? '100.3 The River - WQRV - Meridianville/Huntsville, AL'
-      : index === 390
-        ? 'La Zeta (Hermosillo) - 93.9 FM - XHHY - Uniradio - Hermosillo, Sonora'
-        : `QA Radio ${String(index + 1).padStart(3, '0')}`,
-    lat: -72 + row * 6,
-    lon: -174 + column * 12,
-    streamUrl: `https://audio.example.test/${index}.mp3`,
-    homepage: `https://station.example.test/${index}`,
-    tags: tags[index % tags.length].split(','),
-    languages: index === 360 ? ['Spanish'] : ['English'],
-    state: `Region ${row + 1}`,
-    country: 'United States',
-    countryCode: 'US',
-    metadataTrust: 'untrusted-community',
-    codec: index % 2 ? 'AAC' : 'MP3',
-    bitrate: 128,
-  };
-});
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -111,14 +80,13 @@ async function restoreRadioPanels(page, prior) {
 // not on wall-clock sleeps, particularly with software rendering.
 async function settleRadioFrames(page) {
   await page.evaluate(() => new Promise((resolve, reject) => {
-    const scene = window.__godsEyeView.viewer.scene;
     let remaining = 4;
     const timeout = setTimeout(() => { remove(); reject(new Error('Radio rendered-frame deadline exceeded')); }, 10_000);
-    const remove = scene.postRender.addEventListener(() => {
+    const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
       if (--remaining === 0) { remove(); clearTimeout(timeout); resolve(); }
-      else requestAnimationFrame(() => scene.requestRender());
+      else requestAnimationFrame(() => window.__godsEyeView.engine.render.request());
     });
-    scene.requestRender();
+    window.__godsEyeView.engine.render.request();
   }));
 }
 
@@ -130,17 +98,9 @@ async function main() {
     process.exit(2);
   }
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(chrome ? { executablePath: chrome } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox',
-      ...(process.platform === 'darwin'
-        ? ['--use-angle=metal', '--enable-gpu']
-        : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--disable-dev-shm-usage', '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding', '--window-size=1440,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900'],
   });
 
   try {
@@ -185,6 +145,103 @@ async function main() {
         return Promise.resolve();
       };
     });
+    // What Radio draws, read through the globe contract (the layer draws
+    // engine.movers point and sprite sets, src/layers/radio/render/display.js;
+    // there are no Radio Entities, data sources or Cesium clusters any more):
+    // set counts from engine.movers.list(), and what is drawn at a point
+    // from engine.picker.drillPick (each instance's pickId).
+    await page.evaluateOnNewDocument((fixture) => {
+      const SETS = ['radio-stations', 'radio-clusters', 'radio-selected', 'radio-bracket'];
+      const byId = new Map(fixture.map(([id, lat, lon]) => [id, { lat, lon }]));
+      const engine = () => window.__godsEyeView.engine;
+      // WGS84 geodetic → Earth-fixed metres.
+      const world = (lat, lon, height = 0) => {
+        const a = 6378137;
+        const e2 = 6.69437999014e-3;
+        const phi = (lat * Math.PI) / 180;
+        const lambda = (lon * Math.PI) / 180;
+        const n = a / Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
+        return {
+          x: (n + height) * Math.cos(phi) * Math.cos(lambda),
+          y: (n + height) * Math.cos(phi) * Math.sin(lambda),
+          z: (n * (1 - e2) + height) * Math.sin(phi),
+        };
+      };
+      const api = {
+        world,
+        stationPosition(id, height = 2.5) {
+          const station = byId.get(String(id).replace(/^radio:(selected:)?/, ''));
+          return station ? world(station.lat, station.lon, height) : null;
+        },
+        // Instance counts of the Radio mover sets ({} while none exist).
+        counts() {
+          const counts = {};
+          for (const set of engine().movers.list())
+            if (SETS.includes(set.id)) counts[set.id] = set.count;
+          return counts;
+        },
+        anyDrawn() {
+          return Object.values(api.counts()).some((count) => count > 0);
+        },
+        // A world position's canvas point, or null off the canvas.
+        canvasPoint(position) {
+          const e = engine();
+          const screen = position && e.projector.worldToWindow(position);
+          if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return null;
+          const rect = e.host.canvas.getBoundingClientRect();
+          const point = { x: screen.x, y: screen.y };
+          if (point.x < 0 || point.y < 0 || point.x > rect.width || point.y > rect.height) return null;
+          return point;
+        },
+        // The picks at a canvas point: { id, owner } of what the engine drew there.
+        picksAt(point, limit = 16) {
+          if (!point) return [];
+          return (engine().picker.drillPick(point, limit) || []).map((picked) => ({
+            id: picked?.id == null ? null : String(picked.id),
+            owner: picked?.owner ?? null,
+          }));
+        },
+        // The pick id written to the selected marker, while its set is live.
+        selectedMarkerId() {
+          if (api.counts()['radio-selected'] !== 1) return null;
+          const item = window.__qaRadioInstances?.get('radio-selected')?.[0];
+          return item?.pickId ?? null;
+        },
+        // The station ids a pick finds at each fixture station's canvas
+        // point: { front, back } split by whether the station is in front of
+        // the horizon. A station culled behind the globe must not be picked.
+        drawnStations(limit = 4) {
+          const e = engine();
+          const front = new Set();
+          const back = new Set();
+          for (const [id] of byId) {
+            const position = api.stationPosition(id);
+            const point = api.canvasPoint(position);
+            if (!point) continue;
+            const ids = new Set(api.picksAt(point, limit).map((pick) => pick.id));
+            if (!ids.has(`radio:${id}`)) continue;
+            (e.projector.horizonVisible(position) ? front : back).add(id);
+          }
+          return { front: [...front], back: [...back] };
+        },
+        // Renders frames until the engine has drawn `count` of them.
+        frames(count = 2) {
+          const e = engine();
+          return new Promise((resolve) => {
+            let left = count;
+            const timeout = setTimeout(() => { remove(); resolve(); }, 3_000);
+            const remove = e.frames.postRender.addEventListener(() => {
+              if (--left > 0) return void e.render.request('qa-radio');
+              remove();
+              clearTimeout(timeout);
+              resolve();
+            });
+            e.render.request('qa-radio');
+          });
+        },
+      };
+      window.__qaRadioDrawn = api;
+    }, stations.map(({ id, lat, lon }) => [id, lat, lon]));
     await page.setRequestInterception(true);
     let catalogDegraded = false;
     let catalogStations = stations;
@@ -274,6 +331,10 @@ async function main() {
     const failedResponses = [];
     const externalCesiumEndpointFailures = [];
     page.on('console', (message) => {
+      if (isExpectedPreviewSetupError(message, { preview: args.includes('--preview'), baseUrl: APP_URL })) {
+        expectedPreviewErrors.push('/api/setup/status: 404');
+        return;
+      }
       if (message.type() === 'error') {
         const sourceUrl = message.location()?.url || '';
         consoleErrors.push(sourceUrl ? `${message.text()} [${sourceUrl}]` : message.text());
@@ -294,23 +355,38 @@ async function main() {
 
     await page.goto(RADIO_URL.href, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60_000 });
+    await whenSettled(page);
     await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 60_000 });
-    await page.waitForFunction(
-      () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 60_000 },
-    );
+    await whenSettled(page);
     await page.waitForFunction(() => (
       typeof window.__gevQaRegisterLayer === 'function'
       && typeof window.__gevQaUnregisterLayer === 'function'
     ));
     await page.evaluate(() => {
-      window.__godsEyeView.viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       window.__godsEyeView.styleManager.setPanelCollapsed('pp-toggles', true);
       window.__godsEyeView.styleManager.setPanelCollapsed('cctv-panel', true);
       window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', true);
       window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', true);
     });
 
+    await page.evaluate(() => {
+      const movers = window.__godsEyeView.engine.movers;
+      const create = movers.createSet.bind(movers);
+      window.__qaRadioInstances = new Map();
+      movers.createSet = (options) => {
+        const set = create(options);
+        if (!options.id.startsWith('radio-')) return set;
+        const items = [];
+        window.__qaRadioInstances.set(options.id, items);
+        const write = set.set.bind(set);
+        set.set = (index, fields) => {
+          write(index, fields);
+          items[index] = { ...items[index], ...fields };
+        };
+        return set;
+      };
+    });
     const enablePanels = await revealRadioControls(page, 'radio-enable-btn');
     const enableStartedAt = Date.now();
     await page.click('#radio-enable-btn');
@@ -377,7 +453,7 @@ async function main() {
       const selectedBefore = module.getUIState().selected?.id || null;
       const playsBefore = window.__qaRadioPlayCalls.length;
       const camera = gev.viewer.camera;
-      const originalFlyTo = camera.flyTo;
+      const originalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       const flyToCalls = [];
       camera.flyTo = (options) => flyToCalls.push(options);
       const beganTuning = module.beginTuning();
@@ -420,7 +496,7 @@ async function main() {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const result = {
         presentationActive: module.getUIState().presentationActive,
-        markerSourceVisible: gev.viewer.dataSources.getByName('Radio stations')[0]?.show,
+        markerSourceVisible: window.__qaRadioDrawn.anyDrawn(),
         tunerHidden: document.getElementById('radio-tuner').hidden,
         filterDisabled: document.getElementById('radio-filter').disabled,
         prevDisabled: document.getElementById('radio-prev-btn').disabled,
@@ -514,7 +590,7 @@ async function main() {
     const disablingPresentation = await page.evaluate(() => ({
       manager: window.__godsEyeView.dataManager.getLayerLifecycleState('radio'),
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
-      markerSourceVisible: window.__godsEyeView.viewer.dataSources.getByName('Radio stations')[0]?.show,
+      markerSourceVisible: window.__qaRadioDrawn.anyDrawn(),
       full: document.getElementById('radio-enable-btn').textContent,
       layerState: document.getElementById('radio-layer-state').textContent,
       message: document.getElementById('radio-playback-state').textContent,
@@ -550,7 +626,7 @@ async function main() {
       const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
       const radio = document.getElementById('radio-panel');
       scroller.scrollTop = Math.max(0, radio.offsetTop - scroller.clientHeight + 70);
-      const camera = gev.viewer.camera.positionWC;
+      const camera = window.__godsEyeView.engine.camera.pose().position;
       return {
         scrollTop: scroller.scrollTop,
         pageY: window.scrollY,
@@ -583,7 +659,7 @@ async function main() {
     const enablingPresentation = await page.evaluate(() => ({
       manager: window.__godsEyeView.dataManager.getLayerLifecycleState('radio'),
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
-      markerSourceVisible: window.__godsEyeView.viewer.dataSources.getByName('Radio stations')[0]?.show,
+      markerSourceVisible: window.__qaRadioDrawn.anyDrawn(),
       full: document.getElementById('radio-enable-btn').textContent,
       layerState: document.getElementById('radio-layer-state').textContent,
       message: document.getElementById('radio-playback-state').textContent,
@@ -623,7 +699,7 @@ async function main() {
       const viewport = scroller.getBoundingClientRect();
       const directory = document.querySelector('#radio-panel .radio-directory-row').getBoundingClientRect();
       const play = document.getElementById('radio-play-btn').getBoundingClientRect();
-      const camera = gev.viewer.camera.positionWC;
+      const camera = window.__godsEyeView.engine.camera.pose().position;
       return {
         scrollTop: scroller.scrollTop,
         pageY: window.scrollY,
@@ -669,28 +745,24 @@ async function main() {
         { name: 'global', height: 24_200_000, limit: 16 },
         { name: 'near', height: 500_000, limit: 32 },
       ]) {
-        await page.evaluate(({ lon, height }) => {
-          const viewer = window.__godsEyeView.viewer;
-          viewer.camera.cancelFlight();
-          viewer.camera.setView({
-            destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        await evaluateWithGeo(page, async (qaGeo, { lon, height }) => {
+          window.__godsEyeView.engine.camera.cancelFlight();
+          window.__godsEyeView.engine.camera.setView({
+            destination: qaGeo.cartographic.toCartesian({
               longitude: lon * Math.PI / 180,
               latitude: 6 * Math.PI / 180,
               height,
             }),
             orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         }, { lon: spec.lon, height: view.height });
-        await sleep(700);
+        await whenFramesDrawn(page);
         await settleRadioFrames(page);
         const sample = await page.evaluate(async () => {
-          const viewer = window.__godsEyeView.viewer;
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-          const dataSource = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-            .find((item) => item.name === 'Radio stations');
-          const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
-          const { radioStationIdFromPick } = await import('/src/data/radio.js');
+          const drawn = window.__qaRadioDrawn;
+          const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
           return new Promise((resolve) => {
             let removePostRender = null;
             const finish = () => {
@@ -699,26 +771,27 @@ async function main() {
               const paintedSingletonIds = overlay.singletonIds.filter((entryId) => Boolean(getOverlayPaintRect('radio', entryId)));
               const pickableSingletonIds = paintedSingletonIds.filter((entryId) => {
                 const rect = getOverlayPaintRect('radio', entryId);
-                const anchor = rect?.entry?.position
-                  && viewer.scene.cartesianToCanvasCoordinates(rect.entry.position);
+                const anchor = drawn.canvasPoint(rect?.entry?.position);
                 if (!anchor) return false;
-                return (viewer.scene.drillPick(anchor, 16) || [])
-                  .some((picked) => radioStationIdFromPick(picked) === entryId.slice('station:'.length));
+                return drawn.picksAt(anchor, 16)
+                  .some((picked) => picked.id === `radio:${entryId.slice('station:'.length)}`);
               });
               resolve({
                 overlay,
                 host: getWorldOverlayDiagnostics(),
                 paintedSingletonIds,
                 pickableSingletonIds,
-                nativeLabelCount: dataSource.entities.values.filter((entity) => Boolean(entity.label)).length,
+                // Radio draws no text on the globe itself: no engine line or
+                // label belongs to it (the old check counted native entity labels).
+                radioLines: window.__godsEyeView.engine.lines.list().filter((line) => /^radio/.test(line.id)).length,
               });
             };
             const timeout = setTimeout(finish, 500);
-            removePostRender = viewer.scene.postRender.addEventListener(() => {
+            removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
               clearTimeout(timeout);
               finish();
             });
-            viewer.scene.requestRender();
+            window.__godsEyeView.engine.render.request();
           });
         });
         singletonViews.push({ ...spec, ...view, ...sample });
@@ -746,17 +819,17 @@ async function main() {
       }))),
     );
     check(
-      'Radio label allocation stays bounded with no native Cesium entity text across sparse and All views',
+      'Radio label allocation stays bounded with no globe-drawn Radio text across sparse and All views',
       singletonViews.every((sample) => (
         sample.overlay.entryCount <= 65
-        && sample.nativeLabelCount === 0
+        && sample.radioLines === 0
         && sample.host.paintedBySource?.radio > 0
       )),
       JSON.stringify(singletonViews.map((sample) => ({
         category: sample.category,
         view: sample.name,
         entries: sample.overlay.entryCount,
-        nativeLabels: sample.nativeLabelCount,
+        radioLines: sample.radioLines,
         painted: sample.host.paintedBySource?.radio,
       }))),
     );
@@ -1255,13 +1328,10 @@ async function main() {
     });
     await page.select('#radio-filter', 'all');
     const allPalette = await page.evaluate(() => {
-      const source = Array.from({ length: window.__godsEyeView.viewer.dataSources.length }, (_, index) => (
-        window.__godsEyeView.viewer.dataSources.get(index)
-      )).find((item) => item.name === 'Radio stations');
       const colorFor = (index) => {
         const id = `radio:00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
-        const color = source?.entities.getById(id)?.point?.color?.getValue?.();
-        return color ? [color.red, color.green, color.blue].map((value) => Math.round(value * 255)) : null;
+        const station = window.__qaRadioInstances.get('radio-stations')?.find(item => item.pickId === id);
+        return station?.color?.slice(0, 3).map(value => Math.round(value * 255)) ?? null;
       };
       return { news: colorFor(0), talk: colorFor(1), music: colorFor(7) };
     });
@@ -1273,89 +1343,85 @@ async function main() {
         && allPalette.music?.[1] > allPalette.music?.[2],
       JSON.stringify(allPalette),
     );
-    const clusterBadge = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+    const clusterBadge = await evaluateWithGeo(page, async (qaGeo) => {
+      const drawn = window.__qaRadioDrawn;
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
+      // Start from another view, so the clusters at the view below are a new
+      // cohort the host must solve (the old check forced one by switching
+      // Cesium's clustering off and on).
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
+          longitude: 68 * Math.PI / 180,
+          latitude: 7 * Math.PI / 180,
+          height: 24_200_000,
+        }),
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await drawn.frames(3);
       const baselineSolveRevision = getWorldOverlayDiagnostics().solveRevision;
-      const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -98 * Math.PI / 180,
           latitude: 38 * Math.PI / 180,
           height: 18_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      source.clustering.enabled = false;
-      viewer.scene.requestRender();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return new Promise((resolve) => {
-        const originalPixelRange = source.clustering.pixelRange;
-        const timeout = setTimeout(() => {
-          remove();
-          resolve(null);
-        }, 2_000);
-        const remove = source.clustering.clusterEvent.addEventListener(async (entities, cluster) => {
-          clearTimeout(timeout);
-          remove();
-          const native = {
-            count: entities.length,
-            labelShow: cluster.label.show,
-            labelText: cluster.label.text,
-            pointSize: cluster.point.pixelSize,
-            pointMaxDistance: cluster.point.distanceDisplayCondition?.far ?? null,
-          };
-          source.clustering.pixelRange = originalPixelRange;
-          const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-          await new Promise((done) => setTimeout(done, 0));
-          let painted = null;
-          for (let attempt = 0; attempt < 20 && !painted?.rect; attempt += 1) {
-            painted = await new Promise((done) => {
-              let removePostRender = null;
-              const timeout = setTimeout(() => {
-                removePostRender?.();
-                done({ rect: null, host: getWorldOverlayDiagnostics() });
-              }, 150);
-              removePostRender = viewer.scene.postRender.addEventListener(() => {
-                clearTimeout(timeout);
-                removePostRender();
-                const host = getWorldOverlayDiagnostics();
-                let match = null;
-                for (const entryId of radio.getOverlayDiagnostics().clusterIds) {
-                  const rect = getOverlayPaintRect('radio', entryId);
-                  if (rect) match = { entryId, rect };
-                }
-                done({
-                  expectedEntryId: match?.entryId || null,
-                  rect: match ? { x: match.rect.x, y: match.rect.y, w: match.rect.w, h: match.rect.h } : null,
-                  host,
-                });
-              });
-              viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
+      const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
+      // The layer clusters on screen itself now (render/display.js,
+      // ../screenClusters.js) into the radio-clusters point set; the cluster
+      // text is a shared-host overlay entry. There is no Cesium cluster
+      // label or point to read: a painted cluster entry's anchor must pick
+      // a radio-clusters instance instead.
+      let painted = null;
+      for (let attempt = 0; attempt < 20 && !painted?.rect; attempt += 1) {
+        painted = await new Promise((done) => {
+          let removePostRender = null;
+          const timeout = setTimeout(() => {
+            removePostRender?.();
+            done({ rect: null, host: getWorldOverlayDiagnostics() });
+          }, 150);
+          removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
+            clearTimeout(timeout);
+            removePostRender();
+            const host = getWorldOverlayDiagnostics();
+            let match = null;
+            for (const entryId of radio.getOverlayDiagnostics().clusterIds) {
+              const rect = getOverlayPaintRect('radio', entryId);
+              if (rect) match = { entryId, rect };
+            }
+            done({
+              expectedEntryId: match?.entryId || null,
+              rect: match ? { x: match.rect.x, y: match.rect.y, w: match.rect.w, h: match.rect.h } : null,
+              position: match?.rect?.entry?.position || null,
+              host,
             });
-          }
-          resolve({
-            native,
-            baselineSolveRevision,
-            expectedEntryId: painted?.expectedEntryId || null,
-            rect: painted?.rect || null,
-            source: radio.getOverlayDiagnostics(),
-            host: painted?.host || getWorldOverlayDiagnostics(),
           });
+          window.__godsEyeView.engine.render.request();
         });
-        source.clustering.enabled = true;
-        viewer.scene.requestRender();
-      });
+      }
+      const position = typeof painted?.position === 'function' ? painted.position() : painted?.position;
+      const anchor = drawn.canvasPoint(position);
+      const clusterPick = drawn.picksAt(anchor, 16).find((picked) => picked.owner === 'radio-clusters') || null;
+      return {
+        drawn: drawn.counts(),
+        clusterPick,
+        radioLines: window.__godsEyeView.engine.lines.list().filter((line) => /^radio/.test(line.id)).length,
+        baselineSolveRevision,
+        expectedEntryId: painted?.expectedEntryId || null,
+        rect: painted?.rect || null,
+        source: radio.getOverlayDiagnostics(),
+        host: painted?.host || getWorldOverlayDiagnostics(),
+      };
     });
     check(
       'Radio cluster text is native-free and painted through the bounded shared host',
-      clusterBadge?.native?.labelShow === false
-        && clusterBadge?.native?.labelText === ''
-        && clusterBadge?.native?.pointSize >= 14
-        && clusterBadge?.native?.pointMaxDistance === 50_000_000
+      clusterBadge?.drawn?.['radio-clusters'] > 0
+        && clusterBadge?.radioLines === 0
+        && /^radio:/.test(clusterBadge?.clusterPick?.id || '')
         && clusterBadge?.source?.clusterTexts?.some((text) => /^\d+\s+[A-Z]/.test(text))
         && clusterBadge?.source?.entryCount <= 65
         && clusterBadge?.host?.entriesBySource?.radio === clusterBadge?.source?.entryCount
@@ -1364,67 +1430,56 @@ async function main() {
         && clusterBadge?.rect?.h > 0,
       JSON.stringify(clusterBadge),
     );
-    await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: 68 * Math.PI / 180,
           latitude: 7 * Math.PI / 180,
           height: 24_200_000,
         }),
         orientation: { heading: 15 * Math.PI / 180, pitch: -Math.PI / 2, roll: 0 },
       });
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 500));
     });
     await settleRadioFrames(page);
-    const highGlobalClusterLabels = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const highGlobalClusterLabels = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const ellipsoid = qaGeo.ellipsoid.WGS84;
+      const { getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
       const source = radio.getOverlayDiagnostics();
-      const cameraPosition = viewer.camera.positionWC;
+      const cameraPosition = window.__godsEyeView.engine.camera.pose().position;
       const cameraRadius = Math.hypot(cameraPosition.x, cameraPosition.y, cameraPosition.z);
       const horizonDistance = Math.sqrt(Math.max(
         0,
         cameraRadius * cameraRadius - ellipsoid.maximumRadius * ellipsoid.maximumRadius,
       ));
-      const points = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations')?.clustering?._clusterPointCollection;
+      // The cluster points are the radio-clusters mover set; pick at each
+      // painted cluster entry's anchor (nearest the centre first) and accept
+      // only a radio-clusters instance.
+      const drawn = window.__qaRadioDrawn;
+      const { getPaintRect: getOverlayPaintRect } = window.__gevWorldOverlay;
       let clusterPoint = null;
-      // Pool order is not visibility order after a camera change. Choose an
-      // on-screen point independently of the native pick result being tested.
-      const visiblePoints = [];
-      for (let index = 0; index < (points?.length || 0); index += 1) {
-        const point = points.get(index);
-        if (!point?.show || !Array.isArray(point.id) || !point.id.length) continue;
-        const anchor = viewer.scene.cartesianToCanvasCoordinates(point.position);
-        if (!anchor) continue;
-        if (anchor.x < 0 || anchor.y < 0 || anchor.x > viewer.canvas.clientWidth || anchor.y > viewer.canvas.clientHeight) continue;
-        visiblePoints.push({ point, anchor });
-      }
-      visiblePoints.sort((a, b) => (
-        Math.hypot(a.anchor.x - viewer.canvas.clientWidth / 2, a.anchor.y - viewer.canvas.clientHeight / 2)
-        - Math.hypot(b.anchor.x - viewer.canvas.clientWidth / 2, b.anchor.y - viewer.canvas.clientHeight / 2)
-      ));
-      if (visiblePoints.length) {
-        const { point, anchor } = visiblePoints[0];
-        const exactPick = (viewer.scene.drillPick(anchor, 16) || []).find((picked) => (
-          picked?.primitive === point && picked?.id === point.id
-        ));
+      const width = window.__godsEyeView.engine.host.canvas.clientWidth;
+      const height = window.__godsEyeView.engine.host.canvas.clientHeight;
+      const anchors = source.clusterIds
+        .map((entryId) => getOverlayPaintRect('radio', entryId)?.entry?.position)
+        .map((position) => drawn.canvasPoint(typeof position === 'function' ? position() : position))
+        .filter(Boolean)
+        .sort((a, b) => Math.hypot(a.x - width / 2, a.y - height / 2) - Math.hypot(b.x - width / 2, b.y - height / 2));
+      if (anchors.length) {
+        const pick = drawn.picksAt(anchors[0], 16).find((picked) => picked.owner === 'radio-clusters');
         clusterPoint = {
-          maxDistance: point.distanceDisplayCondition?.far ?? null,
-          pickable: Boolean(exactPick),
+          drawn: drawn.counts()['radio-clusters'] ?? 0,
+          pickable: Boolean(pick),
         };
       }
       return {
         source,
         host: getWorldOverlayDiagnostics(),
-        altitude: viewer.camera.positionCartographic.height,
+        altitude: window.__godsEyeView.engine.camera.pose().cartographic.height,
         horizonDistance,
         horizonDistanceAlpha: distanceFade(horizonDistance, { maxDistance: 50_000_000 }),
         clusterPoint,
@@ -1437,23 +1492,21 @@ async function main() {
         && highGlobalClusterLabels.host.projectedCount > 0
         && highGlobalClusterLabels.host.paintedBySource?.radio > 0
         && highGlobalClusterLabels.horizonDistanceAlpha === 1
-        && highGlobalClusterLabels.clusterPoint?.maxDistance === 50_000_000
+        && highGlobalClusterLabels.clusterPoint?.drawn > 0
         && highGlobalClusterLabels.clusterPoint?.pickable,
       JSON.stringify(highGlobalClusterLabels),
     );
     await page.screenshot({ path: path.join(SHOTS_DIR, 'high-global-all-labels.png') });
-    const clusterContinuity = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const clusterContinuity = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const paintedClusters = () => new Promise((resolve) => {
         let removePostRender = null;
         const timeout = setTimeout(() => {
           removePostRender?.();
           resolve({ clusters: [], fadingCount: -1, host: null, source: null });
         }, 500);
-        removePostRender = viewer.scene.postRender.addEventListener(() => {
+        removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           clearTimeout(timeout);
           removePostRender();
           const source = radio.getOverlayDiagnostics();
@@ -1474,20 +1527,20 @@ async function main() {
             source,
           });
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       });
       const longitudes = [-25, -24, -23, -22, -23, -24, -25];
       const samples = [];
       for (const longitude of longitudes) {
-        viewer.camera.setView({
-          destination: ellipsoid.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: longitude * Math.PI / 180,
             latitude: 38 * Math.PI / 180,
             height: 10_000_000,
           }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
         for (const delay of [50, 100, 200, 350]) {
           await new Promise((resolve) => setTimeout(resolve, delay));
           samples.push({ longitude, delay, ...(await paintedClusters()) });
@@ -1542,11 +1595,10 @@ async function main() {
       JSON.stringify(clusterContinuity),
     );
     const directoryRefreshContinuity = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const before = radio.getOverlayDiagnostics().clusterMemberships;
       await radio.update();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 900));
       const after = radio.getOverlayDiagnostics().clusterMemberships;
       const beforeByMembership = new Map(before.map((entry) => [entry.membershipId, entry.entryId]));
@@ -2372,7 +2424,7 @@ async function main() {
     await page.evaluate(() => {
       const camera = window.__godsEyeView.viewer.camera;
       window.__qaFirstPlayFlyToCalls = [];
-      window.__qaFirstPlayOriginalFlyTo = camera.flyTo;
+      window.__qaFirstPlayOriginalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       camera.flyTo = (options) => window.__qaFirstPlayFlyToCalls.push(options);
     });
     const firstPlayPanels = await revealRadioControls(page, 'radio-play-btn');
@@ -2417,11 +2469,10 @@ async function main() {
     check('first Play never moves the camera', firstPlay.flyToCalls === 0, `${firstPlay.flyToCalls} flyTo calls`);
 
     await page.select('#radio-filter', 'news');
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -98 * Math.PI / 180,
           latitude: 38 * Math.PI / 180,
           height: 18_000_000,
@@ -2429,31 +2480,30 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     });
-    await sleep(700);
+    await whenFramesDrawn(page);
+    await settleRadioFrames(page);
     const newsClusterTarget = await page.evaluate(() => {
-      const gev = window.__godsEyeView;
-      const source = Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      const points = source.clustering._clusterPointCollection;
-      for (let index = 0; index < (points?.length || 0); index += 1) {
-        const point = points.get(index);
-        if (!point.show || !Array.isArray(point.id) || !point.id.length) continue;
-        const canvasPoint = gev.viewer.scene.cartesianToCanvasCoordinates(point.position);
+      // A drawn cluster: a painted cluster entry whose anchor picks a
+      // radio-clusters instance. Its pickId names the cluster's first
+      // station, which a click on it plays.
+      const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
+      const drawn = window.__qaRadioDrawn;
+      const { getPaintRect: getOverlayPaintRect } = window.__gevWorldOverlay;
+      const { clusterIds } = radio.getOverlayDiagnostics();
+      for (const entryId of clusterIds) {
+        const position = getOverlayPaintRect('radio', entryId)?.entry?.position;
+        const canvasPoint = drawn.canvasPoint(typeof position === 'function' ? position() : position);
         if (!canvasPoint) continue;
+        const pick = drawn.picksAt(canvasPoint, 16).find((picked) => picked.owner === 'radio-clusters');
+        if (!pick) continue;
         return {
           x: canvasPoint.x,
           y: canvasPoint.y,
-          firstId: String(point.id[0]?.id || '').replace(/^radio:/, ''),
-          pointIds: point.id.map((entity) => entity.id),
+          firstId: pick.id.replace(/^radio:/, ''),
+          pointIds: [pick.id],
         };
       }
-      return {
-        missing: true,
-        points: Array.from({ length: points?.length || 0 }, (_, index) => ({
-          show: points.get(index).show,
-          pointIds: Array.isArray(points.get(index)?.id) ? points.get(index).id.length : 0,
-        })),
-      };
+      return { missing: true, clusterIds, drawn: drawn.counts() };
     });
     if (!newsClusterTarget.missing) {
       await page.mouse.click(newsClusterTarget.x, newsClusterTarget.y);
@@ -2477,7 +2527,7 @@ async function main() {
     );
 
     await page.select('#radio-filter', 'weather');
-    await sleep(700);
+    await whenFramesDrawn(page);
     const weatherCluster = await page.evaluate(() => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       return { texts: radio.getOverlayDiagnostics().clusterTexts };
@@ -2529,19 +2579,18 @@ async function main() {
     );
     const idleHorizonScans = await page.evaluate(async () => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const camera = window.__godsEyeView.viewer.camera;
-      camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       await new Promise((resolve) => setTimeout(resolve, 350));
       const positionBefore = {
-        x: camera.positionWC.x,
-        y: camera.positionWC.y,
-        z: camera.positionWC.z,
+        x: window.__godsEyeView.engine.camera.pose().position.x,
+        y: window.__godsEyeView.engine.camera.pose().position.y,
+        z: window.__godsEyeView.engine.camera.pose().position.z,
       };
       const before = radio.getStats().horizonScans;
       await new Promise((resolve) => setTimeout(resolve, 850));
-      const dx = camera.positionWC.x - positionBefore.x;
-      const dy = camera.positionWC.y - positionBefore.y;
-      const dz = camera.positionWC.z - positionBefore.z;
+      const dx = window.__godsEyeView.engine.camera.pose().position.x - positionBefore.x;
+      const dy = window.__godsEyeView.engine.camera.pose().position.y - positionBefore.y;
+      const dz = window.__godsEyeView.engine.camera.pose().position.z - positionBefore.z;
       return {
         before,
         after: radio.getStats().horizonScans,
@@ -2651,33 +2700,41 @@ async function main() {
         && slider.getBoundingClientRect().width > 0;
     });
 
-    const horizon = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      const visibleIds = () => source.entities.values.filter((entity) => entity.show).map((entity) => entity.id);
+    const horizon = await evaluateWithGeo(page, async (qaGeo) => {
+      const drawn = window.__qaRadioDrawn;
+      // What is drawn, through the engine's picks at every fixture station's
+      // canvas point: a station behind the globe projects onto the canvas
+      // too (the point sets draw without a depth test), so a pick of one
+      // there means it was not culled.
       const setView = (lon, lat = 0) => {
-        viewer.camera.cancelFlight();
-        viewer.camera.setView({
-          destination: ellipsoid.cartographicToCartesian({ longitude: lon * Math.PI / 180, latitude: lat * Math.PI / 180, height: 2_000_000 }),
+        window.__godsEyeView.engine.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({ longitude: lon * Math.PI / 180, latitude: lat * Math.PI / 180, height: 2_000_000 }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
+        window.__godsEyeView.engine.render.request();
       };
       setView(-54);
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const front = visibleIds();
+      await drawn.frames(3);
+      const front = drawn.drawnStations();
       setView(180, -2);
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const back = visibleIds();
-      const frontSet = new Set(front);
+      await drawn.frames(3);
+      const back = drawn.drawnStations();
+      const frontSet = new Set(front.front);
       return {
-        front: front.length,
-        back: back.length,
-        changed: back.some((id) => !frontSet.has(id)),
+        front: front.front.length,
+        back: back.front.length,
+        farSidePicked: front.back.length + back.back.length,
+        changed: back.front.some((id) => !frontSet.has(id)),
       };
     });
-    check('far-side markers are horizon culled', horizon.front > 0 && horizon.front < 750 && horizon.back > 0 && horizon.back < 750, `${horizon.front}/${horizon.back} visible`);
+    check(
+      'far-side markers are horizon culled',
+      horizon.front > 0 && horizon.front < 750 && horizon.back > 0 && horizon.back < 750 && horizon.farSidePicked === 0,
+      `${horizon.front}/${horizon.back} drawn in front, ${horizon.farSidePicked} picked behind the globe`,
+    );
     check('horizon visibility follows camera hemisphere', horizon.changed);
 
     await page.select('#radio-filter', 'all');
@@ -2702,8 +2759,7 @@ async function main() {
         buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
       }));
       const snapshot = () => {
-        const markerId = gev.viewer.entities.values
-          .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
+        const markerId = window.__qaRadioDrawn.selectedMarkerId();
         return {
           slot: Number(slider.value),
           markerId,
@@ -2807,7 +2863,7 @@ async function main() {
         buttons: type === 'pointercancel' || type === 'pointerup' ? 0 : 1,
       }));
       const camera = gev.viewer.camera;
-      const originalFlyTo = camera.flyTo;
+      const originalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       const flyToCalls = [];
       camera.flyTo = (options) => flyToCalls.push(options);
       const before = {
@@ -2823,8 +2879,7 @@ async function main() {
       // The tuner renders from the Radio store; let Vue patch before reading.
       await Promise.resolve();
       const shiftedSlot = Number(slider.value);
-      const previewBeforeCancel = gev.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
+      const previewBeforeCancel = window.__qaRadioDrawn.selectedMarkerId();
       const flyToCallsBeforeCancel = flyToCalls.length;
       pointer('pointercancel', targetIndex);
       await Promise.resolve();
@@ -2840,10 +2895,7 @@ async function main() {
         tuningActive: afterState.tuningActive,
       };
       const flyToCallsAfterCancel = flyToCalls.length;
-      const selectedEntity = () => gev.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:')) || null;
-      const restoredEntity = selectedEntity();
-      const previewId = restoredEntity?.id || null;
+      const previewId = window.__qaRadioDrawn.selectedMarkerId();
       after.previewId = previewId;
       const filterControl = document.getElementById('radio-filter');
       const changedFilter = afterState.filter === 'news' ? 'all' : 'news';
@@ -2853,13 +2905,15 @@ async function main() {
       filterControl.value = changedFilter;
       filterControl.dispatchEvent(new Event('change', { bubbles: true }));
       const changedFilterState = radio.getUIState();
-      const changedFilterEntity = selectedEntity();
+      // The marker is an instance of the radio-selected set: whether the
+      // layer rebuilt it is not observable through the contract (the old
+      // check compared Entity objects), only which station it is drawn on.
+      const changedFilterEntity = window.__qaRadioDrawn.selectedMarkerId();
       const changedFilterCleanup = {
         filter: changedFilterState.filter,
         restoredStationId: changedFilterState.tuningRestoredStationId,
         selectedId: changedFilterState.selected?.id || null,
-        entityRebuilt: Boolean(changedFilterEntity && changedFilterEntity !== restoredEntity),
-        entityId: changedFilterEntity?.id || null,
+        entityId: changedFilterEntity,
         snapshotPreserved: radio.getAcceptedCatalogSnapshot() === changedFilterSnapshot,
         playDelta: window.__qaRadioPlayCalls.length - changedFilterPlays,
         cameraDelta: flyToCalls.length - changedFilterCameraMoves,
@@ -2867,14 +2921,13 @@ async function main() {
       const sameFilterBegan = radio.beginTuning();
       const sameFilterCancelled = radio.cancelTuning();
       const sameFilterRestoredState = radio.getUIState();
-      const sameFilterRestoredEntity = selectedEntity();
       const sameFilterSnapshot = radio.getAcceptedCatalogSnapshot();
       const sameFilterPlays = window.__qaRadioPlayCalls.length;
       const sameFilterCameraMoves = flyToCalls.length;
       filterControl.value = sameFilterRestoredState.filter;
       filterControl.dispatchEvent(new Event('change', { bubbles: true }));
       const sameFilterState = radio.getUIState();
-      const sameFilterEntity = selectedEntity();
+      const sameFilterEntity = window.__qaRadioDrawn.selectedMarkerId();
       const sameFilterCleanup = {
         began: sameFilterBegan,
         cancelled: sameFilterCancelled,
@@ -2882,8 +2935,7 @@ async function main() {
         restoredAfter: sameFilterState.tuningRestoredStationId,
         filter: sameFilterState.filter,
         selectedId: sameFilterState.selected?.id || null,
-        entityRebuilt: Boolean(sameFilterEntity && sameFilterEntity !== sameFilterRestoredEntity),
-        entityId: sameFilterEntity?.id || null,
+        entityId: sameFilterEntity,
         snapshotPreserved: radio.getAcceptedCatalogSnapshot() === sameFilterSnapshot,
         playDelta: window.__qaRadioPlayCalls.length - sameFilterPlays,
         cameraDelta: flyToCalls.length - sameFilterCameraMoves,
@@ -2923,11 +2975,10 @@ async function main() {
       JSON.stringify(tunerCancelRestore),
     );
     check(
-      'accepted changed-filter action clears and rebuilds the cancel-restored marker without side effects',
+      'accepted changed-filter action clears the cancel-restored marker onto the selection without side effects',
       tunerCancelRestore.changedFilterCleanup.filter === tunerCancelRestore.changedFilter
         && tunerCancelRestore.changedFilterCleanup.restoredStationId === null
         && tunerCancelRestore.changedFilterCleanup.selectedId === tunerCancelRestore.before.selectedId
-        && tunerCancelRestore.changedFilterCleanup.entityRebuilt
         && tunerCancelRestore.changedFilterCleanup.entityId === `radio:selected:${tunerCancelRestore.before.selectedId}`
         && tunerCancelRestore.changedFilterCleanup.snapshotPreserved
         && tunerCancelRestore.changedFilterCleanup.playDelta === 0
@@ -2935,14 +2986,13 @@ async function main() {
       JSON.stringify(tunerCancelRestore.changedFilterCleanup),
     );
     check(
-      'accepted same-filter action clears and rebuilds the cancel-restored marker without side effects',
+      'accepted same-filter action clears the cancel-restored marker onto the selection without side effects',
       tunerCancelRestore.sameFilterCleanup.began
         && tunerCancelRestore.sameFilterCleanup.cancelled
         && tunerCancelRestore.sameFilterCleanup.restoredBefore === tunerCancelRestore.before.selectedId
         && tunerCancelRestore.sameFilterCleanup.restoredAfter === null
         && tunerCancelRestore.sameFilterCleanup.filter === tunerCancelRestore.changedFilter
         && tunerCancelRestore.sameFilterCleanup.selectedId === tunerCancelRestore.before.selectedId
-        && tunerCancelRestore.sameFilterCleanup.entityRebuilt
         && tunerCancelRestore.sameFilterCleanup.entityId === `radio:selected:${tunerCancelRestore.before.selectedId}`
         && tunerCancelRestore.sameFilterCleanup.snapshotPreserved
         && tunerCancelRestore.sameFilterCleanup.playDelta === 0
@@ -3127,7 +3177,7 @@ async function main() {
     await page.mouse.down();
     await page.mouse.move(tunerCommitTarget.targetX, tunerCommitTarget.y, { steps: 12 });
     await page.mouse.up();
-    await sleep(650);
+    await whenFramesDrawn(page);
     const tunerCommit = await page.evaluate((target) => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
@@ -3236,7 +3286,7 @@ async function main() {
             && sample.ratio >= microDragSamples[index - 1].ratio)),
       JSON.stringify(microDragSamples),
     );
-    const viewportTuner = await page.evaluate(async (selectedId) => {
+    const viewportTuner = await evaluateWithGeo(page, async (qaGeo, selectedId) => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const before = {
@@ -3245,11 +3295,11 @@ async function main() {
         selectedIndex: style._radioControls._radioTunerStations.findIndex((station) => station.id === selectedId),
         needle: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
       };
-      const current = gev.viewer.camera.positionCartographic;
+      const current = window.__godsEyeView.engine.camera.pose().cartographic;
       const oppositeLongitude = ((current.longitude + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
-      gev.viewer.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
-      gev.viewer.camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.host.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: oppositeLongitude,
           latitude: -current.latitude,
           height: 2_000_000,
@@ -3292,7 +3342,7 @@ async function main() {
       };
     });
     await page.$eval('#radio-next-btn', (button) => button.click());
-    await sleep(1500);
+    await whenFramesDrawn(page);
     const nextNeedleAfter = await page.evaluate(() => {
       const style = window.__godsEyeView.styleManager;
       const selectedId = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id;
@@ -3327,8 +3377,7 @@ async function main() {
         cancelable: true,
         key: value,
       }));
-      const markerId = () => gev.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
+      const markerId = () => window.__qaRadioDrawn.selectedMarkerId();
       const startIndex = Number(slider.value);
       const expectedIndex = Math.min(style._radioControls._radioTunerStations.length - 1, startIndex + 1);
       const expectedId = style._radioControls._radioTunerStations[expectedIndex]?.id || null;
@@ -3428,8 +3477,7 @@ async function main() {
         centerIndex,
         slot: Number(slider.value),
         ratio: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
-        markerId: gev.viewer.entities.values
-          .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null,
+        markerId: window.__qaRadioDrawn.selectedMarkerId(),
         expectedId: style._radioControls._radioTunerStations[centerIndex]?.id || null,
       };
       slider.dispatchEvent(new PointerEvent('pointercancel', {
@@ -3489,10 +3537,9 @@ async function main() {
         && fullPoolNavigation.afterNextWrap === fullPoolNavigation.expectedNextWrap,
       JSON.stringify(fullPoolNavigation),
     );
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: 2_000_000,
@@ -3500,7 +3547,7 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     });
-    await sleep(500);
+    await whenFramesDrawn(page);
     // Next left the Radio stopped; a release plays only from an active stream.
     await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.togglePlayback({ origin: 'user' }));
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
@@ -3551,12 +3598,12 @@ async function main() {
     );
     await page.select('#radio-filter', 'news');
 
-    const markerTarget = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const markerTarget = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      source.clustering.enabled = false;
+      const drawn = window.__qaRadioDrawn;
+      // Radio clusters on screen in its own display now (no Cesium
+      // clustering to switch off); at this 500 km view the News stations
+      // are hundreds of pixels apart, so none cluster.
       const selectedId = radio.getUIState().selected?.id || null;
       if (selectedId) {
         radio.selectStation(selectedId, {
@@ -3565,31 +3612,28 @@ async function main() {
           origin: 'programmatic',
         });
       }
-      viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       const markerView = {
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -174 * Math.PI / 180,
           latitude: 6 * Math.PI / 180,
           height: 500_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       };
-      viewer.camera.setView(markerView);
+      window.__godsEyeView.engine.camera.setView(markerView);
       await new Promise((resolve) => {
         let removePostRender = null;
-        removePostRender = viewer.scene.postRender.addEventListener(() => {
+        removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           removePostRender?.();
           resolve();
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       });
-      // Cesium clears its private cluster collections during the rendered
-      // disabled-state update. Publish the same-filter singleton overlay only
-      // after that frame so this harness mutation cannot leak stale clusters.
       radio.setFilter('news');
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       return new Promise((resolve) => {
         let removePostRender = null;
         let timeout = null;
@@ -3600,38 +3644,37 @@ async function main() {
           resolve(result);
         };
         const probe = () => {
-          const camera = viewer.camera.positionCartographic;
+          const camera = window.__godsEyeView.engine.camera.pose().cartographic;
           const longitude = camera.longitude * 180 / Math.PI;
           const latitude = camera.latitude * 180 / Math.PI;
           if (Math.abs(longitude + 174) > 0.5 || Math.abs(latitude - 6) > 0.5) {
-            viewer.camera.cancelFlight();
-            viewer.camera.setView(markerView);
-            viewer.scene.requestRender();
+            window.__godsEyeView.engine.camera.cancelFlight();
+            window.__godsEyeView.engine.camera.setView(markerView);
+            window.__godsEyeView.engine.render.request();
             return;
           }
           const diagnostics = radio.getOverlayDiagnostics();
           const singletonIds = new Set(diagnostics.singletonIds);
-          let visibleEntityCount = 0;
-          let singletonEntityCount = 0;
+          // A singleton label painted on the shared host whose station point
+          // a pick at the label's anchor finds (the station's own pickId).
+          let pickableSingletonCount = 0;
           let paintedSingletonCount = 0;
-          for (const entity of source.entities.values) {
-            if (!entity.show) continue;
-            visibleEntityCount += 1;
-            const id = String(entity.id).slice('radio:'.length);
-            const overlayId = `station:${id}`;
-            if (!singletonIds.has(overlayId)) continue;
-            singletonEntityCount += 1;
-            const position = entity.position?.getValue(viewer.clock.currentTime);
-            const canvas = position && viewer.scene.cartesianToCanvasCoordinates(position);
+          for (const overlayId of singletonIds) {
+            const id = overlayId.slice('station:'.length);
             const paintRect = getOverlayPaintRect('radio', overlayId);
-            if (paintRect) paintedSingletonCount += 1;
-            if (paintRect && canvas?.x > 300 && canvas.x < 1100 && canvas.y > 100 && canvas.y < 800) {
+            if (!paintRect) continue;
+            paintedSingletonCount += 1;
+            const canvas = drawn.canvasPoint(paintRect.entry?.position);
+            const pickable = drawn.picksAt(canvas, 16)
+              .some((picked) => picked.owner === 'radio-stations' && picked.id === `radio:${id}`);
+            if (pickable) pickableSingletonCount += 1;
+            if (pickable && canvas.x > 300 && canvas.x < 1100 && canvas.y > 100 && canvas.y < 800) {
               finish({
                 found: true,
                 id,
                 x: canvas.x,
                 y: canvas.y,
-                ownsNativeLabel: Boolean(entity.label),
+                pickable,
                 labelPainted: true,
                 singletonTexts: diagnostics.singletonTexts,
               });
@@ -3641,8 +3684,8 @@ async function main() {
           lastObservation = {
             found: false,
             filter: radio.getUIState().filter,
-            visibleEntityCount,
-            singletonEntityCount,
+            drawn: drawn.counts(),
+            pickableSingletonCount,
             paintedSingletonCount,
             singletonIds: diagnostics.singletonIds,
             singletonTexts: diagnostics.singletonTexts,
@@ -3650,22 +3693,22 @@ async function main() {
             overlayEntryCount: diagnostics.entryCount,
             worldOverlay: getWorldOverlayDiagnostics(),
             camera: {
-              longitude: viewer.camera.positionCartographic.longitude * 180 / Math.PI,
-              latitude: viewer.camera.positionCartographic.latitude * 180 / Math.PI,
-              height: viewer.camera.positionCartographic.height,
+              longitude: window.__godsEyeView.engine.camera.pose().cartographic.longitude * 180 / Math.PI,
+              latitude: window.__godsEyeView.engine.camera.pose().cartographic.latitude * 180 / Math.PI,
+              height: window.__godsEyeView.engine.camera.pose().cartographic.height,
             },
           };
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         };
         timeout = setTimeout(() => finish(lastObservation || { found: false, reason: 'no post-render probe' }), 8000);
-        removePostRender = viewer.scene.postRender.addEventListener(probe);
-        viewer.scene.requestRender();
+        removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(probe);
+        window.__godsEyeView.engine.render.request();
       });
     });
     check('Radio exposes a visible marker for click-tolerance QA', markerTarget?.found === true, JSON.stringify(markerTarget));
     check(
-      'the directly pickable singleton point has painted shared-host text and no native label',
-      markerTarget?.labelPainted && !markerTarget?.ownsNativeLabel,
+      'the directly pickable singleton point has painted shared-host text',
+      markerTarget?.labelPainted && markerTarget?.pickable,
       JSON.stringify(markerTarget),
     );
     check(
@@ -3685,14 +3728,13 @@ async function main() {
       check('an offset click within 8px reliably selects the intended Radio dot', offsetSelected === markerTarget.id, offsetSelected);
     }
 
-    await page.evaluate(() => {
+    await evaluateWithGeo(page, async (qaGeo) => {
       const gev = window.__godsEyeView;
-      const camera = gev.viewer.camera;
       const radio = gev.dataManager.layers.get('radio').module;
-      camera.cancelFlight();
-      gev.viewer.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
-      camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.host.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: 2_000_000,
@@ -3700,8 +3742,6 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       radio.stopPlayback();
-      Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations').clustering.enabled = true;
       // Next plays only while a stream is active, so start from a playing station.
       radio.selectStation('00000000-0000-4000-8000-000000000001', { autoplay: true, focus: false });
     });
@@ -3718,12 +3758,12 @@ async function main() {
       window.__qaRadioFailedNearest = false;
       window.__qaRadioDelayNextFailure = true;
       window.__qaRadioFlyToCalls = [];
-      window.__qaRadioOriginalFlyTo = camera.flyTo;
-      window.__qaRadioCameraHeight = camera.positionCartographic.height;
+      window.__qaRadioOriginalFlyTo = window.__godsEyeView.engine.camera.flyTo;
+      window.__qaRadioCameraHeight = window.__godsEyeView.engine.camera.pose().cartographic.height;
       camera.flyTo = (options) => window.__qaRadioFlyToCalls.push(options);
       gev.dataManager.layers.get('flights').enabled = true;
     });
-    await sleep(500);
+    await whenFramesDrawn(page);
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', false);
@@ -3731,7 +3771,7 @@ async function main() {
     });
     await page.waitForSelector('#radio-next-btn', { visible: true });
     await page.evaluate(() => {
-      window.__qaRadioCameraHeight = window.__godsEyeView.viewer.camera.positionCartographic.height;
+      window.__qaRadioCameraHeight = window.__godsEyeView.engine.camera.pose().cartographic.height;
     });
     const radioOnlyNextDispatched = await page.evaluate(() => {
       const button = document.getElementById('radio-next-btn');
@@ -3741,10 +3781,9 @@ async function main() {
     });
     if (!radioOnlyNextDispatched) throw new Error('Radio next button unavailable');
     await page.waitForFunction(() => typeof window.__qaRejectRadioPlay === 'function');
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: 2_400_000,
@@ -3754,14 +3793,11 @@ async function main() {
       window.__qaRejectRadioPlay();
     });
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
-    const playing = await page.evaluate(async () => {
+    const playing = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const viewer = window.__godsEyeView.viewer;
-      const selectedEntity = window.__godsEyeView.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:'));
-      const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const flightTargets = window.__qaRadioFlyToCalls.map(({ destination }) => {
-        const position = viewer.scene.globe.ellipsoid.cartesianToCartographic(destination);
+        const position = qaGeo.cartographic.fromCartesian(destination);
         return {
           lat: position.latitude * 180 / Math.PI,
           lon: position.longitude * 180 / Math.PI,
@@ -3775,11 +3811,11 @@ async function main() {
       flightTargets,
       cameraHeight: window.__qaRadioCameraHeight,
       playLabel: document.getElementById('radio-play-btn').getAttribute('aria-label'),
-      regularMarkerSize: Array.from({ length: window.__godsEyeView.viewer.dataSources.length }, (_, index) => window.__godsEyeView.viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations')?.entities.values[0]?.point?.pixelSize?.getValue(),
-      selectedMarkerSize: selectedEntity?.point?.pixelSize?.getValue(),
-      selectedBracketWidth: selectedEntity?.billboard?.width?.getValue(),
-      selectedOwnsNativeLabel: Boolean(selectedEntity?.label),
+      // The point and bracket sizes are the display's set options
+      // (render/style.js), which the movers do not list; what is drawn is
+      // one selected point and one bracket sprite on the selection.
+      drawn: window.__qaRadioDrawn.counts(),
+      selectedMarkerId: window.__qaRadioDrawn.selectedMarkerId(),
       overlay: radio.getOverlayDiagnostics(),
       host: getWorldOverlayDiagnostics(),
       expectedPrimary: window.__qaRadioExpectedPrimary,
@@ -3815,7 +3851,7 @@ async function main() {
       const run = async (ownerPrefix, buttonId) => {
         const owner = viewer.entities.add({
           id: `qa:${ownerPrefix}:radio-camera-owner`,
-          position: viewer.camera.positionWC.clone(),
+          position: window.__godsEyeView.engine.camera.pose().position,
         });
         owner.gevTrackedId = `${ownerPrefix}:qa-radio-camera-owner`;
         viewer.trackedEntity = owner;
@@ -3831,7 +3867,7 @@ async function main() {
           afterStationId: radio.getUIState().selected?.id || null,
           flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
           trackedIdentityPreserved: viewer.trackedEntity === owner,
-          trackedId: viewer.trackedEntity?.gevTrackedId || null,
+          trackedId: window.__godsEyeView.engine.camera.following()?.label?.id || null,
         };
         viewer.trackedEntity = undefined;
         viewer.entities.remove(owner);
@@ -3865,7 +3901,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       const owner = viewer.entities.add({
         id: 'qa:flights:delayed-radio-fallback-owner',
-        position: viewer.camera.positionWC.clone(),
+        position: window.__godsEyeView.engine.camera.pose().position,
       });
       owner.gevTrackedId = 'flights:qa-delayed-radio-fallback-owner';
       viewer.trackedEntity = owner;
@@ -3880,7 +3916,7 @@ async function main() {
       const result = {
         flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
         trackedIdentityPreserved: viewer.trackedEntity === owner,
-        trackedId: viewer.trackedEntity?.gevTrackedId || null,
+        trackedId: window.__godsEyeView.engine.camera.following()?.label?.id || null,
         selectedId: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id || null,
       };
       viewer.trackedEntity = undefined;
@@ -3896,10 +3932,9 @@ async function main() {
         && Boolean(delayedFallbackOwnership.selectedId),
       JSON.stringify(delayedFallbackOwnership),
     );
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: window.__qaRadioCameraHeight,
@@ -3908,48 +3943,50 @@ async function main() {
       });
     });
     check(
-      'individual Radio dots stay at least half the largest cluster point',
-      playing.regularMarkerSize === 13
-        && playing.regularMarkerSize * 2 >= 26
-        && playing.selectedMarkerSize === 14,
-      `${playing.regularMarkerSize}px / ${playing.selectedMarkerSize}px selected`,
+      'the current station carries a four-corner selection bracket',
+      playing.drawn['radio-selected'] === 1
+        && playing.drawn['radio-bracket'] === 1
+        && playing.selectedMarkerId === `radio:selected:${playing.state.selected?.id}`,
+      JSON.stringify({ drawn: playing.drawn, marker: playing.selectedMarkerId }),
     );
-    check('the current station carries a 40px four-corner selection bracket', playing.selectedBracketWidth === 40, `${playing.selectedBracketWidth}px`);
     check(
-      'selected-station text is published to the protected shared-host lane with no native entity label',
-      !playing.selectedOwnsNativeLabel
-        && playing.overlay.selectedCount === 1
+      'selected-station text is published to the protected shared-host lane',
+      playing.overlay.selectedCount === 1
         && playing.host.entriesBySource?.radio === playing.overlay.entryCount,
       JSON.stringify({ overlay: playing.overlay, host: playing.host.entriesBySource }),
     );
-    const closeSelectedText = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const closeSelectedText = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const selected = radio.getUIState().selected;
       window.__qaRadioVisualView = {
-        position: viewer.camera.positionWC.clone(),
-        direction: viewer.camera.directionWC.clone(),
-        up: viewer.camera.upWC.clone(),
+        position: window.__godsEyeView.engine.camera.pose().position,
+        direction: window.__godsEyeView.engine.camera.pose().direction,
+        up: window.__godsEyeView.engine.camera.pose().up,
       };
-      const destination = viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      const destination = qaGeo.cartographic.toCartesian({
         longitude: selected.lon * Math.PI / 180,
         latitude: selected.lat * Math.PI / 180,
         height: 5_000,
       });
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.setView({
         destination,
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      const selectedEntity = viewer.entities.values
-        .find((entity) => String(entity.id) === `radio:selected:${selected.id}`);
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      // The selected point is drawn when a pick at its anchor finds its
+      // pickId (the old check read the Entity's show).
+      const drawn = window.__qaRadioDrawn;
+      const selectedShown = () => drawn
+        .picksAt(drawn.canvasPoint(drawn.stationPosition(selected.id, 5)), 8)
+        .some((picked) => picked.owner === 'radio-selected' && picked.id === `radio:selected:${selected.id}`);
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const expectedEntryId = `selected:${selected.id}`;
       let painted = null;
-      // Radio's horizon pass reveals the selected entity on its own timer
+      let shown = false;
+      // Radio's horizon pass reveals the selected point on its own timer
       // after the camera jump, so a stationary view waits for both to settle.
       for (
         let attempt = 0;
-        attempt < 20 && !(painted?.rect && selectedEntity?.show === true);
+        attempt < 20 && !(painted?.rect && shown);
         attempt += 1
       ) {
         painted = await new Promise((resolve) => {
@@ -3958,7 +3995,7 @@ async function main() {
             removePostRender?.();
             resolve({ rect: null, host: getWorldOverlayDiagnostics() });
           }, 150);
-          removePostRender = viewer.scene.postRender.addEventListener(() => {
+          removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
             clearTimeout(timeout);
             removePostRender();
             const rect = getOverlayPaintRect('radio', expectedEntryId);
@@ -3967,15 +4004,16 @@ async function main() {
               host: getWorldOverlayDiagnostics(),
             });
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         });
+        shown = selectedShown();
       }
       return {
         expectedEntryId,
         rect: painted?.rect || null,
         host: painted?.host || getWorldOverlayDiagnostics(),
-        selectedEntityShow: selectedEntity?.show,
-        cameraHeight: viewer.camera.positionCartographic.height,
+        selectedEntityShow: shown,
+        cameraHeight: window.__godsEyeView.engine.camera.pose().cartographic.height,
       };
     });
     check(
@@ -3986,22 +4024,19 @@ async function main() {
       JSON.stringify(closeSelectedText),
     );
     await page.screenshot({ path: path.join(SHOTS_DIR, 'selected-label-desktop.png') });
-    const highGlobalSelectedText = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const highGlobalSelectedText = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const selected = radio.getUIState().selected;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (selected.lon + 10) * Math.PI / 180,
           latitude: selected.lat * Math.PI / 180,
           height: 5_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      const selectedEntity = viewer.entities.values
-        .find((entity) => String(entity.id) === `radio:selected:${selected.id}`);
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const drawn = window.__qaRadioDrawn;
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const expectedEntryId = `selected:${selected.id}`;
       let rect = null;
       for (let attempt = 0; attempt < 20 && !rect; attempt += 1) {
@@ -4011,7 +4046,7 @@ async function main() {
             removePostRender?.();
             resolve(null);
           }, 150);
-          removePostRender = viewer.scene.postRender.addEventListener(() => {
+          removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
             clearTimeout(timeout);
             removePostRender();
             const painted = getOverlayPaintRect('radio', expectedEntryId);
@@ -4022,61 +4057,46 @@ async function main() {
               h: painted.h,
             } : null);
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         });
       }
-      const entityPosition = selectedEntity?.position?.getValue?.();
-      const entityAnchor = entityPosition
-        && viewer.scene.cartesianToCanvasCoordinates(entityPosition);
+      // The selected point and its bracket are instances of the
+      // radio-selected and radio-bracket mover sets, both picked as
+      // `radio:selected:<id>`; the pick at the point's anchor is the check.
+      const pickId = `radio:selected:${selected.id}`;
+      const entityPosition = drawn.stationPosition(selected.id, 5);
+      const entityAnchor = drawn.canvasPoint(entityPosition);
       let selectedNativePick = null;
       let selectedPointPick = null;
       let selectedBillboardPick = null;
-      // Retry on the STRICT anchor: waiting only for "any pick" let a
-      // billboard satisfy the loop while the point anchor was still missing.
+      // Retry on the STRICT anchor: waiting only for "any pick" let the
+      // bracket satisfy the loop while the point anchor was still missing.
       for (let attempt = 0; entityAnchor && attempt < 8 && !selectedPointPick; attempt += 1) {
-        const picks = viewer.scene.drillPick(entityAnchor, 16) || [];
-        selectedNativePick = picks.find((picked) => picked?.id === selectedEntity);
-        selectedPointPick = picks.find((picked) => (
-          picked?.id === selectedEntity
-          && String(picked?.primitive?.constructor?.name || '').includes('PointPrimitive')
-        ));
-        selectedBillboardPick = picks.find((picked) => (
-          picked?.id === selectedEntity
-          && String(picked?.primitive?.constructor?.name || '').includes('Billboard')
-        ));
-        if (!selectedPointPick) {
-          await new Promise((resolve) => {
-            const removePostRender = viewer.scene.postRender.addEventListener(() => {
-              removePostRender();
-              resolve();
-            });
-            viewer.scene.requestRender();
-          });
-        }
+        const picks = drawn.picksAt(entityAnchor, 16);
+        selectedNativePick = picks.find((picked) => picked.id === pickId);
+        selectedPointPick = picks.find((picked) => picked.id === pickId && picked.owner === 'radio-selected');
+        selectedBillboardPick = picks.find((picked) => picked.id === pickId && picked.owner === 'radio-bracket');
+        if (!selectedPointPick) await drawn.frames(1);
       }
-      const selectedPointDistance = selectedEntity?.point?.distanceDisplayCondition?.getValue?.();
+      const counts = drawn.counts();
       return {
         rect,
         selectedNativePickable: Boolean(selectedNativePick),
         selectedPointPickable: Boolean(selectedPointPick),
         selectedBillboardPickable: Boolean(selectedBillboardPick),
-        selectedPointMaxDistance: selectedPointDistance?.far ?? null,
-        selectedEntityShow: selectedEntity?.show,
-        selectedBracketVisible: Boolean(
-          selectedEntity?.billboard
-          && selectedEntity.billboard.show?.getValue?.() !== false
-        ),
+        selectedEntityShow: Boolean(selectedPointPick),
+        selectedBracketVisible: counts['radio-bracket'] === 1,
         entityAnchor: entityAnchor ? { x: entityAnchor.x, y: entityAnchor.y } : null,
         entityDistance: entityPosition
           ? Math.hypot(
-            viewer.camera.positionWC.x - entityPosition.x,
-            viewer.camera.positionWC.y - entityPosition.y,
-            viewer.camera.positionWC.z - entityPosition.z,
+            window.__godsEyeView.engine.camera.pose().position.x - entityPosition.x,
+            window.__godsEyeView.engine.camera.pose().position.y - entityPosition.y,
+            window.__godsEyeView.engine.camera.pose().position.z - entityPosition.z,
           )
           : null,
         overlay: radio.getOverlayDiagnostics(),
         host: getWorldOverlayDiagnostics(),
-        cameraHeight: viewer.camera.positionCartographic.height,
+        cameraHeight: window.__godsEyeView.engine.camera.pose().cartographic.height,
       };
     });
     check(
@@ -4086,15 +4106,14 @@ async function main() {
         && highGlobalSelectedText.rect?.h > 0
         && highGlobalSelectedText.selectedEntityShow === true
         && highGlobalSelectedText.selectedBracketVisible
-        && highGlobalSelectedText.selectedPointMaxDistance === 50_000_000
         // The POINT anchor is the invariant: it is what stays pickable out to
-        // the 50,000 km band. Accepting any native pick let the co-located
-        // billboard keep this green after the point anchor regressed.
+        // the 50,000 km band (the display's distance cut; the movers list no
+        // per-set distance, so the old 50,000 km distance-condition read is
+        // gone). Accepting any pick let the co-located bracket keep this
+        // green after the point anchor regressed.
         //
         // `selectedBillboardPickable` is reported for diagnostics but NOT
-        // asserted: measured here it is false — the selection bracket renders
-        // (selectedBracketVisible) without being pickable at the point anchor,
-        // so requiring it would pin a behavior the app does not have.
+        // asserted.
         && highGlobalSelectedText.selectedPointPickable
         && highGlobalSelectedText.selectedNativePickable,
       JSON.stringify(highGlobalSelectedText),
@@ -4105,7 +4124,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.toggleCleanView(true);
       viewer.resize();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     await page.screenshot({ path: path.join(SHOTS_DIR, 'selected-label-mobile.png') });
@@ -4114,19 +4133,18 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.toggleCleanView(false);
       viewer.resize();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
     await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
       const view = window.__qaRadioVisualView;
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.setView({
         destination: view.position,
         orientation: { direction: view.direction, up: view.up },
       });
       delete window.__qaRadioVisualView;
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await whenFramesDrawn(page);
 
     await page.evaluate(() => {
       window.__qaRadioFlyToCalls = [];
@@ -4143,10 +4161,10 @@ async function main() {
       radioOnlyNextClicked,
       `clicked=${radioOnlyNextClicked}`,
     );
-    const radioOnlyFocusCalls = await page.evaluate(() => {
+    const radioOnlyFocusCalls = await evaluateWithGeo(page, async (qaGeo) => {
       const calls = window.__qaRadioFlyToCalls.length;
       const heights = window.__qaRadioFlyToCalls.map((options) => (
-        window.__godsEyeView.viewer.scene.globe.ellipsoid.cartesianToCartographic(options.destination).height
+        qaGeo.cartographic.fromCartesian(options.destination).height
       ));
       window.__godsEyeView.viewer.camera.flyTo = window.__qaRadioOriginalFlyTo;
       delete window.__qaRadioOriginalFlyTo;
@@ -4159,19 +4177,19 @@ async function main() {
       JSON.stringify(radioOnlyFocusCalls),
     );
 
-    const stagedGlobeNavigation = await page.evaluate(async () => {
+    const stagedGlobeNavigation = await evaluateWithGeo(page, async (qaGeo) => {
       const gev = window.__godsEyeView;
       const viewer = gev.viewer;
       const camera = viewer.camera;
       const radio = gev.dataManager.layers.get('radio').module;
       const stationIds = radio.getTunerStations(3).map((station) => station.id);
       if (stationIds.length < 3) throw new Error('Radio recenter QA requires three visible stations');
-      const originalFlyTo = camera.flyTo;
+      const originalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       const calls = [];
       camera.flyTo = (options) => calls.push(options);
       const setCamera = (height, pitchDegrees, headingDegrees = 38) => {
-        camera.setView({
-          destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: -133.9483 * Math.PI / 180,
             latitude: 23.4741 * Math.PI / 180,
             height,
@@ -4182,18 +4200,18 @@ async function main() {
             roll: 0,
           },
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       };
       const completeFlight = (index) => {
         const flight = calls[index];
-        camera.setView({
+        window.__godsEyeView.engine.camera.setView({
           destination: flight.destination,
           orientation: flight.orientation,
         });
         flight.complete?.();
       };
       const describe = (flight) => {
-        const cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(flight.destination);
+        const cartographic = qaGeo.cartographic.fromCartesian(flight.destination);
         return {
           lat: cartographic.latitude * 180 / Math.PI,
           lon: cartographic.longitude * 180 / Math.PI,
@@ -4220,7 +4238,7 @@ async function main() {
       radio.cycleStation(1, { rotate: true, autoplay: false, stationIds });
       const owner = viewer.entities.add({
         id: 'qa:flights:radio-recenter-stage-owner',
-        position: viewer.camera.positionWC.clone(),
+        position: window.__godsEyeView.engine.camera.pose().position,
       });
       owner.gevTrackedId = 'flights:qa-radio-recenter-stage-owner';
       viewer.trackedEntity = owner;
@@ -4450,7 +4468,7 @@ async function main() {
     );
 
     await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', false));
-    await sleep(350);
+    await whenFramesDrawn(page);
     await page.screenshot({ path: path.join(SHOTS_DIR, 'desktop.png') });
     const desktop = await page.$eval('#radio-panel', (element) => {
       const rect = element.getBoundingClientRect();
@@ -4472,7 +4490,7 @@ async function main() {
     await page.click('#radio-play-btn');
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
-    await sleep(500);
+    await whenFramesDrawn(page);
     await page.$eval('#radio-panel', (element) => element.scrollIntoView({ block: 'nearest' }));
     await page.screenshot({ path: path.join(SHOTS_DIR, 'mobile.png') });
     const mobile = await page.$eval('#radio-panel', (element) => {
@@ -4540,10 +4558,12 @@ async function main() {
       failedResponses.slice(0, 3).join(' | '),
     );
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const failures = results.filter((result) => !result.ok).length;
+  const reportPath = option('--report');
+  if (reportPath) fs.writeFileSync(reportPath, JSON.stringify({ pass: failures === 0, checks: results, expectedPreviewErrors }, null, 2) + '\n');
   console.log(`\nRadio QA: ${results.length - failures}/${results.length} passed`);
   console.log(`RESULT: ${results.length - failures} passed, ${failures} failed, 0 skipped`);
   process.exitCode = failures ? 1 : 0;

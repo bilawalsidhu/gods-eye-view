@@ -25,11 +25,11 @@ export function createToast({
       store.publishToast({ ...store.toast, visible: false });
   };
   return {
-    /** @param {string} message */
-    show(message) {
+    /** @param {string} message @param {number} [dwellMs] */
+    show(message, dwellMs = durationMs) {
       store.publishToast({ text: message, visible: true, shown: ++shown });
       clearTimeout(timer);
-      timer = setTimeout(hide, durationMs);
+      timer = setTimeout(hide, dwellMs);
     },
     /** Hide the toast now and drop the timer. */
     hide,

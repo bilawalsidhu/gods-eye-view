@@ -136,7 +136,13 @@ export class ShellFeedback {
     this._trafficSyncFeedbackState = createTrafficSyncFeedbackState();
     this._loadingFeedbackEvent = null;
     this._globalStatusNotice = null;
-    this._loadingFeedbackTicker = this._trafficChipTicker = null;
+    // A persistent notice (the Navara engine notice) that a finite one
+    // covers for its dwell; it comes back when the finite one ends.
+    this._coveredPersistentNotice = null;
+    this._loadingFeedbackTicker =
+      this._trafficChipTicker =
+      this._toastTimer =
+        null;
     this._loadingVisibilityHandler = null;
     this._lastLoadingFeedbackUpdateAt = 0;
     this._lastTrafficChipUpdateAt = 0;
@@ -221,7 +227,8 @@ export class ShellFeedback {
       Number.isFinite(this._globalStatusNotice?.hideAt) &&
       now >= this._globalStatusNotice.hideAt
     ) {
-      this._globalStatusNotice = null;
+      this._globalStatusNotice = this._coveredPersistentNotice;
+      this._coveredPersistentNotice = null;
     }
     // Loading phases and universal notices both have time-driven transitions.
     // Compute this after arbitration: a queued finite notice starts its dwell
@@ -283,10 +290,35 @@ export class ShellFeedback {
     this._publishLoading({ hidden: true, state: null });
   }
 
+  /**
+   * Withdraw a persistent notice (the engine's own, when that engine
+   * detaches); a finite notice showing now stays for its dwell.
+   */
+  clearPersistentNotice() {
+    this._coveredPersistentNotice = null;
+    if (this._globalStatusNotice?.persistent !== true) return;
+    this._globalStatusNotice = null;
+    this._updateGlobalLoadingFeedback(performance.now());
+  }
+
   _showGlobalStatusNotice(message, options = {}) {
     if (this.destroyed) return;
     const now = performance.now();
-    this._globalStatusNotice = createGlobalStatusNotice(message, now, options);
+    const next = createGlobalStatusNotice(message, now, options);
+    const current = this._globalStatusNotice;
+    if (next?.persistent && current && !current.persistent) {
+      // A persistent notice arriving under a live finite one (the engine
+      // notice after a share link's "kept in the link") waits for it.
+      this._coveredPersistentNotice = next;
+      this._updateGlobalLoadingFeedback(now);
+      return;
+    }
+    if (next && !next.persistent) {
+      if (current?.persistent) this._coveredPersistentNotice = current;
+    } else {
+      this._coveredPersistentNotice = null;
+    }
+    this._globalStatusNotice = next;
     this._updateGlobalLoadingFeedback(now);
   }
 
@@ -342,9 +374,9 @@ export class ShellFeedback {
     this._loadingFeedbackTicker = null;
   }
 
-  _showToast(message) {
+  _showToast(message, durationMs) {
     if (this.destroyed) return;
-    this._toast.show(message);
+    this._toast.show(message, durationMs);
   }
   destroy() {
     if (this.destroyed) return;

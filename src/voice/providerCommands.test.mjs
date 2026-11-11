@@ -1,3 +1,4 @@
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 // Imports intentionally target the candidate, never the immutable reference.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -179,6 +180,7 @@ function compositionFixture(
   const position = { x: 6379137, y: 0, z: 0 };
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas,
     camera: {
       positionWC: position,
       positionCartographic: { height: state.height },
@@ -208,6 +210,7 @@ function compositionFixture(
   pointer = createPointerTracker({ element: null, now: () => 1000 });
   const referents = createReferentRegistry();
   const runner = createGevActionRunner({
+    engine: createCesiumEngine(viewer),
     viewer,
     dataManager,
     styleManager: {},

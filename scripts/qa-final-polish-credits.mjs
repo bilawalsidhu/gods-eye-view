@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /** Persistent inline attribution through actual OSM layer display lifetimes. */
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import puppeteer from 'puppeteer';
 import { moveCamera } from './qa-journey-recorder.mjs';
 const url = process.argv.find((a) => /^https?:/.test(a));
 if (!url) throw new Error('Supply the running server URL');
@@ -10,9 +11,9 @@ const dir = process.env.QA_POLISH_DIR || 'qa-shots/final-polish';
 await fs.mkdir(dir, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const result = { states: [], errors: [] };
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-angle=metal'],
+  args: [],
 });
 try {
   const page = await browser.newPage();
@@ -25,12 +26,10 @@ try {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed'),
   );
   await page.goto(`${url}/?welcome=0`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 120000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 120000,
+  });
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -53,7 +52,8 @@ try {
       value,
     );
   const shot = async (name, osm, tiles) => {
-    await sleep(300);
+    await whenSettled(page);
+    await whenUiSettled(page);
     const state = await page.$eval('#cesium-credits', (e) => {
       const nodes = [
         ...e.querySelectorAll('a,img,.cesium-credit-expand-link'),
@@ -111,7 +111,7 @@ try {
     });
     result.states.push({ name, ...state });
   };
-  await sleep(1600);
+  await whenSettled(page);
   await shot('nothing', false, false);
   await toggle('alpr-cameras', true);
   await page.waitForFunction(
@@ -137,7 +137,7 @@ try {
   await shot('traffic', true, true);
   for (const width of [1280, 1920]) {
     await page.setViewport({ width, height: 900 });
-    await sleep(500);
+    await whenSettled(page);
     await shot(`traffic-${width}`, true, true);
   }
   await page.setViewport({ width: 1440, height: 900 });
@@ -154,5 +154,5 @@ try {
   console.log(JSON.stringify(result, null, 2));
 } finally {
   await fs.writeFile(`${dir}/credits.json`, JSON.stringify(result, null, 2));
-  await browser.close();
+  await closeBrowser(browser);
 }

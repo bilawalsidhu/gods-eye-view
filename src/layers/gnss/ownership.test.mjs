@@ -1,6 +1,10 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createGnssDisplay } from './render/display.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { createFakeGroundHarness } from '../../testSupport/groundDisplayEngines.mjs';
+import { rgbaFromCss } from '../shared/color.js';
 import { createGnssIntegrityLayer, defaultGnssViewAnchor } from './index.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
 import { layerFeedState } from '../../data/feedState.js';
@@ -23,22 +27,10 @@ function harness(
   } = {},
 ) {
   let anchor = initialAnchor;
-  const sources = [];
-  const viewer = {
-    camera: { moveEnd: new Cesium.Event(), changed: new Cesium.Event() },
-    scene: {
-      globe: { show: true },
-      groundPrimitives: {
-        add(value) {
-          sources.push(value);
-        },
-        remove(value) {
-          sources.splice(sources.indexOf(value), 1);
-          value.destroy();
-        },
-      },
-    },
-  };
+  const ground = createFakeGroundHarness();
+  const { engine } = ground;
+  // What the manager's lifecycle reads of a scene besides the engine.
+  const viewer = { scene: { globe: { show: true } } };
   let clock = 1_000;
   const anchors = [];
   const layer = createGnssIntegrityLayer({
@@ -49,17 +41,26 @@ function harness(
         return { ageMs: 0, ...snapshot };
       },
     },
-    viewAnchor: () => {
-      anchors.push(anchor);
-      return anchor;
-    },
+    rendererFactory: ({ engine }) =>
+      createGnssDisplay(engine, {
+        viewAnchor: () => {
+          anchors.push(anchor);
+          return anchor;
+        },
+      }),
     now: () => clock,
     monotonicNow: () => clock,
   });
-  if (initialize) layer.init(viewer);
+  if (initialize) layer.init(null, { engine });
   return {
     layer,
-    sources,
+    ground,
+    engine,
+    camera: engine.camera,
+    /** The drawn cells' ground set (undefined once released). */
+    cells: () => ground.set('gnss-integrity'),
+    /** How many cells are drawn. */
+    drawn: () => ground.set('gnss-integrity')?.items.length ?? 0,
     anchors,
     viewer,
     advance(ms) {
@@ -82,21 +83,15 @@ const threeHealthy = () => [
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('a globe-wide rectangle uses the visible screen centre as the query anchor', () => {
-  const anchor = defaultGnssViewAnchor({
-    scene: {
-      canvas: { clientWidth: 1000, clientHeight: 800 },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-    },
-    camera: {
-      pickEllipsoid(pixel) {
-        assert.deepEqual(pixel, new Cesium.Cartesian2(500, 400));
-        return Cesium.Cartesian3.fromDegrees(-97, 30);
-      },
-      computeViewRectangle: () => {
-        throw new Error('centre hit must not compute a rectangle');
-      },
-    },
+  const engine = createFakeEngine({ width: 1000, height: 800 });
+  engine.fake.script('pickEllipsoid', (pixel) => {
+    assert.deepEqual(pixel, { x: 500, y: 400 });
+    return geo.cartesian3.fromDegrees(-97, 30);
   });
+  engine.fake.script('viewRectangle', () => {
+    throw new Error('centre hit must not compute a rectangle');
+  });
+  const anchor = defaultGnssViewAnchor(engine);
   assert.ok(Math.abs(anchor.latitude - 30) < 1e-8);
   assert.ok(Math.abs(anchor.longitude + 97) < 1e-8);
 });
@@ -111,16 +106,16 @@ test('pan and zoom refresh through the manager without toggling; nearby changes 
     },
     { initialize: false },
   );
-  const manager = new LayerLifecycle(h.viewer);
+  const manager = new LayerLifecycle(h.viewer, { engine: h.engine });
   manager.register(h.layer);
   h.layer.attachDataManager(manager);
   const changes = [];
   manager.subscribe((change) => changes.push(change.type));
   await manager.setEnabled(h.layer.id, true);
   h.setAnchor({ latitude: 54, longitude: 19 });
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   h.setAnchor({ latitude: 55, longitude: 20 });
-  h.viewer.camera.moveEnd.raiseEvent();
+  h.camera.moveEnd.raiseEvent();
   h.advance(2500);
   t.mock.timers.tick(2500);
   await flush();
@@ -137,14 +132,14 @@ test('pan and zoom refresh through the manager without toggling; nearby changes 
   });
   assert.match(h.layer.getRowControls().info, /Regional sample.*250 nm radius/);
   h.setAnchor({ latitude: 55.1, longitude: 20.1 });
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   h.advance(5000);
   t.mock.timers.tick(5000);
   await flush();
   assert.equal(calls, 2, 'nearby views reuse the same query region');
   await manager.destroyAll();
-  assert.equal(h.viewer.camera.moveEnd.numberOfListeners, 0);
-  assert.equal(h.viewer.camera.changed.numberOfListeners, 0);
+  assert.equal(h.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(h.camera.changed.numberOfListeners, 0);
 });
 
 test('movement during a pending refresh follows up at the newest view; disable cancels queued work', async (t) => {
@@ -162,12 +157,12 @@ test('movement during a pending refresh follows up at the newest view; disable c
   h.layer.enable();
   await h.layer.update();
   h.setAnchor({ latitude: 54, longitude: 19 });
-  h.viewer.camera.moveEnd.raiseEvent();
+  h.camera.moveEnd.raiseEvent();
   h.advance(2500);
   t.mock.timers.tick(2500);
   await flush();
   h.setAnchor({ latitude: 35, longitude: 140 });
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   h.advance(2500);
   t.mock.timers.tick(2500);
   await flush();
@@ -180,7 +175,7 @@ test('movement during a pending refresh follows up at the newest view; disable c
   assert.equal(calls.length, 3);
   assert.deepEqual(calls.at(-1), { latitude: 35, longitude: 140 });
   h.setAnchor({ latitude: 10, longitude: 10 });
-  h.viewer.camera.moveEnd.raiseEvent();
+  h.camera.moveEnd.raiseEvent();
   h.layer.disable();
   h.advance(5000);
   t.mock.timers.tick(5000);
@@ -192,11 +187,14 @@ test('movement during a pending refresh follows up at the newest view; disable c
 test('the layer requires a snapshot source and cannot be initialized twice', () => {
   assert.throws(() => createGnssIntegrityLayer({}), TypeError);
   const { layer } = harness(async () => ({ rows: [] }));
-  assert.throws(() => layer.init({ dataSources: { add() {} } }), /already/);
+  assert.throws(
+    () => layer.init(null, { engine: createFakeEngine() }),
+    /already/,
+  );
 });
 
 test('an enabled refresh bins the snapshot into coloured ground cells', async () => {
-  const { layer, sources, anchors } = harness(async (anchor, { signal }) => {
+  const { layer, cells, anchors } = harness(async (anchor, { signal }) => {
     assert.deepEqual(anchor, { latitude: 50, longitude: 30 });
     assert.ok(signal instanceof AbortSignal);
     return {
@@ -213,13 +211,21 @@ test('an enabled refresh bins the snapshot into coloured ground cells', async ()
   assert.equal(await layer.update(), false, 'disabled layers do not fetch');
   assert.equal(anchors.length, 0);
   layer.enable();
-  assert.equal(sources[0].show, true);
+  assert.equal(cells().shown, true);
   assert.equal(await layer.update(), true);
-  const entities = sources[0].get(0).geometryInstances;
-  assert.equal(entities.length, 1, 'the one-aircraft cell is withheld');
-  assert.equal(entities[0].id, 'gnss-integrity:280:420');
-  assert.ok(entities[0].geometry instanceof Cesium.RectangleGeometry);
-  assert.equal(sources[0].get(0).allowPicking, false);
+  const { items, options } = cells();
+  assert.equal(items.length, 1, 'the one-aircraft cell is withheld');
+  // Cell 280:420, half a degree from 50° N, 30° E, at the high level.
+  assert.deepEqual(
+    { ...items[0], fill: undefined },
+    { west: 30, south: 50, east: 30.5, north: 50.5, fill: undefined },
+  );
+  assert.deepEqual(
+    items[0].fill,
+    rgbaFromCss('#f85149').withAlpha(0.55).rgba(),
+  );
+  assert.equal(options.kind, 'cell');
+  assert.equal(options.pickable, false);
   const stats = layer.getStats();
   assert.equal(stats.count, 1);
   assert.equal(stats.error, null);
@@ -272,7 +278,7 @@ test('the visible layer leads with low navigation accuracy and exposes its prove
 
 test('a failed refresh keeps the last cells and reports the error', async () => {
   let fail = false;
-  const { layer, sources } = harness(async () => {
+  const { layer, drawn } = harness(async () => {
     if (fail) throw new Error('adsb.lol HTTP 502');
     return {
       rows: [
@@ -288,14 +294,14 @@ test('a failed refresh keeps the last cells and reports the error', async () => 
   assert.equal(layer.getStats().stale, true);
   fail = true;
   assert.equal(await layer.update(), true);
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 1);
+  assert.equal(drawn(), 1);
   assert.equal(layer.getStats().error, 'adsb.lol HTTP 502');
   assert.equal(layer.getStats().count, 1);
 });
 
 test('observations expire with the window, and disable aborts the request in flight', async () => {
   let pending;
-  const { layer, sources, advance } = harness(
+  const { layer, drawn, cells, advance } = harness(
     (anchor, { signal }) =>
       new Promise((resolve, reject) => {
         pending = { resolve };
@@ -315,17 +321,17 @@ test('observations expire with the window, and disable aborts the request in fli
   pending.resolve({ rows: [] });
   assert.equal(await result, true);
   assert.equal(layer.getStats().count, 0);
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 0);
+  assert.equal(drawn(), 0);
 
   result = layer.update();
   layer.disable();
   assert.equal(await result, false);
-  assert.equal(sources[0].show, false);
+  assert.equal(cells().shown, false);
 });
 
-test('no view anchor means no request, and destroy releases the data source', async () => {
+test('no view anchor means no request, and destroy releases the ground set', async () => {
   let calls = 0;
-  const { layer, sources } = harness(
+  const { layer, ground } = harness(
     async () => {
       calls += 1;
       return { rows: [] };
@@ -341,13 +347,13 @@ test('no view anchor means no request, and destroy releases the data source', as
   assert.equal(calls, 0);
   assert.equal(layer.getStats().error, null);
   layer.destroy();
-  assert.equal(sources.length, 0);
+  assert.equal(ground.sets(), 0);
   assert.equal(layer.getStats().count, 0);
 });
 
 test('a replayed stale snapshot keeps its observation age and expires on time', async () => {
   // The proxy keeps answering with the snapshot it observed at t=1000.
-  const { layer, sources, advance, now } = harness(async () => ({
+  const { layer, drawn, advance, now } = harness(async () => ({
     rows: threeHealthy(),
     ageMs: now() - 1_000,
     stale: true,
@@ -369,12 +375,12 @@ test('a replayed stale snapshot keeps its observation age and expires on time', 
     0,
     'the replay did not restart the window',
   );
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 0);
+  assert.equal(drawn(), 0);
 });
 
 test('cells expire during prolonged fetch failures', async () => {
   let fail = false;
-  const { layer, sources, advance } = harness(async () => {
+  const { layer, drawn, advance } = harness(async () => {
     if (fail) throw new Error('adsb.lol HTTP 502');
     return { rows: threeHealthy() };
   });
@@ -387,13 +393,13 @@ test('cells expire during prolonged fetch failures', async () => {
   advance(11 * MIN);
   assert.equal(await layer.update(), true);
   assert.equal(layer.getStats().count, 0);
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 0);
+  assert.equal(drawn(), 0);
   assert.equal(layer.getStats().error, 'adsb.lol HTTP 502');
 });
 
 test('cells expire while no view anchor is available', async () => {
   let calls = 0;
-  const { layer, sources, advance, setAnchor } = harness(async () => {
+  const { layer, drawn, advance, setAnchor } = harness(async () => {
     calls += 1;
     return { rows: threeHealthy() };
   });
@@ -407,36 +413,37 @@ test('cells expire while no view anchor is available', async () => {
   assert.equal(await layer.update(), true);
   assert.equal(calls, 1, 'no anchor means no request');
   assert.equal(layer.getStats().count, 0);
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 0);
+  assert.equal(drawn(), 0);
   assert.equal(layer.getStats().error, null);
 });
 
 test('re-enabling after a long disable does not show cells past the window', async () => {
-  const { layer, sources, advance } = harness(async () => ({
+  const { layer, drawn, advance } = harness(async () => ({
     rows: threeHealthy(),
   }));
   layer.enable();
   await layer.update();
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 1);
+  assert.equal(drawn(), 1);
   layer.disable();
   advance(31 * MIN);
   layer.enable();
   assert.equal(layer.getStats().count, 0);
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 0);
+  assert.equal(drawn(), 0);
 });
 
 const threeCells = () => ({
   rows: [row('a1', 50.1, true), row('a2', 50.1, true), row('a3', 50.2, false)],
 });
 
-test('an identical snapshot leaves the drawn entities untouched', async () => {
-  const { layer, sources } = harness(async () => threeCells());
+test('an identical snapshot leaves the drawn cells untouched', async () => {
+  const { layer, drawn, cells } = harness(async () => threeCells());
   layer.enable();
   await layer.update();
-  const first = sources[0].get(0);
+  const first = cells();
   await layer.update();
-  assert.equal(sources[0].get(0)?.geometryInstances.length ?? 0, 1);
-  assert.equal(sources[0].get(0), first);
+  assert.equal(drawn(), 1);
+  assert.equal(cells().commits, first.commits);
+  assert.equal(cells().items, first.items);
 });
 
 test('an initial feed failure stays enabled, reports unavailable, and recovers automatically', async (t) => {
@@ -450,7 +457,7 @@ test('an initial feed failure stays enabled, reports unavailable, and recovers a
     },
     { initialize: false },
   );
-  const manager = new LayerLifecycle(h.viewer);
+  const manager = new LayerLifecycle(h.viewer, { engine: h.engine });
   manager.register(h.layer);
   h.layer.attachDataManager(manager);
   const changes = [];
@@ -496,7 +503,7 @@ test('provider cooldown is preserved across movement and toggling; disable cance
   h.layer.enable();
   await h.layer.update();
   h.setAnchor({ latitude: 10, longitude: 20 });
-  h.viewer.camera.moveEnd.raiseEvent();
+  h.camera.moveEnd.raiseEvent();
   h.advance(30000);
   t.mock.timers.tick(30000);
   await flush();
@@ -583,7 +590,7 @@ test('GERMAN: camera debounce and minimum request gap are pinned', async (t) => 
   h.layer.enable();
   await h.layer.update();
   h.setAnchor({ latitude: 51, longitude: 31 });
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   h.advance(2499);
   t.mock.timers.tick(2499);
   await flush();
@@ -594,7 +601,7 @@ test('GERMAN: camera debounce and minimum request gap are pinned', async (t) => 
   assert.equal(calls, 2);
   h.advance(3000);
   h.setAnchor({ latitude: 52, longitude: 32 });
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   h.advance(599);
   t.mock.timers.tick(599);
   await flush();
@@ -619,7 +626,7 @@ test('camera movement during initial activation waits for acquisition before fol
   h.layer.enable();
   const initial = h.layer.update();
   h.setAnchor({ latitude: 51, longitude: 31 });
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   h.advance(2500);
   t.mock.timers.tick(2500);
   await flush();
@@ -648,17 +655,18 @@ test('monotonic camera scheduling is unaffected by wall-clock rollback', async (
         return { rows: [], ageMs: 0 };
       },
     },
-    viewAnchor: () => anchor,
+    rendererFactory: ({ engine }) =>
+      createGnssDisplay(engine, { viewAnchor: () => anchor }),
     now: () => wall,
     monotonicNow: () => mono,
   });
-  layer.init(h.viewer);
+  layer.init(null, { engine: h.engine });
   layer.enable();
   await layer.update();
   wall -= 3600000;
   mono = 3000;
   anchor = { latitude: 51, longitude: 31 };
-  h.viewer.camera.changed.raiseEvent();
+  h.camera.changed.raiseEvent();
   mono += 600;
   t.mock.timers.tick(600);
   await flush();
@@ -666,35 +674,79 @@ test('monotonic camera scheduling is unaffected by wall-clock rollback', async (
   layer.destroy();
 });
 
-test('GNSS fill emits no pick-pass commands but keeps normal rendering', async (t) => {
+test('the cells stay out of picks', async () => {
   const h = harness(async () => ({ rows: threeHealthy() }));
   h.layer.enable();
   await h.layer.update();
-  const fill = h.sources[0].get(0);
-  let updates = 0;
-  t.mock.method(Cesium.GroundPrimitive.prototype, 'update', () => updates++);
-  fill.update({ passes: { pick: true } });
-  assert.equal(updates, 0);
-  fill.update({ passes: { render: true, pick: false } });
-  assert.equal(updates, 1);
+  assert.equal(h.cells().options.pickable, false);
+  // A pick at the drawn cell (1° N, 30.2° E) finds nothing of the layer.
+  h.engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(30.2, 1.2, 100_000),
+  });
+  const { width, height } = h.engine.host.size();
+  assert.equal(
+    h.engine.picker.pick({ x: width / 2, y: height / 2 }),
+    undefined,
+  );
   h.layer.destroy();
-  assert.equal(fill.isDestroyed(), true);
+  assert.equal(h.ground.sets(), 0);
 });
 
 test('view anchor falls back to rectangle, then nadir, then no camera', () => {
   assert.equal(defaultGnssViewAnchor({}), null);
-  const viewer = {
-    camera: {
-      computeViewRectangle: () => Cesium.Rectangle.fromDegrees(20, 40, 22, 42),
-    },
-  };
-  const rectangleAnchor = defaultGnssViewAnchor(viewer);
+  const radians = geo.math.toRadians;
+  const engine = createFakeEngine({ width: 1000, height: 800 });
+  engine.fake.script('pickEllipsoid', undefined);
+  engine.fake.script('viewRectangle', {
+    west: radians(20),
+    south: radians(40),
+    east: radians(22),
+    north: radians(42),
+  });
+  engine.camera.pose = () => assert.fail('a rectangle must not read the pose');
+  const rectangleAnchor = defaultGnssViewAnchor(engine);
   assert.ok(Math.abs(rectangleAnchor.latitude - 41) < 1e-10);
   assert.ok(Math.abs(rectangleAnchor.longitude - 21) < 1e-10);
-  viewer.camera = {
-    positionCartographic: Cesium.Cartographic.fromDegrees(21, 41),
+  engine.camera = {
+    pickEllipsoid: () => assert.fail('an empty canvas has no centre'),
+    viewRectangle: () => undefined,
+    pose: () => ({
+      cartographic: { longitude: radians(21), latitude: radians(41) },
+    }),
   };
-  const nadirAnchor = defaultGnssViewAnchor(viewer);
+  engine.host = { size: () => ({ width: 0, height: 0 }) };
+  const nadirAnchor = defaultGnssViewAnchor(engine);
   assert.ok(Math.abs(nadirAnchor.latitude - 41) < 1e-10);
   assert.ok(Math.abs(nadirAnchor.longitude - 21) < 1e-10);
+  engine.camera.pose = () => ({
+    cartographic: { longitude: Number.NaN, latitude: 0 },
+  });
+  assert.equal(defaultGnssViewAnchor(engine), null);
+});
+
+test('an in-flight regional response supplies the next renderer without a new request', async () => {
+  let resolve,
+    calls = 0;
+  const h = harness(() => {
+    calls++;
+    return new Promise((done) => {
+      resolve = done;
+    });
+  });
+  try {
+    h.layer.enable();
+    const pending = h.layer.update();
+    h.layer.detachRenderer();
+    assert.equal(h.camera.changed.numberOfListeners, 0);
+    resolve({ rows: threeHealthy() });
+    assert.equal(await pending, true);
+    assert.equal(h.ground.sets(), 0);
+    assert.equal(h.layer.getStats().levels.low, 1);
+    h.layer.attachRenderer({ engine: h.engine });
+    assert.equal(h.drawn(), 1);
+    assert.equal(calls, 1);
+    assert.equal(h.camera.changed.numberOfListeners, 1);
+  } finally {
+    h.layer.destroy();
+  }
 });

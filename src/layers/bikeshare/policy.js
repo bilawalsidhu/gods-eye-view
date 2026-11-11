@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { constantRgba, rgbaFromCss } from '../shared/color.js';
 
 export const BIKESHARE_SELECTED_OVERLAY_SOURCE_ID = 'bikeshare-selected';
 
@@ -57,29 +57,24 @@ export const MAX_TOTAL_POINTS = 8000;
 // --- Availability color palette ---
 /** Station has >60% bikes available. */
 
-export const COLOR_GREEN =
-  Cesium.Color.fromCssColorString('#00ff88').withAlpha(0.95);
+export const COLOR_GREEN = rgbaFromCss('#00ff88').withAlpha(0.95);
 
 /** Station has 30-60% bikes available. */
 
-export const COLOR_YELLOW =
-  Cesium.Color.fromCssColorString('#ffaa00').withAlpha(0.94);
+export const COLOR_YELLOW = rgbaFromCss('#ffaa00').withAlpha(0.94);
 
 /** Station has <30% bikes available. */
 
-export const COLOR_RED =
-  Cesium.Color.fromCssColorString('#ff4444').withAlpha(0.94);
+export const COLOR_RED = rgbaFromCss('#ff4444').withAlpha(0.94);
 
 /** No status data available for station. */
 
-export const COLOR_NEUTRAL =
-  Cesium.Color.fromCssColorString('#91a4b4').withAlpha(0.62);
+export const COLOR_NEUTRAL = rgbaFromCss('#91a4b4').withAlpha(0.62);
 
 /** Station is offline (not installed, not renting, or not returning). */
 
-export const COLOR_MUTED =
-  Cesium.Color.fromCssColorString('#687581').withAlpha(0.48);
+export const COLOR_MUTED = rgbaFromCss('#687581').withAlpha(0.48);
 
 /** Outline color for all station points. */
 
-export const COLOR_OUTLINE = Cesium.Color.BLACK.withAlpha(0.25);
+export const COLOR_OUTLINE = constantRgba(0, 0, 0, 0.25);

@@ -1,3 +1,6 @@
+// Cesium-only probes: native imagery, primitive and listener counts audit Cesium resource ownership.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * Weather teardown and cross-layer regression probe.
  *
@@ -5,7 +8,8 @@
  * weather layer on and exercises it (history playback, a wind reading, a
  * storm selection), turns them all off, and asserts the scene is back to the
  * baseline (imagery layers on the globe and the tileset, primitives, ground
- * primitives, data sources, entities, camera/scene listeners, the weather
+ * primitives, data sources, entities, the globe contract's mover sets,
+ * lines, ground sets and imagery layers, camera/scene listeners, the weather
  * panel, the wind reading marker). Then it enables a set of non-weather
  * layers one at a time and samples the render rate, long tasks and console
  * errors for each, and repeats the same non-weather sequence in a control
@@ -13,9 +17,9 @@
  *
  *   node scripts/qa-weather-teardown.mjs --url http://localhost:4173 --label google
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -41,13 +45,8 @@ const WEATHER = [
   'weather-cyclones',
 ];
 
-const browser = await puppeteer.launch({
-  headless: flag('--headless') ? 'new' : false,
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((p) =>
-      existsSync(p),
-    ),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   defaultViewport: null,
   args: [
@@ -74,19 +73,18 @@ const boot = async () => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`.slice(0, 200));
   });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, {
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, {
     timeout: 120_000,
   });
-  await sleep(10_000);
-  await page.evaluate(async () => {
+  await whenSettled(page);
+  await evaluateWithGeo(page, async (qaGeo) => {
     const gev = window.__godsEyeView;
     const dm = gev.dataManager;
     for (const [id, e] of dm.layers)
       if (e.enabled) await dm.setEnabled(id, false, { origin: 'user' });
-    const v = gev.viewer;
     const d = Math.PI / 180;
-    v.camera.setView({
-      destination: v.scene.ellipsoid.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: -95 * d,
         latitude: 32 * d,
         height: 4_500_000,
@@ -94,7 +92,7 @@ const boot = async () => {
       orientation: { heading: 0, pitch: -90 * d, roll: 0 },
     });
   });
-  await sleep(3000);
+  await whenSettled(page);
   return { page, errors };
 };
 
@@ -120,20 +118,61 @@ const snapshot = (page) =>
         };
     }
     const wind = dm.layers.get('wind')?.module?.getDiagnostics?.() || {};
+    // What layers draw on Cesium directly, excluding collections and the contract's own
+    // batches: the engine keeps one PrimitiveCollection per primitive kind
+    // (src/globe/cesium/) for the scene's lifetime, and its mover, line and
+    // ground batches (tagged gevMoverSet, gevLine, gevGroundSet) are counted
+    // below through the contract.
+    const contractOwned = (item) =>
+      item?.gevMoverSet !== undefined ||
+      item?.gevLine !== undefined ||
+      item?.gevGroundSet !== undefined;
+    const drawn = (collection) => {
+      let count = 0;
+      for (let i = 0; i < collection.length; i++) {
+        const item = collection.get(i);
+        if (contractOwned(item)) continue;
+        if (typeof item?.raiseToTop === 'function') count += drawn(item);
+        else count++;
+      }
+      return count;
+    };
+    const { engine } = gev;
+    const sum = (rows, key) => rows.reduce((n, row) => n + (row[key] || 0), 0);
+    const movers = engine.movers.list();
+    const lines = engine.lines.list();
+    const ground = engine.ground.list();
     return {
       globeImagery: v.imageryLayers.length,
       tilesetImagery: t?.imageryLayers?.length ?? null,
-      primitives: s.primitives.length,
-      groundPrimitives: s.groundPrimitives.length,
+      primitives: drawn(s.primitives),
+      groundPrimitives: drawn(s.groundPrimitives),
+      // The globe contract's own drawing (cyclone points and fills draw
+      // through it; render/display.js).
+      // Drawn instances, not sets: a disabled layer may keep an emptied set
+      // for its next enable (the cyclone points do), which draws nothing.
+      contract: {
+        moverInstances: sum(movers, 'count'),
+        lines: lines.filter((line) => line.shown && line.points > 0).length,
+        groundItems: sum(
+          ground.filter((set) => set.shown),
+          'count',
+        ),
+        imageryLayers: engine.imagery.list().filter((layer) => layer.shown)
+          .length,
+      },
       dataSources: v.dataSources.length,
       entities: v.entities.values.length,
       listeners: {
-        postRender: s.postRender.numberOfListeners,
-        preRender: s.preRender.numberOfListeners,
+        postRender:
+          window.__godsEyeView.engine.frames.postRender.numberOfListeners,
+        preRender:
+          window.__godsEyeView.engine.frames.preRender.numberOfListeners,
         postUpdate: s.postUpdate.numberOfListeners,
-        moveEnd: v.camera.moveEnd.numberOfListeners,
-        moveStart: v.camera.moveStart.numberOfListeners,
-        changed: v.camera.changed.numberOfListeners,
+        moveEnd: window.__godsEyeView.engine.camera.moveEnd.numberOfListeners,
+        moveStart:
+          window.__godsEyeView.engine.camera.moveStart.numberOfListeners,
+        changed: window.__godsEyeView.engine.camera.changed.numberOfListeners,
         tick: v.clock.onTick.numberOfListeners,
       },
       dom: {
@@ -155,7 +194,10 @@ const sample = async (page, seconds) => {
     window.__qaRenders = 0;
     window.__qaLong = { count: 0, ms: 0 };
     const s = window.__godsEyeView.viewer.scene;
-    window.__qaOff = s.postRender.addEventListener(() => window.__qaRenders++);
+    window.__qaOff =
+      window.__godsEyeView.engine.frames.postRender.addEventListener(
+        () => window.__qaRenders++,
+      );
     window.__qaObs = new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
         window.__qaLong.count++;
@@ -164,7 +206,7 @@ const sample = async (page, seconds) => {
     });
     window.__qaObs.observe({ entryTypes: ['longtask'] });
     window.__qaRaf = () => {
-      s.requestRender();
+      window.__godsEyeView.engine.render.request();
       window.__qaRafId = requestAnimationFrame(window.__qaRaf);
     };
     window.__qaRaf();
@@ -274,7 +316,7 @@ try {
   console.log('weather on', JSON.stringify(weatherOn));
   results.weatherOnSample = await sample(a.page, 5);
   for (const id of WEATHER) await setLayer(a.page, id, false);
-  await sleep(4000);
+  await whenFramesDrawn(a.page);
   const afterOff = await snapshot(a.page);
   const leak = diff(
     { ...baseline, enabled: undefined, weather: undefined },
@@ -292,7 +334,7 @@ try {
   results.afterWeather = [];
   for (const id of others) {
     const ok = await setLayer(a.page, id, true);
-    await sleep(9000);
+    await whenFramesDrawn(a.page);
     const m = await sample(a.page, 5);
     const snap = await snapshot(a.page);
     results.afterWeather.push({
@@ -315,7 +357,7 @@ try {
   results.control = [];
   for (const id of others) {
     const ok = await setLayer(b.page, id, true);
-    await sleep(9000);
+    await whenFramesDrawn(b.page);
     const m = await sample(b.page, 5);
     const snap = await snapshot(b.page);
     results.control.push({
@@ -361,5 +403,5 @@ try {
     JSON.stringify(results, null, 2),
   );
   console.log(`wrote ${path.join(outDir, 'results.json')}`);
-  await browser.close();
+  await closeBrowser(browser);
 }

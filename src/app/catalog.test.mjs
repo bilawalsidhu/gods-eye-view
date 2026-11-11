@@ -155,3 +155,73 @@ test('controls bind catalog instances rather than similarly named defaults', () 
     /Control layer missing/,
   );
 });
+
+test('data setup without a viewer registers an empty catalog and no sonar scene', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const releases = [];
+  let attached = null;
+  const { dataManager } = createApplicationData({
+    scene: { viewer: null, mapStackController: null },
+    controls: {
+      styleManager: {
+        attachDataManager(manager) {
+          attached = manager;
+        },
+      },
+    },
+    catalog: createLayerCatalog([], []),
+    defer: (release) => releases.push(release),
+  });
+  assert.equal(attached, dataManager);
+  assert.equal(dataManager.viewer, null);
+  assert.equal(dataManager.layers.size, 0);
+  assert.equal(dataManager.registrationsFinalized, true);
+  for (const release of releases.reverse()) await release();
+});
+
+test('a teardown during startup ends the wait for a stalled layer attachment', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const layer = {
+    id: 'slow',
+    init: () => true,
+    enable: () => true,
+    update: () => true,
+    disable: () => true,
+    destroy: () => true,
+    attachRenderer: (viewer) =>
+      viewer?.second ? new Promise(() => {}) : undefined,
+    detachRenderer() {},
+  };
+  const layerSession = { lifetime: new AbortController() };
+  const start = (viewer, signal = null) => {
+    const releases = [];
+    const data = createApplicationData({
+      scene: { viewer },
+      controls: { styleManager: { attachDataManager() {} } },
+      catalog: createLayerCatalog([layer], metadata([layer])),
+      layerSession,
+      signal,
+      defer: (release) => releases.push(release),
+    });
+    return { data, releases };
+  };
+  const first = start({ first: true });
+  assert.equal(await layerSession.manager.setEnabled('slow', true), true);
+  for (const release of first.releases.reverse()) await release();
+
+  const application = new AbortController();
+  const second = start({ second: true }, application.signal);
+  application.abort();
+  const { dataManager } = await second.data;
+  assert.equal(dataManager, layerSession.manager);
+});

@@ -122,10 +122,24 @@ body {
   left: 0;
 }
 
+.globe-renderer,
+.engine-switch-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.engine-switch-frame {
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* Unified world-overlay host: detection uses one host-owned blend surface
    beneath the shared text/card canvas; both share one frame path. The root
    holds ONLY the card canvas — it is a stacking context (z-index below), and
    a canvas that blends against the scene cannot live inside one. */
+.world-overlay-root,
 #world-overlay-root {
   position: absolute;
   inset: 0;
@@ -134,6 +148,8 @@ body {
   pointer-events: none;
 }
 
+.world-overlay-detection-surface,
+.world-overlay-canvas,
 #world-overlay-detection-surface,
 #world-overlay-canvas {
   position: absolute;
@@ -166,6 +182,7 @@ body {
    `mix-blend-mode: screen` composites against the WebGL scene. z5 keeps it
    under the z6 root that carries the shared card canvas; do not move this
    surface inside #world-overlay-root, which would isolate the blend. */
+.world-overlay-detection-surface,
 #world-overlay-detection-surface {
   z-index: 5;
 }

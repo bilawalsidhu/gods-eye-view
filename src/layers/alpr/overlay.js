@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   MAX_CANVAS_FRUSTUMS,
   MARKER_ICON_SIZE,
@@ -19,11 +19,27 @@ import {
   validAlprGroundHeight,
 } from './visuals.js';
 
-/** Per-layer presentation on a caller-owned overlay; Cesium remains the fallback. */
-export function createAlprOverlay({
+let overlaySequence = 0;
+
+/**
+ * Canvas artwork for the nearest ALPR cameras over each engine's native
+ * markers, with bounded surface refinement. The engine adapter owns marker
+ * lookup and appearance, surface sampling, the camera pose and projection.
+ * @param {object} options
+ * @param {object} options.state Layer state.
+ * @param {object} options.services Layer services.
+ * @param {function(): void} [options.onSurfaceChange] Map stack changed.
+ * @param {object} options.engine Globe engine.
+ */
+export function createAlprOverlayCore({
   state,
   services,
   onSurfaceChange = () => {},
+  engine,
+  markers,
+  syncMarker,
+  sampleHeight,
+  terrainHeight,
 }) {
   let lane,
     removeMapListener,
@@ -38,95 +54,60 @@ export function createAlprOverlay({
     if (!destroyed && state.enabled) lane?.requestPaint();
   };
 
-  function nativeVisible(entity, visible) {
-    if (!entity) return;
-    canvasOwned(entity, !visible);
-    setShown(entity, visible);
+  function canvasOwned(marker, owned) {
+    if (marker.canvasOwned === owned) return;
+    marker.canvasOwned = owned;
+    syncMarker(marker);
   }
 
-  /** Swap a marker between its native look and a faint canvas pick target. */
-  function canvasOwned(entity, owned) {
-    const visible = !owned;
-    const billboard = entity.billboard;
-    // Keep a faint native pick target under the canvas badge so sibling layer
-    // handlers recognize ALPR ownership instead of treating the click as empty.
-    if (!visible && !entity.gevAlprNativeAppearance) {
-      entity.gevAlprNativeAppearance = {
-        position: entity.position,
-        heightReference: billboard.heightReference,
-        scaleByDistance: billboard.scaleByDistance,
-        color: billboard.color,
-      };
-      entity.position = entity.gevAlprCanvasPosition;
-      entity.gevAlprPickPosition = entity.position;
-      billboard.heightReference = Cesium.HeightReference.NONE;
-      billboard.scaleByDistance = undefined;
-      billboard.color = Cesium.Color.WHITE.withAlpha(0.01);
-    } else if (visible && entity.gevAlprNativeAppearance) {
-      const saved = entity.gevAlprNativeAppearance;
-      if (entity.position === entity.gevAlprPickPosition)
-        entity.position = saved.position;
-      billboard.heightReference = saved.heightReference;
-      billboard.scaleByDistance = saved.scaleByDistance;
-      billboard.color = saved.color;
-      entity.gevAlprNativeAppearance = null;
-      entity.gevAlprPickPosition = null;
-    }
+  function setShown(marker, shown) {
+    if (marker.shown === shown) return;
+    marker.shown = shown;
+    syncMarker(marker);
   }
 
-  // Assign only on change: each Entity property write mints a new property
-  // and raises definitionChanged, which paint used to do for every overlay
-  // camera on every frame.
-  function setShown(entity, visible) {
-    if (entity.gevAlprShown === visible) return;
-    entity.gevAlprShown = visible;
-    entity.billboard.show = visible;
-    if (entity.polyline) entity.polyline.show = visible;
-    if (entity.polygon) entity.polygon.show = visible;
+  function nativeVisible(marker, visible) {
+    if (!marker) return;
+    canvasOwned(marker, !visible);
+    setShown(marker, visible);
   }
 
   function resetAnchors() {
-    for (const entity of state.dataSource.entities.values) {
-      entity.gevAlprCanvasPosition = null;
-      entity.gevAlprWedge = null;
-      entity.gevAlprDisplayPosition = null;
-      nativeVisible(entity, true);
+    for (const marker of markers.values()) {
+      marker.gevAlprCanvasPosition = null;
+      marker.gevAlprWedge = null;
+      marker.displayPosition = null;
+      nativeVisible(marker, true);
     }
     state.lastAnchorSampleAt = 0;
     retryUntil = Date.now() + 15000;
     requestPaint();
   }
 
-  function anchorFor(record, entity, budget) {
-    if (entity.gevAlprCanvasPosition) return entity.gevAlprCanvasPosition;
-    const scene = state.viewer.scene;
-    const location = Cesium.Cartographic.fromDegrees(
-      record.longitude,
-      record.latitude,
-    );
+  function anchorFor(record, marker, budget) {
+    if (marker.gevAlprCanvasPosition) return marker.gevAlprCanvasPosition;
     // A floor-placed marker anchors where its native badge sits; only a
     // marker still waiting for its floor samples the rendered surface, and
-    // each paint samples a few at most (each sample is a depth render).
+    // each paint samples a few at most.
     let height;
     const floor = services.groundFloor.cachedGroundFloor(
       record.latitude,
       record.longitude,
     );
     if (validAlprGroundHeight(floor)) height = floor + MARKER_FLOOR_LIFT_M;
-    else if (scene.sampleHeightSupported) {
+    else if (engine.surface.supported) {
       if (budget.samples <= 0) return null;
       budget.samples -= 1;
       try {
-        height = scene.sampleHeight(location, [entity]);
+        height = sampleHeight(record, marker);
       } catch {
         /* streaming tiles */
       }
     }
-    if (!validAlprGroundHeight(height) && scene.globe.show)
-      height = scene.globe.getHeight?.(location);
+    if (!validAlprGroundHeight(height)) height = terrainHeight(record);
     if (!validAlprGroundHeight(height)) return null;
-    setAnchor(record, entity, height);
-    return entity.gevAlprCanvasPosition;
+    setAnchor(record, marker, height);
+    return marker.gevAlprCanvasPosition;
   }
 
   function floorHeightAt(latitude, longitude) {
@@ -134,81 +115,69 @@ export function createAlprOverlay({
     return validAlprGroundHeight(floor) ? floor + MARKER_FLOOR_LIFT_M : null;
   }
 
-  function setAnchor(record, entity, height) {
-    entity.gevAlprCanvasPosition = Cesium.Cartesian3.fromDegrees(
+  function setAnchor(record, marker, height) {
+    marker.gevAlprCanvasPosition = geo.cartesian3.fromDegrees(
       record.longitude,
       record.latitude,
       height,
     );
-    entity.gevAlprWedge = directionWedgePositions(
+    marker.resolved = true;
+    syncMarker(marker);
+    marker.gevAlprWedge = directionWedgePositions(
       record,
       height,
       floorHeightAt,
     );
   }
 
-  /** Whether the visible photoreal tiles (or globe) have finished streaming. */
-  function surfaceSettled(scene) {
-    if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
-    for (let i = 0; i < (scene.primitives?.length || 0); i++) {
-      const primitive = scene.primitives.get(i);
-      if (primitive?.show && primitive.tilesLoaded === false) return false;
-    }
-    return true;
-  }
-
   /**
    * Replace floor anchors with the rendered surface under each overlay camera.
    * Floors come from ~111 m cells, so on a slope a badge could float or sink
    * by tens of metres. Runs only while the camera is still and tiles have
-   * settled, a few depth samples per paint, and each anchor at most once;
+   * settled, a few surface samples per paint, and each anchor at most once;
    * samples far outside the floor prior (a roof or a streaming tile) are
    * rejected. Returns whether anchors remain to check.
    */
   function refineAnchors(budget) {
-    const camera = state.viewer.camera;
-    const scene = state.viewer.scene;
+    const camera = engine.camera.pose();
     const still =
       lastCamera &&
-      camera.positionWC &&
-      Cesium.Cartesian3.equalsEpsilon(
-        camera.positionWC,
+      camera.position &&
+      geo.cartesian3.equalsEpsilon(
+        camera.position,
         lastCamera.position,
         0,
         0.05,
       ) &&
-      Cesium.Cartesian3.equalsEpsilon(
-        camera.directionWC,
+      geo.cartesian3.equalsEpsilon(
+        camera.direction,
         lastCamera.direction,
         0,
         1e-6,
       );
-    if (camera.positionWC && camera.directionWC)
+    if (camera.position && camera.direction)
       lastCamera = {
-        position: Cesium.Cartesian3.clone(camera.positionWC),
-        direction: Cesium.Cartesian3.clone(camera.directionWC),
+        position: geo.cartesian3.clone(camera.position),
+        direction: geo.cartesian3.clone(camera.direction),
       };
-    if (!scene.sampleHeightSupported) return false;
+    if (!engine.surface.supported) return false;
     let pending = false;
     for (const record of records) {
-      const entity = state.dataSource.entities.getById(record.id);
-      const anchor = entity?.gevAlprCanvasPosition;
-      if (!anchor || entity.gevAlprSurfaceCheckedFor === anchor) continue;
-      if (!still || !surfaceSettled(scene) || budget.samples <= 0) {
+      const marker = markers.get(record.id);
+      const anchor = marker?.gevAlprCanvasPosition;
+      if (!anchor || marker.gevAlprSurfaceCheckedFor === anchor) continue;
+      if (!still || !engine.surface.tilesLoaded() || budget.samples <= 0) {
         pending = true;
         continue;
       }
       budget.samples -= 1;
       let sample;
       try {
-        sample = scene.sampleHeight(
-          Cesium.Cartographic.fromDegrees(record.longitude, record.latitude),
-          [entity],
-        );
+        sample = sampleHeight(record, marker);
       } catch {
         /* streaming tiles */
       }
-      const current = Cesium.Cartographic.fromCartesian(anchor).height;
+      const current = geo.cartographic.fromCartesian(anchor).height;
       const floor = services.groundFloor.cachedGroundFloor(
         record.latitude,
         record.longitude,
@@ -219,23 +188,42 @@ export function createAlprOverlay({
           (sample >= floor - SURFACE_BELOW_FLOOR_M &&
             sample <= floor + SURFACE_ABOVE_FLOOR_M));
       if (accepted && Math.abs(sample + MARKER_FLOOR_LIFT_M - current) > 1)
-        setAnchor(record, entity, sample + MARKER_FLOOR_LIFT_M);
-      entity.gevAlprSurfaceCheckedFor = entity.gevAlprCanvasPosition;
-      if (entity.id === state.selectedId)
-        entity.gevAlprDisplayPosition = entity.gevAlprCanvasPosition;
+        setAnchor(record, marker, sample + MARKER_FLOOR_LIFT_M);
+      marker.gevAlprSurfaceCheckedFor = marker.gevAlprCanvasPosition;
+      if (marker.id === state.selectedId)
+        marker.displayPosition = marker.gevAlprCanvasPosition;
     }
     return pending;
   }
 
-  function paint({ ctx, width, height, keyhole, occluder }) {
+  function paint(frame) {
+    const { ctx, width, height, keyhole } = frame;
     hits = [];
     if (!state.enabled || destroyed) return;
+    const horizonVisible = (point) => engine.projector.horizonVisible(point);
+    const matrix = frame.viewProjectionMatrix;
+    function project({ x, y, z }) {
+      const w = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+      if (!(w > 0)) return null;
+      return {
+        x:
+          (((matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12]) / w +
+            1) *
+            width) /
+          2,
+        y:
+          ((1 -
+            (matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13]) / w) *
+            height) /
+          2,
+      };
+    }
     let unresolved = false;
     const painted = [];
     const budget = { samples: ANCHOR_SAMPLES_PER_PAINT };
     for (const record of records) {
-      const entity = state.dataSource.entities.getById(record.id);
-      if (!entity) continue;
+      const marker = markers.get(record.id);
+      if (!marker) continue;
       const selected = record.id === state.selectedId;
       const image = images[selected ? 1 : 0];
       if (
@@ -243,46 +231,43 @@ export function createAlprOverlay({
         !image.naturalWidth ||
         (selected && !images[2]?.naturalWidth)
       ) {
-        nativeVisible(entity, true);
+        nativeVisible(marker, true);
         continue;
       }
-      const anchor = anchorFor(record, entity, budget);
+      const anchor = anchorFor(record, marker, budget);
       if (!anchor) {
-        nativeVisible(entity, true);
+        nativeVisible(marker, true);
         unresolved = true;
         continue;
       }
-      canvasOwned(entity, true);
-      if (occluder && !occluder.isPointVisible(anchor)) {
-        setShown(entity, false);
+      canvasOwned(marker, true);
+      if (!horizonVisible(anchor)) {
+        setShown(marker, false);
         continue;
       }
-      const scene = state.viewer.scene;
-      const origin = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        anchor,
-      );
+      const origin = project(anchor);
       if (!origin) {
-        setShown(entity, false);
+        setShown(marker, false);
         continue;
       }
       const alpha =
         services.overlays.keyholeAlpha?.(origin.x, origin.y, keyhole) ?? 1;
       if (!(alpha > 0)) {
-        setShown(entity, false);
+        setShown(marker, false);
         continue;
       }
-      const wedge = entity.gevAlprWedge;
+      const wedge = marker.gevAlprWedge;
       if (wedge) {
-        const left = Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          wedge[1],
-        );
-        const right = Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          wedge[2],
-        );
-        if (left && right) {
+        const left = project(wedge[1]);
+        const right = project(wedge[2]);
+        if (
+          left &&
+          right &&
+          Math.max(origin.x, left.x, right.x) >= -3 &&
+          Math.min(origin.x, left.x, right.x) <= width + 3 &&
+          Math.max(origin.y, left.y, right.y) >= -3 &&
+          Math.min(origin.y, left.y, right.y) <= height + 3
+        ) {
           ctx.save();
           ctx.globalAlpha *= alpha;
           paintDirectionWedge(ctx, origin, left, right, selected);
@@ -295,10 +280,10 @@ export function createAlprOverlay({
         origin.y < -60 ||
         origin.y > height + 60
       ) {
-        setShown(entity, false);
+        setShown(marker, false);
         continue;
       }
-      setShown(entity, true);
+      setShown(marker, true);
       painted.push({
         record,
         origin,
@@ -306,10 +291,10 @@ export function createAlprOverlay({
         image,
         alpha,
         scale: markerScale(
-          Cesium.Cartesian3.distance(state.viewer.camera.positionWC, anchor),
+          geo.cartesian3.distance(engine.camera.livePosition, anchor),
         ),
       });
-      if (selected) entity.gevAlprDisplayPosition = anchor;
+      if (selected) marker.displayPosition = anchor;
     }
     // Paint all glyphs after the wedges so one camera's cone cannot wash out another.
     for (const { record, origin, selected, image, alpha, scale } of painted) {
@@ -358,7 +343,7 @@ export function createAlprOverlay({
       if (!services.overlays?.registerPaintLane || typeof Image === 'undefined')
         return;
       lane = services.overlays.registerPaintLane('selected', paint, {
-        id: `alpr-${Cesium.createGuid()}`,
+        id: `alpr-${++overlaySequence}`,
         active: false,
       });
       images = [MARKER_IMAGE, SELECTED_IMAGE, BRACKETS_IMAGE].map((src) => {
@@ -371,9 +356,8 @@ export function createAlprOverlay({
     },
     sync(visible) {
       if (!lane) return;
-      for (const record of records)
-        nativeVisible(state.dataSource.entities.getById(record.id), true);
-      const position = state.viewer.camera.positionWC;
+      for (const record of records) nativeVisible(markers.get(record.id), true);
+      const position = engine.camera.livePosition;
       records = visible
         .filter(
           (record) =>
@@ -383,12 +367,9 @@ export function createAlprOverlay({
         .map((record) => ({
           record,
           distance: position
-            ? Cesium.Cartesian3.distanceSquared(
+            ? geo.cartesian3.distanceSquared(
                 position,
-                Cesium.Cartesian3.fromDegrees(
-                  record.longitude,
-                  record.latitude,
-                ),
+                geo.cartesian3.fromDegrees(record.longitude, record.latitude),
               )
             : 0,
         }))
@@ -421,8 +402,7 @@ export function createAlprOverlay({
     clear() {
       clearTimeout(retryTimer);
       retryTimer = null;
-      for (const record of records)
-        nativeVisible(state.dataSource?.entities.getById(record.id), true);
+      for (const record of records) nativeVisible(markers.get(record.id), true);
       records = [];
       hits = [];
       lane?.setActive(false);

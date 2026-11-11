@@ -1,29 +1,22 @@
 import { destroyTrack } from '../../data/contactPlayback.js';
-import * as Cesium from 'cesium';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
-  CAMERA_PERCENTAGE_CHANGED,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
-} from './policy.js';
+import { TRANSIT_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 
 /**
  * Init / enable / disable / update / destroy for one Transit layer instance.
- * Everything acquired here is released here — primitives, listeners, the sprite
- * registration, the pick owner, the render hold, and the camera sensitivity
- * this layer borrowed.
+ * Everything acquired here is released here — the renderer, listeners, the
+ * pick owner, the render hold, and the camera sensitivity this layer
+ * borrowed.
  * @param {object} context
  * @returns {object}
  */
-export function createLifecycle({ state, services, parts }) {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = services.sprites;
+export function createLifecycle({
+  state,
+  services,
+  parts,
+  source,
+  rendererFactory,
+}) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { releaseContinuousRender } = services.render;
 
@@ -38,17 +31,13 @@ export function createLifecycle({ state, services, parts }) {
    * default while Bikeshare was still relying on a fine one was exactly the
    * bug that produced.
    */
-  function borrowCameraSensitivity(viewer) {
-    claimCameraSensitivity(
-      viewer?.camera,
-      'transit',
-      CAMERA_PERCENTAGE_CHANGED,
-    );
+  function borrowCameraSensitivity() {
+    parts.renderer.claimCamera();
   }
 
   /** Give the claim up. The camera keeps whatever anyone else still asks for. */
-  function returnCameraSensitivity(viewer) {
-    releaseCameraSensitivity(viewer?.camera, 'transit');
+  function returnCameraSensitivity() {
+    parts.renderer?.releaseCamera();
   }
 
   /**
@@ -115,6 +104,10 @@ export function createLifecycle({ state, services, parts }) {
     hidden = false;
   }
 
+  const picks = {
+    owner: 'transit',
+    predicate: (pickedId) => state._vehicles.has(pickedId),
+  };
   const methods = {
     id: 'transit',
     name: 'Transit',
@@ -122,45 +115,57 @@ export function createLifecycle({ state, services, parts }) {
     source: 'GTFS-RT',
 
     /**
-     * Create the point collection. Called once at bootstrap.
-     * @param {Cesium.Viewer} viewer
+     * Create the marker sets. Called once at bootstrap.
      */
-    init(viewer) {
-      state._viewer = viewer;
-      state._markers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
+    init(viewer, options) {
+      this.attachRenderer(options);
+    },
+    show(enabled) {
+      if (state._markers) state._markers.show = enabled;
+      if (state._animatedMarkers) state._animatedMarkers.show = enabled;
+      state._overlayHost.setVisible(
+        TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
+        enabled,
+      );
+    },
+    picks,
+    attachRenderer(options = {}) {
+      state._sceneContext = options;
+      if (parts.renderer)
+        throw new Error('Transit layer is already initialized');
+      if (typeof rendererFactory !== 'function')
+        throw new TypeError('A transit renderer factory is required');
+      const renderer = rendererFactory({
+        state,
+        services,
+        parts,
+        source,
+        engine: options.engine,
       });
-      viewer.scene.primitives.add(state._markers);
-      registerSpriteCollection('transit', state._markers);
-      state._animatedMarkers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(state._animatedMarkers);
-      registerSpriteCollection('transit-motion', state._animatedMarkers);
-      state._animatedMarkers.show = false;
-      state._markers.show = false;
-      state._enabled = false;
-      state._activeFeeds.clear();
-      state._feedStatus.clear();
-      state._inFlight.clear();
-      for (const entry of state._vehicles.values()) {
-        entry.detectContact = null;
-        parts.rendering.cancelWake(entry);
-        destroyTrack(entry.track);
+      if (!renderer)
+        throw new TypeError('Transit has no renderer on this engine');
+      parts.renderer = renderer;
+      try {
+        renderer.attach();
+        [state._markers, state._animatedMarkers] = renderer.createMarkers();
+      } catch (error) {
+        renderer.destroy();
+        parts.renderer = null;
+        throw error;
       }
-      state._vehicles.clear();
-      parts.height.clear();
-      state._selectedKey = null;
-      state._lastUpdate = null;
-      state._error = null;
-      state._limitWarned = false;
-      state._altitudeGateOpen = false;
-      state._moving.clear();
-      state._heightDirty.clear();
-      state._rotationPose = null;
-      state._rotationDirty = false;
-      state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
-      restoreSpriteOrder(viewer);
+      state._overlayHost.setVisible(
+        TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
+        state._enabled,
+      );
+      if (state._enabled) {
+        for (const [key, entry] of state._vehicles) {
+          parts.rendering.addMarker(key, entry);
+          entry.detectContact = null;
+          entry.pathRevision = -1;
+        }
+        this.bindScene();
+        if (state._sceneContext?.viewReady !== false) this.repaint();
+      }
       bindStyleEvents();
       console.log(
         `[Data:Transit] Initialized with ${TRANSIT_ENABLED_FEEDS.length} GTFS-RT feeds`,
@@ -169,13 +174,16 @@ export function createLifecycle({ state, services, parts }) {
 
     /**
      * Show vehicles, watch the camera, and poll every feed in range.
-     * @param {Cesium.Viewer} viewer
      */
-    enable(viewer) {
+    enable() {
       state._enabled = true;
-      bindVisibility();
       state._generation += 1;
       state._error = null;
+      this.bindScene();
+    },
+
+    bindScene() {
+      bindVisibility();
       state._markers.show = true;
       state._animatedMarkers.show = true;
       state._maintenanceTimer = setInterval(
@@ -183,27 +191,78 @@ export function createLifecycle({ state, services, parts }) {
         250,
       );
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, true);
-      parts.selection.installClickHandler(viewer);
-      registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
+      parts.selection.installClickHandler();
+      registerPickOwner(picks.owner, picks.predicate, parts.renderer?.engine);
       if (!state._cameraChangedAttached) {
-        viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
-        borrowCameraSensitivity(viewer);
+        state._cameraChangedRemove = parts.renderer.onCameraChanged(
+          parts.viewport.onCameraChanged,
+        );
+        borrowCameraSensitivity();
         state._cameraChangedAttached = true;
       }
       if (!state._preRenderRemove) {
-        state._preRenderRemove = viewer.scene.preRender.addEventListener(
+        state._preRenderRemove = parts.renderer.onPreRender(
           parts.rendering.onPreRender,
         );
       }
       parts.viewport.runProximityCheck();
-      restoreSpriteOrder(viewer);
+    },
+
+    repaint() {
+      state._visibilityAt = 0;
+      state._rotationDirty = true;
+      parts.viewport.runProximityCheck();
+      parts.rendering.refreshVisibility();
+      parts.trails.rebind();
+      parts.selection.refreshSelectedCard(true);
+      for (const feed of state._activeFeeds.values())
+        parts.renderer.addCredit(
+          feed,
+          state._feedStatus.get(feed.id)?.creditSnapshot,
+        );
+    },
+    resumeViewport() {
+      if (state._enabled && parts.renderer) this.repaint();
+    },
+    detachRenderer() {
+      if (!parts.renderer) return;
+      state._sceneContext = null;
+      unbindVisibility();
+      clearInterval(state._maintenanceTimer);
+      clearTimeout(state._cameraDebounceTimer);
+      clearTimeout(state._visibilityTimer);
+      state._maintenanceTimer =
+        state._cameraDebounceTimer =
+        state._visibilityTimer =
+          null;
+      parts.selection.removeClickHandler();
+      unregisterPickOwner('transit', parts.renderer?.engine);
+      state._cameraChangedRemove?.();
+      state._cameraChangedRemove = null;
+      if (state._cameraChangedAttached) returnCameraSensitivity();
+      state._cameraChangedAttached = false;
+      state._preRenderRemove?.();
+      state._preRenderRemove = null;
+      parts.trails.detachRenderer();
+      for (const entry of state._vehicles.values()) {
+        parts.rendering.cancelWake(entry);
+        entry.marker = entry.markerCollection = entry.detectContact = null;
+      }
+      state._detectCache = null;
+      state._detectBuiltAt = -Infinity;
+      state._visible.clear();
+      state._moving.clear();
+      if (state._renderHeld)
+        releaseContinuousRender('transit', parts.renderer?.engine);
+      state._renderHeld = false;
+      parts.renderer.destroy();
+      parts.renderer = state._markers = state._animatedMarkers = null;
     },
 
     /**
      * Hide everything, stop polling, drop all vehicles.
-     * @param {Cesium.Viewer} viewer
      */
-    disable(viewer) {
+    disable() {
       state._enabled = false;
       unbindVisibility();
       parts.testing._stopTransitProbeForTest();
@@ -221,12 +280,11 @@ export function createLifecycle({ state, services, parts }) {
       parts.selection.clearSelection();
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
       parts.selection.removeClickHandler();
-      unregisterPickOwner('transit');
+      unregisterPickOwner('transit', parts.renderer?.engine);
       if (state._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(
-          parts.viewport.onCameraChanged,
-        );
-        returnCameraSensitivity(viewer);
+        state._cameraChangedRemove?.();
+        state._cameraChangedRemove = null;
+        returnCameraSensitivity();
         state._cameraChangedAttached = false;
       }
       if (state._preRenderRemove) {
@@ -253,7 +311,7 @@ export function createLifecycle({ state, services, parts }) {
       state._rotationPose = null;
       state._rotationDirty = false;
       if (state._renderHeld) {
-        releaseContinuousRender('transit');
+        releaseContinuousRender('transit', parts.renderer?.engine);
         state._renderHeld = false;
       }
     },
@@ -278,25 +336,16 @@ export function createLifecycle({ state, services, parts }) {
 
     /**
      * Tear down the collection entirely and release every shared registration.
-     * @param {Cesium.Viewer} viewer
      */
-    destroy(viewer) {
-      this.disable(viewer);
-      if (state._markers) {
-        unregisterSpriteCollection('transit', state._markers);
-        viewer?.scene?.primitives?.remove(state._markers);
-        state._markers = null;
-      }
-      if (state._animatedMarkers) {
-        unregisterSpriteCollection('transit-motion', state._animatedMarkers);
-        viewer?.scene?.primitives?.remove(state._animatedMarkers);
-        state._animatedMarkers = null;
-      }
+    destroy() {
+      this.disable();
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
+      parts.renderer?.destroy();
+      parts.renderer = null;
+      state._markers = state._animatedMarkers = null;
       parts.height.clear();
       unbindStyleEvents();
       state._dataManager = null;
-      state._viewer = null;
     },
   };
 

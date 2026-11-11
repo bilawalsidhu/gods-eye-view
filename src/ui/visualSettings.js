@@ -1,5 +1,9 @@
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
-import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import {
+  ENGINE_SHARPEN_DEFAULT,
+  STYLE_STATUS_LABELS,
+  presetSharpenIntensity,
+} from './visualPresets.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
@@ -101,8 +105,7 @@ export class VisualSettings {
       const intensity = decodeBloomIntensity(bloomIntensity, bloomVersion);
       this._setBloomIntensity(intensity, { syncShare: false });
     }
-    if (typeof sharpenIntensity === 'number')
-      this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
+    this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
     if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
     if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
     if (hudVariant) this._setHudVariant(hudVariant);
@@ -151,6 +154,7 @@ export class VisualSettings {
 
   constructor({
     viewer,
+    engine = null,
     services,
     elements,
     operations,
@@ -180,6 +184,9 @@ export class VisualSettings {
       readDisplayPortalActive,
     });
     this._lifetime = new UiLifetime();
+    // The baseline and the style presets take this engine's default sharpen
+    // (presetSharpenIntensity); share links restore their explicit value.
+    this._engineKind = engine?.kind ?? 'cesium';
     // The display, the active style and the style sliders carry translated
     // text; publish them again in a new locale.
     this._lifetime.own(
@@ -195,14 +202,18 @@ export class VisualSettings {
       setStyleParameter: (name, value) => this.setStyleParameter(name, value),
     });
     this._visualEffects = new VisualEffects({
-      viewer,
+      engine,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,
       releaseRender: services.releaseContinuousRender,
     });
     // The sharpen amount as a whole percentage. VisualEffects keeps the
     // fraction it applies, and drops writes once it is stopped.
-    this._sharpenPct = 49;
+    this._sharpenFollowsEngine = true;
+    this._sharpenPct = presetSharpenIntensity(
+      GLOBAL_POST_DEFAULTS.sharpen.intensity,
+      this._engineKind,
+    );
     // Detection's density stop, keyhole fade and outside opacity, in whole
     // percentages; the mode label the button shows (null until first
     // synced) and the allocation its segments show (null until set).
@@ -577,8 +588,10 @@ export class VisualSettings {
 
   /** Set the sharpen amount, a percentage clamped to 0-100, and apply it. */
   _setSharpenIntensity(pct, { syncShare = true } = {}) {
-    if (!Number.isFinite(pct)) return;
-    this._sharpenPct = Math.max(0, Math.min(100, Math.round(pct)));
+    const value = presetSharpenIntensity(pct, this._engineKind);
+    if (!Number.isFinite(value)) return;
+    this._sharpenFollowsEngine = pct === ENGINE_SHARPEN_DEFAULT;
+    this._sharpenPct = Math.max(0, Math.min(100, Math.round(value)));
     this._applySharpenIntensity(this._sharpenPct / 100);
     this._publishDisplay();
     if (syncShare) this._syncShareState();
@@ -621,7 +634,7 @@ export class VisualSettings {
       fadeRatio: this._detectionFadePct / 100,
       outsideOpacity: this._detectionOutsidePct / 100,
     });
-    this.viewer.scene.requestRender?.();
+    this.viewer?.scene.requestRender?.();
   }
 
   _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
@@ -787,8 +800,7 @@ export class VisualSettings {
     }
 
     const sharpenInput = preset.sharpen || {};
-    if (typeof sharpenInput.intensity === 'number')
-      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
+    this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
     if (typeof sharpenInput.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
@@ -830,10 +842,9 @@ export class VisualSettings {
       this._setBloomEnabled(defaults.bloom.enabled);
     }
 
-    if (typeof defaults.sharpen?.intensity === 'number')
-      this._setSharpenIntensity(defaults.sharpen.intensity, {
-        syncShare: false,
-      });
+    this._setSharpenIntensity(defaults.sharpen?.intensity, {
+      syncShare: false,
+    });
     if (typeof defaults.sharpen?.enabled === 'boolean') {
       this._setSharpenEnabled(defaults.sharpen.enabled);
     }
@@ -893,6 +904,7 @@ export class VisualSettings {
         bloomIntensity: this._getBloomIntensity(),
         bloomVersion: BLOOM_SCALE_VERSION,
         sharpenIntensity: this._sharpenPct,
+        sharpenFollowsEngine: this._sharpenFollowsEngine,
         hudVariant: this.hud.getVariant(),
         hudVisible: this.hud.visible,
         detectionMode: detection.mode,
@@ -1411,7 +1423,12 @@ export class VisualSettings {
   /** Publish the style's parameter rows, or none for a style without any. */
   _updateSliderPanel(styleName, { reveal = false } = {}) {
     const shader = STYLES[styleName];
-    if (!shader || !shader.uniforms || styleName === 'normal') {
+    if (
+      !shader ||
+      !shader.uniforms ||
+      styleName === 'normal' ||
+      !this.stages[styleName]
+    ) {
       this._publishParameters(null);
       this._scheduleRightPanelLayout();
       return;

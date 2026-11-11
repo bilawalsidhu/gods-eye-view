@@ -1,3 +1,6 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createCesiumMaps } from '../globe/cesium/maps.js';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
@@ -39,6 +42,7 @@ function fixture(registry, options = {}) {
         },
       },
       primitives: {
+        contains: (value) => primitives.includes(value),
         add(value) {
           primitives.push(value);
         },
@@ -58,16 +62,30 @@ function fixture(registry, options = {}) {
       },
     },
   };
-  const controller = new MapSourceController(viewer, {
-    registry,
+  viewer.creditDisplay = viewer.scene.frameState.creditDisplay;
+  const mapsOwner = createCesiumMaps(viewer, {
+    credits: createCesiumCredits(viewer).credits,
     createImageryLayer: (provider) => ({ provider }),
+    tilesetRef: {
+      current:
+        registry.sources.find((source) => source.tileset)?.tileset ?? null,
+    },
+  });
+  const controller = new MapSourceController({
+    registry,
+    engine: Object.assign(createFakeEngine(), { maps: mapsOwner.maps }),
     onChange: (state) => changes.push(state),
     ...options,
   });
+  const destroyController = controller.destroy.bind(controller);
+  controller.destroy = () => {
+    destroyController();
+    mapsOwner.destroy();
+  };
   return { viewer, controller, imagery, credits, primitives, removed, changes };
 }
 const settle = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve();
+  for (let i = 0; i < 60; i++) await Promise.resolve();
 };
 const descriptor = (id) => ({ id, label: id, kind: 'imagery' });
 function publicFixture(options) {
@@ -386,20 +404,20 @@ for (const reactivate of [false, true]) {
     await env.controller.setStack('supplied');
     resolve(tileset);
     await loading;
-    assert.equal(env.primitives.length, 0);
+    assert.deepEqual(env.primitives, [supplied]);
     assert.equal(supplied.show, true);
     assert.equal(env.controller.getActiveId(), 'supplied');
     if (reactivate) {
       await env.controller.setStack('slow');
       await env.controller.setStack('slow');
-      assert.deepEqual(env.primitives, [tileset]);
+      assert.deepEqual(env.primitives, [supplied, tileset]);
       assert.equal(reads, 1);
       assert.equal(tileset.show, true);
       assert.equal(supplied.show, false);
     }
     env.controller.destroy();
     await settle();
-    assert.equal(env.primitives.length, 0);
+    assert.deepEqual(env.primitives, [supplied]);
     assert.equal(destroyed, 1);
   });
 }
@@ -840,6 +858,232 @@ test('each switch generation reports its origin: an outside setStack is manual, 
   recovering.controller.destroy();
 });
 
+// --- On a globe engine: scene changes go through engine.maps ----------------
+
+async function engineFixture({ googleTileset = { show: true }, engine } = {}) {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  engine ??= createFakeEngine();
+  const registry = createDefaultMapSources({ googleTileset });
+  const providers = new Map();
+  for (const source of registry.sources) {
+    if (!source.imagery) continue;
+    const provider = { id: source.descriptor.id, errorEvent: event() };
+    providers.set(source.descriptor.id, provider);
+    source.imagery = async () => provider;
+    source.terrain = {
+      id: 'keyless',
+      create: async () => ({ provider: { id: 'terrain' } }),
+    };
+  }
+  const changes = [];
+  const controller = new MapSourceController({
+    registry,
+    engine,
+    onChange: (state) => changes.push(state),
+  });
+  return { engine, registry, providers, controller, changes, googleTileset };
+}
+
+test('on an engine a globe stack is base imagery, then no photoreal tiles, then terrain', async () => {
+  const env = await engineFixture();
+  await env.controller.setStack('esri-imagery');
+  const calls = env.engine.fake.calls.filter(({ method }) =>
+    method.startsWith('maps.'),
+  );
+  assert.deepEqual(
+    calls.map(({ method }) => method),
+    ['maps.setBaseImagery', 'maps.setPhotorealTiles', 'maps.setTerrain'],
+  );
+  const [imagery] = calls[0].args;
+  assert.equal(imagery.provider, env.providers.get('esri-imagery'));
+  assert.equal(imagery.descriptor.id, 'esri-imagery');
+  assert.match(imagery.credit, /Esri/);
+  assert.equal(calls[1].args[0], null);
+  assert.deepEqual(await calls[2].args[0].create(), {
+    provider: { id: 'terrain' },
+  });
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  env.engine.fake.resetCalls();
+  await env.controller.setStack('esri-imagery');
+  assert.equal(
+    env.engine.fake.callsOf('maps.setTerrain').length,
+    0,
+    'terrain stays applied',
+  );
+  env.controller.destroy();
+});
+
+test('on an engine a photoreal stack hands the engine its tileset and credit', async () => {
+  const env = await engineFixture();
+  await env.controller.setStack('osm');
+  env.engine.fake.resetCalls();
+  await env.controller.setStack('photoreal');
+  const [call] = env.engine.fake.callsOf('maps.setPhotorealTiles');
+  assert.equal(call.args[0].tileset, env.googleTileset);
+  assert.equal(env.engine.fake.callsOf('maps.setBaseImagery').length, 0);
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  env.controller.destroy();
+});
+
+test('on an engine tile failures still fall back through the error watch', async () => {
+  const env = await engineFixture();
+  await env.controller.setStack('esri-imagery');
+  const errors = env.providers.get('esri-imagery').errorEvent;
+  assert.equal(errors.size, 1);
+  errors.raise();
+  errors.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.equal(errors.size, 0);
+  assert.equal(
+    env.engine.fake.callsOf('maps.setBaseImagery').at(-1).args[0].provider,
+    env.providers.get('osm'),
+  );
+  env.controller.destroy();
+});
+
+test('on an engine owned tilesets are released through engine.maps and disposed', async () => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  let destroyed = 0;
+  const owned = { show: false, destroy: () => destroyed++ };
+  const controller = new MapSourceController({
+    engine,
+    registry: {
+      defaultId: 'owned',
+      sources: [
+        { descriptor: descriptor('owned'), createTileset: async () => owned },
+      ],
+    },
+  });
+  await controller.setStack('owned');
+  assert.equal(
+    engine.fake.callsOf('maps.setPhotorealTiles')[0].args[0].tileset,
+    owned,
+  );
+  controller.destroy();
+  assert.deepEqual(engine.fake.callsOf('maps.releasePhotorealTiles')[0].args, [
+    { tileset: owned },
+  ]);
+  assert.equal(destroyed, 1);
+});
+
+test('controller and Cesium engine: photoreal to a globe stack restores imagery and credit and back', async () => {
+  const { createCesiumEngine } =
+    await import('../globe/cesium/createCesiumEngine.js');
+  const { createFakeViewer } =
+    await import('../globe/cesium/testing/fakeViewer.mjs');
+  const viewer = createFakeViewer();
+  const google = { show: true };
+  viewer.primitiveList.push(google);
+  viewer.scene.globe.show = false;
+  const engine = createCesiumEngine(viewer, {
+    tilesetRef: { current: google },
+    requestRender: () => {},
+    createImageryLayer: (provider) => ({ provider }),
+  });
+  const env = await engineFixture({ googleTileset: google, engine });
+  const credits = () => viewer.staticCredits.map((credit) => credit.html);
+  await env.controller.setStack('photoreal');
+  assert.equal(google.show, true);
+  assert.equal(viewer.scene.globe.show, false);
+  const photorealCredits = credits();
+  await env.controller.setStack('esri-imagery');
+  assert.equal(google.show, false);
+  assert.equal(viewer.scene.globe.show, true);
+  assert.deepEqual(viewer.imageryList, [
+    { provider: env.providers.get('esri-imagery') },
+  ]);
+  assert.equal(credits().length, 1);
+  assert.match(credits()[0], /Esri/);
+  assert.equal(viewer.terrainProvider?.id, 'terrain', 'terrain applied');
+  await env.controller.setStack('osm');
+  assert.deepEqual(viewer.imageryList, [
+    { provider: env.providers.get('osm') },
+  ]);
+  assert.deepEqual(credits(), [], 'OSM carries no static credit');
+  await env.controller.setStack('photoreal');
+  assert.deepEqual(viewer.imageryList, []);
+  assert.equal(google.show, true);
+  assert.equal(viewer.scene.globe.show, false);
+  assert.deepEqual(credits(), photorealCredits);
+  env.controller.destroy();
+  engine.destroy();
+  assert.deepEqual(credits(), []);
+});
+
+// --- On a non-Cesium engine: descriptions only, nothing Cesium is built ------
+
+function navaraFixture() {
+  return import('../globe/testing/fakeEngine.js').then(
+    ({ createFakeEngine }) => {
+      const engine = createFakeEngine({ kind: 'navara' });
+      const registry = createDefaultMapSources({
+        googleTileset: { show: true },
+        cesiumToken: 'ion-test',
+        googleApiKey: 'google-test',
+      });
+      const built = [];
+      for (const source of registry.sources) {
+        if (source.imagery)
+          source.imagery = () => built.push(`imagery:${source.descriptor.id}`);
+        if (source.terrain)
+          source.terrain = {
+            ...source.terrain,
+            create: () => built.push(`terrain:${source.terrain.id}`),
+          };
+      }
+      const controller = new MapSourceController({ registry, engine });
+      return { engine, controller, built };
+    },
+  );
+}
+
+test('on a non-Cesium engine the controller sends descriptions and builds nothing', async () => {
+  const { engine, controller, built } = await navaraFixture();
+  await controller.setStack('esri-imagery');
+  const [imagery] = engine.fake.callsOf('maps.setBaseImagery')[0].args;
+  assert.equal(imagery.kind, 'esri-imagery');
+  assert.equal(imagery.descriptor.id, 'esri-imagery');
+  assert.match(imagery.credit, /Esri/);
+  assert.equal('provider' in imagery, false);
+  assert.equal(typeof imagery.imagery, 'undefined');
+  const [terrain] = engine.fake.callsOf('maps.setTerrain')[0].args;
+  assert.deepEqual(terrain, {
+    id: 'world',
+    kind: 'world',
+    accessToken: 'ion-test',
+  });
+  await controller.setStack('bing-aerial');
+  const [ion] = engine.fake.callsOf('maps.setBaseImagery')[1].args;
+  assert.equal(ion.kind, 'ion');
+  assert.equal(ion.accessToken, 'ion-test');
+  assert.ok(ion.style !== undefined);
+  await controller.setStack('photoreal');
+  const [photoreal] = engine.fake.callsOf('maps.setPhotorealTiles').at(-1).args;
+  assert.equal(photoreal.kind, 'photoreal');
+  assert.equal(photoreal.googleApiKey, 'google-test');
+  assert.equal(photoreal.cesiumToken, 'ion-test');
+  assert.equal('tileset' in photoreal, false);
+  assert.deepEqual(built, [], 'no Cesium provider, terrain or tileset built');
+  assert.equal(controller.getActiveId(), 'photoreal');
+  controller.destroy();
+});
+
+test('on a non-Cesium engine a source the engine cannot build falls back by description', async () => {
+  const { engine, controller } = await navaraFixture();
+  const setBaseImagery = engine.maps.setBaseImagery;
+  engine.maps.setBaseImagery = async (source) => {
+    if (source.kind === 'esri-imagery') throw new Error('no Esri here');
+    return setBaseImagery(source);
+  };
+  const state = await controller.setStack('esri-imagery');
+  assert.equal(state.activeId, 'osm');
+  assert.equal(state.lastError, 'Esri Satellite is unavailable; using OSM');
+  assert.equal(engine.fake.maps.imagery.kind, 'osm');
+  controller.destroy();
+});
+
 function failingEsri(env) {
   const esri = { failing: true, attempts: 0, next: null };
   env.registry.sources.find(
@@ -857,6 +1101,23 @@ const deferred = () => {
   const promise = new Promise((done) => (resolve = done));
   return { promise, resolve };
 };
+
+test('the Cesium engine retries its visible imagery fallback through the map controller', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = await engineFixture();
+  t.after(() => env.controller.destroy());
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getActiveId(), 'osm');
+  esri.failing = false;
+  t.mock.timers.tick(30_000);
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(
+    env.engine.fake.maps.imagery.provider,
+    env.providers.get('esri-imagery'),
+  );
+});
 
 test('a failed Esri construction shows OSM at once, backs off while retries fail, and recovers in place', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

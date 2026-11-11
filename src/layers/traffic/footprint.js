@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 
 const RETICLE_RANGE_KM = 10;
@@ -64,20 +64,20 @@ export function footprintTiles(polygon, zoom, near) {
 
 /** Reusable camera scratch; sampled only on camera events, never in the animation loop. */
 export function createReticleFootprint() {
-  const pixels = Array.from({ length: 25 }, () => new Cesium.Cartesian2());
-  const hits = Array.from({ length: 25 }, () => new Cesium.Cartesian3());
-  const carto = new Cesium.Cartographic();
-  const ray = new Cesium.Ray();
-  return (viewer, altitude) => {
-    const { camera, scene } = viewer;
-    if (!camera.getPickRay) return null;
-    const nadir = camera.positionCartographic;
+  const pixels = Array.from({ length: 25 }, () => geo.cartesian2.create());
+  const carto = geo.cartographic.create();
+  return (engine, altitude) => {
+    const camera = engine?.camera;
+    if (!camera?.pickRay) return null;
+    const pose = camera.pose();
+    const nadir = pose.cartographic;
+    const canvas = engine.host.canvas;
     const near = {
-      lat: Cesium.Math.toDegrees(nadir.latitude),
-      lon: Cesium.Math.toDegrees(nadir.longitude),
+      lat: geo.math.toDegrees(nadir.latitude),
+      lon: geo.math.toDegrees(nadir.longitude),
     };
-    const width = scene.canvas.clientWidth || scene.canvas.width,
-      height = scene.canvas.clientHeight || scene.canvas.height;
+    const width = canvas.clientWidth || canvas.width,
+      height = canvas.clientHeight || canvas.height;
     const side = Math.min(width, height),
       left = (width - side) / 2,
       top = (height - side) / 2;
@@ -88,17 +88,18 @@ export function createReticleFootprint() {
           p = pixels[i];
         p.x = left + (side * col) / 4;
         p.y = top + (side * row) / 4;
-        const hit = camera.pickEllipsoid(p, Cesium.Ellipsoid.WGS84, hits[i]);
+        const hit = camera.pickEllipsoid(p);
         let dx, dy;
         if (hit) {
-          Cesium.Cartographic.fromCartesian(hit, Cesium.Ellipsoid.WGS84, carto);
-          dy = (Cesium.Math.toDegrees(carto.latitude) - near.lat) * 111.195;
-          let dlon = Cesium.Math.toDegrees(carto.longitude) - near.lon;
+          geo.cartographic.fromCartesian(hit, geo.ellipsoid.WGS84, carto);
+          dy = (geo.math.toDegrees(carto.latitude) - near.lat) * 111.195;
+          let dlon = geo.math.toDegrees(carto.longitude) - near.lon;
           dlon -= 360 * Math.round(dlon / 360);
           dx = dlon * 111.195 * Math.cos(nadir.latitude);
         } else {
-          camera.getPickRay(p, ray);
-          const d = ray.direction;
+          const picked = camera.pickRay(p);
+          if (!picked) continue;
+          const d = picked.direction;
           dx =
             -Math.sin(nadir.longitude) * d.x + Math.cos(nadir.longitude) * d.y;
           dy =
@@ -154,8 +155,8 @@ export function createReticleFootprint() {
           nadir.latitude,
           nadir.longitude,
           nadir.height / 10000,
-          camera.heading,
-          camera.pitch,
+          pose.heading,
+          pose.pitch,
         ]
           .map((v) => Number(v || 0).toFixed(7))
           .join(','),

@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
+import { fromDegrees } from '../../geo/cartesian3.js';
+import { toDegrees } from '../../geo/math.js';
+import { createAirQualityDisplay } from './render/display.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -23,13 +26,19 @@ const STATION_MARKER_RADIUS_M = 6_000;
 const READOUT_LIMIT = 5;
 
 /** Own one air-quality display, its refresh lifecycle, and its readout card. */
-export function createAirQualityLayer({ source, overlayHost } = {}) {
+export function createAirQualityLayer({
+  source,
+  overlayHost,
+  rendererFactory = ({ engine }) => createAirQualityDisplay(engine),
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
-  let _viewer = null;
+  let sceneEngine = null;
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
+  let initialized = false;
   let _request = null;
-  let _dataSource = null;
+  let renderer = null;
   let _readings = [];
   let _count = 0;
   let _lastUpdate = null;
@@ -41,14 +50,13 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
 
   /** The camera's lon/lat rectangle in degrees, or null when unresolvable. */
   const viewRectangle = () => {
-    const rectangle = _viewer?.camera?.computeViewRectangle?.();
+    const rectangle = renderer?.viewRectangle();
     if (!rectangle) return null;
-    const toDeg = Cesium.Math.toDegrees;
     return {
-      west: toDeg(rectangle.west),
-      south: toDeg(rectangle.south),
-      east: toDeg(rectangle.east),
-      north: toDeg(rectangle.north),
+      west: toDegrees(rectangle.west),
+      south: toDegrees(rectangle.south),
+      east: toDegrees(rectangle.east),
+      north: toDegrees(rectangle.north),
     };
   };
 
@@ -59,23 +67,43 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     source: 'ECCC MSC GeoMet',
     updateInterval: 1_200_000,
 
-    init(viewer) {
-      if (_viewer) throw new Error('Air quality layer is already initialized');
-      _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('air-quality');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
-      _readings = [];
-      _count = 0;
-      _lastUpdate = null;
-      _lastError = null;
-      _enabled = false;
+    init(viewer, { engine = null } = {}) {
+      if (initialized)
+        throw new Error('Air quality layer is already initialized');
+      initialized = true;
+      try {
+        if (engine) this.attachRenderer({ engine });
+      } catch (error) {
+        this.destroy();
+        throw error;
+      }
+    },
+
+    show(enabled) {
+      renderer?.setVisible(enabled);
+      overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
+      if (!initialized || renderer)
+        throw new Error('Invalid air quality scene attachment');
+      sceneEngine = engine;
+      renderer = rendererFactory({ engine });
+      this.show(_enabled);
+      overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, _enabled);
+      if (_readings.length) this._render();
+    },
+
+    detachRenderer() {
+      overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
+      renderer?.destroy();
+      renderer = null;
+      sceneEngine = null;
     },
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      renderer?.setVisible(true);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, true);
       notify();
     },
@@ -85,14 +113,14 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      renderer?.setVisible(false);
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       notify();
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -120,47 +148,13 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       }
     },
 
-    /** Rebuild entities and overlay labels from the current readings. */
+    /** Redraw the station discs and overlay labels from the current readings. */
     _render() {
-      if (!_dataSource) return;
-      _dataSource.entities.removeAll();
+      if (!renderer) return;
+      renderer.replace(_readings, STATION_MARKER_RADIUS_M);
       const overlayEntries = [];
       for (const reading of _readings) {
-        const position = Cesium.Cartesian3.fromDegrees(
-          reading.lon,
-          reading.lat,
-        );
-        const color = Cesium.Color.fromCssColorString(reading.color);
-        _dataSource.entities.add(
-          new Cesium.Entity({
-            id: `air-quality:${reading.id}`,
-            position,
-            ellipse: {
-              // Static axes, as in the earthquake layer: a per-frame axis
-              // re-tessellates the clamped ground primitive every frame.
-              semiMajorAxis: STATION_MARKER_RADIUS_M,
-              semiMinorAxis: STATION_MARKER_RADIUS_M,
-              material: new Cesium.ColorMaterialProperty(color.withAlpha(0.35)),
-              outline: true,
-              outlineColor: color.withAlpha(0.9),
-              outlineWidth: 2,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            },
-            properties: {
-              provider: reading.provider,
-              scale: reading.scale,
-              value: reading.value,
-              band: reading.band,
-              name: reading.name,
-              zone: reading.zone,
-              risk: reading.risk,
-              observedMs: reading.observedMs,
-              note: reading.note,
-              lat: reading.lat,
-              lon: reading.lon,
-            },
-          }),
-        );
+        const position = fromDegrees(reading.lon, reading.lat);
         overlayEntries.push(
           createAirQualityOverlayEntry({
             id: reading.id,
@@ -184,17 +178,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       _enabled = false;
-      overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
-      overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
-      }
-      _viewer = null;
+      initialized = false;
+      this.detachRenderer();
       _readings = [];
       _count = 0;
       _lastUpdate = null;

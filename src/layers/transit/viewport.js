@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -7,6 +7,7 @@ import {
   inflateViewBounds,
 } from './policy.js';
 import { transitFeedsInRange } from '../../data/transitFeeds.js';
+import { viewRectangleCenter } from '../shared/viewRectangle.js';
 
 /**
  * Camera-driven feed activation: only the feeds whose coverage circle contains
@@ -17,27 +18,25 @@ import { transitFeedsInRange } from '../../data/transitFeeds.js';
 export function createViewport({ state, services, parts }) {
   const { governorRequestRender } = services.render;
 
-  function getCameraAltitude(viewer = state._viewer) {
-    const carto = viewer?.camera?.positionCartographic;
+  function getCameraAltitude() {
+    const carto = parts.renderer?.cameraCartographic();
     return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
   }
 
-  function getCameraCenterLatLon(viewer = state._viewer) {
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+  function getCameraCenterLatLon() {
+    const rect = parts.renderer?.viewRectangle();
     if (rect) {
-      const center = Cesium.Rectangle.center(rect);
+      const center = viewRectangleCenter(rect);
       return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
+        lat: geo.math.toDegrees(center.latitude),
+        lon: geo.math.toDegrees(center.longitude),
       };
     }
-    const carto = viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     if (carto) {
       return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
+        lat: geo.math.toDegrees(carto.latitude),
+        lon: geo.math.toDegrees(carto.longitude),
       };
     }
     return null;
@@ -53,16 +52,13 @@ export function createViewport({ state, services, parts }) {
    * animating. Cheap, and only on a settled camera — never per frame.
    */
   function refreshViewBounds() {
-    const viewer = state._viewer;
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+    const rect = parts.renderer?.viewRectangle();
     state._viewBounds = rect
       ? inflateViewBounds({
-          south: Cesium.Math.toDegrees(rect.south),
-          north: Cesium.Math.toDegrees(rect.north),
-          west: Cesium.Math.toDegrees(rect.west),
-          east: Cesium.Math.toDegrees(rect.east),
+          south: geo.math.toDegrees(rect.south),
+          north: geo.math.toDegrees(rect.north),
+          west: geo.math.toDegrees(rect.west),
+          east: geo.math.toDegrees(rect.east),
         })
       : null;
     // The sweep itself is deferred: `marker.show` is a dirty flag, and a drag
@@ -80,7 +76,12 @@ export function createViewport({ state, services, parts }) {
       globalThis.document?.visibilityState === 'hidden'
     )
       return;
-    if (!state._enabled || !state._viewer) return;
+    if (
+      !state._enabled ||
+      !parts.renderer?.ready ||
+      state._sceneContext?.viewReady === false
+    )
+      return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
     const wasGateOpen = state._altitudeGateOpen;
@@ -122,12 +123,13 @@ export function createViewport({ state, services, parts }) {
     }
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
-    governorRequestRender('transit-proximity');
+    governorRequestRender('transit-proximity', parts.renderer?.engine);
     // Repaint now: the row follows the camera, the manager tick is 15 s.
     if (changed) state._dataManager?.refreshLayerStats?.('transit');
   }
 
   function onCameraChanged() {
+    if (state._sceneContext?.viewReady === false) return;
     // The bounds update immediately; the feed proximity check stays debounced.
     // A person dragging the globe should not wait a third of a second for the
     // vehicles under the cursor to start moving again.

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { nextTick } from 'vue';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { createInteractionSession } from '../director/interactions/session.js';
@@ -9,19 +8,19 @@ import { applicationPinia } from '../ui/vueRuntime.js';
 /**
  * Own the active shot's pick handler, accessible actions and plain-text
  * feedback. The Scene actions panel is presented to the scene interactions
- * store, which its view renders inside the viewer's container.
+ * store, which its view renders inside the globe engine's container. A
+ * feature is picked through engine.input (a click with its pick).
  */
 // Keys each activation's panel, so a new one never reuses an old one's DOM.
 let activations = 0;
 
-export function createSceneInteractions(
-  viewer,
-  {
-    execute,
-    available = () => true,
-    store = useSceneInteractionsStore(applicationPinia()),
-  },
-) {
+export function createSceneInteractions({
+  execute,
+  engine = null,
+  available = () => true,
+  store = useSceneInteractionsStore(applicationPinia()),
+}) {
+  let container = engine?.host?.container;
   let panel = null,
     handler,
     items = [],
@@ -76,10 +75,57 @@ export function createSceneInteractions(
       });
     return ok;
   }
+  function bindInput(owner) {
+    if (!engine) return;
+    const click = (event) => {
+      if (
+        panel?.owner !== owner ||
+        !shown() ||
+        !isPointerFree() ||
+        !available()
+      )
+        return;
+      const picked = event.picked?.id;
+      const matches = items.filter(
+        (item) =>
+          targets.get(
+            JSON.stringify([item.target.packId, item.target.featureId]),
+          ) === picked,
+      );
+      if (!matches.length) return;
+      update({
+        outlined: matches.map((item) => item.id),
+        status: t('Selected feature: {feature}. Choose an action.', {
+          feature: matches[0].target.featureId,
+        }),
+      });
+      // Focus the first match once the panel shows the selection.
+      void nextTick(() => {
+        if (panel?.owner !== owner || !shown()) return;
+        const id = globalThis.CSS?.escape?.(matches[0].id) ?? matches[0].id;
+        engine?.host.container
+          ?.querySelector?.(
+            `[data-director-interactions] [data-director-action="${id}"]`,
+          )
+          ?.focus({ preventScroll: true });
+      });
+    };
+    handler = { destroy: engine.input.on('click', click, { pick: true }) };
+  }
   return {
     clear,
     destroy: clear,
     getState: session.getState,
+    setScene(nextEngine, registered) {
+      handler?.destroy();
+      handler = null;
+      engine = nextEngine;
+      if (registered) targets = registered;
+      container = engine?.host?.container ?? container;
+      if (!panel || !engine) return;
+      update({ container });
+      bindInput(panel.owner);
+    },
     activate(shot, registered) {
       clear();
       items = shot.interactions || [];
@@ -102,7 +148,7 @@ export function createSceneInteractions(
       panel = {
         id: ++activations,
         owner,
-        container: viewer.container,
+        container,
         items: items.map(({ id, label }) => ({ id, label })),
         status: t('Select a feature or use Tab and Enter to choose an action.'),
         busy: false,
@@ -117,40 +163,7 @@ export function createSceneInteractions(
         },
       });
       session.activate(items);
-      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      handler.setInputAction((event) => {
-        if (
-          panel?.owner !== owner ||
-          !shown() ||
-          !isPointerFree() ||
-          !available()
-        )
-          return;
-        const picked = viewer.scene.pick(event.position)?.id;
-        const matches = items.filter(
-          (item) =>
-            targets.get(
-              JSON.stringify([item.target.packId, item.target.featureId]),
-            ) === picked,
-        );
-        if (!matches.length) return;
-        update({
-          outlined: matches.map((item) => item.id),
-          status: t('Selected feature: {feature}. Choose an action.', {
-            feature: matches[0].target.featureId,
-          }),
-        });
-        // Focus the first match once the panel shows the selection.
-        void nextTick(() => {
-          if (panel?.owner !== owner || !shown()) return;
-          const id = globalThis.CSS?.escape?.(matches[0].id) ?? matches[0].id;
-          viewer.container
-            ?.querySelector?.(
-              `[data-director-interactions] [data-director-action="${id}"]`,
-            )
-            ?.focus({ preventScroll: true });
-        });
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      bindInput(owner);
     },
   };
 }

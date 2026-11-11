@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   gstime,
   propagate,
@@ -79,16 +79,16 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   function orbitFrameModelMatrix(
     gmstAtBake,
     nowDate,
-    result = new Cesium.Matrix4(),
+    result = geo.matrix4.create(),
   ) {
     const deltaGmst = gstime(nowDate) - gmstAtBake;
-    const rotation = Cesium.Matrix3.fromRotationZ(
+    const rotation = geo.matrix3.fromRotationZ(
       -deltaGmst,
       layerState._scratchRingRotation,
     );
-    return Cesium.Matrix4.fromRotationTranslation(
+    return geo.matrix4.fromRotationTranslation(
       rotation,
-      Cesium.Cartesian3.ZERO,
+      geo.cartesian3.ZERO,
       result,
     );
   }
@@ -110,7 +110,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       if (!posVel.position || typeof posVel.position === 'boolean') return null;
 
       const gmst = gstime(date);
-      const geo = eciToGeodetic(posVel.position, gmst);
+      const geodetic = eciToGeodetic(posVel.position, gmst);
       const velocity =
         posVel.velocity && typeof posVel.velocity !== 'boolean'
           ? posVel.velocity
@@ -119,12 +119,12 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         ? Math.hypot(velocity.x, velocity.y, velocity.z) * 1000
         : null;
 
-      const latitude = degreesLat(geo.latitude);
-      const longitude = degreesLong(geo.longitude);
+      const latitude = degreesLat(geodetic.latitude);
+      const longitude = degreesLong(geodetic.longitude);
       return {
         longitude,
         latitude,
-        altitude: geo.height * 1000, // km → meters
+        altitude: geodetic.height * 1000, // km → meters
         speedMps: Number.isFinite(speedMps) ? speedMps : null,
         groundTrackDeg: groundTrackBearingDeg(
           posVel.position,
@@ -165,12 +165,12 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       try {
         const posVel = propagate(satrec, t);
         if (!posVel.position || typeof posVel.position === 'boolean') continue;
-        const geo = eciToGeodetic(posVel.position, fixedGmst);
+        const geodetic = eciToGeodetic(posVel.position, fixedGmst);
         positions.push(
-          Cesium.Cartesian3.fromDegrees(
-            degreesLong(geo.longitude),
-            degreesLat(geo.latitude),
-            geo.height * 1000,
+          geo.cartesian3.fromDegrees(
+            degreesLong(geodetic.longitude),
+            degreesLat(geodetic.latitude),
+            geodetic.height * 1000,
           ),
         );
       } catch {

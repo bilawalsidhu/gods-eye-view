@@ -991,6 +991,10 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
         'osm_query',
       ].includes(tool.name),
   );
+  // The EOX basemap extends the map enum, independently of the mission tools.
+  const stacks = legacyTools.find((tool) => tool.name === 'set_map_stack')
+    .parameters.properties.stack.enum;
+  assert.equal(stacks.pop(), 'sentinel2');
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/trackedModelRegime.test.mjs
 //
@@ -45,6 +46,7 @@ import militaryFlightsLayer, {
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -155,7 +157,7 @@ if (typeof globalThis.window === 'undefined') {
 /** A viewer stub whose camera altitude the test can move between evaluations. */
 function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undefined } = {}) {
   const tileset = { show: true, tilesLoaded };
-  return {
+  const viewer = {
     camera: {
       positionCartographic: { height },
       positionWC: Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 5000),
@@ -171,6 +173,13 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
     trackedEntity: undefined,
     entities: { remove() {} },
   };
+  viewer.engine = createFakeEngine();
+  viewer.engine.fake.script('tilesLoaded', () => viewer.tileset.tilesLoaded === true);
+  viewer.engine.fake.script('sampleHeightDetailed', (place, { exclude } = {}) => {
+    const h = viewer.scene.sampleHeight(place, exclude);
+    return Number.isFinite(h) ? { height: h, source: 'tiles' } : undefined;
+  });
+  return viewer;
 }
 
 /** A billboard with a real position, so the tracked-model driver has somewhere
@@ -192,6 +201,28 @@ function recordingModelCollection() {
   return { added, add(m) { added.push(m); }, remove() {}, isDestroyed() { return false; } };
 }
 
+let loadModel = () => Promise.reject(new Error('No model fixture'));
+function rendererFor(viewer, collection) {
+  return recordingAircraftRenderer(viewer.engine, {
+    view: { camera: viewer.camera, scene: viewer.scene },
+    fleet: { shown: true },
+    models: {
+      live: () => Boolean(collection) && !collection.isDestroyed(),
+      loadFleet: (spec) => loadModel(spec),
+      loadTracked: (spec) => loadModel(spec),
+      preload: (url) => loadModel({ url }),
+      add: (model) => collection.add(model),
+      remove: (model) => collection?.remove(model),
+      destroy: (model) => model.destroy(),
+      setPose(model, position, headingDeg, offsetDeg = 180) {
+        return Cesium.Transforms.headingPitchRollToFixedFrame(position,
+          new Cesium.HeadingPitchRoll(Cesium.Math.toRadians((headingDeg || 0) + offsetDeg), 0, 0),
+          Cesium.Ellipsoid.WGS84, undefined, model.modelMatrix);
+      },
+    },
+  });
+}
+
 const LAYERS = [
   {
     name: 'flights',
@@ -205,6 +236,7 @@ const LAYERS = [
     seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedFlightRefreshStateForTest({
+        renderer: () => rendererFor(viewer, modelCollection),
         icao24,
         entity: null,
         billboard,
@@ -230,6 +262,7 @@ const LAYERS = [
     seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedMilitaryRefreshStateForTest({
+        renderer: () => rendererFor(viewer, modelCollection),
         icao24,
         entity: null,
         billboard,
@@ -251,7 +284,7 @@ for (const fixture of LAYERS) {
     fixture.layer.stopTracking();
     fixture.layer.setParams({ models3d: true });
 
-    const realFrom = Cesium.Model.fromGltfAsync;
+    const realFrom = loadModel;
     const viewer = viewerAtHeight(30_000, { tilesLoaded: false });
     const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
     const loadedCollection = recordingModelCollection();
@@ -265,7 +298,7 @@ for (const fixture of LAYERS) {
 
     try {
       const loadingIcao = fixture.name === 'flights' ? 'a0f201' : 'b0f201';
-      Cesium.Model.fromGltfAsync = () => Promise.resolve(loadingModel);
+      loadModel = () => Promise.resolve(loadingModel);
       const billboard = fixture.seed({
         viewer,
         tracked: false,
@@ -299,7 +332,7 @@ for (const fixture of LAYERS) {
 
       const failedIcao = fixture.name === 'flights' ? 'a0f202' : 'b0f202';
       const failedCollection = recordingModelCollection();
-      Cesium.Model.fromGltfAsync = () => Promise.reject(new Error('simulated fleet GLB failure'));
+      loadModel = () => Promise.reject(new Error('simulated fleet GLB failure'));
       const failedBillboard = fixture.seed({
         viewer,
         tracked: false,
@@ -316,7 +349,7 @@ for (const fixture of LAYERS) {
         .some((object) => object.icao24 === failedIcao),
       'fleet load rejection leaves the contact in the billboard proximity cohort');
     } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
+      loadModel = realFrom;
       fixture.layer.setParams({ models3d: false });
       fixture.layer.stopTracking();
     }
@@ -576,7 +609,7 @@ for (const fixture of LAYERS) {
     fixture.layer.stopTracking();
     fixture.layer.setParams({ models3d: false });
 
-    const realFrom = Cesium.Model.fromGltfAsync;
+    const realFrom = loadModel;
     const realNow = Date.now;
     let now = 3_000_000;
     Date.now = () => now;
@@ -594,7 +627,7 @@ for (const fixture of LAYERS) {
       scale: 1,
       destroy() {},
     };
-    Cesium.Model.fromGltfAsync = () => Promise.resolve(model);
+    loadModel = () => Promise.resolve(model);
 
     try {
       const billboard = fixture.seed({
@@ -687,7 +720,7 @@ for (const fixture of LAYERS) {
       assert.equal(fixture.trackedBillboardColor().alpha, 1,
         'there is no invisible-owner gap while the replacement snap is unavailable');
     } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
+      loadModel = realFrom;
       Date.now = realNow;
       fixture.layer.stopTracking();
     }
@@ -834,14 +867,14 @@ for (const fixture of LAYERS) {
     clearTr3bRegistry();
     fixture.layer.setParams({ models3d: false });
 
-    const realFrom = Cesium.Model.fromGltfAsync;
+    const realFrom = loadModel;
     const realNow = Date.now;
     let now = 1_000_000;
     const clock = { advance(ms) { now += ms; } };
     Date.now = () => now;
     let attempts = 0;
     const requested = [];
-    Cesium.Model.fromGltfAsync = ({ url }) => {
+    loadModel = ({ url }) => {
       attempts++; requested.push(url);
       return Promise.reject(new Error('simulated missing GLB'));
     };
@@ -884,7 +917,7 @@ for (const fixture of LAYERS) {
       await driveFrames(fixture, 3, clock);
       assert.ok(attempts > settled, 'selecting another contact restores the retry budget');
     } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
+      loadModel = realFrom;
       Date.now = realNow;
       console.warn = realWarn;
       fixture.layer.stopTracking();
@@ -895,14 +928,14 @@ for (const fixture of LAYERS) {
     clearTr3bRegistry();
     fixture.layer.setParams({ models3d: false });
 
-    const realFrom = Cesium.Model.fromGltfAsync;
+    const realFrom = loadModel;
     const realNow = Date.now;
     const realWarn = console.warn;
     let now = 2_000_000;
     const clock = { advance(ms) { now += ms; } };
     Date.now = () => now;
     let attempts = 0;
-    Cesium.Model.fromGltfAsync = () => { attempts++; return Promise.reject(new Error('simulated missing GLB')); };
+    loadModel = () => { attempts++; return Promise.reject(new Error('simulated missing GLB')); };
     console.warn = () => {};
 
     try {
@@ -921,7 +954,7 @@ for (const fixture of LAYERS) {
       assert.ok(attempts > latched,
         're-tracking the same contact is a new selection and gets its retries back');
     } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
+      loadModel = realFrom;
       Date.now = realNow;
       console.warn = realWarn;
       fixture.layer.stopTracking();

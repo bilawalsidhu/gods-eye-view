@@ -1,12 +1,11 @@
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   readFix,
   correctHeight,
   FIX_FLAGS,
   mergeHistory,
 } from '../../data/contactPlayback.js';
-import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
@@ -33,8 +32,8 @@ export function createTrails({ state, services, parts, source }) {
     fadeTimer = null,
     revision = 0;
   function ensureRenderer() {
-    if (!renderer && state._viewer)
-      renderer = createContactTrailRenderer(state._viewer.scene);
+    if (!renderer && parts.renderer?.ready)
+      renderer = parts.renderer.createTrailRenderer();
     return renderer;
   }
   function style() {
@@ -154,12 +153,10 @@ export function createTrails({ state, services, parts, source }) {
           // Ground polylines consume longitude/latitude and drape themselves.
           // Unknown floors still disqualify the marker corridor.
           positions.push(
-            draped ? Cesium.Cartesian3.fromDegrees(point.lon, point.lat) : null,
+            draped ? geo.cartesian3.fromDegrees(point.lon, point.lat) : null,
           );
         } else
-          positions.push(
-            Cesium.Cartesian3.fromDegrees(point.lon, point.lat, h),
-          );
+          positions.push(geo.cartesian3.fromDegrees(point.lon, point.lat, h));
       }
       signature += `${a.seq}/${b.seq}:${heights.join(',')};`;
       if (retainBody) vertices += n + 1;
@@ -192,7 +189,10 @@ export function createTrails({ state, services, parts, source }) {
         });
         entry.trailVertices = vertices;
         entry.trailSegments = all;
-        services.render.governorRequestRender('transit-trail-history');
+        services.render.governorRequestRender(
+          'transit-trail-history',
+          parts.renderer?.engine,
+        );
       }
     }
     return changed;
@@ -216,7 +216,7 @@ export function createTrails({ state, services, parts, source }) {
     }
     if (sample.fromSeq === sample.toSeq) {
       if (!Number.isFinite(entry.segment.from.h)) return null;
-      Cesium.Cartesian3.clone(entry.fromCart, out);
+      geo.cartesian3.clone(entry.fromCart, out);
       return out;
     }
     const path = entry.displayPaths?.get(sample.fromSeq);
@@ -303,7 +303,10 @@ export function createTrails({ state, services, parts, source }) {
           parts.height.anchorFloors();
           prepareEntry(entry);
           update();
-          services.render.governorRequestRender('transit-trail-backfill');
+          services.render.governorRequestRender(
+            'transit-trail-backfill',
+            parts.renderer?.engine,
+          );
         })
         .catch(() => {
           // Session history remains usable if the optional retained read fails.
@@ -316,8 +319,23 @@ export function createTrails({ state, services, parts, source }) {
       if (!state._enabled || selected !== entry) return;
       parts.rendering.sampleIdle(entry);
       update();
-      services.render.governorRequestRender('transit-trail-age');
+      services.render.governorRequestRender(
+        'transit-trail-age',
+        parts.renderer?.engine,
+      );
     }, 1000);
+  }
+  function detachRenderer() {
+    renderer?.destroy();
+    renderer = null;
+  }
+  function rebind() {
+    if (!selected) return;
+    ensureRenderer();
+    selected.pathRevision = -1;
+    style();
+    prepareEntry(selected);
+    update();
   }
   function clear() {
     if (historyRequest) {
@@ -341,6 +359,8 @@ export function createTrails({ state, services, parts, source }) {
     update,
     style,
     destroy: clear,
+    detachRenderer,
+    rebind,
     requestDiagnostics: () => ({
       requestCount,
       abortCount,
