@@ -4,6 +4,7 @@ import { geminiSocketUrl } from './geminiSession.js';
 import { createVoiceSession } from './session.js';
 import { createPointerTracker } from './pointerContext.js';
 import { withToolCatalog } from './gevRealtime.js';
+import { setLocale, t } from '../i18n/index.js';
 import {
   harness,
   tick,
@@ -3661,4 +3662,29 @@ test('a missing server key reaches the error state flagged, other token failures
     assert.equal(error?.missingKey, missingKey);
     assert.equal(h.sockets.length, 0);
   }
+});
+
+test('an error keeps its English catalog text beside the worded detail', async (t2) => {
+  t2.after(() => setLocale('en'));
+  setLocale('es');
+  const h = harness({
+    fetchImpl: async () =>
+      Response.json(
+        { error: 'Gemini quota is unavailable. Try again later.' },
+        { status: 503 },
+      ),
+  });
+  await h.c.start();
+  const error = h.events
+    .filter((event) => event.type === 'state' && event.state === 'error')
+    .at(-1);
+  assert.equal(
+    error.sourceDetail,
+    'Gemini quota is unavailable. Try again later.',
+  );
+  assert.equal(
+    error.detail,
+    t('Gemini quota is unavailable. Try again later.'),
+  );
+  assert.notEqual(error.detail, error.sourceDetail);
 });

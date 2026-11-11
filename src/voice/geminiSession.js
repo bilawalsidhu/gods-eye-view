@@ -71,7 +71,9 @@ export function geminiSocketUrl({ token, websocketUrl }) {
   return url.href;
 }
 
-// Known local-server failures are translated; unexpected diagnostics stay intact.
+// The local server's known failures, marked for translation. Each is kept as
+// its English catalog text, which the status words when it is shown, so a
+// language change words it again; unexpected diagnostics stay intact.
 function tokenErrorMessage(error) {
   switch (error) {
     case msg('Gemini voice could not connect. Try again.'):
@@ -85,7 +87,6 @@ function tokenErrorMessage(error) {
     case msg('Token request is too large'):
     case msg('Use an empty JSON token request'):
     case msg('Method not allowed'):
-      return t(error);
     default:
       return error;
   }
@@ -369,10 +370,14 @@ export class GeminiSessionController {
       detail = this.input.pushToTalkKeyHeld
         ? msg('Release Space to send')
         : msg('Hold Space to talk');
+    // `detail` is worded in the current language; `sourceDetail` keeps the
+    // English catalog text, so a view can word it again after a language
+    // change.
     const event = {
       type: 'state',
       state: status,
       detail: translateKnown(detail),
+      ...(typeof detail === 'string' && { sourceDetail: detail }),
     };
     if (recovery) event.recovery = translateKnown(recovery);
     if (missingKey) event.missingKey = true;
