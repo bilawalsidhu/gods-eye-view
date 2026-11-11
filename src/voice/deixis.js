@@ -143,6 +143,8 @@ function resolveFly(args, { pointer, referents }) {
         entity: {
           layerId: target.layerId,
           id: target.id,
+          // The answer names it, not its id ("near cam-9").
+          ...(target.label ? { label: target.label } : {}),
           ...(hasPosition(target) ? { lat: target.lat, lon: target.lon } : {}),
         },
       },
@@ -345,6 +347,7 @@ function resolveCropPixels(args, { imageFrame, cameraKey }) {
 const RESOLVERS = Object.freeze({
   track_entity: resolveTrack,
   fly_to_location: resolveFly,
+  show_street_level: resolveFly,
   get_entity_context: resolveContext,
   analyst_query: resolveAnalyst,
   annotate_map: resolveAnnotate,
