@@ -71,13 +71,19 @@ async function showRow(page) {
     // Check whether it opened before attempting the gesture again.
     for (let attempt = 0; attempt < 5; attempt++) {
       await page.click('button ::-p-text(DATA LAYERS)');
-      await sleep(150);
-      if (
-        !(await page.$eval('#data-panel', (el) =>
-          el.classList.contains('collapsed'),
-        ))
-      )
+      try {
+        await page.waitForFunction(
+          () => {
+            const panel = document.querySelector('#data-panel');
+            return Boolean(panel && !panel.classList.contains('collapsed'));
+          },
+          { timeout: 1000 },
+        );
         break;
+      } catch (error) {
+        if (error.name !== 'TimeoutError')
+          throw new Error('DATA LAYERS open check failed');
+      }
     }
     await page.$eval('#data-panel', (el) => {
       if (el.classList.contains('collapsed'))
@@ -196,6 +202,7 @@ try {
     check(
       'no uncaught browser errors on restore',
       restored.errors.length === 0,
+      `${restored.errors.length} page errors`,
     );
     await restored.page.close();
   }
