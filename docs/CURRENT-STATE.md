@@ -7563,7 +7563,8 @@ on purpose:
   `altitudeQuality: 'held-after-rejection'`. Only a newer altitude is judged
   (`altitudeAt`, the time of the message the altitude came from), so the
   layer's repeated re-reads of one record, and the decoder's later
-  non-altitude messages, neither count twice nor let a refused value through. Three refusals in a row re-anchor, so a bad first altitude clears
+  non-altitude messages, neither count twice nor let a refused value
+  through. Three refusals in a row re-anchor, so a bad first altitude clears
   itself. A surface report passes unjudged, because a feed's `ground` is 0
   and not a barometric reading. There is no absolute ceiling: balloons really
   do fly above 100,000 ft.
