@@ -3692,5 +3692,10 @@
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
-  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
+  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "NOAA SWPC solar wind": "רוח סולארית מ-NOAA SWPC",
+  "extrapolated": "מוערך באקסטרפולציה",
+  "Solar wind feed unavailable": "נתוני הרוח הסולארית אינם זמינים",
+  "Field lines not re-traced · previous lines kept": "קווי השדה לא חושבו מחדש · הקווים הקודמים נשמרו",
+  "Magnetosphere": "מגנטוספרה"
 }

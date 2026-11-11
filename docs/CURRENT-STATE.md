@@ -715,7 +715,7 @@ filaments were traced without one — which is how this layer shipped once. It
 also blocks the feed and asserts the opposite: still drawing, naming no model,
 and staying inside the internal budget.
 
-Share token `5`, enabled plus an opacity option.
+Share token `03`, enabled plus an opacity option.
 
 ## Tools and local MCP server — October 1, 2026
 
