@@ -4912,6 +4912,7 @@ its criteria cannot be silently ignored.
 | CCTV                                 | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Iceland (Vegagerðin / IRCA) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                                                                                                                        | `/api/cctv`                                                                                                                  | 10s (active)                                                                                                                |
 | Radio                                | Radio Browser (public-domain station directory)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `src/data/radio.js`                                                                                                                                       | `/api/radio/stations`, `/api/radio/click/:uuid`                                                                              | 45 min directory refresh                                                                                                    |
 | Transit 🚌                           | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/layers/transit/` via `src/app/layers/transit.js`                                                                                                     | `/api/transit`                                                                                                               | 15s (poll + delayed playback)                                                                                               |
+| Rail 🚆                              | Live operator train positions (GPS, or station reports for Irish Rail) and trip updates, trains only, with opt-in route packs built from static GTFS (30 keyless feeds, all on, 28 out of the box; `src/data/railFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/rail/` via `src/app/layers/rail.js`                                                                                                           | `/api/rail`                                                                                                                  | 15s (poll + delayed playback)                                                                                               |
 | Bikeshare 🚲                         | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                                                                                                                                                                                                                                                         | `src/data/bikeshare.js`                                                                                                                                   | `/api/gbfs`                                                                                                                  | 60s                                                                                                                         |
 | Directions 🧭                        | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/directions.js`                                                                                                                                  | `/api/route` (`steps=1`)                                                                                                     | on placement / mode change                                                                                                  |
 | Datacenters ▣                        | OSM extract (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/data/infrastructure.js`                                                                                                                              | —                                                                                                                            | static                                                                                                                      |
@@ -5476,7 +5477,7 @@ answered yet opens nothing rather than a card hanging at sea level. The cells
 are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
 reroute, CLEAR and disable cancel that.
 Transit is off by default, and share links use token `j`. The movement panel order
-places Transit directly after Street Traffic and before Bike Share. Cameras and
+places Transit directly after Street Traffic and before Rail. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
 gate. Forty-nine keyless regions are available: Boston, Austin, Minneapolis–St Paul,
@@ -5700,6 +5701,279 @@ responses and decoding, caches successful snapshots, and backs off after failed
 refreshes. A 304 confirms contact without appending history. Missing vehicles
 are removed after two missed polls; reports older than ten minutes and feeds
 silent for five minutes are removed. Credits appear when the feed is used.
+
+**Rail.** Rail is off by default, and share links use token `02`, with five
+boolean options for its categories: `t` (urban), `l` (local), `r`
+(regional), `n` (national) and `i` (international), all on by default. It sits
+in the Movement panel directly after Transit and before Bike Share. The layer
+lives in `src/layers/rail/` and is built by `src/app/layers/rail.js`; feeds are
+registered in `src/data/railFeeds.js`.
+
+Every train shown is live: it is where its operator last reported it, by GPS
+or, for Irish Rail, by the station or timing point the signalling last
+reported. No train is placed or moved from a timetable, and a feed whose live
+positions fail shows as unavailable while its trains age out as any quiet
+train does. Below a 3,000 km altitude gate (with 150 km hysteresis), the layer
+polls every 15 seconds each listed feed whose coverage circle contains the
+centre of the view; a feed already polled stays active 40 km past its edge. A
+feed's trip updates are polled every 30 seconds while one of its trains is
+selected and its schedule pack is loaded. The registry lists 30 feeds, all
+switched on and all keyless: every realtime feed and every static timetable
+is published for anyone to fetch, so no feed needs a key, an account or a
+registration, and no rail request carries a credential.
+
+**Opt-in packs.** Live feeds work out of the box, and nothing is downloaded
+when the app starts. A path pack and a schedule pack, built only when someone
+runs `scripts/build-rail-paths.mjs` for a feed (Packs below), are an extra for
+its live trains: the operator's own route lines, stop names, the next stop
+and, from the trip updates, the delays at each stop. Renfe long and medium
+distance and KTMB, whose vehicles name no route, are classified from the
+pack's routes (`railFeedNeedsSchedulePack`), so `/api/rail/feeds` lists them
+only once `<id>.schedule.json` is in the pack directory (`publicRailCatalog`).
+The server checks that the file exists, never reading it for this, and keeps
+each answer for 60 seconds; the catalog itself is sent with `max-age=300`. So
+a host that has built nothing shows 28 feeds, in 22 regions, and the other two
+appear as their packs are built. The browser reads the catalog once per layer
+instance; until it answers, or while it fails (asked again after 30 s,
+doubling to 10 minutes), only the feeds that need no pack are polled. A feed
+the catalog lists without live positions is never polled.
+
+Five enabled feeds publish no licence for their train positions and are used
+on the basis their entries record, which is never a licence and never
+credited as one: MARC on what its publication says, and METRO light rail on
+the basis the Transit layer uses for the same file. Tri-Rail and Charlotte's
+LYNX are used without a published licence by project owner decision of
+2026-11-10. The fifth is Irish Rail, whose train positions publish no licence
+while its NTA timetable is CC BY 4.0. The
+Montpellier tram's GTFS is ODbL, so the packs built from it are ODbL too: a
+deployer who serves them publicly makes them subject to the same licence,
+offered under it with the attribution kept, and France's national access
+point adds that a re-shared derived database must be published on
+transport.data.gouv.fr in its original format.
+
+By position source, 29 feeds publish live GPS. 13 are in the US: Metro-North,
+LIRR, MBTA, SEPTA Regional Rail and trolleys, MARC, Tri-Rail, RTD, CapMetro,
+METRO, Charlotte's LYNX, the Seattle Streetcar and Cincinnati's Connector. Three are in Australia: Citytrain, G:link and Adelaide Metro. The
+remaining 13 are GRT ION in Canada, VR in Finland, Renfe long and medium
+distance and Cercanías in Spain, the four Entur operators in Norway (SJ Nord
+through SIRI VM), KTMB in Malaysia, the Bordeaux and Montpellier trams in
+France, and the Manyōsen and Toyama trams in Japan. Irish Rail publishes the
+station or timing point the signalling last reported.
+
+22 feeds register trip updates; on a feed whose pack is built their delays
+reach the selected train's stops. Irish Rail and SJ Nord publish none, but
+each train's report states its delay: with the pack built, that delay moves
+the train's stops and the run its report is matched to, in the browser and,
+for Irish Rail's train codes, on the server, so a late train is not shown
+past a stop it has not reached. `DATA_SOURCES.md` lists every feed, one row
+each, with its licence, terms and attribution.
+
+**Proxy.** `GET /api/rail/feeds` returns the public catalog of listed feeds,
+`GET /api/rail/trains/<feedId>` one feed's snapshot,
+`GET /api/rail/updates/<feedId>` its trip updates, and
+`GET /api/rail/paths/<feedId>` and `GET /api/rail/schedule/<feedId>` its path
+and schedule packs once built (`src/sources/railService.js`,
+`src/data/railProxy.js`, served in development and preview by
+`server/providers/rail.js`, which reads the packs from `.cache/rail-paths/` or
+`RAIL_PATHS_DIR`). The request policy is the Transit proxy's: a memory cache
+with single-flight refresh (15 s, or the feed's own poll interval; 30 s for
+trip updates, or the feed's own), serve-stale for up to 10 minutes after a
+failure (an empty or header-less GTFS-Realtime reply is refused as unreadable
+and counts as one: stale, or 502 without a snapshot), per-feed and global
+admission limits, the failure cooldown ladder, redirects followed hop by hop
+only on the feed's own https origin, and an 8 MiB body cap unless a feed sets
+its own, at most 64 MiB. A feed whose positions or trip updates can be read
+only with its schedule pack (routes taken from the pack) answers
+503 "Rail schedule unavailable" (`X-Rail-Backoff: schedule`, never cached)
+whenever every record it sent was dropped, rather than an empty list: the
+pack is missing or refused, or names none of the trips the feed runs now (a
+stale pack: Renfe's trip ids carry their date). The server refuses a schedule
+pack, as it does one it cannot read, when it is of another format version or
+another feed, or once the last run it holds has arrived (its window has
+ended), and reads it again after five minutes. A feed that needs
+its pack to be listed is served only once that pack is built: until then
+`/trains` and `/updates` answer 503 "Rail schedule unavailable"
+(`X-Rail-Backoff: schedule`) without contacting the operator. Without a
+`hasSchedulePack` probe, the server asks `schedulePackVersion` or
+`readSchedulePack` (null: not built); with neither, no such feed is listed.
+Only a missing pack is 404: a pack that cannot be read answers 503 with
+`Retry-After: 60`. A pack is sent `no-cache` with an ETag from its file's
+modification time and size, and a request whose If-None-Match names it is
+answered 304 without reading the file: a feed's path and schedule packs pair
+by `builtAt`, so a browser never keeps one of them past a rebuild. The browser asks again for a path or schedule pack after
+30 s, doubling to 10 minutes. LIRR and Metro-North, whose positions and trip
+updates are one document, are fetched once per freshness window for both.
+Each feed's classifier runs on every decoded vehicle; only trains leave the
+server, each tagged with a `category` (`transit`, `local`, `regional`,
+`national`, `international`) and a `mode` (`rail`, `metro`, `tram`).
+Everything else, buses in a mixed feed included, is dropped and counted as
+`dropped`. There is no disk cache and no history.
+
+**Packs.** `scripts/build-rail-paths.mjs` builds, for each feed it is given
+that has a static GTFS (29 of the 30), a path pack (`<id>.json`: the
+operator's track shapes) and a schedule pack (`<id>.schedule.json`: routes,
+stops, stop patterns, run-time profiles and the service dates of a window) into `--out`, else `RAIL_PATHS_DIR` when the build's own environment sets it (the folder the server reads), else `.cache/rail-paths/`, which is gitignored. A
+build names its feeds (`--feed <id>`, repeatable) or passes `--all` for every
+enabled feed (many downloads and a long run); a bare run exits 1, and
+`--help` prints the usage. A build in which any feed fails exits 2 once the
+others are built (1 stays for a build that cannot start: a bad argument, or
+another build holding the lock). `--out` may not be `src/` or `public/` or a
+folder inside them. The window is four service dates by default (yesterday,
+today and the next two days), 1 to 14 with `--days`, starting at `--from`.
+`--local-gtfs <id>=<zip>` builds a feed from a zip already on disk instead of
+downloading it, a copy of the GTFS the feed publishes; the zip is only read,
+and the packs record its file name, not its path. The server serves a pack of
+up to 24 MiB, passed through as bytes from a 64 MiB in-memory read cache keyed
+by the file's modification time and size (`server/providers/rail.js`), and
+answers a larger one with 503 "Rail paths too large" or "Rail schedule too
+large". The build refuses to write a pack over that cap (the feed counts as
+failed and its previous packs stay), and a pack whose trips fall under a fifth
+of the pack it would replace, or to none, which reads as an upstream fault,
+unless `--force` is given. A feed's two packs are written together: to
+temporary names, then renamed into place, the path pack first, only once both
+are written; with `--no-schedule` the feed's old schedule pack, whose patterns
+index the old path pack, is deleted, and a feed named only through its
+schedule pack (Renfe long and medium distance, KTMB) is refused and counts
+as failed. A lock file in the `--out` folder
+(`.build-rail-paths.lock`) makes a second build there refuse to start. A
+schedule pack records the `builtAt` of the path pack its shape indices refer
+to (`pathsBuiltAt`); where the two no longer match, its shape indices are not
+used. Every download is open and made over https only (a redirect to plain
+http is refused), capped in size and time, with the script's User-Agent and
+any identifying header the operator asks for (`staticHeaders`). Shapes are
+taken at face value: the operator's `shapes.txt` as published; nothing is
+redrawn from other map data, and no line is drawn where the operator
+publishes none. A shape with a gap of more than 5 km between two points is a
+chord, not track, and is dropped; a trip without a usable shape gets none, and
+its train moves between reports in straight lines. A feed's
+`staticRouteTypes` lists the route types it keeps when its classifier accepts
+every route of a mode-specific feed. A frequency-based trip
+(`frequencies.txt`) becomes one run per departure, `<trip_id>@<HH:MM:SS>`, on
+its template's stops and run times. A stop the GTFS gives no coordinates,
+which some feeds write as (0, 0), is left out of the run with its times, so no
+line is drawn to it; a run needs two located stops. The Toyama tram has no
+static GTFS registered, so it has no packs and its trains move in straight
+lines between reports.
+
+**Duplicates across feeds.** Where loaded feeds carry the same train,
+`src/layers/rail/dedupe.js` draws it once. Copies from different feeds match
+by train number within 100 km of each other. A train number is three or more
+digits, or a shorter number after a long-distance product (EC, ECE, EN, ICE,
+NJ, RJ, RJX, TGV; not IC, where a short number names a line); a trip id that
+is an operator prefix and a number, or a headsign that is a bare number, is
+read too, and numbers that differ are different trains. A short line name
+(S1, RB 1, U6) names a line many trains run: copies on different lines are
+different trains, and copies on one line match only in the same category
+within 15 km, the nearest pairs first. The copy drawn is scored by its
+position source (live GPS, then station reports), then by its line (bound to
+its operator's shape in a built pack, then without one). A drawn copy stays
+until another scores strictly higher, and the comparison runs once per poll,
+never per frame.
+
+**Ukraine.** No train is placed in Ukraine, a safety rule
+(`src/data/railNoPositions.js`: its recognised borders as mapped in
+OpenStreetMap, via geoBoundaries, simplified to about 50 m, and stop ids that
+name the country). The path build leaves out every run with a stop there: a
+stop whose id names Ukraine or whose position is inside its borders, either
+being enough, so an id naming another country does not keep a stop that
+lies inside. The proxy drops every live position inside it, for every feed.
+
+**Categories and markers.** Each train is a disc in its category colour (urban
+`#FF7A59`, local `#F2D04B`, regional `#7BE495`, national `#5AB8FF`,
+international `#C58BFF`) with a white glyph for its mode: a train front, a tram
+with a pantograph, or an "M" for metro. The layer row shows one chip per
+category, which hides or shows that category, and a colour legend with live
+counts for the categories present. On photorealistic tiles a train's height
+is sampled from the rendered mesh at points on its own line
+(about every 55 m, for trains within 8 km of a camera at most 5 km above the
+ground there, and only once the tiles in view have loaded), where the draped
+line is the track bed or the deck. A reading more than 25 m under or 80 m over
+the floor there is a coarse tile and is dropped; a kept one is read again
+after 30 s, and the new reading replaces it when the camera is no higher than
+it was, or once the old one is five minutes old. Elsewhere it stands on the
+shared ground floor that Transit and aircraft use, and on a floor cell not
+sampled yet it keeps a neighbouring cell's floor or its last one. Only a train
+with no floor yet, or a stop of the selected trip, stands on the ellipsoid,
+and only until its cell is warm: the stops are read again every second until
+they stand on a floor. Rail warms those floor cells on one shared budget that
+refills at 1,200 cells a minute and holds at most 320, so no minute spends
+more than 1,520 cells (about 24 of the 90 requests of 64 points that
+`/api/terrain/heights` allows a client each minute), and only under trains
+within 30 km of the camera and at the selected trip's stops, the selected
+train and its stops first and then the nearest, in one batch a second, so a
+view full of trains cannot use up the limit every layer shares. Its drawn
+height changes no faster than 5% of the distance it moves (plus 0.5 m/s while
+it stands), so a roof or overpass sampled under it is a bump, not a jump, and
+a followed train rides smoothly; it snaps when a better height replaces a
+fallback (a real floor, or any floor replacing the ellipsoid) and after a jump
+of more than 2 km.
+
+**Playback, lines and cards.** Trains use the Transit layer's delayed
+playback between reports, so a train glides at 1× behind real time rather
+than jumping. Between reports they move along the line in the feed's path
+pack where there is one, else in straight lines. A loaded feed's faint
+network is drawn in full below 150 km and not at all above 200 km. A feed
+out of use for ten minutes gives back its network, path pack and schedule
+pack; they load again when it is next used. The selected train's line, its
+operator's shape from the path pack, is drawn ahead of it and, fainter,
+behind it. Clicking a train opens a card titled with its route or headsign,
+with at most six lines under it: category, mode, feed and region; displayed
+motion and position source ("Live GPS" or "Estimated from station reports");
+the next and previous stops with their times and delays where the schedule
+pack gives them; report age (marked "feed time" when the feed stamps the
+header rather than the train) and display delay; reported speed and heading;
+the last reported stop status where no stops are known; and the vehicle id.
+Metro trains are shown at street level, as in Transit, and the card says so.
+
+**Camera.** Selecting a moving train gives it the camera as selecting an
+aircraft does: Cesium's tracked entity rides on the train's marker, framed
+2.5 km out and 35° down along the camera's heading (`WORLD_FOCUS_FRAMING.train`),
+and a drag or a zoom orbits or zooms around the train. A train counts as
+moving while it glides between reports, waits at a stop with its departure
+already reported, or waits for its next report after its last two moved it
+at least 15 m. Any other train (parked, known from one report, or not heard
+from for 90 seconds) gets one fly-to with the same framing, as a vessel does;
+in the Cockpit that fly-to is refused with "Exit cockpit to fly to a train".
+The follow lets go, leaving the camera where it is, when the train is
+deselected (a click on anything else, Escape, its category hidden, the train
+leaving its feed, the layer turned off) or another train is selected, which
+takes the camera in turn. An aircraft or satellite tracked by another layer
+clears the selection too; a navigation that only releases the follow camera
+(a search, a fly-to) keeps the train selected. When the duplicate filter moves
+the selection to another feed's copy of the train, the follow stays and
+glides to the new copy over 1.2 seconds.
+
+**The selected train from far out.** While a train is selected its feed stays
+polled at any altitude and wherever the camera looks, so the train, its line
+and its stops stay on the map from orbit. While nothing else would keep that
+feed loaded, it carries the selected train alone: its other trains and its
+faint network go as they would with the feed. On the far side of the globe
+the selected train and its stop dots are hidden. Deselecting returns the feed
+to the usual rules.
+
+**Limits.** A train a feed stops listing for two polls is removed, as is any
+report older than ten minutes; a train without its own timestamp is aged from
+the snapshot's fetch time, so a frozen feed empties rather than showing old
+trains as live. A feed whose operator has not answered for 90 seconds reads as
+stale, and its trains are removed after five minutes. The layer holds at most
+5,000 trains drawn (a copy hidden as another feed's does not count); past that
+the layer row reads PARTIAL. Rail is not voice-controllable yet: it is listed in
+`VOICE_OFF_LAYERS` for prompt budget, and the "trains" alias still names
+Transit. Credits appear when a feed's trains are shown.
+
+**Upkeep.**
+
+- Packs cover a fixed window of service dates, so they are rebuilt before it
+  runs out: daily at the default four days, or weekly with `--all --days 7`
+  from a `--from` date that starts the coming week. The window and build time
+  of a pack are in its `window` and `builtAt` fields.
+- After a rebuild, the server picks up the new pack within a minute: it
+  checks each schedule pack's file time and size once a minute and rebuilds
+  what it reads from a changed pack (a host with its own `readSchedulePack`
+  and no `schedulePackVersion` keeps it up to an hour). A feed whose
+  first pack was just built is listed within a minute; a browser that has
+  read the catalog sees it after a reload, once its five-minute cache has
+  passed.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry

@@ -19,6 +19,7 @@ import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
 import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
+import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
@@ -199,6 +200,7 @@ export function createApplicationCatalog({
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationRail({ surface, source: sources.rail }),
         createApplicationFirms({
           surface,
           id: 'local-firms',
