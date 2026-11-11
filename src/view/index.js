@@ -1,0 +1,579 @@
+/**
+ * A view: what God's Eye View shows, independent of how it is shown. Camera,
+ * data layers, visual style, map imagery and an entity to follow. Views are
+ * written in the share-link format, so the app restores them when a link
+ * opens and every surface that produces one agrees on its meaning.
+ */
+
+import {
+  REGISTERED_LAYER_IDS,
+  createDefaultLayerState,
+  decodeLayerStateParams,
+  encodeLayerStateParams,
+} from '../data/layerState.js';
+import { encodeIdSwitches } from '../data/idSwitches.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
+
+/** Visual styles by internal name, with the name share links use. */
+export const STYLE_URL_NAMES = Object.freeze({
+  normal: 'normal',
+  retro: 'crt',
+  surveillance: 'nvg',
+  thermal: 'flir',
+  anime: 'anime',
+  noir: 'noir',
+});
+
+const STYLES_BY_URL_NAME = Object.freeze(
+  Object.fromEntries(
+    Object.entries(STYLE_URL_NAMES).map(([name, url]) => [url, name]),
+  ),
+);
+
+export const VIEW_STYLES = Object.freeze(Object.keys(STYLE_URL_NAMES));
+
+export const VIEW_MAPS = Object.freeze([
+  'photoreal',
+  'bing-aerial',
+  'bing-labels',
+  'esri-imagery',
+  'osm',
+]);
+
+/**
+ * What can be followed, the layer that shows it, and where the layer-state
+ * codec keeps its identifier.
+ */
+const FOLLOWABLE = Object.freeze({
+  aircraft: {
+    layer: 'flights',
+    owner: 'flights',
+    key: 'selectedFlightsTrackingId',
+    cockpit: true,
+  },
+  military_aircraft: {
+    layer: 'military',
+    owner: 'flights',
+    key: 'selectedMilitaryTrackingId',
+    cockpit: true,
+  },
+  satellite: {
+    layer: 'satellites',
+    owner: 'satellites',
+    key: 'selectedSatTrackingId',
+  },
+});
+
+export const VIEW_FOLLOW_KINDS = Object.freeze(Object.keys(FOLLOWABLE));
+
+/**
+ * Street-level imagery sources a view can open, the layer that shows them and
+ * the map a source needs (Google's terms allow Street View beside Google maps
+ * only). Literal here: this module stays portable.
+ */
+const STREET_LEVEL_LAYER = 'street-level';
+export const VIEW_STREET_LEVEL_PROVIDERS = Object.freeze([
+  'google',
+  'mapillary',
+  'kartaview',
+  'panoramax',
+]);
+const STREET_LEVEL_MAP = Object.freeze({ google: 'photoreal' });
+const STREET_LEVEL_PARAM = 'sl';
+const EARTH_RADIUS_M = 6_371_000;
+
+/** Above this a camera frames a region, not a street: photos open under it. */
+const LOOK_AT_MAX_ALTITUDE_M = 20_000;
+/** Flatter than this the look-at point is at the horizon: use the camera's. */
+const LOOK_AT_MIN_PITCH_DEG = -5;
+/** Further ahead than this the camera frames a region: use its own point. */
+const LOOK_AT_MAX_DISTANCE_M = 10_000;
+
+/**
+ * The ground point a street-scale camera looks at: straight below it when it
+ * looks down, else ahead along its heading by altitude / tan(pitch). A camera
+ * with no altitude, above street scale, aimed at the horizon, or looking
+ * further than 10 km ahead gives its own point. Longitude wraps at the
+ * antimeridian.
+ */
+export function lookAtPoint(camera) {
+  const pitch = Number(camera.pitch_deg ?? -90);
+  const altitude = Number(camera.altitude_m);
+  if (
+    !(altitude > 0) ||
+    altitude > LOOK_AT_MAX_ALTITUDE_M ||
+    !(pitch > -89) ||
+    pitch > LOOK_AT_MIN_PITCH_DEG
+  )
+    return { lat: camera.lat, lon: camera.lon };
+  const ground = altitude / Math.tan((-pitch * Math.PI) / 180);
+  if (ground > LOOK_AT_MAX_DISTANCE_M)
+    return { lat: camera.lat, lon: camera.lon };
+  const heading = ((Number(camera.heading_deg) || 0) * Math.PI) / 180;
+  const dLat =
+    ((ground * Math.cos(heading)) / EARTH_RADIUS_M) * (180 / Math.PI);
+  const cosLat = Math.cos((camera.lat * Math.PI) / 180) || 1e-6;
+  const dLon =
+    ((ground * Math.sin(heading)) / (EARTH_RADIUS_M * cosLat)) *
+    (180 / Math.PI);
+  const lon = camera.lon + dLon;
+  return {
+    lat: clamp(camera.lat + dLat, -90, 90),
+    // Near a pole one step ahead can be several turns of the parallel.
+    lon: ((((lon + 180) % 360) + 360) % 360) - 180,
+  };
+}
+
+/**
+ * Where a tilted camera looks, measured from the ground under it: a view's
+ * altitude is above the ellipsoid, and a city a mile up would otherwise put
+ * the point kilometres too far ahead. `terrain` is a heights service
+ * (`getHeights`); null when it is missing or cannot say.
+ */
+export async function groundedLookAt(camera, terrain, signal) {
+  if (typeof terrain?.getHeights !== 'function') return null;
+  // Looking down or at the horizon the point is the camera's own: the ground
+  // under it changes nothing, so it is not asked for.
+  if (
+    !Number.isFinite(camera?.altitude_m) ||
+    !(camera.pitch_deg > -89) ||
+    camera.pitch_deg > LOOK_AT_MIN_PITCH_DEG
+  )
+    return null;
+  let heights;
+  try {
+    heights = await terrain.getHeights([{ lat: camera.lat, lon: camera.lon }], {
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
+  const ground = Number(heights?.[0]?.ellipsoid);
+  if (!Number.isFinite(ground)) return null;
+  return lookAtPoint({ ...camera, altitude_m: camera.altitude_m - ground });
+}
+
+/** Annotation kinds the app draws, as in its annotate_map action. */
+export const VIEW_ANNOTATION_TYPES = Object.freeze([
+  'pin',
+  'highlight',
+  'area',
+  'arrow',
+  'route',
+  'label',
+]);
+const ANNOTATION_COLORS = Object.freeze([
+  'primary',
+  'amber',
+  'cyan',
+  'green',
+  'red',
+]);
+const MAX_ANNOTATIONS = 24;
+const MAX_ANNOTATION_PARAM_CHARS = 6000;
+const ANNOTATION_PARAM = 'an';
+
+const MIN_ALTITUDE_M = 50;
+const MAX_ALTITUDE_M = 20_000_000;
+
+/** JSON Schema for the parts of a view a caller chooses directly. */
+export const VIEW_PROPERTIES = Object.freeze({
+  camera: Object.freeze({
+    type: 'object',
+    description:
+      'Camera position: lat and lon it is above, altitude in meters, heading ' +
+      '(0 is north) and pitch (-90 looks straight down, 0 at the horizon).',
+    properties: {
+      lat: { type: 'number', minimum: -90, maximum: 90 },
+      lon: { type: 'number', minimum: -180, maximum: 180 },
+      altitude_m: {
+        type: 'number',
+        minimum: MIN_ALTITUDE_M,
+        maximum: MAX_ALTITUDE_M,
+      },
+      heading_deg: { type: 'number', minimum: 0, maximum: 360 },
+      pitch_deg: { type: 'number', minimum: -90, maximum: 0 },
+    },
+    additionalProperties: false,
+  }),
+  layers: Object.freeze({
+    type: 'array',
+    maxItems: REGISTERED_LAYER_IDS.length,
+    items: { type: 'string', enum: [...REGISTERED_LAYER_IDS] },
+    description: 'Data layers to turn on, such as "flights" or "earthquakes".',
+  }),
+  style: Object.freeze({
+    type: 'string',
+    enum: [...VIEW_STYLES],
+    description:
+      'Visual style: retro is CRT, surveillance is night vision, thermal is FLIR.',
+  }),
+  map: Object.freeze({
+    type: 'string',
+    enum: [...VIEW_MAPS],
+    description: 'Map imagery; photoreal is Google 3D tiles.',
+  }),
+  annotations: Object.freeze({
+    type: 'array',
+    maxItems: MAX_ANNOTATIONS,
+    description:
+      'Marks drawn on the globe: a pin, highlight, area or label at a place ' +
+      'name (target) or lat/lon, an arrow between two points, or a route ' +
+      'through points.',
+    items: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: [...VIEW_ANNOTATION_TYPES] },
+        target: { type: 'string', minLength: 1, maxLength: 200 },
+        latitude: { type: 'number', minimum: -90, maximum: 90 },
+        longitude: { type: 'number', minimum: -180, maximum: 180 },
+        toLatitude: { type: 'number', minimum: -90, maximum: 90 },
+        toLongitude: { type: 'number', minimum: -180, maximum: 180 },
+        points: {
+          type: 'array',
+          minItems: 2,
+          maxItems: 12,
+          items: {
+            type: 'object',
+            properties: {
+              latitude: { type: 'number', minimum: -90, maximum: 90 },
+              longitude: { type: 'number', minimum: -180, maximum: 180 },
+            },
+            required: ['latitude', 'longitude'],
+            additionalProperties: false,
+          },
+        },
+        label: { type: 'string', maxLength: 120 },
+        color: { type: 'string', enum: [...ANNOTATION_COLORS] },
+      },
+      required: ['type'],
+      additionalProperties: false,
+    },
+  }),
+  street_level: Object.freeze({
+    type: 'object',
+    description:
+      'Open street-level photos at a point: Google Street View (google; the ' +
+      'map becomes Google 3D), Mapillary, KartaView or Panoramax. lat/lon ' +
+      'default to the spot the camera looks at. The app flies there and ' +
+      'opens the nearest photo; a plain link with google only arms it, ' +
+      'leaving the billed load to a click. Not with follow.',
+    properties: {
+      provider: { type: 'string', enum: [...VIEW_STREET_LEVEL_PROVIDERS] },
+      lat: { type: 'number', minimum: -90, maximum: 90 },
+      lon: { type: 'number', minimum: -180, maximum: 180 },
+    },
+    additionalProperties: false,
+  }),
+  follow: Object.freeze({
+    type: 'object',
+    description:
+      'An entity the camera follows: an aircraft or military aircraft by ' +
+      'ICAO 24-bit address, or a satellite by NORAD catalog number. Its layer ' +
+      'is turned on.',
+    properties: {
+      kind: { type: 'string', enum: [...VIEW_FOLLOW_KINDS] },
+      id: { type: 'string', pattern: '^[0-9A-Za-z~_-]{1,16}$' },
+      cockpit: {
+        type: 'boolean',
+        description:
+          "Show the aircraft's cockpit view instead of following it from " +
+          'outside. Aircraft only; links open the app following it.',
+      },
+    },
+    required: ['kind', 'id'],
+    additionalProperties: false,
+  }),
+});
+
+const round = (value, digits) => Number(value.toFixed(digits));
+const latitude = (value) =>
+  Number.isFinite(value) && Math.abs(value) <= 90 ? value : undefined;
+const longitude = (value) =>
+  Number.isFinite(value) && Math.abs(value) <= 180 ? value : undefined;
+const text = (value, max) =>
+  typeof value === 'string' && value.trim()
+    ? value.trim().slice(0, max)
+    : undefined;
+
+/**
+ * One annotation with only the fields the app draws, or null when it has
+ * nothing to place. Unknown fields and out-of-range values are dropped.
+ */
+function annotationOf(input) {
+  if (!input || !VIEW_ANNOTATION_TYPES.includes(input.type)) return null;
+  const points = Array.isArray(input.points)
+    ? input.points
+        .slice(0, 12)
+        .map((point) => ({
+          latitude: latitude(point?.latitude),
+          longitude: longitude(point?.longitude),
+        }))
+        .filter(
+          (point) =>
+            point.latitude !== undefined && point.longitude !== undefined,
+        )
+    : [];
+  // Coordinates are kept or dropped in pairs; half a position places nothing.
+  const pair = (lat, lon) =>
+    latitude(lat) !== undefined && longitude(lon) !== undefined
+      ? [lat, lon]
+      : [undefined, undefined];
+  const [lat, lon] = pair(input.latitude, input.longitude);
+  const [toLat, toLon] = pair(input.toLatitude, input.toLongitude);
+  const entry = Object.fromEntries(
+    Object.entries({
+      type: input.type,
+      target: text(input.target, 200),
+      latitude: lat,
+      longitude: lon,
+      toLatitude: toLat,
+      toLongitude: toLon,
+      points: points.length >= 2 ? points : undefined,
+      label: text(input.label, 120),
+      color: ANNOTATION_COLORS.includes(input.color) ? input.color : undefined,
+    }).filter(([, value]) => value !== undefined),
+  );
+  const placed =
+    entry.target !== undefined ||
+    entry.points !== undefined ||
+    (entry.latitude !== undefined && entry.longitude !== undefined);
+  return placed ? Object.freeze(entry) : null;
+}
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+/**
+ * A complete view from its parts. `camera` needs lat and lon; the rest has
+ * defaults: 800 km up, looking straight down, no layers, the recipient's own
+ * style and map.
+ */
+export function createView({
+  camera,
+  layers = [],
+  style = null,
+  map = null,
+  follow = null,
+  annotations = [],
+  street_level: streetLevel = null,
+} = {}) {
+  if (!Number.isFinite(camera?.lat) || !Number.isFinite(camera?.lon))
+    throw new TypeError('A view needs a camera lat and lon');
+  if (RETIRED_STYLES.includes(style)) style = 'normal';
+  if (style !== null && !VIEW_STYLES.includes(style))
+    throw new TypeError(`Unknown view style: ${style}`);
+  if (map !== null && !VIEW_MAPS.includes(map))
+    throw new TypeError(`Unknown view map: ${map}`);
+  const followed = follow ? FOLLOWABLE[follow.kind] : null;
+  if (follow && !followed)
+    throw new TypeError(`Cannot follow a ${follow.kind}`);
+  if (follow?.cockpit === true && !followed.cockpit)
+    throw new TypeError(`A ${follow.kind} has no cockpit view`);
+  let street = null;
+  if (streetLevel) {
+    if (follow)
+      throw new TypeError(
+        'A view cannot both follow an entity and open street-level photos',
+      );
+    const provider = streetLevel.provider ?? null;
+    if (provider !== null && !VIEW_STREET_LEVEL_PROVIDERS.includes(provider))
+      throw new TypeError(`Unknown street-level source: ${provider}`);
+    const needs = provider ? STREET_LEVEL_MAP[provider] || null : null;
+    if (needs && map !== null && map !== needs)
+      throw new TypeError(
+        `${provider} street-level imagery shows only on the ${needs} map`,
+      );
+    if (needs) map = needs;
+    // The point defaults to where the camera looks: a view "of X" opens
+    // photos at X, also when the camera sits behind it. It is a pair: half
+    // of one is not mixed with the camera's other half.
+    const given = [latitude(streetLevel.lat), longitude(streetLevel.lon)];
+    const seen = lookAtPoint(camera);
+    const [lat, lon] = given.includes(undefined) ? [seen.lat, seen.lon] : given;
+    street = Object.freeze({
+      ...(provider ? { provider } : {}),
+      lat: round(clamp(lat, -90, 90), 5),
+      lon: round(clamp(lon, -180, 180), 5),
+    });
+  }
+  const enabled = new Set(
+    layers.filter((layer) => REGISTERED_LAYER_IDS.includes(layer)),
+  );
+  if (followed) enabled.add(followed.layer);
+  if (street) enabled.add(STREET_LEVEL_LAYER);
+  return Object.freeze({
+    camera: Object.freeze({
+      lat: round(clamp(camera.lat, -90, 90), 4),
+      lon: round(clamp(camera.lon, -180, 180), 4),
+      altitude_m: Math.round(
+        clamp(camera.altitude_m ?? 800_000, MIN_ALTITUDE_M, MAX_ALTITUDE_M),
+      ),
+      heading_deg: Math.round(camera.heading_deg ?? 0) % 360,
+      pitch_deg: Math.round(clamp(camera.pitch_deg ?? -90, -90, 0)),
+    }),
+    layers: Object.freeze(
+      REGISTERED_LAYER_IDS.filter((layer) => enabled.has(layer)),
+    ),
+    style,
+    map,
+    follow: follow
+      ? Object.freeze({
+          kind: follow.kind,
+          id: String(follow.id).toLowerCase(),
+          ...(follow.cockpit === true ? { cockpit: true } : {}),
+        })
+      : null,
+    annotations: Object.freeze(
+      (Array.isArray(annotations) ? annotations : [])
+        .slice(0, MAX_ANNOTATIONS)
+        .map(annotationOf)
+        .filter(Boolean),
+    ),
+    street_level: street,
+  });
+}
+
+/** Share-link hash parameters that restore a view. */
+export function viewToParams(view) {
+  const params = new URLSearchParams({
+    v: '2',
+    lat: view.camera.lat.toFixed(4),
+    lon: view.camera.lon.toFixed(4),
+    alt: String(view.camera.altitude_m),
+    heading: String(view.camera.heading_deg),
+    pitch: String(view.camera.pitch_deg),
+    roll: '0',
+  });
+  if (view.style) params.set('style', STYLE_URL_NAMES[view.style]);
+  if (view.map) params.set('map', view.map);
+  if (view.layers.length) {
+    const state = createDefaultLayerState();
+    state.enabledLayerIds = [...view.layers];
+    const followed = view.follow ? FOLLOWABLE[view.follow.kind] : null;
+    if (followed)
+      state.options[followed.owner] = {
+        ...state.options[followed.owner],
+        [followed.key]: view.follow.id,
+      };
+    // The restored layer lights the source the photos come from.
+    const provider = view.street_level?.provider;
+    if (provider)
+      state.options[STREET_LEVEL_LAYER] = {
+        ...state.options[STREET_LEVEL_LAYER],
+        mapillary: provider === 'mapillary',
+        providerSwitches: encodeIdSwitches(
+          VIEW_STREET_LEVEL_PROVIDERS.filter((id) => id !== 'mapillary').map(
+            (id) => [id, id === provider],
+          ),
+        ),
+      };
+    encodeLayerStateParams(params, state);
+  }
+  if (view.street_level)
+    params.set(
+      STREET_LEVEL_PARAM,
+      [
+        view.street_level.provider ?? '',
+        view.street_level.lat.toFixed(5),
+        view.street_level.lon.toFixed(5),
+      ].join(','),
+    );
+  if (view.annotations.length) {
+    const encoded = JSON.stringify(view.annotations);
+    if (encoded.length <= MAX_ANNOTATION_PARAM_CHARS)
+      params.set(ANNOTATION_PARAM, encoded);
+  }
+  return params;
+}
+
+/** The annotations a share link carries, or an empty list. */
+export function annotationsFromParams(params) {
+  const raw = params.get(ANNOTATION_PARAM);
+  if (!raw || raw.length > MAX_ANNOTATION_PARAM_CHARS) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.slice(0, MAX_ANNOTATIONS).map(annotationOf).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The street-level photos a share link opens (`sl=<source>,<lat>,<lon>`, the
+ * source optional), or null.
+ */
+export function streetLevelFromParams(params) {
+  const raw = params.get(STREET_LEVEL_PARAM);
+  if (!raw) return null;
+  // Three fields, plain decimal degrees: that alone bounds the value.
+  const parts = raw.split(',');
+  if (parts.length !== 3) return null;
+  const [provider, lat, lon] = parts;
+  if (provider && !VIEW_STREET_LEVEL_PROVIDERS.includes(provider)) return null;
+  // Plain decimal degrees only: no exponents, hex or blanks.
+  const DECIMAL = /^-?\d{1,3}(\.\d{1,8})?$/;
+  if (!DECIMAL.test(lat) || !DECIMAL.test(lon)) return null;
+  const point = { lat: latitude(Number(lat)), lon: longitude(Number(lon)) };
+  if (point.lat === undefined || point.lon === undefined) return null;
+  return { ...(provider ? { provider } : {}), ...point };
+}
+
+/** The entity a decoded layer state follows, or null. */
+function followFromState(state) {
+  for (const [kind, followed] of Object.entries(FOLLOWABLE)) {
+    const id = state?.options?.[followed.owner]?.[followed.key];
+    if (id !== null && id !== undefined) return { kind, id: String(id) };
+  }
+  return null;
+}
+
+/** The entity a share link follows, or null. */
+export function followFromParams(params) {
+  return followFromState(decodeLayerStateParams(params));
+}
+
+/** The view a set of share-link hash parameters restores, or null. */
+export function viewFromParams(params) {
+  const lat = Number.parseFloat(params.get('lat'));
+  const lon = Number.parseFloat(params.get('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const number = (name) => {
+    const value = Number.parseFloat(params.get(name));
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const state = decodeLayerStateParams(params);
+  const follow = followFromState(state);
+  const map = params.get('map');
+  // A link is untrusted input: its photos win over a map their source cannot
+  // show on, and a followed entity keeps the camera.
+  const street = follow ? null : streetLevelFromParams(params);
+  const needs = street?.provider ? STREET_LEVEL_MAP[street.provider] : null;
+  return createView({
+    camera: {
+      lat,
+      lon,
+      altitude_m: number('alt'),
+      heading_deg: number('heading'),
+      pitch_deg: number('pitch'),
+    },
+    layers: state?.enabledLayerIds ?? [],
+    style: RETIRED_STYLES.includes(params.get('style'))
+      ? 'normal'
+      : Object.hasOwn(STYLES_BY_URL_NAME, params.get('style'))
+        ? STYLES_BY_URL_NAME[params.get('style')]
+        : null,
+    map: needs ? needs : VIEW_MAPS.includes(map) ? map : null,
+    follow,
+    annotations: annotationsFromParams(params),
+    street_level: street,
+  });
+}
+
+/** The address that opens the app at a view. */
+export function viewUrl(baseUrl, view) {
+  const url = new URL(baseUrl);
+  url.hash = viewToParams(view).toString();
+  return url.href;
+}

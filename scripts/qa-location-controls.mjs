@@ -62,13 +62,17 @@ try {
   );
   check(
     'orbit controls and indicator agree',
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const ui = window.__godsEyeView.styleManager;
+      // Vue renders on a microtask; a task later the indicator shows it.
+      const rendered = () => new Promise((resolve) => setTimeout(resolve));
       ui.setOrbit(true);
+      await rendered();
       const active =
         ui.orbitController.active &&
         document.getElementById('orbit-indicator').classList.contains('active');
       ui.setOrbit(false);
+      await rendered();
       return (
         active &&
         !ui.orbitController.active &&
@@ -84,6 +88,66 @@ try {
       () => window.__godsEyeView.styleManager._activePoiIndex === 1,
     ),
   );
+  const geocoderRequests = [];
+  const recordGeocoderRequest = (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname === '/api/geocode' ||
+      url.pathname === '/api/google/geocode' ||
+      (url.hostname === 'photon.komoot.io' && url.pathname === '/api/')
+    )
+      geocoderRequests.push(request.url());
+  };
+  page.on('request', recordGeocoderRequest);
+  await page.$eval('#location-search', (input) => {
+    input.value = 'geo:39.7392,-104.9903';
+    input.focus();
+  });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(
+    () => {
+      const state =
+        window.__godsEyeView.styleManager._locationLookup.getState();
+      return (
+        state.query === 'geo:39.7392,-104.9903' && state.status === 'found'
+      );
+    },
+    { timeout: 30000 },
+  );
+  await page.waitForFunction(
+    () => !window.__godsEyeView.viewer.camera._currentFlight,
+    { timeout: 10000 },
+  );
+  check(
+    'native geo URI search shows the decimal coordinate readout',
+    await page.evaluate(() => {
+      const ui = window.__godsEyeView.styleManager;
+      return (
+        ui._searchedLocationLabel === '39.7392° N, 104.9903° W' &&
+        document
+          .getElementById('location-mini-city')
+          .textContent.includes('39.7392° N') &&
+        document.getElementById('location-mini-poi').textContent ===
+          '104.9903° W'
+      );
+    }),
+  );
+  check(
+    'geo URI navigation settles near the requested coordinate',
+    await page.evaluate(() => {
+      const position = window.__godsEyeView.viewer.camera.positionCartographic;
+      const degrees = 180 / Math.PI;
+      return (
+        Math.abs(position.latitude * degrees - 39.7392) < 0.05 &&
+        Math.abs(position.longitude * degrees + 104.9903) < 0.05
+      );
+    }),
+  );
+  check(
+    'geo URI search makes no geocoder request',
+    geocoderRequests.length === 0,
+  );
+  page.off('request', recordGeocoderRequest);
   await page.evaluate(() => {
     const lookup = window.__godsEyeView.styleManager._locationLookup;
     window.__qaSearchRequests = [];
@@ -96,6 +160,7 @@ try {
         window.__qaSearchRequests.push({ query, options, resolve }),
       );
     document.getElementById('location-search').value = 'First';
+    document.getElementById('location-search').focus();
   });
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__qaSearchRequests.length === 1);
@@ -136,8 +201,11 @@ try {
       const ui = window.__godsEyeView.styleManager;
       return (
         ui._searchedLocationLabel === 'Second landmark, Test city' &&
-        ui._locationMiniCity.textContent.includes('Second landmark') &&
-        ui._locationMiniPoi.textContent === 'Test city' &&
+        document
+          .getElementById('location-mini-city')
+          .textContent.includes('Second landmark') &&
+        document.getElementById('location-mini-poi').textContent ===
+          'Test city' &&
         ui.activeStyle === 'normal' &&
         !ui._locationSearch.classList.contains('searching')
       );
@@ -169,8 +237,10 @@ try {
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       );
       return (
-        !ui._poiRow.classList.contains('expanded') &&
-        !ui._locationBarDivider.classList.contains('visible')
+        !document.getElementById('poi-row').classList.contains('expanded') &&
+        !document
+          .getElementById('location-bar-divider')
+          .classList.contains('visible')
       );
     }, cityId),
   );
@@ -226,7 +296,7 @@ try {
     'native reset returns through the existing camera handoff',
     await page.evaluate(async () => {
       const ui = window.__godsEyeView.styleManager;
-      ui._resetGlobeBtn.click();
+      document.getElementById('reset-globe-view').click();
       const pending = ui._globeResetPromise;
       if (!pending) return false;
       await pending;
@@ -243,8 +313,11 @@ try {
       ui._locationControls.destroy();
       ui._locationLookup.destroy();
       const before = ui._navigationGeneration;
-      ui._locationPills.querySelector('button').click();
-      ui._resetGlobeBtn.click();
+      document
+        .getElementById('location-pills')
+        .querySelector('button')
+        ?.click();
+      document.getElementById('reset-globe-view').click();
       ui._locationSearch.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
       );

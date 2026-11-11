@@ -1,11 +1,10 @@
 import { createCctvCatalog } from './cctv/catalog.js';
-import {
-  normalizeFeedType,
-  isVideoFeedType,
-  toFiniteNumber,
-} from './cctv/normalize.js';
+import { quebec511VideoUrl, quebecBrowserVideoEnabled } from './cctv/quebec.js';
+import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
+  cctvLiveMediaType,
+  cctvRasterImageType,
   proxyMediaResponse,
   fetchCctvImageFromUpstream,
   fetchTxdotSnapshot,
@@ -17,7 +16,11 @@ import {
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
+import { admitSameSiteKeyless } from './common/same-site.js';
+import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
+import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
+import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -28,7 +31,7 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  *   GET /api/cctv/sources        — list all registered camera sources
  *   GET /api/cctv/health         — per-camera health/status report
  *   GET /api/cctv/stream/:id     — stream info (feedType, URLs) for a camera
- *   GET /api/cctv/media/:id      — proxy live video/image media from upstream
+ *   GET /api/cctv/media/:id      — proxy live video media from upstream
  *   GET /api/cctv/frame/:id      — single frame with fallback chain
  *
  * @returns {import('vite').Plugin}
@@ -43,6 +46,120 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
+  /**
+   * Bounded transient image reuse keeps cadence-limited providers (World
+   * stills, Ottawa's once-a-minute API) inside their refresh floor. The byte
+   * cap is the real bound; the entry cap only limits map overhead.
+   */
+  const WORLD_FRAME_CACHE_MAX_ENTRIES = 1024;
+  /** Retry a failed fetch sooner than a full refresh window, never under a minute. */
+  const THROTTLED_FRAME_FAILURE_BACKOFF_MS = 60 * 1000;
+  const WORLD_FRAME_CACHE_MAX_ENTRY_BYTES = 2 * 1024 * 1024;
+  const WORLD_FRAME_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+  const worldFrameCache = new Map();
+  const worldFrameInflight = new Map();
+  const worldFrameNextAllowedAt = new Map();
+  let worldFrameCacheBytes = 0;
+
+  function getWorldFrameCache(cameraId) {
+    const entry = worldFrameCache.get(cameraId);
+    if (!entry) return null;
+    worldFrameCache.delete(cameraId);
+    worldFrameCache.set(cameraId, entry);
+    return entry;
+  }
+
+  function storeWorldFrame(cameraId, image) {
+    if (
+      !Buffer.isBuffer(image?.body) ||
+      image.body.length > WORLD_FRAME_CACHE_MAX_ENTRY_BYTES
+    )
+      return;
+    const previous = worldFrameCache.get(cameraId);
+    if (previous) worldFrameCacheBytes -= previous.body.length;
+    const entry = {
+      body: image.body,
+      contentType: image.contentType,
+      fetchedAt: Date.now(),
+    };
+    worldFrameCache.delete(cameraId);
+    worldFrameCache.set(cameraId, entry);
+    worldFrameCacheBytes += entry.body.length;
+    while (
+      worldFrameCache.size > WORLD_FRAME_CACHE_MAX_ENTRIES ||
+      worldFrameCacheBytes > WORLD_FRAME_CACHE_MAX_BYTES
+    ) {
+      const oldestId = worldFrameCache.keys().next().value;
+      const oldest = worldFrameCache.get(oldestId);
+      worldFrameCache.delete(oldestId);
+      worldFrameCacheBytes -= oldest.body.length;
+    }
+  }
+
+  function setNextAllowedAt(cameraId, at) {
+    worldFrameNextAllowedAt.delete(cameraId);
+    worldFrameNextAllowedAt.set(cameraId, at);
+    while (worldFrameNextAllowedAt.size > 4096) {
+      worldFrameNextAllowedAt.delete(
+        worldFrameNextAllowedAt.keys().next().value,
+      );
+    }
+  }
+
+  /**
+   * Fetch a frame from a provider with a per-camera refresh floor. Inside the
+   * floor the last frame is reused; with no frame to reuse the caller gets
+   * `{ throttled: true }` and serves a placeholder, so a cadence-limited camera
+   * never falls through to the key-bearing Street View fallback. A failed
+   * fetch backs off for a minute (capped at the floor) instead of a full
+   * window.
+   */
+  async function fetchThrottledFrame(source, cameraId, frameUrl) {
+    const cached = getWorldFrameCache(cameraId);
+    const rawRefreshMs = Number(source?.frameRefreshMs);
+    const refreshMs =
+      Number.isFinite(rawRefreshMs) && rawRefreshMs > 0
+        ? rawRefreshMs
+        : 5 * 60 * 1000;
+    const now = Date.now();
+    if (cached && now - cached.fetchedAt < refreshMs) {
+      return { ok: true, ...cached, cached: true };
+    }
+
+    const inflight = worldFrameInflight.get(cameraId);
+    if (inflight) return inflight;
+    const stale = cached
+      ? {
+          ok: true,
+          body: cached.body,
+          contentType: cached.contentType,
+          stale: true,
+        }
+      : null;
+    const nextAllowedAt = worldFrameNextAllowedAt.get(cameraId) || 0;
+    if (now < nextAllowedAt) return stale || { ok: false, throttled: true };
+    if (!frameUrl) return stale;
+    setNextAllowedAt(cameraId, now + refreshMs);
+    let request;
+    request = fetchCctvImageFromUpstream(frameUrl)
+      .then((image) => {
+        if (image?.ok) {
+          storeWorldFrame(cameraId, image);
+          return image;
+        }
+        setNextAllowedAt(
+          cameraId,
+          Date.now() + Math.min(refreshMs, THROTTLED_FRAME_FAILURE_BACKOFF_MS),
+        );
+        return stale || image;
+      })
+      .finally(() => {
+        if (worldFrameInflight.get(cameraId) === request)
+          worldFrameInflight.delete(cameraId);
+      });
+    worldFrameInflight.set(cameraId, request);
+    return request;
+  }
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -116,8 +233,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
         signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
       });
-      const svType = svResp.headers.get('content-type') || '';
-      if (!svResp.ok || !svType.startsWith('image/')) return null;
+      const svType = cctvRasterImageType(svResp.headers.get('content-type'));
+      if (!svResp.ok || !svType) {
+        try {
+          await svResp.body?.cancel();
+        } catch {
+          /* no-op */
+        }
+        return null;
+      }
 
       return {
         ok: true,
@@ -135,22 +259,30 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     });
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
+        const url = new URL(req.url || '/', 'http://localhost');
+        // Refuse cross-site requests before any catalog or upstream work. The
+        // keyless gate keeps the routes reachable behind a reverse proxy; the
+        // key-bearing Street View fallback below has its own check.
+        if (admitSameSiteKeyless(req, res)) return;
         const sources = await getCctvSources();
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
         );
-        const url = new URL(req.url || '/', 'http://localhost');
 
         if (url.pathname === '/sources') {
+          const quebecVideo = quebecBrowserVideoEnabled();
           const body = {
+            trimmedPacks: getCctvSources.trimmedPacks?.(sources) ?? [],
             sources: sources.map((source) => ({
               id: source.id,
+              pack: source.pack,
               name: source.name,
               city: source.city,
               cityId: source.cityId,
               provider: source.provider,
               lat: source.lat,
               lon: source.lon,
+              frameRefreshMs: source.frameRefreshMs,
               headingDeg: source.headingDeg,
               headingConfidence: source.headingConfidence || '',
               pitchDeg: source.pitchDeg,
@@ -161,7 +293,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               feedType: normalizeFeedType(source.feedType),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
+              sourceUrl: source.sourceUrl || '',
+              browserMediaUrl:
+                quebecVideo && source.sourceKind === 'quebec-511-browser'
+                  ? quebec511VideoUrl(source.id)
+                  : '',
+              accuracyM: source.accuracyM,
+              positionSource: source.positionSource || '',
               poseSource: source.poseSource,
+              model: source.model || '',
+              manufacturer: source.manufacturer || '',
               license: source.license,
               credit: source.credit || '',
               code: source.code || '',
@@ -212,6 +353,21 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           const source = sourceById.get(cameraId);
           const mediaUrl = source?.url || '';
           const feedType = normalizeFeedType(source?.feedType || 'image');
+          // Live feeds only. A still camera is served by /frame, whose fetch
+          // keeps redirects on the registered origin, accepts only raster
+          // images and caps the body; relaying it here would bypass all three.
+          if (!isVideoFeedType(feedType) && feedType !== 'mjpeg') {
+            res.writeHead(404, {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
+            });
+            res.end(
+              JSON.stringify({
+                error: 'No live media for this camera; use the frame endpoint',
+              }),
+            );
+            return;
+          }
           const leaseId = url.searchParams.get('lease');
           if (feedType === 'hls' && !/^[a-f0-9-]{36}$/i.test(leaseId || '')) {
             res.writeHead(400);
@@ -363,7 +519,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               }
               return;
             }
-            const contentType = upstream.headers.get('content-type') || '';
             if (!upstream.ok) {
               try {
                 await upstream.body?.cancel();
@@ -388,31 +543,42 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
 
-            if (
-              isVideoFeedType(feedType) &&
-              !(
-                contentType.startsWith('video/') ||
-                contentType.includes('mpegurl')
-              )
-            ) {
+            // The relayed type is the feed kind's own, checked before the
+            // camera counts as healthy and before any byte is relayed.
+            const contentType = cctvLiveMediaType(
+              feedType,
+              upstream.headers.get('content-type'),
+            );
+            if (!contentType) {
+              try {
+                await upstream.body?.cancel();
+              } catch {
+                /* already closed */
+              }
               setHealth(cameraId, {
                 status: 'degraded',
                 sourceKind: 'upstream',
                 label: source?.provider || 'Configured source',
-                message: `Unexpected media type ${contentType || 'unknown'}`,
+                message: 'Unexpected media type',
               });
-            } else {
-              setHealth(cameraId, {
-                status: 'ok',
-                sourceKind: isVideoFeedType(feedType) ? 'live' : 'snapshot',
-                label: source?.provider || 'Configured source',
-                message: isVideoFeedType(feedType)
-                  ? 'Live stream connected'
-                  : 'Snapshot feed connected',
+              res.writeHead(502, {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
               });
+              res.end(JSON.stringify({ error: 'Media proxy failed' }));
+              return;
             }
+            setHealth(cameraId, {
+              status: 'ok',
+              sourceKind: isVideoFeedType(feedType) ? 'live' : 'snapshot',
+              label: source?.provider || 'Configured source',
+              message: isVideoFeedType(feedType)
+                ? 'Live stream connected'
+                : 'Snapshot feed connected',
+            });
 
             await proxyMediaResponse(res, upstream, {
+              contentType,
               sourceHeader: isVideoFeedType(feedType)
                 ? 'live-media'
                 : 'upstream-image',
@@ -486,15 +652,71 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : '');
 
         const upstreamImage =
-          source?.sourceKind === 'txdot-its'
-            ? await fetchTxdotSnapshot(upstreamCandidate)
-            : await fetchCctvImageFromUpstream(upstreamCandidate);
+          source?.pack === 'world-cameras'
+            ? await fetchThrottledFrame(source, cameraId, upstreamCandidate)
+            : source?.sourceKind === 'ottawa-traffic'
+              ? await fetchThrottledFrame(
+                  source,
+                  cameraId,
+                  ottawaAuthorizedFrameUrl(upstreamCandidate),
+                )
+              : source?.sourceKind === 'txdot-its'
+                ? await fetchTxdotSnapshot(upstreamCandidate)
+                : await fetchCctvImageFromUpstream(upstreamCandidate, {
+                    allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
+                  });
+        if (
+          source?.sourceKind === 'mlit-river' &&
+          isMlitRiverAdjustmentImage(upstreamImage)
+        ) {
+          const svg = buildSyntheticCctvSvg({
+            cameraId,
+            label,
+            city,
+            status: 'CAMERA UNDER ADJUSTMENT',
+          });
+          setHealth(cameraId, {
+            status: 'degraded',
+            sourceKind: 'snapshot',
+            label: source.provider || 'MLIT river cameras',
+            message: 'Provider camera under adjustment',
+          });
+          res.writeHead(200, {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'provider-maintenance',
+          });
+          res.end(svg);
+          return;
+        }
+        if (upstreamImage?.throttled) {
+          // Inside the provider's refresh floor with no frame to reuse: a
+          // placeholder, not Street View, and no health change.
+          res.writeHead(200, {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'synthetic',
+          });
+          res.end(
+            buildSyntheticCctvSvg({
+              cameraId,
+              label,
+              city,
+              status: 'WAITING FOR NEXT FRAME',
+            }),
+          );
+          return;
+        }
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
-            status: 'ok',
+            status: upstreamImage.stale ? 'degraded' : 'ok',
             sourceKind: 'snapshot',
             label: source?.provider || 'Configured source',
-            message: 'Upstream snapshot active',
+            message: upstreamImage.stale
+              ? 'Serving last snapshot; refresh failed'
+              : upstreamImage.cached
+                ? 'Cached snapshot active'
+                : 'Upstream snapshot active',
           });
           res.writeHead(200, {
             'Content-Type': upstreamImage.contentType,
@@ -505,13 +727,22 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
-        const sv = await streetViewFallback({
-          lat,
-          lon,
-          heading,
-          fov,
-          pitch,
-        });
+        // The Street View fallback spends the Google key, so a forwarded
+        // request (whose client this server cannot see) gets the placeholder,
+        // as if no key were configured. Any forwarding header counts, even an
+        // empty one.
+        const forwarded = PROXY_SIGNALS.some(
+          (name) => req.headers?.[name] !== undefined,
+        );
+        const sv = forwarded
+          ? null
+          : await streetViewFallback({
+              lat,
+              lon,
+              heading,
+              fov,
+              pitch,
+            });
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',

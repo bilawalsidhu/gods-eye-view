@@ -2,14 +2,34 @@ import {
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
 } from '../panelStackLayout.js';
-import {
-  resolveHudRailLayout,
-  shouldHideCollapsedRightPanels,
-} from './panelRailGeometry.js';
+import { resolveHudRailLayout } from './panelRailGeometry.js';
 
 import { displayPanelScroller } from './displayPanelScroll.js';
+import { settleSideAccordion } from './panelAccordion.js';
 
 const pendingCollapseRetries = new WeakSet();
+
+/**
+ * Where the left rail's top will settle, not where it is mid-transition:
+ * nothing re-runs this pass when the `top` animation ends (ResizeObserver
+ * ignores moves). Returns NaN when there is no left rail.
+ */
+function settledLeftRailTop(leftStack, viewportHeight, getComputedStyle) {
+  const top = leftStack?.getBoundingClientRect().top;
+  if (!Number.isFinite(top)) return NaN;
+  const transition = leftStack
+    .getAnimations?.()
+    .find((animation) => animation.transitionProperty === 'top');
+  if (!transition) return top;
+  const keyframes = transition.effect?.getKeyframes?.() || [];
+  const targetTop = parseFloat(keyframes.at(-1)?.top);
+  const currentTop = parseFloat(getComputedStyle(leftStack).top);
+  // The rect and the computed `top` move together; keep any offset between them.
+  if (Number.isFinite(targetTop) && Number.isFinite(currentTop))
+    return top + targetTop - currentTop;
+  const targetPct = parseFloat(leftStack.dataset?.safeTopPct);
+  return Number.isFinite(targetPct) ? (targetPct * viewportHeight) / 100 : top;
+}
 
 /**
  * Measure and place the right panel rail for one synchronous layout pass.
@@ -21,7 +41,8 @@ const pendingCollapseRetries = new WeakSet();
  * @param {Window} options.windowRef Viewport and style reader.
  * @param {{visible: boolean, variant: string}} options.hud Current HUD presentation.
  * @param {string} options.preferredPanelId Most recently opened panel.
- * @param {Function} options.onCollapse Update a panel's disclosure chrome.
+ * @param {Function} options.onCollapse Present a panel's collapse:
+ *   `(panel, {collapsed, auto})`.
  * @param {Function} options.onRetry Request another pass after automatic collapse.
  * @param {Function} [options.getComputedStyle] Optional DOM style reader override.
  * @param {HTMLElement} options.leftStack Rail supplying the shared top baseline.
@@ -47,49 +68,39 @@ export function layoutRightPanelRail({
   // A collapse may schedule one follow-up, which only measures and allocates.
   const isCollapseRetry = pendingCollapseRetries.delete(stack);
 
+  // Other CSS may hide a panel, such as an event view: it is not laid out.
+  // Exclusive presentation hides collapsed panels itself; those stay in the
+  // rail so they can be restored.
+  const hiddenByRail = (panel) =>
+    stack.classList.contains('layout-exclusive') &&
+    panel.classList.contains('collapsed');
   const panels = [...stack.children].filter(
-    (panel) => panel.matches('[data-panel-id]') && !panel.hidden,
+    (panel) =>
+      panel.matches('[data-panel-id]') &&
+      !panel.hidden &&
+      (hiddenByRail(panel) || getComputedStyle(panel).display !== 'none'),
   );
   if (!hud.visible || hud.variant !== 'tactical') {
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
-      panel.classList.remove('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: false, auto: null });
     }
   }
-  // Normalize restored state and theme entry without overwriting saved panel
-  // preferences. This marker is distinct from Tactical's space-based collapse.
-  if (hud.variant === 'cyber') {
-    const expanded = panels.filter(
-      (panel) => !panel.classList.contains('collapsed'),
-    );
-    const owner =
-      expanded.find((panel) => panel.id === preferredPanelId) ||
-      expanded.find((panel) => panel.contains(documentRef?.activeElement)) ||
-      expanded[0];
-    for (const panel of expanded) {
-      if (panel === owner) continue;
-      panel.classList.add('collapsed', 'cyber-accordion-collapsed');
-      onCollapse(panel);
-    }
-  } else {
-    for (const panel of panels) {
-      if (!panel.classList.contains('cyber-accordion-collapsed')) continue;
-      panel.classList.remove('collapsed', 'cyber-accordion-collapsed');
-      onCollapse(panel);
-    }
-  }
+  // One panel is open per desktop side; this marker is distinct from
+  // Tactical's space-based collapse.
   const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
-  const hasExpandedPanel = panels.some(
-    (panel) =>
-      !panel.classList.contains('collapsed') &&
-      (!isMobile || panel.id !== 'pp-toggles'),
-  );
-  const exclusive = shouldHideCollapsedRightPanels({
-    hudVariant: hud.variant,
-    hasExpandedPanel,
+  settleSideAccordion({
+    panels,
+    enabled: !isMobile,
+    preferredPanelId,
+    documentRef,
+    onCollapse,
   });
+  // The desktop panel rail lists every panel, so collapsed ones are hidden.
+  // Phones present the rail as tab sheets (mobileShell.js), which choose what
+  // shows; hiding collapsed siblings would empty a sheet and its a11y tree.
+  const exclusive = !isMobile;
   stack.classList.toggle('layout-exclusive', exclusive);
   for (const panel of panels) {
     if (exclusive && panel.classList.contains('collapsed'))
@@ -110,9 +121,16 @@ export function layoutRightPanelRail({
   const viewportHeight = Math.max(1, windowRef.innerHeight);
   const safeGap = Math.max(8, viewportHeight * 0.012);
   const stackRect = stack.getBoundingClientRect();
-  const leftStackTop = leftStack?.getBoundingClientRect().top;
+  const leftStackTop = settledLeftRailTop(
+    leftStack,
+    viewportHeight,
+    getComputedStyle,
+  );
+  // Align with the left rail's buttons, which hold still while its stack moves.
+  const leftRailOffset =
+    parseFloat(leftStack?.style.getPropertyValue('--panel-rail-offset')) || 0;
   const alignedTop = Number.isFinite(leftStackTop)
-    ? leftStackTop
+    ? leftStackTop + leftRailOffset
     : viewportHeight * 0.26;
   const obstacleRects = [];
 
@@ -260,8 +278,7 @@ export function layoutRightPanelRail({
   if (!isCollapseRetry && autoCollapseIndices.length) {
     for (const index of autoCollapseIndices) {
       const panel = expandedPanels[index];
-      panel.classList.add('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: true, auto: 'layout' });
     }
     pendingCollapseRetries.add(stack);
     onRetry();

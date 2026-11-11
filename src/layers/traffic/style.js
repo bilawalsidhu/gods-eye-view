@@ -104,7 +104,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
       const bucket = dot.bucket;
       if (!bucket) continue; // sim/uncovered dots stay byte-identical
       dot.point.color = layerState._activeBucketColors[bucket];
-      dot.point.pixelSize =
+      dot.nominalSize = dot.point.pixelSize =
         baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
         activeSizeDelta(bucket);
@@ -137,10 +137,14 @@ export function createStyle({ state: layerState, services, parts, source }) {
     return layerState._jamViz === 'density' || layerState._jamViz === 'both';
   }
 
-  /** @returns {boolean} Heat-line prototype active. */
+  /** @returns {boolean} Road lines drawn: the `lines` toggle or the heat-line prototype. */
 
   function heatlineOn() {
-    return layerState._jamViz === 'heatline' || layerState._jamViz === 'both';
+    return (
+      layerState._showLines ||
+      layerState._jamViz === 'heatline' ||
+      layerState._jamViz === 'both'
+    );
   }
   return {
     presetProfileActive,

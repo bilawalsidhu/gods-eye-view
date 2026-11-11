@@ -5,6 +5,7 @@ import { createApplicationCatalog } from './constructCatalog.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
+import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
 
 function fixtureSources(ids, calls) {
   const sources = createStandaloneLayerSources();
@@ -39,8 +40,13 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 29);
+  assert.equal(first.layers.length, 40);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
+  assert.deepEqual(
+    first.metadata.find(({ id }) => id === 'osm-places'),
+    { id: 'osm-places', disposition: 'local-only' },
+    'voice search results never enter share links or stored state',
+  );
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },
@@ -59,6 +65,10 @@ test('catalogs construct distinct layers and classification from their supplied 
       '2026-09-21T12:00:00.000Z',
     );
   assert.ok(first.get('fire-perimeters'));
+  assert.ok(first.get('gnss-integrity'));
+  assert.ok(first.get('s2-ghostmaps'));
+  assert.ok(first.get('drone-airspace'));
+  assert.ok(first.get('news'));
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
@@ -116,7 +126,7 @@ test('invalid or already cancelled construction fails before classification can 
   assert.throws(
     () =>
       createApplicationCatalog({
-        sources: {},
+        sources: { flights: {} },
         signal: lifetime.signal,
         surface: fixtureSurface(lifetime.signal),
       }),
@@ -140,3 +150,92 @@ function fixtureSurface(signal) {
     eventTarget: null,
   });
 }
+
+test('Mapillary can be omitted or replaced without changing catalog membership', (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const sources = fixtureSources([], []);
+  delete sources.mapillary;
+  const options = {
+    sources,
+    signal: lifetime.signal,
+    surface: fixtureSurface(lifetime.signal),
+  };
+  const catalog = createApplicationCatalog(options);
+  assert.equal(catalog.layers.length, 40);
+  assert.deepEqual(catalog.get('street-level').providerIds, []);
+  assert.equal(
+    catalogControlServices(catalog).streetLevelLayer,
+    catalog.get('street-level'),
+  );
+  assert.match(
+    catalog.get('street-level').getUIState().coverage.hint,
+    /No street-level imagery providers/,
+  );
+  const provider = fakeStreetLevelProvider({
+    id: 'example',
+    pickPrefix: 'example:',
+  });
+  const replacement = createApplicationCatalog({
+    ...options,
+    streetLevelProviders: [provider],
+  });
+  assert.deepEqual(replacement.get('street-level').providerIds, ['example']);
+  assert.deepEqual(replacement.metadata, catalog.metadata);
+  assert.equal(provider.calls.activate, 0, 'construction must not acquire');
+  assert.deepEqual(
+    createApplicationCatalog({
+      ...options,
+      sources: fixtureSources([], []),
+      streetLevelProviders: [],
+    }).get('street-level').providerIds,
+    [],
+  );
+  assert.throws(
+    () =>
+      createApplicationCatalog({
+        ...options,
+        sources: { ...sources, mapillary: {} },
+      }),
+    /Mapillary source/,
+  );
+});
+
+test('a GNSS integrity source can set the layer evidence window', (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const gnssLayer = (descriptor) => {
+    const sources = fixtureSources([], []);
+    sources['gnss-integrity'] = {
+      getSnapshot: async () => ({}),
+      ...descriptor,
+    };
+    return createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('gnss-integrity');
+  };
+  const shows = (layer, minutes) => {
+    assert.equal(layer.provenance.window.minutes, minutes);
+    const { info, legend } = layer.getRowControls();
+    assert.match(info, new RegExp(`visited views over ${minutes} min`));
+    assert.match(legend[0].blurb, new RegExp(`over ${minutes} minutes`));
+  };
+  shows(gnssLayer({ windowMs: 65 * 60_000 }), 65);
+  shows(gnssLayer({}), 30);
+  for (const windowMs of [
+    undefined,
+    null,
+    NaN,
+    Infinity,
+    0,
+    -60_000,
+    '3600000',
+  ])
+    assert.equal(
+      gnssLayer({ windowMs }).provenance.window.minutes,
+      30,
+      `${String(windowMs)} falls back to the default`,
+    );
+});

@@ -1,18 +1,16 @@
-export {
-  GROUND_FLOOR_CLAMP_RADIUS_KM,
-  GROUND_FLOOR_WARM_MAX_ALT_M,
-  POSITION_HISTORY_LIMIT,
-  LANDED_MISSING_POLL_LIMIT,
-  MISSING_POLL_LIMIT,
-  ERROR_BACKOFF_INTERVAL,
-} from './recordPolicy.js';
 import * as Cesium from 'cesium';
+import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
 export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+
+/** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
+
+export const EMERGENCY_TINT =
+  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
@@ -134,7 +132,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -148,6 +146,15 @@ export const TRAIL_MAX_POINTS = 400;
 /** @constant {number} Display latency in seconds (= one poll interval). */
 
 export const RENDER_DELAY_SEC = 30;
+
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (state) => state.timeline?.active() === true;
+
+/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
+ *  following the clock, whose snapshots are loaded ahead of the time. */
+export const displayDelayMs = (state) =>
+  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 
@@ -200,6 +207,37 @@ export const FLEET_DR_INTERVAL_MS = 80;
 
 export const ROTATION_REFRESH_MS = 1000;
 
+/**
+ * @constant {number} Dead-reckoning cadence (ms) for contacts hidden behind the
+ * horizon. The worldwide feed carries ~13k contacts and a zoomed-in view shows
+ * well under 1% of them; the rest still need positions for hidden-inclusive
+ * proximity queries, but ~1 s old (≈250 m for an airliner) is well inside the
+ * 30 s poll's own uncertainty. Each hidden contact is re-reckoned on one tick in
+ * every HIDDEN_CONTACT_DR_TICKS, staggered by id so no tick carries them all.
+ */
+
+export const HIDDEN_CONTACT_DR_INTERVAL_MS = 1000;
+
+export const HIDDEN_CONTACT_DR_TICKS = Math.max(
+  1,
+  Math.round(HIDDEN_CONTACT_DR_INTERVAL_MS / FLEET_DR_INTERVAL_MS),
+);
+
+/**
+ * Stable slot in [0, HIDDEN_CONTACT_DR_TICKS) for a contact id, so each hidden
+ * contact re-reckons on the same tick of every rotation.
+ * @param {string} id Contact id (ICAO24).
+ * @returns {number}
+ */
+
+export function hiddenContactDrPhase(id) {
+  const text = String(id);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++)
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash % HIDDEN_CONTACT_DR_TICKS;
+}
+
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */
 
@@ -213,8 +251,8 @@ export const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // adsbdb enrichment (best-effort, fail-silent). Bounded fan-out: max 4
 // concurrent requests, dispatches dripped ≥ENRICH_DISPATCH_GAP_MS apart
 // (≤5/s — adsbdb is a free community API; the dev-server proxy additionally
-// caches per-key on disk forever, negative results included, so repeat
-// sessions never re-hit adsbdb). Each key is requested at most once per
+// caches successful and 404 responses per key for 24 hours, so later sessions
+// may refresh them). Each key is requested at most once per
 // session. Priority jobs (tracked plane, model-eligible planes) jump the
 // queue; the ambient fleet sweep (below) fills the back at poll cadence.
 // ---------------------------------------------------------------------------
@@ -224,6 +262,11 @@ export const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 
 export const ENRICH_DISPATCH_GAP_MS = 200;
+
+/** A lookup whose source failed (an outage, a timeout, a restarting server) may
+ *  be asked again after this long; a real "not found" answer never is. */
+
+export const ENRICH_RETRY_COOLDOWN_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Ambient fleet type enrichment (2026-07-02 field data: OpenSky's live
@@ -237,7 +280,7 @@ export const ENRICH_DISPATCH_GAP_MS = 200;
 //     of drip, so the backlog can't outgrow a poll and re-sorts fresh), and
 //   - a ROLLING token-bucket budget (below) bounding the sustained ambient
 //     request rate (repeat sessions resolve instantly from the proxy's
-//     permanent disk cache).
+//     24-hour disk cache).
 // Fail-silent by contract: the sweep never throws into the poll loop, never
 // blocks rendering, and never touches tracking state. When a type answer
 // lands, _requestTypeEnrichment's callback swaps the billboard glyph + scale
@@ -251,7 +294,7 @@ export const ENRICH_DISPATCH_GAP_MS = 200;
 // ENRICH_AMBIENT_REFILL_TOKENS every ENRICH_AMBIENT_REFILL_WINDOW_MS, clamped
 // at the ceiling (no banking beyond one bucket). Numbers: 150 / 5 min sustains
 // 0.5 req/s worst case — an order of magnitude under the 5/s drip that (with
-// the 4-concurrent limit + the proxy's permanent disk cache) is the REAL
+// the 4-concurrent limit + the proxy's 24-hour disk cache) is the REAL
 // politeness bound on adsbdb; the 300 ceiling preserves the old first-look
 // burst so a fresh region still classifies quickly.
 /** Bucket ceiling: max ambient tokens held at once (= the initial burst). */
@@ -437,3 +480,6 @@ export const FLOOR_SEED_GRACE_MS = 90_000;
  *  reloads synchronously. */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;

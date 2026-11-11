@@ -50,8 +50,9 @@ export function createIngestion({
     layerState._postTleRetryCount++;
     layerState._retryTimer = setTimeout(() => {
       layerState._retryTimer = null;
+      // A failed retry is already recorded in the layer stats.
       if (layerState._enabled && token === layerState._lifecycleToken)
-        requestMissionUpdate();
+        requestMissionUpdate().catch(() => {});
     }, POST_TLE_RETRY_DELAY_MS);
   }
 
@@ -168,9 +169,16 @@ export function createIngestion({
   async function performMissionUpdate(token) {
     try {
       ensureActiveTleLookup(token);
-      const payload = await source.getLaunches({
-        signal: layerState._sourceController.signal,
-      });
+      const { payload, stale } = source.getLaunchSnapshot
+        ? await source.getLaunchSnapshot({
+            signal: layerState._sourceController.signal,
+          })
+        : {
+            payload: await source.getLaunches({
+              signal: layerState._sourceController.signal,
+            }),
+            stale: false,
+          };
       const launches = parts.model.normalizeRocketLaunches(payload);
       if (
         !layerState._enabled ||
@@ -194,6 +202,10 @@ export function createIngestion({
       if (layerState._renderedTleText === layerState._activeTleText)
         clearPostTleRetry();
       layerState._count = launches.length;
+      // The roster reads these to tell a loaded empty index from loading.
+      layerState._lastUpdate = Date.now();
+      layerState._lastError = null;
+      layerState._stale = stale === true;
       parts.panel.renderMissionRoster();
       if (
         !layerState._selectedLaunchId ||
@@ -212,12 +224,19 @@ export function createIngestion({
       }
       layerState._focusAfterActiveLookup = false;
       parts.panel.renderMissionPanel();
-      layerState._lastUpdate = Date.now();
-      layerState._lastError = null;
+      layerState.coverageChanged();
+      layerState._entryCameraView = null;
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
+        layerState._lastErrorAt = Date.now();
         console.warn('[Data:RocketLaunches] Fetch error:', error);
+        // No index yet: fail the enable so Context rolls back.
+        // After a loaded index, a failed refresh keeps its records.
+        if (layerState._lastUpdate === null) {
+          parts.panel.renderMissionRoster();
+          throw error;
+        }
       }
     }
   }

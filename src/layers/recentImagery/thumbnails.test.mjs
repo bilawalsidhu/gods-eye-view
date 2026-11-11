@@ -315,3 +315,24 @@ test('a request queued behind an aborted fetch still starts once the abort settl
     tracked: 1,
   });
 });
+
+test('injected thumbnail acquisition owns requests while the loader releases object URLs', async () => {
+  const calls = [];
+  const { loader, fetch, revoked } = fixture({
+    requestThumbnail: async (...args) => {
+      calls.push(args);
+      return response({ headers: { 'Data-Present': 'true' } });
+    },
+  });
+  const entry = candidate('S30', '2026-09-18');
+  loader.request(entry, BOX, 0);
+  await settle();
+  assert.equal(fetch.calls.length, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], entry);
+  assert.deepEqual(calls[0][1], BOX);
+  assert.ok(calls[0][2].signal instanceof AbortSignal);
+  assert.equal(loader.get(entry.key).status, 'present');
+  loader.destroy();
+  assert.deepEqual(revoked, ['blob:1']);
+});

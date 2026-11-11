@@ -32,6 +32,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 import { classifyAircraft, CLASS_SCALE_2D, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
 // Hangar fleet (2026-08-16): real per-class GLBs render at scale 1; military
 // heavies (airliner/quadjet/glider) render airplane.glb at 1 x class; only
@@ -186,6 +187,7 @@ async function main() {
   const httpErrors = [];
   try {
     const page = await browser.newPage();
+    await stubPlanespotters(page);
     await page.setViewport({ width: 1280, height: 800 });
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -229,11 +231,11 @@ async function main() {
         const nowSec = Date.now() / 1000 + (S.timeOffsetSec || 0);
         const tRel = nowSec - S.epochMs / 1000;
 
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
-        if (url.includes('/api/adsblol/trace')) {
+        if (url.includes('/api/flights/track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/military/track')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
-        if (url.includes('/api/opensky')) {
+        if (url.includes('/api/flights')) {
           window.__SPR_HITS.opensky++;
           const states = S.flights.map((f) => {
             const s = S.stateAt(f, tRel);
@@ -249,7 +251,7 @@ async function main() {
           });
           return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
         }
-        if (url.includes('/api/adsblol/mil')) {
+        if (url.includes('/api/military')) {
           window.__SPR_HITS.mil++;
           const ac = S.military.map((m) => {
             const s = S.stateAt(m, tRel);

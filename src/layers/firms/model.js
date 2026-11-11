@@ -1,9 +1,12 @@
 import * as Cesium from 'cesium';
+import { formatNumber, getLocale, isolate, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
   accentForSeverity,
+  formatFrpMw,
 } from '../../data/firmsLabels.js';
+import { FRP_RAMP, frpRampStop } from '../../data/firmsIntensity.js';
 import {
   VIEW_PADDING,
   DETECTION_COLOR_STOPS,
@@ -29,7 +32,8 @@ export function createModel({
    * context-store ids, so the two stay consistent).
    * @param {Object|null|undefined} fire - Internal fire record.
    * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
-   *   confidence: number|null, satellite: string|null, acqTime: number|null}}
+   *   confidence: number|null, satellite: string|null, sensor: string|null,
+   *   acqTime: number|null}}
    */
 
   function mapAnalystRecord(fire) {
@@ -45,6 +49,7 @@ export function createModel({
       frp: num(fire?.frp),
       confidence: num(fire?.confidence), // normalized 0..1 (firmsAdapt.normalizeConfidence)
       satellite: text(fire?.satellite) || text(fire?.sensor),
+      sensor: text(fire?.sensor), // VIIRS or MODIS
       acqTime:
         Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? fire.acqMs : null, // epoch ms; 0 = unparseable → null
     };
@@ -115,27 +120,30 @@ export function createModel({
     );
   }
 
-  function heatColor(value, alpha) {
-    if (value > 0.72) return Cesium.Color.RED.withAlpha(alpha);
-    if (value > 0.42) return Cesium.Color.ORANGE.withAlpha(alpha);
-    return Cesium.Color.YELLOW.withAlpha(alpha);
+  /**
+   * The ramp stop for a fire radiative power (stepped, weakest first).
+   * Intensity alone drives the color: confidence feeds the card text and the
+   * switch, brightness is unreliable (saturates at 367 K) — see HAL-675.
+   * @param {number} frp - Megawatts.
+   * @returns {{name: string, minFrp: number, color: Cesium.Color}}
+   */
+
+  function frpColorStop(frp) {
+    const name = frpRampStop(frp).name;
+    return (
+      DETECTION_COLOR_STOPS.find((stop) => stop.name === name) ||
+      DETECTION_COLOR_STOPS[0]
+    );
   }
 
   /**
-   * Pick a sprite color stop from FRP + confidence, reusing the same
-   * yellow → orange → red thresholds as the aggregated heat cells.
+   * Pick a sprite color stop for one detection from its FRP on the shared ramp.
    * @param {Object} fire - Detection record.
    * @returns {{name: string, color: Cesium.Color}}
    */
 
   function detectionColorStop(fire) {
-    const heat = Math.min(
-      1,
-      Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15,
-    );
-    if (heat > 0.72) return DETECTION_COLOR_STOPS[0];
-    if (heat > 0.42) return DETECTION_COLOR_STOPS[1];
-    return DETECTION_COLOR_STOPS[2];
+    return frpColorStop(fire?.frp);
   }
 
   /** FRP → core marker pixel size, clamped to 8..28px. */
@@ -224,17 +232,30 @@ export function createModel({
   }
 
   /**
+   * The anchor already built for a detection, without the floor lookup;
+   * for the far marker band, where floors are never warmed and the height
+   * difference is invisible, so tens of thousands of markers skip a cache
+   * read each per rebuild. Builds one through {@link firePosition} once.
+   * @param {Object} fire - Detection record.
+   * @returns {Cesium.Cartesian3}
+   */
+
+  function fireBuiltPosition(fire) {
+    return fire.position ?? firePosition(fire);
+  }
+
+  /**
    * Occlusion-test anchor for one detection. Returns the render position
    * outright for anchors comfortably above the ellipsoid (the common case) and
    * a lazily-cached lifted point otherwise — see CULL_LIFT_THRESHOLD_M. This
    * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
    * is what the sprite and the card are drawn at.
    * @param {Object} fire - Detection record.
+   * @param {Cesium.Cartesian3} [position] Its render anchor, if at hand.
    * @returns {Cesium.Cartesian3}
    */
 
-  function fireCullPosition(fire) {
-    const position = firePosition(fire);
+  function fireCullPosition(fire, position = firePosition(fire)) {
     if (fire.positionHeight >= CULL_LIFT_THRESHOLD_M) return position;
     if (!fire.cullPosition) {
       fire.cullPosition = Cesium.Cartesian3.fromDegrees(
@@ -327,14 +348,18 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [`${confidenceBucket(fire.confidence)} conf`];
+    const meta = [
+      t('{value} conf', {
+        value: confidenceLabel(confidenceBucket(fire.confidence)),
+      }),
+    ];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
-      if (age) meta.push(`${age} ago`);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
+      if (age) meta.push(t('{value} ago', { value: age }));
     }
     const sat = satelliteShortName(fire.satellite);
     meta.push(
-      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || 'sensor n/a',
+      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || t('sensor n/a'),
     );
     return {
       id: `selected-fire:${fireDetectionKey(fire)}`,
@@ -344,10 +369,11 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `FIRE · ${formatFrp(fire.frp)} MW`,
+      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
-        formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+        formatLatLonLabel(fire.lat, fire.lon) +
+          (fire.night ? ` · ${t('NIGHT')}` : ''),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -366,9 +392,9 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceBucket(fire.confidence)];
+    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
@@ -380,7 +406,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${formatFrp(fire.frp)} MW`,
+      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -389,8 +415,8 @@ export function createModel({
 
   /**
    * Card model for an aggregated heat cell, e.g. title "14 FIRES", detail
-   * "max 210 MW · new 3h". Accent comes from the candidate (heat-normalized
-   * score is only known at renderCells time). Exported for unit tests.
+   * "max 210 MW · new 3h". Accent comes from the candidate (renderHeat sets
+   * it with {@link cellCardAccent}). Exported for unit tests.
    * @param {{cell: Object, position: Cesium.Cartesian3, accent: string}} candidate
    * @param {number} nowMs - Current epoch milliseconds.
    * @returns {Object} firmsLabels entry.
@@ -398,19 +424,23 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? 'FIRE' : 'FIRES';
-    const parts = [`max ${formatFrp(cell.maxFrp)} MW`];
+    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
     if (cell.newestAcqMs > 0) {
-      const age = formatAge(nowMs - cell.newestAcqMs);
-      if (age) parts.push(`new ${age}`);
+      const age = formatAgeLabel(nowMs - cell.newestAcqMs);
+      if (age) parts.push(t('new {value}', { value: age }));
     }
     return {
       id: `cell:${cell.latCell ?? 'x'}:${cell.lonCell ?? 'x'}`,
       position: candidate.position,
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
-      accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      accent: candidate.accent || accentForSeverity(FRP_RAMP[0].name),
+      // The count picks the plural form of the language ("حريقان (2)",
+      // "14 حريقًا", "14 ПОЖАРОВ"); the card shows it in capitals like the
+      // other card titles.
+      title: tn(cell.count, '{n} fire', '{n} fires', {
+        n: cell.count,
+      }).toLocaleUpperCase(getLocale()),
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -451,16 +481,14 @@ export function createModel({
   }
 
   /**
-   * Heat-normalized cell score → severity accent, mirroring heatColor's
-   * red/orange/yellow thresholds.
-   * @param {number} normalized - 0..1 normalized heat score.
+   * Cell card accent: the cell's strongest fire on the FRP ramp, the same
+   * color its markers take once the camera is close enough to show them.
+   * @param {{maxFrp?: number}} cell - Aggregated cell.
    * @returns {string} "r, g, b" accent string.
    */
 
-  function cellAccent(normalized) {
-    if (normalized > 0.72) return accentForSeverity('red');
-    if (normalized > 0.42) return accentForSeverity('orange');
-    return accentForSeverity('yellow');
+  function cellCardAccent(cell) {
+    return accentForSeverity(frpColorStop(cell?.maxFrp ?? 0).name);
   }
 
   /** Coordinate line like "30.512°N 75.831°E". */
@@ -472,7 +500,39 @@ export function createModel({
   }
 
   function formatFrp(frp) {
-    return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
+    return formatFrpMw(frp);
+  }
+
+  /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
+
+  function formatFrpLabel(frp) {
+    const text = formatFrpMw(frp);
+    const digits = text.includes('.') ? 1 : 0;
+    return formatNumber(Number(text), {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+      useGrouping: false,
+    });
+  }
+
+  /** formatLatLon for a card: "8,389° ю. ш. 44,162° з. д." in Russian. */
+
+  function formatLatLonLabel(lat, lon) {
+    const amount = (value) =>
+      formatNumber(Math.abs(value), {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false,
+      });
+    const latPart =
+      lat >= 0
+        ? t('{value}°N', { value: amount(lat) })
+        : t('{value}°S', { value: amount(lat) });
+    const lonPart =
+      lon >= 0
+        ? t('{value}°E', { value: amount(lon) })
+        : t('{value}°W', { value: amount(lon) });
+    return `${isolate(latPart)} ${isolate(lonPart)}`;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
@@ -488,11 +548,37 @@ export function createModel({
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
 
   function formatAgoMinutes(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return t('just now');
     const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return '<1m ago';
-    if (minutes < 90) return `${minutes}m ago`;
-    return `${Math.round(minutes / 60)}h ago`;
+    if (minutes < 1) return t('<1m ago');
+    if (minutes < 90) return t('{count}m ago', { count: minutes });
+    return t('{count}h ago', { count: Math.round(minutes / 60) });
+  }
+
+  /** A confidence bucket as a card shows it, in the UI language. */
+
+  function confidenceLabel(bucket) {
+    switch (bucket) {
+      case 'high':
+        return t('high', { context: 'fire confidence' });
+      case 'nominal':
+        return t('nominal', { context: 'fire confidence' });
+      case 'low':
+        return t('low', { context: 'fire confidence' });
+      default:
+        return bucket;
+    }
+  }
+
+  /** formatAge for a card: "<1h", "24h", "3d" in the UI language ("24 ч"). */
+
+  function formatAgeLabel(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
+    const hours = deltaMs / 3600000;
+    if (hours < 1) return t('<1h', { context: 'age' });
+    if (hours < 48)
+      return t('{count}h', { context: 'age', count: Math.round(hours) });
+    return t('{count}d', { context: 'age', count: Math.round(hours / 24) });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
@@ -508,12 +594,13 @@ export function createModel({
     boundsContainPoint,
     cellIntersectsBounds,
     heatScore,
-    heatColor,
+    frpColorStop,
     detectionColorStop,
     frpPixelSize,
     sizeBucket,
     glowSprite,
     firePosition,
+    fireBuiltPosition,
     fireCullPosition,
     cellCullPosition,
     applyHorizonCull,
@@ -522,10 +609,11 @@ export function createModel({
     buildFireCard,
     buildCellCard,
     applyFirmsOverlayPolicy,
-    cellAccent,
+    cellCardAccent,
     formatLatLon,
     formatFrp,
     formatAge,
+    formatAgeLabel,
     formatAgoMinutes,
     confidenceBucket,
   };

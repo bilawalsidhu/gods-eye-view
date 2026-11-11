@@ -1,10 +1,26 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import {
+  claimPointer,
+  isPointerFree,
+  releasePointer,
+} from '../data/inputOwnership.js';
+import { initGeoFileImport } from '../ui/geoFileImport.js';
+import { useDisplayStore } from '../ui/stores/display.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
-import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
+import { installViews, isEmbeddedInline } from './embed.js';
+import {
+  installScopeMask,
+  destroyScopeMask,
+  isScopeMaskEnabled,
+} from '../scopeMask.js';
+import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
+import { installGlobeInViewRecovery } from './viewer.js';
+import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
   installRenderGovernor,
   getRenderGovernorDiagnostics,
@@ -24,6 +40,7 @@ export function createApplicationTools({
   startChrome,
   onSceneDirector,
   sceneDataPacks,
+  drawMarkActions = [],
   signal,
   defer,
 }) {
@@ -39,6 +56,14 @@ export function createApplicationTools({
     .get('bhote-koshi-2026')
     ?.module.attachSceneController(sceneDirector);
   defer(() => sceneDirector.destroy());
+  defer(
+    installGlobeInViewRecovery(viewer, {
+      // The scope mask hides everything outside its keyhole.
+      keyholeRadius: () => (isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0),
+      // An authored scene frames its own shots, holds included.
+      paused: () => sceneDirector.running,
+    }),
+  );
   onSceneDirector?.(sceneDirector);
   const annotations = initAnnotations({
     viewer,
@@ -50,11 +75,40 @@ export function createApplicationTools({
     if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
     annotations.destroy();
   });
-  // DISPLAY ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
+  const displayStore = useDisplayStore(applicationPinia());
+  // The Display panel's controls answer through the store; returns the
+  // disconnect.
+  const connectDisplay = (actions) => {
+    const token = displayStore.connect(actions);
+    return () => displayStore.detach(token);
+  };
+  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
   // while a session is open, so its teardown belongs to the application
-  // lifetime rather than to whoever last pressed the button.
-  const drawTool = initDrawTool({ viewer, annotations });
+  // lifetime rather than to whoever last pressed the button. A row's fly-to
+  // goes through the shell's navigation policy, as Import's does.
+  // `drawMarkActions` are an application's own buttons on a drawn area's or
+  // line's row (annotations/drawMarks.js); the standalone shell adds none.
+  const drawTool = initDrawTool({
+    viewer,
+    annotations,
+    navigation: styleManager,
+    publish: (view) => displayStore.publishDraw(view),
+    connect: connectDisplay,
+    markActions: drawMarkActions,
+  });
   defer(() => drawTool?.destroy());
+  // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
+  // own data source. They live for the page session, so the application
+  // lifetime removes them and the drop listeners on the viewer container.
+  const geoFileImport = initGeoFileImport({
+    viewer,
+    navigation: styleManager,
+    ground: operations.surface?.groundFloor,
+    subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
+    publish: (view) => displayStore.publishGeoImport(view),
+    connect: connectDisplay,
+  });
+  defer(() => geoFileImport?.destroy());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
   // panel lives on the right rail, so both belong to the application
   // lifetime. The tileset lets the layer drape while the globe is hidden.
@@ -98,6 +152,15 @@ export function createApplicationTools({
   // nothing animates per frame. Installed AFTER every module above has had
   // its chance to register pre-install holds. (perf wave 2)
   installRenderGovernor(viewer);
+  // Cesium keeps a turned-off layer's draw commands (and so all its entities)
+  // alive in reused per-pass arrays; trim them after each disable.
+  defer(
+    installLayerReleaseTrim({
+      scene: viewer.scene,
+      dataManager,
+      requestRender: governorRequestRender,
+    }),
+  );
 
   // Install the explicit scope mask used by the DISPLAY controls.
   installScopeMask(viewer);
@@ -118,7 +181,9 @@ export function createApplicationTools({
   // GPU. Holder/data state is untouched, so return is seamless: restore
   // the loop, refresh the one DOM surface we gated, render a frame.
   const syncVisibilitySuspension = () => {
-    const hidden = document.hidden;
+    // A panel's host may report it hidden while it is on screen; the panel
+    // keeps drawing itself (see keepPanelRendering in embed.js).
+    const hidden = document.hidden && !isEmbeddedInline();
     viewer.useDefaultRenderLoop = !hidden;
     cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
@@ -176,5 +241,28 @@ export function createApplicationTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
-  return { sceneDirector, annotations, voiceCommands };
+  defer(
+    installViews({
+      shell: styleManager,
+      viewer,
+      dataManager,
+      run: (name, args, options = {}) =>
+        voiceCommands.runner(name, args, { ...options, signal }),
+      signal,
+      terrain: operations.requests.terrain,
+    }),
+  );
+  // An application's own tool takes the pointer as Draw does, and its own
+  // click handlers yield while a tool holds it, as the layers' do
+  // (data/inputOwnership.js).
+  return {
+    sceneDirector,
+    annotations,
+    voiceCommands,
+    pointer: {
+      claim: claimPointer,
+      release: releasePointer,
+      isFree: isPointerFree,
+    },
+  };
 }

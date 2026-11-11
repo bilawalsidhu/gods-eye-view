@@ -24,8 +24,8 @@ export function runChecked(command, args, { shell = false } = {}) {
 export function installPinokioDependencies() {
   applyPinokioEnvironment();
   rmSync(READY_FILE, { force: true });
-  const npm = npmProcessSpec();
-  runChecked(npm.command, ['ci'], { shell: npm.shell });
+  const npm = npmProcessSpec(['ci']);
+  runChecked(npm.command, npm.args, { shell: npm.shell });
 
   // Pinokio starts Vite directly and loads only its ENVIRONMENT file plus the
   // normal dotenv ladder. Unlike dev-fresh.sh, it does not import macOS

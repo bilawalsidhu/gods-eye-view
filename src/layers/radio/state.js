@@ -25,6 +25,7 @@ export function createState({ services }) {
   layerState._stale = false;
 
   layerState._degraded = false;
+  layerState._rejectedStationCount = 0;
 
   layerState._error = null;
 
@@ -37,6 +38,7 @@ export function createState({ services }) {
   layerState._stationById = new Map();
 
   layerState._categories = [];
+  layerState._categoriesLocale = null;
 
   layerState._renderById = new Map();
 
@@ -75,6 +77,8 @@ export function createState({ services }) {
   layerState._tuningPreviewId = null;
 
   layerState._tuningStartStationId = null;
+
+  layerState._tuningResumesPlayback = false;
 
   layerState._tuningResolutionSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
 

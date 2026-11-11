@@ -1,9 +1,5 @@
-export {
-  PARTIAL_RETENTION_MS,
-  SELECTED_PIN_REFRESHES,
-  AIS_FIRST_CONNECT_LABEL,
-} from './recordPolicy.js';
 import { VESSEL_LABEL_GRID_PX } from '../../data/vesselLabels.js';
+import { msg } from '../../i18n/index.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
@@ -57,6 +53,11 @@ export const TRAIL_MAX_POINTS = 400;
 
 export const TRAIL_MIN_MOVE_M = 25;
 
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (vesselState) =>
+  vesselState.timeline?.active() === true;
+
 export const DEFAULT_AIS_RUNTIME = Object.freeze({
   now: () => Date.now(),
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
@@ -71,12 +72,12 @@ export const DEFAULT_AIS_RUNTIME = Object.freeze({
  */
 
 export const AIS_STATUS_REASON = {
-  'missing-key': 'AISSTREAM_API_KEY not set',
-  unsupported: 'live feed unsupported',
-  connecting: 'connecting to feed…',
-  closed: 'feed disconnected',
-  error: 'feed down',
-  idle: 'feed idle',
+  'missing-key': msg('AISSTREAM_API_KEY not set'),
+  unsupported: msg('live feed unsupported'),
+  connecting: msg('connecting to feed…'),
+  closed: msg('feed disconnected'),
+  error: msg('feed down'),
+  idle: msg('feed idle'),
 };
 
 /**

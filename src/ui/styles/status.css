@@ -123,6 +123,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Translated retry details ("cámaras ALPR · reintento en 53 s") run longer
+   than the English one; English keeps its 220px. */
+html:not([lang='en']) #global-loading-detail {
+  max-width: min(300px, 46vw);
+}
 #global-loading-status:is(
   [data-state='complete'],
   [data-state='cancelled'],
@@ -160,6 +165,24 @@
 #global-loading-status[data-state='cancelled'] #global-loading-label,
 #global-loading-status[data-state='cancelled'] #global-loading-detail {
   color: #ffd488;
+}
+/* A last-known notice is a sentence with the entity's id on a second line;
+   the id is shown whole (a vessel UUID is 36 characters). */
+#global-loading-status[data-state='last-known'] {
+  flex-direction: column;
+  gap: 3px;
+  border-color: rgba(255, 212, 136, 0.55);
+  text-align: center;
+}
+#global-loading-status[data-state='last-known'] #global-loading-label {
+  color: #ffd488;
+}
+#global-loading-status[data-state='last-known'] #global-loading-detail {
+  max-width: none;
+  color: rgba(255, 228, 176, 0.82);
+  letter-spacing: 1.2px;
+  text-align: center;
+  text-transform: none;
 }
 #global-loading-status[data-state='acquiring'] {
   border-color: rgba(0, 212, 255, 0.42);
@@ -238,20 +261,20 @@
 
 /* ── Split-flap chip text ─────────────────────────────────────────
    Per-character departure-board flip when a chip label changes.
-   Driven entirely by src/splitFlap.js, which rebuilds the label as
-   one span per character on the change and strips them again once
-   the cascade lands.
+   Planned by src/splitFlap.js and rendered by SplitFlapText.vue, which
+   lays out one cell per character on the change and strips them again
+   once the cascade lands.
 
    The DOM text is the truth and its node never moves. A chip label is
-   upgraded once into a permanent shell — a .gev-flap-text span holding
-   one long-lived Text node, plus an aria-hidden .gev-flap-cells
-   sibling — and from then on a label change is only `node.data = next`.
+   a .gev-flap-text span holding one long-lived Text node, plus an
+   aria-hidden .gev-flap-cells sibling, and a label change is only
+   `node.data = next`.
    During a cascade the host takes .gev-flap-active, which clips the
    real text out of view and lets the cells stand in for it. The cells
    carry no text at all: both glyphs are generated content (::before =
    outgoing, ::after = incoming), and generated content never reaches
-   textContent. That is what keeps QA pins and the traffic chip's own
-   `textContent !==` guard honest, and it lets the cells be rebuilt
+   textContent. That is what keeps QA pins honest, and it lets the
+   cells be rebuilt
    freely while the aria-live region sees only one characterData
    change per label update.
 
@@ -385,7 +408,7 @@
 /* ── Toast Notification ──────────────────────── */
 #toast {
   position: fixed;
-  bottom: 100px;
+  bottom: calc(100px + var(--world-timeline-lift, 0px));
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   z-index: 200;

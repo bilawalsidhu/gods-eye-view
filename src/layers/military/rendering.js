@@ -18,6 +18,7 @@ import {
   screenProjectedRotation,
 } from '../../data/iconOrientation.js';
 import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
+import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
   PLANE_MODEL_SCALE,
   PLANE_MODEL_URL,
@@ -33,6 +34,7 @@ import {
   COCKPIT_CONTACT_SIZE_PX,
   MIL_ICON_COLOR,
   TRACKED_ICON_COLOR,
+  EMERGENCY_ICON_COLOR,
   MODEL_ALT_CEIL_M,
   MODEL_MAX_ALL,
   MODEL_MAX,
@@ -50,7 +52,9 @@ import {
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
+  STALE_ALPHA,
 } from './policy.js';
+import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -159,7 +163,7 @@ export function createRendering({
       bb.height = COCKPIT_CONTACT_SIZE_PX;
       bb.scale = limbScale;
       bb.scaleByDistance = _cockpitBillboardScaleByDistance();
-      bb.color = MIL_ICON_COLOR.withAlpha(freshnessAlpha);
+      bb.color = _fleetBillboardColor(icao24).withAlpha(freshnessAlpha);
       bb.rotation = 0;
       return;
     }
@@ -173,7 +177,9 @@ export function createRendering({
     bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.scale = _militaryBillboardScale(icao24) * limbScale;
     bb.scaleByDistance = _normalBillboardScaleByDistance();
-    bb.color = MIL_ICON_COLOR.withAlpha(cyberSonarBaseAlpha(bb));
+    bb.color = _fleetBillboardColor(icao24, meta).withAlpha(
+      cyberSonarBaseAlpha(bb),
+    );
   }
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except
@@ -189,7 +195,17 @@ export function createRendering({
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return TRACKED_ICON_COLOR;
-    return MIL_ICON_COLOR;
+    return _fleetBillboardColor(icao24);
+  }
+
+  /** Fleet (untracked) tint: red while the latest poll broadcast an emergency,
+   *  amber otherwise. Cockpit far-contact dots use it too. */
+
+  function _fleetBillboardColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
+    return isEmergency(info?.emergency) ? EMERGENCY_ICON_COLOR : MIL_ICON_COLOR;
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -459,6 +475,7 @@ export function createRendering({
       model = await Cesium.Model.fromGltfAsync({
         url: resolveAsset(spec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
@@ -624,6 +641,19 @@ export function createRendering({
   /** Per-frame driver for the standalone tracked model (see flights.js for the rationale). The
    *  tracked entity stays a pure billboard, so the follow-camera never stalls/freezes on 3D-toggle. */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (
+      flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR
+    ).withAlpha(alpha);
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -662,6 +692,7 @@ export function createRendering({
       Cesium.Model.fromGltfAsync({
         url: resolveAsset(trackedSpec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR,
@@ -770,6 +801,7 @@ export function createRendering({
         flightState._trackedModel.modelMatrix,
         spec.headingOffsetDeg,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -797,6 +829,13 @@ export function createRendering({
    */
 
   function _fleetTick() {
+    // Every frame, shown or not: the tracked trail records where its icon is
+    // drawn and moves its body on (the head callback only reads the result),
+    // and the tracked label's stale cue follows the clock.
+    if (flightState._viewer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (
       !flightState._viewer ||
       !flightState._billboardCollection ||
@@ -965,14 +1004,16 @@ export function createRendering({
       const isCockpitNear =
         flightState._cockpitContactMode &&
         flightState._cockpitNearContacts.has(icao24);
-      const baseColor = MIL_ICON_COLOR;
+      const baseColor = _fleetBillboardColor(icao24, info);
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,
         baseScale:
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _militaryBillboardScale(icao24),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,
@@ -1082,6 +1123,7 @@ export function createRendering({
     _applyFleetBillboardPresentation,
     _iconKind,
     _modelColor,
+    _fleetBillboardColor,
     _modelRegimeActive,
     _modelCap,
     _modelAddDistM,

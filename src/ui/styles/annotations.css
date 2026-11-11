@@ -1,0 +1,25 @@
+/* ── Screen-space annotations (src/annotations/screenAnnotationRenderer.js) ── */
+.gev-screen-whiteboard { position: fixed; inset: 0; pointer-events: none; z-index: 90; }
+.gev-screen-whiteboard-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* No CSS opacity transition here on purpose: group opacity is driven per-frame in JS
+   (the 260ms fade-in via computeAlpha, and the tracked-entity z-order ease). A CSS
+   transition fought those per-frame writes and made the tracked-fade opacity oscillate
+   (flicker). Fade-OUT keeps its own transition via .gev-anno.gev-out below. */
+.gev-anno-ring { filter: drop-shadow(0 0 6px currentColor); }
+.gev-anno-dot { filter: drop-shadow(0 0 5px rgba(255,255,255,0.6)); }
+.gev-anno-area { filter: drop-shadow(0 0 5px currentColor); }
+.gev-anno-arrow { filter: drop-shadow(0 0 4px currentColor); stroke-linecap: round; }
+.gev-anno-leader { stroke-dasharray: 2 3; }
+.gev-anno-card { fill: rgba(8,18,28,0.78); stroke: rgba(255,255,255,0.14); stroke-width: 1; }
+.gev-anno-text { fill: #eaf6ff; font: 600 13px "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.02em; }
+/* draw-on: outlined shapes reveal their stroke */
+.gev-draw { stroke-dasharray: 1400; stroke-dashoffset: 1400; }
+.gev-anno.gev-in .gev-draw { transition: stroke-dashoffset 900ms ease-out; stroke-dashoffset: 0; }
+/* opacity-only fade-in: a CSS transform here would override the SVG transform
+   attribute used to POSITION the callout and snap it to 0,0. */
+.gev-anno-callout { opacity: 0; }
+.gev-anno.gev-in .gev-anno-callout { animation: gev-pop 320ms ease-out both; }
+.gev-anno.gev-out { opacity: 0 !important; transition: opacity 320ms ease; }
+.gev-pulse { animation: gev-ring-pulse 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes gev-ring-pulse { 0%,100% { opacity: 0.9; stroke-width: 2; } 50% { opacity: 0.35; stroke-width: 3.5; } }
+@keyframes gev-pop { from { opacity: 0; } to { opacity: 1; } }

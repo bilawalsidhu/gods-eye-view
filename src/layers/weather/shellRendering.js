@@ -1,6 +1,7 @@
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
+import { msg } from '../../i18n/index.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -390,7 +391,8 @@ export function detailWindow(footprint, bounds, previous = null) {
 /** Observed weather on 3D Tiles: one raised shell per product and one
  * full-extent image per frame. The previous image stays until the next is ready.
  * Inside a window around the view the same surface samples a sharper image of
- * that area, so the two images share one mesh and never blend. */
+ * that area, so the two images share one mesh and never blend. A `frameSource`
+ * with `getImage` supplies both images, the detail window through its `bbox`. */
 export function createWeatherShell({
   viewer,
   cesium,
@@ -404,6 +406,7 @@ export function createWeatherShell({
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
   cacheBytes = WEATHER_SHELL_CACHE_BYTES,
+  frameSource = null,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
@@ -474,6 +477,7 @@ export function createWeatherShell({
       decodeImage,
       now,
       onFetched,
+      frameSource,
     });
     // An aborted decode may still finish; never repopulate a cleared instance.
     signal.throwIfAborted();
@@ -630,7 +634,7 @@ export function createWeatherShell({
     if (incoming !== frame) return;
     incoming = null;
     close(frame);
-    lastError = 'Weather tiles unavailable · previous frame retained';
+    lastError = msg('Weather tiles unavailable · previous frame retained');
     frame.resolve(false);
     scene.requestRender();
     onChange();

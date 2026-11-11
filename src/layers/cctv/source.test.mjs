@@ -148,3 +148,51 @@ test('camera construction is inert and destruction cancels a pending catalog and
   assert.equal(a.getStats().count, 0);
   assert.equal(b.getStats().count, 0);
 });
+
+test('frames are read through the registered frame endpoint', async () => {
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+  const requested = [];
+  const source = createCctvSource({
+    fetchImpl: async (url, init) => {
+      requested.push({ url, cache: init.cache });
+      return new Response(png, {
+        headers: { 'Content-Type': 'Image/PNG; charset=binary' },
+      });
+    },
+  });
+  const frame = await source.getFrame(camera);
+  assert.equal(frame.contentType, 'image/png');
+  assert.deepEqual([...frame.bytes], [...png]);
+  assert.equal(
+    requested[0].url.split('?')[0],
+    '/api/cctv/frame/pack%2Fcamera%20%3Fx',
+  );
+  assert.equal(requested[0].cache, 'no-store');
+  const failing = createCctvSource({
+    fetchImpl: async () => new Response(null, { status: 502 }),
+  });
+  await assert.rejects(failing.getFrame(camera), /Camera frame HTTP 502/);
+});
+
+test('frame provenance admits the proxy kinds and leaves missing or unknown headers unknown', async () => {
+  for (const kind of [
+    'upstream-image',
+    'hls-pull',
+    'streetview',
+    'synthetic',
+    'other',
+    null,
+  ]) {
+    const source = createCctvSource({
+      fetchImpl: async () =>
+        new Response(new Uint8Array([1]), {
+          headers: {
+            'Content-Type': 'image/png',
+            ...(kind ? { 'X-CCTV-Source': kind } : {}),
+          },
+        }),
+    });
+    const frame = await source.getFrame(camera);
+    assert.equal(frame.sourceKind, kind === 'other' ? null : kind);
+  }
+});

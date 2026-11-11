@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+import { spaceMissionsIndexFailure } from './contextActions.js';
 import { shouldExpandGlobalContextPanel } from '../rightRailPolicy.js';
 
 export function _initGlobalContextPanel() {
@@ -32,7 +34,7 @@ export function _initGlobalContextPanel() {
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      'Contacts could not complete the requested transition; try again',
+      t('Contacts could not complete the requested transition; try again'),
     ).then((succeeded) => {
       if (
         !this.destroyed &&
@@ -58,10 +60,15 @@ export function _initGlobalContextPanel() {
     const nextMode =
       this._contextMode === 'space-missions' ? null : 'space-missions';
     this._claimContextVisualAuthority();
+    const startedAt = Date.now();
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      'Space Missions could not complete the requested transition; try again',
+      () =>
+        (nextMode && spaceMissionsIndexFailure(this._dataManager, startedAt)) ||
+        t(
+          'Space Missions could not complete the requested transition; try again',
+        ),
     ).then((succeeded) => {
       if (
         !this.destroyed &&
@@ -83,10 +90,9 @@ export function _initGlobalContextPanel() {
       !this._dataManager?.layers?.has('military-installations')
     )
       return;
-    const button = this._installationsSearchBtn;
-    if (button.getAttribute('aria-busy') === 'true') return;
-    button.setAttribute('aria-disabled', 'true');
-    button.setAttribute('aria-busy', 'true');
+    if (this._installationsSearchBusy) return;
+    this._installationsSearchBusy = true;
+    this._presentContext();
     void this._runUserFacingContextAction(async (notificationToken) => {
       const enabled = await this._dataManager.setEnabled(
         'military-installations',
@@ -108,14 +114,16 @@ export function _initGlobalContextPanel() {
       this.showToast(
         stats?.statusMessage ||
           (stats?.status === 'zoom-in'
-            ? 'Zoom in to search mapped installations'
-            : 'Nearby installations refreshed'),
+            ? t('Zoom in to search mapped installations')
+            : t('Nearby installations refreshed')),
       );
       return true;
-    }, 'Nearby installations could not be refreshed; try again').finally(() => {
-      if (this.destroyed) return;
-      button.setAttribute('aria-disabled', 'false');
-      button.setAttribute('aria-busy', 'false');
-    });
+    }, t('Nearby installations could not be refreshed; try again')).finally(
+      () => {
+        if (this.destroyed) return;
+        this._installationsSearchBusy = false;
+        this._presentContext();
+      },
+    );
   });
 }

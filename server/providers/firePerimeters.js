@@ -39,6 +39,8 @@ const API_URL =
 // The service caps a single response at its maxRecordCount (2000); a peak
 // season can exceed that, so follow exceededTransferLimit with offset pages.
 const MAX_PAGES = 5;
+/** Longest a failed refresh keeps serving the last perimeter snapshot, marked stale. */
+const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 
 const exceededTransferLimit = (payload) =>
   payload?.exceededTransferLimit === true ||
@@ -165,7 +167,14 @@ export function firePerimetersProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
-      if (previous) return { value: previous.value, stale: true };
+      // A failed refresh serves the last answer, marked stale. A perimeter
+      // snapshot only for a day: older than that, it is no picture of
+      // current fires. (InciWeb entries keep their previous behaviour.)
+      if (
+        previous &&
+        (key !== 'perimeters' || now() - previous.savedAt <= STALE_MAX_MS)
+      )
+        return { value: previous.value, stale: true };
       throw error;
     }
   }

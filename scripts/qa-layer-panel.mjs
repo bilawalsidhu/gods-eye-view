@@ -87,17 +87,21 @@ try {
         row().querySelector('.data-toggle-btn').dataset.feedState === 'stale',
       ]);
       const ui = window.__godsEyeView.styleManager;
-      ui._clearSelectedLayersBtn.click();
+      const clearButton = document.getElementById('clear-selected-layers');
+      clearButton.click();
+      // The bar renders the busy state on Vue's next flush.
+      await Promise.resolve();
       result.push([
         'native clear activation presents busy state',
-        ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'true' &&
+        clearButton.getAttribute('aria-busy') === 'true' &&
           !!ui._contextControls._clearSelectedLayersPromise,
       ]);
       await ui._contextControls._clearSelectedLayersPromise;
+      await Promise.resolve();
       result.push([
         'clear settles through the existing layer transaction',
         !manager.isEnabled(id) &&
-          ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'false',
+          clearButton.getAttribute('aria-busy') === 'false',
       ]);
       await manager.setEnabled(id, true);
       const final = row().querySelector('.data-toggle-btn');
@@ -121,6 +125,14 @@ try {
     result.push([
       'ordinary layer rows return after reassembly',
       container.querySelectorAll('.data-toggle-row').length > 10,
+    ]);
+    result.push([
+      'Directions returns to the Utilities list after reassembly',
+      Boolean(
+        document.querySelector(
+          '#utilities-toggles [data-layer-id="directions"]',
+        ) && !container.querySelector('[data-layer-id="directions"]'),
+      ),
     ]);
     return result;
   });

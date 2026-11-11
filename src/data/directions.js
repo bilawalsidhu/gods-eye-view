@@ -1,3 +1,4 @@
+import { createDirectionsSource } from '../layers/directions/source.js';
 /**
  * @module directions
  * @description Service bundle for the Directions layer.
@@ -10,6 +11,7 @@
  * the layer's pure helpers for the tests and the share-link code.
  */
 
+import * as credits from './dataCredits.js';
 import * as render from '../renderGovernor.js';
 import * as sprites from './spriteOrder.js';
 import * as picking from './pickRegistry.js';
@@ -22,7 +24,8 @@ import * as input from './inputOwnership.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 
 /** The shared scene owners every Directions instance runs on. */
-export const directionsServices = Object.freeze({
+const directionsServices = Object.freeze({
+  credits,
   render,
   sprites,
   picking,
@@ -35,8 +38,10 @@ export const directionsServices = Object.freeze({
 });
 
 /** Construct one Directions layer over the application scene owners. */
-export function createApplicationDirectionsLayer() {
-  return createDirectionsLayer({ services: directionsServices });
+export function createApplicationDirectionsLayer({
+  source = createDirectionsSource(),
+} = {}) {
+  return createDirectionsLayer({ services: directionsServices, source });
 }
 
 export {
@@ -44,15 +49,11 @@ export {
   DIRECTIONS_MODES,
   DIRECTIONS_POINTER_OWNER,
   DIRECTIONS_ROUTE_COLOR,
-  DIRECTIONS_STEP_OVERLAY_SOURCE_ID,
-  DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS,
-  FLIGHT_PROGRESS_MS,
   POINTER_TOOL_EXITS,
   STEP_ANCHOR_DEADLINE_MS,
   STEP_ANCHOR_FAST_ATTEMPTS,
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
-  createDirectionsLayer,
   createDirectionsStepOverlayEntry,
   directionsRequestUrl,
   directionsRowControls,

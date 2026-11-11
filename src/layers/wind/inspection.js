@@ -1,23 +1,27 @@
 import { sampleWind, windSpeed } from './model.js';
 import { sampleScalar } from './fields.js';
 
+// The reading stays English: AI tools read it too. Text is marked for i18n
+// extraction and translated where the WEATHER card shows it (presentation.js).
+const msg = (text) => text;
+
 const DIRECTIONS = [
-  'N',
-  'NNE',
-  'NE',
-  'ENE',
-  'E',
-  'ESE',
-  'SE',
-  'SSE',
-  'S',
-  'SSW',
-  'SW',
-  'WSW',
-  'W',
-  'WNW',
-  'NW',
-  'NNW',
+  msg('N'),
+  msg('NNE'),
+  msg('NE'),
+  msg('ENE'),
+  msg('E'),
+  msg('ESE'),
+  msg('SE'),
+  msg('SSE'),
+  msg('S'),
+  msg('SSW'),
+  msg('SW'),
+  msg('WSW'),
+  msg('W'),
+  msg('WNW'),
+  msg('NW'),
+  msg('NNW'),
 ];
 export const WIND_UNITS = Object.freeze({
   'km/h': 3.6,
@@ -56,13 +60,14 @@ export function inspectWindAtCenter(
       ));
   if (!point || !snapshot?.u || !snapshot?.v)
     return {
-      coordinates: 'No surface reading',
-      wind: 'Aim the map center at Earth',
+      coordinates: msg('No surface reading'),
+      wind: msg('Aim the map center at Earth'),
       model,
       validTime,
       status,
-      explanation:
+      explanation: msg(
         'A location reading needs a loaded forecast and the Earth at the center of the view.',
+      ),
     };
   const location = cesium.Cartographic.fromCartesian(point, ellipsoid);
   const lon = cesium.Math.toDegrees(location.longitude);
@@ -87,11 +92,11 @@ export function inspectWindAtCenter(
     scalarKind: overlay,
     scalarLabel:
       overlay === 'speed'
-        ? 'Wind speed'
+        ? msg('Wind speed')
         : overlay === 'temperature'
-          ? 'Air temperature · 2 m'
+          ? msg('Air temperature · 2 m')
           : overlay === 'pressure'
-            ? 'Sea-level pressure'
+            ? msg('Sea-level pressure')
             : null,
     scalarValue:
       overlay === 'speed'
@@ -102,66 +107,8 @@ export function inspectWindAtCenter(
     model,
     validTime,
     status,
-    explanation:
+    explanation: msg(
       'Interpolated model forecast on an approximately 1° grid. Broad weather patterns, not a street-level measurement.',
-  };
-}
-
-/** One passive marker for the captured location; it never samples on camera movement. */
-export function createWindInspectionMarker({ container, viewer, cesium }) {
-  let removeRender = null;
-  let marker = null;
-  const clear = () => {
-    removeRender?.();
-    removeRender = null;
-    marker?.remove();
-    marker = null;
-    viewer?.scene?.requestRender?.();
-  };
-  return {
-    show(position) {
-      clear();
-      const scene = viewer?.scene;
-      if (
-        !position ||
-        !container?.ownerDocument?.createElement ||
-        !scene?.postRender?.addEventListener ||
-        !scene.cartesianToCanvasCoordinates
-      )
-        return;
-      marker = container.ownerDocument.createElement('div');
-      marker.className = 'gev-wind-inspection-marker';
-      marker.setAttribute('aria-hidden', 'true');
-      marker.style.cssText =
-        'position:absolute;width:18px;height:18px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #153440,0 0 0 5px rgba(102,225,242,.35);transform:translate(-50%,-50%);pointer-events:none;z-index:150;';
-      container.appendChild(marker);
-      const occluder = new cesium.EllipsoidalOccluder(
-        scene.globe?.ellipsoid || cesium.Ellipsoid.WGS84,
-        viewer.camera.positionWC,
-      );
-      const render = () => {
-        occluder.cameraPosition = viewer.camera.positionWC;
-        const point = scene.cartesianToCanvasCoordinates(position);
-        const visible =
-          point &&
-          point.x >= 0 &&
-          point.y >= 0 &&
-          point.x <= scene.canvas.clientWidth &&
-          point.y <= scene.canvas.clientHeight &&
-          (scene.mode !== cesium.SceneMode.SCENE3D ||
-            occluder.isPointVisible(position));
-        marker.hidden = !visible;
-        if (!visible) return;
-        const canvasRect = scene.canvas.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        marker.style.left = `${point.x + canvasRect.left - containerRect.left}px`;
-        marker.style.top = `${point.y + canvasRect.top - containerRect.top}px`;
-      };
-      removeRender = scene.postRender.addEventListener(render);
-      render();
-      scene.requestRender?.();
-    },
-    clear,
-    destroy: clear,
+    ),
   };
 }

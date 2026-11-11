@@ -1,3 +1,5 @@
+import { msg } from './i18n/marker.js';
+
 const CONTEXT_DEPENDENCIES = Object.freeze({
   flights: new Set([
     'military-awareness',
@@ -9,6 +11,12 @@ const CONTEXT_DEPENDENCIES = Object.freeze({
   'space-missions': new Set(['rocket-launches', 'satellites']),
 });
 const CONTEXT_COMPANIONS = new Set(['radio']);
+/** The Space Missions refusal, with the blocked layer's name as {layer}. */
+export const SPACE_MISSIONS_LAYER_BLOCK_REASON = msg(
+  'Space Missions isolates replay data. Exit the mode to enable {layer}.',
+);
+const [BLOCK_REASON_PREFIX, BLOCK_REASON_SUFFIX] =
+  SPACE_MISSIONS_LAYER_BLOCK_REASON.split('{layer}');
 /** Return whether an origin represents a direct user choice on this route. */
 export function isExplicitUserIntentOrigin(origin, layerId = null) {
   return origin === 'user' || origin === 'voice';
@@ -336,7 +344,30 @@ export function contextLayerEnableBlockReason({
     return null;
   }
   const label = String(layerName || change.layerId || 'that layer');
-  return `Space Missions isolates replay data. Exit the mode to enable ${label}.`;
+  return SPACE_MISSIONS_LAYER_BLOCK_REASON.replace('{layer}', label);
+}
+
+/**
+ * The layer name from a Space Missions refusal, so the UI can rebuild the
+ * sentence in its language.
+ * @param {string} reason
+ * @returns {{layer: string}|null} The blocked layer's name, or null when the
+ *   reason is not a Space Missions refusal.
+ */
+export function parseContextLayerBlockReason(reason) {
+  if (
+    typeof reason !== 'string' ||
+    !reason.startsWith(BLOCK_REASON_PREFIX) ||
+    !reason.endsWith(BLOCK_REASON_SUFFIX) ||
+    reason.length <= BLOCK_REASON_PREFIX.length + BLOCK_REASON_SUFFIX.length
+  )
+    return null;
+  return {
+    layer: reason.slice(
+      BLOCK_REASON_PREFIX.length,
+      reason.length - BLOCK_REASON_SUFFIX.length,
+    ),
+  };
 }
 
 /**
@@ -380,30 +411,73 @@ export function contextRestoreLayerIds(snapshot = {}) {
   return restored;
 }
 
+/** The layers an aircraft Cockpit subject can come from. */
+export const COCKPIT_AIRCRAFT_LAYER_IDS = Object.freeze([
+  'flights',
+  'military',
+]);
+
 /**
- * Cockpit entry belongs to the operational Contacts context bundle. A tracked
- * aircraft alone is not sufficient: both observed-flight feeds must still be
- * active so the cockpit's surrounding-contact picture is not presented as a
- * complete context view when one source is disabled.
+ * Cockpit entry needs only the aircraft it rides: that aircraft's own layer
+ * (Live Flights for a civilian, Military Flights for a military aircraft) must
+ * be on. Contacts and the other feeds are not required. When a source the
+ * surrounding picture uses is off, the Cockpit's Contact card and Live
+ * Signals say the picture is partial instead of blocking entry, so a partial
+ * picture is never presented as complete. A Context mode change in flight
+ * still owns the camera, so entry waits it out.
  *
- * @param {object} input Current context and dependency visibility.
- * @param {string|null} input.contextMode Active Context mode.
- * @param {boolean} input.contextModeChanging Whether the Context transaction is unsettled.
- * @param {boolean} input.flightsEnabled Whether Live Flights is enabled.
- * @param {boolean} input.militaryEnabled Whether Military Flights is enabled.
+ * @param {object} input Current subject and Context state.
+ * @param {string|null} input.subjectLayerId Layer of the tracked aircraft
+ *   ('flights' or 'military'), or null with none tracked.
+ * @param {boolean} input.subjectLayerEnabled Whether that layer is enabled.
+ * @param {boolean} input.contextModeChanging Whether a Context transaction is unsettled.
  * @returns {boolean} Whether cockpit entry may be offered or activated.
  */
 export function cockpitEntryAllowed({
-  contextMode,
+  subjectLayerId,
+  subjectLayerEnabled,
   contextModeChanging,
-  flightsEnabled,
-  militaryEnabled,
 }) {
   return (
-    contextMode === 'flights' &&
+    COCKPIT_AIRCRAFT_LAYER_IDS.includes(subjectLayerId) &&
+    Boolean(subjectLayerEnabled) &&
+    !contextModeChanging
+  );
+}
+
+/**
+ * Whether the selected vessel's bridge view can be entered. Like aircraft
+ * Cockpit it needs only its own layer, Live AIS Vessels, with a vessel
+ * selected. A Context mode change in flight still owns the camera, so entry
+ * waits it out.
+ * @param {{vesselsEnabled: boolean, contextModeChanging: boolean}} state
+ * @returns {boolean}
+ */
+export function bridgeEntryAllowed({ vesselsEnabled, contextModeChanging }) {
+  return Boolean(vesselsEnabled) && !contextModeChanging;
+}
+
+/**
+ * Whether the tracked satellite's orbital view can be entered. Like the
+ * bridge it needs only its own layer, Satellites, with a satellite tracked.
+ * A Context mode change in flight still owns the camera, so entry waits it
+ * out. A subject the satellites layer marks as not enterable (debris:
+ * rocket bodies, fragments, dead satellites; `satelliteClassEnterable` in
+ * src/layers/satellites/classes.js) can be tracked but is never ridden: it is
+ * no mission and has no view to offer.
+ * @param {{satellitesEnabled: boolean, contextModeChanging: boolean,
+ *   subjectEnterable?: boolean}} state
+ * @returns {boolean}
+ */
+export function orbitEntryAllowed({
+  satellitesEnabled,
+  contextModeChanging,
+  subjectEnterable = true,
+}) {
+  return (
+    Boolean(satellitesEnabled) &&
     !contextModeChanging &&
-    Boolean(flightsEnabled) &&
-    Boolean(militaryEnabled)
+    subjectEnterable !== false
   );
 }
 

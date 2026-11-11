@@ -1,4 +1,17 @@
+import { msg } from '../../i18n/index.js';
 import { RADIO_VOICE_PLAYBACK_TIMEOUT_MS } from './policy.js';
+
+// Playback errors stay English in layer state; the Radio panel shows them
+// through t().
+const AUDIO_ERROR_STREAM_FAILED = msg(
+  'Broadcaster stream is unavailable or blocked by the browser.',
+);
+const AUDIO_ERROR_GESTURE_REQUIRED = msg(
+  'Playback requires a direct click or tap.',
+);
+const AUDIO_ERROR_START_FAILED = msg(
+  'Broadcaster stream could not be started.',
+);
 
 export function createPlayback({ state: layerState, services, parts, source }) {
   function audioEventBelongsToActiveAttempt(audio) {
@@ -75,8 +88,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       const attempt = layerState._activePlaybackAttempt;
       if (tryRadioFallback(failedId, attempt?.origin, attempt?.id)) return;
       layerState._audioState = 'error';
-      layerState._audioError =
-        'Broadcaster stream is unavailable or blocked by the browser.';
+      layerState._audioError = AUDIO_ERROR_STREAM_FAILED;
       parts.presentation.emitState();
     });
   }
@@ -202,8 +214,8 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       layerState._audioState = 'error';
       layerState._audioError =
         error?.name === 'NotAllowedError'
-          ? 'Playback requires a direct click or tap.'
-          : 'Broadcaster stream could not be started.';
+          ? AUDIO_ERROR_GESTURE_REQUIRED
+          : AUDIO_ERROR_START_FAILED;
       parts.presentation.emitState();
       return false;
     }
@@ -332,14 +344,17 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     }
     if (!parts.interaction.radioPresentationAllowed())
       return Promise.resolve(false);
-    if (!layerState._selectedId) {
+    if (layerState._selectedId) {
+      // Drop a fallback left by a voice step whose playback never started.
+      layerState._playFallbackId = null;
+      layerState._playFallbackFocus = null;
+    } else {
       const ranked = parts.queries.rankedVisibleStations();
       if (!ranked.length) return Promise.resolve(false);
-      layerState._playFallbackId = ranked[1]?.id || null;
-      layerState._playFallbackFocus = false;
       parts.selection.selectRadioStation(ranked[0].id, {
         autoplay: false,
         focus: false,
+        playFallback: { id: ranked[1]?.id || null, focus: false },
       });
     }
     return playSelectedRadio({ origin });

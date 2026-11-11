@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { createCoordinateGeocoder } from './coordinateGeocoder.js';
 import { createPresetGeocoder } from './presetGeocoder.js';
 import { createPlaceSearch } from './placeSearch.js';
+import { createDefaultPlaceSearch } from './defaults.js';
 
 const PRESETS = {
   austin: {
@@ -188,4 +189,53 @@ test('a cancelled search stops the offline providers too', async () => {
       (error) => error.name === 'AbortError',
     );
   }
+});
+
+test('default search resolves a geo URI exactly without requesting a geocoder', async () => {
+  const requests = [];
+  const search = createDefaultPlaceSearch({
+    resolveApiKey: () => 'test-key',
+    fetchImpl: async (url) => {
+      requests.push(url);
+      throw new Error('No network request should be needed');
+    },
+  });
+  const { place, fallbackUsed } = await search.geocode(
+    'geo:39.7392,-104.9903;crs=wgs84',
+  );
+  assert.deepEqual(requests, []);
+  assert.equal(fallbackUsed, false);
+  assert.equal(place.lat, 39.7392);
+  assert.equal(place.lng, -104.9903);
+  assert.equal(place.exact, true);
+  assert.deepEqual(place.types, ['coordinate']);
+  assert.ok(place.viewport.southwest.lat < place.lat);
+  assert.ok(place.viewport.northeast.lat > place.lat);
+  assert.ok(place.viewport.southwest.lng < place.lng);
+  assert.ok(place.viewport.northeast.lng > place.lng);
+});
+
+test('unsupported geo URIs reach the next search provider unchanged', async () => {
+  const queries = [
+    'geo:39.7392,-104.9903,1600',
+    'geo:39.7392,-104.9903;u=10',
+    'geo:39.7392,-104.9903;crs=unknown',
+    'geo:0,0?q=Denver',
+  ];
+  const received = [];
+  const search = createPlaceSearch({
+    providers: [
+      createCoordinateGeocoder(),
+      {
+        async geocode(query) {
+          received.push(query);
+          return { place: null, answered: true };
+        },
+      },
+    ],
+  });
+  for (const query of queries) {
+    assert.equal((await search.geocode(query)).place, null);
+  }
+  assert.deepEqual(received, queries);
 });

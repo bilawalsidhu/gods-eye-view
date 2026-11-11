@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   vesselTypeCss,
   vesselOverlayCohortLimit,
@@ -18,7 +19,12 @@ import {
   FOCUS_UPDATE_MS,
   LABEL_GRID_PX,
   CARD_MIN_SEP_PX,
+  followsClock,
 } from './policy.js';
+import { vesselPositionAt } from './motion.js';
+
+/** How often vessels move on as the world clock plays (wall ms). */
+const FOLLOW_POSITION_MS = 250;
 
 export function createRendering({
   vesselState,
@@ -41,20 +47,16 @@ export function createRendering({
       visual = { billboard: record.billboard || null };
       visualRecords.set(record, visual);
     }
+    // Following the world clock, a vessel is drawn where it was at the time.
+    const { lat, lon } = followsClock(vesselState)
+      ? vesselPositionAt(record, vesselState.worldNow())
+      : record;
     const heightM = components.queries.vesselDatumHeightM(
-      components.tracking.currentGeoidN(record.lat, record.lon),
+      components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
     );
-    visual.position = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      heightM,
-    );
-    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      0,
-    );
+    visual.position = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
+    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
     visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
       visual.position,
       new Cesium.Cartesian3(),
@@ -74,7 +76,13 @@ export function createRendering({
     focusPassIsNeeded,
     advanceSpriteFocus,
     focusAlphaNeedsWrite,
+    spriteFocusAtRest,
   } = services.focus;
+  const {
+    holdContinuousRender,
+    releaseContinuousRender,
+    governorRequestRender,
+  } = services.render;
 
   function renderRowLimit() {
     const configured = Number(options.maxRows);
@@ -195,15 +203,60 @@ export function createRendering({
     return icon;
   }
 
+  // Vessels move only when a poll lands, so the layer does not hold the
+  // continuous render loop. Its passes run in preRender, which idle mode fires
+  // only for rendered frames: a forced pass (new data, selection) requests its
+  // frame, a frame that moved the camera but fell inside the 800 ms cadence
+  // leaves a trailing frame so the view the camera stopped on is always
+  // evaluated, and the continuous hold is kept only while focus emphasis is
+  // animating. The trailing frame is keyed to camera motion alone: the pass's
+  // own label publication requests a frame, and scheduling on that would loop.
   function installRuntime(viewer) {
     if (state.preRenderRemover || !viewer) return;
-    state.preRenderRemover = viewer.scene.preRender.addEventListener(() =>
-      updateVisibility(),
+    state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
+      if (followsClock(vesselState)) followClockPositions();
+      updateVisibility();
+    });
+  }
+
+  // As the world clock plays, vessels between two fixes move on along them.
+  let followedAtWallMs = -Infinity;
+  let followedAtMs = null;
+  function followClockPositions() {
+    const wallMs = performance.now();
+    if (wallMs - followedAtWallMs < FOLLOW_POSITION_MS) return;
+    followedAtWallMs = wallMs;
+    const atMs = vesselState.worldNow();
+    if (atMs === followedAtMs) return;
+    followedAtMs = atMs;
+    for (const record of state.records.all) {
+      if (!record.motion) continue;
+      const visual = prepareRecordVisual(record);
+      if (visual.billboard) visual.billboard.position = visual.position;
+    }
+  }
+
+  function scheduleTrailingVisibilityPass(now) {
+    if (state.trailingVisibilityTimer) return;
+    const waitMs = Math.max(
+      0,
+      VISIBILITY_UPDATE_MS - (now - state.lastVisibilityUpdate),
     );
+    state.trailingVisibilityTimer = vesselState._aisRuntime.setTimeout(() => {
+      state.trailingVisibilityTimer = null;
+      if (state.feed.enabled) governorRequestRender('ais-vessels-visibility');
+    }, waitMs);
+  }
+
+  function cancelTrailingVisibilityPass() {
+    if (!state.trailingVisibilityTimer) return;
+    vesselState._aisRuntime.clearTimeout(state.trailingVisibilityTimer);
+    state.trailingVisibilityTimer = null;
   }
 
   function updateVisibility(force = false) {
     if (!state.feed.enabled) return;
+    if (force) governorRequestRender('ais-vessels-update');
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
     const regularPass =
@@ -211,13 +264,30 @@ export function createRendering({
     const focusPass =
       focusPassIsNeeded(focusTarget, state.activeFocusCount) &&
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
+    if (
+      !regularPass &&
+      state.viewer?.camera &&
+      cameraPoseSignature(state.viewer.camera) !== vesselState._lastCamPoseSig
+    )
+      scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
     if (regularPass) state.lastVisibilityUpdate = now;
     if (focusPass) state.lastFocusUpdate = now;
     if (!state.records.all.length) {
       // No records — flush any lingering card entries (vanished-feed case).
-      if (regularPass) updateClusteredLabels([]);
-      if (focusPass) state.activeFocusCount = 0;
+      // Still record the pose this pass evaluated, or every later frame that
+      // falls inside the cadence would schedule another trailing frame.
+      if (regularPass) {
+        if (state.viewer?.camera)
+          vesselState._lastCamPoseSig = cameraPoseSignature(
+            state.viewer.camera,
+          );
+        updateClusteredLabels([]);
+      }
+      if (focusPass) {
+        state.activeFocusCount = 0;
+        releaseContinuousRender('ais-vessels');
+      }
       return;
     }
 
@@ -235,7 +305,9 @@ export function createRendering({
         const visual = getVisual(record);
         const visible = isVisible(visual.surfacePosition, occluder);
         if (visual.billboard) {
-          visual.billboard.show = visible;
+          // The bridge camera sits on this sprite; showing it would fill the view.
+          visual.billboard.show =
+            visible && record.id !== state.cockpitSubjectId;
           if (visible && doRotations && scene) {
             const rot = screenProjectedRotation(
               scene,
@@ -271,6 +343,9 @@ export function createRendering({
           Cesium.Cartesian3.distance(camera.positionWC, position),
       });
       state.activeFocusCount = result.activeCount;
+      if (result.activeCount > 0 || result.transitioning)
+        holdContinuousRender('ais-vessels');
+      else releaseContinuousRender('ais-vessels');
     }
   }
 
@@ -301,6 +376,16 @@ export function createRendering({
       const bb = visual?.billboard;
       const position = bb?.position || visual?.position;
       if (!bb || !position) continue;
+      // Most of a worldwide feed sits behind the horizon. A hidden sprite with
+      // no pending focus state and full alpha would advance to exactly what it
+      // already is, so skip it instead of paying its distance and state work
+      // every 80 ms while anything is tracked.
+      if (
+        bb.show === false &&
+        spriteFocusAtRest(bb) &&
+        !focusAlphaNeedsWrite(bb.color?.alpha, 1, params)
+      )
+        continue;
       const focus = advanceSpriteFocus(bb, {
         // Hidden/far-side sprites still finish any pending release so the active
         // count remains truthful and they cannot reappear with stale dim alpha.
@@ -358,7 +443,10 @@ export function createRendering({
     const viewer = state.viewer;
     const scene = viewer?.scene;
     const selected = state.selectedRecord;
-    const entries = selected
+    // From the bridge, the selected vessel is the viewer; its card would be
+    // pinned to the camera position.
+    const selectedCarded = selected && selected.id !== state.cockpitSubjectId;
+    const entries = selectedCarded
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
     const maxLabels = labelRowLimit();
@@ -394,7 +482,7 @@ export function createRendering({
     // Greedy min-separation pass over the priority-ranked cell winners: the
     // selected card's anchor seeds the accepted set so ambient cards keep clear.
     const accepted = [];
-    if (selected) {
+    if (selectedCarded) {
       const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
         scene,
         getVisual(selected).billboard?.position || getVisual(selected).position,
@@ -443,14 +531,17 @@ export function createRendering({
           VESSEL_CARD_FADE_DISTANCE_M,
         );
         if (!card.interactive) return card;
-        const mmsi = String(card.id || '').startsWith('vessel:')
+        const id = String(card.id || '').startsWith('vessel:')
           ? card.id.slice('vessel:'.length)
           : '';
+        const mmsi = state.records.byId.get(id)?.mmsi || '';
         return {
           ...card,
-          accessibilityLabel: `Focus vessel ${card.title}, MMSI ${mmsi}`,
+          accessibilityLabel: mmsi
+            ? t('Focus vessel {name}, MMSI {mmsi}', { name: card.title, mmsi })
+            : t('Focus {label}', { label: card.title }),
           activate: () => {
-            const record = state.records.byMmsi.get(mmsi);
+            const record = state.records.byId.get(id);
             if (!record) return false;
             components.selection.selectAndFocusVessel(record);
             return true;
@@ -482,7 +573,8 @@ export function createRendering({
       text &&
       text !== 'VESSEL' &&
       !/^MMSI\s*\d+$/i.test(text) &&
-      text !== record.mmsi,
+      text !== record.mmsi &&
+      text !== record.id,
     );
   }
 
@@ -506,6 +598,7 @@ export function createRendering({
     shipIcon,
     installRuntime,
     updateVisibility,
+    cancelTrailingVisibilityPass,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,
