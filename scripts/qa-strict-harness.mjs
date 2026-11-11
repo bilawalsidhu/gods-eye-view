@@ -747,8 +747,9 @@ export async function pickEngine(
 
 /** Wait until `kind` runs, its picker is idle and its view is restored. */
 export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
-  if (kind !== 'cesium' && kind !== 'navara')
-    throw new TypeError(`waitForEngine needs the engine kind, got ${kind}`);
+  // The engine picker's value: cesium, navara or a Navara variant.
+  if (typeof kind !== 'string' || !kind)
+    throw new TypeError('waitForEngine needs the engine picker value');
   const started = Date.now();
   await page.waitForFunction(
     (expected) =>
