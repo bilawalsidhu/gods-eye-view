@@ -12,7 +12,8 @@
  * provider, a handle per imagery layer and photoreal base. A hidden
  * photoreal base is turned off through the port and on again when shown.
  */
-import { findFrame, findGlobe } from '../render/rendererOf.js';
+import { findFrame, findGlobe, rendererOf } from '../render/rendererOf.js';
+import { KEYLESS_TERRAIN_URL } from './keylessTerrain.js';
 
 const ESRI_TILES =
   'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
@@ -154,7 +155,11 @@ export const globeMapEngine = Object.freeze({
         spec: { kind: 'world', requestVertexNormals: true },
       };
     },
-    keyless: async () => ({ provider: null, spec: { kind: 'ellipsoid' } }),
+    // Re:Earth's keyless terrain, as the Cesium map engine draws it.
+    keyless: async () => ({
+      provider: null,
+      spec: { kind: 'quantizedMesh', url: KEYLESS_TERRAIN_URL },
+    }),
   }),
   createImageryLayer: (spec) => ({ spec, layer: null }),
   requestRender(host) {
@@ -197,8 +202,13 @@ export const globeMapEngine = Object.freeze({
     handle.layer = null;
   },
   applyTerrain(host, result) {
+    // Where the renderer draws no terrain, the ellipsoid stays.
+    const spec = result.spec ?? null;
+    const flat =
+      spec?.kind !== 'ellipsoid' &&
+      rendererOf(host)?.capabilities?.has('terrain') === false;
     findGlobe(host)
-      ?.setTerrain(result.spec ?? null)
+      ?.setTerrain(flat ? null : spec)
       .catch((error) => console.warn('[MapStack] terrain failed', error));
   },
   /**

@@ -20,6 +20,7 @@ import { provideUnboundGlobe } from '../rendererOf.js';
 import { isBaseTileset, markBaseTileset } from '../baseTilesets.js';
 import { listenerList, uncaught } from './common.js';
 import { createCesiumImagery } from './imagery.js';
+import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
 
 // The base marks live outside the adapter, so code that is not Cesium's can
 // mark a base; they are re-exported here for the code that still is.
@@ -45,6 +46,22 @@ async function terrainProvider(spec, { worldDataToken }) {
       );
     const resource = await Cesium.IonResource.fromAssetId(WORLD_TERRAIN_ASSET, {
       accessToken,
+    });
+    return Cesium.CesiumTerrainProvider.fromUrl(resource, {
+      requestVertexNormals: spec.requestVertexNormals ?? false,
+      requestWaterMask: false,
+    });
+  }
+  if (spec.kind === 'quantizedMesh') {
+    if (typeof spec.url !== 'string' || !spec.url)
+      throw new TypeError('Quantized-mesh terrain needs its url');
+    // Busy hosts are asked again as the keyless terrain is
+    // (`terrainRetry.js`); every tile's resource inherits the policy.
+    const policy = createTerrainRetryPolicy();
+    const resource = new Cesium.Resource({
+      url: spec.url,
+      retryCallback: policy.retryCallback,
+      retryAttempts: policy.retryAttempts,
     });
     return Cesium.CesiumTerrainProvider.fromUrl(resource, {
       requestVertexNormals: spec.requestVertexNormals ?? false,

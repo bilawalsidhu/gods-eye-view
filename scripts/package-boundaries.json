@@ -1492,7 +1492,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/maps/keylessTerrain.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -2172,7 +2173,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/maps/keylessTerrain.js"
     ],
     "external": ["cesium"]
   },
@@ -2222,7 +2224,8 @@
       "src/layers/recentImagery/display.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
-      "src/maps/engine.js"
+      "src/maps/engine.js",
+      "src/maps/keylessTerrain.js"
     ],
     "external": ["cesium"]
   },
@@ -3511,7 +3514,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/maps/keylessTerrain.js"
     ],
     "external": ["cesium"]
   },
@@ -4810,7 +4814,8 @@
       "src/maps/globeEngine.js",
       "src/render/cesium/viewers.js",
       "src/ui/creditsView.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/maps/keylessTerrain.js"
     ],
     "external": [
       "hls.js",
@@ -5585,7 +5590,8 @@
       "src/maps/globeEngine.js",
       "src/maps/engine.js",
       "src/data/planespottersPhoto.js",
-      "src/render/cesium/zoomOutGuard.js"
+      "src/render/cesium/zoomOutGuard.js",
+      "src/maps/keylessTerrain.js"
     ],
     "external": [
       "hls.js",

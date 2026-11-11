@@ -7850,9 +7850,10 @@ and the application scene loads the photoreal base through it too. A renderer
 whose plugin hands none switches through its globe port
 (`src/maps/globeEngine.js`): Esri and OSM as `xyz` imagery, ion's world
 imagery as `world` imagery, photoreal as the port's photoreal base (turned off
-while hidden, on again when shown), and world terrain, or the ellipsoid where
-Cesium uses Re:Earth's keyless terrain (the contract's `TerrainSpec` has no
-such kind). A viewer with no renderer bound gets the Cesium engine, with the
+while hidden, on again when shown), and world terrain, or without a key
+Re:Earth's keyless terrain as `quantizedMesh` terrain at its URL
+(`src/maps/keylessTerrain.js`), as the Cesium engine draws it; a renderer
+without the `terrain` capability keeps the ellipsoid. A viewer with no renderer bound gets the Cesium engine, with the
 other unbound ports, from the package's `./render/cesium/unbound` export.
 
 The controller accepts other source registries without adding provider branches.

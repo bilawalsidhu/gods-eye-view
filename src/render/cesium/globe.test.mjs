@@ -421,6 +421,35 @@ test('terrain: the ellipsoid with exaggeration; the last call wins', async () =>
   await assert.rejects(flat.port.setTerrain({ kind: 'world' }), /no terrain/);
 });
 
+test('terrain: quantized mesh at its url, asked again when its host is busy', async (t) => {
+  const { scene, port } = setup();
+  const made = new Cesium.EllipsoidTerrainProvider();
+  const asked = [];
+  t.mock.method(Cesium.CesiumTerrainProvider, 'fromUrl', async (...args) => {
+    asked.push(args);
+    return made;
+  });
+  await port.setTerrain({
+    kind: 'quantizedMesh',
+    url: 'https://terrain.example/mesh',
+    exaggeration: 1.5,
+  });
+  assert.equal(scene.terrainProvider, made);
+  assert.equal(scene.verticalExaggeration, 1.5);
+  const [[resource, options]] = asked;
+  assert.equal(resource.url, 'https://terrain.example/mesh');
+  assert.ok(resource.retryAttempts > 0);
+  assert.equal(typeof resource.retryCallback, 'function');
+  assert.deepEqual(options, {
+    requestVertexNormals: false,
+    requestWaterMask: false,
+  });
+  await assert.rejects(
+    port.setTerrain({ kind: 'quantizedMesh' }),
+    /needs its url/,
+  );
+});
+
 test('setBase replaces the imagery and says what it drew', async () => {
   const { scene, port } = setup();
   const overlay = port.imagery.add({ kind: 'xyz', url: url('overlay') });

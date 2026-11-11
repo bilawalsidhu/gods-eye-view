@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { globeMapEngine as engine } from './globeEngine.js';
+import { KEYLESS_TERRAIN_URL } from './keylessTerrain.js';
 import { mapEngineFor, provideMapEngine } from './engine.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { provideApplicationHooks } from '../render/applicationHooks.js';
@@ -69,8 +70,8 @@ test('the globe is shown and hidden through the port, read back without globe vi
   assert.equal(engine.globeShown(visible.host), false);
 });
 
-test('terrain is the port’s world terrain, or the ellipsoid without a token', async () => {
-  const { host, renderer } = scene();
+test('terrain is the port’s world terrain, or the keyless quantized mesh without a token', async () => {
+  const { host, renderer } = scene(['terrain']);
   await assert.rejects(engine.terrain.world(''), /ion token/);
   const world = await engine.terrain.world('token');
   engine.applyTerrain(host, world);
@@ -79,13 +80,19 @@ test('terrain is the port’s world terrain, or the ellipsoid without a token', 
   ]);
   engine.applyTerrain(host, await engine.terrain.keyless());
   assert.deepEqual(calls(renderer, 'setTerrain').at(-1).args, [
-    { kind: 'ellipsoid' },
+    { kind: 'quantizedMesh', url: KEYLESS_TERRAIN_URL },
   ]);
   assert.throws(() => engine.imagery.ion(2, ''), /token/);
   assert.deepEqual(engine.imagery.ion(3, 'token'), {
     kind: 'world',
     worldStyle: 'aerialLabels',
   });
+});
+
+test('where the renderer draws no terrain the ellipsoid stays', async () => {
+  const { host, renderer } = scene([]);
+  engine.applyTerrain(host, await engine.terrain.keyless());
+  assert.deepEqual(calls(renderer, 'setTerrain').at(-1).args, [null]);
 });
 
 test('photoreal loads through the port, hides and shows, and is released', async () => {
