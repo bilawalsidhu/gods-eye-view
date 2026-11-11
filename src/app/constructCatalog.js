@@ -69,6 +69,7 @@ export function createApplicationCatalog({
   signal,
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
+  newsOptions,
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
@@ -146,8 +147,9 @@ export function createApplicationCatalog({
         // Ages, the window and the counts read the world clock: a host that
         // follows it for the layer shows the news at the time on the timeline.
         createApplicationNews({
-          source: sources.news,
           now: worldClock.timeFor(NEWS_LAYER_ID),
+          ...newsOptions,
+          source: sources.news,
         }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
