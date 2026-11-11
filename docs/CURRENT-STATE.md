@@ -121,7 +121,7 @@ release, so a refused turn keeps the tracking.
 Surface Temperature is a keyless NASA GIBS layer that plays back MODIS Terra
 ## Temperature
 
-**Temperature** is one Weather layer (`temperature`, share token `5`) with four
+**Temperature** is one Weather layer (`temperature`, share token `03`) with four
 modes: **Land surface** (default), **Sea surface**, **Sea anomaly** and
 **Air (2 m)**. `src/layers/temperatureModes/` owns the mode and delegates to the
 land (`src/layers/temperature/`), ocean (`src/layers/oceanTemperature/`) and air

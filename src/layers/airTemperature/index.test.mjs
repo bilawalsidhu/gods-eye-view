@@ -142,6 +142,6 @@ test('application and standalone compositions construct an independent configure
   assert.notEqual(catalog.get('temperature'), catalog.get('wind'));
   assert.equal(
     catalog.metadata.find(({ id }) => id === 'temperature').token,
-    '00',
+    '03',
   );
 });
