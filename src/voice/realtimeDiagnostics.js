@@ -183,7 +183,11 @@ export class RealtimeDiagnostics {
     storeErrors(this.errors);
     console.error('[GEV Realtime]', record);
     this.debugLog('error', record);
-    this.setStatus('error', formatErrorForDisplay(record));
+    this.setStatus(
+      'error',
+      formatErrorForDisplay(record),
+      record.code === 'API_KEY_MISSING' ? { missingKey: true } : undefined,
+    );
     return record;
   }
 
