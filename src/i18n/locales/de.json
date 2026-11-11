@@ -3420,6 +3420,7 @@
   "Switching map": "Karte wird gewechselt",
   "Opening imagery": "Bilder werden geöffnet",
   "Street View is ready: press {open} to load it": "Street View ist bereit: Auf {open} klicken, um es zu laden",
+  "{source} cannot open this link's street-level photo without a working key": "{source} kann das Straßenfoto dieses Links ohne gültigen Schlüssel nicht öffnen",
   "Street-level photos are hidden in the current view. Leave it first.": "Fotos auf Straßenebene sind in dieser Ansicht ausgeblendet. Zuerst die Ansicht verlassen.",
   "STATIONS": "STATIONEN",
   "Crewed stations and the craft that visit them": "Bemannte Stationen und die Raumfahrzeuge, die sie anfliegen",

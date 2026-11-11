@@ -3339,6 +3339,7 @@
   "Switching map": "地図を切り替え中",
   "Opening imagery": "画像を開いています",
   "Street View is ready: press {open} to load it": "ストリートビューの準備ができました：{open} を押して読み込みます",
+  "{source} cannot open this link's street-level photo without a working key": "{source} は有効なキーがないため、このリンクのストリートレベル写真を開けません",
   "Street-level photos are hidden in the current view. Leave it first.": "現在の表示ではストリートレベルの写真は非表示です。先にこの表示を終了してください。",
   "STATIONS": "ステーション",
   "Crewed stations and the craft that visit them": "有人宇宙ステーションと、そこを訪れる宇宙機",

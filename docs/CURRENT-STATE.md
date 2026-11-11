@@ -5329,7 +5329,8 @@ and a plain link runs it once restored (one shot: the rewritten hash drops
   screen centre is within 1 km of it (`ARMED_REACH_M`) or cannot be picked; a
   sky centre refuses; any other lookup, open, close, disable, the source
   switched off or its map leaving drops it), opens the panel and shows a toast
-  pointing at OPEN GOOGLE STREET VIEW.
+  pointing at OPEN GOOGLE STREET VIEW. A link whose source has no working
+  key here changes nothing and says so in a toast (not in a frame).
 - **Who may open.** Posted views, and the panel page's own link (inline embed)
   for a tool result issued in the last 5 minutes, open the photo:
   `show_in_gods_eye_view` stamps a street-level result `issued_at`, every

@@ -207,6 +207,14 @@ function armedToast() {
   });
 }
 
+/** Why a link's photo stays shut: its source has no working key here. */
+function keyToast(result) {
+  return t(
+    "{source} cannot open this link's street-level photo without a working key",
+    { source: translateKnown(result.providerName || 'Street Level') },
+  );
+}
+
 /**
  * Make the app show a view: style and map, exactly the view's layers,
  * annotations, the camera, and the followed entity. Each step runs through the
@@ -378,6 +386,12 @@ export function installViews({
       streetLevelArgs(streetLevel, { autoOpen }),
       { origin: 'programmatic' },
     );
+    // A source without a working key changes nothing: say why, or the link
+    // looks broken. In a frame the host reads the result instead.
+    if (result?.stage === 'key' && !isEmbedded(location)) {
+      shell._showToast?.(keyToast(result));
+      return;
+    }
     // OPEN must be in view, but embed mode hides the rail that holds it: in
     // a frame a posted view is the way to open a photo.
     if (result?.armed === true && !isEmbedded(location)) {

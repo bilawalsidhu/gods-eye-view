@@ -518,7 +518,7 @@ test('a link to street-level photos opens them after it restores', async () => {
     [[], []],
     'an opened photo needs no toast or panel nudge',
   );
-  // A failure (no key) is not an armed state either.
+  // A failure (no key) is not an armed state either: it says why instead.
   const failed = recorder({
     show_street_level: () => ({
       ok: false,
@@ -542,7 +542,16 @@ test('a link to street-level photos opens them after it restores', async () => {
     windowRef: new EventTarget(),
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual([toasts, panels], [[], []]);
+  assert.deepEqual(
+    [toasts, panels],
+    [
+      [
+        "Street Level cannot open this link's street-level photo without a working key",
+      ],
+      [],
+    ],
+    'it says why, and nothing to press opens',
+  );
 });
 
 test('a link that follows an entity keeps the camera: its photos are not opened', async () => {
@@ -590,6 +599,54 @@ test('a failing link step does not take the next one with it', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(calls, ['annotate_map', 'show_street_level']);
+});
+
+test('a link whose source has no working key says why instead of doing nothing; a frame stays quiet', async () => {
+  for (const embed of [false, true]) {
+    const toasts = [];
+    const { calls, run } = recorder({
+      show_street_level: () => ({
+        ok: false,
+        stage: 'key',
+        provider: 'google',
+        providerName: 'Google Street View',
+        error: 'Google Street View needs its key',
+      }),
+    });
+    const windowRef = new EventTarget();
+    if (embed) {
+      windowRef.document = { body: { classList: { add() {} } } };
+      windowRef.parent = { postMessage() {} };
+    }
+    installViews({
+      shell: {
+        initialRestorePromise: Promise.resolve(),
+        setCleanView() {},
+        _showToast: (text) => toasts.push(text),
+        setPanelCollapsed() {
+          throw new Error('nothing to arm');
+        },
+      },
+      viewer: fakeViewer(),
+      dataManager: fakeLayers(new Set()),
+      run,
+      location: {
+        search: embed ? '?embed=1' : '',
+        hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
+      },
+      windowRef,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(calls[0][0], 'show_street_level');
+    assert.deepEqual(
+      toasts,
+      embed
+        ? []
+        : [
+            "Google Street View cannot open this link's street-level photo without a working key",
+          ],
+    );
+  }
 });
 
 test('a plain link never auto-loads a billed photo: it arms the panel and says so; an embedded view opens', async () => {

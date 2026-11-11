@@ -3501,6 +3501,7 @@
   "Switching map": "Cambiando de mapa",
   "Opening imagery": "Abriendo imágenes",
   "Street View is ready: press {open} to load it": "Street View está listo: pulsa {open} para cargarlo",
+  "{source} cannot open this link's street-level photo without a working key": "{source} no puede abrir la foto a pie de calle de este enlace sin una clave válida",
   "Street-level photos are hidden in the current view. Leave it first.": "Las fotos a pie de calle están ocultas en la vista actual. Sal de ella primero.",
   "STATIONS": "ESTACIONES",
   "Crewed stations and the craft that visit them": "Estaciones tripuladas y las naves que las visitan",

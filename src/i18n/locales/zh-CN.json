@@ -3339,6 +3339,7 @@
   "Switching map": "正在切换地图",
   "Opening imagery": "正在打开影像",
   "Street View is ready: press {open} to load it": "街景已就绪：按 {open} 加载",
+  "{source} cannot open this link's street-level photo without a working key": "没有有效密钥，{source} 无法打开此链接的街景照片",
   "Street-level photos are hidden in the current view. Leave it first.": "当前视图隐藏了街景照片。请先退出该视图。",
   "STATIONS": "空间站",
   "Crewed stations and the craft that visit them": "载人空间站及来访飞行器",

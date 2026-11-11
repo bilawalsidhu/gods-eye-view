@@ -3582,6 +3582,7 @@
   "Switching map": "Перемикання карти",
   "Opening imagery": "Відкриття знімків",
   "Street View is ready: press {open} to load it": "Перегляд вулиць готовий: натисніть {open}, щоб завантажити",
+  "{source} cannot open this link's street-level photo without a working key": "{source} не може відкрити вуличне фото за цим посиланням без робочого ключа",
   "Street-level photos are hidden in the current view. Leave it first.": "Вуличні знімки приховані в поточному режимі. Спершу вийдіть із нього.",
   "STATIONS": "СТАНЦІЇ",
   "Crewed stations and the craft that visit them": "Пілотовані станції та кораблі, що до них прилітають",

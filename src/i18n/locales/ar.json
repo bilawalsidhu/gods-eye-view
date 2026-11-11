@@ -3744,6 +3744,7 @@
   "Switching map": "جارٍ تبديل الخريطة",
   "Opening imagery": "جارٍ فتح الصور",
   "Street View is ready: press {open} to load it": "Street View جاهز: اضغط «{open}» لتحميله",
+  "{source} cannot open this link's street-level photo without a working key": "لا يمكن لـ {source} فتح صورة مستوى الشارع في هذا الرابط بدون مفتاح صالح",
   "Street-level photos are hidden in the current view. Leave it first.": "صور مستوى الشارع مخفية في العرض الحالي. اخرج منه أولًا.",
   "STATIONS": "المحطات",
   "Crewed stations and the craft that visit them": "المحطات المأهولة والمركبات التي تزورها",

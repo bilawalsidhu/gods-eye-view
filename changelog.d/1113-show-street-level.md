@@ -7,9 +7,9 @@
   `sl=google` link never loads a billed panorama by itself: it arms Street
   View and leaves the load to OPEN GOOGLE STREET VIEW; embedded views open it,
   and so does the God's Eye View panel for a result issued in the last five
-  minutes. A request stops when the user navigates or hides the panel before
-  its photo loads; a new photo replaces the open one in place, so EXPAND
-  stays. When nothing is found and a 360°, flat or SINCE filter is on, the
+  minutes; a link whose source has no working key says so. A request stops
+  when the user navigates or hides the panel before its photo loads; a new
+  photo replaces the open one in place, so EXPAND stays. When nothing is found and a 360°, flat or SINCE filter is on, the
   answer names the filter. An unavailable map stack now reports the
   controller's own reason instead of always asking for a Cesium ion token
   (Said Turksever, @asturksever, #1113).

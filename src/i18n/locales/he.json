@@ -3302,6 +3302,7 @@
   "Switching map": "מחליף מפה",
   "Opening imagery": "פותח צילומים",
   "Street View is ready: press {open} to load it": "Street View מוכן: לחץ על {open} כדי לטעון אותו",
+  "{source} cannot open this link's street-level photo without a working key": "{source} לא יכול לפתוח את תמונת רמת הרחוב של הקישור הזה בלי מפתח תקף",
   "Street-level photos are hidden in the current view. Leave it first.": "תמונות ברמת הרחוב מוסתרות בתצוגה הנוכחית. צא ממנה קודם.",
   "Ship bridge view": "תצוגת גשר האונייה",
   "Satellite orbital view": "התצוגה המסלולית של הלוויין",
