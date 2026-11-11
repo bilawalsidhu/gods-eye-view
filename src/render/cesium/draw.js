@@ -2833,7 +2833,10 @@ export function createCesiumDraw({
     // would have the collection rewrite its vertices.
     const drawn = was.polyline.positions;
     const unmoved = drawnAt(drawn, item.positions);
-    const positions = unmoved ? drawn : linePositions(item);
+    // One that moves by as many points (a front stepping out) is written
+    // into the points it has, which the polyline then takes again.
+    const positions =
+      unmoved || rewrite(drawn, item) ? drawn : linePositions(item);
     if (!unmoved) was.polyline.positions = positions;
     was.polyline.show = show;
     if (recolour) paintLine(was.polyline.material, item.style);
@@ -2842,6 +2845,31 @@ export function createCesiumDraw({
         item.revealFraction,
         positions,
       );
+  }
+
+  /**
+   * Write a line's new positions into `drawn`, the Cartesians a polyline
+   * draws (made by `linePositions`), when they are as many and convert one
+   * for one (not geodesic): true if written, else false, writing nothing.
+   */
+  function rewrite(drawn, item) {
+    if (item.mode === 'geodesic' || !Array.isArray(drawn)) return false;
+    const positions = item.positions;
+    if (positions instanceof Float64Array) {
+      if (positions.length !== drawn.length * 3) return false;
+      for (let i = 0; i < drawn.length; i++)
+        Cesium.Cartesian3.fromElements(
+          positions[i * 3],
+          positions[i * 3 + 1],
+          positions[i * 3 + 2],
+          drawn[i],
+        );
+      return true;
+    }
+    if (positions.length !== drawn.length) return false;
+    for (let i = 0; i < drawn.length; i++)
+      toCartesianInto(positions[i], drawn[i]);
+    return true;
   }
 
   /**

@@ -2282,7 +2282,7 @@ test('the context layer draws its static range ring as a haloed line on a viewer
       );
     }
     // Small moves keep the ring; one past 250 m moves it.
-    const first = core.positions[0];
+    const first = Cesium.Cartesian3.clone(core.positions[0]);
     rendering.renderVisual(subject(0.001));
     assert.ok(Cesium.Cartesian3.equals(linesOf()[0].positions[0], first));
     rendering.renderVisual(subject(0.01));
@@ -3006,6 +3006,61 @@ test('an outlined solid line draws one outline material, recoloured in place, an
       batch.geometryInstances.map((one) => one.id.id),
       ['a'],
     );
+    s.set.dispose();
+  }));
+
+test('a line that moves by as many points is written into the points it draws; by more, it takes new ones', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    const style = {
+      kind: 'solid',
+      color: [0, 0.5, 1, 1],
+      outline: { color: [0, 0, 0, 1], widthPx: 1 },
+    };
+    const front = (positions) => ({
+      id: 'front',
+      positions,
+      widthPx: 4,
+      mode: '3d',
+      style,
+    });
+    const at = (...heights) =>
+      heights.map((h) => ({ ...Cesium.Cartesian3.fromDegrees(0, 0, h) }));
+    // Beside a line that settles, as the ring's fronts are not.
+    s.set.set([front(at(10, 20, 30)), settleStem('a', 200)]);
+    const polylines = s.polylines();
+    let line = null;
+    for (let i = 0; i < polylines.length; i++)
+      if (polylines.get(i).id?.id === 'front') line = polylines.get(i);
+    const points = line.positions;
+    const objects = [...points];
+    s.set.upsert([front(at(40, 50, 60))]);
+    assert.equal(line.positions, points, 'the same points');
+    assert.deepEqual(line.positions, objects, 'each the same object');
+    const heights = () =>
+      line.positions.map((p) =>
+        Math.round(Cesium.Cartographic.fromCartesian(p).height),
+      );
+    assert.deepEqual(heights(), [40, 50, 60]);
+    // Packed triples are written in too.
+    const packed = new Float64Array(9);
+    at(70, 80, 90).forEach((p, i) => packed.set([p.x, p.y, p.z], i * 3));
+    s.set.upsert([front(packed)]);
+    assert.equal(line.positions, points);
+    assert.deepEqual(heights(), [70, 80, 90]);
+    // As longitudes and latitudes, converted into the same points.
+    s.set.upsert([
+      front([
+        { lon: 0, lat: 0, height: 1 },
+        { lon: 0, lat: 0, height: 2 },
+        { lon: 0, lat: 0, height: 3 },
+      ]),
+    ]);
+    assert.equal(line.positions, points);
+    assert.deepEqual(heights(), [1, 2, 3]);
+    s.set.upsert([front(at(5, 6, 7, 8))]);
+    assert.notEqual(line.positions, points, 'more points: new ones');
+    assert.deepEqual(heights(), [5, 6, 7, 8]);
     s.set.dispose();
   }));
 
