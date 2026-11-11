@@ -3407,5 +3407,7 @@
   "Map style": "地图样式",
   "Language": "语言",
   "UI style": "界面样式",
-  "Display settings": "显示设置"
+  "Display settings": "显示设置",
+  "Enable": "启用",
+  "Disable": "禁用"
 }

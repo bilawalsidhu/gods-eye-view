@@ -1,5 +1,14 @@
 <script setup>
-import { computed, onBeforeUnmount, shallowRef } from 'vue';
+import UiSelect from './kit/UiSelect.js';
+import UiButton from './kit/UiButton.vue';
+import {
+  UiMenu,
+  UiMenuTrigger,
+  UiMenuContent,
+  UiMenuItem,
+} from './kit/UiPrimitives.js';
+import { computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { t } from '../i18n/index.js';
 import UiRail from './kit/UiRail.vue';
 import {
@@ -8,22 +17,9 @@ import {
 } from './panelRailCatalog.js';
 import { usePanelStore } from './stores/panels.js';
 import { useHudStore } from './stores/hud.js';
-import { worldClock } from '../time/worldClock.js';
+import { useWorldTimeStore } from './stores/worldTime.js';
 import MinimalSearch from './MinimalSearch.vue';
 import UiIcon from './kit/UiIcon.vue';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from './shadcn/dropdown-menu/index.ts';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from './shadcn/select/index.ts';
 import { useVoiceStore } from './stores/voice.js';
 
 const props = defineProps({
@@ -37,31 +33,9 @@ const panels = usePanelStore();
 const hud = useHudStore();
 const voice = useVoiceStore();
 const minimal = computed(() => hud.hud?.variant === 'minimal');
-const time = shallowRef(worldClock.getState());
-const timelineOpen = shallowRef(false);
-const toolsOpen = shallowRef(false);
-const unsubscribeTime = worldClock.subscribe((state) => {
-  time.value = state;
-});
-onBeforeUnmount(unsubscribeTime);
-function chooseTime(value) {
-  if (value === 'timeline') {
-    timelineOpen.value = !timelineOpen.value;
-    return;
-  }
-  timelineOpen.value = false;
-  const hours = Number(value);
-  if (!hours) return worldClock.goLive();
-  const coverage = worldClock.coverage();
-  if (!time.value.supported || !coverage) return;
-  worldClock.pause();
-  worldClock.seek(
-    Math.min(
-      coverage.end,
-      Math.max(coverage.start, worldClock.wallNow() - hours * 3_600_000),
-    ),
-  );
-}
+const clock = useWorldTimeStore();
+const { time, timelineOpen } = storeToRefs(clock);
+const { toolsOpen } = storeToRefs(panels);
 function runVoice(action) {
   toolsOpen.value = false;
   voice.controls?.emit(action);
@@ -117,7 +91,7 @@ const label = computed(() =>
     :data-timeline-open="timelineOpen"
     :aria-label="t('Panels')"
   >
-    <button
+    <UiButton
       type="button"
       class="minimal-filter-toggle"
       data-rail-item="data-panel"
@@ -129,47 +103,42 @@ const label = computed(() =>
       "
       @click="onSelect('data-panel')"
       >{{ t('Layers') }}<UiIcon name="chevron_down" :size="14"
-    /></button>
-    <Select
+    /></UiButton>
+    <UiSelect
+      id="minimal-time-select"
+      class="console-time-trigger"
       :model-value="time.live ? '0' : 'replay'"
-      @update:model-value="chooseTime"
+      :aria-label="t('World time')"
+      :title="
+        time.supported
+          ? t('World time')
+          : t('Enable a layer with historical data to replay time')
+      "
+      @update:model-value="clock.selectPreset"
     >
-      <SelectTrigger
-        id="minimal-time-select"
-        class="console-time-trigger"
-        :aria-label="t('World time')"
-        :title="
-          time.supported
-            ? t('World time')
-            : t('Enable a layer with historical data to replay time')
-        "
-        ><SelectValue
-      /></SelectTrigger>
-      <SelectContent
-        ><SelectItem value="0">{{ t('Live') }}</SelectItem
-        ><SelectItem value="1" :disabled="!time.supported">{{
-          t('1 hour ago')
-        }}</SelectItem
-        ><SelectItem value="24" :disabled="!time.supported">{{
-          t('24 hours ago')
-        }}</SelectItem
-        ><SelectItem value="timeline" :disabled="!time.supported">{{
-          t('Timeline')
-        }}</SelectItem
-        ><SelectItem v-if="!time.live" value="replay" disabled>{{
-          t('Replay')
-        }}</SelectItem></SelectContent
-      >
-    </Select>
-    <DropdownMenu v-model:open="toolsOpen">
-      <DropdownMenuTrigger as-child
-        ><button
+      <option value="0">{{ t('Live') }}</option>
+      <option value="1" :disabled="!time.supported">{{
+        t('1 hour ago')
+      }}</option>
+      <option value="24" :disabled="!time.supported">{{
+        t('24 hours ago')
+      }}</option>
+      <option value="timeline" :disabled="!time.supported">{{
+        t('Timeline')
+      }}</option>
+      <option v-if="!time.live" value="replay" disabled>{{
+        t('Replay')
+      }}</option>
+    </UiSelect>
+    <UiMenu v-model:open="toolsOpen">
+      <UiMenuTrigger as-child
+        ><UiButton
           type="button"
           class="minimal-filter-toggle"
           data-minimal-tools-trigger
-          >{{ t('Tools') }}<UiIcon name="chevron_down" :size="14" /></button
-      ></DropdownMenuTrigger>
-      <DropdownMenuContent
+          >{{ t('Tools') }}<UiIcon name="chevron_down" :size="14" /></UiButton
+      ></UiMenuTrigger>
+      <UiMenuContent
         id="minimal-tools-menu"
         align="start"
         :side-offset="8"
@@ -177,24 +146,22 @@ const label = computed(() =>
         class="w-52"
         :aria-label="t('Tools')"
       >
-        <DropdownMenuItem
+        <UiMenuItem
           v-for="item in items.filter((item) => item.id !== 'data-panel')"
           :key="item.id"
           :data-rail-item="item.id"
           :aria-pressed="item.id === active"
           @select="choosePanel(item.id)"
-          >{{ item.label }}</DropdownMenuItem
+          >{{ item.label }}</UiMenuItem
         >
-        <DropdownMenuItem
-          v-if="voice.controls"
-          @select="runVoice('chat-button')"
-          ><UiIcon name="chat" :size="16" />{{ t('Chat') }}</DropdownMenuItem
+        <UiMenuItem v-if="voice.controls" @select="runVoice('chat-button')"
+          ><UiIcon name="chat" :size="16" />{{ t('Chat') }}</UiMenuItem
         >
-        <DropdownMenuItem v-if="voice.controls" @select="runVoice('button')"
-          ><UiIcon name="mic" :size="16" />{{ t('Voice') }}</DropdownMenuItem
+        <UiMenuItem v-if="voice.controls" @select="runVoice('button')"
+          ><UiIcon name="mic" :size="16" />{{ t('Voice') }}</UiMenuItem
         >
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </UiMenuContent>
+    </UiMenu>
     <MinimalSearch :panels="items" :on-panel="choosePanel" />
   </div>
 </template>

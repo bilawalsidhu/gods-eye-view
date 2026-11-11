@@ -184,39 +184,19 @@ test('Minimal time dropdown seeks real coverage and returns to live', async () =
     useHudStore(ui.pinia).publish({ variant: 'minimal' });
     await nextTick();
     const select = left.querySelector('#minimal-time-select');
-    async function open() {
-      select.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-      );
-      await nextTick();
-      await new Promise((resolve) => setTimeout(resolve, 30));
-    }
-    const option = (text) =>
-      [...document.querySelectorAll('[data-slot="select-item"]')].find(
-        (item) => item.textContent.trim() === text,
-      );
-    await open();
-    assert.equal(option('1 hour ago').getAttribute('aria-disabled'), 'true');
-    select.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
+    assert.equal(select.querySelector('option[value="1"]').disabled, true);
     worldClock.follow(id);
     await nextTick();
-    if (!option('1 hour ago')) await open();
-    assert.notEqual(option('1 hour ago').getAttribute('aria-disabled'), 'true');
-    option('1 hour ago').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    assert.equal(select.querySelector('option[value="1"]').disabled, false);
+    select.value = '1';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
     await nextTick();
-    await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(worldClock.isLive(), false);
     assert.equal(worldClock.now(), start);
-    await open();
-    option('Live').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    assert.equal(select.value, 'replay');
+    select.value = '0';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
     await nextTick();
-    await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(worldClock.isLive(), true);
   } finally {
     worldClock.goLive();

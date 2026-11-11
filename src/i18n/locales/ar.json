@@ -3812,5 +3812,7 @@
   "Map style": "نمط الخريطة",
   "Language": "اللغة",
   "UI style": "نمط الواجهة",
-  "Display settings": "إعدادات العرض"
+  "Display settings": "إعدادات العرض",
+  "Enable": "تفعيل",
+  "Disable": "تعطيل"
 }

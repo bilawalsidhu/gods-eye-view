@@ -36,7 +36,7 @@ async function fixture(t, { enabled = false, failed = false } = {}) {
     return document.querySelector('#minimal-universal-search');
   }
   const input = await open();
-  return { calls, host, input,
+  return { calls, host, input, pinia,
     async type(query) { const input = await open(); input.value = query; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick(); },
     async enter() { const input = await open(); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await nextTick(); await new Promise(resolve => setTimeout(resolve, 30)); },
   };
@@ -111,3 +111,19 @@ for (const mode of ['ui-clean-view', 'recording-mode', 'scene-playback-mode']) {
     assert.ok(document.querySelector('#minimal-universal-search'));
   });
 }
+
+
+test('the translated Settings command opens the shared settings store', async t => {
+  const { setLocale } = await import('../i18n/index.js');
+  const { useLocaleStore } = await import('./stores/locale.js');
+  const f = await fixture(t);
+  t.after(() => setLocale('en'));
+  setLocale('de');
+  useLocaleStore(f.pinia).publishPicker({ current: 'de' });
+  await f.type('Einstellungen');
+  const result = document.querySelector('[data-result-id="settings"]');
+  assert.ok(result);
+  assert.equal(result.textContent.includes('Einstellungen'), true);
+  result.click(); await nextTick(); await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(useProviderSettingsStore(f.pinia).settingsOpen, true);
+});

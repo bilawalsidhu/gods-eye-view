@@ -12,6 +12,7 @@ export const useProviderSettingsStore = defineStore(
   () => {
     /** The presented setup; null until the owner first publishes. */
     const view = shallowRef(null);
+    const settingsOpen = shallowRef(false);
 
     /** @param {?object} next A fresh presentation; every publish re-renders. */
     function publish(next) {
@@ -26,6 +27,18 @@ export const useProviderSettingsStore = defineStore(
       controls.value = next && markRaw(next);
     }
 
-    return { view, publish, controls, connect };
+    /** Show the interface preferences menu without a DOM click binding. */
+    function openMenu() {
+      settingsOpen.value = true;
+    }
+
+    return {
+      view,
+      publish,
+      controls,
+      connect,
+      settingsOpen,
+      openMenu,
+    };
   },
 );

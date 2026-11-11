@@ -3569,5 +3569,7 @@
   "Map style": "Estilo del mapa",
   "Language": "Idioma",
   "UI style": "Estilo de la interfaz",
-  "Display settings": "Ajustes de visualización"
+  "Display settings": "Ajustes de visualización",
+  "Enable": "Activar",
+  "Disable": "Desactivar"
 }

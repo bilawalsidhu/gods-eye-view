@@ -3650,5 +3650,7 @@
   "Map style": "Стиль карты",
   "Language": "Язык",
   "UI style": "Стиль интерфейса",
-  "Display settings": "Настройки отображения"
+  "Display settings": "Настройки отображения",
+  "Enable": "Включить",
+  "Disable": "Отключить"
 }

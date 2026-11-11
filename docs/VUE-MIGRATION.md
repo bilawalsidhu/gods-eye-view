@@ -63,6 +63,14 @@ tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
+The Minimal console reuses `UiButton`, `UiSelect` and `UiIcon`. Interaction
+families absent from the native kit are shared through `UiPrimitives.js`:
+`UiMenu`, `UiPopover`, `UiCommand`, `UiSwitch` and `UiCollapsible`, backed by
+vendored shadcn-vue/Reka components. Their props/events retain the upstream
+contracts; they hold no application logic. Command-search state and dispatch
+live in `stores/commandSearch.js`, world-time presets in the existing time
+store, and settings/menu disclosure in their respective stores.
+
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's

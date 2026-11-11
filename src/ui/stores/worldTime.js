@@ -89,6 +89,7 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     });
   const time = shallowRef(read());
   const speed = shallowRef('real');
+  const timelineOpen = shallowRef(false);
   const rate = () => WORLD_TIME_SPEEDS[speed.value];
   let ticker = null;
   const syncTicker = () => {
@@ -117,6 +118,26 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
 
   return {
     time,
+    timelineOpen,
+    /** Choose a toolbar replay preset through the same clock owner as the timeline. */
+    selectPreset(value) {
+      if (value === 'timeline') {
+        timelineOpen.value = !timelineOpen.value;
+        return;
+      }
+      timelineOpen.value = false;
+      const hours = Number(value);
+      if (!hours) return worldClock.goLive();
+      const coverage = worldClock.coverage();
+      if (!time.value.supported || !coverage) return;
+      worldClock.pause();
+      worldClock.seek(
+        Math.min(
+          coverage.end,
+          Math.max(coverage.start, worldClock.wallNow() - hours * 3_600_000),
+        ),
+      );
+    },
     /**
      * Play runs the track at the speed chosen, from the start when it is at
      * its end (at live, say), as a video plays again from the top. It runs

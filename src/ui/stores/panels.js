@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { reactive } from 'vue';
+import { reactive, shallowRef } from 'vue';
 
 /**
  * @typedef {object} RailPanel
@@ -26,6 +26,7 @@ const samePanels = (a, b) =>
 export const usePanelStore = defineStore('gev-panels', () => {
   /** @type {{left: RailPanel[], right: RailPanel[]}} */
   const sides = reactive({ left: [], right: [] });
+  const toolsOpen = shallowRef(false);
 
   /**
    * Replace one side's panels, keeping the array when nothing changed.
@@ -53,5 +54,5 @@ export const usePanelStore = defineStore('gev-panels', () => {
     );
   }
 
-  return { sides, setSide, openPanelId, isOpen };
+  return { sides, setSide, openPanelId, isOpen, toolsOpen };
 });

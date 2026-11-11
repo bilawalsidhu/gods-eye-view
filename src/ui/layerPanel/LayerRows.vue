@@ -1,4 +1,10 @@
 <script setup>
+import {
+  UiSwitch,
+  UiCollapsible,
+  UiCollapsibleTrigger,
+  UiCollapsibleContent,
+} from '../kit/UiPrimitives.js';
 import RailChips from '../rail/RailChips.vue';
 import RailRowList from '../rail/RailRowList.vue';
 import RowRange from './RowRange.vue';
@@ -7,14 +13,8 @@ import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import UiIcon from '../kit/UiIcon.vue';
-import { Switch } from '../shadcn/switch/index.ts';
 import { computed, shallowRef, onMounted, onBeforeUnmount } from 'vue';
-import { t } from '../../i18n/index.js';
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from '../shadcn/collapsible/index.ts';
+import { formatNumber, t } from '../../i18n/index.js';
 const minimal = shallowRef(false);
 let themeObserver;
 onMounted(() => {
@@ -98,8 +98,12 @@ const sections = computed(() => {
   <template v-if="minimal && !sectionContent">
     <div v-if="master" class="console-layer-master">
       <span>{{ t('All layers') }}</span>
-      <small aria-live="polite">{{ master.enabled }}/{{ master.total }}</small>
-      <Switch
+      <small aria-live="polite"
+        >{{ formatNumber(master.enabled) }}/{{
+          formatNumber(master.total)
+        }}</small
+      >
+      <UiSwitch
         class="console-layer-switch"
         data-layer-master
         :model-value="master.checked"
@@ -122,10 +126,10 @@ const sections = computed(() => {
             >−</span
           ></template
         >
-      </Switch>
+      </UiSwitch>
     </div>
     <template v-for="section in sections" :key="section.key">
-      <Collapsible
+      <UiCollapsible
         v-if="section.label"
         as="section"
         class="console-layer-section"
@@ -133,14 +137,14 @@ const sections = computed(() => {
         default-open
       >
         <h3 class="console-layer-heading"
-          ><CollapsibleTrigger as-child
+          ><UiCollapsibleTrigger as-child
             ><button type="button" class="console-section-trigger"
               ><span>{{ section.label }}</span
-              ><small>{{ section.items.length }}</small
+              ><small>{{ formatNumber(section.items.length) }}</small
               ><UiIcon name="chevron_down" :size="14" /></button
-          ></CollapsibleTrigger>
+          ></UiCollapsibleTrigger>
         </h3>
-        <CollapsibleContent class="console-section-content"
+        <UiCollapsibleContent class="console-section-content"
           ><LayerRows
             :items="section.items"
             section-content
@@ -149,8 +153,8 @@ const sections = computed(() => {
             :on-list-item="onListItem"
             :on-slider="onSlider"
             :on-range="onRange"
-        /></CollapsibleContent>
-      </Collapsible>
+        /></UiCollapsibleContent>
+      </UiCollapsible>
       <LayerRows
         v-else
         :items="section.items"
@@ -190,7 +194,7 @@ const sections = computed(() => {
               v-if="item.count"
               :class="['data-count', { 'data-count-empty': item.count.empty }]"
               :text="item.count.text"
-            /><Switch
+            /><UiSwitch
               v-if="minimal"
               class="console-layer-switch"
               :data-feed-state="item.toggle.feedState"

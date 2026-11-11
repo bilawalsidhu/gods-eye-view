@@ -3407,5 +3407,7 @@
   "Map style": "地図スタイル",
   "Language": "言語",
   "UI style": "UIスタイル",
-  "Display settings": "表示設定"
+  "Display settings": "表示設定",
+  "Enable": "有効化",
+  "Disable": "無効化"
 }

@@ -3488,5 +3488,7 @@
   "Map style": "Kartenstil",
   "Language": "Sprache",
   "UI style": "Oberflächenstil",
-  "Display settings": "Anzeigeeinstellungen"
+  "Display settings": "Anzeigeeinstellungen",
+  "Enable": "Aktivieren",
+  "Disable": "Deaktivieren"
 }
