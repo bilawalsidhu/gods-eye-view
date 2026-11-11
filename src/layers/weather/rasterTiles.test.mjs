@@ -198,6 +198,23 @@ test('a null tile is one shared transparent tile, drawn rather than missing', as
   assert.equal(canvases[0].encoded, 1);
 });
 
+test('an empty tile that failed to encode is encoded again next time', async () => {
+  const { ask, canvases } = frameFetch(async () => null, {
+    createCanvas: () => {
+      const canvas = tileCanvas();
+      if (!canvases.length)
+        canvas.convertToBlob = async () =>
+          Promise.reject(new Error('no encoder'));
+      canvases.push(canvas);
+      return canvas;
+    },
+  });
+  await assert.rejects(ask(0, 0, 0), /no encoder/);
+  const next = await ask(1, 0, 0);
+  assert.equal(text(next.bytes), 'tile:0');
+  assert.equal(canvases.length, 2);
+});
+
 test('a failed tile rejects, which the renderer reports as a tile error', async () => {
   const { ask } = frameFetch(async () => {
     throw new Error('frame unavailable');

@@ -86,7 +86,11 @@ export function createFrameTileFetch({
     });
     if (pixels === null) {
       both?.throwIfAborted();
-      empty ??= canvasBytes(canvas());
+      // A failed encode is not kept: the next empty tile tries again.
+      empty ??= canvasBytes(canvas()).catch((error) => {
+        empty = null;
+        throw error;
+      });
       return { bytes: (await empty).slice(0), contentType: 'image/png' };
     }
     let tileCanvas;
