@@ -40,6 +40,15 @@ export function isEmbedded(location = globalThis.location) {
   );
 }
 
+/**
+ * Whether an embedding page asked for the full app interface instead of the
+ * clean globe: opt-in, set by the page as `globalThis.GEV_EMBED_FULL_UI`
+ * before the app loads (for hosts with room for the app's own controls).
+ */
+export function isEmbeddedFullUi() {
+  return globalThis.GEV_EMBED_FULL_UI === true;
+}
+
 /** Whether a panel page loaded the app into itself. */
 export function isEmbeddedInline() {
   return globalThis.GEV_EMBED_INLINE === true;
@@ -263,8 +272,10 @@ export function installViews({
     });
   if (!isEmbedded(location)) return () => {};
 
-  windowRef.document.body.classList.add('ui-embed');
-  shell.setCleanView?.(true);
+  if (!isEmbeddedFullUi()) {
+    windowRef.document.body.classList.add('ui-embed');
+    shell.setCleanView?.(true);
+  }
   const stopRendering = isEmbeddedInline()
     ? keepPanelRendering(viewer, { windowRef })
     : () => {};
