@@ -740,7 +740,9 @@ export class LayerPanel {
     ) {
       return `${source} · ${translateStatusMessage(stats.statusMessage.trim())}`;
     }
-    const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : t('never');
+    const ago = stats.lastUpdate
+      ? this._timeAgo(stats.lastUpdate, stats.atMs)
+      : t('never');
     if (stats.loading) {
       const loadingLabel =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
@@ -783,7 +785,7 @@ export class LayerPanel {
       // row by the oldest of it, not by the load that re-served it.
       const dataAgo =
         Number(stats.oldestTileAt) > 0
-          ? this._timeAgo(stats.oldestTileAt)
+          ? this._timeAgo(stats.oldestTileAt, stats.atMs)
           : ago;
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
         return t('{state} · {source} · {ago} · retrying in {seconds}s', {
@@ -808,8 +810,11 @@ export class LayerPanel {
     return t('{source} · {ago}', { source, ago });
   }
 
-  _timeAgo(timestamp) {
-    const diff = Math.floor((Date.now() - timestamp) / 1000);
+  /** How long before `nowMs` (the layer's world time, else the wall clock). */
+  _timeAgo(timestamp, nowMs) {
+    const diff = Math.floor(
+      ((Number.isFinite(nowMs) ? nowMs : Date.now()) - timestamp) / 1000,
+    );
     if (diff < 5) return t('just now');
     if (diff < 60) return t('{count}s ago', { count: diff });
     if (diff < 3600) return t('{count}m ago', { count: Math.floor(diff / 60) });

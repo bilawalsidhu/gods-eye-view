@@ -7,7 +7,7 @@ import { createVoiceSession, isStoppable } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
-import { t } from '../i18n/index.js';
+import { t, translateKnown } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
@@ -114,11 +114,20 @@ export function createVoiceCommands({
     // States are machine values; only the label is translated.
     ui.update('status', { text: () => voiceStatusLabel(event.state) });
     // The portable session reports 'Voice off' in English: show the idle
-    // label instead. Other details are provider messages, shown as they come.
+    // label instead. Other details are provider messages; one that keeps its
+    // English catalog text is worded again in the current language.
     const idle = event.state === 'idle';
-    const detail = event.detail === 'Voice off' ? '' : event.detail;
+    const source = event.sourceDetail ?? event.detail;
+    const detail = () =>
+      source === 'Voice off'
+        ? ''
+        : event.sourceDetail
+          ? event.sourceParams
+            ? t(event.sourceDetail, event.sourceParams)
+            : translateKnown(event.sourceDetail)
+          : event.detail;
     ui.update('detail', {
-      text: () => detail || (idle ? t('Voice off') : t('Voice active')),
+      text: () => detail() || (idle ? t('Voice off') : t('Voice active')),
     });
     // A typed chat session is not the microphone.
     ui.update('button', {
@@ -127,8 +136,10 @@ export function createVoiceCommands({
     ui.update('error', {
       text: () =>
         event.state === 'error'
-          ? event.detail || t('Voice could not be started.')
+          ? detail() || t('Voice could not be started.')
           : '',
+      // "Check microphone permission" is wrong advice for a missing key.
+      hint: () => !(event.state === 'error' && event.missingKey === true),
     });
   });
   // Captions, plan and result card nested in the control; it only reads

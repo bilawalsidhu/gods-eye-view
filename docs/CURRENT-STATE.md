@@ -1145,7 +1145,7 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
 
-The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
+The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. With no Gemini key the token route answers `503` with code `API_KEY_MISSING`, and the voice control says `Add a Gemini API key in Provider Settings` without the microphone-permission hint. Voice status and error messages keep the message as given on the session's `state` event (`sourceDetail`, English catalog text when it is the app's own, with `sourceParams` for its placeholders), beside the worded `detail`, so the voice control words them again after a language change. Typed-chat errors and the chat panel are worded once. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
 Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
@@ -1598,6 +1598,47 @@ first-connect grace and warm-data behavior. Known source failures have bounded
 messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
 Sources receive cancellation signals and check them after body parsing. The
 layer's existing lifecycle and selection guards continue to reject late work.
+
+### Following the world clock
+
+A source may declare a timeline: it can answer a snapshot at a given time.
+`source.timeline` is `{ coverage(), stepMs, subscribe? }`, validated by
+`readSnapshotTimeline` (`src/sources/live/contract.js`): `coverage()` returns
+the span `{ start, end }` in epoch ms it can answer, or null while it does not
+know yet; `stepMs` is the spacing of its snapshots; the optional
+`subscribe(listener)` tells of a change in coverage. Flights, Military Flights
+and AIS Vessels follow the world clock only while their source declares one
+(`src/time/snapshotTimeline.js`); with none they never follow it, and every
+request, timing and display stays as it is live.
+
+While such a layer is on it follows the clock and registers the source's
+coverage on the timeline. At the live edge it polls as it always has. Away
+from it the layer stops polling and asks for `getSnapshot({ ...query, atMs })`
+at the step at or before the clock's time; a request at the live edge carries
+no `atMs`. A seek, the time going backwards or leaving live is a jump (the
+clock's `getState().jumps` counts seeks and returns to live, not play): what
+loads is dropped, play holds while the snapshot loads, and the snapshot then
+stands in for every contact. A contact it lacks is gone at once; a tracked or
+selected contact it lacks is released, and one it has starts its trail afresh,
+whose track request carries `atMs` and draws only points at or before it.
+Playing, the layer stays a snapshot ahead of the time, and play does not pass a
+snapshot still loading for more than 8 seconds. Those snapshots apply as polls
+do, so contacts move on smoothly: aircraft are drawn at the clock's time
+rather than behind it, and vessels between two fixes move along the great
+circle, never past the newer one. Records, absences and the Layers panel's age
+are judged at the clock's time. Outside the coverage the layer shows no
+contacts and loads nothing; while the coverage is unknown it loads nothing and
+clears nothing. A snapshot that fails clears the time and is asked again after
+5 seconds; one the source drops for a newer request (an `AbortError`) is no
+failure, and nothing is cleared. A layer has one snapshot loading at a time:
+the older is aborted before a newer starts. Moving the view while vessels follow the clock asks for the new
+area at the same time. Back at live the contacts are cleared and the layer
+polls at once.
+
+A snapshot at `atMs` describes the world as it stood then: `observedAtMs` is
+at or before `atMs`, no record is observed later than `atMs`, freshness and
+staleness are judged against `atMs`, `atMs` is echoed back, and a vessel
+snapshot reports `transportStatus: 'live'`.
 
 ## State and action outcomes
 
@@ -4788,7 +4829,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 ### Interface localization (October 2026)
 
 Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, **he**,
-**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and
+**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **sv**, **uk**, **zh-CN** and
 **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
@@ -6279,7 +6320,7 @@ and unreachable upstream (502/504) separately from road geometry.
 
 `GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:
 
-- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
+- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token. With no OpenAI key the token route answers `503` with code `API_KEY_MISSING`, and the voice control shows `Needs OPENAI_API_KEY — add it in Provider Settings` in the interface language, reworded on a language change, without the microphone-permission hint.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
 - **Thirty tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
 
@@ -6319,6 +6360,7 @@ and unreachable upstream (502/504) separately from road geometry.
 - **Reliability**: tool-call dedupe (2.5s window across call/item/args keys); response-create queueing that respects active responses and defers follow-ups when the user starts speaking; per-tool follow-up instructions so the agent confirms only what actually happened (zoom confirms only on `ok=true`).
 - **Aircraft identity honesty:** “What is this aircraft?” reads callsign, operator, registration, type, and route only from the selected contact context. Missing operator, route, or type enrichment is named explicitly rather than silently omitted or inferred from the callsign.
 - **Diagnostics**: every client/server event is posted to `/api/realtime/debug-log` and appended to `.gev-logs/realtime-conversations.jsonl` (gitignored) with secret/image redaction; last 30 errors persist in `localStorage` (`gev-realtime-errors`); `window.__gevVoiceCommands.getDiagnostics()` in the console.
+  - **Visual-context escalation** (OpenAI Realtime): when a response's last tool result is a `get_entity_context` answer, a tool output from that response was sent and the data channel is open, it logs one `viewport_context.decision` with `contextId`, `send` and `reason`, plus `viewScale` and, when `send` is true, `kind` (`viewport` or `crop`). Decision reasons: `structured-identity-sufficient` (structured context made an image unnecessary), `view-scale-not-local`, `structured-identity-missing` (requests a viewport), `pointer-crop-eligible` (a pointer answer with no identity; requests a crop, and the crop checks below decide whether one is sent), `pointer-identity-present` and `pointer-missing`. A send decision is followed by exactly one outcome with the same `contextId` and `kind`: `viewport_context.result` (`sent`, `data-channel-send-failed`), logged as soon as the send returns, or `viewport_context.skipped`. Pointer-crop skips are `pointer-not-fresh` (no snapshot, or a stale one), `pointer-not-ground`, `pointer-off-screen`, `pointer-scale-not-useful` (zoomed out past `local` or `city`), `pointer-already-requested` (the most recently requested snapshot again: already sent, still being captured, or an earlier attempt for it threw), `pointer-expired`, `pointer-pose-unknown` and `pose-changed`; dropped captures are `capture-unavailable`, `session-reset`, `superseded` (a newer request or turn), `channel-lost` and `frame-stale`; a step that throws before an outcome closes the pair with `error`, and the caller then logs `viewport_context.failed`. Direct calls to the crop or image senders log their skips with a null `contextId`. Decision and outcome are separate records, so the debug-log rate limit can drop one half of a pair. Payloads are static codes only, never image data, tool payloads or user text, and other tool results log nothing here. Gemini Live uses a different gate in `geminiSession.js` (no pointer crop, a 1 s throttle), which is not instrumented.
 - **Counting semantics ("near")** — a CONTRACT; new count-bearing tool work inherits it. Three honest numbers exist for one question: the Contacts cohort (250 km around the subject, what the panel shows), `analyst_query`'s count of _currently-loaded_ records for the requested scope, and the layer-wide loaded total in `coverage.layersQueried[].total`. They diverge legitimately — the flights layer loads by viewport, so after a camera dive the loaded set can hold a fraction of the cohort (field case: panel 42, analyst 8). The contract:
   1. **Contacts ACTIVE** → "near / nearby / how many aircraft" means the **Contacts window** — the panel's numbers, spoken verbatim. Mechanism: `contactsWindow` (`{centeredOn, radiusKm, flights, military, vessels, complete}`), carried by both `analyst_query` and `get_current_view_state`, derived by `contactsWindowFromSnapshot()` from the same snapshot the panel renders so the two cannot drift. Voice filtering and follow-up memory use that immutable snapshot too. A cohort whose feed cannot answer reports `'unknown'`, never a confident zero; a cohort at the 20,000-row retention bound reports a lower bound.
   2. **Contacts OFF** → "nearby" means **in view**; "near \<place\>" means a radius around that place. A radius query with Contacts active and no explicit centre is centred on the **active contact**, not the camera.

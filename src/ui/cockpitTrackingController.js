@@ -65,7 +65,12 @@ export function resolveEntryKind() {
 
 export function dispatchCockpitModeChanged(active, info = null) {
   const subjectId = active
-    ? String(info?.icao24 || info?.mmsi || info?.noradId || '')
+    ? String(
+        info?.icao24 ||
+          (info?.kind === 'vessel' ? info.id : '') ||
+          info?.noradId ||
+          '',
+      )
         .trim()
         .toLowerCase() || null
     : null;
@@ -245,7 +250,7 @@ export function enter({ kind = null } = {}) {
   // Each session reads its own water: never a height left from the last.
   this.vesselWaterline = null;
   this.vesselFix = null;
-  this.subjectId = vessel ? info.mmsi : satellite ? info.noradId : null;
+  this.subjectId = vessel ? info.id : satellite ? info.noradId : null;
   this.trackedEntity = entity;
   if (entity) {
     this.trackedEntityWasShown = entity.show;
@@ -255,7 +260,7 @@ export function enter({ kind = null } = {}) {
     this.services.satellitesLayer?.setCockpitSubject?.(info.noradId);
     this.beginOrbital();
   } else {
-    this.services.aisLiveVesselsLayer?.setCockpitSubject?.(info.mmsi);
+    this.services.aisLiveVesselsLayer?.setCockpitSubject?.(info.id);
   }
   // A ship reporting neither heading nor course keeps the camera's own
   // heading: no direction is made up for it.

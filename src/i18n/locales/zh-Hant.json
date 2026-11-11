@@ -2983,8 +2983,6 @@
   "Take the exit {direction}": "從出口{direction}駛出",
   "Link shared": "鏈接已分享",
   "This share link can't be opened": "無法打開此分享鏈接",
-  "{id} isn't reporting now — showing where it was at {time}": "{id} 目前沒有發送信號——顯示其在 {time} 的位置",
-  "{id} isn't reporting now — showing where it was last seen": "{id} 目前沒有發送信號——顯示其最後出現的位置",
   "Shared vessel is unavailable": "分享的船隻不可用",
   "Check the spelling and press Enter to search again.": "請檢查拼寫，然後按 Enter 重新搜索。",
   "Press Enter to try again.": "按 Enter 重試。",
@@ -3373,5 +3371,17 @@
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "捲動或雙指縮放，拖曳以移動 · 按兩下查看全部",
   "1 min/s": "1 分鐘/秒",
-  "Photo © {photographer}": "照片 © {photographer}"
+  "Photo © {photographer}": "照片 © {photographer}",
+  "The shared flight isn't reporting now — showing where it was last seen": "共享的航班目前沒有發送信號——顯示其最後出現的位置",
+  "The shared flight isn't reporting now — showing where it was at {time}": "共享的航班目前沒有發送信號——顯示其在 {time} 的位置",
+  "The shared military flight isn't reporting now — showing where it was last seen": "共享的軍用航班目前沒有發送信號——顯示其最後出現的位置",
+  "The shared military flight isn't reporting now — showing where it was at {time}": "共享的軍用航班目前沒有發送信號——顯示其在 {time} 的位置",
+  "The shared vessel isn't reporting now — showing where it was last seen": "共享的船舶目前沒有發送信號——顯示其最後出現的位置",
+  "The shared vessel isn't reporting now — showing where it was at {time}": "共享的船舶目前沒有發送信號——顯示其在 {time} 的位置",
+  "The shared satellite isn't reporting now — showing where it was last seen": "共享的衛星目前沒有發送信號——顯示其最後出現的位置",
+  "The shared satellite isn't reporting now — showing where it was at {time}": "共享的衛星目前沒有發送信號——顯示其在 {time} 的位置",
+  "ICAO: {id}": "ICAO：{id}",
+  "NORAD: {id}": "NORAD：{id}",
+  "MMSI: {id}": "MMSI：{id}",
+  "Vessel UUID: {id}": "船舶 UUID：{id}"
 }

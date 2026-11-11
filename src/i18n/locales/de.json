@@ -2528,8 +2528,6 @@
   "Shared flight is unavailable": "Geteilter Flug ist nicht verfügbar",
   "Shared military flight is unavailable": "Geteilter Militärflug ist nicht verfügbar",
   "Shared satellite is unavailable": "Geteilter Satellit ist nicht verfügbar",
-  "{id} isn't reporting now — showing where it was last seen": "{id} sendet gerade nicht – letzte bekannte Position wird gezeigt",
-  "{id} isn't reporting now — showing where it was at {time}": "{id} sendet gerade nicht – Position um {time} wird gezeigt",
   "This share link can't be opened": "Dieser Freigabelink kann nicht geöffnet werden",
   "Shared vessel is unavailable": "Geteiltes Schiff ist nicht verfügbar",
   "subject": "Objekt",
@@ -3454,5 +3452,17 @@
   "Play speed": "Wiedergabegeschwindigkeit",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
   "1 min/s": "1 Min./s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "The shared flight isn't reporting now — showing where it was last seen": "Der geteilte Flug sendet gerade nicht – letzte bekannte Position wird gezeigt",
+  "The shared flight isn't reporting now — showing where it was at {time}": "Der geteilte Flug sendet gerade nicht – Position um {time} wird gezeigt",
+  "The shared military flight isn't reporting now — showing where it was last seen": "Der geteilte Militärflug sendet gerade nicht – letzte bekannte Position wird gezeigt",
+  "The shared military flight isn't reporting now — showing where it was at {time}": "Der geteilte Militärflug sendet gerade nicht – Position um {time} wird gezeigt",
+  "The shared vessel isn't reporting now — showing where it was last seen": "Das geteilte Schiff sendet gerade nicht – letzte bekannte Position wird gezeigt",
+  "The shared vessel isn't reporting now — showing where it was at {time}": "Das geteilte Schiff sendet gerade nicht – Position um {time} wird gezeigt",
+  "The shared satellite isn't reporting now — showing where it was last seen": "Der geteilte Satellit sendet gerade nicht – letzte bekannte Position wird gezeigt",
+  "The shared satellite isn't reporting now — showing where it was at {time}": "Der geteilte Satellit sendet gerade nicht – Position um {time} wird gezeigt",
+  "ICAO: {id}": "ICAO: {id}",
+  "NORAD: {id}": "NORAD: {id}",
+  "MMSI: {id}": "MMSI: {id}",
+  "Vessel UUID: {id}": "Schiffs-UUID: {id}"
 }
