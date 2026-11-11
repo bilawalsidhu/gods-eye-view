@@ -84,9 +84,9 @@ const PANEL_GROUPS = [
       'fire-perimeters',
       'gnss-integrity',
       's2-ghostmaps',
+      'gravity',
       'shipwrecks',
       'news',
-      'gravity',
     ],
   },
   {

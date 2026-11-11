@@ -700,7 +700,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({
     id: 'gravity',
-    token: '00',
+    token: '03',
     disposition: 'enabled+options',
     optionOwner: 'gravity',
   }),
