@@ -37,7 +37,10 @@ test('every acquisition source can be omitted without losing catalog membership'
 
 test('all acquisition sources may be absent, and enable fails before initializing or fetching', async (t) => {
   const actual = catalog({}, t);
-  assert.equal(actual.layers.length, 40);
+  assert.deepEqual(
+    actual.layers.map(({ id }) => id),
+    catalog(createStandaloneLayerSources(), t).layers.map(({ id }) => id),
+  );
   const manager = new LayerLifecycle(
     {},
     { getSourceAvailability: actual.getSourceAvailability },
