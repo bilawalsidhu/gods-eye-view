@@ -36,6 +36,27 @@ function globals(t, values) {
   }
 }
 
+const committedFixture = (name) =>
+  readFileSync(new URL(`./fixtures/tiles3d/${name}`, import.meta.url));
+
+// The tileset's numbers come from trigonometry whose last bits differ
+// between CPUs (the fixture was written on arm64, CI runs x64), so they
+// match to 1e-12 of their size; the meshes are exact.
+function assertClose(actual, expected, path) {
+  if (typeof expected === 'number') {
+    assert.equal(typeof actual, 'number', path);
+    assert.ok(
+      Math.abs(actual - expected) <=
+        1e-12 * Math.max(1, Math.abs(actual), Math.abs(expected)),
+      `${path}: ${actual} != ${expected}`,
+    );
+  } else if (expected && typeof expected === 'object') {
+    assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
+    for (const key of Object.keys(expected))
+      assertClose(actual[key], expected[key], `${path}.${key}`);
+  } else assert.equal(actual, expected, path);
+}
+
 test('fixture is reproducible, self-contained and under 200 KB', () => {
   const files = buildTilesFixture();
   assert.equal(files.size, 5);
@@ -43,10 +64,9 @@ test('fixture is reproducible, self-contained and under 200 KB', () => {
     [...files.values()].reduce((sum, bytes) => sum + bytes.length, 0) < 200_000,
   );
   for (const [name, bytes] of files)
-    assert.deepEqual(
-      readFileSync(new URL(`./fixtures/tiles3d/${name}`, import.meta.url)),
-      bytes,
-    );
+    if (name.endsWith('.json'))
+      assertClose(JSON.parse(committedFixture(name)), JSON.parse(bytes), name);
+    else assert.deepEqual(committedFixture(name), bytes);
   const tileset = JSON.parse(files.get('tileset.json'));
   for (const child of tileset.root.children)
     assert.ok(files.has(child.content.uri));
@@ -363,18 +383,21 @@ test('strict keyless assertion permits only the opted-in fixture and its real ti
 test('harness exposes exactly the five binary-safe fixture routes on the preview origin', () => {
   const routes = tilesFixtureRoutes('http://localhost:4303');
   assert.equal(routes.length, 5);
-  const files = buildTilesFixture();
+  const names = new Set();
   for (const route of routes) {
     const url = new URL(route.pattern);
     assert.equal(url.origin, 'http://localhost:4303');
     assert.ok(!route.pattern.includes('*'));
     const answer = route.respond();
-    assert.deepEqual(answer.body, files.get(url.pathname.split('/').at(-1)));
+    const name = url.pathname.split('/').at(-1);
+    names.add(name);
+    assert.deepEqual(answer.body, committedFixture(name));
     assert.equal(
       answer.contentType,
       url.pathname.endsWith('.glb') ? 'model/gltf-binary' : 'application/json',
     );
   }
+  assert.deepEqual([...names].sort(), [...buildTilesFixture().keys()].sort());
 });
 
 // Load only the page callbacks, without launching the command-line scenario.
