@@ -382,7 +382,15 @@ test('styles: 44 px corner eye, safe areas, fade, and the modes that own the scr
   // In normal mobile-shell view the eye must not cover the More dock tab.
   assert.match(
     css,
-    /body\.mobile-shell:not\(\.ui-clean-view\) #clean-view-eye\s*\{[^}]*bottom:\s*calc\(var\(--mobile-tab-space\) \+ 8px\)/,
+    /@media \(min-height: 521px\) \{\s*body\.mobile-shell:not\(\.ui-clean-view\) #clean-view-eye\s*\{\s*bottom:\s*calc\(var\(--mobile-tab-space\) \+ var\(--world-timeline-lift, 0px\) \+ 8px\)/,
+  );
+  assert.match(
+    css,
+    /body\.mobile-shell:not\(\.ui-clean-view\)\[data-mobile-sheet\] #clean-view-eye\s*\{\s*display: none;/,
+  );
+  assert.match(
+    css,
+    /@media \(max-height: 520px\) \{\s*#clean-view-eye \{\s*top: max\(/,
   );
   // Phones: the eye replaces the EXIT pill.
   assert.match(
