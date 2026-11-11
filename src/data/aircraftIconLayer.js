@@ -1,8 +1,19 @@
-import { COURSE_HOLD_SPEED_MPS, courseSlewCapDps } from './motionModel.js';
-import { norm180, distance, clone, copyInto } from '../geo/vector.js';
+import {
+  COAST_FLOOR_LIFT_M,
+  COURSE_HOLD_SPEED_MPS,
+  courseSlewCapDps,
+} from './motionModel.js';
+import {
+  norm180,
+  distance,
+  clone,
+  copyInto,
+  toDegrees,
+} from '../geo/vector.js';
+import { fromRadians, toCartographicRadians } from '../geo/ellipsoid.js';
 import { horizonFrom, liftedForHorizon } from '../geo/horizon.js';
 import { createIconBook } from '../render/motion/iconBook.js';
-import { motionCourse } from '../render/motion/iconMotion.js';
+import { motionCourse, motionPosition } from '../render/motion/iconMotion.js';
 import {
   drawOf,
   findCamera,
@@ -201,6 +212,137 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
     },
   };
   return icons;
+}
+
+/** How far ahead (ms) a coast's ground is read each time it is planned. */
+export const COAST_FLOOR_LOOKAHEAD_MS = 10_000;
+/** How far apart (ms) the ground under a coast is read, and how long each
+ *  piece of a coast the ground lifts runs. */
+export const COAST_FLOOR_STEP_MS = 1_000;
+/** A coast from above this height (m) never meets the ground: no terrain
+ *  is this high, and a level coast only rises off the ellipsoid. */
+const COAST_ABOVE_TERRAIN_M = 9_000;
+
+/**
+ * How far the ground lifts an icon at `position`: metres to raise it to
+ * COAST_FLOOR_LIFT_M over the ground (0 or less: none), or null where the
+ * ground is not known.
+ */
+function floorLift(position, cachedGroundFloor) {
+  const carto = toCartographicRadians(position);
+  if (!carto) return null;
+  const ground = cachedGroundFloor(toDegrees(carto.lat), toDegrees(carto.lon));
+  if (!Number.isFinite(ground)) return null;
+  return ground + COAST_FLOOR_LIFT_M - carto.height;
+}
+
+/** `position` raised by `lift` metres (a copy). */
+function raised(position, lift) {
+  if (!(lift > 0)) return clone(position);
+  const carto = toCartographicRadians(position);
+  return fromRadians(carto.lon, carto.lat, carto.height + lift);
+}
+
+/**
+ * A coast arc kept above the ground, as the CPU dead reckoning keeps it
+ * (`floorCoastedPosition`): past its fix an icon never draws lower than
+ * COAST_FLOOR_LIFT_M over the ground the layer's floor cache knows. The
+ * renderer cannot read that ground, so the coast is planned in pieces from
+ * the ground read along it:
+ * - clear of the ground for the lookahead, the arc as it is, planned again
+ *   when the lookahead runs out (or never, with the ground known to the
+ *   coast's end);
+ * - meeting the ground further on, the arc until a step before it;
+ * - where the ground lifts it within a step, a piece of the same arc from
+ *   where it is drawn now, lifted, climbing to where the ground puts it a
+ *   step on;
+ * - with the coast over, held where it stopped, lifted.
+ * Before its fix (a warm-up), an arc runs as it is until the fix.
+ * @param {object} arc The coast's `arc` motion segment.
+ * @param {number} t The display instant, epoch ms on the set's motion clock.
+ * @param {(latDeg: number, lonDeg: number) => number|null} cachedGroundFloor
+ * @returns {{motion?: object, pos?: object, course?: number, expiresAt: number}|null}
+ *   A replacement motion where the ground lifts the icon, and until when the
+ *   plan holds; null when the ground never matters to this arc.
+ */
+export function floorCoastArc(arc, t, cachedGroundFloor) {
+  if (!(arc.maxDtS > 0) || typeof cachedGroundFloor !== 'function') return null;
+  const fixCarto = toCartographicRadians(arc.fix);
+  if (
+    fixCarto &&
+    fixCarto.height > COAST_ABOVE_TERRAIN_M &&
+    !((arc.climbMps ?? 0) < 0)
+  )
+    return null;
+  const end = arc.t0 + arc.maxDtS * 1000;
+  if (t >= end) {
+    // The coast is over: it holds where it stopped.
+    const stopped = motionPosition(arc, null, end);
+    const lift = floorLift(stopped, cachedGroundFloor);
+    if (lift === null) return { expiresAt: t + COAST_FLOOR_LOOKAHEAD_MS };
+    if (!(lift > 0)) return { expiresAt: Infinity };
+    const courseDeg = motionCourse(arc, undefined, end);
+    return {
+      motion: { kind: 'hold', courseDeg },
+      pos: raised(stopped, lift),
+      course: courseDeg,
+      expiresAt: Infinity,
+    };
+  }
+  const start = Math.max(t, arc.t0);
+  const horizon = Math.min(end, start + COAST_FLOOR_LOOKAHEAD_MS);
+  let unknown = false;
+  let belowAt = null;
+  for (let at = start; ; at = Math.min(at + COAST_FLOOR_STEP_MS, horizon)) {
+    const lift = floorLift(motionPosition(arc, null, at), cachedGroundFloor);
+    if (lift === null) unknown = true;
+    else if (lift > 0) {
+      belowAt = at;
+      break;
+    }
+    if (at >= horizon) break;
+  }
+  if (belowAt === null)
+    return {
+      expiresAt:
+        horizon < end || unknown ? start + COAST_FLOOR_LOOKAHEAD_MS : Infinity,
+    };
+  // A warm-up runs to its fix as it is; the coast is read again from there.
+  if (t < arc.t0)
+    return { expiresAt: Math.max(arc.t0, belowAt - COAST_FLOOR_STEP_MS) };
+  if (belowAt - COAST_FLOOR_STEP_MS > t)
+    return { expiresAt: belowAt - COAST_FLOOR_STEP_MS };
+  // The ground lifts it within a step: a piece from here to a step on.
+  const next = Math.min(t + COAST_FLOOR_STEP_MS, end);
+  const here = motionPosition(arc, null, t);
+  const there = motionPosition(arc, null, next);
+  const from = raised(here, floorLift(here, cachedGroundFloor) ?? 0);
+  const to = raised(there, floorLift(there, cachedGroundFloor) ?? 0);
+  const seconds = (next - t) / 1000;
+  const climbMps =
+    seconds > 0
+      ? (toCartographicRadians(to).height -
+          toCartographicRadians(from).height) /
+        seconds
+      : 0;
+  const courseDeg = motionCourse(arc, undefined, t);
+  return {
+    motion: {
+      kind: 'arc',
+      fix: from,
+      t0: t,
+      minDtS: 0,
+      // On to the coast's end, should the next piece come late.
+      maxDtS: (end - t) / 1000,
+      speedMps: arc.speedMps,
+      trackDeg: courseDeg,
+      turnRateDps: arc.turnRateDps,
+      climbMps,
+    },
+    pos: from,
+    course: courseDeg,
+    expiresAt: next,
+  };
 }
 
 let instances = 0;
@@ -436,6 +578,22 @@ export function createAircraftIcons({
       // A warm-up's arc ends at its fix, still ahead; a coast's runs to its
       // limit, and a report that holds stays put until the next one.
       if (regime.maxDt === 0 && t0 > t) expiresAt = t0;
+      // Past its fix a coast never goes below the ground.
+      if (motion.kind === 'arc') {
+        const floored = floorCoastArc(
+          motion,
+          t,
+          services.groundFloor?.cachedGroundFloor,
+        );
+        if (floored) {
+          if (floored.motion) {
+            motion = floored.motion;
+            pos = floored.pos;
+            course = floored.course;
+          }
+          expiresAt = Math.min(expiresAt, floored.expiresAt);
+        }
+      }
     }
     // Below hover speed the nose holds what is on screen (or, for a new row,
     // where this motion starts); above it, it glides on at the slew cap.
