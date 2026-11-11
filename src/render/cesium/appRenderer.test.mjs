@@ -3,6 +3,8 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { CONTRACT_VERSION, checkRendererShape } from '../contract/index.js';
 import { rendererOf } from '../rendererOf.js';
+import { applicationHooksOf } from '../applicationHooks.js';
+import { cesiumMapEngine } from './mapEngine.js';
 import {
   ReadonlySet,
   cesiumRenderer,
@@ -55,12 +57,19 @@ function fakeViewer(log, { failDestroy = false } = {}) {
         moveEnd: fakeEvent(listeners),
       },
       primitives: { add() {}, remove() {} },
+      // The free-look height limit writes the camera controller's look.
+      screenSpaceCameraController: {
+        enableLook: true,
+        minimumTrackBallHeight: 7_500_000,
+      },
       requestRender() {},
       preUpdate: fakeEvent(listeners),
       postUpdate: fakeEvent(listeners),
       preRender: fakeEvent(listeners),
       postRender: fakeEvent(listeners),
     },
+    camera: { positionCartographic: { height: 20_000_000 } },
+    entities: { contains: (entity) => entity?.own === true },
     canvas: {
       tag: 'canvas',
       // Cesium's input handler binds the canvas's events.
@@ -128,6 +137,23 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   assert.equal(cesiumViewerOf(renderer).canvas, renderer.canvas);
   assert.equal(rendererOf(viewer), renderer, 'the viewer finds its renderer');
 
+  assert.equal(
+    viewer.scene.screenSpaceCameraController.enableLook,
+    false,
+    'free look is limited to low heights from the start',
+  );
+  const hooks = applicationHooksOf(renderer);
+  assert.equal(hooks.mapEngine, cesiumMapEngine, 'the map stacks use Cesium');
+  assert.equal(hooks.qaHandles.viewer, viewer, 'QA scripts read the viewer');
+  assert.equal(hooks.viewerDrawsEntity({ own: true }), true);
+  assert.equal(hooks.viewerDrawsEntity({}), false);
+  for (const name of [
+    'trimStaleCommands',
+    'keepPanelRendering',
+    'installZoomOutGuard',
+  ])
+    assert.equal(typeof hooks[name], 'function', name);
+
   assert.ok(viewer.listeners.size > 0, 'the ports follow the frame phases');
   assert.equal(typeof renderer.draw.icons, 'function');
   assert.ok(renderer.capabilities.has('models'), 'draw.models is declared');
@@ -136,6 +162,11 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   renderer.destroy();
   assert.equal(viewer.listeners.size, 0, 'and stop on destroy');
   assert.equal(rendererOf(viewer), null, 'and lets go of the viewer');
+  assert.equal(
+    viewer.scene.screenSpaceCameraController.enableLook,
+    true,
+    'and gives free look back',
+  );
   assert.deepEqual(log, ['resize', 'destroy']);
   assert.deepEqual(doc.children, [], 'credits leave with the renderer');
   renderer.destroy();
@@ -271,50 +302,6 @@ test('a read-only set keeps the values it was built with', () => {
 test('only renderers this plugin made reach a Cesium viewer', () => {
   assert.equal(cesiumViewerOf({ id: 'cesium' }), null);
   assert.equal(cesiumViewerOf({}), null);
-});
-
-test('the application refuses a renderer it cannot run on, and destroys it', async (t) => {
-  const { createApplicationScene } = await import('../../app/scene.js');
-  const { createApplicationRequestServices } =
-    await import('../../services/requests.js');
-  const destroyed = [];
-  const deferred = [];
-  const plugin = {
-    id: 'other',
-    async create(options) {
-      assert.ok(options.signal, 'the scene passes its signal');
-      return {
-        id: 'other',
-        destroy: () => {
-          destroyed.push('other');
-          throw new Error('and it fails to go');
-        },
-      };
-    },
-  };
-  const saved = { document: globalThis.document, window: globalThis.window };
-  globalThis.document = fakeDocument();
-  globalThis.window = new EventTarget();
-  const warn = console.warn;
-  console.warn = () => {};
-  t.after(() => {
-    for (const fn of deferred.reverse()) fn();
-    console.warn = warn;
-    globalThis.document = saved.document;
-    globalThis.window = saved.window;
-  });
-  await assert.rejects(
-    createApplicationScene({
-      renderer: plugin,
-      requestServices: createApplicationRequestServices(),
-      loaderStatus: { textContent: '' },
-      signal: new AbortController().signal,
-      defer: (fn) => deferred.push(fn),
-    }),
-    /renderer cannot run the application yet/,
-    'the refusal is not hidden by the failed destroy',
-  );
-  assert.deepEqual(destroyed, ['other']);
 });
 
 const EXPECTED_MISSING = [];

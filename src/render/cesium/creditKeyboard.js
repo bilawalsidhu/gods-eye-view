@@ -2,7 +2,7 @@
  * Adds the keyboard semantics omitted by Cesium's href-less attribution links.
  * Cesium retains ownership of showing and hiding its required credit lightbox.
  */
-import { t } from './i18n/index.js';
+import { t } from '../../i18n/index.js';
 
 export function configureCreditKeyboardAccess(root = document) {
   const expand = root?.querySelector?.(

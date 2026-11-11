@@ -2,11 +2,17 @@
  * @module render/cesium/mapEngine
  * @description The Cesium map engine (`src/maps/engine.js`): the providers
  * the map stacks' imagery and terrain come from (`mapImagery.js`,
- * `mapTerrain.js`), and the viewer operations the map source controller
- * switches stacks with. Provided as this module loads.
+ * `mapTerrain.js`), the photoreal base the application scene loads
+ * (`google3d.js`), and the viewer operations the map source controller
+ * switches stacks with. Each operation takes the scene object: the viewer
+ * behind it (`viewers.js`) is the one it changes. Provided as this module
+ * loads, for viewers with no renderer bound, and handed to the application
+ * with each renderer the plugin makes (`appRenderer.js`).
  */
 import * as Cesium from 'cesium';
 import { provideMapEngine } from '../../maps/engine.js';
+import { loadPhotorealisticTileset } from './google3d.js';
+import { viewerBehind } from './viewers.js';
 import {
   createEsriImagery,
   createIonImagery,
@@ -27,33 +33,35 @@ export const cesiumMapEngine = Object.freeze({
   }),
   /** The layer a globe stack's imagery provider draws through. */
   createImageryLayer: (provider) => new Cesium.ImageryLayer(provider),
-  requestRender(viewer) {
-    viewer?.scene?.requestRender?.();
+  requestRender(host) {
+    viewerBehind(host)?.scene?.requestRender?.();
   },
-  globeShown: (viewer) => viewer?.scene?.globe?.show === true,
-  setGlobeShown(viewer, shown) {
-    viewer.scene.globe.show = shown;
+  globeShown: (host) => viewerBehind(host)?.scene?.globe?.show === true,
+  setGlobeShown(host, shown) {
+    viewerBehind(host).scene.globe.show = shown;
   },
-  addTileset(viewer, tileset) {
-    viewer.scene.primitives.add(tileset);
+  addTileset(host, tileset) {
+    viewerBehind(host).scene.primitives.add(tileset);
   },
-  removeTileset(viewer, tileset) {
-    viewer.scene.primitives.remove(tileset);
+  /** Removed, which destroys it. */
+  removeTileset(host, tileset) {
+    viewerBehind(host).scene.primitives.remove(tileset);
   },
   tilesetShown: (tileset) => tileset?.show === true,
   showTileset(tileset, shown) {
     tileset.show = shown;
   },
   /** Below every other imagery layer, at `index`. */
-  addImageryLayer(viewer, layer, index) {
-    viewer.imageryLayers.add(layer, index);
+  addImageryLayer(host, layer, index) {
+    viewerBehind(host).imageryLayers.add(layer, index);
   },
   /** Removed and destroyed. */
-  removeImageryLayer(viewer, layer) {
-    viewer.imageryLayers.remove(layer, true);
+  removeImageryLayer(host, layer) {
+    viewerBehind(host).imageryLayers.remove(layer, true);
   },
   /** A terrain factory's result: `{terrain}` or `{provider}`. */
-  applyTerrain(viewer, result) {
+  applyTerrain(host, result) {
+    const viewer = viewerBehind(host);
     if (result.terrain) viewer.scene.setTerrain(result.terrain);
     else viewer.terrainProvider = result.provider;
   },
@@ -75,6 +83,15 @@ export const cesiumMapEngine = Object.freeze({
     if (typeof value?.destroy === 'function' && !value.isDestroyed?.())
       value.destroy();
   },
+  /**
+   * Load Google Photorealistic 3D Tiles by the best route the credentials
+   * allow (`google3d.js`); the tileset is not yet drawn.
+   * @param {object} host
+   * @param {{googleApiKey?: string, googleTokens?: object|null, cesiumToken?: string}} credentials
+   * @returns {Promise<{tileset: object|null, route: string, errors: Error[]}>}
+   */
+  loadPhotoreal: (host, credentials) =>
+    loadPhotorealisticTileset(Cesium, credentials),
 });
 
 provideMapEngine(cesiumMapEngine);

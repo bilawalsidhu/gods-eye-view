@@ -8,26 +8,40 @@
  * ports (`ports.js`), the ones the conformance renderer is checked with,
  * and it has every member of the contract. The application's base (the
  * photoreal tiles, the map stack's imagery and terrain) is still loaded
- * through the viewer by the scene and the map stack; the globe port drapes
- * its imagery on that base as drawn (see `globe.js`). `whenSettled` waits
- * for the globe, the scene's 3D tiles and what the draw sets hold, not for
- * what layers still draw through the viewer themselves.
- * Until a family is ported, its code reaches the Cesium viewer through
- * `cesiumViewerOf`, never through a renderer member, so no engine type
- * crosses the contract and each call marks code still to port. Ported code
- * that still holds the viewer reaches the renderer through `rendererOf`.
+ * through the Cesium map engine (`mapEngine.js`), which the plugin hands
+ * the application with the renderer (`../applicationHooks.js`); the globe
+ * port drapes its imagery on that base as drawn (see `globe.js`).
+ * `whenSettled` waits for the globe, the scene's 3D tiles and what the draw
+ * sets hold.
+ *
+ * What only this renderer needs at startup is set up here: the free-look
+ * height limit, keyboard access to the credits' expand link (in the page's
+ * language), and the hooks the application uses where a renderer has
+ * them (stale command trimming, inline panel rendering, whether an entity
+ * is the viewer's own, the zoom-out guard, the viewer QA scripts read).
+ * Adapter code reaches the viewer behind a renderer through
+ * `cesiumViewerOf` (`viewers.js`), never through a renderer member, so no
+ * engine type crosses the contract.
  */
 import { createApplicationViewer } from './applicationViewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
 import { bindRenderer } from '../rendererOf.js';
+import { provideApplicationHooks } from '../applicationHooks.js';
+import { FREE_LOOK_MAX_HEIGHT_METERS } from '../../globeInView.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
-// The application's map stacks switch through the Cesium map engine.
-import './mapEngine.js';
+import { cesiumMapEngine } from './mapEngine.js';
+import { installFreeLookHeightLimit } from './freeLookLimit.js';
+import { keepPanelRendering } from './panelRendering.js';
+import { trimStaleSceneCommands } from './sceneCommandRelease.js';
+import { installZoomOutGuard } from './zoomOutGuard.js';
+import { configureCreditKeyboardAccess } from './creditKeyboard.js';
+import { onLocaleChange } from '../../i18n/index.js';
+import { cesiumViewerOf, recordViewer } from './viewers.js';
+
+export { cesiumViewerOf };
 
 /** @typedef {import('../contract/renderer').Renderer} TransitionalRenderer */
-
-const viewers = new WeakMap();
 
 /** A Set no one can change once built, so `capabilities` stays true. */
 export class ReadonlySet extends Set {
@@ -50,14 +64,6 @@ export class ReadonlySet extends Set {
     throw new TypeError('capabilities are read-only');
   }
 }
-
-/**
- * The Cesium viewer behind a renderer this plugin made, or null for any
- * renderer it did not make.
- * @param {object} renderer
- * @returns {object|null}
- */
-export const cesiumViewerOf = (renderer) => viewers.get(renderer) ?? null;
 
 /**
  * The Cesium plugin over a viewer factory; tests pass a fake one.
@@ -90,6 +96,8 @@ export function createCesiumRendererPlugin({
       let ports;
       let input;
       let capabilities;
+      let releaseFreeLook = () => {};
+      let offLocale = () => {};
       try {
         viewer = createViewer({ container, creditContainer });
         capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
@@ -101,7 +109,19 @@ export function createCesiumRendererPlugin({
           query: ports.query,
           report: ports.report,
         });
+        // Free look is limited to low heights from the start.
+        releaseFreeLook = installFreeLookHeightLimit(
+          viewer,
+          FREE_LOOK_MAX_HEIGHT_METERS,
+        );
+        configureCreditKeyboardAccess(document);
+        offLocale = onLocaleChange(() =>
+          configureCreditKeyboardAccess(document),
+        );
       } catch (error) {
+        offLocale();
+        releaseFreeLook();
+        input?.dispose();
         ports?.dispose();
         if (viewer && !viewer.isDestroyed()) viewer.destroy();
         creditContainer.remove();
@@ -132,6 +152,8 @@ export function createCesiumRendererPlugin({
         },
         destroy() {
           try {
+            offLocale();
+            releaseFreeLook();
             input.dispose();
             ports.dispose();
             if (!viewer.isDestroyed()) viewer.destroy();
@@ -143,8 +165,25 @@ export function createCesiumRendererPlugin({
           }
         },
       });
-      viewers.set(renderer, viewer);
+      recordViewer(renderer, viewer);
       unbind = bindRenderer(viewer, renderer);
+      provideApplicationHooks(renderer, {
+        mapEngine: cesiumMapEngine,
+        // Drops the draw commands the scene keeps after it stops drawing
+        // them; run after a drawn frame (see sceneCommandRelease.js).
+        trimStaleCommands: () => trimStaleSceneCommands(viewer.scene),
+        // Keeps the globe drawing in an inline panel whose host stops
+        // animation frames (embed mode, src/app/embed.js).
+        keepPanelRendering: (options) => keepPanelRendering(viewer, options),
+        // Whether an entity is one of the viewer's own (Cockpit asks whether
+        // the aircraft it flies still draws).
+        viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
+        // Keeps outward user zooms bounded and the Earth framed; returns its
+        // disposer (see zoomOutGuard.js).
+        installZoomOutGuard: (options) => installZoomOutGuard(viewer, options),
+        // QA scripts drive and read the viewer itself.
+        qaHandles: { viewer },
+      });
       return renderer;
     },
   });

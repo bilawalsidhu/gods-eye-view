@@ -6,7 +6,6 @@ import {
   maxPitchForHeight,
   MAXIMUM_ZOOM_DISTANCE_M,
 } from './zoomOutGuard.js';
-import { applicationViewerHooks } from './application.js';
 
 const deg = Cesium.Math.toDegrees;
 const { WHEEL, PINCH, RIGHT_DRAG, LEFT_DRAG, MIDDLE_DRAG } =
@@ -764,7 +763,7 @@ test('a tracked camera cannot climb past the ceiling from its target', () => {
   }
 });
 
-test("the application scene's viewer hooks install the guard on the viewer and hand back its disposer", () => {
+test('the guard installs on the viewer and hands back its disposer', () => {
   const controller = { maximumZoomDistance: Infinity };
   const scene = {
     mode: Cesium.SceneMode.SCENE3D,
@@ -778,7 +777,7 @@ test("the application scene's viewer hooks install the guard on the viewer and h
   };
   const viewer = { scene, camera, canvas: new EventTarget() };
   const handoffs = new Set();
-  const dispose = applicationViewerHooks(viewer).installZoomOutGuard({
+  const dispose = installZoomOutGuard(viewer, {
     subscribeCameraHandoff(listener) {
       handoffs.add(listener);
       return () => handoffs.delete(listener);

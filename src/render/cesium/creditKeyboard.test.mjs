@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
-import { setLocale } from './i18n/index.js';
+import { setLocale } from '../../i18n/index.js';
 
 function fakeElement() {
   const attributes = new Map();

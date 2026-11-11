@@ -17,6 +17,7 @@ import { provideNativeClick } from '../rendererOf.js';
 import { drawHitOf } from './drawHit.js';
 import { pickThroughFollowHelper } from './follow.js';
 import { recentPick } from './pickMemo.js';
+import { viewerBehind } from './viewers.js';
 
 /** A drill is run at least this deep and sliced, so callers asking for
  *  different depths on one click share one pass. */
@@ -165,10 +166,10 @@ export function createNativeClick(scene, at) {
   };
 }
 
-// Any Cesium viewer, bound or not, by shape: a caller's may come from
-// another copy of Cesium.
-provideNativeClick((viewer, at) => {
-  const scene = viewer?.scene;
+// The viewer behind the scene object, bound or not, by shape: an unbound one
+// may come from another copy of Cesium.
+provideNativeClick((host, at) => {
+  const scene = viewerBehind(host)?.scene;
   if (typeof scene?.pick !== 'function') return null;
   return createNativeClick(scene, at);
 });

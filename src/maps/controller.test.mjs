@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
 // The controller switches stacks through the Cesium map engine.
-import '../render/cesium/mapEngine.js';
+import { cesiumMapEngine } from '../render/cesium/mapEngine.js';
 import { createDefaultMapSources } from './defaultSources.js';
 import { bindRenderer } from '../render/rendererOf.js';
 
@@ -61,6 +61,7 @@ function fixture(registry, options = {}) {
   });
   const controller = new MapSourceController(viewer, {
     registry,
+    engine: cesiumMapEngine,
     createImageryLayer: (provider) => ({ provider }),
     onChange: (state) => changes.push(state),
     ...options,

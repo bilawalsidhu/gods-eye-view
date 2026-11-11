@@ -1,6 +1,6 @@
 import { indexMapSources } from './registry.js';
 import { createMapCredits } from './credits.js';
-import { mapEngine } from './engine.js';
+import { mapEngineFor } from './engine.js';
 import { markBaseTileset } from '../render/baseTilesets.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
@@ -24,9 +24,10 @@ const resolved = (provider, effectiveStackId) => ({
 
 /**
  * Coordinate source lifetimes and scene changes; the registry owns provider
- * choices. The scene changes go through the renderer's map engine
- * (`engine.js`), which a viewer with no renderer bound gets once its owner
- * has loaded the package's `./render/cesium/unbound` export.
+ * choices. The scene changes go through the map engine of the scene's
+ * renderer (`engine.js`): its own, or its globe port. A viewer with no
+ * renderer bound gets one once its owner has loaded the package's
+ * `./render/cesium/unbound` export.
  */
 export class MapSourceController {
   constructor(
@@ -36,7 +37,7 @@ export class MapSourceController {
       initialStack,
       onChange = null,
       onError = null,
-      engine = mapEngine(),
+      engine = mapEngineFor(viewer),
       requestRender = () => engine.requestRender(viewer),
       createImageryLayer = (provider) => engine.createImageryLayer(provider),
     },

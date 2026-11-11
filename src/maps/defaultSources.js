@@ -8,8 +8,8 @@ import { ESRI_ATTRIBUTION_HTML } from './attribution.js';
 /**
  * Select sources and setup guidance without putting provider branches in the
  * controller. Each source builds its imagery and terrain through the
- * renderer's map engine (`engine.js`), or the `engine` given, when it is
- * first shown.
+ * `engine` given (the scene's map engine, `engine.js`), else the one the
+ * adapter provided for viewers with no renderer, when it is first shown.
  */
 export function createDefaultMapSources({
   googleTileset = null,
@@ -17,7 +17,6 @@ export function createDefaultMapSources({
   googleApiKey = '',
   engine = null,
 } = {}) {
-  // The engine given, else the one the renderer provided, read when used.
   const engineOf = () => engine ?? mapEngine();
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);

@@ -224,6 +224,30 @@ export function bindRenderer(host, renderer) {
 }
 
 /**
+ * The scene object the application holds for `renderer`: what every layer
+ * and tool is handed, and reaches the renderer's ports through. It is the
+ * application's own: the element the renderer
+ * fills (`container`) and whether the scene is gone (`isDestroyed()`), and
+ * nothing of the engine.
+ * @param {object} renderer
+ * @param {{container: HTMLElement}} options
+ * @returns {{host: Readonly<{container: HTMLElement, isDestroyed: () => boolean}>,
+ *   release: () => void}} `release` marks the scene gone and unbinds it.
+ */
+export function createSceneHost(renderer, { container }) {
+  let destroyed = false;
+  const host = Object.freeze({ container, isDestroyed: () => destroyed });
+  const unbind = bindRenderer(host, renderer);
+  return {
+    host,
+    release() {
+      destroyed = true;
+      unbind();
+    },
+  };
+}
+
+/**
  * @param {object|null|undefined} host
  * @returns {object|null} The renderer bound to `host`, or null.
  */

@@ -1,17 +1,7 @@
 import { createApplicationOperations } from './operations.js';
-// The application's composition root: it picks the Cesium renderer, and
-// this is the only part of the adapter it imports.
-import {
-  applicationViewerHooks,
-  cesiumRenderer,
-  cesiumViewerOf,
-  loadApplicationPhotoreal,
-  releaseApplicationPhotoreal,
-  showApplicationPhotoreal,
-} from '../render/cesium/application.js';
 import { registerDataCredits } from '../data/dataCredits.js';
-import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
+import { mapEngineFor } from '../maps/engine.js';
 import { initLogoGaze } from '../logoGaze.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -21,19 +11,32 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
-import { FREE_LOOK_MAX_HEIGHT_METERS } from '../globeInView.js';
 import { worldClock, worldTimeFor } from '../time/worldClock.js';
 import { followWorldTime } from '../time/viewerClock.js';
-import { onLocaleChange, t } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
+import { applicationHooksOf } from '../render/applicationHooks.js';
+import { createSceneHost } from '../render/rendererOf.js';
+
+/**
+ * The application's composition root picks the renderer: the one given, else
+ * the default (Cesium), loaded only then, so a page on the stub never
+ * loads it. This is the only part of an adapter the application imports.
+ */
+async function defaultRenderer() {
+  const { cesiumRenderer } = await import('../render/cesium/application.js');
+  return cesiumRenderer;
+}
 
 /**
  * Construct the application globe using the caller's local configuration.
  * `renderer` is the `RendererPlugin` that draws it (default: Cesium). The
- * application still runs on the Cesium viewer until its layers are ported,
- * so a plugin whose renderer has none is refused.
+ * application runs on a renderer with only the contract's required members:
+ * what a renderer's plugin hands it beside the contract
+ * (`src/render/applicationHooks.js`) it uses where given, and does without
+ * where not.
  */
 export async function createApplicationScene({
-  renderer: rendererPlugin = cesiumRenderer,
+  renderer: givenPlugin,
   requestServices,
   googleApiKey,
   googleTokens = null,
@@ -60,23 +63,23 @@ export async function createApplicationScene({
     });
   }
   loaderStatus.textContent = t('Configuring viewer...');
-  // The scene still loads the tiles, so their credentials stay here.
+  const rendererPlugin = givenPlugin ?? (await defaultRenderer());
+  signal.throwIfAborted();
+  const container = document.getElementById('cesiumContainer');
   const renderer = await rendererPlugin.create({
-    container: document.getElementById('cesiumContainer'),
+    container,
+    googleApiKey: googleApiKey || undefined,
+    googleTokens: googleTokens
+      ? (options) => googleTokens.token(options)
+      : undefined,
+    worldDataToken: cesiumToken || undefined,
     signal,
   });
-  const viewer = cesiumViewerOf(renderer);
-  if (!viewer) {
-    const refusal = new Error(
-      `The ${rendererPlugin.id} renderer cannot run the application yet`,
-    );
-    try {
-      renderer.destroy();
-    } catch (error) {
-      console.warn('[Init] Refused renderer failed to destroy:', error);
-    }
-    throw refusal;
-  }
+  // The scene object every layer and tool is handed: the application's own,
+  // bound to the renderer.
+  const scene = createSceneHost(renderer, { container });
+  const viewer = scene.host;
+  const hooks = applicationHooksOf(renderer);
   // The governor keeps its holds on the renderer's frame port. The loop
   // draws every frame until the application's tools are up (they release
   // 'boot'), as it did before anything could hold it.
@@ -86,11 +89,15 @@ export async function createApplicationScene({
     try {
       uninstallRenderGovernor(renderer.frame);
     } finally {
-      renderer.destroy();
+      try {
+        renderer.destroy();
+      } finally {
+        scene.release();
+      }
     }
   });
   // Before any layer binds a click: every layer and tool shares this one.
-  // Deferred after the viewer, so it is released before the viewer goes.
+  // Deferred after the renderer, so it is released before the renderer goes.
   const input = inputFor(viewer);
   defer(() => input.destroy());
   // Ctrl+wheel and trackpad pinches zoom the globe, not the page.
@@ -103,28 +110,29 @@ export async function createApplicationScene({
       requestRender: () => governorRequestRender('world-time'),
     }),
   );
-  // What the adapter hands the application about its viewer; free look is
-  // limited to low heights from the start.
-  const viewerHooks = applicationViewerHooks(viewer);
-  defer(viewerHooks.installFreeLookHeightLimit(FREE_LOOK_MAX_HEIGHT_METERS));
   registerDataCredits(viewer, credits);
-  configureCreditKeyboardAccess(document);
-  defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')
       : t('Loading the keyless globe...');
-  const photoreal = await loadApplicationPhotoreal({
+  // The map stacks, and the photoreal base among them, switch through the
+  // scene's map engine: the renderer's own, or its globe port.
+  const engine = mapOptions.engine ?? mapEngineFor(viewer);
+  const photoreal = (await engine.loadPhotoreal?.(viewer, {
     googleApiKey,
     googleTokens,
     cesiumToken,
-  });
+  })) ?? { tileset: null, route: 'none', errors: [] };
   const tileset = photoreal.tileset;
   // A provider can finish after cancellation; retain ownership of its result.
-  defer(() => releaseApplicationPhotoreal(viewer, tileset));
+  defer(() => {
+    if (!tileset || engine.isDestroyed(tileset)) return;
+    engine.removeTileset(viewer, tileset);
+    engine.release(tileset);
+  });
   signal.throwIfAborted();
   if (tileset) {
-    showApplicationPhotoreal(viewer, tileset);
+    engine.addTileset(viewer, tileset);
     // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
     // Google Photorealistic 3D Tiles provide their own terrain/elevation.
     renderer.globe.setGlobeVisible(false);
@@ -152,6 +160,7 @@ export async function createApplicationScene({
   const mapStackController = new MapController(viewer, {
     requestRender: governorRequestRender,
     ...mapOptions,
+    engine,
     googleTileset: tileset,
     cesiumToken,
     initialStack: tileset ? 'photoreal' : 'esri-imagery',
@@ -180,9 +189,14 @@ export async function createApplicationScene({
     mapStackController,
     operations,
     input,
-    // Trims stale draw commands, keeps an inline panel drawing, says
-    // whether an entity is the viewer's own, and installs the zoom-out
-    // guard (render/cesium/application.js).
-    ...viewerHooks,
+    // What the renderer's plugin hands the application beside the contract,
+    // each optional: trims stale draw commands, keeps an inline panel
+    // drawing, says whether an entity is the renderer's own, installs the
+    // zoom-out guard, and what QA scripts read (render/applicationHooks.js).
+    trimStaleCommands: hooks.trimStaleCommands,
+    keepPanelRendering: hooks.keepPanelRendering,
+    viewerDrawsEntity: hooks.viewerDrawsEntity,
+    installZoomOutGuard: hooks.installZoomOutGuard,
+    qaHandles: hooks.qaHandles,
   };
 }

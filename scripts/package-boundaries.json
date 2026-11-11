@@ -1404,7 +1404,9 @@
       "src/ui/ownerFlagSheet.js",
       "src/layers/satellites/sensors.js",
       "src/data/adminBoundaries.js",
-      "src/data/retryableLoad.js"
+      "src/data/retryableLoad.js",
+      "src/maps/imageryHost.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -2036,7 +2038,10 @@
       "src/renderGovernor.js",
       "src/sky/icrf.js",
       "src/sky/stars.js",
-      "src/render/cesium/starrySky.js"
+      "src/render/cesium/starrySky.js",
+      "src/render/applicationHooks.js",
+      "src/maps/globeEngine.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": ["cesium"]
   },
@@ -2642,7 +2647,8 @@
       "src/render/cesium/nativeClick.js",
       "src/render/input/router.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/cesium/input.js"
+      "src/render/cesium/input.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -3293,7 +3299,10 @@
       "src/render/cesium/nativeClick.js",
       "src/maps/attribution.js",
       "src/maps/startupRoute.js",
-      "src/maps/engine.js"
+      "src/maps/engine.js",
+      "src/render/applicationHooks.js",
+      "src/maps/globeEngine.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": ["cesium"]
   },
@@ -3534,7 +3543,7 @@
       "src/cockpitVisionPolicy.js",
       "src/contactsDetectionPolicy.js",
       "src/contextModePolicy.js",
-      "src/creditKeyboard.js",
+      "src/render/cesium/creditKeyboard.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
@@ -4555,7 +4564,10 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/render/cesium/imageryLookAhead.js"
+      "src/render/cesium/imageryLookAhead.js",
+      "src/render/applicationHooks.js",
+      "src/maps/globeEngine.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": [
       "hls.js",
@@ -5297,7 +5309,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": [
       "hls.js",
@@ -5431,7 +5444,8 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/render/cesium/nativeClick.js",
-      "src/render/cesium/input.js"
+      "src/render/cesium/input.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": [
       "cesium",
@@ -6199,7 +6213,8 @@
       "src/render/cesium/nativeClick.js",
       "src/data/rioRouteNames.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -6306,7 +6321,8 @@
       "src/render/cesium/pickMemo.js",
       "src/render/cesium/nativeClick.js",
       "src/data/rioRouteNames.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/render/cesium/viewers.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -6845,7 +6861,8 @@
       "src/contextModePolicy.js",
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/render/rendererOf.js"
     ],
     "external": []
   },

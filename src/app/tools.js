@@ -224,6 +224,9 @@ export function createApplicationTools({
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
     entityRecords: { read: readEntityRecord, write: entityRecord },
+    // What the renderer's plugin lets QA scripts read (the Cesium viewer,
+    // for the default renderer), in place of the scene object above.
+    ...scene.qaHandles,
   };
   const debug = window.__godsEyeView;
   defer(() => {
