@@ -1,8 +1,8 @@
-import { weatherTileUrl } from './source.js';
+import { weatherTileUrl, closeWeatherPixels } from './source.js';
 import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { globeImageryHost } from './shellRendering.js';
-import { drawMosaicTile } from './rasterTiles.js';
+import { drawMosaicTile, createFrameTileFetch } from './rasterTiles.js';
 import { weatherDisplay } from './display.js';
 import { msg } from '../../i18n/index.js';
 import {
@@ -75,6 +75,7 @@ function createGlobeRendering({
   fetchImpl,
   decodeImage,
   createCanvas,
+  frameSource,
 }) {
   const requestRender = () => frameOf(viewer)?.requestRender('weather');
   const onPostRender = (cb) => frameOf(viewer).on('postRender', cb);
@@ -119,6 +120,7 @@ function createGlobeRendering({
       decodeImage,
       now,
       onFetched,
+      frameSource,
     });
     // An aborted decode may still finish; never repopulate a cleared instance.
     signal.throwIfAborted();
@@ -129,27 +131,50 @@ function createGlobeRendering({
     return { ...result, cached: false };
   }
 
-  function prefetchTiles(snapshot, time) {
+  /** Level 0–1 tiles of the visible product bounds, at most eight. */
+  function prefetchTiles(snapshot) {
     const bounds = snapshot.bounds;
     const view = cameraOf(viewer)?.viewRectangle?.();
     const coverage = view ? rectangleOverlap(bounds, view) : bounds;
     if (!coverage) return [];
-    const template = weatherTileUrl(snapshot.product, time, {
-      size: profile(snapshot.product).tileSize,
-    });
-    const urls = [];
+    const tiles = [];
     for (let z = 0; z <= 1; z++) {
       for (let y = 0; y < 2 ** z; y++) {
         for (let x = 0; x < 2 ** (z + 1); x++) {
           if (!rectangleOverlap(coverage, geographicTile(x, y, z))) continue;
-          urls.push(
-            template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
-          );
-          if (urls.length === MAX_PREFETCH_TILES) return urls;
+          tiles.push({ z, x, y });
+          if (tiles.length === MAX_PREFETCH_TILES) return tiles;
         }
       }
     }
-    return urls;
+    return tiles;
+  }
+  function tileUrls(snapshot, time, tiles) {
+    const template = weatherTileUrl(snapshot.product, time, {
+      size: profile(snapshot.product).tileSize,
+    });
+    return tiles.map(({ z, x, y }) =>
+      template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
+    );
+  }
+  /** Warm tiles through the frame source; the pixels themselves are released. */
+  function prefetchFrameTiles(snapshot, time, tiles, signal) {
+    const size = profile(snapshot.product).tileSize;
+    return Promise.all(
+      tiles.map(async ({ z, x, y }) =>
+        closeWeatherPixels(
+          await frameSource.getTile({
+            product: snapshot.product,
+            time,
+            z,
+            x,
+            y,
+            size,
+            signal,
+          }),
+        ),
+      ),
+    );
   }
 
   function creditText(snapshot) {
@@ -263,8 +288,14 @@ function createGlobeRendering({
         )
           return false;
         const global = snapshot.product === 'clouds';
-        const urls = global ? [] : prefetchTiles(snapshot, time);
-        const key = global ? `${time}|${infrared}` : urls.join('|');
+        const tiles = global ? [] : prefetchTiles(snapshot);
+        const supplied = !global && Boolean(frameSource?.getTile);
+        const urls = global || supplied ? [] : tileUrls(snapshot, time, tiles);
+        const key = global
+          ? `${time}|${infrared}`
+          : supplied
+            ? `${snapshot.product}|${time}|${tiles.map(({ z, x, y }) => `${z}/${x}/${y}`).join('|')}`
+            : urls.join('|');
         if (prefetchJob?.key === key || prefetchedKey === key) return false;
         cancelPrefetch();
         job = { key, controller: new AbortController() };
@@ -272,6 +303,8 @@ function createGlobeRendering({
         const { signal } = job.controller;
         job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
         if (global) await mosaic(time, infrared, signal);
+        else if (supplied)
+          await prefetchFrameTiles(snapshot, time, tiles, signal);
         else
           await Promise.all(
             urls.map(async (url) => {
@@ -452,6 +485,21 @@ function createGlobeRendering({
               maxLevel: nextProfile.maximumLevel,
               retryStatuses: RETRY_STATUSES,
               admit,
+              // A host's frame source supplies the tiles in place of the
+              // route, at most six at once.
+              ...(frameSource?.getTile
+                ? {
+                    fetchTile: createFrameTileFetch({
+                      frameSource,
+                      product: snapshot.product,
+                      time,
+                      createCanvas,
+                      tileSize,
+                      signal: frame.controller.signal,
+                    }),
+                    maxConcurrentRequests: 6,
+                  }
+                : {}),
               ...(snapshot.product === 'clouds-regional'
                 ? {
                     // The transfer runs on the upright tile the renderer
@@ -608,6 +656,7 @@ export function createWeatherRendering({
   fetchImpl = (...args) => globalThis.fetch(...args),
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
+  frameSource = null,
 }) {
   const shared = {
     viewer,
@@ -618,6 +667,7 @@ export function createWeatherRendering({
     fetchImpl,
     decodeImage,
     createCanvas,
+    frameSource,
   };
   const globe = createGlobeRendering({
     ...shared,

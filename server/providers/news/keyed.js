@@ -642,9 +642,16 @@ export function createKeyedNews({
       await firstAnswer(inFlight.get('gdelt'));
     if (!current()) return { failed: true };
     const dayAgo = new Date(now() - DAY_MS).toISOString();
+    // Exports are read in parallel, so reports of one time arrive in any
+    // order: the most mentioned comes first, then by id.
     const reports = [...gdelt.reports.values()]
       .filter((r) => r.publishedAt >= dayAgo)
-      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+      .sort(
+        (a, b) =>
+          b.publishedAt.localeCompare(a.publishedAt) ||
+          b.mentions - a.mentions ||
+          a.id.localeCompare(b.id),
+      )
       .slice(0, MAX_GDELT_REPORTS);
     if (reports.length !== gdelt.reports.size) {
       const kept = new Set(reports);

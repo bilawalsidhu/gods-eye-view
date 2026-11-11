@@ -171,11 +171,15 @@ test('regional news and local conditions render what the region returned', async
   assert.equal(text('#cockpit-local-coordinates'), 'POSITION UNAVAILABLE');
 });
 
+// One time for every story: newest-first order then keeps the order a test
+// lists them in. A clock read per story could tick between two of them and
+// swap them.
+const STORY_PUBLISHED_AT = new Date().toISOString();
 const story = (id, url = `https://example.com/${id}`) => ({
   url,
   title: `Story ${id}`,
   domain: 'example.com',
-  publishedAt: new Date().toISOString(),
+  publishedAt: STORY_PUBLISHED_AT,
 });
 
 test('a refreshed news list keeps a focused story on its own link', async (t) => {

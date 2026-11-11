@@ -256,9 +256,11 @@ export function createApplicationTools({
       shell: styleManager,
       viewer,
       dataManager,
-      run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      run: (name, args, options = {}) =>
+        voiceCommands.runner(name, args, { ...options, signal }),
       signal,
       keepRendering: scene.keepPanelRendering,
+      terrain: operations.requests.terrain,
     }),
   );
   // An application's own tool takes the pointer as Draw does, and its own
