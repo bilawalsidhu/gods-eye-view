@@ -1,7 +1,10 @@
-import { weatherTileUrl } from './source.js';
+import { weatherTileUrl, closeWeatherPixels } from './source.js';
 import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
-import { createRasterTileProvider } from './rasterTiles.js';
+import {
+  createRasterTileProvider,
+  createFrameTileProvider,
+} from './rasterTiles.js';
 import { createWeatherShell } from './shellRendering.js';
 import { weatherDisplay, escapeCreditText } from './display.js';
 import { msg } from '../../i18n/index.js';
@@ -30,6 +33,7 @@ function createGlobeRendering({
   fetchImpl,
   decodeImage,
   createCanvas,
+  frameSource,
 }) {
   let current = null;
   let incoming = null;
@@ -72,6 +76,7 @@ function createGlobeRendering({
       decodeImage,
       now,
       onFetched,
+      frameSource,
     });
     // An aborted decode may still finish; never repopulate a cleared instance.
     signal.throwIfAborted();
@@ -82,7 +87,8 @@ function createGlobeRendering({
     return { ...result, cached: false };
   }
 
-  function prefetchTiles(snapshot, time) {
+  /** Level 0–1 tiles of the visible product bounds, at most eight. */
+  function prefetchTiles(snapshot) {
     const { west, south, east, north } = snapshot.bounds;
     const bounds = cesium.Rectangle.fromDegrees(west, south, east, north);
     const view = viewer.camera?.computeViewRectangle?.(
@@ -93,10 +99,7 @@ function createGlobeRendering({
       : bounds;
     if (!coverage) return [];
     const scheme = new cesium.GeographicTilingScheme();
-    const template = weatherTileUrl(snapshot.product, time, {
-      size: profile(snapshot.product).tileSize,
-    });
-    const urls = [];
+    const tiles = [];
     for (let z = 0; z <= 1; z++) {
       for (let y = 0; y < scheme.getNumberOfYTilesAtLevel(z); y++) {
         for (let x = 0; x < scheme.getNumberOfXTilesAtLevel(z); x++) {
@@ -107,14 +110,39 @@ function createGlobeRendering({
             )
           )
             continue;
-          urls.push(
-            template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
-          );
-          if (urls.length === MAX_PREFETCH_TILES) return urls;
+          tiles.push({ z, x, y });
+          if (tiles.length === MAX_PREFETCH_TILES) return tiles;
         }
       }
     }
-    return urls;
+    return tiles;
+  }
+  function tileUrls(snapshot, time, tiles) {
+    const template = weatherTileUrl(snapshot.product, time, {
+      size: profile(snapshot.product).tileSize,
+    });
+    return tiles.map(({ z, x, y }) =>
+      template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
+    );
+  }
+  /** Warm tiles through the frame source; the pixels themselves are released. */
+  function prefetchFrameTiles(snapshot, time, tiles, signal) {
+    const size = profile(snapshot.product).tileSize;
+    return Promise.all(
+      tiles.map(async ({ z, x, y }) =>
+        closeWeatherPixels(
+          await frameSource.getTile({
+            product: snapshot.product,
+            time,
+            z,
+            x,
+            y,
+            size,
+            signal,
+          }),
+        ),
+      ),
+    );
   }
 
   function creditText(snapshot) {
@@ -225,8 +253,14 @@ function createGlobeRendering({
         )
           return false;
         const global = snapshot.product === 'clouds';
-        const urls = global ? [] : prefetchTiles(snapshot, time);
-        const key = global ? `${time}|${infrared}` : urls.join('|');
+        const tiles = global ? [] : prefetchTiles(snapshot);
+        const supplied = !global && Boolean(frameSource?.getTile);
+        const urls = global || supplied ? [] : tileUrls(snapshot, time, tiles);
+        const key = global
+          ? `${time}|${infrared}`
+          : supplied
+            ? `${snapshot.product}|${time}|${tiles.map(({ z, x, y }) => `${z}/${x}/${y}`).join('|')}`
+            : urls.join('|');
         if (prefetchJob?.key === key || prefetchedKey === key) return false;
         cancelPrefetch();
         job = { key, controller: new AbortController() };
@@ -234,6 +268,8 @@ function createGlobeRendering({
         const { signal } = job.controller;
         job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
         if (global) await mosaic(time, infrared, signal);
+        else if (supplied)
+          await prefetchFrameTiles(snapshot, time, tiles, signal);
         else
           await Promise.all(
             urls.map(async (url) => {
@@ -396,18 +432,32 @@ function createGlobeRendering({
               credit,
               createCanvas,
             })
-          : new cesium.UrlTemplateImageryProvider({
-              url: weatherTileUrl(snapshot.product, time, {
-                size: nextProfile.tileSize,
-              }),
-              tilingScheme,
-              rectangle,
-              tileWidth: nextProfile.tileSize,
-              tileHeight: nextProfile.tileSize,
-              maximumLevel: nextProfile.maximumLevel,
-              enablePickFeatures: false,
-              credit,
-            });
+          : frameSource?.getTile
+            ? createFrameTileProvider({
+                cesium,
+                frameSource,
+                product: snapshot.product,
+                time,
+                tilingScheme,
+                rectangle,
+                maximumLevel: nextProfile.maximumLevel,
+                tileSize: nextProfile.tileSize,
+                credit,
+                createCanvas,
+                signal: frame.controller.signal,
+              })
+            : new cesium.UrlTemplateImageryProvider({
+                url: weatherTileUrl(snapshot.product, time, {
+                  size: nextProfile.tileSize,
+                }),
+                tilingScheme,
+                rectangle,
+                tileWidth: nextProfile.tileSize,
+                tileHeight: nextProfile.tileSize,
+                maximumLevel: nextProfile.maximumLevel,
+                enablePickFeatures: false,
+                credit,
+              });
         // Cesium reads a provider's credit every frame; a refreshed manifest
         // can replace it without restaging the imagery.
         Object.defineProperty(provider, 'credit', {
@@ -597,6 +647,7 @@ export function createWeatherRendering({
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
   createShell = createWeatherShell,
+  frameSource = null,
 }) {
   const shared = {
     viewer,
@@ -608,6 +659,7 @@ export function createWeatherRendering({
     fetchImpl,
     decodeImage,
     createCanvas,
+    frameSource,
   };
   const globe = createGlobeRendering(shared);
   let shell = null;
