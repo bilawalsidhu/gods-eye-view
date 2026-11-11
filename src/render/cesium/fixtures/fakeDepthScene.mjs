@@ -1,7 +1,7 @@
 /**
- * A stand-in scene and WebGL context for tests of the occlusion probe: just
- * the members `sceneOcclusionProbe.js` uses, with depth images the test
- * controls.
+ * A stand-in scene and WebGL context for tests of the occlusion probe
+ * (`render/occlusion/depthProbe.js`): just the members it and
+ * `sceneOcclusionProbe.js` use, with depth images the test controls.
  *
  * The fake context cannot run GLSL. When the probe draws a point inside a
  * query, the fake decides whether the point draws by applying the same rule
@@ -27,6 +27,18 @@ export function packDepth(depth) {
     rest -= digit;
   }
   return bytes;
+}
+
+/**
+ * A depth texture's image (the `'depth'` encoding) filled from a function of
+ * the texel, as `depthImage`.
+ */
+export function rawDepthImage(width, height, depthAt) {
+  const depth = new Float32Array(width * height);
+  for (let row = 0; row < height; row++)
+    for (let column = 0; column < width; column++)
+      depth[row * width + column] = depthAt(column, row);
+  return { width, height, depth };
 }
 
 /** Inverse of `depthToViewDistance`. */
@@ -272,8 +284,11 @@ export function createFakeGl({ webgl2 = true } = {}) {
           const image = state.units[uniforms[`u_depth${i}`]].image;
           const column = Math.min(image.width - 1, Math.floor(u * image.width));
           const row = Math.min(image.height - 1, Math.floor(v * image.height));
+          const texel = row * image.width + column;
           const distance = depthToViewDistance(
-            unpackDepth(image.data, (row * image.width + column) * 4),
+            uniforms.u_packed === 0
+              ? image.depth[texel]
+              : unpackDepth(image.data, texel * 4),
             uniforms.u_near[i],
             uniforms.u_far[i],
             uniforms.u_logDepth === 1,

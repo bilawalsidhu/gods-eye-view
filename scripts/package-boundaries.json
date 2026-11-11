@@ -63,6 +63,7 @@
       "src/geo/frustum.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -1107,6 +1108,7 @@
       "src/geoDistance.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -1477,6 +1479,7 @@
       "src/maps/engine.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
@@ -1661,6 +1664,7 @@
       "src/render/input/router.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
@@ -1807,6 +1811,7 @@
       "src/data/planespottersPhoto.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -1930,6 +1935,7 @@
       "src/data/satelliteClassMask.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -2066,6 +2072,7 @@
       "src/geoDistance.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -2147,6 +2154,7 @@
       "src/render/cesium/viewers.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -2287,6 +2295,7 @@
       "src/render/color.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -2388,6 +2397,7 @@
       "src/data/retryableLoad.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "satellite.js"]
@@ -2485,6 +2495,7 @@
       "src/time/worldClock.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -2590,6 +2601,7 @@
       "src/render/input/router.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
@@ -2780,6 +2792,7 @@
       "src/render/cesium/viewers.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
@@ -2956,6 +2969,7 @@
       "src/render/input/router.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["hls.js", "cesium"]
@@ -3077,6 +3091,7 @@
       "src/time/worldClock.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
@@ -3157,6 +3172,7 @@
       "src/queries/heights.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
@@ -3263,6 +3279,7 @@
       "src/data/satelliteClassMask.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -3333,6 +3350,7 @@
       "src/render/input/router.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -3460,6 +3478,7 @@
       "src/render/cesium/viewers.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -3747,6 +3766,7 @@
       "src/data/detectionPresentation.js",
       "src/data/detectionRenderDemand.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/earthquakes.js",
       "src/data/fireAnchors.js",
       "src/data/firmsAdapt.js",
@@ -5345,6 +5365,7 @@
       "src/data/detectionPresentation.js",
       "src/data/detectionOcclusion.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/modelEligibility.js",
       "src/app/layers/recentImagery.js",
       "src/layers/recentImagery/index.js",
@@ -5667,6 +5688,7 @@
       "src/render/cesium/viewers.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": [
@@ -5768,6 +5790,7 @@
       "src/data/entityRecords.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -6458,6 +6481,7 @@
       "src/render/cesium/viewers.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
@@ -6570,6 +6594,7 @@
       "src/render/cesium/viewers.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "pbf"]
@@ -6816,6 +6841,7 @@
       "src/queries/heights.js",
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
+      "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
@@ -7165,12 +7191,16 @@
     "exports": [
       "./render/contract",
       "./render/stub",
+      "./render/occlusion",
       "./render/camera/events",
       "./render/conformance"
     ],
     "modules": [
       "src/render/contract/index.js",
       "src/render/stub/index.js",
+      "src/render/occlusion/index.js",
+      "src/render/occlusion/depthProbe.js",
+      "src/data/detectionOcclusion.js",
       "src/render/color.js",
       "src/geo/polyline.js",
       "src/render/motion/iconMotion.js",

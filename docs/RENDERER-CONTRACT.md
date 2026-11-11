@@ -116,7 +116,11 @@ optional, so a renderer written before it still conforms:
   (`zoomOutGuard.js`). The application turns it on where a renderer has it.
 - `query.occlusionTest()` (capability `occlusionTest`) tests many points
   against the depth of the frames drawn without waiting for the GPU; the
-  detection overlay leaves out the street vehicles it finds hidden.
+  detection overlay leaves out the street vehicles it finds hidden. A WebGL
+  renderer that hands over its frame's depth gets one from
+  `@gods-eye-view/core/render/occlusion` (`createDepthOcclusionTest`, given a
+  `DepthSource`: depth packed into RGBA8 or a depth texture, standard or
+  logarithmic, with the view it was drawn from).
 - `RendererPlugin.applicationHooks(renderer)` hands the application what
   only some renderers have (`ApplicationHooks`); see
   [The application and its renderer](#the-application-and-its-renderer).
@@ -243,8 +247,9 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   stays framed (`camera.controls.keepEarthFramed`, which the scene turns
   on; Cesium's is `src/render/cesium/zoomOutGuard.js`); the detection
   overlay leaves out street vehicles something stands in front of through
-  `query.occlusionTest()` under the `occlusionTest` capability (Cesium's is
-  `src/render/cesium/sceneOcclusionProbe.js`; without it every such
+  `query.occlusionTest()` under the `occlusionTest` capability (the GPU
+  probe is `src/render/occlusion/depthProbe.js`, which Cesium's
+  `src/render/cesium/sceneOcclusionProbe.js` feeds; without it every such
   vehicle's bracket shows); and an inline panel whose host stops animation
   frames keeps drawing through `resize` and `frame.renderNow()`
   (`src/app/panelRendering.js`), stopping at a frame that throws.

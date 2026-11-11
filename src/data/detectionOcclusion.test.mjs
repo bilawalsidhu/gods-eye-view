@@ -107,9 +107,19 @@ test('the ends of the depth range, and a bad range, mean nothing was drawn', () 
     assert.ok(Number.isNaN(depthToViewDistance(0, 1, 100, log)));
     assert.ok(Number.isNaN(depthToViewDistance(1, 1, 100, log)));
     assert.ok(Number.isNaN(depthToViewDistance(Number.NaN, 1, 100, log)));
-    assert.ok(Number.isNaN(depthToViewDistance(0.5, 0, 100, log)));
+    assert.ok(Number.isNaN(depthToViewDistance(0.5, -1, 100, log)));
     assert.ok(Number.isNaN(depthToViewDistance(0.5, 100, 100, log)));
   }
+  // No near plane: standard depth has nothing to decode against.
+  assert.ok(Number.isNaN(depthToViewDistance(0.5, 0, 100, false)));
+});
+
+test('log depth with no near plane decodes as it is written with none', () => {
+  // Written as log2(1 + d) / log2(far + 1).
+  const depth = Math.log2(1 + 400) / Math.log2(100_000 + 1);
+  assert.ok(
+    Math.abs(depthToViewDistance(depth, 0, 100_000, true) - 400) < 1e-6,
+  );
 });
 
 const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
