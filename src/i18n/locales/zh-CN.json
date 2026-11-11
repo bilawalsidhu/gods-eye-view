@@ -2940,5 +2940,20 @@
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "全球可用监测站。未监测区域没有实测覆盖。",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV 将所选污染物与欧洲环境署的小时分级标准进行对照。这不是监测站的综合空气质量指数，也不是当地官方指数。",
   "Unknown air quality provider": "未知的空气质量数据提供方",
-  "Next automatic update at {time}. Cached observations remain visible.": "下次自动更新于 {time}。缓存的观测数据仍然可见。"
+  "Next automatic update at {time}. Cached observations remain visible.": "下次自动更新于 {time}。缓存的观测数据仍然可见。",
+  "air quality risk|Low": "低",
+  "air quality risk|Moderate": "中等",
+  "air quality risk|High": "高",
+  "air quality risk|Very High": "极高",
+  "EEA hourly quality|Good": "良好",
+  "EEA hourly quality|Fair": "尚可",
+  "EEA hourly quality|Moderate": "中等",
+  "EEA hourly quality|Poor": "差",
+  "EEA hourly quality|Very poor": "很差",
+  "EEA hourly quality|Extremely poor": "极差",
+  "SAAQIS category|Good": "良好",
+  "SAAQIS category|Moderate": "中等",
+  "SAAQIS category|Unhealthy": "不健康",
+  "SAAQIS category|Very Unhealthy": "非常不健康",
+  "SAAQIS category|Hazardous": "危险"
 }

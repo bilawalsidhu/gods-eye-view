@@ -13,6 +13,7 @@ export const ECCC_DEFINITION = Object.freeze({
   sourceLabel: 'ECCC MSC GeoMet',
   parameters: [],
   legend: AIR_QUALITY_BANDS,
+  bandContext: 'air quality risk',
   observation: false,
   refreshMs: 1_200_000,
 });
@@ -117,6 +118,7 @@ export function createDefaultAirQualityProviders({
       parameters: SA_POLLUTANTS,
       averagingLabel: msg('Hourly average'),
       indexLabel: msg('SAAQIS index'),
+      bandContext: 'SAAQIS category',
       coverageNote: msg(
         'Station observations across all nine provinces. Municipalities without monitors have no measured coverage.',
       ),
@@ -150,6 +152,7 @@ export function createDefaultAirQualityProviders({
       requiresKeyId: 'openaq',
       averagingLabel: msg('Hourly average'),
       getLegend: hourlyLegend,
+      bandContext: 'EEA hourly quality',
       indexLabel: msg('Index unavailable'),
       coverageNote: msg(
         'Available monitoring stations worldwide. Unmonitored areas have no measured coverage.',

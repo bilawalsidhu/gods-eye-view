@@ -8,4 +8,6 @@
   AQHI view. Reuse OpenAQ catalog regions and station observations across
   navigation, cancel abandoned upstream work, reserve capacity for new regions,
   and recover automatically from provider cooldowns with cached markers and a
-  visible retry time (khanmjk, #1291).
+  visible retry time. Translate AQHI risk, EEA quality and SAAQIS categories
+  in separate contexts so Russian labels remain consistent within each scale
+  (khanmjk, #1291).

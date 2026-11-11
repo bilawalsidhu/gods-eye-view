@@ -337,7 +337,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           createAirQualityOverlayEntry({
             id: reading.id,
             position,
-            title: `${reading.name} ${reading.label}${reading.assessment?.label || reading.rating ? ` · ${t(reading.assessment?.label || reading.rating.label)}` : ''}`,
+            title: `${reading.name} ${reading.label}${reading.assessment?.label || reading.rating ? ` · ${bandLabel(reading.assessment?.label || reading.rating.label, definition().bandContext)}` : ''}`,
             accent: reading.color,
             value: observation() ? 0 : reading.value,
           }),
@@ -455,7 +455,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                   'Highest {pollutant} category in view: {category} · {station}',
                   {
                     pollutant: parameter,
-                    category: t(category),
+                    category: bandLabel(category, provider.bandContext),
                     station: worst.name,
                   },
                 ),
@@ -509,7 +509,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                 : coverage?.stale
                   ? t('Air quality provider unavailable')
                   : category
-                    ? `${parameter} · ${t(category)}`
+                    ? `${parameter} · ${bandLabel(category, provider.bandContext)}`
                     : coverage?.partial
                       ? t('Partial coverage · discovery continues')
                       : _count === 0
@@ -654,7 +654,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           : (provider.legend ?? [])
         ).map((band) => ({
           color: band.color,
-          label: `${t(band.label)}${band.range ? ` ${band.range}` : ''}`,
+          label: `${bandLabel(band.label, provider.bandContext)}${band.range ? ` ${band.range}` : ''}`,
         })),
         legendCategorical: true,
         list: {
@@ -668,9 +668,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             ...(isObservation
               ? {
                   badge: reading.rating
-                    ? `${t(reading.rating.label)} · ${reading.rating.score}/10`
+                    ? `${bandLabel(reading.rating.label, provider.bandContext)} · ${reading.rating.score}/10`
                     : reading.assessment?.label
-                      ? t(reading.assessment.label)
+                      ? bandLabel(
+                          reading.assessment.label,
+                          provider.bandContext,
+                        )
                       : reading.assessment
                         ? t('Not rated')
                         : t('Index unavailable'),
@@ -732,3 +735,48 @@ msg('Moderate');
 msg('Unhealthy');
 msg('Very Unhealthy');
 msg('Hazardous');
+
+/** Translate each scale in its own grammatical context, only when rendered. */
+function bandLabel(label, context) {
+  if (context === 'air quality risk') {
+    switch (label) {
+      case 'Low':
+        return t('Low', { context: 'air quality risk' });
+      case 'Moderate':
+        return t('Moderate', { context: 'air quality risk' });
+      case 'High':
+        return t('High', { context: 'air quality risk' });
+      case 'Very High':
+        return t('Very High', { context: 'air quality risk' });
+    }
+  } else if (context === 'EEA hourly quality') {
+    switch (label) {
+      case 'Good':
+        return t('Good', { context: 'EEA hourly quality' });
+      case 'Fair':
+        return t('Fair', { context: 'EEA hourly quality' });
+      case 'Moderate':
+        return t('Moderate', { context: 'EEA hourly quality' });
+      case 'Poor':
+        return t('Poor', { context: 'EEA hourly quality' });
+      case 'Very poor':
+        return t('Very poor', { context: 'EEA hourly quality' });
+      case 'Extremely poor':
+        return t('Extremely poor', { context: 'EEA hourly quality' });
+    }
+  } else if (context === 'SAAQIS category') {
+    switch (label) {
+      case 'Good':
+        return t('Good', { context: 'SAAQIS category' });
+      case 'Moderate':
+        return t('Moderate', { context: 'SAAQIS category' });
+      case 'Unhealthy':
+        return t('Unhealthy', { context: 'SAAQIS category' });
+      case 'Very Unhealthy':
+        return t('Very Unhealthy', { context: 'SAAQIS category' });
+      case 'Hazardous':
+        return t('Hazardous', { context: 'SAAQIS category' });
+    }
+  }
+  return t(label);
+}

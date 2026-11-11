@@ -2940,5 +2940,20 @@
   "Worldwide · available OpenAQ stations": "全球 · 可用的 OpenAQ 監測站",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "全球可用監測站。未監測區域沒有實測覆蓋。",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV 將所選污染物與歐洲環境署的小時分級標準進行對照。這不是監測站的綜合空氣質量指數，也不是當地官方指數。",
-  "Unknown air quality provider": "未知的空氣質量數據提供方"
+  "Unknown air quality provider": "未知的空氣質量數據提供方",
+  "air quality risk|Low": "低",
+  "air quality risk|Moderate": "中等",
+  "air quality risk|High": "高",
+  "air quality risk|Very High": "極高",
+  "EEA hourly quality|Good": "良好",
+  "EEA hourly quality|Fair": "尚可",
+  "EEA hourly quality|Moderate": "中等",
+  "EEA hourly quality|Poor": "差",
+  "EEA hourly quality|Very poor": "很差",
+  "EEA hourly quality|Extremely poor": "極差",
+  "SAAQIS category|Good": "良好",
+  "SAAQIS category|Moderate": "中等",
+  "SAAQIS category|Unhealthy": "不健康",
+  "SAAQIS category|Very Unhealthy": "非常不健康",
+  "SAAQIS category|Hazardous": "危險"
 }

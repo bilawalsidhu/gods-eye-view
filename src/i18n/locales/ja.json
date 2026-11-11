@@ -2940,5 +2940,20 @@
   "Worldwide · available OpenAQ stations": "世界 · 利用可能なOpenAQ観測所",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "世界各地の利用可能な観測所。未観測地域には実測データがありません。",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEVは選択した汚染物質をEEAの時間別区分と比較します。これは観測所全体のAQIでも、地域の公式指数でもありません。",
-  "Unknown air quality provider": "不明な大気質データ提供元"
+  "Unknown air quality provider": "不明な大気質データ提供元",
+  "air quality risk|Low": "低",
+  "air quality risk|Moderate": "中",
+  "air quality risk|High": "高",
+  "air quality risk|Very High": "非常に高い",
+  "EEA hourly quality|Good": "良好",
+  "EEA hourly quality|Fair": "まずまず",
+  "EEA hourly quality|Moderate": "中",
+  "EEA hourly quality|Poor": "不良",
+  "EEA hourly quality|Very poor": "非常に不良",
+  "EEA hourly quality|Extremely poor": "極めて不良",
+  "SAAQIS category|Good": "良好",
+  "SAAQIS category|Moderate": "中",
+  "SAAQIS category|Unhealthy": "健康に悪影響",
+  "SAAQIS category|Very Unhealthy": "健康に非常に悪影響",
+  "SAAQIS category|Hazardous": "危険"
 }

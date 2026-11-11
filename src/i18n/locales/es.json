@@ -3080,5 +3080,20 @@
   "Calculated comparison": "Comparación calculada",
   "Older observation": "Observación anterior",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV compara el contaminante seleccionado con las categorías horarias de la AEMA. No es un ICA global de la estación ni un índice oficial local.",
-  "Next automatic update at {time}. Cached observations remain visible.": "Próxima actualización automática a las {time}. Las observaciones en caché siguen visibles."
+  "Next automatic update at {time}. Cached observations remain visible.": "Próxima actualización automática a las {time}. Las observaciones en caché siguen visibles.",
+  "air quality risk|Low": "Baja",
+  "air quality risk|Moderate": "Moderada",
+  "air quality risk|High": "Alta",
+  "air quality risk|Very High": "Muy alta",
+  "EEA hourly quality|Good": "Buena",
+  "EEA hourly quality|Fair": "Aceptable",
+  "EEA hourly quality|Moderate": "Moderada",
+  "EEA hourly quality|Poor": "Mala",
+  "EEA hourly quality|Very poor": "Muy mala",
+  "EEA hourly quality|Extremely poor": "Extremadamente mala",
+  "SAAQIS category|Good": "Buena",
+  "SAAQIS category|Moderate": "Moderada",
+  "SAAQIS category|Unhealthy": "Insalubre",
+  "SAAQIS category|Very Unhealthy": "Muy insalubre",
+  "SAAQIS category|Hazardous": "Peligrosa"
 }

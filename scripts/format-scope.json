@@ -381,6 +381,7 @@
   "src/layers/airQuality/index.js",
   "src/layers/airQuality/model.js",
   "src/layers/airQuality/model.test.mjs",
+  "src/layers/airQuality/airQualityLocale.test.mjs",
   "src/layers/airQuality/ownership.test.mjs",
   "src/layers/airQuality/source.js",
   "src/layers/earthquakes/index.js",

@@ -3080,5 +3080,20 @@
   "Worldwide · available OpenAQ stations": "Mundo · estações OpenAQ disponíveis",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "Estações de monitoramento disponíveis no mundo. Áreas não monitoradas não têm cobertura medida.",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "O GEV compara o poluente selecionado com as faixas horárias da AEA. Este não é um AQI geral da estação nem um índice oficial local.",
-  "Unknown air quality provider": "Provedor de qualidade do ar desconhecido"
+  "Unknown air quality provider": "Provedor de qualidade do ar desconhecido",
+  "air quality risk|Low": "Risco baixo",
+  "air quality risk|Moderate": "Risco moderado",
+  "air quality risk|High": "Risco alto",
+  "air quality risk|Very High": "Risco muito alto",
+  "EEA hourly quality|Good": "Boa",
+  "EEA hourly quality|Fair": "Razoável",
+  "EEA hourly quality|Moderate": "Risco moderado",
+  "EEA hourly quality|Poor": "Ruim",
+  "EEA hourly quality|Very poor": "Muito ruim",
+  "EEA hourly quality|Extremely poor": "Extremamente ruim",
+  "SAAQIS category|Good": "Boa",
+  "SAAQIS category|Moderate": "Risco moderado",
+  "SAAQIS category|Unhealthy": "Insalubre",
+  "SAAQIS category|Very Unhealthy": "Muito insalubre",
+  "SAAQIS category|Hazardous": "Perigosa"
 }

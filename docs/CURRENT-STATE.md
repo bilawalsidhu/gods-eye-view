@@ -6489,6 +6489,11 @@ the method, observation age and provenance. Hourly acquisition replaces the late
 request within the existing per-view request budget; caches are pollutant-scoped.
 The summary excludes stations beyond the globe's horizon, and failed/stale
 refreshes suppress activity guidance instead of reassuring from cached readings.
+Provider definitions carry a `bandContext` for scale-specific translations: AQHI
+health risk, EEA hourly quality and SAAQIS categories are translated independently
+across legends, summaries, station badges and map labels. Source category values
+remain English data; Russian risk, quality and SAAQIS wording retain their own
+grammatical forms.
 
 ### Shared native dropdowns and numeric fields
 

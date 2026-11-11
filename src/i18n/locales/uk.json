@@ -3150,5 +3150,20 @@
   "Worldwide · available OpenAQ stations": "Увесь світ · доступні станції OpenAQ",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "Доступні станції моніторингу у світі. Території без моніторингу не мають виміряного покриття.",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV порівнює вибраний забруднювач із погодинними діапазонами ЄЕА. Це не загальний AQI станції та не місцевий офіційний індекс.",
-  "Unknown air quality provider": "Невідомий постачальник даних про якість повітря"
+  "Unknown air quality provider": "Невідомий постачальник даних про якість повітря",
+  "air quality risk|Low": "Низький",
+  "air quality risk|Moderate": "Помірний",
+  "air quality risk|High": "Високий",
+  "air quality risk|Very High": "Дуже високий",
+  "EEA hourly quality|Good": "Добра",
+  "EEA hourly quality|Fair": "Задовільна",
+  "EEA hourly quality|Moderate": "Помірний",
+  "EEA hourly quality|Poor": "Погана",
+  "EEA hourly quality|Very poor": "Дуже погана",
+  "EEA hourly quality|Extremely poor": "Надзвичайно погана",
+  "SAAQIS category|Good": "Добра",
+  "SAAQIS category|Moderate": "Помірний",
+  "SAAQIS category|Unhealthy": "Шкідлива для здоров’я",
+  "SAAQIS category|Very Unhealthy": "Дуже шкідлива для здоров’я",
+  "SAAQIS category|Hazardous": "Небезпечна"
 }
