@@ -5,15 +5,18 @@ export const DEFAULT_AUSTIN_ROWS_URL =
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 /**
- * Catalog-wide safety ceiling on served cameras. Each pack already caps
- * itself (nearest-to-anchor first); this bound only matters when the packs
- * together exceed it, and it is then filled round-robin across packs (see
- * cap.js) so no region is silently dropped. The default per-pack caps
- * together can exceed it, so a default install may be thinned evenly here.
+ * Slots every pack shares round-robin before any reservation applies. A
+ * reserved pack (Québec, World) only takes capacity above this floor, so a
+ * cap at or below it thins every region evenly (see cap.js).
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 4000;
+export const CCTV_SHARED_SOURCE_SLOTS = 4000;
+/**
+ * Catalog-wide default: the 4,000 shared slots plus room reserved for the
+ * 1,120 Québec and 2,230 World image locations.
+ */
+export const DEFAULT_CCTV_MAX_SOURCES = 7350;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
-export const CCTV_MAX_SOURCES_CEILING = 5000;
+export const CCTV_MAX_SOURCES_CEILING = 8000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -197,6 +200,39 @@ export const DRIVEBC_ANCHORS = [
   { lat: 49.2827, lon: -123.1207 }, // Vancouver
   { lat: 48.4284, lon: -123.3656 }, // Victoria
 ];
+/** City of Ottawa traffic cameras: documented JSON list (keyless). */
+export const OTTAWA_CAMERAS_URL =
+  'https://traffic.ottawa.ca/map/service/camera';
+/**
+ * Keyless canonical frame URL for one camera number. The city's Traffic Camera
+ * Images API needs a certificate (OTTAWA_CAMERA_CERTIFICATE), which the frame
+ * proxy adds at request time so it never appears in a catalog response.
+ */
+export const OTTAWA_IMAGE_URL = (cameraNumber) =>
+  `https://traffic.ottawa.ca/opendata/camera?c=${encodeURIComponent(cameraNumber)}`;
+/** Pinned frame directory, for redirect containment in the media proxy. */
+export const OTTAWA_IMAGE_ORIGIN = 'https://traffic.ottawa.ca/opendata/';
+/** The API lets one certificate and user id fetch a camera once a minute. */
+export const OTTAWA_FRAME_REFRESH_MS = 60 * 1000;
+/** Alphanumeric user id this server sends with its certificate. */
+export const OTTAWA_API_USER_ID = 'gev';
+export const DEFAULT_OTTAWA_MAX_SOURCES = 250;
+/** Prioritization anchor: downtown Ottawa (Parliament Hill). */
+export const OTTAWA_ANCHORS = [{ lat: 45.4215, lon: -75.6972 }];
+/**
+ * Taiwan Highway Bureau MJPEG servers. Each camera is one root path segment,
+ * so the pin is the host root: a redirect must stay on the same server.
+ */
+export const TAIWAN_HIGHWAY_IMAGE_ORIGINS = Object.freeze(
+  [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `https://cctv-ss0${n}.thb.gov.tw/`),
+);
+/** Direct still-image directories from the World cams add-on's eligible packs. */
+export const TRIPCHECK_IMAGE_ORIGIN =
+  'https://www.tripcheck.com/roadcams/cams/';
+export const MLIT_RIVER_IMAGE_ORIGIN = 'https://cam.river.go.jp/cam/now/';
+export const DEFAULT_WORLD_CCTV_SOURCE_FILE =
+  'config/cctv_sources.world-image-cameras.json';
+export const WORLD_CCTV_SOURCE_COUNT = 2230;
 /** Tallinn intersection cameras: curated catalog + public stills on ristmikud.tallinn.ee. */
 export const DEFAULT_TALLINN_SOURCE_FILE = 'config/cctv_sources.tallinn.json';
 export const DEFAULT_TALLINN_MAX_SOURCES = 255;
@@ -307,6 +343,37 @@ export const DEFAULT_CATALONIA_MAX_SOURCES = 150;
 export const CATALONIA_ANCHORS = [
   { lat: 41.3874, lon: 2.1686 }, // Barcelona
   { lat: 41.5636, lon: 2.0111 }, // Terrassa
+];
+
+/**
+ * Icelandic Road and Coastal Administration (Vegagerðin, IRCA) road cameras:
+ * one keyless JSON list, one row per camera view (about 500 views at roughly
+ * 170 stations, verified 2026-11-06). Frames are stills on the IRCA host, each
+ * rewritten by the publisher every few minutes. Camera images are published
+ * under CC BY 4.0 (IRCA terms of use, "Open data" section).
+ */
+export const ICELAND_CAMERAS_URL =
+  'https://gagnaveita.vegagerdin.is/api/vefmyndavelar2014_1';
+/** The only directory Iceland camera frames may come from. */
+export const ICELAND_IMAGE_ORIGIN =
+  'https://www.vegagerdin.is/vgdata/vefmyndavelar/';
+/** Byte ceiling for the Iceland catalog read (~150 KB observed 2026-11-06). */
+export const ICELAND_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Ground-elevation prior in metres: the feed carries none, and the country
+ * runs from sea level to highland passes. The client's ground snap corrects
+ * this on 3D-tile stacks. */
+export const ICELAND_GROUND_ELEVATION_M = 60;
+/** The feed lists about 500 views; the default keeps half so the shared
+ * catalog cap still leaves room for denser regions. */
+export const DEFAULT_ICELAND_MAX_SOURCES = 250;
+/** Prioritization anchors: Reykjavík and the regional centres, so a cap keeps
+ * every region's nearest cameras instead of only the capital's. */
+export const ICELAND_ANCHORS = [
+  { lat: 64.1466, lon: -21.9426 }, // Reykjavík
+  { lat: 65.6885, lon: -18.1262 }, // Akureyri
+  { lat: 65.2639, lon: -14.3948 }, // Egilsstaðir
+  { lat: 66.0749, lon: -23.1351 }, // Ísafjörður
+  { lat: 63.9331, lon: -20.9971 }, // Selfoss
 ];
 
 /** Hong Kong Transport Department traffic snapshot cameras: keyless English
@@ -442,6 +509,70 @@ export const NYC_ANCHORS = [
   { lat: 40.8448, lon: -73.8648 }, // Bronx
   { lat: 40.5795, lon: -74.1502 }, // Staten Island
 ];
+
+/** Houston TranStar cameras: one keyless JSON list for the metro (~1,000
+ * cameras with a numeric id). Frames are stills synthesized from that id on
+ * the city's snapshot host — never taken from the payload. The catalog is
+ * served as `application/javascript`; asking for `application/json` gets HTTP
+ * 406, so the loader accepts any media type. */
+export const HOUSTON_CAMERAS_URL =
+  'https://traffic.houstontranstar.org/data/layers/cctvSnapshots_json.js';
+/** The only origin Houston camera frames may come from. The catalog's `url`
+ * is a `showWin(...)` viewer helper and is ignored; the registered path is
+ * always this origin plus `/snapshots/cctv/<id>.jpg`. */
+export const HOUSTON_IMAGE_ORIGIN = 'https://www.houstontranstar.org/';
+export const HOUSTON_IMAGE_URL = (id) =>
+  `${HOUSTON_IMAGE_ORIGIN}snapshots/cctv/${id}.jpg`;
+/** Numeric TranStar snapshot ids: 3–5 digits, no leading zero. Id `0` is a
+ * different (non-snapshot) camera class in the same list. */
+export const HOUSTON_CAMERA_ID_RE = /^[1-9]\d{2,4}$/;
+export const DEFAULT_HOUSTON_MAX_SOURCES = 250;
+export const HOUSTON_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Ground-elevation prior in metres. The TranStar payload carries none, and
+ * Houston sits a few metres above sea level. */
+export const HOUSTON_GROUND_ELEVATION_M = 15;
+/** Downtown Houston (Main @ Texas): the primary prioritization anchor. */
+export const HOUSTON_DOWNTOWN = { lat: 29.7604, lon: -95.3698 };
+export const HOUSTON_ANCHORS = [
+  { lat: 29.7604, lon: -95.3698 }, // Downtown
+  { lat: 29.739, lon: -95.461 }, // Uptown / Galleria
+  { lat: 29.71, lon: -95.398 }, // Texas Medical Center
+  { lat: 29.9902, lon: -95.3368 }, // IAH
+  { lat: 29.3013, lon: -94.7977 }, // Galveston
+];
+
+/** Autostrada del Brennero (A22, Brenner–Modena) webcams: the keyless Open
+ * Data Hub (NOI Techpark, South Tyrol) tourism API republishes Autobrennero's
+ * own camera list with coordinates, one request for the whole motorway
+ * (13 cameras). Frames are stills on the operator's host, refreshed about
+ * once a minute. */
+export const DEFAULT_A22_CCTV_URL =
+  'https://tourism.api.opendatahub.com/v1/WebcamInfo?source=a22&pagesize=200&removenullvalues=true';
+/** The only origin A22 camera frames may come from: `km<N>.jpg` per camera. */
+export const A22_IMAGE_ORIGIN = 'https://www.autobrennero.it/WebCamImg/';
+/** Hard ceiling on the catalog body. The whole motorway is ~45 KB. */
+export const A22_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Orthometric ground elevation (m) at each camera, keyed by its motorway
+ * kilometre, from the Copernicus GLO-90 DEM via Open-Meteo's elevation API.
+ * The feed's coordinates are 2D and the road climbs from the Po valley (~20 m)
+ * to the Brenner Pass (~1,370 m), so one flat prior would bury the Alpine
+ * cameras. A camera not listed here uses A22_DEFAULT_GROUND_ELEVATION_M. */
+export const A22_GROUND_ELEVATION_BY_KM = Object.freeze({
+  1: 1365,
+  68: 375,
+  77: 301,
+  100: 219,
+  129: 206,
+  138: 204,
+  159: 175,
+  205: 188,
+  228: 72,
+  240: 38,
+  272: 16,
+  285: 19,
+  313: 40,
+});
+export const A22_DEFAULT_GROUND_ELEVATION_M = 200;
 
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';

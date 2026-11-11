@@ -2,5 +2,11 @@
   "singleQuote": true,
   "tabWidth": 2,
   "semi": true,
-  "endOfLine": "lf"
+  "endOfLine": "lf",
+  "overrides": [
+    {
+      "files": "*.vue",
+      "options": { "htmlWhitespaceSensitivity": "strict" }
+    }
+  ]
 }

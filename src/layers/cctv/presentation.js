@@ -1,5 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { msg, t } from '../../i18n/index.js';
+import { isolate, msg, t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -97,6 +97,8 @@ export function createPresentation({
     const health = layerState._healthById.get(active.camera.id) || null;
     const calBadge = parts.calibration.deriveCalBadge(active.camera);
 
+    // Each part is isolated: in right-to-left text a code keeps its own value
+    // (FOV 44°) instead of trading it with its neighbour.
     return [
       t('{city} CCTV', {
         city: active.camera.city.toUpperCase(),
@@ -140,6 +142,7 @@ export function createPresentation({
         : null,
     ]
       .filter(Boolean)
+      .map(isolate)
       .join(' · ');
   }
 
@@ -157,9 +160,14 @@ export function createPresentation({
     const camera = record.camera;
     const health = layerState._healthById.get(camera.id) || null;
     const isActive = camera.id === resolvedActiveId;
-    const refreshMs = isActive
+    const defaultRefreshMs = isActive
       ? ACTIVE_FRAME_REFRESH_MS
       : IDLE_FRAME_REFRESH_MS;
+    const sourceRefreshMs = Number(camera.frameRefreshMs);
+    const refreshMs =
+      Number.isFinite(sourceRefreshMs) && sourceRefreshMs > 0
+        ? Math.max(defaultRefreshMs, sourceRefreshMs)
+        : defaultRefreshMs;
     return {
       id: camera.id,
       name: camera.name,
@@ -189,13 +197,18 @@ export function createPresentation({
       mountHeightM: camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      sourceUrl: camera.sourceUrl || '',
+      browserMediaUrl: camera.browserMediaUrl || '',
+      accuracyM: Number.isFinite(camera.accuracyM) ? camera.accuracyM : null,
+      positionSource: camera.positionSource || '',
       isVideo:
-        parts.model.isVideoFeedType(camera.feedType) &&
+        parts.model.isVideoFeedCamera(camera) &&
         record.projection?.mode !== 'image',
-      sourceKind:
-        health?.sourceKind ||
-        camera.sourceKind ||
-        (camera.feedConfigured ? 'configured' : 'seed'),
+      sourceKind: camera.sourceKind?.startsWith('quebec-')
+        ? camera.sourceKind
+        : health?.sourceKind ||
+          camera.sourceKind ||
+          (camera.feedConfigured ? 'configured' : 'seed'),
       sourceStatus: health?.status || 'unknown',
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
@@ -273,13 +286,53 @@ export function createPresentation({
         hoverId: layerState._hoverCardId,
       },
       activeCameraId: activeId,
+      activeCameraReselection: layerState._activeCameraReselection,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
-      cameras: layerState._records.map((record) =>
-        getPublicCameraState(record, activeId),
-      ),
+      cameraIndex: cameraIndex(),
       summary: buildSummaryText(),
     };
+    // The full per-camera state is built only when a subscriber reads it: a
+    // catalog of tens of thousands would otherwise be rebuilt on every
+    // progress tick for listeners that only want the active camera. It reads
+    // the records live at that moment, and spreading or serializing the
+    // payload builds it, so callers that want a count use `count`.
+    let cameras = null;
+    Object.defineProperty(payload, 'cameras', {
+      enumerable: true,
+      get() {
+        cameras ??= layerState._records.map((record) =>
+          getPublicCameraState(record, activeId),
+        );
+        return cameras;
+      },
+    });
     return payload;
+  }
+
+  /**
+   * `{ id, city, name }` for the active camera, then every camera the view
+   * pass shows: what the camera picker lists. A whole catalog would put tens
+   * of thousands of options in the DOM and slow every layout. The same array
+   * is returned until the view or the active camera changes, so a consumer
+   * can compare it by identity.
+   * @returns {{id: string, city: string, name: string}[]}
+   */
+
+  function cameraIndex() {
+    const view = layerState._viewRecords;
+    const active = parts.selection.getActiveRecord();
+    const cached = layerState._cameraIndexCache;
+    if (cached?.view === view && cached.active === active) return cached.list;
+    const records = active
+      ? [active, ...view.filter((record) => record !== active)]
+      : view;
+    const list = records.map(({ camera }) => ({
+      id: camera.id,
+      city: camera.city,
+      name: camera.name,
+    }));
+    layerState._cameraIndexCache = { view, active, list };
+    return list;
   }
 
   /** Dispatches the current UI state to all registered subscriber callbacks. */

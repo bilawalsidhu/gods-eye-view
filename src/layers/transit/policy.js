@@ -9,6 +9,7 @@ import {
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -407,7 +408,9 @@ export function buildTransitSelectionCopy(
     );
   if (Number.isFinite(record.bearing))
     reportedMotion.push(
-      t('reported hdg {heading}°', { heading: Math.round(record.bearing) }),
+      t('reported hdg {heading}°', {
+        heading: roundHeadingDegrees(record.bearing),
+      }),
     );
   // The operator's own claim, kept as a REPORT rather than as the live state.
   // It describes the moment of the report, which the display may not have

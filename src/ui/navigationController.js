@@ -12,7 +12,7 @@ export class NavigationController {
   constructor({
     viewer,
     tracking,
-    searchInput,
+    settleSearch = () => {},
     interruptCameraMotion,
     interruptGlobeRotation = () => {},
     isCockpitActive,
@@ -26,7 +26,7 @@ export class NavigationController {
     Object.assign(this, {
       viewer,
       tracking,
-      searchInput,
+      settleSearch,
       interruptCameraMotion,
       interruptGlobeRotation,
       isCockpitActive,
@@ -123,15 +123,7 @@ export class NavigationController {
   _settleLocationSearchUi(generation, { keepQuery = false } = {}) {
     if (this._activeLocationSearchGeneration !== generation) return;
     this._activeLocationSearchGeneration = null;
-    this.searchInput?.classList.remove('searching');
-    if (keepQuery) {
-      this.searchInput?.focus();
-      this.searchInput?.select?.();
-      return;
-    }
-    this.searchInput?.classList.remove('expanded');
-    if (this.searchInput) this.searchInput.value = '';
-    this.searchInput?.blur();
+    this.settleSearch({ keepQuery });
   }
 
   _releaseFollowCamera({

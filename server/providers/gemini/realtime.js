@@ -12,6 +12,7 @@ import {
   isGeminiRequestOriginAllowed,
   readGeminiTokenRequest,
 } from './request.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 
 const UPSTREAM_RESPONSE_BYTES = 32 * 1024;
 const MINT_FAILURE = 'Gemini voice could not connect. Try again.';
@@ -19,6 +20,8 @@ const MINT_FAILURE = 'Gemini voice could not connect. Try again.';
 export function createGeminiTokenHandler({
   annotationGuidance,
   tools,
+  // osm_query is offered only when an operator configured Overpass.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.GEMINI_API_KEY,
   resolveModel = () =>
@@ -60,7 +63,10 @@ export function createGeminiTokenHandler({
         return reply(403, 'Gemini voice requires a same-origin app request');
       apiKey = String(resolveApiKey() || '').trim();
       if (!apiKey)
-        return reply(503, 'Add a Gemini API key in Provider Settings');
+        return reply(503, {
+          error: 'Add a Gemini API key in Provider Settings',
+          code: 'API_KEY_MISSING',
+        });
       model = normalizeGeminiModel(resolveModel());
       if (!model)
         return reply(503, 'The Gemini Live model configuration is invalid');
@@ -104,6 +110,7 @@ export function createGeminiTokenHandler({
         annotationGuidance,
         inputMode,
         tools,
+        { overpass: overpassConfigured() },
       );
       const issuedAt = now();
       // REST uses bidiGenerateContentSetup. liveConnectConstraints is the SDK

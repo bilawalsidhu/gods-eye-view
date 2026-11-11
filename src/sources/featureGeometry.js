@@ -14,28 +14,48 @@ export function ringAreaM2(ring) {
   return Math.abs(area) / 2;
 }
 
-export function stitchLine(segments) {
-  const same = (a, b) => approximateDistanceM(a[1], a[0], b[1], b[0]) < 2;
+/**
+ * Join line pieces whose ends meet (closer than `toleranceM`, or at most it
+ * when `inclusive`) into as few chains as possible. Each chain grows greedily
+ * from the first unused piece.
+ */
+export function stitchLines(
+  segments,
+  { toleranceM = 2, inclusive = false, maxChains = Infinity } = {},
+) {
+  const same = (a, b) => {
+    const d = approximateDistanceM(a[1], a[0], b[1], b[0]);
+    return inclusive ? d <= toleranceM : d < toleranceM;
+  };
   const remaining = segments.map((s) => s.slice());
-  let line = remaining.shift();
-  let advanced = true;
-  while (advanced && remaining.length) {
-    advanced = false;
-    for (let i = 0; i < remaining.length; i++) {
-      const s = remaining[i];
-      if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
-      else if (same(line[line.length - 1], s[s.length - 1]))
-        line = line.concat(s.slice(0, -1).reverse());
-      else if (same(line[0], s[s.length - 1]))
-        line = s.slice(0, -1).concat(line);
-      else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
-      else continue;
-      remaining.splice(i, 1);
-      advanced = true;
-      break;
+  const chains = [];
+  while (remaining.length && chains.length < maxChains) {
+    let line = remaining.shift();
+    let advanced = true;
+    while (advanced && remaining.length) {
+      advanced = false;
+      for (let i = 0; i < remaining.length; i++) {
+        const s = remaining[i];
+        if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
+        else if (same(line[line.length - 1], s[s.length - 1]))
+          line = line.concat(s.slice(0, -1).reverse());
+        else if (same(line[0], s[s.length - 1]))
+          line = s.slice(0, -1).concat(line);
+        else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
+        else continue;
+        remaining.splice(i, 1);
+        advanced = true;
+        break;
+      }
     }
+    chains.push(line);
   }
-  return line;
+  return chains;
+}
+
+/** The chain grown from the first segment. */
+export function stitchLine(segments) {
+  return stitchLines(segments, { maxChains: 1 })[0];
 }
 
 export function bufferCorridor(line, halfWidthM) {
@@ -77,7 +97,8 @@ export function simplifyRing(ring, tolM) {
   return out.length >= 4 ? out : ring;
 }
 
-function douglasPeucker(points, tol) {
+/** Douglas-Peucker on [lon, lat] points with a tolerance in degrees. */
+export function douglasPeucker(points, tol) {
   const n = points.length;
   if (n < 3) return points.slice();
   // Iterative, index-based (no per-call array slicing / recursion), so a large
@@ -231,6 +252,37 @@ export function ringCentroid(ring) {
     sumLon += lon;
   }
   return { lat: sumLat / ring.length, lon: sumLon / ring.length };
+}
+
+/**
+ * The point on any of `lines` ([lon, lat] chains) nearest `lat, lon`, with
+ * its distance in metres, or null when no line has a segment.
+ */
+export function nearestPointOnLines(lines, lat, lon) {
+  const mLat = 111320;
+  const mLon = mLat * Math.cos((lat * Math.PI) / 180);
+  let best = null;
+  let bestD2 = Infinity;
+  for (const line of lines || []) {
+    for (let i = 0; i + 1 < line.length; i++) {
+      const ax = (line[i][0] - lon) * mLon;
+      const ay = (line[i][1] - lat) * mLat;
+      const dx = (line[i + 1][0] - line[i][0]) * mLon;
+      const dy = (line[i + 1][1] - line[i][1]) * mLat;
+      const len2 = dx * dx + dy * dy;
+      const t = len2
+        ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2))
+        : 0;
+      const x = ax + t * dx;
+      const y = ay + t * dy;
+      if (x * x + y * y < bestD2) {
+        bestD2 = x * x + y * y;
+        best = { lat: lat + y / mLat, lon: lon + x / mLon, distanceM: 0 };
+      }
+    }
+  }
+  if (best) best.distanceM = Math.sqrt(bestD2);
+  return best;
 }
 
 export function approximateAreaM2(coords) {

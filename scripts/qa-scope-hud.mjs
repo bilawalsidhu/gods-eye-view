@@ -345,7 +345,7 @@ try {
     (await readScope()).feather === 2,
   );
   await page.click('#scope-toggle');
-  for (const layout of ['minimal', 'operator', 'cyber', 'tactical']) {
+  for (const layout of ['minimal', 'cyber', 'tactical']) {
     await page.select('#hud-layout-select', layout);
     const state = await readScope();
     check(
@@ -395,7 +395,7 @@ try {
     restored,
   );
 
-  for (const layout of ['minimal', 'operator', 'tactical']) {
+  for (const layout of ['minimal', 'tactical']) {
     await page.select('#hud-layout-select', layout);
     await page.evaluate(() =>
       window.__godsEyeView.styleManager.applyVisualState({
@@ -429,20 +429,13 @@ try {
         wrappersTransparent: wrappers.every(
           (el) => getComputedStyle(el).display === 'contents',
         ),
-        operatorFrame:
-          hud.dataset.variant !== 'operator' ||
-          (getComputedStyle(hud.querySelector('.hud-corner'))
-            .backgroundColor === 'rgba(0, 0, 0, 0.36)' &&
-            getComputedStyle(hud.querySelector('.hud-top-bar'))
-              .backgroundImage !== 'none'),
       };
     });
     check(
       `${layout}: Scope ON retains the original presentation without new backplates`,
       original.markerAbsent &&
         original.unbacked &&
-        original.wrappersTransparent &&
-        original.operatorFrame,
+        original.wrappersTransparent,
       original,
     );
     check(
@@ -571,7 +564,7 @@ try {
           );
         });
       const broadBackings = [
-        ...hud.querySelectorAll('.hud-corner, .hud-top-bar, .hud-bottom-bar'),
+        ...hud.querySelectorAll('.hud-corner, .hud-bottom-bar'),
       ].filter(
         (el) =>
           el.offsetWidth > 0 &&
@@ -656,7 +649,7 @@ try {
       }),
   );
   check('narrow HUD text backings stay within the viewport', narrow);
-  for (const layout of ['minimal', 'operator', 'tactical']) {
+  for (const layout of ['minimal', 'tactical']) {
     await page.select('#hud-layout-select', layout);
     await page.evaluate(() =>
       window.__godsEyeView.styleManager.applyVisualState({

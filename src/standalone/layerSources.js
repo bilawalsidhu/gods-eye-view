@@ -20,15 +20,25 @@ import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
+import { createNewsSource } from '../layers/news/source.js';
+import { createShipwrecksSource } from '../layers/shipwrecks/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources(overrides = {}) {
+export function createStandaloneLayerSources(
+  overrides = {},
+  { createMapTiles = createOpenFreeMapSource } = {},
+) {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
     throw new TypeError('Source overrides must be an object');
-  const mapTiles = createOpenFreeMapSource();
+  const trafficTiles = createMapTiles({
+    selectDecoded: ({ roads }) => ({ roads }),
+  });
+  const installationTiles = createMapTiles({
+    selectDecoded: ({ military }) => ({ military }),
+  });
   const defaults = {
     ...createReferenceSources(),
     directions: createDirectionsSource(),
@@ -43,15 +53,20 @@ export function createStandaloneLayerSources(overrides = {}) {
     }),
     cctv: createCctvSource(),
     radio: createRadioSource(),
-    traffic: createTrafficSource({ mapTiles }),
+    traffic: createTrafficSource({ mapTiles: trafficTiles }),
     transit: createTransitSource(),
     bikeshare: createBikeshareSource(),
-    installations: createInstallationSource({ mapTiles }),
+    installations: createInstallationSource({ mapTiles: installationTiles }),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createAlprTileSource(),
     firms: createFirmsSource(),
     's2-ghostmaps': createGhostMapsSource(),
+    // Same-origin /api/news: the local server proxies GEV_NEWS_ORIGIN and,
+    // without it, answers "not configured", which the layer shows as
+    // unavailable without retrying.
+    news: createNewsSource(),
+    shipwrecks: createShipwrecksSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),

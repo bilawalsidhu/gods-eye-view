@@ -1,0 +1,98 @@
+.qci-panel {
+  position: fixed;
+  z-index: 2000;
+  top: 80px;
+  right: 24px;
+  width: min(360px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid #3eabbc;
+  border-radius: 8px;
+  background: #071117;
+  color: #e6f8fb;
+  box-shadow: 0 12px 36px #000a;
+  font: 12px/1.4 sans-serif;
+}
+.qci-panel[hidden],
+.qci-live[hidden],
+.qci-note[hidden],
+.qci-panel a[hidden],
+.qci-marker[hidden],
+.qci-marker-still[hidden] {
+  display: none;
+}
+.qci-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  cursor: move;
+  touch-action: none;
+}
+.qci-panel button {
+  border: 1px solid #43818d;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: #102830;
+  color: inherit;
+  cursor: pointer;
+}
+.qci-panel button:focus-visible {
+  outline: 2px solid #82e9f7;
+  outline-offset: 2px;
+}
+.qci-coordinates,
+.qci-credit,
+.qci-note {
+  margin: 0 10px 8px;
+  color: #a9c5ca;
+  font: 10px/1.45 'Cascadia Code', Consolas, monospace;
+}
+.qci-credit {
+  color: #7fc7d2;
+}
+.qci-live {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.qci-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px 0;
+}
+.qci-actions[hidden] {
+  display: none;
+}
+.qci-panel a {
+  display: inline-block;
+  margin: 0 10px 10px;
+  color: #82e9f7;
+}
+.qci-marker {
+  position: fixed;
+  z-index: 500;
+  width: 160px;
+  transform: translate(-50%, -100%) scale(var(--qci-scale, 1));
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  padding: 3px;
+  border: 1px solid #65d7e7;
+  background: #071117;
+  color: #d8f9ff;
+  font: 10px/1.3 sans-serif;
+}
+.qci-marker-still {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.qci-marker-label {
+  display: block;
+  padding: 3px;
+}
+.qci-marker-link-only {
+  width: max-content;
+  max-width: 220px;
+}

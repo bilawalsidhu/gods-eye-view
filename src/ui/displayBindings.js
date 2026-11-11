@@ -1,8 +1,7 @@
-import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
-import { bindDisplayControls, syncScopeControls } from './displayControls.js';
-import { canonicalizeDensity } from '../data/detectionPolicy.js';
+import { useDisplayStore } from './stores/display.js';
+import { applicationPinia } from './vueRuntime.js';
 
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
 export class DisplayBindings {
@@ -13,10 +12,11 @@ export class DisplayBindings {
     operations,
     readState,
     claimDetection,
+    displayStore,
   }) {
     Object.assign(
       this,
-      { viewer, services, readState, claimDetection },
+      { viewer, services, readState, claimDetection, displayStore },
       elements,
       operations,
     );
@@ -42,19 +42,8 @@ export class DisplayBindings {
   get _models3dEnabled() {
     return this.readState()._models3dEnabled;
   }
-  get _models3dModeBtns() {
-    return this.readState()._models3dModeBtns;
-  }
-  get _detectionAllocationBtns() {
-    return this.readState()._detectionAllocationBtns;
-  }
   _initUI() {
-    const {
-      cycleDetectionMode,
-      setScopeMaskEnabled,
-      isScopeMaskEnabled,
-      setScopeMaskFeather,
-    } = this.services;
+    const { cycleDetectionMode, isScopeMaskEnabled } = this.services;
     this._applicationShortcuts?.destroy();
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = createFrameRateMonitor({
@@ -66,13 +55,7 @@ export class DisplayBindings {
       searchInput: this._locationSearch,
       actions: {
         setStyle: (style) => this.setStyle(style, { userInitiated: true }),
-        dismissSearch: () => {
-          if (this._locationSearch.classList.contains('expanded')) {
-            this._locationSearch.classList.remove('expanded');
-            this._locationSearch.value = '';
-            this._locationSearch.blur();
-          }
-        },
+        dismissSearch: () => this._closeLocationSearch?.({ ifOpen: true }),
         toggleHud: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.hud.toggle();
@@ -93,142 +76,107 @@ export class DisplayBindings {
       },
     });
 
-    syncScopeControls(
-      this._scopeBtn,
-      this._scopeFeatherSlider,
-      isScopeMaskEnabled(),
-    );
-    this._displayControls?.destroy();
-    this._displayControls = bindDisplayControls({
-      elements: {
-        styleButtons: document.querySelectorAll('.style-btn'),
-        bloomButton: this._bloomBtn,
-        bloomSlider: this._bloomSlider,
-        sharpenButton: this._sharpenBtn,
-        sharpenSlider: this._sharpenSlider,
-        scopeToggle: this._scopeBtn,
-        scopeFeatherSlider: this._scopeFeatherSlider,
-        hudLayout: this._hudLayoutSelect,
-        hudButton: this._hudBtn,
-        sonarButton: this._cyberSonarBtn,
-        sonarRingsSlider: this._cyberSonarRings,
-        sonarRangeSlider: this._cyberSonarRange,
-        sonarIntensitySlider: this._cyberSonarIntensity,
-        sonarOpacitySlider: this._cyberSonarOpacity,
-        sonarSectorSlider: this._cyberSonarSector,
-        cleanViewButton: this._cleanViewBtn,
-        cleanViewExitButton: this._cleanViewExitBtn,
-        densitySlider: this._detectionDensitySlider,
-        detectionButton: this._detectionBtn,
-        allocationButtons: this._detectionAllocationBtns,
-        fadeSliders: [this._detectionFadeSlider, this._detectionOpacitySlider],
-        celestialButton: this._celestialBtn,
-        modelsButton: this._models3dBtn,
-        modelModeButtons: this._models3dBtn ? this._models3dModeBtns : [],
+    this._setScope({ enabled: isScopeMaskEnabled() }, { apply: false });
+    // The Display controls (and the dock's style buttons) answer through
+    // the display store; DisplayPanel's events call these actions.
+    this._detachDisplayControls?.();
+    const store = this.displayStore ?? useDisplayStore(applicationPinia());
+    const token = store.connect({
+      setStyle: (style) => this.setStyle(style, { userInitiated: true }),
+      toggleBloom: () => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setBloomEnabled(!this.bloomEnabled);
       },
-      actions: {
-        setStyle: (style) => this.setStyle(style, { userInitiated: true }),
-        toggleBloom: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setBloomEnabled(!this.bloomEnabled);
-        },
-        setBloomIntensity: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setBloomIntensity(value);
-        },
-        toggleSharpen: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setSharpenEnabled(!this.sharpenEnabled);
-        },
-        setScopeEnabled: (enabled) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          setScopeMaskEnabled(enabled);
-          syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, enabled);
-          this._syncShareState();
-        },
-        setScopeFeather: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          const pct = clampScopeFeatherPct(value);
-          if (this._scopeFeatherValue)
-            this._scopeFeatherValue.textContent = `${pct}%`;
-          setScopeMaskFeather(pct / 100);
-          this._syncShareState();
-        },
-        setSharpenIntensity: (pct) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          if (this._sharpenSliderValue)
-            this._sharpenSliderValue.textContent = `${pct}%`;
-          this._applySharpenIntensity(pct / 100);
-          this._syncShareState();
-        },
-        setHudLayout: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._setHudVariant(value, { applyVisualDefaults: true });
-        },
-        toggleCleanView: () => this.toggleCleanView(),
-        exitCleanView: () => this.toggleCleanView(false),
-        setDensity: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.claimDetection();
-          const pct = canonicalizeDensity(value);
-          this._detectionDensitySlider.value = String(pct);
-          if (this._detectionDensityValue)
-            this._detectionDensityValue.textContent = `${pct}%`;
-          this._applyDetectionDensityFromUi();
-          this._syncShareState();
-        },
-        setAllocation: (value) => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.claimDetection();
-          this._setDetectionAllocation(value);
-        },
-        setFade: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._applyDetectionFadeFromUi();
-          this._syncShareState();
-        },
-        toggleCelestial: () => {
-          const ringIsVisible = !!this.celestialRing?.visible;
-          if (!this.celestialRingEnabled || !ringIsVisible) {
-            this.setCelestialRingEnabled(true, { focus: true });
-          } else {
-            this.setCelestialRingEnabled(false);
-          }
-        },
-        toggleHud: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.hud.toggle();
-          this._updateHudButtonState();
-          this._syncShareState();
-        },
-        toggleSonar: () => this._setCyberSonarEnabled(),
-        setSonarRings: (value) => this._setCyberSonarSetting('rings', value),
-        setSonarRange: (value) => this._setCyberSonarSetting('range', value),
-        setSonarIntensity: (value) =>
-          this._setCyberSonarSetting('intensity', value),
-        setSonarOpacity: (value) =>
-          this._setCyberSonarSetting('opacity', value),
-        setSonarSector: (value) => this._setCyberSonarSetting('sector', value),
-        cycleDetection: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.claimDetection();
-          cycleDetectionMode();
-          this._syncShareState();
-        },
-        toggleModels: () => {
-          this._setModels3dEnabled(!this._models3dEnabled);
-          this._syncModels3dModeRow();
-        },
-        setModelsMode: (mode) => this._setModels3dMode(mode),
+      setBloomIntensity: (value) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setBloomIntensity(value);
       },
+      toggleSharpen: () => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setSharpenEnabled(!this.sharpenEnabled);
+      },
+      setScopeEnabled: (enabled) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setScope({ enabled });
+        this._syncShareState();
+      },
+      setScopeFeather: (value) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setScope({ featherPct: value });
+        this._syncShareState();
+      },
+      setSharpenIntensity: (pct) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setSharpenIntensity(pct);
+      },
+      setHudLayout: (value) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setHudVariant(value, { applyVisualDefaults: true });
+      },
+      toggleCleanView: () => this.toggleCleanView(),
+      exitCleanView: () => this.toggleCleanView(false),
+      setDensity: (value) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this.claimDetection();
+        this._setDetectionDensity(value);
+        this._syncShareState();
+      },
+      setAllocation: (value) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this.claimDetection();
+        this._setDetectionAllocation(value);
+      },
+      setFade: (fadePct) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setDetectionFade({ fadePct });
+        this._syncShareState();
+      },
+      setOutsideOpacity: (outsideOpacityPct) => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this._setDetectionFade({ outsideOpacityPct });
+        this._syncShareState();
+      },
+      toggleCelestial: () => {
+        const ringIsVisible = !!this.celestialRing?.visible;
+        if (!this.celestialRingEnabled || !ringIsVisible) {
+          this.setCelestialRingEnabled(true, { focus: true });
+        } else {
+          this.setCelestialRingEnabled(false);
+        }
+      },
+      toggleHud: () => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this.hud.toggle();
+        this._updateHudButtonState();
+        this._syncShareState();
+      },
+      toggleSonar: () => this._setCyberSonarEnabled(),
+      setSonarRings: (value) => this._setCyberSonarSetting('rings', value),
+      setSonarRange: (value) => this._setCyberSonarSetting('range', value),
+      setSonarIntensity: (value) =>
+        this._setCyberSonarSetting('intensity', value),
+      setSonarOpacity: (value) => this._setCyberSonarSetting('opacity', value),
+      setSonarSector: (value) => this._setCyberSonarSetting('sector', value),
+      cycleDetection: () => {
+        this.shareLinkManager?.claimRestoreLane?.('visual');
+        this.claimDetection();
+        cycleDetectionMode();
+        this._syncShareState();
+      },
+      toggleModels: () => {
+        this._setModels3dEnabled(!this._models3dEnabled);
+        this._syncModels3dModeRow();
+      },
+      setModelsMode: (mode) => this._setModels3dMode(mode),
     });
+    this._detachDisplayControls = () => store.detach(token);
   }
   destroy() {
     this._applicationShortcuts?.destroy();
     this._applicationShortcuts = null;
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = null;
-    this._displayControls?.destroy();
-    this._displayControls = null;
+    this._detachDisplayControls?.();
+    this._detachDisplayControls = null;
   }
 }
