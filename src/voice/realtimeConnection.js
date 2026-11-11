@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { getLocale, t } from '../i18n/index.js';
 
 const DISCONNECT_GRACE_MS = 6000;
 
@@ -93,6 +93,7 @@ export class RealtimeConnection {
       const minted = await this.backend.requestToken({
         tier: this.cost.voiceTier,
         authMode: this.cost.sessionCloudVoiceAuth,
+        language: getLocale(),
         signal,
       });
       const token = minted.token;

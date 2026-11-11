@@ -3373,5 +3373,19 @@
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "捲動或雙指縮放，拖曳以移動 · 按兩下查看全部",
   "1 min/s": "1 分鐘/秒",
-  "Photo © {photographer}": "照片 © {photographer}"
+  "Photo © {photographer}": "照片 © {photographer}",
+  "Finding {place} on the map.": "正在地圖上尋找{place}。",
+  "Finding those places.": "正在尋找這些地點。",
+  "Looking up {place}.": "正在查詢{place}。",
+  "Outlining {place}.": "正在勾勒{place}的輪廓。",
+  "Searching the imagery catalog.": "正在搜尋影像目錄。",
+  "Loading the image.": "正在載入影像。",
+  "Searching OpenStreetMap for {place}.": "正在 OpenStreetMap 中搜尋{place}。",
+  "Searching OpenStreetMap.": "正在搜尋 OpenStreetMap。",
+  "Heading to {place}.": "正在飛往{place}。",
+  "Turning on {place}.": "正在開啟{place}。",
+  "Loading aircraft there.": "正在載入該區域的飛機。",
+  "Picking the nearest aircraft.": "正在挑選最近的飛機。",
+  "Still working on {place}.": "仍在處理{place}。",
+  "Still working on it.": "仍在處理中。"
 }

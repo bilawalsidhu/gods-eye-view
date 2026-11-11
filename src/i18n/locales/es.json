@@ -1930,6 +1930,15 @@
   "Flying": "Volando",
   "Turning on layer": "Activando capa",
   "Loading aircraft": "Cargando aeronaves",
+  "Finding {place} on the map.": "Buscando {place} en el mapa.",
+  "Finding those places.": "Buscando esos lugares.",
+  "Looking up {place}.": "Consultando {place}.",
+  "Heading to {place}.": "Volando a {place}.",
+  "Turning on {place}.": "Activando {place}.",
+  "Loading aircraft there.": "Cargando las aeronaves de la zona.",
+  "Picking the nearest aircraft.": "Eligiendo la aeronave más cercana.",
+  "Still working on {place}.": "Sigo trabajando en {place}.",
+  "Still working on it.": "Sigo trabajando en ello.",
   "Picking nearest": "Eligiendo la más cercana",
   "Working": "Procesando",
   "{value} feet": "{value} pies",
@@ -3535,5 +3544,10 @@
   "Play speed": "Velocidad de reproducción",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Desplaza o pellizca para ampliar, arrastra para moverte · doble clic para verlo todo",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "Outlining {place}.": "Trazando el contorno de {place}.",
+  "Searching the imagery catalog.": "Buscando en el catálogo de imágenes.",
+  "Loading the image.": "Cargando la imagen.",
+  "Searching OpenStreetMap for {place}.": "Buscando {place} en OpenStreetMap.",
+  "Searching OpenStreetMap.": "Buscando en OpenStreetMap."
 }

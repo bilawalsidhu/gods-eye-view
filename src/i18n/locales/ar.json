@@ -3778,5 +3778,19 @@
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
   "1 min/s": "دقيقة/ث",
-  "Photo © {photographer}": "صورة © {photographer}"
+  "Photo © {photographer}": "صورة © {photographer}",
+  "Finding {place} on the map.": "جارٍ البحث عن {place} على الخريطة.",
+  "Finding those places.": "جارٍ البحث عن هذه الأماكن.",
+  "Looking up {place}.": "جارٍ البحث عن {place}.",
+  "Outlining {place}.": "جارٍ رسم حدود {place}.",
+  "Searching the imagery catalog.": "جارٍ البحث في فهرس الصور.",
+  "Loading the image.": "جارٍ تحميل الصورة.",
+  "Searching OpenStreetMap for {place}.": "جارٍ البحث عن {place} في OpenStreetMap.",
+  "Searching OpenStreetMap.": "جارٍ البحث في OpenStreetMap.",
+  "Heading to {place}.": "جارٍ التوجه إلى {place}.",
+  "Turning on {place}.": "جارٍ تشغيل {place}.",
+  "Loading aircraft there.": "جارٍ تحميل الطائرات في تلك المنطقة.",
+  "Picking the nearest aircraft.": "جارٍ اختيار أقرب طائرة.",
+  "Still working on {place}.": "ما زلت أعمل على {place}.",
+  "Still working on it.": "ما زلت أعمل على ذلك."
 }

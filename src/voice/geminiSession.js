@@ -1,5 +1,5 @@
 import { createGeminiTextChat } from './geminiTextChat.js';
-import { t, translateKnown } from '../i18n/index.js';
+import { getLocale, t, translateKnown } from '../i18n/index.js';
 import { msg } from '../i18n/marker.js';
 import { createGeminiAudio } from './geminiAudio.js';
 import { RealtimeInput } from './realtimeInput.js';
@@ -8,6 +8,7 @@ import { captureViewportImage } from './realtimeViewport.js';
 import { createNarrationScheduler } from './narration.js';
 import { createEarcon } from './earcon.js';
 import { narrationLabel } from './speech.js';
+import { resolveVoiceLanguage } from './voiceLanguage.js';
 import { waitForSignal } from '../sources/requestDeadline.js';
 import { readResponseJsonCapped } from '../sources/httpBody.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
@@ -145,6 +146,7 @@ export class GeminiSessionController {
     dataManager = null,
     pointer = null,
     tokenEndpoint = '/api/gemini/token',
+    getLanguage = getLocale,
     startupTimeoutMs = 30_000,
     inputBoundaryTimeoutMs = 5_000,
     fetchImpl = (...args) => fetch(...args),
@@ -165,6 +167,7 @@ export class GeminiSessionController {
       signal,
       ui,
       tokenEndpoint,
+      getLanguage,
       startupTimeoutMs,
       inputBoundaryTimeoutMs,
       fetchImpl,
@@ -563,11 +566,19 @@ export class GeminiSessionController {
     this.controlBytes = 0;
   }
 
+  /** The token route, with the interface language; English sends nothing. */
+  tokenUrl() {
+    const lang = resolveVoiceLanguage(this.getLanguage());
+    if (!lang) return this.tokenEndpoint;
+    const separator = this.tokenEndpoint.includes('?') ? '&' : '?';
+    return `${this.tokenEndpoint}${separator}${new URLSearchParams({ lang })}`;
+  }
+
   async requestToken(signal, pushToTalk = false) {
     signal.throwIfAborted();
     let acquiredResponse;
     const acquisition = Promise.resolve(
-      this.fetchImpl(this.tokenEndpoint, {
+      this.fetchImpl(this.tokenUrl(), {
         method: 'POST',
         cache: 'no-store',
         redirect: 'error',

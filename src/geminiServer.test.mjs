@@ -21,6 +21,8 @@ import {
   offeredTools,
   realtimeTools,
 } from '../server/providers/openai/tools.js';
+import { realtimeInstructions } from '../server/providers/openai/instructions.js';
+import { voiceLanguageInstruction } from './voice/voiceLanguage.js';
 import { PROXY_SIGNALS } from './localRequestGate.mjs';
 
 const API_KEY = 'private-gemini-test-key-never-return';
@@ -107,7 +109,10 @@ test('dev and preview install the same bounded Gemini token endpoint', () => {
     geminiLiveProxy()[hook]({
       middlewares: { use: (...args) => installed.push(args) },
     });
-    assert.deepEqual(installed.map(([route]) => route), ['/api/gemini/chat', '/api/gemini/token']);
+    assert.deepEqual(
+      installed.map(([route]) => route),
+      ['/api/gemini/chat', '/api/gemini/token'],
+    );
     assert.ok(installed.every(([, handler]) => typeof handler === 'function'));
   }
 });
@@ -247,6 +252,62 @@ test('mint locks canonical action schemas and server instructions with no perman
     model: 'models/gemini-3.8-live',
     ...data.config,
   });
+});
+
+test('the interface language from ?lang= closes the locked Gemini instructions', async (t) => {
+  const f = await fixture(t);
+  const instructionsFor = async (path) => {
+    const response = await fetch(`${f.origin}${path}`, {
+      method: 'POST',
+      body: '{}',
+      headers: { Origin: f.origin, 'Content-Type': 'application/json' },
+    });
+    assert.equal(response.status, 200, path);
+    const request = JSON.parse(f.calls.at(-1)[1].body);
+    return request.bidiGenerateContentSetup.systemInstruction.parts[0].text;
+  };
+  const english = realtimeInstructions();
+  assert.equal(await instructionsFor('/'), english);
+  assert.equal(await instructionsFor('/?lang=en'), english);
+  assert.equal(await instructionsFor('/?lang=ko'), english);
+  assert.equal(
+    await instructionsFor('/?lang=es'),
+    `${english}\n${voiceLanguageInstruction('es')}`,
+  );
+  assert.equal(
+    await instructionsFor('/?lang=zh-cn'),
+    `${english}\n${voiceLanguageInstruction('zh-CN')}`,
+  );
+});
+
+test('the locked Gemini instructions name osm_query only when Overpass is configured, in any language', async (t) => {
+  const instructionsFor = async (overpass, path) => {
+    const f = await fixture(t, { overpassConfigured: () => overpass });
+    const response = await fetch(`${f.origin}${path}`, {
+      method: 'POST',
+      body: '{}',
+      headers: { Origin: f.origin, 'Content-Type': 'application/json' },
+    });
+    assert.equal(response.status, 200, path);
+    const request = JSON.parse(f.calls.at(-1)[1].body);
+    return request.bidiGenerateContentSetup.systemInstruction.parts[0].text;
+  };
+  for (const overpass of [false, true]) {
+    for (const [path, language] of [
+      ['/', undefined],
+      ['/?lang=es', 'es'],
+    ]) {
+      assert.equal(
+        await instructionsFor(overpass, path),
+        realtimeInstructions(undefined, { overpass, language }),
+        `${path} overpass ${overpass}`,
+      );
+    }
+  }
+  assert.notEqual(
+    await instructionsFor(true, '/'),
+    await instructionsFor(false, '/'),
+  );
 });
 
 test('missing key and malformed model fail without an upstream request', async (t) => {

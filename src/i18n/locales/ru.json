@@ -1967,6 +1967,15 @@
   "Flying": "Перелёт",
   "Turning on layer": "Включение слоя",
   "Loading aircraft": "Загрузка самолётов",
+  "Finding {place} on the map.": "Ищем на карте: {place}.",
+  "Finding those places.": "Ищем эти места.",
+  "Looking up {place}.": "Ищем: {place}.",
+  "Heading to {place}.": "Перелёт: {place}.",
+  "Turning on {place}.": "Включаем: {place}.",
+  "Loading aircraft there.": "Загружаем самолёты в этом районе.",
+  "Picking the nearest aircraft.": "Выбираем ближайший самолёт.",
+  "Still working on {place}.": "Всё ещё работаем: {place}.",
+  "Still working on it.": "Всё ещё работаем.",
   "Picking nearest": "Выбор ближайших",
   "Working": "Выполняется",
   "{value} feet": "{value} фт",
@@ -3616,5 +3625,10 @@
   "Play speed": "Скорость воспроизведения",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутите или сведите пальцы для масштаба, перетащите для перемещения · двойной щелчок — показать всё",
   "1 min/s": "1 мин/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "Outlining {place}.": "Обвожу контур: {place}.",
+  "Searching the imagery catalog.": "Ищу в каталоге снимков.",
+  "Loading the image.": "Загружаю изображение.",
+  "Searching OpenStreetMap for {place}.": "Ищу {place} в OpenStreetMap.",
+  "Searching OpenStreetMap.": "Ищу в OpenStreetMap."
 }

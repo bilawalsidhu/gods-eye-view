@@ -3535,5 +3535,19 @@
   "Play speed": "Velocità di riproduzione",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scorri o pizzica per lo zoom, trascina per spostarti · doppio clic per vedere tutto",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "Finding {place} on the map.": "Cerco {place} sulla mappa.",
+  "Finding those places.": "Cerco quei luoghi.",
+  "Looking up {place}.": "Cerco {place}.",
+  "Outlining {place}.": "Traccio il contorno di {place}.",
+  "Searching the imagery catalog.": "Cerco nel catalogo immagini.",
+  "Loading the image.": "Carico l'immagine.",
+  "Searching OpenStreetMap for {place}.": "Cerco {place} su OpenStreetMap.",
+  "Searching OpenStreetMap.": "Cerco su OpenStreetMap.",
+  "Heading to {place}.": "Mi dirigo verso {place}.",
+  "Turning on {place}.": "Attivo {place}.",
+  "Loading aircraft there.": "Carico gli aerei della zona.",
+  "Picking the nearest aircraft.": "Scelgo l'aereo più vicino.",
+  "Still working on {place}.": "Sto ancora lavorando su {place}.",
+  "Still working on it.": "Sto ancora lavorando."
 }

@@ -1,3 +1,5 @@
+import { voiceLanguageInstruction } from '../../../src/voice/voiceLanguage.js';
+
 const DEFAULT_ANNOTATION_GUIDANCE =
   'Put related places in one annotate_map call. Set flyTo true only when the user is not already looking at the place (off-screen marks auto-frame, so when unsure leave it false). Do not say you are drawing or annotating — talk about the places while the marks appear. Marks ACCUMULATE AND PERSIST across flights and topics so the user can build up the map: never pass clearPrevious, and call clear_annotations ONLY when the user EXPLICITLY asks to clear or reset the map.';
 
@@ -77,8 +79,19 @@ function realtimeDirectives(
   ];
 }
 
-function realtimeInstructions(annotationGuidance, options) {
-  return realtimeDirectives(annotationGuidance, options).join('\n');
+/**
+ * The voice session instructions: the shared directives, then, for a shipped
+ * non-English interface `language`, one closing LANGUAGE line. The line is
+ * voice-only (text chat reuses the directives without it), and without a
+ * language the text is byte-identical to the directives.
+ */
+function realtimeInstructions(
+  annotationGuidance,
+  { language, ...options } = {},
+) {
+  const lines = realtimeDirectives(annotationGuidance, options);
+  const languageLine = voiceLanguageInstruction(language);
+  return (languageLine ? [...lines, languageLine] : lines).join('\n');
 }
 
 export { realtimeInstructions, realtimeDirectives };

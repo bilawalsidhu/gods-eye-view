@@ -5,6 +5,7 @@ import { GevRealtimeController } from './realtimeController.js';
 import { RealtimeInput } from './realtimeInput.js';
 import { RealtimeViewport } from './realtimeViewport.js';
 import { resolveVoiceModel } from './voiceCost.js';
+import { setLocale } from '../i18n/index.js';
 
 function installGlobals(t, values) {
   for (const [name, value] of Object.entries(values)) {
@@ -281,4 +282,25 @@ test('late action or viewport completion cannot resume a stopped or replacement 
       controller.stop();
     }
   }
+});
+
+test('a session asks for its token in the interface language', async (t) => {
+  browser(t);
+  t.after(() => setLocale('en'));
+  const languages = [];
+  const controller = new GevRealtimeController({
+    runner: async () => ({ ok: true }),
+    backend: {
+      async requestToken({ language }) { languages.push(language); return { token: 'synthetic', model: resolveVoiceModel('mini').id }; },
+      async negotiate() { return 'answer'; },
+    },
+    debugSink: null,
+    ui: createTestVoiceUi(),
+  });
+  for (const locale of ['en', 'es']) {
+    setLocale(locale);
+    await controller.start();
+    controller.stop();
+  }
+  assert.deepEqual(languages, ['en', 'es']);
 });

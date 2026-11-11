@@ -3373,5 +3373,19 @@
   "Play speed": "再生速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
   "1 min/s": "1分/秒",
-  "Photo © {photographer}": "写真 © {photographer}"
+  "Photo © {photographer}": "写真 © {photographer}",
+  "Finding {place} on the map.": "{place}を地図上で探しています。",
+  "Finding those places.": "該当の場所を探しています。",
+  "Looking up {place}.": "{place}を検索しています。",
+  "Outlining {place}.": "{place}の輪郭を描いています。",
+  "Searching the imagery catalog.": "画像カタログを検索しています。",
+  "Loading the image.": "画像を読み込んでいます。",
+  "Searching OpenStreetMap for {place}.": "OpenStreetMapで{place}を検索しています。",
+  "Searching OpenStreetMap.": "OpenStreetMapを検索しています。",
+  "Heading to {place}.": "{place}へ向かっています。",
+  "Turning on {place}.": "{place}をオンにしています。",
+  "Loading aircraft there.": "その地域の航空機を読み込んでいます。",
+  "Picking the nearest aircraft.": "最も近い航空機を選んでいます。",
+  "Still working on {place}.": "{place}の処理を続けています。",
+  "Still working on it.": "処理を続けています。"
 }

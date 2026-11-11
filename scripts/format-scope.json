@@ -1273,6 +1273,7 @@
   "src/textChatServer.test.mjs",
   "src/geminiChatServer.test.mjs",
   "src/voice/geminiTextChat.test.mjs",
+  "src/voice/voiceLanguage.test.mjs",
   "server/providers/common/textChat.js",
   "server/providers/common/textInstructions.js",
   "server/providers/common/textTools.js",

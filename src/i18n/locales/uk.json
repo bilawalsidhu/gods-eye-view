@@ -3616,5 +3616,19 @@
   "Play speed": "Швидкість відтворення",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутіть або зведіть пальці для масштабу, перетягніть для переміщення · подвійне клацання — показати все",
   "1 min/s": "1 хв/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "Finding {place} on the map.": "Шукаю {place} на карті.",
+  "Finding those places.": "Шукаю ці місця.",
+  "Looking up {place}.": "Перевіряю {place}.",
+  "Outlining {place}.": "Обводжу контур: {place}.",
+  "Searching the imagery catalog.": "Шукаю в каталозі знімків.",
+  "Loading the image.": "Завантажую зображення.",
+  "Searching OpenStreetMap for {place}.": "Шукаю {place} в OpenStreetMap.",
+  "Searching OpenStreetMap.": "Шукаю в OpenStreetMap.",
+  "Heading to {place}.": "Прямую до {place}.",
+  "Turning on {place}.": "Вмикаю {place}.",
+  "Loading aircraft there.": "Завантажую літаки в цьому районі.",
+  "Picking the nearest aircraft.": "Вибираю найближчий літак.",
+  "Still working on {place}.": "Усе ще працюю над {place}.",
+  "Still working on it.": "Усе ще працюю."
 }
