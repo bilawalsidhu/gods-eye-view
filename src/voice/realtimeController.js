@@ -54,7 +54,7 @@ export {
 
 import { createRealtimeBackend } from './realtimeBackend.js';
 
-import { t } from '../i18n/index.js';
+import { t, translateKnown } from '../i18n/index.js';
 import { voiceStatusLabel } from './control.js';
 
 // Machine states (dataset.status, CSS); voiceStatusLabel() translates labels.
@@ -416,10 +416,13 @@ export class GevRealtimeController extends RealtimeFacade {
    */
   setStatus(status, detail, { missingKey = false } = {}) {
     this.status = status;
+    // A detail may be English catalog text (from the helpers this controller
+    // shares with Gemini): it is worded in the current language when shown.
     this.emitSessionEvent({
       type: 'state',
       state: status,
-      detail,
+      detail: translateKnown(detail),
+      ...(typeof detail === 'string' && { sourceDetail: detail }),
       ...(missingKey && { missingKey: true }),
     });
     this.ui.update('root', {
@@ -437,7 +440,7 @@ export class GevRealtimeController extends RealtimeFacade {
         ? held
           ? t('Release Space to send')
           : t('Hold Space to talk')
-        : detail;
+        : translateKnown(detail);
     const primaryDetail = () =>
       status === 'error'
         ? t('VOICE UNAVAILABLE')

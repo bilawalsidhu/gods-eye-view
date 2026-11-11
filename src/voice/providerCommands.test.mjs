@@ -928,3 +928,27 @@ test('a provider message is worded again after a language change', async (t2) =>
   assert.equal(ui.state.detail.text, t('Ask or command'));
   assert.notEqual(ui.state.detail.text, 'Ask or command');
 });
+
+test('a provider message with placeholders is worded again with them', async (t2) => {
+  t2.after(() => setLocale('en'));
+  const f = compositionFixture(t2, {});
+  f.select('gemini');
+  await settle();
+  const ui = f.views.at(-1);
+  const text = 'Gemini token request failed (HTTP {status})';
+  f.instances.at(-1).hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: t(text, { status: 502 }),
+    sourceDetail: text,
+    sourceParams: { status: 502 },
+  });
+  assert.equal(ui.state.error.text, 'Gemini token request failed (HTTP 502)');
+  setLocale('es');
+  assert.equal(ui.state.error.text, t(text, { status: 502 }));
+  assert.match(ui.state.error.text, /502/);
+  assert.notEqual(
+    ui.state.error.text,
+    'Gemini token request failed (HTTP 502)',
+  );
+});

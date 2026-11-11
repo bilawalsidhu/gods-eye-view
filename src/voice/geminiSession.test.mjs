@@ -3688,3 +3688,24 @@ test('an error keeps its English catalog text beside the worded detail', async (
   );
   assert.notEqual(error.detail, error.sourceDetail);
 });
+
+test('a token failure without a message keeps its status for the next language', async (t2) => {
+  t2.after(() => setLocale('en'));
+  setLocale('es');
+  const h = harness({
+    fetchImpl: async () => Response.json({}, { status: 502 }),
+  });
+  await h.c.start();
+  const error = h.events
+    .filter((event) => event.type === 'state' && event.state === 'error')
+    .at(-1);
+  assert.equal(
+    error.sourceDetail,
+    'Gemini token request failed (HTTP {status})',
+  );
+  assert.deepEqual(error.sourceParams, { status: 502 });
+  assert.equal(
+    error.detail,
+    t('Gemini token request failed (HTTP {status})', { status: 502 }),
+  );
+});

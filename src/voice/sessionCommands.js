@@ -122,7 +122,9 @@ export function createVoiceCommands({
       source === 'Voice off'
         ? ''
         : event.sourceDetail
-          ? translateKnown(event.sourceDetail)
+          ? event.sourceParams
+            ? t(event.sourceDetail, event.sourceParams)
+            : translateKnown(event.sourceDetail)
           : event.detail;
     ui.update('detail', {
       text: () => detail() || (idle ? t('Voice off') : t('Voice active')),
