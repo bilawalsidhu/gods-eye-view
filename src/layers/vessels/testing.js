@@ -33,6 +33,11 @@ export function createTesting({
   function _setVesselStateForTest(options = {}) {
     components.lifecycle.resetState();
     const records = Array.isArray(options.records) ? options.records : [];
+    // A test record that names no id is keyed by its MMSI, as an AIS feed's
+    // own rows are (see normalizeVessel).
+    for (const record of [...records, options.selectedRecord])
+      if (record && typeof record === 'object' && record.id === undefined)
+        record.id = String(record.mmsi || '').trim();
     state.viewer = options.viewer || null;
     state.feed.enabled = options.enabled !== false;
     state.feed.loaded = options.loaded === true;
@@ -43,10 +48,10 @@ export function createTesting({
     state.feed.lastUpdate = options.lastUpdate ?? null;
     state.records.all = records;
     state.feed.count = records.length;
-    state.records.byMmsi = new Map(
+    state.records.byId = new Map(
       records
-        .filter((record) => record?.mmsi)
-        .map((record) => [record.mmsi, record]),
+        .filter((record) => record?.id)
+        .map((record) => [record.id, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
     // The test's renderer, else the layer's display for `engine`.
@@ -63,7 +68,7 @@ export function createTesting({
             engine: options.engine ?? null,
           }) ?? null);
     state.trail = options.trail || null;
-    state.trailMmsi = options.trailMmsi || null;
+    state.trailId = options.trailId || null;
     state.trailPositions = Array.isArray(options.trailPositions)
       ? [...options.trailPositions]
       : [];
@@ -154,8 +159,8 @@ export function createTesting({
       lastMessageAt: state.feed.lastMessageAt,
       rawRowCount: state.feed.rawRowCount,
       acceptedRowCount: state.feed.acceptedRowCount,
-      selectedMmsi: state.selectedRecord?.mmsi || null,
-      trailMmsi: state.trailMmsi,
+      selectedId: state.selectedRecord?.id || null,
+      trailId: state.trailId,
       trailPositionCount: state.trailPositions.length,
       sessionId: state.feed.sessionId,
       firstConnectPhase: state.feed.firstConnectPhase,
@@ -179,14 +184,14 @@ export function createTesting({
   /**
    * Read lifecycle ownership state without exposing the mutable state object.
    * Test-only seam.
-   * @returns {{trailMmsi: string|null, trailPositionCount: number, vesselCount: number}}
+   * @returns {{trailId: string|null, trailPositionCount: number, vesselCount: number}}
    */
 
   function _getVesselStateForTest() {
     return {
-      trailMmsi: state.trailMmsi,
+      trailId: state.trailId,
       trailPositionCount: state.trailPositions.length,
-      vesselCount: state.records.byMmsi.size,
+      vesselCount: state.records.byId.size,
     };
   }
   return {

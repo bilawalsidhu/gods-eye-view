@@ -1872,7 +1872,7 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
     ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
       /hasContact\(\s*icao24,?\s*\)\s*\{\s*if\s*\(\s*!flightState\.enabled\s*\|\|\s*flightState\.records\.data\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
     ['aisLiveVessels', readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byMmsi\s*\|\|\s*state\.records\.byMmsi\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+      /hasContact\(\s*id,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byId\s*\|\|\s*state\.records\.byId\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
   ]) {
     assert.match(
       source,

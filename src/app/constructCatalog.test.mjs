@@ -40,7 +40,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 38);
+  assert.equal(first.layers.length, 40);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'osm-places'),
@@ -68,6 +68,7 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.ok(first.get('gnss-integrity'));
   assert.ok(first.get('s2-ghostmaps'));
   assert.ok(first.get('drone-airspace'));
+  assert.ok(first.get('news'));
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
@@ -161,7 +162,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 38);
+  assert.equal(catalog.layers.length, 40);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,
@@ -200,7 +201,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
   );
 });
 
-test('the catalog has the same layers on both engines', async (t) => {
+test('the catalog includes every layer on both engines', async (t) => {
   const { APPLICATION_LAYER_DIRECTORY } = await import('./layers/directory.js');
   const controller = new AbortController();
   t.after(() => controller.abort());
@@ -220,10 +221,16 @@ test('the catalog has the same layers on both engines', async (t) => {
   assert.equal(cesium.engineKind, 'cesium');
 
   const navara = build({ engineKind: 'navara' });
-  assert.equal(navara.layers.length, cesium.layers.length);
+  assert.equal(navara.layers.length, 40);
+  assert.ok(navara.get('news'));
+  assert.ok(navara.get('shipwrecks'));
+  assert.deepEqual(
+    navara.layers.map(({ id }) => id),
+    cesium.layers.map(({ id }) => id),
+  );
 });
 
-test('both engines attach to the same 38 session models', async (t) => {
+test('both engines attach to the same 40 session models', async (t) => {
   const { loadLayerRenderers } = await import('./layers/renderers.js');
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());
@@ -236,13 +243,14 @@ test('both engines attach to the same 38 session models', async (t) => {
   const cesium = createApplicationCatalog(options);
   await loadLayerRenderers('navara');
   const navara = createApplicationCatalog({ ...options, engineKind: 'navara' });
-  assert.equal(cesium.layers.length, 38);
+  assert.equal(cesium.layers.length, 40);
+  const shared = cesium.layers;
   assert.deepEqual(
     navara.layers.map(({ id }) => id),
-    cesium.layers.map(({ id }) => id),
+    shared.map(({ id }) => id),
   );
   assert.deepEqual(navara.metadata, cesium.metadata);
-  for (const layer of cesium.layers) {
+  for (const layer of shared) {
     assert.equal(navara.get(layer.id), layer, layer.id);
     assert.equal(typeof layer.attachRenderer, 'function', layer.id);
     assert.equal(typeof layer.detachRenderer, 'function', layer.id);

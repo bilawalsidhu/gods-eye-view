@@ -57,7 +57,11 @@ export function transitAtlasIcons() {
     ...new Set(
       TRANSIT_ICON_KINDS.flatMap((mode) =>
         ['normal', 'thermal', 'retro'].flatMap((style) =>
-          [48, 96].map((px) => transitIcon(mode, px, { style })),
+          [48, 96].flatMap((px) =>
+            [true, false].map((heading) =>
+              transitIcon(mode, px, { style, heading }),
+            ),
+          ),
         ),
       ),
     ),

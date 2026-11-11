@@ -109,7 +109,7 @@ test("a layer's factory puts its sprites in its data/spriteOrder slot", async ()
   display.fleet.add(fleetSpec());
   await Promise.resolve();
   const [listed] = setsOf(engine, 'military-sprites');
-  assert.equal(engine.fake.moverSet(listed.id).options.order, 8);
+  assert.equal(engine.fake.moverSet(listed.id).options.order, 9);
   display.destroy();
   engine.destroy();
 });
@@ -422,7 +422,7 @@ for (const makeHarness of HARNESSES) {
     const b = geo.cartesian3.fromDegrees(0.1, 0, 1000);
     trail.setPositions([a, a, b]);
     const [body] = engine.lines.list();
-    assert.match(body.id, /^gev-trail:flights-/);
+    assert.match(body.id, /^gev-trail:/);
     assert.equal(body.points, 2, 'near-duplicates dropped');
     const base = Cesium.Color.fromCssColorString('#00d4ff');
     const alphas = (id) => {

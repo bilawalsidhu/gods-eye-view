@@ -148,7 +148,7 @@ export class CockpitViewController {
      */
     this.subjectKind = null;
     /**
-     * The vessel subject's MMSI or the satellite's NORAD id; aircraft are
+     * The vessel subject's id or the satellite's NORAD id; aircraft are
      * identified by trackedEntity.
      */
     this.subjectId = null;

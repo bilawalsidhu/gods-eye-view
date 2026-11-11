@@ -86,7 +86,7 @@ for (const makeHarness of CCTV_HARNESSES) {
     await h.settle();
     {
       const set = h.engine.fake.moverSet('cctv');
-      assert.equal(set.options.order, 0, 'the bottom of the contact sprites');
+      assert.equal(set.options.order, 1, 'the sprite slot above shipwrecks');
       assert.equal(set.options.depthTest, 'always');
       assert.equal(set.options.pickable, true);
       assert.equal(set.options.sprite.sizePx, 24);

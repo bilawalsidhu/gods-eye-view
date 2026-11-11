@@ -76,9 +76,9 @@ export function formatAwarenessLabel(value) {
       value.callsign,
       value.name,
       value.label,
+      value.mmsi,
       value.id,
       value.icao24,
-      value.mmsi,
     ]) {
       const label = formatAwarenessLabel(candidate);
       if (label !== '—') return label;
@@ -173,7 +173,7 @@ export function getAwarenessNavigationTargets(
         ? cohort.summary.nearest
         : [];
     for (const item of sourceItems) {
-      const id = item?.icao24 || item?.mmsi || item?.id;
+      const id = item?.icao24 || item?.id || item?.mmsi;
       if (!id) continue;
       const key = `${layerId}:${id}`;
       if (key === `${subject?.layerId}:${subject?.id}`) continue;

@@ -375,7 +375,7 @@ const SIBLING_PICKS = [
   [
     'ais-live-vessels',
     '353136000',
-    { id: { mmsi: '353136000', name: 'EVER GIVEN' } },
+    { id: { id: '353136000', mmsi: '353136000', name: 'EVER GIVEN' } },
   ],
   ['cctv', 'atx-cam-3', { id: { id: 'atx-cam-3', name: 'entity-like' } }],
   ['satellites', '25544', { id: 25544 }],

@@ -120,7 +120,7 @@ test('the standalone startup graph can be imported before the Cesium SDK exists'
     const { createStandaloneCatalog } = await import('./src/standalone/catalog.js');
     const lifetime = new AbortController();
     const catalog = createStandaloneCatalog({ engineKind: 'navara', signal: lifetime.signal });
-    if (catalog.layers.length !== 38) throw new Error('Incomplete cold Navara catalog');
+    if (catalog.layers.length !== 40) throw new Error('Incomplete cold Navara catalog');
     lifetime.abort();
   `;
   const result = spawnSync(

@@ -81,7 +81,15 @@ const boundsOf = ({ west, south, east, north }) => ({
 /** Draped frames: one imagery layer, each new frame staged over the shown one. */
 function createDrapedWeather(
   engine,
-  { onChange, timeoutMs, now, fetchImpl, decodeImage, createCanvas },
+  {
+    onChange,
+    timeoutMs,
+    now,
+    fetchImpl,
+    decodeImage,
+    createCanvas,
+    frameSource,
+  },
 ) {
   const id = `weather-${++layers}`;
   let layer = null;
@@ -118,6 +126,7 @@ function createDrapedWeather(
       decodeImage,
       now,
       onFetched,
+      frameSource,
     });
     // An aborted decode may still finish; never repopulate a cleared instance.
     signal.throwIfAborted();
@@ -257,6 +266,7 @@ function createDrapedWeather(
       try {
         if (hidden || incoming || suspended() || !snapshot.times.includes(time))
           return false;
+        if (frameSource?.getTile && snapshot.product !== 'clouds') return false;
         const global = snapshot.product === 'clouds';
         const urls = global ? [] : prefetchTiles(snapshot, time);
         const key = global ? `${time}|${infrared}` : urls.join('|');
@@ -293,6 +303,7 @@ function createDrapedWeather(
       { signal, infrared = 'filtered', creditSnapshot } = {},
     ) {
       signal?.throwIfAborted();
+      if (frameSource?.getTile && snapshot.product !== 'clouds') return false;
       cancelPrefetch();
       cancelIncoming();
       if (suspended()) return false;
@@ -536,6 +547,8 @@ export function createWeatherDisplay(
     fetchImpl = (...args) => globalThis.fetch(...args),
     decodeImage,
     createCanvas = () => document.createElement('canvas'),
+    frameSource = null,
+    frameRendering = null,
   } = {},
 ) {
   const shared = {
@@ -545,9 +558,15 @@ export function createWeatherDisplay(
     fetchImpl,
     decodeImage,
     createCanvas,
+    frameSource,
   };
   const getHost = () => engineImageryHost(engine);
-  const globe = createDrapedWeather(engine, shared);
+  const draped = createDrapedWeather(engine, shared);
+  const supplied =
+    frameSource?.getTile && frameRendering
+      ? frameRendering(engine, shared)
+      : null;
+  let globe = draped;
   let shell = null;
   let active = null;
   let alpha = 0.7;
@@ -624,21 +643,41 @@ export function createWeatherDisplay(
   }
   return {
     rehome() {
+      if (engine.imagery.surface() === 'none') {
+        draped.cancelPrefetch();
+        supplied?.cancelPrefetch();
+      }
       const switched = switchHost();
       if (active === 'shell' && !shell) return switched;
       return renderer().rehome() || switched;
     },
     cancelPrefetch() {
-      renderer()?.cancelPrefetch();
+      draped.cancelPrefetch();
+      supplied?.cancelPrefetch();
+      shell?.cancelPrefetch();
     },
     prefetch(snapshot, time, options) {
       switchHost();
       if (active === 'shell' && shell?.product !== snapshot.product)
         return Promise.resolve(false);
-      return renderer().prefetch(snapshot, time, options);
+      const target =
+        active === 'shell'
+          ? shell
+          : supplied && snapshot.product !== 'clouds'
+            ? supplied
+            : draped;
+      return target.prefetch(snapshot, time, options);
     },
     async setFrame(snapshot, time, options = {}) {
       options.signal?.throwIfAborted();
+      const next =
+        supplied && snapshot.product !== 'clouds' ? supplied : draped;
+      if (next !== globe) {
+        globe.clear();
+        globe = next;
+        globe.setAlpha(alpha);
+        globe.setHidden(hidden);
+      }
       switchHost();
       restaging = null;
       const target = active === 'shell' ? shellFor(snapshot.product) : globe;
@@ -669,7 +708,12 @@ export function createWeatherDisplay(
     },
     setHidden(value) {
       hidden = Boolean(value);
-      if (hidden) restaging = null;
+      if (hidden) {
+        restaging = null;
+        draped.cancelPrefetch();
+        supplied?.cancelPrefetch();
+        shell?.cancelPrefetch();
+      }
       renderer()?.setHidden(hidden);
     },
     setAlpha(value) {
@@ -683,7 +727,8 @@ export function createWeatherDisplay(
       hidden = false;
       shell?.clear();
       shell = null;
-      globe.clear();
+      draped.clear();
+      supplied?.clear();
     },
     getDiagnostics() {
       const diagnostics =

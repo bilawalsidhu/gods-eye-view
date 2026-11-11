@@ -10,6 +10,21 @@ import {
 import { trailHeadStart } from '../../data/modelVisualAnchor.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import {
+  drawTrailSegments,
+  historyFixEpochMs,
+  insertTrailFix,
+  joinTrailBackfill,
+  recordTrailPoint,
+  trailBackfillFixes,
+  trailBodyCount,
+  trailBodyCountOutsideModel,
+  trailBodySegments,
+  trailHeadStartFix,
+  trailRecordingBlocked,
+  TRAIL_RECORD_STEP_M,
+  TRAIL_RECORD_STEP_MS,
+} from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 /**
@@ -46,9 +61,6 @@ import { roundHeadingDegrees } from '../../data/headingDegrees.js';
  *   selection (not a resume) starts, before its trail.
  * @param {boolean} options.floorTrail Lift every trail position onto the warm
  *   ground floor (for a layer whose grounded fixes keep the pre-datum height).
- * @param {{ leadAltM: number, thinToBudget: boolean }} options.backfill The
- *   height of leading waypoints with no altitude and no floor, and whether the
- *   history is stride-thinned to the remaining vertex budget.
  */
 export function createAircraftTracking({
   flightState,
@@ -68,10 +80,11 @@ export function createAircraftTracking({
   followAltitudeM,
   onTrackStart,
   floorTrail,
-  backfill,
 }) {
   const {
-    RENDER_DELAY_SEC,
+    displayDelayMs,
+    followsClock,
+    DR_CORRECTION_MS,
     TRAIL_COLOR,
     TRAIL_MAX_POINTS,
     TRACKED_MODEL_MAX_LOAD_FAILS,
@@ -472,65 +485,155 @@ export function createAircraftTracking({
   }
 
   /**
-   * Append one fix to the tracked aircraft's trail accumulation and refresh
-   * the rendered trail. Caller passes an owned (cloned) Cartesian3.
-   * @param {object} position - New fix position (Cartesian3), appended at the head.
+   * Put one report into the tracked aircraft's trail, in time order, and
+   * refresh the rendered trail. Caller passes an owned (cloned) Cartesian3. A
+   * report that breaks from its neighbour starts a new segment (see
+   * trailContinuity).
+   * @param {object} position - The report's position.
+   * @param {number} [epochMs] - The report's time; defaults to the tracked
+   *   aircraft's newest position-history fix, which every caller has just pushed.
+   * @param {{nullAltitude?: boolean}} [options] - `nullAltitude`: the report
+   *   had no altitude, so its position is not kept and the line breaks there.
+   *   A report for a time the display has already passed replaces what was
+   *   drawn after it (see `insertTrailFix`).
    */
 
-  function _appendTrailFix(position) {
-    flightState._trailPositions.push(
+  function _appendTrailFix(position, epochMs, { nullAltitude = false } = {}) {
+    const history = flightState._positionHistory.get(flightState._trackedIcao);
+    const timeMs = Number.isFinite(epochMs)
+      ? epochMs
+      : historyFixEpochMs(history?.[history.length - 1]);
+    insertTrailFix(
+      flightState._trailFixes,
       floorTrail ? _trailFloorPosition(position) : position,
+      timeMs,
+      TRAIL_MAX_POINTS,
+      {
+        nullAltitude,
+        displayMs: flightState.now() - displayDelayMs(flightState),
+        settleMs: DR_CORRECTION_MS,
+      },
     );
-    if (flightState._trailPositions.length > TRAIL_MAX_POINTS)
-      flightState._trailPositions.shift();
     _refreshTrailDisplay();
   }
 
   /**
-   * Renders the trail BODY — the accumulated fixes EXCLUDING the newest raw one. That
-   * newest fix is at ~now, ~one poll interval AHEAD of the delayed icon (rendered at
-   * now − RENDER_DELAY_SEC), so drawing it would push the trail in FRONT of the plane.
-   * The cheap per-frame _trailHeadEntity segment bridges the last body point to the
-   * delayed dead-reckoned head, so this primitive only rebuilds on a real fix (poll
-   * cadence), never at motion cadence.
+   * Per-frame trail work, run from the layer's preRender pass whether or not
+   * the head is visible: record where the tracked icon is drawn (at most once
+   * a second or every 150 m) and move the body on as the display time passes
+   * reports. The head callback only reads the result.
+   */
+
+  function _trailTick() {
+    if (!flightState._trackedIcao || !flightState._trail) return;
+    const displayMs = flightState.now() - displayDelayMs(flightState);
+    let changed = false;
+    if (
+      flightState._trailFixes.length &&
+      !parts.motion._isTrackWarmingUp() &&
+      !trailRecordingBlocked(flightState._trailFixes, displayMs)
+    ) {
+      const drawn = parts.motion._trackedDisplayPosition(
+        flightState._trackedIcao,
+      );
+      const last = flightState._trailRecordPosition;
+      if (
+        drawn &&
+        (!last ||
+          displayMs - flightState._trailRecordMs >= TRAIL_RECORD_STEP_MS ||
+          geo.cartesian3.distance(last, drawn) >= TRAIL_RECORD_STEP_M)
+      ) {
+        flightState._trailRecordMs = displayMs;
+        flightState._trailRecordPosition = geo.cartesian3.clone(
+          drawn,
+          flightState._trailRecordPosition ?? undefined,
+        );
+        changed = recordTrailPoint(
+          flightState._trailFixes,
+          floorTrail
+            ? _trailFloorPosition(geo.cartesian3.clone(drawn))
+            : geo.cartesian3.clone(drawn),
+          displayMs,
+          TRAIL_MAX_POINTS,
+        );
+      }
+    }
+    if (changed || _trailBodyCountNow() !== flightState._trailBodyCount)
+      _refreshTrailDisplay();
+  }
+
+  /**
+   * Renders the trail with its head clamped to the render-behind display
+   * position. Raw newest fixes run up to RENDER_DELAY_SEC ahead of the
+   * displayed aircraft (PRD C2 delayed clock) — drawing them verbatim makes
+   * the trail extend in FRONT of the icon. The head is refreshed ~1Hz from
+   * the fleet tick so it stays glued to the moving aircraft.
    */
 
   function _refreshTrailDisplay() {
+    // The trail BODY is the accumulated fixes at or before the delayed display time
+    // (now − RENDER_DELAY_SEC); newer fixes are AHEAD of the icon, so drawing them
+    // would push the trail in front of the plane. The cheap per-frame
+    // _trailHeadEntity segment bridges the last body point to the delayed
+    // dead-reckoned head, so the body rebuilds only on a real fix or when the
+    // display time passes one, never at motion cadence.
+    // A break lifts the pen: each segment is its own line, nothing between them.
     if (!flightState._trail) return;
-    flightState._trail.setPositions(
-      flightState._trailPositions.length > 1
-        ? flightState._trailPositions.slice(0, -1)
-        : flightState._trailPositions,
+    flightState._trailBodyCount = _trailBodyCountNow();
+    drawTrailSegments(
+      flightState._trail,
+      trailBodySegments(flightState._trailFixes, flightState._trailBodyCount),
+    );
+  }
+
+  /** Fixes at or before the time the aircraft is drawn (now − RENDER_DELAY_SEC),
+   *  less the newest recorded points inside its 3D model. */
+
+  function _trailBodyCountNow() {
+    return trailBodyCountOutsideModel(
+      flightState._trailFixes,
+      trailBodyCount(
+        flightState._trailFixes,
+        flightState.now() - displayDelayMs(flightState),
+      ),
+      parts.motion._trackedModelCenterWorld(),
+      parts.motion._trackedModelEnvelopeM(),
     );
   }
 
   /**
    * Start the trail for a newly tracked aircraft: seed it with the short
    * dead-reckoning history (chronological), render immediately, then
-   * fire-and-forget the source's track backfill.
+   * fire-and-forget an OpenSky track backfill.
    * @param {string} icao24 - ICAO 24-bit transponder address being tracked.
    */
 
   function _startTrail(icao24) {
     flightState._trailBackfillToken += 1;
-    flightState._trailPositions = [];
+    flightState._trailFixes = [];
+    flightState._trailRecordPosition = null;
+    flightState._trailRecordMs = -Infinity;
     const history = flightState._positionHistory.get(icao24) || [];
-    // Seed only fixes at/behind the DELAYED display time (now − RENDER_DELAY_SEC). The
-    // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
-    // would draw the trail in front of the plane. They join the trail via _appendTrailFix
-    // as they age past the delay.
-    const seedRenderTimeMs = flightState.now() - RENDER_DELAY_SEC * 1000;
+    // Seed every report. The body only draws those at or before the delayed
+    // display time (now − RENDER_DELAY_SEC); newer ones join it as the display
+    // passes them. A synthetic forward fix (it carries `reportEpochMs`) is a
+    // motion aid, never a report. A report drawn at an invented height keeps
+    // no position and breaks the line.
     for (const fix of history) {
-      if (fix.timeMs <= seedRenderTimeMs) {
-        const seed = geo.cartesian3.clone(fix.position);
-        flightState._trailPositions.push(
-          floorTrail ? _trailFloorPosition(seed) : seed,
-        );
-      }
+      if (Number.isFinite(fix.reportEpochMs)) continue;
+      insertTrailFix(
+        flightState._trailFixes,
+        floorTrail
+          ? _trailFloorPosition(geo.cartesian3.clone(fix.position))
+          : geo.cartesian3.clone(fix.position),
+        historyFixEpochMs(fix),
+        TRAIL_MAX_POINTS,
+        { nullAltitude: fix.inventedHeight === true },
+      );
     }
     _attachTrail();
     const oldestFixEpochSec = history.length
-      ? history[0].timeMs / 1000
+      ? historyFixEpochMs(history[0]) / 1000
       : Infinity;
     _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
   }
@@ -553,14 +656,9 @@ export function createAircraftTracking({
         id: `gev-trail:${trailHeadIdPrefix}-head-${++flightState._trailHeadSeq}`,
         show: !flightState._cockpitContactMode,
         positions: () => {
-          // Need ≥2 accumulated points: the body draws all-but-newest, so the head must
-          // start at the last DISPLAYED body point (index n−2). With a single fix that
-          // point would be the sole raw fix — which is ~now, AHEAD of the delayed icon —
-          // so the segment would draw IN FRONT of the plane. Likewise during warm-up the
-          // icon predates all real history, so there is no valid body point behind it.
           if (
             !flightState._trackedIcao ||
-            flightState._trailPositions.length < 2 ||
+            !flightState._trailFixes.length ||
             parts.motion._isTrackWarmingUp()
           )
             return [];
@@ -568,10 +666,14 @@ export function createAircraftTracking({
             parts.motion._trackedTrailCached() ||
             parts.motion._trackedDisplayPosition(flightState._trackedIcao);
           if (!head) return [];
-          // body[n−2] (last displayed body point) → delayed head: runs FORWARD, never a
-          // backward/reversing segment.
-          const start =
-            flightState._trailPositions[flightState._trailPositions.length - 2];
+          const last = trailHeadStartFix(
+            flightState._trailFixes,
+            head,
+            flightState.now(),
+            flightState._trailBodyCount,
+          );
+          if (!last) return [];
+          const start = last.position;
           // With `floorTrail` the head is floored too: a grounded tracked
           // contact's DR display height is the pre-datum default — without this
           // the last segment dives underground while taxiing.
@@ -607,12 +709,10 @@ export function createAircraftTracking({
   }
 
   /**
-   * Fire-and-forget source track backfill (PRD F1/F2). On success, splices
+   * Fire-and-forget OpenSky /tracks backfill. On success, splices
    * waypoints strictly older than the oldest seeded fix AHEAD of the locally
-   * accumulated fine segment, capped at TRAIL_MAX_POINTS (newest kept); with
-   * `backfill.thinToBudget` they are first stride-thinned to the remaining
-   * vertex budget. Any failure (404/429/timeout/malformed) silently keeps the
-   * local-only trail.
+   * accumulated fine segment, capped at TRAIL_MAX_POINTS (newest kept). Any
+   * failure (404/429/timeout/malformed) silently keeps the local-only trail.
    * @param {string} icao24 - ICAO 24-bit transponder address being tracked.
    * @param {number} token - Backfill token captured at request time.
    * @param {number} oldestFixEpochSec - Epoch seconds of the oldest seeded fix.
@@ -621,15 +721,16 @@ export function createAircraftTracking({
 
   async function _backfillTrail(icao24, token, oldestFixEpochSec) {
     let path = null;
+    // Following the world clock, the track ends at the world's time.
+    const atMs = followsClock(flightState) ? flightState.now() : undefined;
     try {
+      const signal = AbortSignal.any([
+        flightState.lifetime.signal,
+        AbortSignal.timeout(8000),
+      ]);
       const track = await flightState.feed._source.getTrack?.(
         flightState.records.data.get(icao24)?.sourceReference ?? icao24,
-        {
-          signal: AbortSignal.any([
-            flightState.lifetime.signal,
-            AbortSignal.timeout(8000),
-          ]),
-        },
+        atMs === undefined ? { signal } : { signal, atMs },
       );
       path = track?.records ?? null;
     } catch {
@@ -642,12 +743,8 @@ export function createAircraftTracking({
     )
       return;
 
-    // Height-datum fix (Task 6/7): a track waypoint's altitude is barometric
-    // (OpenSky /tracks has no per-waypoint geo_altitude; a readsb trace point
-    // carries the same datum as the live alt_baro), so its render height is the
-    // documented visual FALLBACK baroM + geoidHeight(waypointLat, waypointLon)
-    // — geometrically approximate, not exact, same honesty caveat as the live
-    // baro-fallback branch of pickRenderAltitudeM.
+    // Tracks report barometric altitude only; the geoid offset approximates
+    // ellipsoid height consistently with live barometric fixes.
     await ensureGeoidReady();
     const parsed = [];
     for (const waypoint of path) {
@@ -659,21 +756,20 @@ export function createAircraftTracking({
       } = waypoint;
       const time = observedAtMs / 1000;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (atMs !== undefined && !(observedAtMs <= atMs)) continue;
       if (!Number.isFinite(time) || time >= oldestFixEpochSec) continue;
-      parsed.push({ lat, lon, baroAlt });
+      parsed.push({
+        lat,
+        lon,
+        baroAlt,
+        onGround: waypoint.onGround === true,
+        timeMs: observedAtMs,
+      });
     }
     if (!parsed.length) return;
 
-    // Field-test fix (WAKE01 trail-underground, 2026-07-06): resolve the coarse
-    // ellipsoidal ground along the track and floor every waypoint at it so low
-    // baro segments never dive below the mesh; a no-baro waypoint (taxi/ground
-    // segments) sits ON the surface when the floor is known — the old fixed
-    // 50 m sentinel rendered ~1.5 km underground at Kirtland AFB.
-    // Round-2 fix (owner: "trails suddenly much shorter / not loading"): the
-    // resolve is BOUNDED (≤1.2 s), not a blocking await — a cold Re:Earth
-    // lookup across a long path could stall the paint for seconds-to-timeout.
-    // Paint with whatever cells are warm; the resolve keeps filling the cache
-    // in the background for the next paint/select.
+    // Floor low segments at the ground without waiting indefinitely for cold
+    // terrain cells. The lookup keeps warming the cache after the bound.
     await resolveGroundFloorCellsBounded(parsed);
     // Re-check the backfill token after the await (same guard as post-fetch):
     // tracking may have moved on while the terrain race was in flight.
@@ -683,41 +779,30 @@ export function createAircraftTracking({
     )
       return;
 
-    let older = [];
-    let lastAltM = null; // carry-forward for no-baro points whose cell isn't warm yet
-    for (const { lat, lon, baroAlt } of parsed) {
-      const baroM = Number.isFinite(baroAlt)
-        ? baroAlt + geoidHeight(lat, lon)
-        : null;
-      let altM = floorAltitudeM(baroM, cachedGroundFloor(lat, lon));
-      // No baro + unresolved floor: hold the previous waypoint's altitude
-      // (continuity — never a dive/spike to a made-up height). Leading points
-      // with nothing to carry keep the layer's old placeholder height.
-      if (altM == null) altM = lastAltM != null ? lastAltM : backfill.leadAltM;
-      lastAltM = altM;
-      older.push(geo.cartesian3.fromDegrees(lon, lat, altM));
-    }
-
-    // Stride-thin the backfill so it plus the live fine segment fit the cap.
-    if (backfill.thinToBudget) {
-      const budget = Math.max(
-        1,
-        TRAIL_MAX_POINTS - flightState._trailPositions.length,
-      );
-      if (older.length > budget) {
-        const stride = Math.ceil(older.length / budget);
-        const thinned = [];
-        for (let i = 0; i < older.length; i += stride) thinned.push(older[i]);
-        older = thinned;
-      }
-    }
-
-    flightState._trailPositions = older.concat(flightState._trailPositions);
-    if (flightState._trailPositions.length > TRAIL_MAX_POINTS) {
-      flightState._trailPositions = flightState._trailPositions.slice(
-        flightState._trailPositions.length - TRAIL_MAX_POINTS,
-      );
-    }
+    // Every waypoint is kept, each leg its own segment. A ground waypoint is
+    // at altitude 0, floored at the ground. A waypoint with no altitude is a
+    // break on both sides: it sits on the ground where the floor is known and
+    // is skipped otherwise; a skipped point still breaks the line.
+    const backfill = trailBackfillFixes(
+      parsed.map(({ lat, lon, baroAlt, onGround, timeMs }) => {
+        const known = Number.isFinite(baroAlt) ? baroAlt : onGround ? 0 : null;
+        const altM = floorAltitudeM(
+          known == null ? null : known + geoidHeight(lat, lon),
+          cachedGroundFloor(lat, lon),
+        );
+        return {
+          position:
+            altM == null ? null : geo.cartesian3.fromDegrees(lon, lat, altM),
+          timeMs,
+          nullAltitude: known == null,
+        };
+      }),
+    );
+    flightState._trailFixes = joinTrailBackfill(
+      backfill,
+      flightState._trailFixes,
+      TRAIL_MAX_POINTS,
+    );
     _refreshTrailDisplay();
   }
 
@@ -727,7 +812,9 @@ export function createAircraftTracking({
 
   function _clearTrail() {
     flightState._trailBackfillToken += 1;
-    flightState._trailPositions = [];
+    flightState._trailFixes = [];
+    flightState._trailRecordPosition = null;
+    flightState._trailRecordMs = -Infinity;
     if (flightState._trail) flightState._trail.clear();
     if (flightState._trailHeadEntity)
       flightState._renderer?.trails.removeHead(flightState._trailHeadEntity);
@@ -1013,7 +1100,7 @@ export function createAircraftTracking({
       return;
     }
     onTrackStart?.(icao24);
-    // Track-history trail (PRD F1/F2): seed from local history + async backfill.
+    // Track-history trail: seed from local history + async backfill.
     // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
     // aircraft's history is retrievable on select; ground legs drape (see
     // _trailFloorPosition), never dive.
@@ -1153,6 +1240,7 @@ export function createAircraftTracking({
     _syncTracked2dRotation,
     ...(floorTrail ? { _trailFloorPosition } : {}),
     _appendTrailFix,
+    _trailTick,
     _refreshTrailDisplay,
     _startTrail,
     _attachTrail,

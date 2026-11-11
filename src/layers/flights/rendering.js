@@ -31,12 +31,13 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
-  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
   HIDDEN_CONTACT_DR_TICKS,
   hiddenContactDrPhase,
+  STALE_ALPHA,
+  displayDelayMs,
 } from './policy.js';
 
 export function createRendering({
@@ -624,6 +625,17 @@ export function createRendering({
    *  follow-camera's bounding sphere is ALWAYS ready — toggling 3D, or tracking while already zoomed
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode). */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (flightState._irBoost ? WHITE : CYAN).withAlpha(alpha);
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -745,6 +757,7 @@ export function createRendering({
         parts.motion._trackedDisplayCourse(),
         flightState._trackedModel,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       // A model that loaded retires this selection's failure budget: a contact
       // that recovers after a transient blip is not one attempt from giving up.
@@ -776,6 +789,10 @@ export function createRendering({
   }
 
   function _fleetTick() {
+    if (flightState._renderer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (!flightState._renderer?.fleet.visible()) return;
     const view = flightState._renderer.view;
     const scene = view.scene;
@@ -794,7 +811,7 @@ export function createRendering({
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
-    const renderTime = flightState.now() - RENDER_DELAY_SEC * 1000;
+    const renderTime = flightState.now() - displayDelayMs(flightState);
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
@@ -987,7 +1004,9 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,

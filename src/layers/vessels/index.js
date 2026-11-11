@@ -11,6 +11,9 @@ import { createTesting } from './testing.js';
 import { createEvidence } from './evidence.js';
 import { createQueries } from './queries.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
+import { followsClock } from './policy.js';
+import { createSnapshotTimeline } from '../../time/snapshotTimeline.js';
+import { worldClock } from '../../time/worldClock.js';
 /** Compose one vessel layer with application-owned scene services. */
 export function createVesselLayer({ source, services, options = {} } = {}) {
   const vesselState = createVesselState({ source, services });
@@ -32,6 +35,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     tracking: parts.tracking,
     selection: parts.selection,
     cards: parts.cards,
+    followsClock: () => followsClock(vesselState),
   });
 
   parts.ingestion = createIngestion({
@@ -52,6 +56,28 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     now: () => vesselState._aisRuntime.now(),
     setSourceLabel: (source) => {
       layer.source = source;
+    },
+    followsClock: () => followsClock(vesselState),
+    reloadAtClock: () => vesselState.timeline.reload(),
+  });
+  // Vessels follow the world clock while the source declares a timeline.
+  vesselState.timeline = createSnapshotTimeline({
+    id: 'ais-live-vessels',
+    clock: worldClock,
+    source: () => vesselState._source,
+    load: (atMs, { signal, replace }) =>
+      parts.ingestion.loadAt(atMs, { signal, replace }),
+    clear: () => {
+      const { state } = vesselState;
+      parts.snapshots.reconcileVessels(state.renderer?.view, [], {
+        complete: true,
+        replace: true,
+      });
+      state.feed.count = state.records.all.length;
+      state.feed.lastUpdate = null;
+    },
+    resumeLive: () => {
+      void parts.ingestion.loadLivePositions(vesselState.state.renderer?.view);
     },
   });
   Object.assign(
@@ -81,7 +107,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
         .map((record) => [record, parts.rendering.getVisual(record).billboard])
         .filter(([, billboard]) => billboard)
         .map(([record, billboard]) => ({
-          id: record.mmsi ?? null,
+          id: record.id ?? null,
           position: plain(billboard.position),
           show: billboard.show === true,
           rotation: billboard.rotation,

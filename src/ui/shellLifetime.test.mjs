@@ -141,10 +141,15 @@ test('camera-entry listeners are removed before any asynchronous layer cleanup',
 });
 
 
-test('weather shell supplies navigation to wind and observations and releases it', (t) => {
+test('weather and news shell navigation is released on disconnect', (t) => {
   const { owner } = bindings(t);
   const attached = new Map();
-  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning'];
+  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning', 'news'];
+  const navigations = [];
+  owner.runImmediateNavigation = (noun, navigate) => {
+    navigations.push(noun);
+    return navigate();
+  };
   owner.attachDataManager({
     layers: new Map(ids.map(id => [id, { module: {
       attachShellServices(services) { attached.set(id, services); },
@@ -152,6 +157,8 @@ test('weather shell supplies navigation to wind and observations and releases it
     subscribe: () => () => {},
   });
   for (const id of ids) assert.equal(typeof attached.get(id).runNavigation, 'function');
+  assert.equal(attached.get('news').runNavigation(() => 'arrived'), 'arrived');
+  assert.deepEqual(navigations, ['news']);
   owner.disconnect();
   for (const id of ids) assert.equal(attached.get(id), null);
 });

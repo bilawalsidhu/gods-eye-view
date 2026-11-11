@@ -166,6 +166,24 @@ html:not([lang='en']) #global-loading-detail {
 #global-loading-status[data-state='cancelled'] #global-loading-detail {
   color: #ffd488;
 }
+/* A last-known notice is a sentence with the entity's id on a second line;
+   the id is shown whole (a vessel UUID is 36 characters). */
+#global-loading-status[data-state='last-known'] {
+  flex-direction: column;
+  gap: 3px;
+  border-color: rgba(255, 212, 136, 0.55);
+  text-align: center;
+}
+#global-loading-status[data-state='last-known'] #global-loading-label {
+  color: #ffd488;
+}
+#global-loading-status[data-state='last-known'] #global-loading-detail {
+  max-width: none;
+  color: rgba(255, 228, 176, 0.82);
+  letter-spacing: 1.2px;
+  text-align: center;
+  text-transform: none;
+}
 #global-loading-status[data-state='acquiring'] {
   border-color: rgba(0, 212, 255, 0.42);
   box-shadow:

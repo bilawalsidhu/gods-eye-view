@@ -337,6 +337,14 @@ function installFeeds({ group, epoch, groups, ghost, launches, firms }) {
             })
           : response,
       );
+    if (path === '/api/shipwrecks')
+      return json({ records: [{ id: 'fixture-wreck', name: 'Fixture wreck', source: 'wikidata', lat: 49.2, lon: 36.2, year: 1912, casualties: 12 }], version: 'fixture', fetchedAt: epoch, sources: { emodnet: true, wikidata: true } });
+    if (path === '/api/news/hotspots')
+      return json({ hotspots: [{ id: 'fixture-area', name: 'Fixture area', bbox: [35, 48, 37, 50], focus: { lat: 49, lon: 36 }, counts: { last24h: 1 } }] });
+    if (path === '/api/news/feed')
+      return json({ reports: [{ id: 'fixture-report', title: 'Fixture report', url: 'https://example.com/report', publishedAt: new RealDate(epoch - 600_000).toISOString(), publisher: 'Example', category: 'strike', severity: 3, relevance: 'major', hotspotId: 'fixture-area', geo: { lat: 49, lon: 36, place: 'Fixture place', mappable: true } }], nextBefore: null });
+    if (path === '/api/news/outline')
+      return json({ polygons: [{ outer: [[35, 48], [37, 48], [37, 50], [35, 50]], holes: [] }], borders: [], disputed: [] });
     if (path === '/api/flights')
       return json({
         time: epoch / 1000,

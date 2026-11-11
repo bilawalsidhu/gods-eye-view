@@ -27,6 +27,12 @@ const navaraWindFlow = async () => {
   };
 };
 
+const cesiumWeatherFrames = async () => {
+  const { createWeatherFrameRendering } =
+    await import('../../globe/cesium/weatherFrames.js');
+  return { frameRendering: createWeatherFrameRendering };
+};
+
 // The layers' displays (./displays.js), one chunk.
 const displays = () => import('./displays.js');
 
@@ -42,7 +48,9 @@ export const LAYER_MANIFEST = Object.freeze({
   'fire-perimeters': display('createPerimetersDisplay'),
   'gnss-integrity': display('createGnssDisplay'),
   's2-ghostmaps': display('createGhostMapsDisplay'),
+  shipwrecks: Object.freeze({}),
   'drone-airspace': display('createDroneAirspaceDisplay'),
+  news: Object.freeze({}),
   // Draws itself through the globe contract (engine.movers, engine.lines).
   'wildlife-sightings': Object.freeze({}),
   'alpr-cameras': display('createAlprDisplay'),
@@ -67,9 +75,15 @@ export const LAYER_MANIFEST = Object.freeze({
     cesium: cesiumWindFlow,
     navara: navaraWindFlow,
   }),
-  'weather-radar': display('createWeatherDisplay'),
-  'weather-satellite': display('createWeatherDisplay'),
-  'weather-lightning': display('createWeatherDisplay'),
+  'weather-radar': display('createWeatherDisplay', {
+    cesium: cesiumWeatherFrames,
+  }),
+  'weather-satellite': display('createWeatherDisplay', {
+    cesium: cesiumWeatherFrames,
+  }),
+  'weather-lightning': display('createWeatherDisplay', {
+    cesium: cesiumWeatherFrames,
+  }),
   'weather-cyclones': display('createCyclonesDisplay'),
   // The open map overlays draw through imagery, or the optional native
   // maps.addOverlay path (src/data/osmOverlays.js).

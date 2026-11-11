@@ -172,7 +172,8 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/stores/worldTime.js",
       "src/ui/views/panels/WorldTimeline.vue",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -521,7 +522,8 @@
       "src/localRequestGate.mjs",
       "src/data/adminBoundaries.js",
       "src/data/placeNames.js",
-      "src/sources/featureGeometry.js"
+      "src/sources/featureGeometry.js",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": []
   },
@@ -608,7 +610,8 @@
       "src/data/retryableLoad.js",
       "src/sources/httpBody.js",
       "src/i18n/",
-      "src/sources/nominatim.js"
+      "src/sources/nominatim.js",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": []
   },
@@ -719,7 +722,13 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiSegmented.vue"
+      "src/ui/kit/UiSegmented.vue",
+      "src/ui/kit/UiEmpty.vue",
+      "src/ui/kit/UiSelect.js",
+      "src/ui/layerPanel/RowRange.vue",
+      "src/ui/news/NewsCard.vue",
+      "src/ui/news/NewsFeed.vue",
+      "src/ui/newsPanel.js"
     ],
     "external": ["vue"]
   },
@@ -851,7 +860,8 @@
       "src/globe/cesium/orbital.js",
       "src/globe/surfaceDetail.js",
       "src/globe/surfacePlacement.js",
-      "src/globe/cesium/orbitalImagery.js"
+      "src/globe/cesium/orbitalImagery.js",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": ["cesium"]
   },
@@ -1113,7 +1123,13 @@
       "src/globe/cesium/orbital.js",
       "src/time/clock.js",
       "src/globe/cesium/celestialHost.js",
-      "src/globe/cesium/orbitalImagery.js"
+      "src/globe/cesium/orbitalImagery.js",
+      "src/data/regionalNewsWindow.js",
+      "src/ui/kit/UiEmpty.vue",
+      "src/ui/kit/UiSelect.js",
+      "src/ui/news/NewsCard.vue",
+      "src/ui/news/NewsFeed.vue",
+      "src/ui/newsPanel.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1279,7 +1295,11 @@
       "src/overlays/bindOverlayHost.js",
       "src/time/worldClock.js",
       "src/data/planespottersPhoto.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/data/trailContinuity.js",
+      "src/layers/flights/clockFollow.js",
+      "src/sources/live/contract.js",
+      "src/time/snapshotTimeline.js"
     ],
     "external": ["cesium"]
   },
@@ -1329,7 +1349,12 @@
       "src/layers/aircraft/qaDrawn.js",
       "src/overlays/bindOverlayHost.js",
       "src/time/worldClock.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/data/trailContinuity.js",
+      "src/layers/military/clockFollow.js",
+      "src/sources/live/contract.js",
+      "src/time/snapshotTimeline.js",
+      "src/ui/unitLabels.js"
     ],
     "external": ["cesium"]
   },
@@ -1397,7 +1422,12 @@
       "src/layers/shared/color.js",
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/layers/vessels/motion.js",
+      "src/sources/live/contract.js",
+      "src/time/clock.js",
+      "src/time/snapshotTimeline.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium"]
   },
@@ -1799,7 +1829,8 @@
       "src/i18n/",
       "src/sources/vectorTiles.js",
       "src/sources/phaseTiming.js",
-      "src/geo/"
+      "src/geo/",
+      "src/data/displayText.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2822,7 +2853,34 @@
       "src/globe/cesium/orbitalImagery.js",
       "src/globe/cesium/windGpuRendering.js",
       "src/globe/cesium/windRelief.js",
-      "src/globe/cesium/windRendering.js"
+      "src/globe/cesium/windRendering.js",
+      "src/app/layers/news.js",
+      "src/app/layers/shipwrecks.js",
+      "src/data/detectionOcclusion.js",
+      "src/data/displayText.js",
+      "src/data/regionalNewsWindow.js",
+      "src/data/sceneOcclusionProbe.js",
+      "src/data/trailContinuity.js",
+      "src/data/trailRenderer.js",
+      "src/globe/cesium/weatherFrames.js",
+      "src/layers/news/cards.js",
+      "src/layers/news/index.js",
+      "src/layers/news/model.js",
+      "src/layers/news/records.js",
+      "src/layers/news/source.js",
+      "src/layers/news/sprites.js",
+      "src/layers/shipwrecks/cards.js",
+      "src/layers/shipwrecks/eras.js",
+      "src/layers/shipwrecks/index.js",
+      "src/layers/shipwrecks/period.js",
+      "src/layers/shipwrecks/records.js",
+      "src/layers/shipwrecks/source.js",
+      "src/layers/vessels/motion.js",
+      "src/time/snapshotTimeline.js",
+      "src/ui/kit/UiSelect.js",
+      "src/ui/news/NewsCard.vue",
+      "src/ui/news/NewsFeed.vue",
+      "src/ui/newsPanel.js"
     ],
     "external": [
       "hls.js",
@@ -3263,7 +3321,31 @@
       "src/globe/cesium/celestialHost.js",
       "src/globe/cesium/windGpuRendering.js",
       "src/globe/cesium/windRelief.js",
-      "src/globe/cesium/windRendering.js"
+      "src/globe/cesium/windRendering.js",
+      "src/app/layers/news.js",
+      "src/app/layers/shipwrecks.js",
+      "src/data/detectionOcclusion.js",
+      "src/data/displayText.js",
+      "src/data/regionalNewsWindow.js",
+      "src/data/sceneOcclusionProbe.js",
+      "src/data/trailContinuity.js",
+      "src/data/trailRenderer.js",
+      "src/globe/cesium/weatherFrames.js",
+      "src/layers/news/cards.js",
+      "src/layers/news/index.js",
+      "src/layers/news/model.js",
+      "src/layers/news/records.js",
+      "src/layers/news/source.js",
+      "src/layers/news/sprites.js",
+      "src/layers/shipwrecks/cards.js",
+      "src/layers/shipwrecks/eras.js",
+      "src/layers/shipwrecks/index.js",
+      "src/layers/shipwrecks/period.js",
+      "src/layers/shipwrecks/records.js",
+      "src/layers/shipwrecks/source.js",
+      "src/layers/vessels/motion.js",
+      "src/sources/live/contract.js",
+      "src/time/snapshotTimeline.js"
     ],
     "external": [
       "hls.js",
@@ -3351,7 +3433,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": [
       "cesium",
@@ -3573,7 +3656,11 @@
   },
   "regional-source": {
     "exports": ["./sources/regional"],
-    "modules": ["src/data/regionalModel.js", "src/geoDistance.js"],
+    "modules": [
+      "src/data/regionalModel.js",
+      "src/geoDistance.js",
+      "src/data/regionalNewsWindow.js"
+    ],
     "external": []
   },
   "voice-action-schemas": {
@@ -3636,7 +3723,8 @@
       "src/sources/httpBody.js",
       "src/i18n/",
       "src/sources/vectorTiles.js",
-      "src/sources/phaseTiming.js"
+      "src/sources/phaseTiming.js",
+      "src/data/displayText.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -3764,7 +3852,8 @@
       "src/geoDistance.js",
       "src/sources/httpBody.js",
       "src/i18n/",
-      "src/sources/nominatim.js"
+      "src/sources/nominatim.js",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": []
   },
@@ -3787,7 +3876,8 @@
       "src/data/regionalModel.js",
       "src/geoDistance.js",
       "src/sources/httpBody.js",
-      "src/i18n/"
+      "src/i18n/",
+      "src/data/regionalNewsWindow.js"
     ],
     "external": []
   },
@@ -4273,7 +4363,8 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/displayText.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -4383,6 +4474,41 @@
       "src/layers/wildlifeSightings/acartiaTaxa.js",
       "src/layers/wildlifeSightings/gridViewport.js",
       "src/layers/wildlifeSightings/performance.js"
+    ],
+    "external": []
+  },
+  "news-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/news"],
+    "modules": [
+      "server/providers/news.js",
+      "server/providers/news/keyed.js",
+      "server/providers/news/categorize.js",
+      "server/providers/news/areas.js",
+      "server/providers/news/gdeltEvents.js",
+      "server/providers/news/upstream.js",
+      "server/providers/common/http.js",
+      "server/providers/common/same-site.js",
+      "src/data/adminBoundaries.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js",
+      "src/layers/news/source.js",
+      "src/layers/news/records.js",
+      "src/localRequestGate.mjs",
+      "src/sources/httpBody.js",
+      "src/sources/capability.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "news-source": {
+    "exports": ["./layers/news/source"],
+    "modules": [
+      "src/layers/news/source.js",
+      "src/layers/news/records.js",
+      "src/sources/httpBody.js",
+      "src/sources/capability.js",
+      "src/i18n/marker.js"
     ],
     "external": []
   }

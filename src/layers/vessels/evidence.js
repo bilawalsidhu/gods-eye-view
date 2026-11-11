@@ -43,7 +43,7 @@ export function createEvidence({
       const bb = components.rendering.getVisual(record).billboard;
       const screen = bb?.position ? view.worldToWindow(bb.position) : null;
       return {
-        id: record.mmsi,
+        id: record.id,
         show: bb?.show === true,
         alpha: bb?.color?.alpha ?? null,
         x: screen?.x ?? null,

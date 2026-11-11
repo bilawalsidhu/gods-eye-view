@@ -117,6 +117,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
           });
       }
       setMilitaryLayerActive(true);
+      flightState.timeline?.start();
       if (!renderer) return;
       parts.tracking._installClickHandler();
       registerPickOwner(
@@ -157,6 +158,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
      * dispatcher so clicks do not get intercepted while the layer is off.
      */
     disable() {
+      flightState.timeline?.stop();
       flightState.enabled = false;
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
@@ -176,6 +178,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
      * @param {object|null} viewer - The viewer the layer was drawn on.
      */
     destroy(viewer) {
+      flightState.timeline?.stop();
       flightState.initialized = false;
       flightState.enabled = false;
       setMilitaryLayerActive(false);

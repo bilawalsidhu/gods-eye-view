@@ -3,6 +3,7 @@ import { compareLedgers, drawLedger } from './ledger.mjs';
 
 // Each group needs four page starts and two picker switches within 300 seconds.
 export const COLD_START_GROUPS = {
+  markers: { layers: ['news', 'shipwrecks'], view: [49, 36, 1000000] },
   aircraft: {
     layers: ['flights', 'military'],
     view: [40.2539, -125.5779, 21130],

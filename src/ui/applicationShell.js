@@ -279,7 +279,12 @@ export class StyleManager extends ShellScene {
       initialShareCode,
     });
     this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
-      readShareFollowSubject({ engine: this._scene?.engine, nowMs }),
+      readShareFollowSubject({
+        engine: this._scene?.engine,
+        nowMs,
+        readSelectedVessel: () =>
+          this.services.aisLiveVesselsLayer?.getSelectedFix?.() ?? null,
+      }),
     );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),

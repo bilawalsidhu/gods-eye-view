@@ -13,6 +13,9 @@ import { createBikeshareLayer } from '../../layers/bikeshare/index.js';
 import { createRadioLayer } from '../../layers/radio/index.js';
 import { createDisplayHarness } from '../../layers/installations/render/displayHarness.mjs';
 import { BOX } from '../../layers/recentImagery/testDoubles.mjs';
+import { createNewsLayer } from '../../layers/news/index.js';
+import { createShipwrecksLayer } from '../../layers/shipwrecks/index.js';
+import { testMarkerAtlas } from '../../testSupport/mapMarkers.mjs';
 
 const noop = () => {};
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -45,6 +48,56 @@ const story = () => ({
 // Small records from the displays' parity tests; transport and image decoding
 // are supplied so this rehearsal needs neither a DOM canvas nor a network.
 const cases = {
+  news: async (make, _engine, services) => {
+    const d = make({
+      overlayHost: services.overlayHost,
+      drawAtlas: testMarkerAtlas,
+      matchMedia: () => ({ matches: true }),
+      source: {
+        getHotspots: async () => ({
+          hotspots: [
+            {
+              id: 'news-area',
+              name: 'Area',
+              bbox: [-1, -1, 1, 1],
+              focus: { lat: 0, lon: 0 },
+              last24h: 1,
+            },
+          ],
+          categories: [],
+        }),
+        getFeed: async () => ({ reports: [], nextBefore: null }),
+      },
+    });
+    d.enable();
+    await d.update();
+    return { hide: () => d.show(false) };
+  },
+  shipwrecks: async (make, _engine, services) => {
+    const d = make({
+      overlayHost: services.overlayHost,
+      drawAtlas: testMarkerAtlas,
+      source: {
+        getSnapshot: async () => ({
+          records: [
+            {
+              id: 'wreck',
+              name: 'Wreck',
+              source: 'wikidata',
+              lat: 0,
+              lon: 0,
+              year: 1900,
+            },
+          ],
+          sources: { emodnet: true, wikidata: true },
+          fetchedAt: 1,
+        }),
+      },
+    });
+    d.enable();
+    await d.update();
+    return { hide: () => d.show(false) };
+  },
   'bhote-koshi-2026': async (make) => {
     const d = make();
     await d.loadImages(BOX, ['pre.webp', 'post.webp'], 'Vantor');
@@ -549,6 +602,11 @@ const skips = {
     'The overlay controller draws imagery itself; no manifest display factory.',
 };
 
+const layerDisplays = {
+  news: createNewsLayer,
+  shipwrecks: createShipwrecksLayer,
+};
+
 function listenerCounts(engine) {
   return [engine.camera, engine.frames].flatMap((part) =>
     Object.values(part)
@@ -606,14 +664,14 @@ test('every manifest display draws and releases its resources on a third engine'
   assert.deepEqual(
     Object.keys(cases).sort(),
     Object.entries(LAYER_MANIFEST)
-      .filter(([, entry]) => entry.display)
+      .filter(([id, entry]) => entry.display || layerDisplays[id])
       .map(([id]) => id)
       .sort(),
   );
   assert.deepEqual(
     Object.keys(skips).sort(),
     Object.entries(LAYER_MANIFEST)
-      .filter(([, entry]) => !entry.display)
+      .filter(([id, entry]) => !entry.display && !layerDisplays[id])
       .map(([id]) => id)
       .sort(),
   );
@@ -643,12 +701,15 @@ test('every manifest display draws and releases its resources on a third engine'
         };
       };
       const services = servicesFixture();
-      const factory = await entry.display();
+      const factory = entry.display ? await entry.display() : layerDisplays[id];
       let display;
       let lifecycle;
       const make = (options = {}) => {
         assert.equal(display, undefined, 'one factory call per manifest entry');
-        return (display = factory(engine, options));
+        if (entry.display) return (display = factory(engine, options));
+        display = factory(options);
+        display.attachRenderer({ engine });
+        return display;
       };
       try {
         lifecycle = (await cases[id](make, engine, services)) ?? {};

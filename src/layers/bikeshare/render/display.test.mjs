@@ -152,7 +152,7 @@ for (const makeHarness of HARNESSES) {
       const { options } = f.engine.fake.moverSet('bikeshare');
       assert.equal(options.pickable, true);
       assert.equal(options.sharpen, true);
-      assert.equal(options.order, 3, 'its data/spriteOrder slot');
+      assert.equal(options.order, 4, 'its data/spriteOrder slot');
       assert.deepEqual(options.depthTest, { disableWithinM: 2500 });
       assert.equal(options.point.outlinePx, 1);
       assert.deepEqual(options.point.outlineColor, COLOR_OUTLINE.rgba());

@@ -1207,6 +1207,79 @@ test('custom detection lane receives the shared host frame and paints below ordi
   env.cleanup();
 });
 
+test('a detection lane sees which cards this frame will paint before they publish paint rects', () => {
+  // The detection lane paints before the cards publish this frame's paint
+  // rects, so it reads the queued alpha instead.
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  worldOverlayFor(overlayEngine = env.engine)?.init();
+  const seen = [];
+  worldOverlayFor(overlayEngine)?.registerPaintLane('detection', () => {
+    seen.push({
+      shown: worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('cards', 'SHOWN'),
+      hidden: worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('hidden-cards', 'HIDDEN'),
+      unknown: worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('cards', 'NOT-PUBLISHED'),
+      rect: worldOverlayFor(overlayEngine)?.getPaintRect('cards', 'SHOWN'),
+    });
+  }, { id: 'detection', active: true, target: 'detection' });
+  worldOverlayFor(overlayEngine)?.setEntries('cards', [selectedEntry('SHOWN', {
+    position: positionAtScreen(200, 150),
+  })]);
+  worldOverlayFor(overlayEngine)?.setEntries('hidden-cards', [selectedEntry('HIDDEN', {
+    position: positionAtScreen(100, 100),
+  })]);
+  worldOverlayFor(overlayEngine)?.setVisible('hidden-cards', false);
+
+  env.postRender.raise();
+  assert.deepEqual(seen[0], { shown: 1, hidden: 0, unknown: 0, rect: null },
+    'the card is queued while its paint rect is still unpublished');
+  assert.ok(worldOverlayFor(overlayEngine)?.getPaintRect('cards', 'SHOWN'), 'the card did paint after the lane');
+  assert.equal(worldOverlayFor(overlayEngine)?.getPaintRect('hidden-cards', 'HIDDEN'), null);
+
+  worldOverlayFor(overlayEngine)?.clearSource('cards');
+  env.postRender.raise();
+  assert.equal(seen[1].shown, 0, 'a card cleared since the last frame is no longer queued');
+  worldOverlayFor(overlayEngine)?.destroy();
+  assert.equal(worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('cards', 'SHOWN'), 0);
+  env.cleanup();
+});
+
+test('a detection lane reads zero for a yielding entry the declutter pass hid this frame', () => {
+  // Declutter runs before custom lanes, so a yielding entry it hid must not
+  // report its full queued alpha to them.
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  worldOverlayFor(overlayEngine = env.engine)?.init();
+  const seen = [];
+  worldOverlayFor(overlayEngine)?.registerPaintLane('detection', () => {
+    seen.push({
+      winner: worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('cards', 'ABOVE'),
+      yielder: worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('labels', 'YIELDER'),
+    });
+  }, { id: 'detection', active: true, target: 'detection' });
+  // Two cards take both vertical slots, so a vertical-only yielder has none.
+  const at = positionAtScreen(200, 150);
+  const card = (id, placement) => selectedEntry(id, {
+    position: at,
+    placement,
+    verticalOnly: true,
+    collisionGroup: 'shared-card',
+  });
+  worldOverlayFor(overlayEngine)?.setEntries('cards', [card('ABOVE', 'above'), card('BELOW', 'below')]);
+  worldOverlayFor(overlayEngine)?.setEntries('labels', [selectedEntry('YIELDER', {
+    position: at,
+    verticalOnly: true,
+    collisionGroup: 'yielding-label',
+    yieldToCollisionGroup: 'shared-card',
+  })]);
+
+  env.postRender.raise();
+  assert.ok(worldOverlayFor(overlayEngine)?.getPaintRect('cards', 'ABOVE'), 'the winner painted');
+  assert.equal(worldOverlayFor(overlayEngine)?.getPaintRect('labels', 'YIELDER'), null, 'the yielder was hidden');
+  assert.ok(seen[0].winner > 0, 'the winner reads its queued alpha');
+  assert.equal(seen[0].yielder, 0, 'the yielder hidden this frame reads zero');
+  worldOverlayFor(overlayEngine)?.destroy();
+  env.cleanup();
+});
+
 test('custom-lane painter state is bracketed by host save/restore', () => {
   // A painter that leaks a clip or alpha must not corrupt later frames: the
   // host wraps every custom-lane painter in save/try/finally-restore. Pin the
@@ -2748,3 +2821,83 @@ for (const makeHarness of GROUND_HARNESSES) {
     }
   });
 }
+
+test('the queued-card index stays bounded while card identities churn', () => {
+  // The index is internal: capture it through Map.prototype.set, like the
+  // projection-record test.
+  const originalSet = Map.prototype.set;
+  let queuedIndex = null;
+  Map.prototype.set = function captureQueuedIndex(key, value) {
+    if (typeof key === 'string' && key.startsWith('churn-card-')
+      && value && typeof value === 'object' && 'temporalAlpha' in value
+      && 'placement' in value && 'stamp' in value) {
+      queuedIndex = this;
+    }
+    return originalSet.call(this, key, value);
+  };
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  try {
+    worldOverlayFor(overlayEngine = env.engine)?.init();
+    const FRAMES = 1300;
+    for (let frame = 0; frame < FRAMES; frame++) {
+      // One card whose id changes every frame reuses one pooled paint item,
+      // like a vessel cohort republished as the camera moves.
+      worldOverlayFor(overlayEngine)?.setEntries('cards', [selectedEntry(`churn-card-${frame}`, {
+        position: positionAtScreen(200, 150),
+      })]);
+      env.advanceTime(16);
+      env.postRender.raise();
+      assert.equal(worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('cards', `churn-card-${frame}`), 1,
+        'the live card is queued in the frame just painted');
+      if (frame > 0) {
+        assert.equal(worldOverlayFor(overlayEngine)?.getQueuedEntryAlpha('cards', `churn-card-${frame - 1}`), 0,
+          'a stale row never reports the previous card as queued');
+      }
+    }
+    assert.ok(queuedIndex, 'the queued-card index was never populated');
+    // Rows are pruned every 600 painted frames, so with one new id per frame
+    // the index holds at most one prune window of ids plus the live card.
+    const bound = 600 + 1;
+    assert.ok(
+      queuedIndex.size <= bound,
+      `queued-card index holds ${queuedIndex.size} rows after ${FRAMES} identities (bound ${bound})`,
+    );
+  } finally {
+    Map.prototype.set = originalSet;
+    env.cleanup();
+  }
+});
+
+
+test('clearing a republished cohort also releases its outgoing card fades', () => {
+  const env = installMockEnvironment();
+  try {
+    const host = worldOverlayFor(env.engine);
+    host.init();
+    const card = (id) => selectedEntry(id, {
+      selected: false, protected: false, variant: 'card',
+      collisionGroup: 'retired-cards', verticalOnly: true,
+    });
+    host.setEntries('retired', [card('first')]);
+    env.advanceTime(600);
+    env.postRender.raise();
+    env.advanceTime(600);
+    env.postRender.raise();
+    host.setEntries('retired', [card('second')]);
+    env.advanceTime(16);
+    env.postRender.raise();
+    assert.ok(host.getPaintRect('retired', 'first'), 'the previous cohort fades out');
+    host.clearSource('retired');
+    env.postRender.raise();
+    assert.equal(host.getQueuedEntryAlpha('retired', 'first'), 0);
+    assert.equal(host.getPaintRect('retired', 'first'), null);
+    env.viewer.scene.requestRenderCount = 0;
+    for (let i = 0; i < 16; i++) {
+      env.advanceTime(250);
+      for (const observer of env.resizeObservers) observer.callback();
+      env.postRender.raise();
+    }
+    assert.equal(host.getDiagnostics().paintedCount, 0);
+    assert.equal(env.viewer.scene.requestRenderCount, 0);
+  } finally { env.cleanup(); }
+});

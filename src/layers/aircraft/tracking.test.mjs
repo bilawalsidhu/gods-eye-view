@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { createTracking as createFlightsTracking } from '../flights/tracking.js';
 import { createTracking as createMilitaryTracking } from '../military/tracking.js';
+import {
+  trailBodyCount,
+  trailBodySegments,
+} from '../../data/trailContinuity.js';
 import { RENDER_DELAY_SEC as FLIGHT_DELAY_SEC } from '../flights/policy.js';
 import { RENDER_DELAY_SEC as MILITARY_DELAY_SEC } from '../military/policy.js';
 
@@ -18,8 +22,6 @@ const LAYERS = [
     layerName: 'Live Flights',
     focusId: 'flights',
     floorsTrail: false,
-    backfillLeadAltM: 10000,
-    thinsBackfill: false,
   },
   {
     name: 'military',
@@ -29,8 +31,6 @@ const LAYERS = [
     layerName: 'Military Flights',
     focusId: 'militaryFlights',
     floorsTrail: true,
-    backfillLeadAltM: 50,
-    thinsBackfill: true,
   },
 ];
 
@@ -48,7 +48,9 @@ function harness(layer, { groundM = null, track = [] } = {}) {
     lifetime: new AbortController(),
     _billboards: new Map(),
     _trackedIcao: null,
-    _trailPositions: [],
+    _trailFixes: [],
+    _positionHistory: new Map(),
+    now: () => 10_000,
     _trailBackfillToken: 0,
     _renderer: {
       engine: createFakeEngine(),
@@ -120,15 +122,18 @@ for (const layer of LAYERS) {
   test(`${layer.name} trail ${layer.floorsTrail ? 'lifts' : 'keeps'} a fix below the warm ground`, () => {
     const { tracking, flightState } = harness(layer, { groundM: GROUND_M });
     assert.equal('_trailFloorPosition' in tracking, layer.floorsTrail);
-    tracking._appendTrailFix(geo.cartesian3.fromDegrees(-106.6, 35.05, 10));
-    const height = heightOf(flightState._trailPositions[0]);
+    tracking._appendTrailFix(
+      geo.cartesian3.fromDegrees(-106.6, 35.05, 10),
+      1000,
+    );
+    const height = heightOf(flightState._trailFixes[0].position);
     assert.ok(
       Math.abs(height - (layer.floorsTrail ? GROUND_M : 10)) < 0.01,
       `trail height ${height}`,
     );
   });
 
-  test(`${layer.name} trail seeds only fixes behind its delayed layer clock`, () => {
+  test(`${layer.name} trail draws only fixes behind its delayed layer clock`, () => {
     const { tracking, flightState } = harness(layer);
     const cutoffMs = Date.parse('2026-10-24T12:00:00Z');
     const history = [-1000, 0, 1000].map((offset, index) => ({
@@ -140,24 +145,36 @@ for (const layer of LAYERS) {
     flightState._renderer = null;
     tracking._startTrail('abc123');
     assert.deepEqual(
-      flightState._trailPositions,
+      trailBodySegments(
+        flightState._trailFixes,
+        trailBodyCount(flightState._trailFixes, cutoffMs),
+      ).flat(),
       history.slice(0, 2).map((fix) => fix.position),
     );
-    assert.notEqual(flightState._trailPositions[0], history[0].position);
+    assert.equal(flightState._trailFixes.length, 3);
+    assert.notEqual(flightState._trailFixes[0].position, history[0].position);
     flightState.lifetime.abort();
   });
 
-  test(`${layer.name} backfill places and thins history by its own rules`, async () => {
+  test(`${layer.name} backfill skips unknown heights and retains every known waypoint`, async () => {
     const leading = harness(layer, {
       track: [{ observedAtMs: 1000, latitude: 35, longitude: -106 }],
     });
     leading.flightState._trackedIcao = 'abc123';
     await leading.tracking._backfillTrail('abc123', 0, Infinity);
-    assert.equal(leading.flightState._trailPositions.length, 1);
+    assert.equal(leading.flightState._trailFixes.length, 0);
+    const grounded = harness(layer, {
+      groundM: GROUND_M,
+      track: [
+        { observedAtMs: 1000, latitude: 35, longitude: -106, onGround: true },
+      ],
+    });
+    grounded.flightState._trackedIcao = 'abc123';
+    await grounded.tracking._backfillTrail('abc123', 0, Infinity);
+    assert.equal(grounded.flightState._trailFixes.length, 1);
     assert.ok(
       Math.abs(
-        heightOf(leading.flightState._trailPositions[0]) -
-          layer.backfillLeadAltM,
+        heightOf(grounded.flightState._trailFixes[0].position) - GROUND_M,
       ) < 0.01,
     );
 
@@ -171,11 +188,8 @@ for (const layer of LAYERS) {
     });
     long.flightState._trackedIcao = 'abc123';
     await long.tracking._backfillTrail('abc123', 0, Infinity);
-    // 1000 points into a 400-vertex trail: stride-thinned (every 3rd) or
-    // only the newest 400 kept.
-    assert.equal(
-      long.flightState._trailPositions.length,
-      layer.thinsBackfill ? 334 : 400,
-    );
+    assert.equal(long.flightState._trailFixes.length, 1000);
+    assert.equal(long.flightState._trailFixes[0].timeMs, 1000);
+    assert.equal(long.flightState._trailFixes.at(-1).timeMs, 1_000_000);
   });
 }

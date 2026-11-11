@@ -287,6 +287,12 @@ const longRun = quick ? '--swaps=100' : '--swaps=500';
 // label, script, layers, extra arguments, timeout in seconds.
 const runs = [
   [
+    'switch-equals-cold-start--markers',
+    'switch-equals-cold-start',
+    ['news', 'shipwrecks'],
+    ['--group=markers'],
+  ],
+  [
     'switch-equals-cold-start--aircraft',
     'switch-equals-cold-start',
     ['flights', 'military'],

@@ -67,12 +67,12 @@ test('the layers drawn through one display, and the ones that draw without one',
   // Engine-specific options of a display: the Navara backends.
   assert.deepEqual(
     kinds((entry) => Object.keys(entry.backends ?? {}).length),
-    ['wind'],
+    ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning'],
   );
   assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), []);
   assert.deepEqual(
     kinds((entry) => !entry.display),
-    ['wildlife-sightings', 'sea-marks', 'ski-pistes'],
+    ['shipwrecks', 'news', 'wildlife-sightings', 'sea-marks', 'ski-pistes'],
   );
 });
 

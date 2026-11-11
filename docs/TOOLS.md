@@ -270,7 +270,7 @@ and the development server's internal routes. See SECURITY.md.
 | `get_aircraft_info`   | `aircraft`    | Aircraft type and registration, and flight route, from adsbdb  |
 | `vessels_in_area` | `vessels` | Ships reported by AIS in an area, nearest first, optionally by type; `group_by` and `stats` count and summarize every match |
 | `find_vessel` | `vessels` | Ships anywhere by MMSI, IMO number or name |
-| `get_vessel_track` | `vessels` | Recent positions of one ship, thinned to 200 points |
+| `get_vessel_track` | `vessels` | Recent positions of one ship by vessel id or MMSI, thinned to 200 points |
 | `next_satellite_pass` | `satellites` | Next pass over a place or point (default the ISS), with naked-eye visibility |
 | `satellites_overhead` | `satellites` | Satellites in a CelesTrak group above a place or point now, highest first |
 | `find_cctv_cameras` | `cctv` | Public cameras in an area, nearest first |

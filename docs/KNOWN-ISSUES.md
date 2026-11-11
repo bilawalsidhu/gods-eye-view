@@ -10,6 +10,26 @@ For the roadmap and open backlog, see the repository issue tracker.
 
 ## Open
 
+### Supplied decoded weather tiles require Cesium on globe surfaces
+
+Status: Open (Cesium only)
+
+Custom sources supplying individual decoded radar, regional infrared or
+lightning tiles use Cesium's imagery provider scheduler
+(`src/globe/cesium/weatherFrames.js`). Navara hides these controls on globe
+surfaces and requests no supplied tiles there. Full-extent cloud images and
+raised weather shells remain available on both engines. A full port needs
+decoded tile callbacks in the imagery contract and the Navara adapter.
+
+### Street-vehicle label depth occlusion requires Cesium
+
+Status: Open (Cesium only)
+
+GPU depth occlusion for street-vehicle brackets and callouts uses Cesium's
+depth probe (`src/data/detection.js`). Navara retains the existing geometric
+visibility checks, without the GPU depth result. The contract needs an
+asynchronous depth-probe operation before this can run on both engines.
+
 ### Large raised KML polygons omit their fill
 
 Status: Open (bounded triangulation)
@@ -184,6 +204,49 @@ Status: Open (limits)
   fMP4 or byte-range playlists are not supported.
 - When live video fails, the camera falls back to its labeled still, Street View
   or placeholder frame, which is not live video.
+
+---
+
+### News layer without a news server
+Status: Open (limits)
+
+- GDELT's places and categories are machine-coded and approximate. A report can
+  be placed in the wrong town of the same name, or at a country an article only
+  names as a nationality ("Syrian refugees" placed in Syria).
+- Copies of one agency story are merged, but the same event under different
+  wording stays as separate reports.
+- Only the 11 disputed areas in the bundled list
+  (`src/data/local_data/natural_earth/README.md`) and the territories Natural
+  Earth gives no country code (Somaliland, Northern Cyprus, Siachen Glacier,
+  the Spratly Islands and a few more) are named as themselves; everywhere else
+  Natural Earth's default country lines apply, so a place in Western Sahara,
+  for example, is named with the country those lines put it in. GDELT places a whole city at one point: Jerusalem's falls
+  inside East Jerusalem, so it is named "Jerusalem" alone.
+- A country's own stories in Local keep World News API's category (politics as
+  political, business as economy, else other) and carry no severity; fighting
+  there shows through the Conflicts reports placed in the area.
+- When World News API takes 10 to 20 s to answer a country's first read, Local
+  reads unavailable until it is asked again (the next refresh, every 2 minutes
+  while the tab is shown, or the camera settling in another half-degree cell,
+  or a section switch), which is served from that read. A read over 20 s fails
+  and is tried again with the first ask a minute or more later.
+- Local needs a World News API key. Its free plan allows 50 points a day; Core
+  stops at `WORLDNEWSAPI_DAILY_READS` reads (default 30) and Local then says the
+  daily limit is reached. A request that never reached World News API (offline)
+  is not counted; any answer from it is, a failing one too, and so is a
+  request that timed out.
+- A country's news is kept for at most 1 hour (World News API's terms, which
+  also ask the operator for its written permission to cache at all). While
+  World News API cannot be read, Local in that country therefore reads
+  unavailable from an hour after its last good read.
+- A story GDELT codes as violence whose address has no words, and whose page
+  title is not in yet (titles are read for the newest 3 hours only), is not
+  listed under Conflicts or counted in its hotspot: GDELT's coding alone is
+  wrong too often. It still shows in Local for its area, as "… reported in
+  <place>".
+- `/api/news/*` refuses cross-site browser requests and requests carrying
+  reverse-proxy forwarding headers, like the other key-spending routes
+  (SECURITY.md): behind a reverse proxy the News layer reads unavailable.
 
 ---
 

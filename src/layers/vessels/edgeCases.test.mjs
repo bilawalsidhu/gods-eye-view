@@ -11,6 +11,7 @@ const RAD = Math.PI / 180;
 
 const row = (mmsi, latitude, longitude, observedAtMs) => ({
   id: mmsi,
+  mmsi,
   reference: mmsi,
   latitude,
   longitude,

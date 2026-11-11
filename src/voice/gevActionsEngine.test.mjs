@@ -247,6 +247,36 @@ test('track_entity flies to a vessel through the engine', async () => {
   assert.equal(engine.fake.callsOf('camera.flyToSphere').length, 1);
 });
 
+test('track_entity selects a vessel UUID before its MMSI on either engine', async (t) => {
+  const id = '0770e3ca-b896-c307-f499-4f9df2b8f86b';
+  for (const kind of ['cesium', 'navara']) {
+    const engine = engineOverAustin({ kind });
+    t.after(() => engine.destroy());
+    let selected = null;
+    const runner = runnerOn(engine, {
+      dataManager: dataManagerWith({
+        'ais-live-vessels': {
+          findByQuery: () => ({
+            id,
+            mmsi: '366999999',
+            name: 'EVER GIVEN',
+            latitude: 29.7,
+            longitude: -95.0,
+          }),
+          selectById: (value) => (selected = value),
+        },
+      }),
+    });
+    const result = await runner('track_entity', {
+      query: id,
+      layerId: 'ais-live-vessels',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(selected, id);
+    assert.equal(engine.fake.callsOf('camera.flyToSphere').length, 1);
+  }
+});
+
 test('frame_overhead frames the nearby contacts with flyToSphere as on Cesium', async () => {
   const engine = engineOverAustin({ kind: 'navara' });
   const center = engine.camera.pickEllipsoid({ x: 512, y: 384 });

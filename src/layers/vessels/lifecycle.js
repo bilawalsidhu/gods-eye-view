@@ -117,7 +117,7 @@ export function createLifecycle({
     state.renderer?.destroy();
     state.renderer = null;
     state.records.all = [];
-    state.records.byMmsi = new Map();
+    state.records.byId = new Map();
     state.records.unkeyed = [];
     state.clickHandler = null;
     state.selectionRemove = null;
@@ -135,12 +135,12 @@ export function createLifecycle({
     state.selectedRecord = null;
     state.trail = null;
     state.trailPositions = [];
-    state.trailMmsi = null;
+    state.trailId = null;
     state.trailBackfillToken = 0;
   }
   const picks = {
     owner: 'ais-live-vessels',
-    predicate: (pickedId) => state.records.byMmsi.has(pickedId),
+    predicate: (pickedId) => state.records.byId.has(pickedId),
   };
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */
@@ -242,10 +242,12 @@ export function createLifecycle({
           });
       }
       bindVisibleScene(activeViewer, scene);
+      vesselState.timeline?.start();
       return components.ingestion.loadLivePositions(scene);
     },
 
     disable() {
+      vesselState.timeline?.stop();
       removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
@@ -266,6 +268,7 @@ export function createLifecycle({
     },
 
     destroy() {
+      vesselState.timeline?.stop();
       removeViewListener();
       invalidateAisSession();
       releaseContinuousRender('ais-vessels', state.renderer?.engine); // direct-destroy path (perf wave 2 fix)

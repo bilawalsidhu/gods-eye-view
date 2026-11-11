@@ -178,8 +178,8 @@ export function createVesselsDisplay(
   const newHandle = (spec) => {
     const record = spec.id;
     const pickId =
-      record?.mmsi != null && record.mmsi !== ''
-        ? String(record.mmsi)
+      record?.id != null && record.id !== ''
+        ? String(record.id)
         : `gev-vessel-unkeyed:${++unkeyedSeq}`;
     const handle = {
       id: record,

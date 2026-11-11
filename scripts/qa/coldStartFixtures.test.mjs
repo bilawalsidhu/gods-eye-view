@@ -10,6 +10,8 @@ import { createTrafficDisplay } from '../../src/layers/traffic/render/display.js
 import { createAnimation } from '../../src/layers/traffic/animation.js';
 import { createRecentImagerySource } from '../../src/layers/recentImagery/source.js';
 import { createThumbnailLoader } from '../../src/layers/recentImagery/thumbnails.js';
+import { createShipwrecksSource } from '../../src/layers/shipwrecks/source.js';
+import { createNewsSource } from '../../src/layers/news/source.js';
 
 const origin = 'http://127.0.0.1:4309';
 test('every group has valid strict fixture routes', async () => {
@@ -159,6 +161,17 @@ test('the page fetch guard delegates NASA snapshot APIs to their image fixture',
   assert.ok((await response.arrayBuffer()).byteLength > 0);
   assert.equal(page.context.window.__coldStartUnexpectedApi.length, 0);
   await assert.rejects(page.fetch('/api/v1/snapshot'), /No cold-start fixture/);
+});
+
+test('marker fixtures pass the real news and shipwreck source decoders', async () => {
+  const page = await installedPage('markers');
+  const news = createNewsSource({ fetchImpl: page.fetch });
+  const wrecks = createShipwrecksSource({ fetchImpl: page.fetch });
+  assert.ok((await wrecks.getSnapshot()).records.length);
+  const { hotspots } = await news.getHotspots();
+  assert.ok(hotspots.length);
+  assert.ok((await news.getFeed()).reports.length);
+  assert.ok((await news.getOutline(hotspots[0].id)).polygons.length);
 });
 
 test('every TLE group has matching deterministic SATCAT records on both pages', async () => {

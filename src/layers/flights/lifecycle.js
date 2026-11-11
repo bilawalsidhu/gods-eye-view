@@ -133,6 +133,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
             /* geoid grid failed to load — baro path stays un-geoid-corrected until retried */
           });
       }
+      flightState.timeline?.start();
       if (!renderer) return;
       parts.tracking._installClickHandler();
       registerPickOwner(
@@ -177,6 +178,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
      * Also clears any active flight tracking so the camera is released.
      */
     disable() {
+      flightState.timeline?.stop();
       flightState.enabled = false;
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
@@ -195,6 +197,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
      * @param {object|null} viewer - The viewer the layer was drawn on.
      */
     destroy(viewer) {
+      flightState.timeline?.stop();
       flightState.initialized = false;
       flightState.enabled = false;
       flightState.lifetime.abort();

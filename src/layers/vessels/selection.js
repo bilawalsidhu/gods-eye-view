@@ -49,7 +49,7 @@ export function createSelection({
     state.selectionRemove = dispatcher.register('ais-live-vessels', {
       // Owned while enabled (the lifecycle registers the same predicate on
       // enable and drops it on disable).
-      owns: (id) => state.feed.enabled && state.records.byMmsi.has(id),
+      owns: (id) => state.feed.enabled && state.records.byId.has(id),
       onClick: (ctx) => handleClick(ctx),
     });
     bindKeysAndFollow(renderer, keyTarget);
@@ -92,10 +92,10 @@ export function createSelection({
     if (!state.feed.enabled) return;
     // The bridge view owns the selection: a click on open water must not
     // deselect the vessel the camera is riding.
-    if (state.cockpitSubjectMmsi) return;
+    if (state.cockpitSubjectId) return;
     const picked = click.picked;
     const pickedId = resolvePickId(picked);
-    let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
+    let record = pickedId ? state.records.byId.get(pickedId) : null;
     const ownRecordPick = Boolean(pickedRecordOf(picked));
 
     // An own-layer record without a live map key is a strict no-op (FB-1
@@ -143,7 +143,7 @@ export function createSelection({
       const mmsi = String(cardHit.entryId || '').startsWith('vessel:')
         ? cardHit.entryId.slice('vessel:'.length)
         : null;
-      record = mmsi ? state.records.byMmsi.get(mmsi) || null : null;
+      record = mmsi ? state.records.byId.get(mmsi) || null : null;
       // A stale card id is not empty terrain and must not clear a newer
       // selection. The next paint will evict its hit rectangle.
       if (!record) return;
@@ -155,8 +155,8 @@ export function createSelection({
       selectAndFocusVessel(record);
     } else {
       const transition = components.queries.reduceVesselSelection({
-        selectedMmsi: state.selectedRecord?.mmsi,
-        pickedMmsi: null,
+        selectedId: state.selectedRecord?.id,
+        pickedId: null,
         gesture: 'click',
       });
       if (transition.action === 'deselect') clearVesselInspection();
@@ -171,17 +171,17 @@ export function createSelection({
   /** Select one live vessel and request one UI-owned camera transfer. */
 
   function selectAndFocusVessel(record) {
-    if (!record?.mmsi) return false;
+    if (!record?.id) return false;
     const transition = components.queries.reduceVesselSelection({
-      selectedMmsi: state.selectedRecord?.mmsi,
-      pickedMmsi: record.mmsi,
+      selectedId: state.selectedRecord?.id,
+      pickedId: record.id,
       gesture: 'click',
     });
     if (transition.action === 'select') selectVessel(record);
     requestWorldFocus({
       kind: 'vessel',
-      id: record.mmsi,
-      label: record.name || record.mmsi,
+      id: record.id,
+      label: record.name || record.mmsi || record.id,
       position:
         components.rendering.getVisual(record).billboard?.position ||
         components.rendering.getVisual(record).position,
@@ -210,7 +210,7 @@ export function createSelection({
   function onVesselKeyDown(event) {
     if (!state.feed.enabled || event.key !== 'Escape') return;
     const transition = components.queries.reduceVesselSelection({
-      selectedMmsi: state.selectedRecord?.mmsi,
+      selectedId: state.selectedRecord?.id,
       gesture: 'escape',
     });
     if (transition.action === 'deselect') {
@@ -219,8 +219,8 @@ export function createSelection({
   }
 
   function selectVessel(record) {
-    if (!record?.mmsi) return;
-    const reuseTrail = state.trailMmsi === record.mmsi;
+    if (!record?.id) return;
+    const reuseTrail = state.trailId === record.id;
     clearSelection({ preserveTrail: reuseTrail });
     state.selectedRecord = record;
     record.missedRefreshes = 0;
@@ -238,7 +238,7 @@ export function createSelection({
       selectEntityContext(record);
     }
     // Track-history trail (PRD F3/F4): seed with the current position + async
-    // backfill from the server-side per-MMSI ring buffer.
+    // backfill from the source's recent track for this vessel.
     if (reuseTrail) {
       components.tracking.appendSelectedVesselTrailFix(record);
     } else {
@@ -254,10 +254,10 @@ export function createSelection({
    */
 
   function registerSelectedContext(record) {
-    if (!record?.mmsi) return null;
+    if (!record?.id) return null;
     try {
       return registerEntityContext(record, {
-        id: `ais-${record.mmsi}`,
+        id: `ais-${record.id}`,
         layerId: 'ais-live-vessels',
         layerName: 'Live AIS Vessels',
         source: aisLiveVesselsLayer.source,
@@ -265,7 +265,8 @@ export function createSelection({
         latitude: record.lat,
         longitude: record.lon,
         properties: {
-          mmsi: record.mmsi,
+          vesselId: record.id,
+          mmsi: record.mmsi || null,
           type: record.type,
           speedKt: record.speed,
           course: record.course,

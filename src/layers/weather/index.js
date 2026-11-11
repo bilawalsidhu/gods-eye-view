@@ -1,6 +1,7 @@
 import * as geo from '../../geo/index.js';
 import { createWeatherDisplay } from './render/display.js';
 import { engineImageryHost, imageryHostStatus } from '../shared/imageryHost.js';
+import { weatherFrameSource } from './source.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
   RADAR_MAX_GAP_MS,
@@ -68,6 +69,7 @@ export function createWeatherLayer({
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
+  const frameSource = weatherFrameSource(feed);
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
   const satellite = !radar && !lightning;
@@ -108,6 +110,12 @@ export function createWeatherLayer({
     clock ? clock.getState().mode === 'latest' : followLatest;
   // The display draws through engine.imagery, which follows the surface the
   // map shows; without an engine nothing draws and nothing is hidden.
+  const unsupportedTiles = () =>
+    frameSource?.getTile &&
+    sceneEngine &&
+    !sceneEngine.extensions?.cesium?.viewer &&
+    product !== 'clouds' &&
+    sceneEngine.imagery.surface() !== 'tiles';
   const getHost = () =>
     sceneEngine
       ? engineImageryHost(sceneEngine)
@@ -141,7 +149,9 @@ export function createWeatherLayer({
 
   function checkHost(resume = true) {
     const host = getHost();
-    const status = imageryHostStatus(host);
+    const status = unsupportedTiles()
+      ? msg('This weather source requires Cesium')
+      : imageryHostStatus(host);
     const changed = host.collection !== hostCollection || hostStatus !== status;
     hostCollection = host.collection;
     hostStatus = status;
@@ -307,7 +317,10 @@ export function createWeatherLayer({
     attachRenderer({ engine = null } = {}) {
       sceneEngine = engine;
       rendering = engine
-        ? (createNativeRendering(engine, { onChange: notify }) ?? null)
+        ? (createNativeRendering(engine, {
+            onChange: notify,
+            frameSource,
+          }) ?? null)
         : null;
       checkHost(false);
       eventTarget?.addEventListener?.(
@@ -571,6 +584,7 @@ export function createWeatherLayer({
           : { product, opacity };
     },
     getRowControls() {
+      if (unsupportedTiles()) return null;
       const shared = clock?.getState();
       const followLatest = isLatest();
       // Source-described text is data: shown as is, never translated.

@@ -816,7 +816,7 @@ try {
           );
         check(
           `${preset.name}: the icon raster cache stays bounded`,
-          styling.iconCacheSize <= 6 * 2 * 3,
+          styling.iconCacheSize <= 6 * 2 * 3 * 2,
           `${styling.iconCacheSize} rasters`,
         );
       }

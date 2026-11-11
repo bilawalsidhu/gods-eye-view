@@ -7,11 +7,16 @@ import { createAircraftTracking } from '../aircraft/tracking.js';
 import {
   TRACKED_MODEL_MAX_LOAD_FAILS,
   TRACKED_MODEL_RETRY_BACKOFF_MS,
+  STALE_ALPHA,
   TRAIL_MAX_POINTS,
-  RENDER_DELAY_SEC,
+  displayDelayMs,
+  followsClock,
+  DR_CORRECTION_MS,
   TRAIL_COLOR,
   CYAN_TRANSPARENT,
 } from './policy.js';
+
+const STALE_CYAN = CYAN.withAlpha(STALE_ALPHA);
 
 /** The civil layer's tracking: the shared aircraft tracking plus the military
  *  suppression handoff and the route-gated tracked card. */
@@ -26,6 +31,83 @@ export function createTracking({
   const { isMilitaryLayerActive, isMilitaryIcao } = services.militaryRegistry;
   const flightsLayer = layer;
 
+  /**
+   * The tracked plane's stale cue and whether it is drawn with the stale fade.
+   * - SIGNAL LOST · <time since its last report>, dimmed: its coast has ended
+   *   (or it holds at its last report after a missed update) and no newer
+   *   report has come.
+   * - STALE, dimmed: it has missed an update and still coasts, or the whole
+   *   feed is backing off.
+   * @param {string} icao24
+   * @returns {{text: string, dimmed: boolean}}
+   */
+
+  function _trackedStaleCue(icao24) {
+    const records = flightState.records;
+    const misses = records.missingPolls.get(icao24) || 0;
+    const repeated = records.fixRepeated?.has(icao24) === true;
+    const backoff = flightState.feed._backoff === true;
+    // Computed once per frame for the label, the icon colour and the model
+    // fade; a poll between frames changes the key.
+    const frame = flightState._renderer?.view.frameNumber();
+    const key = Number.isFinite(frame)
+      ? `${frame}|${icao24}|${misses}|${repeated}|${backoff}`
+      : null;
+    const cached = flightState._trackedStaleCueCache;
+    if (key !== null && cached?.key === key) return cached.cue;
+    const cue = _computeTrackedStaleCue(
+      icao24,
+      misses > 0 || repeated,
+      backoff,
+    );
+    flightState._trackedStaleCueCache = key === null ? null : { key, cue };
+    return cue;
+  }
+
+  /** `_trackedStaleCue` without the per-frame cache. A repeated fix counts as missed. */
+
+  function _computeTrackedStaleCue(icao24, missed, backoff) {
+    const lost = parts.motion._signalLost(icao24);
+    if (lost && (missed || !lost.holds)) {
+      const sec = Math.max(
+        0,
+        Math.floor((flightState.now() - lost.reportEpochMs) / 1000),
+      );
+      const time =
+        sec < 60
+          ? `${formatNumber(sec, { useGrouping: false })} ${unitLabel('s')}`
+          : `${formatNumber(Math.floor(sec / 60), { useGrouping: false })} ${unitLabel('min')}`;
+      return { text: t('SIGNAL LOST · {time}', { time }), dimmed: true };
+    }
+    // A missed update or a stalled feed: no newer position is coming in.
+    if (missed || backoff) return { text: t('STALE'), dimmed: true };
+    return { text: '', dimmed: false };
+  }
+
+  /** The tracked billboard's colour: cyan, faded while stale, clear while the 3D model is the visual. */
+
+  function _trackedIconColor() {
+    if (parts.rendering._modelOwnsVisual(flightState._trackedIcao))
+      return CYAN_TRANSPARENT;
+    return _trackedStaleCue(flightState._trackedIcao).dimmed
+      ? STALE_CYAN
+      : CYAN;
+  }
+
+  /**
+   * Re-word the tracked label when its stale cue changes (STALE, SIGNAL LOST,
+   * each new second or minute of it). Run from the layer's per-frame pass.
+   */
+
+  function _staleCueTick() {
+    const icao24 = flightState._trackedIcao;
+    if (!icao24 || !flightState._trackedEntity) return;
+    const text = _trackedStaleCue(icao24).text;
+    if (text === flightState._trackedStaleCueText) return;
+    flightState._trackedStaleCueText = text;
+    tracking._updateTrackedLabelModel(icao24);
+  }
+
   const tracking = createAircraftTracking({
     flightState,
     services,
@@ -36,14 +118,20 @@ export function createTracking({
     logTag: '[Data:Flights]',
     trailHeadIdPrefix: 'fl',
     policy: {
-      RENDER_DELAY_SEC,
+      displayDelayMs,
+      followsClock,
+      DR_CORRECTION_MS,
       TRAIL_COLOR,
       TRAIL_MAX_POINTS,
       TRACKED_MODEL_MAX_LOAD_FAILS,
       TRACKED_MODEL_RETRY_BACKOFF_MS,
     },
     trackedStyle: {
-      color: CYAN,
+      get color() {
+        return _trackedStaleCue(flightState._trackedIcao).dimmed
+          ? STALE_CYAN
+          : CYAN;
+      },
       transparentColor: CYAN_TRANSPARENT,
       labelColor: '#39d0ff',
       baseScale: 1,
@@ -83,7 +171,6 @@ export function createTracking({
     // chain), so trail seeds/appends drape without a floor of their own.
     floorTrail: false,
     // Leading no-baro waypoints keep the old 10 km airborne default.
-    backfill: { leadAltM: 10000, thinToBudget: false },
   });
 
   /**
@@ -141,10 +228,7 @@ export function createTracking({
     const spd = info.velocity
       ? quantity(Math.round(info.velocity * 1.944), 'kts')
       : '';
-    const stale =
-      flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
-        ? t('STALE')
-        : '';
+    const stale = _trackedStaleCue(icao24).text;
     const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
     // Converted contacts report their class as TR-3B and nothing else — the
     // operator/type identity is exactly what the Easter egg is replacing.
@@ -234,6 +318,9 @@ export function createTracking({
 
   return {
     ...tracking,
+    _trackedStaleCue,
+    _trackedIconColor,
+    _staleCueTick,
     _militaryLayerSuppresses,
     _trackedLabelText,
     _routeIsPlausible,

@@ -261,7 +261,7 @@ test('a look-under owner (local ADS-B) keeps its own click rule beside the other
 
 test('an own-rule owner (vessels) gets every click with its top pick and is another layer to the rest', () => {
   const { dispatcher, click, escape } = setup({
-    10: [{ id: { mmsi: '111' } }], // its own object (Cesium: the record)
+    10: [{ id: { id: 'ship-1', mmsi: '111' } }], // its own object (Cesium: the record)
     20: [{ id: 'ae01ce' }], // flights' contact
     30: [], // empty map
   });
@@ -269,7 +269,7 @@ test('an own-rule owner (vessels) gets every click with its top pick and is anot
   const flights = recorder();
   let owned = true;
   dispatcher.register('ais-live-vessels', {
-    owns: (id) => owned && id === '111',
+    owns: (id) => owned && id === 'ship-1',
     onClick: (ctx) =>
       seen.push([ctx.position.x, ctx.picked?.id ?? null, ctx.gesture.travelPx]),
   });
@@ -285,7 +285,7 @@ test('an own-rule owner (vessels) gets every click with its top pick and is anot
   click(30, { travel: 40 });
   escape();
   assert.deepEqual(seen, [
-    [10, { mmsi: '111' }, 0],
+    [10, { id: 'ship-1', mmsi: '111' }, 0],
     [20, 'ae01ce', 0],
     [30, null, 0],
     [30, null, 0],

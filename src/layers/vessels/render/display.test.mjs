@@ -3,7 +3,7 @@ import { createFakeGroundHarness as fakeHarness } from '../../../testSupport/gro
 // Cesium engine (real Cesium billboards and polylines over a stub scene:
 // they draw nothing but hold what the engine writes): the chevron bank
 // (no depth test, centred, screen-aligned, 32 px artwork), handle writes
-// committed once per frame, picks by MMSI, the follow signal, the view and
+// committed once per frame, picks by source id, the follow signal, the view and
 // the trail on engine.lines with its pick namespace.
 
 import test from 'node:test';
@@ -100,7 +100,7 @@ for (const makeHarness of HARNESSES) {
     const h = await setup(makeHarness);
     const { engine, display } = h;
     assert.equal(display.fleet.attached(), false);
-    const record = { mmsi: '111' };
+    const record = { id: '111', mmsi: '999' };
     // Added before the fleet attaches: drawn once it does.
     const handle = display.fleet.add(spec(record));
     display.fleet.attach({ show: true });
@@ -154,7 +154,7 @@ for (const makeHarness of HARNESSES) {
     await settle();
     assert.equal(drawn(h, listed.id, 0).show, false);
     // Removal moves the last chevron into the hole.
-    const other = display.fleet.add(spec({ mmsi: '222' }));
+    const other = display.fleet.add(spec({ id: '222', mmsi: '999' }));
     display.fleet.remove(handle);
     await settle();
     assert.equal(chevronSets(engine)[0].count, 1);
@@ -179,8 +179,8 @@ for (const makeHarness of HARNESSES) {
     const h = await setup(makeHarness);
     const { display } = h;
     display.fleet.attach({ show: true });
-    const keyed = { mmsi: '111' };
-    const unkeyed = { mmsi: '' };
+    const keyed = { id: '111', mmsi: '999' };
+    const unkeyed = { id: '', mmsi: '' };
     display.fleet.add(spec(keyed));
     const loose = display.fleet.add(spec(unkeyed));
     await settle();
@@ -293,7 +293,7 @@ test('a display destroyed before its atlas is drawn draws nothing', async () => 
       }),
   });
   display.fleet.attach({ show: true });
-  display.fleet.add(spec({ mmsi: '111' }));
+  display.fleet.add(spec({ id: '111', mmsi: '999' }));
   await settle();
   display.destroy();
   release({ canvas: {}, cells: layout.cells });
@@ -314,7 +314,7 @@ test('a failed atlas warns and leaves the layer without chevrons', async () => {
       },
     });
     display.fleet.attach({ show: true });
-    display.fleet.add(spec({ mmsi: '111' }));
+    display.fleet.add(spec({ id: '111', mmsi: '999' }));
     await display.whenReady();
     assert.equal(engine.movers.list().length, 0);
     assert.equal(warnings.length, 1);
@@ -330,7 +330,7 @@ test('handles keep the colour they are given as plain copies', async () => {
   const display = createVesselsDisplay(engine, { drawAtlas });
   await display.whenReady();
   display.fleet.attach({ show: true });
-  const handle = display.fleet.add(spec({ mmsi: '111' }));
+  const handle = display.fleet.add(spec({ id: '111', mmsi: '999' }));
   const color = WHITE.withAlpha(0.5);
   handle.color = color;
   assert.notEqual(handle.color, color);

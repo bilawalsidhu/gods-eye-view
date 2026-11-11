@@ -14,6 +14,7 @@ const noop = () => {};
 
 const row = (mmsi, latitude, longitude) => ({
   id: mmsi,
+  mmsi,
   reference: mmsi,
   latitude,
   longitude,
@@ -105,7 +106,7 @@ test('vessel logic draws and selects through a plain renderer on an engine, with
   }
 });
 
-test('vessels on the display: one always-on-top chevron bank, MMSI picks, the trail on engine.lines', async () => {
+test('vessels on the display: one always-on-top chevron bank, source-id picks, the trail on engine.lines', async () => {
   const engine = createFakeEngine();
   const layout = vesselAtlasLayout();
   const renderer = createVesselsDisplay(engine, {

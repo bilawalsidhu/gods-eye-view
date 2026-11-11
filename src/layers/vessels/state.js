@@ -2,7 +2,8 @@ import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
 import * as geo from '../../geo/index.js';
-import { DEFAULT_AIS_RUNTIME } from './policy.js';
+import { DEFAULT_AIS_RUNTIME, followsClock } from './policy.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 
 export function createVesselState({ source, services }) {
   const { setEntries, setVisible, clearSource, hitTest } = bindOverlayHost(
@@ -30,6 +31,19 @@ export function createVesselState({ source, services }) {
 
   vesselState._aisRuntime = DEFAULT_AIS_RUNTIME;
 
+  /** Follows the world clock while the source declares a timeline (set by the
+   *  layer); see followsClock in policy.js. */
+  vesselState.timeline = null;
+
+  /** The world time the layer draws at while it follows the clock. */
+  vesselState.worldNow = worldTimeFor('ais-live-vessels');
+
+  /** The time records are judged at: the world's while following the clock. */
+  vesselState.recordsNow = () =>
+    followsClock(vesselState)
+      ? vesselState.worldNow()
+      : vesselState._aisRuntime.now();
+
   vesselState._aisSessionSequence = 0;
 
   /**
@@ -51,7 +65,7 @@ export function createVesselState({ source, services }) {
 
   vesselState.state = {
     feed: createVesselFeed(),
-    records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),
+    records: new VesselRecords({ now: () => vesselState.recordsNow() }),
     viewer: null,
 
     /** The engine's vessel renderer (render/*.js), per lifecycle. */
@@ -79,14 +93,14 @@ export function createVesselState({ source, services }) {
     activeFocusCount: 0,
     activeLabelCount: 0,
     selectedRecord: null,
-    /** @type {string|null} MMSI whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
-    cockpitSubjectMmsi: null,
+    /** @type {string|null} Id of the vessel whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
+    cockpitSubjectId: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
     /** @type {object[]} Chronological trail vertices, Cartesian3 (oldest first) */
     trailPositions: [],
-    /** @type {string|null} MMSI that owns the active selected-vessel trail. */
-    trailMmsi: null,
+    /** @type {string|null} Id of the vessel that owns the active selected-vessel trail. */
+    trailId: null,
     /** @type {number} Monotonic token — invalidates in-flight backfill responses */
     trailBackfillToken: 0,
     trailAbort: null,

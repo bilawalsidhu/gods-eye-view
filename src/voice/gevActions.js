@@ -1,4 +1,5 @@
 import { interruptGlobeRotation } from '../cameraVerbs.js';
+import { normalizeDisplayText } from '../data/displayText.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -2924,7 +2925,7 @@ async function trackEntity(
       () => {
         let trackedOk = false;
         if (family.kind === 'vessel') {
-          trackedOk = !!module.selectById?.(found.mmsi);
+          trackedOk = !!module.selectById?.(found.id ?? found.mmsi);
           flyToLandmark(engine, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
@@ -4098,8 +4099,13 @@ function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
         ?.module?.getAnalystRecords?.()
         .filter(
           (item) =>
-            String(item.icao24 ?? item.mmsi ?? item.noradId ?? item.id) ===
-            String(id),
+            String(
+              item.icao24 ??
+                item.vesselId ??
+                item.mmsi ??
+                item.noradId ??
+                item.id,
+            ) === String(id),
         ) || [];
     // Bikeshare uses station names as IDs: retain the coordinate identity
     // even if a namesake disappears. Moving records use their fresh fix.
@@ -5143,13 +5149,7 @@ function uniqueStrings(values) {
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
 function sanitizeLabel(value) {
-  const text = String(value || '');
-  let out = '';
-  for (const ch of text) {
-    const code = ch.codePointAt(0);
-    out += code < 0x20 || code === 0x7f ? ' ' : ch; // drop control chars incl. newlines
-  }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return normalizeDisplayText(value, 120);
 }
 
 function cachePrecision(service) {
@@ -5266,10 +5266,8 @@ function compactProperties(props) {
 }
 
 function cleanText(value) {
-  if (value == null || typeof value === 'object') return '';
-  const text = String(value).trim();
-  if (!text || text === 'undefined' || text === 'null') return '';
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const text = normalizeDisplayText(value);
+  return text === 'undefined' || text === 'null' ? '' : text;
 }
 
 function layerTitle(layerId) {
@@ -5426,6 +5424,7 @@ function cameraViewBox(engine) {
 /** Identity fields every compact analyst item keeps when present. */
 const ANALYST_IDENTITY_FIELDS = Object.freeze([
   'icao24',
+  'vesselId',
   'mmsi',
   'registration',
   'label',
@@ -5435,11 +5434,28 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Keys that identify an analyst record. The referent registry, track_entity,
+ * locateLayerEntity and follow-up filters match on them, so they skip
+ * display-text normalization.
+ */
+const ANALYST_CANONICAL_FIELDS = new Set([
+  'layerKey',
+  'id',
+  'icao24',
+  'vesselId',
+  'mmsi',
+  'noradId',
+  'registration',
+  'callsign',
+  'routeId',
+]);
+
+/**
  * Compact one analyst record for the voice payload: identity, position (so a
  * follow-up can fly to it), distance, and that layer's manifest fields with
  * times as ISO text. The full record set stays engine-side for follow-ups.
  *
- * `icao24`/`mmsi` ride along because the tool instructions tell the model to
+ * `icao24`/`vesselId`/`mmsi` ride along because the tool instructions tell the model to
  * hand this result straight to track_entity, and `id` is a DISPLAY label
  * (callsign, else registration, else hex). A callsign-less contact therefore
  * handed track_entity a tail number the lookup could not resolve, and the
@@ -5471,6 +5487,11 @@ function compactAnalystItem(r) {
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
+  // Canonical keys stay raw: bikeshare's id is the raw station name.
+  for (const key of Object.keys(compact)) {
+    if (typeof compact[key] === 'string' && !ANALYST_CANONICAL_FIELDS.has(key))
+      compact[key] = normalizeDisplayText(compact[key]);
+  }
   return compact;
 }
 

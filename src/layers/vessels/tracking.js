@@ -5,6 +5,7 @@ import {
   TRAIL_COLOR,
   TRAIL_MAX_POINTS,
   TRAIL_MIN_MOVE_M,
+  followsClock,
 } from './policy.js';
 
 export function createTracking({
@@ -84,20 +85,16 @@ export function createTracking({
     state.trailAbort?.abort();
     state.trailAbort = new AbortController();
     state.trailBackfillToken += 1;
-    state.trailMmsi = record.mmsi;
+    state.trailId = record.id;
     state.trailPositions = [];
     const current = vesselTrailPosition(record);
     if (current) state.trailPositions.push(current);
     attachSelectedVesselTrail();
-    backfillVesselTrail(
-      record.mmsi,
-      state.trailBackfillToken,
-      record.reference,
-    );
+    backfillVesselTrail(record.id, state.trailBackfillToken, record.reference);
   }
 
   function attachSelectedVesselTrail() {
-    if (!state.trailMmsi) return;
+    if (!state.trailId) return;
     if (!state.trail && state.renderer) {
       state.trail = state.renderer.trails.create({
         color: TRAIL_COLOR,
@@ -113,24 +110,29 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget backfill from the server-side per-MMSI ring buffer
+   * Fire-and-forget backfill from the server-side per-vessel ring buffer
    * (PRD F3 — "recent path" since server boot, not voyage history). Older
    * samples are spliced AHEAD of the live accumulation, capped at
    * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/malformed)
    * silently keeps the live-only trail.
-   * @param {string} mmsi - MMSI of the selected vessel.
+   * @param {string} id - Key of the selected vessel.
    * @param {number} token - Backfill token captured at request time.
    * @returns {Promise<void>}
    */
 
-  async function backfillVesselTrail(mmsi, token, reference = mmsi) {
+  async function backfillVesselTrail(id, token, reference = id) {
     const owner = state.trailAbort;
+    // Following the world clock, the track ends at the world's time.
+    const atMs = followsClock(vesselState) ? vesselState.worldNow() : undefined;
     const signal = owner
       ? AbortSignal.any([owner.signal, AbortSignal.timeout(8000)])
       : AbortSignal.timeout(8000);
     let samples = null;
     try {
-      const track = await vesselState._source.getTrack?.(reference, { signal });
+      const track = await vesselState._source.getTrack?.(
+        reference,
+        atMs === undefined ? { signal } : { signal, atMs },
+      );
       samples = track?.records ?? null;
     } catch {
       return; // silent — keep the live-accumulated trail
@@ -142,13 +144,19 @@ export function createTracking({
       token !== state.trailBackfillToken
     )
       return;
-    if (state.trailMmsi !== mmsi) return;
+    if (state.trailId !== id) return;
 
     const older = [];
     for (const sample of samples) {
       const lat = Number(sample?.latitude);
       const lon = Number(sample?.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      // Following the clock, an undated sample may be later than the time.
+      if (
+        atMs !== undefined &&
+        !(Number.isFinite(sample?.observedAtMs) && sample.observedAtMs <= atMs)
+      )
+        continue;
       // Per-sample N (≤ TRAIL_MAX_POINTS lookups) — same sea-surface datum as
       // the live vertices so the spliced trail is height-continuous.
       const heightM = components.queries.vesselDatumHeightM(
@@ -175,7 +183,7 @@ export function createTracking({
    */
 
   function appendSelectedVesselTrailFix(record) {
-    if (state.trailMmsi !== record.mmsi) return;
+    if (state.trailId !== record.id) return;
     const next = vesselTrailPosition(record);
     if (!next) return;
     const last = state.trailPositions[state.trailPositions.length - 1];
@@ -194,7 +202,7 @@ export function createTracking({
     state.trailAbort?.abort();
     state.trailAbort = null;
     state.trailBackfillToken += 1;
-    state.trailMmsi = null;
+    state.trailId = null;
     state.trailPositions = [];
     if (state.trail) state.trail.clear();
   }

@@ -1,3 +1,4 @@
+import { createTrail } from '../../../data/trailRenderer.js';
 // The aircraft display (contract: ./contract.js): what the aircraft layers
 // (flights, military, local ADS-B) draw, on any globe engine, through the
 // engine contract only: engine.movers (the fleet glyphs, the tracked glyph,
@@ -38,11 +39,8 @@ const BASE_SIZE_PX = 20;
 const GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
 // The trail's alpha where it passes the depth test and where the scene hides
 // it, and the live head's.
-const TRAIL_ALPHA = 0.85;
-const TRAIL_OCCLUDED_ALPHA = 0.4;
 const HEAD_ALPHA = 0.9;
 const HEAD_OCCLUDED_ALPHA = 0.45;
-const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 
 // ---------------------------------------------------------------------------
 // Sprite fields
@@ -793,7 +791,7 @@ export function createAircraftDisplay(
   // The layer's lines and heads, released with the display.
   const lines = new Set();
   const heads = new Set();
-  let lineSeq = 0;
+  const bodies = new Set();
   const lineOf = (options) => {
     const line = engine.lines.createLine(options);
     lines.add(line);
@@ -806,55 +804,15 @@ export function createAircraftDisplay(
     a.length === b.length &&
     a.every((position, index) => geo.cartesian3.equals(position, b[index]));
   const trails = {
-    create({ color, width = 2.5 }) {
-      const [r, g, b] = rgbaFromCss(color).rgba();
-      const id = `gev-trail:${layerId}-${++lineSeq}`;
-      let line = null;
-      let visible = true;
-      let current = [];
-      const ensure = () =>
-        (line ??= lineOf({
-          id,
-          widthPx: width,
-          color: [r, g, b, TRAIL_ALPHA],
-          depthFailAlpha: TRAIL_OCCLUDED_ALPHA / TRAIL_ALPHA,
-          arc: 'geodesic',
-          pickId: id,
-        }));
-      return {
-        // Fewer than 2 distinct positions draw nothing; consecutive
-        // near-duplicates are dropped.
-        setPositions(cartesians) {
-          if (destroyed) return;
-          const positions = [];
-          for (const position of Array.isArray(cartesians) ? cartesians : []) {
-            if (!position) continue;
-            const last = positions[positions.length - 1];
-            if (
-              last &&
-              geo.cartesian3.distanceSquared(last, position) <
-                MIN_SEGMENT_DISTANCE_SQ
-            )
-              continue;
-            positions.push(position);
-          }
-          current = positions.length >= 2 ? positions : [];
-          ensure().setPositions(current);
-          line.show(visible);
-        },
-        setVisible(next) {
-          visible = next !== false;
-          line?.show(visible);
-        },
-        clear() {
-          current = [];
-          line?.setPositions(current);
-        },
-        destroy() {
-          dropLine(line);
-          line = null;
-        },
+    create(options) {
+      const trail = createTrail(engine, options);
+      const destroy = trail.destroy;
+      trail.destroy = () => {
+        bodies.delete(trail);
+        destroy();
       };
+      bodies.add(trail);
+      return trail;
     },
     // The live head segment: its positions are read each frame while shown.
     createHead({ id, show, positions, color, width = 2.5 }) {
@@ -932,6 +890,7 @@ export function createAircraftDisplay(
       modelBanks.clear();
       trackedSprites.clear();
       for (const head of [...heads]) head.remove();
+      for (const trail of [...bodies]) trail.destroy();
       for (const line of [...lines]) dropLine(line);
     },
   };

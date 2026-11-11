@@ -52,6 +52,7 @@ import {
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
+  STALE_ALPHA,
 } from './policy.js';
 
 export function createRendering({
@@ -598,6 +599,19 @@ export function createRendering({
   /** Per-frame driver for the standalone tracked model (see flights.js for the rationale). The
    *  tracked entity stays a pure billboard, so the follow-camera never stalls/freezes on 3D-toggle. */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (flightState._irBoost ? WHITE : TRACKED_ICON_COLOR).withAlpha(
+      alpha,
+    );
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -727,6 +741,7 @@ export function createRendering({
         flightState._trackedModel,
         spec.headingOffsetDeg,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       // A model that loaded retires this selection's failure budget: a contact
       // that recovers after a transient blip is not one attempt from giving up.
@@ -759,6 +774,10 @@ export function createRendering({
    */
 
   function _fleetTick() {
+    if (flightState._renderer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (!flightState._renderer?.fleet.visible()) return;
     const view = flightState._renderer.view;
     const scene = view.scene;
@@ -917,7 +936,9 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _militaryBillboardScale(icao24),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,

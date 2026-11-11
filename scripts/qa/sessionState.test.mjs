@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { optionSpecs, REGISTRY_BY_ID } from '../../src/data/layerState.js';
 import { createFakeEngine } from '../../src/globe/testing/fakeEngine.js';
 import { createOsmPlacesLayer } from '../../src/layers/osmPlaces/index.js';
@@ -35,7 +35,7 @@ test('every declaration is covered by a real handoff exercise, without extra fie
     .trim()
     .split('\n');
   const found = {};
-  for (const file of files.filter((file) => file.endsWith('.js'))) {
+  for (const file of files.filter((file) => file.endsWith('.js') && existsSync(file))) {
     const text = readFileSync(file, 'utf8');
     for (const match of text.matchAll(/sessionState\s*:\s*(\[[^\]]*\])/g)) {
       assert.ok(!found[file], `Duplicate declaration in ${file}`);

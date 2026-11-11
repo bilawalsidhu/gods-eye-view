@@ -150,7 +150,7 @@ export function createHistory({ state: layerState, services, parts, source }) {
     return (
       items.find(
         (item) =>
-          String(item?.icao24 || item?.mmsi || item?.id) === String(subject.id),
+          String(item?.icao24 || item?.id || item?.mmsi) === String(subject.id),
       ) || subject
     );
   }

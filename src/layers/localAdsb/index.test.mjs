@@ -401,7 +401,7 @@ test('selecting an aircraft draws a magenta trail of the fixes the receiver hear
   const trails = () =>
     engine.lines
       .list()
-      .filter(({ id }) => /^gev-trail:local-adsb-\d/.test(id))
+      .filter(({ id }) => /^gev-trail:\d/.test(id))
       .map(({ id }) => engine.fake.line(id));
   for (let second = 0; second < 4; second += 1) {
     clock.now = 100_000 + second * 1_000;

@@ -50,7 +50,8 @@ test('Wildlife follows Events and precedes Weather', () => {
   );
   const wildlife = order.findIndex(({ id }) => id === 'wildlife-sightings');
   assert.equal(order[wildlife].label, 'Wildlife');
-  assert.equal(order[wildlife - 1].id, 's2-ghostmaps');
+  // News is the last of Events.
+  assert.equal(order[wildlife - 1].id, 'news');
   assert.equal(order[wildlife + 1].id, 'air-quality');
   assert.equal(order.filter(({ id }) => id === 'wildlife-sightings').length, 1);
 });

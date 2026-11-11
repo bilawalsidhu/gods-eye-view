@@ -108,7 +108,7 @@ test("the ridden ship's trail is hidden while the bridge holds it", (t) => {
   };
   const layer = layerWith(t, [record('own', 0), record('other', 2)], {
     trail,
-    trailMmsi: 'own',
+    trailId: 'own',
   });
   layer.setCockpitSubject('own');
   assert.deepEqual(shown, [false]);

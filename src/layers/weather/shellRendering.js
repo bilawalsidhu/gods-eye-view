@@ -105,7 +105,8 @@ function fitTexture({ width, height }, limit) {
  * that area, so the two images share one mesh and never blend. The surfaces
  * are the engine's (`createSurface`, render/display.js), as are the render
  * requests, the view footprint, the camera's move-end event and the GPU's
- * texture limit. */
+ * texture limit. A `frameSource` with `getImage` supplies both images,
+ * the detail window through its `bbox`. */
 export function createWeatherShell({
   product,
   height = WEATHER_SHELL_HEIGHTS[product],
@@ -122,6 +123,7 @@ export function createWeatherShell({
   viewRectangle,
   moveEnd,
   maxTextureSize = Infinity,
+  frameSource = null,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
@@ -191,6 +193,7 @@ export function createWeatherShell({
       decodeImage,
       now,
       onFetched,
+      frameSource,
     });
     // An aborted decode may still finish; never repopulate a cleared instance.
     signal.throwIfAborted();

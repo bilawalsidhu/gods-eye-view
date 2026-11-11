@@ -750,6 +750,9 @@ export function createWorldOverlay(engine) {
   const _paintItemPool = [];
   const _paintRectPool = [];
   const _paintRectByKey = new Map();
+  /** This frame's paint items by source and entry id. */
+  const _queuedItemBySource = new Map();
+  const QUEUED_ITEM_PRUNE_FRAMES = 600;
   const _hitRects = [];
   const _paintedBySource = Object.create(null);
   const _paintedSourceKeys = [];
@@ -879,6 +882,7 @@ export function createWorldOverlay(engine) {
     _paintRectCount = 0;
     _hitRectCount = 0;
     _paintRectByKey.clear();
+    _queuedItemBySource.clear();
     requestRender();
   }
 
@@ -967,12 +971,20 @@ export function createWorldOverlay(engine) {
     };
   }
 
-  // Removed entries cannot paint an exit fade: their source no longer owns
-  // them. Release the arbiter identity too, so later layout changes cannot
-  // wake the idle renderer for an invisible minimum-lifetime/fade state.
+  // Explicit removals release arbitration too, so later layout changes do
+  // not wake the idle renderer for an invisible minimum-lifetime/fade state.
   function forgetOverlayEntry(entry) {
     _records.delete(entry._overlayKey);
     _domains.get(entry.collisionGroup)?.arbiter.remove(entry._overlayKey);
+  }
+
+  function forgetRetiredEntries(sourceId) {
+    for (const domain of _domainList) {
+      for (const [key, state] of domain.arbiter.states) {
+        if (state.lastCandidate?._record?.entry.source === sourceId)
+          domain.arbiter.remove(key);
+      }
+    }
   }
 
   /**
@@ -992,13 +1004,18 @@ export function createWorldOverlay(engine) {
     const next = new Map();
     for (const entry of normalized) next.set(entry.id, entry);
     for (const entry of source.entries.values()) {
-      if (!next.has(entry.id)) forgetOverlayEntry(entry);
+      if (!next.has(entry.id)) {
+        // A republished cohort keeps its outgoing cards through their fade.
+        if (next.size) _records.delete(entry._overlayKey);
+        else forgetOverlayEntry(entry);
+      }
       const replacement = next.get(entry.id);
       if (replacement && isProtected(entry) !== isProtected(replacement))
         getOrCreateDomain(entry.collisionGroup).arbiter.remove(
           entry._overlayKey,
         );
     }
+    if (!next.size) forgetRetiredEntries(source.id);
     source.entries = next;
     rebuildSourceCohorts(source);
     updateEntryDiagnostics();
@@ -1051,6 +1068,7 @@ export function createWorldOverlay(engine) {
     const source = _sources.get(assertSourceId(sourceId));
     if (!source) return false;
     for (const entry of source.entries.values()) forgetOverlayEntry(entry);
+    forgetRetiredEntries(source.id);
     source.entries.clear();
     source.cohortDomainIds.length = 0;
     source.cohortLists.length = 0;
@@ -1100,6 +1118,33 @@ export function createWorldOverlay(engine) {
     // Pooled rectangles outlive their key, so identity and the publishing frame
     // are both re-checked instead of clearing the index every frame.
     return rect && rect.key === key && rect.stamp === _frameStamp ? rect : null;
+  }
+
+  /**
+   * Opacity an entry paints with this frame, or 0 when it is not queued or the
+   * yield-collision pass hid it. Custom lanes may call it before later lanes
+   * publish paint rects. Leaves out the Cyber sonar fade.
+   * @param {string} sourceId
+   * @param {string} entryId
+   * @returns {number}
+   */
+  function getQueuedOverlayEntryAlpha(sourceId, entryId) {
+    if (_destroyed) return 0;
+    const item = _queuedItemBySource.get(sourceId)?.get(entryId);
+    // Pooled items are reassigned every frame: check the frame and the entry.
+    if (!item || item.stamp !== _frameStamp) return 0;
+    // Declutter has already run when custom lanes call this.
+    if (item.collisionHidden) return 0;
+    const record = item.record;
+    if (record.entry.id !== entryId || record.entry.source !== sourceId)
+      return 0;
+    return (
+      record.sourceAlpha *
+      item.temporalAlpha *
+      record.distanceAlpha *
+      record.altitudeAlpha *
+      (_keyhole ? entryKeyholeAlpha(record.entry, item.placement, _keyhole) : 1)
+    );
   }
 
   /**
@@ -2234,7 +2279,34 @@ export function createWorldOverlay(engine) {
     item.zIndex = record.entry.zIndex;
     item.key = record.key;
     item.collisionHidden = false;
+    item.stamp = _frameStamp;
     _paintQueue[_paintCount++] = item;
+    // Keyed by source and id, not `record.key`, so a lookup builds no string.
+    // Also holds cards fading out after they left `_records`.
+    let bySource = _queuedItemBySource.get(record.entry.source);
+    if (!bySource) {
+      bySource = new Map();
+      _queuedItemBySource.set(record.entry.source, bySource);
+    }
+    bySource.set(record.entry.id, item);
+  }
+
+  /** Drop index rows for entries that stopped painting (bounded, not per frame). */
+  function pruneQueuedItemIndex() {
+    for (const [sourceId, bySource] of _queuedItemBySource) {
+      for (const [entryId, item] of bySource) {
+        // A pooled item that now paints another entry keeps a fresh stamp.
+        const entry = item.record.entry;
+        if (
+          item.stamp !== _frameStamp ||
+          entry.id !== entryId ||
+          entry.source !== sourceId
+        ) {
+          bySource.delete(entryId);
+        }
+      }
+      if (bySource.size === 0) _queuedItemBySource.delete(sourceId);
+    }
   }
 
   function sourceCanPaint(sourceId) {
@@ -2307,6 +2379,7 @@ export function createWorldOverlay(engine) {
       solveRevision += domain.arbiter.solveRevision;
     }
     _paintQueue.length = _paintCount;
+    if (_frameStamp % QUEUED_ITEM_PRUNE_FRAMES === 0) pruneQueuedItemIndex();
     _solveDirty = false;
     _diagnostics.solveMs = solveMs;
     _diagnostics.selectedCount = selectedCount;
@@ -2439,24 +2512,26 @@ export function createWorldOverlay(engine) {
     }
   }
 
+  /** Keyhole edge fade of one placed entry (1 for entries that do not fade). */
+  function entryKeyholeAlpha(entry, placement, keyhole) {
+    if (entry.edgeFade !== 'keyhole') return 1;
+    const keyholeX = placement.centerX - keyhole.centerX;
+    const keyholeY = placement.centerY - keyhole.centerY;
+    return keyholeX * keyholeX + keyholeY * keyholeY <=
+      keyhole.radius * keyhole.radius
+      ? 1
+      : keyholeLabelAlphaFromGeometry(
+          placement.centerX,
+          placement.centerY,
+          keyhole,
+        );
+  }
+
   function paintEntryItem(item, keyhole, sonar) {
     if (item.collisionHidden) return;
     const { record, placement } = item;
     const entry = record.entry;
-    let keyholeAlpha = 1;
-    if (entry.edgeFade === 'keyhole') {
-      const keyholeX = placement.centerX - keyhole.centerX;
-      const keyholeY = placement.centerY - keyhole.centerY;
-      keyholeAlpha =
-        keyholeX * keyholeX + keyholeY * keyholeY <=
-        keyhole.radius * keyhole.radius
-          ? 1
-          : keyholeLabelAlphaFromGeometry(
-              placement.centerX,
-              placement.centerY,
-              keyhole,
-            );
-    }
+    const keyholeAlpha = entryKeyholeAlpha(entry, placement, keyhole);
     // All five channels are normalized at their source. Keep the multiply on
     // the hot paint path so its intermediate doubles remain unboxed; the pure
     // `combinedOverlayAlpha` export still specifies/tests the same binding.
@@ -2733,6 +2808,7 @@ export function createWorldOverlay(engine) {
     window.__gevWorldOverlay = {
       getDiagnostics: getWorldOverlayDiagnostics,
       getPaintRect: getOverlayPaintRect,
+      getQueuedEntryAlpha: getQueuedOverlayEntryAlpha,
     };
   }
 
@@ -2855,6 +2931,7 @@ export function createWorldOverlay(engine) {
     _accessibleActivatorByKey.clear();
     _accessibilitySignature = '';
     _paintRectByKey.clear();
+    _queuedItemBySource.clear();
     _paintCount = 0;
     _paintRectCount = 0;
     _hitRectCount = 0;
@@ -2938,6 +3015,7 @@ export function createWorldOverlay(engine) {
     hitTest: hitTestWorldOverlay,
     getDiagnostics: getWorldOverlayDiagnostics,
     getPaintRect: getOverlayPaintRect,
+    getQueuedEntryAlpha: getQueuedOverlayEntryAlpha,
     registerPaintLane: registerWorldOverlayPaintLane,
     subscribeActions: subscribeWorldOverlayActions,
     activateAction: activateWorldOverlayAction,

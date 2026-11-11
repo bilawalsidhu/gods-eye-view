@@ -188,6 +188,17 @@ state restoration, and release them after the consumers stop. The catalog
 constructor (`application/layers`) also requires `wind`, `weather` and
 `cyclones` sources with `getSnapshot` for the Weather layers, and owns the
 observed-history clock those layers share for the catalog's lifetime.
+A `weather` source may also supply decoded frames: an optional
+`getFrameImage({ product, time, size, bbox, signal })` returns a whole-extent or
+detail image and an optional `getFrameTile({ product, time, z, x, y, size,
+signal })` returns one tile or null for a transparent tile, each as an
+`ImageBitmap`, `ImageData`, canvas or `VideoFrame` of exactly the requested
+size, which the layer draws once and closes. Without them the layers read the
+image and tile routes (`WeatherFrameFeed` in `src/layers/weather/source.js`).
+On globe surfaces, a source with `getFrameTile` currently requires Cesium for
+radar, regional infrared and lightning. Navara pauses those products with
+`This weather source requires Cesium`; decoded global infrared images and
+the whole-frame images used over 3D tiles draw through the shared display.
 
 `application/services` accepts boundary, terrain, regional-context, weather and
 summary services; its weather service supplies cockpit local conditions, not the
