@@ -142,6 +142,7 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
   const parts = {
     queries: { _contactLabel: (_, info) => info.callsign },
     icons: { _iconPosition: (id) => drawn.get(id) ?? null },
+    motion: { _signalLost: () => null },
   };
   const tracking = createTracking({ flightState, services, parts });
   for (const [position, expected] of [

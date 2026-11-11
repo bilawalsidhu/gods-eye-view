@@ -1,8 +1,11 @@
 # Natural Earth packs
 
-Offline named-region polygons for the voice-annotation resolver
-(`src/data/naturalEarthRegions.js`) — "outline the Alps" resolves to the real
-range geometry with no network dependency.
+Offline polygons with no network dependency. The voice-annotation resolver
+(`src/data/naturalEarthRegions.js`) reads the named regions, so "outline the
+Alps" resolves to the real range geometry; area annotations read the
+countries, states and provinces (`src/data/adminBoundaries.js`); and the News
+layer reads the countries and the disputed areas
+(`server/providers/news/areas.js`).
 
 | File | Source dataset | Features |
 |------|----------------|----------|
@@ -10,6 +13,7 @@ range geometry with no network dependency.
 | `marine.json` | `ne_10m_geography_marine_polys` (seas, gulfs, straits, bays, …) | 292 named |
 | `countries.json` | `ne_10m_admin_0_countries` (countries) | 256 |
 | `states_provinces.json` | `ne_10m_admin_1_states_provinces` (states, provinces and other first-level units) | 4,587 named |
+| `disputed_areas.json` | `ne_10m_admin_0_disputed_areas` (disputed, breakaway and UN-patrolled areas; a hand-picked set, see below) | 11 of 99 |
 | `populated_places.json` | `ne_10m_populated_places_simple` (cities and towns, as points) | 7,342 |
 
 **Source:** Natural Earth 10m physical vectors, via the canonical
@@ -105,6 +109,44 @@ Includes England, Scotland, Wales and Northern Ireland from
 `57da82be755f4afccd8f3b14251bb2752f5df1395f47d2d86f817470c4a48862`).
 Result: 945,843 bytes; 260 features, 2,088 parts, 122,788 vertices.
 
+## Disputed areas (`disputed_areas.json`)
+
+The News layer's areas that no one country's name may stand for
+(`server/providers/news/areas.js`): a place inside one is named with the
+area ("Crimea"), and Local there reads no country's outlets.
+
+**Source:** `geojson/ne_10m_admin_0_disputed_areas.geojson` at the same pinned
+commit (SHA-256
+`9cafef8b7dfb6b164dc58f218f981f4ace9f716f6c03795d4c62d1ac9f3d50f5`), fetched
+2026-11-05. Public domain, as above.
+
+**Selection:** a hand-picked 11 of the source's 99 features. No rule picks
+them; this is the list:
+
+| Area | Natural Earth's note (`NOTE_BRK`) |
+|------|-----------------------------------|
+| Golan Heights | Admin. By Israel; Claimed by Syria |
+| UNDOF Zone | UN Patrolled Zone in Syria |
+| Transnistria | Self admin.; Claimed by Moldova |
+| Abyei | Admin. by Sudan; Claimed by South Sudan |
+| Crimea | Admin. by Russia; Claimed by Ukraine |
+| Shebaa Farms | Admin. By Israel; Claimed by Lebanon |
+| Bir Tawil | Between Egypt and Sudan |
+| Halayib Triangle | Admin. by Egypt; Claimed by Sudan |
+| East Jerusalem | Admin. By Israel; Claimed by Palestine |
+| Abu Musa I. | Admin. by Iran; Claimed by UAE |
+| Doumera Island | Admin. By Eritrea; Claimed by Djibouti |
+
+The source names three of these by a country ("Moldova", "Sudan", "Iran");
+the pack names them as the area. The 2014 Donetsk and Luhansk lines are left
+out as out of date. Every other feature is left out too, so a place there is
+named by its country in `countries.json`.
+
+**Curation:** `kind` (`held`, `self`, `un`, `unclaimed`), `heldBy` and
+`claimedBy` are read from `NOTE_BRK`, and `note` keeps it as published. Every
+part is kept; each ring is Douglas-Peucker simplified at 0.003°, coordinates
+are rounded to 3 decimals and rings are stored open. Provenance is in the
+pack's `meta`. Result: 14,504 bytes.
 ## Populated places (`populated_places.json`)
 
 The orbital view's "near <city>" (`src/data/placeBelow.js`): from 8x it

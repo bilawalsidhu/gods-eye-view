@@ -174,3 +174,98 @@ test('military records hold the last track and speed when a poll omits them', ()
   assert.equal(parked.meta.speedMps, 0);
   assert.equal(parked.meta.track, 90);
 });
+
+test('an airborne military contact reported with no altitude is marked as drawn at an invented height', () => {
+  const records = store();
+  const none = records.receive(
+    observation({ baroAltitudeM: null, ellipsoidAltitudeM: null }),
+    context(),
+  );
+  assert.equal(none.meta.renderAltitudeInvented, true);
+  const known = records.receive(
+    observation({ positionTimeMs: 1700000005000 }),
+    context(),
+  );
+  assert.equal(known.meta.renderAltitudeInvented, false);
+  const parked = store().receive(
+    observation({ baroAltitudeM: null, onGround: true }),
+    context(),
+  );
+  assert.equal(parked.meta.renderAltitudeInvented, false);
+});
+
+test('the tracked military contact is stale from its first missed update and kept until ten minutes after its newest fix', () => {
+  const realNow = Date.now;
+  const fixMs = Date.UTC(2026, 10, 9, 20, 0);
+  let clock = fixMs + 5_000;
+  Date.now = () => clock;
+  try {
+    for (const snapshot of [
+      { complete: true },
+      { complete: true, retainIds: new Set(['aaa001']) },
+      { complete: false },
+    ]) {
+      const records = store();
+      records.receive(
+        observation({ positionTimeMs: fixMs }),
+        context({ observedAtMs: fixMs + 1_000 }),
+      );
+      const absent = (tracked) =>
+        records.absence('aaa001', {
+          ...snapshot,
+          likelyLanded: false,
+          tracked,
+        });
+      clock = fixMs + 15_000;
+      assert.equal(absent(true), 'stale');
+      assert.equal(records.missingPolls.get('aaa001'), 1);
+      clock = fixMs + 9 * 60_000;
+      assert.equal(absent(true), 'stale');
+      clock = fixMs + 10 * 60_000 - 1;
+      assert.equal(absent(true), 'stale');
+      clock = fixMs + 10 * 60_000;
+      assert.equal(absent(true), 'remove');
+      assert.equal(records.missingPolls.has('aaa001'), false);
+    }
+    const records = store();
+    records.receive(
+      observation({ positionTimeMs: fixMs }),
+      context({ observedAtMs: fixMs + 1_000 }),
+    );
+    clock = fixMs + 15_000;
+    const untracked = (snapshot) =>
+      records.absence('aaa001', { ...snapshot, likelyLanded: false });
+    assert.equal(untracked({ complete: false }), 'retain');
+    assert.deepEqual(
+      [1, 2, 3].map(() => untracked({ complete: true })),
+      ['stale', 'stale', 'remove'],
+    );
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('a repeated military fix time marks the contact as not updated; removal is unchanged', () => {
+  const records = store();
+  const fixMs = Date.UTC(2026, 10, 9, 20, 0);
+  const poll = (snapshotMs, positionTimeMs) => {
+    records.beginSnapshot(snapshotMs);
+    records.receive(
+      observation({ positionTimeMs }),
+      context({ observedAtMs: snapshotMs }),
+    );
+  };
+  poll(fixMs + 2_000, fixMs);
+  assert.equal(records.fixRepeated.has('aaa001'), false);
+  // adsb.lol re-sends the last position for up to a minute.
+  poll(fixMs + 12_000, fixMs);
+  assert.equal(records.fixRepeated.has('aaa001'), true);
+  assert.equal(records.missingPolls.has('aaa001'), false);
+  poll(fixMs + 12_000, fixMs);
+  assert.equal(records.fixRepeated.has('aaa001'), true);
+  poll(fixMs + 22_000, fixMs + 10_000);
+  assert.equal(records.fixRepeated.has('aaa001'), false);
+  poll(fixMs + 32_000, fixMs + 10_000);
+  records.forget('aaa001');
+  assert.equal(records.fixRepeated.has('aaa001'), false);
+});

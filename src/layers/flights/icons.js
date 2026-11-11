@@ -8,6 +8,8 @@ import {
   FLOOR_FAR_EVERY_TICKS,
   FLOOR_NEAR_M,
   RENDER_DELAY_SEC,
+  STALE_ALPHA,
+  followsClock,
 } from './policy.js';
 
 /** Pinned grounded rows rewrite only past this displayed move (m²) or turn (°). */
@@ -26,6 +28,8 @@ export function createIcons({ flightState, services, parts }) {
     parts,
     layerId: 'flights',
     renderDelaySec: RENDER_DELAY_SEC,
+    followsClock: () => followsClock(flightState),
+    staleAlpha: STALE_ALPHA,
     courseMaxDps: COURSE_MAX_DPS,
     cockpitContactSizePx: COCKPIT_CONTACT_SIZE_PX,
     holdsPlan: (icao24) =>

@@ -35,6 +35,7 @@ import { installFreeLookHeightLimit } from './freeLookLimit.js';
 import { keepPanelRendering } from './panelRendering.js';
 import { trimStaleSceneCommands } from './sceneCommandRelease.js';
 import { installZoomOutGuard } from './zoomOutGuard.js';
+import { createViewerOcclusionProbe } from './sceneOcclusionProbe.js';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
 import { onLocaleChange } from '../../i18n/index.js';
 import { cesiumViewerOf, recordViewer } from './viewers.js';
@@ -183,6 +184,9 @@ export function createCesiumRendererPlugin({
         // Keeps outward user zooms bounded and the Earth framed; returns its
         // disposer (see zoomOutGuard.js).
         installZoomOutGuard: (options) => installZoomOutGuard(viewer, options),
+        // Tests depth-tested contacts (street vehicles) against the frame's
+        // own depth, for the detection overlay (see sceneOcclusionProbe.js).
+        createOcclusionProbe: () => createViewerOcclusionProbe(viewer),
         // QA scripts drive and read the viewer itself.
         qaHandles: { viewer },
       });

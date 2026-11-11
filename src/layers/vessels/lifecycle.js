@@ -116,7 +116,7 @@ export function createLifecycle({
     state.feed.abort = null;
     state.icons = null;
     state.records.all = [];
-    state.records.byMmsi = new Map();
+    state.records.byId = new Map();
     state.records.unkeyed = [];
     state.clickSubscription = null;
     state.keyTarget = null;
@@ -132,7 +132,7 @@ export function createLifecycle({
     state.selectedRecord = null;
     state.trail = null;
     state.trailPositions = [];
-    state.trailMmsi = null;
+    state.trailId = null;
     state.trailBackfillToken = 0;
   }
   const methods = {
@@ -185,9 +185,9 @@ export function createLifecycle({
             /* grid failed to load — anchors stay at ellipsoid 0 */
           });
       }
-      // Pick-ownership (H2): a vessel icon's pick id is its row id, the MMSI.
+      // Pick-ownership (H2): a vessel icon's pick id is its row id, the record's id.
       registerPickOwner('ais-live-vessels', (pickedId) =>
-        state.records.byMmsi.has(pickedId),
+        state.records.byId.has(pickedId),
       );
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();
@@ -196,10 +196,12 @@ export function createLifecycle({
         state.feed.removeViewListener = camera.on('moveEnd', () => {
           components.ingestion.refreshIfMoved(activeViewer);
         });
+      vesselState.timeline?.start();
       return components.ingestion.loadLivePositions(activeViewer);
     },
 
     disable() {
+      vesselState.timeline?.stop();
       removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
@@ -220,6 +222,7 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      vesselState.timeline?.stop();
       removeViewListener();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();

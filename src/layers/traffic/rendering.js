@@ -67,6 +67,13 @@ export function createRendering({
    * cannot drape draws them over the surface instead (the draw port's
    * `overlay`).
    *
+   * One build runs at a time. A city loads in progressive paints, each asking
+   * for a rebuild, and every build drapes up to the cap of polylines
+   * asynchronously. A rebuild asked for while lines are building only replaces
+   * the one waiting, which retireHeatLines starts when the build finishes, so
+   * the scene never holds more than the lines drawn and the lines building.
+   * Turning the lines off is never deferred.
+   *
    * @param {Array} roads - Road objects visible in the current render.
    */
 

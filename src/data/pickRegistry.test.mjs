@@ -50,7 +50,7 @@ test('resolvePickId: the map and nothing → null', () => {
 
 test('ownership: sibling layers recognize each other via String-coerced ids', () => {
   const points = new Map([[25544, {}], [43013, {}]]); // satellites: numeric keys
-  const vessels = new Map([['367123450', {}]]);        // AIS: string mmsi keys
+  const vessels = new Map([['367123450', {}]]);        // AIS: string id keys
   registerPickOwner('satellites', (pickedId) => {
     const norad = Number(pickedId);
     return Number.isFinite(norad) && points.has(norad);
@@ -59,7 +59,7 @@ test('ownership: sibling layers recognize each other via String-coerced ids', ()
   try {
     // Flights asking about a satellite pick (raw numeric id → String upstream)
     assert.equal(isOwnedByOtherLayer('flights', resolvePickId(item('sat:1', '25544'))), true);
-    // Flights asking about a vessel pick (an icon row id: the mmsi)
+    // Flights asking about a vessel pick (an icon row id: the vessel's id)
     assert.equal(isOwnedByOtherLayer('flights', resolvePickId(item('ais:1', '367123450'))), true);
     // A layer never owns its own pick via the sibling scan
     assert.equal(isOwnedByOtherLayer('satellites', '25544'), false);

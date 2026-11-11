@@ -141,7 +141,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -155,6 +155,15 @@ export const TRAIL_MAX_POINTS = 400;
 /** @constant {number} Display latency in seconds (= one poll interval). */
 
 export const RENDER_DELAY_SEC = 30;
+
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (state) => state.timeline?.active() === true;
+
+/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
+ *  following the clock, whose snapshots are loaded ahead of the time. */
+export const displayDelayMs = (state) =>
+  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 
@@ -233,6 +242,11 @@ export const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 
 export const ENRICH_DISPATCH_GAP_MS = 200;
+
+/** A lookup whose source failed (an outage, a timeout, a restarting server) may
+ *  be asked again after this long; a real "not found" answer never is. */
+
+export const ENRICH_RETRY_COOLDOWN_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Ambient fleet type enrichment (2026-07-02 field data: OpenSky's live
@@ -431,3 +445,6 @@ export const FLOOR_EASE_EPSILON_M = 0.02;
  *  airborne long enough to have gone anywhere. */
 
 export const FLOOR_SEED_GRACE_MS = 90_000;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;

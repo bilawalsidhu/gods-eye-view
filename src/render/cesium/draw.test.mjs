@@ -5987,7 +5987,8 @@ test('a draped line moved while its set rebuilds is no longer drawn where it was
   ));
 
 test('a contact trail draws its history and moving head as depth-fail geodesic lines on a viewer of its own', async () => {
-  const { createTrail } = await import('../../data/trailRenderer.js');
+  const { CHUNK_POINTS, createTrail } =
+    await import('../../data/trailRenderer.js');
   withImageClasses(() => {
     const scene = fakeScene();
     const viewer = { scene, isDestroyed: () => false };
@@ -5998,11 +5999,30 @@ test('a contact trail draws its history and moving head as depth-fail geodesic l
       Cesium.Cartesian3.fromDegrees(-97 + i * 0.01, 30, 10000),
     );
     trail.setPositions(fixes);
-    const host = scene.added[0];
-    const deep = host.get(1);
-    const body = deep.get(0);
+    // The lines drawn now: a set that loses a line is built again.
+    const lines = () => {
+      const deep = scene.added[0].get(1);
+      return Array.from({ length: deep.length }, (_, i) => deep.get(i));
+    };
+    const positions = (line) => line.geometryInstances.geometry._positions;
+    // The history is cut into lines of CHUNK_POINTS fixes that share their
+    // boundary points, so the trail has no seam; the newest line grows.
+    const cut = lines();
+    const body = cut[0];
     assert.ok(body instanceof Cesium.Primitive);
-    assert.equal(body.geometryInstances.geometry._positions.length, 400);
+    assert.equal(cut.length, 4, 'three full lines and the newest');
+    for (const line of cut.slice(0, 3))
+      assert.equal(positions(line).length, CHUNK_POINTS);
+    for (let i = 1; i < cut.length; i++)
+      assert.ok(
+        Cesium.Cartesian3.equalsEpsilon(
+          positions(cut[i - 1]).at(-1),
+          positions(cut[i])[0],
+          0,
+          1e-6,
+        ),
+        'adjacent lines share their boundary point',
+      );
     assert.ok(
       Cesium.Color.equals(
         body.depthFailAppearance.material.uniforms.color,
@@ -6014,19 +6034,19 @@ test('a contact trail draws its history and moving head as depth-fail geodesic l
       Cesium.Cartesian3.fromDegrees(-150, 20, 10000),
       Cesium.Cartesian3.fromDegrees(-120, 30, 10000),
     ]);
-    const long = deep.get(0);
-    const arc = long.geometryInstances.geometry._positions;
-    assert.equal(arc.length, 65, 'a lone leg in 64 steps');
-    // A long leg among short ones still takes a step a degree.
+    assert.equal(lines().length, 1);
+    assert.equal(positions(lines()[0]).length, 65, 'a lone leg in 64 steps');
+    // A long leg among short ones still takes a step a degree: the newest
+    // line's 18 short legs take their share of 64 steps, its long one more.
     trail.setPositions([
       ...fixes,
       Cesium.Cartesian3.fromDegrees(-63, 30, 10000),
     ]);
-    const mixed = deep.get(0).geometryInstances.geometry._positions;
-    assert.ok(
-      mixed.length > 400 + 25 && mixed.length < 400 + 40,
-      `${mixed.length}`,
-    );
+    const newest = positions(lines().at(-1)).length - 1;
+    const longSteps = newest - 18 * Math.ceil(64 / 19);
+    assert.ok(longSteps > 25 && longSteps < 40, `${longSteps}`);
+    // A history of one line, so the head is the set's second.
+    trail.setPositions(fixes.slice(0, 10));
     // The head moves every frame alone, under one pick id.
     const head = (lon) => [
       Cesium.Cartesian3.fromDegrees(-120, 30, 10000),

@@ -60,7 +60,7 @@ export function createCards({
       parts.push(`${roundHeadingDegrees(direction)}°`);
     return {
       id: vesselOverlayEntryId(record),
-      actionable: Boolean(record?.mmsi),
+      actionable: Boolean(record?.id),
       position: components.rendering.iconPosition(record),
       gapPx: 10,
       accent: accentForVesselType(record.type),
@@ -99,7 +99,7 @@ export function createCards({
     );
     return {
       id: vesselOverlayEntryId(record),
-      actionable: Boolean(record?.mmsi),
+      actionable: Boolean(record?.id),
       position: components.rendering.iconPosition(record),
       gapPx: 12,
       accent: accentForVesselType(record.type),
@@ -110,11 +110,11 @@ export function createCards({
     };
   }
 
-  /** Stable overlay identity for MMSI-keyed and source-retained unkeyed rows. */
+  /** Stable overlay identity for keyed and source-retained unkeyed rows. */
 
   function vesselOverlayEntryId(record) {
-    const mmsi = String(record?.mmsi || '').trim();
-    if (mmsi) return `vessel:${mmsi}`;
+    const id = String(record?.id || '').trim();
+    if (id) return `vessel:${id}`;
     const name = String(record?.name || 'VESSEL').trim() || 'VESSEL';
     const lat = Number.isFinite(record?.lat) ? record.lat.toFixed(5) : 'x';
     const lon = Number.isFinite(record?.lon) ? record.lon.toFixed(5) : 'x';
@@ -157,7 +157,9 @@ export function createCards({
 
   function displayVesselName(record) {
     const name = String(record.name || '').trim();
-    if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
+    // A source may name a vessel by its id when it has no name.
+    if (name && name !== 'VESSEL' && name !== record.mmsi && name !== record.id)
+      return name;
     return record.mmsi ? `MMSI ${record.mmsi}` : t('VESSEL');
   }
 

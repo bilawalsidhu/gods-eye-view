@@ -8,9 +8,12 @@ import {
 } from '../geo/julian.js';
 import { clone, distance } from '../geo/vector.js';
 import {
+  COAST_MAX_SPEED_MPS,
   courseBetweenCartesians,
   speedRamp,
+  STALE_COAST_MAX_SEC,
   staleCoastLimitSeconds,
+  staleHoldsForFix,
 } from './motionModel.js';
 
 /**
@@ -19,11 +22,14 @@ import {
  * @typedef {{speed: string, track: string}} AircraftRecordFields
  */
 
-/** A fix's own ground speed, else the record's. */
+/** A fix's own ground speed, else the record's; never over COAST_MAX_SPEED_MPS. */
 export function fixSpeedMps(fix, info, fields) {
-  return Number.isFinite(fix.velocity)
-    ? fix.velocity
-    : (info && info[fields.speed]) || 0;
+  return Math.min(
+    Number.isFinite(fix.velocity)
+      ? fix.velocity
+      : (info && info[fields.speed]) || 0,
+    COAST_MAX_SPEED_MPS,
+  );
 }
 
 /** A fix's own track, else the record's. */
@@ -108,17 +114,19 @@ export function createMotionRegime() {
  *   glides FORWARD into interpolation with no freeze and no backward snap
  *   (holding the oldest fix froze the icon; extrapolating the newest to
  *   wall-clock made it jump back a poll interval when interpolation took
- *   over). Otherwise the newest fix coasts. A feed can still be receiving
- *   fresh contact messages for that aircraft; freezing 60 s after the
- *   position produced a stop → catch-up → stop cadence, so it coasts through
- *   the latest real contact plus a bounded grace, with an absolute cap so a
- *   stale cached feed cannot drift forever.
+ *   over). Otherwise the newest fix coasts on its last speed and heading for
+ *   five minutes past it, then stops (SIGNAL LOST). A contact last heard on
+ *   or near the ground holds there instead (`staleHoldsForFix`, decided once
+ *   per report), and a chain of synthetic fixes never coasts further than
+ *   the real report they were built from would.
  *
  * @param {Array<object>} history Non-empty, oldest first.
  * @param {object|undefined} info The contact's record.
  * @param {{dayNumber: number, secondsOfDay: number}} renderTime A Julian date (geo/julian).
  * @param {AircraftRecordFields} fields
  * @param {object} result From `createMotionRegime`; returned filled in.
+ * @param {{cachedGroundFloor?: (latDeg: number, lonDeg: number) => number|null}} [options]
+ *   The ground under a report, where known, for the hold decision.
  */
 export function aircraftMotionRegime(
   history,
@@ -126,6 +134,7 @@ export function aircraftMotionRegime(
   renderTime,
   fields,
   result,
+  { cachedGroundFloor } = {},
 ) {
   for (let i = history.length - 1; i >= 1; i--) {
     const a = history[i - 1];
@@ -167,17 +176,35 @@ export function aircraftMotionRegime(
   result.maxDt =
     warming && history.length > 1
       ? 0
-      : staleCoastLimitSeconds({
-          // `epochMs` is captured once when the poll is normalized. Avoid
-          // allocating a Date per aircraft on every 12 Hz fleet tick.
-          fixEpochMs: Number.isFinite(newest.epochMs)
-            ? newest.epochMs
-            : julianToEpochMs(newest.time),
-          lastContactEpochMs: info?.lastContactEpochMs,
-          // Permit one minute of contact grace but cap any cached-feed drift
-          // at five minutes. Source backoff is exposed separately as a STALE cue.
-          minimumSec: 60,
-          maximumSec: 300,
-        });
+      : staleCoastSeconds(newest, info, cachedGroundFloor);
   return result;
+}
+
+/**
+ * How long `newest` coasts at most: five minutes, less what a synthetic
+ * fix's chain already coasted since its real report (`reportEpochMs`); none
+ * for a report that holds (judged once per report, from its ground flag and
+ * the ground under it where `cachedGroundFloor` knows it).
+ * @param {object} newest
+ * @param {object|undefined} info
+ * @param {Function} [cachedGroundFloor]
+ * @returns {number}
+ */
+export function staleCoastSeconds(newest, info, cachedGroundFloor) {
+  const newestMs = fixEpochMs(newest);
+  const limitSec = staleCoastLimitSeconds({
+    fixEpochMs: newestMs,
+    lastContactEpochMs: info?.lastContactEpochMs,
+    // A plane that stops reporting keeps flying for five minutes, whatever
+    // its contact time, then stops dimmed as SIGNAL LOST. A missed update
+    // shows STALE throughout.
+    minimumSec: 300,
+    maximumSec: 300,
+  });
+  if (staleHoldsForFix(newest, { onGround: info?.onGround, cachedGroundFloor }))
+    return 0;
+  const alreadySec = Number.isFinite(newest.reportEpochMs)
+    ? Math.max(0, (newestMs - newest.reportEpochMs) / 1000)
+    : 0;
+  return Math.max(0, Math.min(limitSec, STALE_COAST_MAX_SEC - alreadySec));
 }

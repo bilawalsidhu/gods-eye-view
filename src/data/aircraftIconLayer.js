@@ -226,6 +226,10 @@ let instances = 0;
  * @param {object} options.parts The layer's parts (`motion`, `rendering`).
  * @param {string} options.layerId Pick and focus owner id.
  * @param {number} options.renderDelaySec How far behind real time contacts draw.
+ * @param {() => boolean} [options.followsClock] True while the layer follows
+ *   the world clock: contacts draw at the world's time (`state.now()`, the
+ *   scene's time) with no delay.
+ * @param {number} [options.staleAlpha] A contact's alpha after a missed update.
  * @param {number} options.courseMaxDps The fleet's course slew cap.
  * @param {number} options.cockpitContactSizePx Cockpit far-contact pip size.
  * @param {(icao24: string) => boolean} [options.holdsPlan] True while something
@@ -242,6 +246,8 @@ export function createAircraftIcons({
   parts,
   layerId,
   renderDelaySec,
+  followsClock = () => false,
+  staleAlpha = 0.45,
   courseMaxDps,
   cockpitContactSizePx,
   holdsPlan = () => false,
@@ -255,7 +261,26 @@ export function createAircraftIcons({
   let switchPx = nearImageSwitchPx(1);
 
   /** The delayed instant (epoch ms) every untracked contact is drawn at. */
-  const _displayMs = () => Date.now() - delayMs;
+  const _displayMs = () =>
+    followsClock() ? state.now() : Date.now() - delayMs;
+  /** The live draw set, and whether its motion clock is the scene's. */
+  let liveSet = null;
+  let sceneClock = false;
+
+  /** The motion clock for whether the layer follows the world clock. */
+  const motionClock = (scene) =>
+    scene ? { kind: 'scene' } : { kind: 'live', delayMs };
+
+  /**
+   * Put the set's motion on the scene's clock (the world's time) while the
+   * layer follows the world clock, on the delayed live clock otherwise.
+   */
+  function _syncMotionClock() {
+    const scene = followsClock();
+    if (!liveSet || scene === sceneClock) return;
+    sceneClock = scene;
+    liveSet.setOptions({ motionClock: motionClock(scene) });
+  }
 
   /**
    * Create the draw set for one layer lifetime, drawn over depth and culled
@@ -266,12 +291,14 @@ export function createAircraftIcons({
     const set = drawOf(viewer).icons({
       id: `${layerId}-icons:${++instances}`,
       horizonCull: true,
-      motionClock: { kind: 'live', delayMs },
+      motionClock: motionClock(followsClock()),
       drawOrder: services.sprites?.spriteDrawOrder?.(layerId) ?? 0,
     });
     // Columns of no rows put the set's host in the scene now, rather than
     // with its first contact.
     set.setColumns?.({ ids: [] });
+    liveSet = set;
+    sceneClock = followsClock();
     switchPx = _imageSwitchPx(viewer);
     state._icons = createContactIcons(set, {
       capabilities: rendererOf(viewer)?.capabilities ?? null,
@@ -283,6 +310,7 @@ export function createAircraftIcons({
   function _disposeIcons() {
     state._icons?.dispose();
     state._icons = null;
+    liveSet = null;
   }
 
   /** The near-image switch in CSS px for the scene's pixel ratio. */
@@ -405,8 +433,9 @@ export function createAircraftIcons({
               trackDeg: heading,
               turnRateDps: regime.turnRateDps,
             };
-      // A warm-up's arc ends at its fix; a coast's runs to its limit.
-      if (regime.maxDt === 0) expiresAt = t0;
+      // A warm-up's arc ends at its fix, still ahead; a coast's runs to its
+      // limit, and a report that holds stays put until the next one.
+      if (regime.maxDt === 0 && t0 > t) expiresAt = t0;
     }
     // Below hover speed the nose holds what is on screen (or, for a new row,
     // where this motion starts); above it, it glides on at the slew cap.
@@ -523,7 +552,7 @@ export function createAircraftIcons({
           color: rgba(rendering._fleetBillboardColor(icao24, info)),
           rotationMode: 'course',
         };
-    look.alpha = state.records.missingPolls.get(icao24) ? 0.45 : 1;
+    look.alpha = state.records.missingPolls.get(icao24) ? staleAlpha : 1;
     icons.update(icao24, look);
   }
 
@@ -575,6 +604,7 @@ export function createAircraftIcons({
 
   return {
     _displayMs,
+    _syncMotionClock,
     _createIcons,
     _disposeIcons,
     _syncImageSwitch,

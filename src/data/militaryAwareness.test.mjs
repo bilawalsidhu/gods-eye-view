@@ -91,7 +91,6 @@ test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(9960), '10\u00a0km');
 });
 
-
 /**
  * Give `viewer`'s bound camera port a follow of its own, as the renderer's
  * is: `follow(target)` sets `followed` and raises `followChanged`.
@@ -479,7 +478,7 @@ test('a dependency the user adopts stays on when Contacts turns off', async () =
     assert.deepEqual(
       released,
       AWARENESS_DEPENDENCIES.filter((layerId) => layerId !== 'flights').sort(),
-      'the adopted layer is the user\'s now; the rest are still released',
+      "the adopted layer is the user's now; the rest are still released",
     );
   } finally {
     runtime.restore();
@@ -1179,6 +1178,95 @@ test('production military tracked-subject label falls back to registration befor
   }
 });
 
+test('the tracked airliner’s photo reaches the Contacts panel when it lands after selection', async () => {
+  const id = 'a1f2c3';
+  const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
+  const sourceViewer = { scene: { primitives: { remove() {} } } };
+  const runtime = installAwarenessRuntime();
+  const restores = [];
+  const meta = {
+    callsign: 'AAL100',
+    altitude: 10_668,
+    renderAltitudeM: 10_700,
+    velocity: 250,
+    true_track: 95,
+    klass: 'airliner',
+    onGround: false,
+    wasAirborne: true,
+    turnRateDps: 0,
+    rawLat: 30.21,
+    rawLon: -97.71,
+    photo: null,
+  };
+
+  try {
+    _setTrackedFlightRefreshStateForTest({
+      icao24: id,
+      entity: null,
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
+      viewer: sourceViewer,
+      meta,
+    });
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `flights:${id}` }),
+    );
+    replaceMethod(
+      militaryFlightsLayer,
+      'getTrackedSubject',
+      () => null,
+      restores,
+    );
+    replaceMethod(flightsLayer, 'trackById', () => true, restores);
+    replaceMethod(militaryFlightsLayer, 'trackById', () => true, restores);
+
+    militaryAwarenessLayer.setParams({ passive: false });
+    await nextTurn();
+    assert.equal(runtime.panel().view?.kind, 'results');
+    assert.equal(runtime.panel().view.photo, null, 'no photo before it lands');
+
+    // An unchanged refresh stays quiet.
+    const settledPublishes = runtime.panel().publishes;
+    await militaryAwarenessLayer.update();
+    assert.equal(runtime.panel().publishes, settledPublishes);
+
+    // The photo lands while the plane holds still: render-worthy on its own.
+    meta.photo = {
+      src: 'https://t.plnspttrs.net/1/a1f2c3_280.jpg',
+      width: 280,
+      height: 186,
+      photographer: 'Jane Doe',
+      link: 'https://www.planespotters.net/photo/1/n100aa',
+    };
+    await militaryAwarenessLayer.update();
+    assert.deepEqual(runtime.panel().view.photo, {
+      src: 'https://t.plnspttrs.net/1/a1f2c3_280.jpg',
+      width: 280,
+      height: 186,
+      link: 'https://www.planespotters.net/photo/1/n100aa',
+      credit: 'Photo © Jane Doe',
+    });
+
+    // And it repaints once, not on every refresh.
+    const shownPublishes = runtime.panel().publishes;
+    await militaryAwarenessLayer.update();
+    assert.equal(runtime.panel().publishes, shownPublishes);
+  } finally {
+    restores.reverse().forEach((restore) => restore());
+    _setTrackedFlightRefreshStateForTest({
+      icao24: id,
+      entity: null,
+      icon: { position, show: true },
+      iconLayer: { show: false, remove() {} },
+      viewer: sourceViewer,
+      meta: {},
+      tracked: false,
+    });
+    runtime.restore();
+  }
+});
+
 test('a cached Context subject re-reads its label when enrichment lands after selection', async () => {
   // The subject snapshot is captured once at selection. Selecting a
   // callsign-less aircraft BEFORE adsbdb enrichment answers used to freeze the
@@ -1797,7 +1885,7 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
     [
       'aisLiveVessels',
       readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*mmsi,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byMmsi\s*\|\|\s*state\.records\.byMmsi\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
+      /hasContact\(\s*id,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byId\s*\|\|\s*state\.records\.byId\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
     ],
   ]) {
     assert.match(

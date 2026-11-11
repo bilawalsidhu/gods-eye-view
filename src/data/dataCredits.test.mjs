@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DATA_CREDITS,
+  LIVEUAMAP_CREDIT,
   NYC_DOT_DISCLAIMER,
   transitFeedCredit,
 } from './dataCredits.js';
@@ -42,6 +43,13 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /PlaneBase/);
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
+});
+
+test('Planespotters is credited with a plain followable link', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'planespotters');
+  assert.ok(credit, 'the tracked aircraft photos come from Planespotters');
+  assert.match(credit.html, /href="https:\/\/www\.planespotters\.net"/);
+  assert.doesNotMatch(credit.html, /nofollow/);
 });
 
 test('the UCS Satellite Database is acknowledged with its version and webpage', () => {
@@ -283,6 +291,26 @@ test('data credits go through the renderer to the attribution list', async () =>
   assert.equal(shown.length, 4, 'a dynamic credit is added once');
   assert.match(shown[3].html, /Traffic flow data © TomTom/);
   assert.equal(registerDynamicCredit({}, { key: 'none', html: 'x' }), false);
+});
+
+test('the News layer credits its built-in sources', () => {
+  const credit = (key) => DATA_CREDITS.find((entry) => entry.key === key);
+  // GDELT's terms ask for a citation and a link.
+  assert.match(
+    credit('gdelt-news').html,
+    /href="https:\/\/www\.gdeltproject\.org\/"[^>]*>GDELT Project</,
+  );
+  // World News API's free plan asks for this exact link.
+  assert.match(
+    credit('worldnewsapi').html,
+    /<a href="https:\/\/worldnewsapi\.com\/"[^>]*>World News API<\/a>/,
+  );
+  assert.match(LIVEUAMAP_CREDIT.html, />Liveuamap</);
+  assert.ok(
+    !DATA_CREDITS.some((entry) => entry.key === LIVEUAMAP_CREDIT.key),
+    'Liveuamap is credited only once its key is in use',
+  );
+  assert.doesNotMatch(credit('news').html, /No single provider/);
 });
 
 test('the PR #1506 camera packs are credited with their sources and terms', () => {

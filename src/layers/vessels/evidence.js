@@ -45,7 +45,7 @@ export function createEvidence({
       const position = drawn ? visual.position : null;
       const screen = position ? query?.project(position) : null;
       return {
-        id: record.mmsi,
+        id: record.id,
         show: drawn && visual.visible === true,
         alpha: drawn ? state.icons.focus(visual.iconId) : null,
         x: screen?.x ?? null,

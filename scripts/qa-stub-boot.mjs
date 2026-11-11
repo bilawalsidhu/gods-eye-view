@@ -39,6 +39,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** The data layers the stub must run, by catalog id. */
 export const STUB_BOOT_LAYERS = Object.freeze([
   'flights',
+  'military',
   'transit',
   'traffic',
   'cctv',
@@ -49,6 +50,8 @@ export const STUB_BOOT_LAYERS = Object.freeze([
   'satellites',
   'local-firms',
   'wildlife-sightings',
+  'shipwrecks',
+  'news',
 ]);
 
 /** A request that is Cesium: the package, its pre-bundle, or its assets. */

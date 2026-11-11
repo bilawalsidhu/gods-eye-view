@@ -23,7 +23,7 @@ function setup({ geoidN = 40, track = null } = {}) {
       trailPositions: [],
       trailBackfillToken: 0,
       trailAbort: null,
-      trailMmsi: null,
+      trailId: null,
       records: { all: records },
     },
   };

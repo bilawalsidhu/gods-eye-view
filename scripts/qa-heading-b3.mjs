@@ -99,6 +99,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 // ---------------------------------------------------------------------------
 // Args (same shape as track-regression.mjs)
@@ -466,6 +467,7 @@ async function main() {
   const failedResponses = [];
   try {
     const page = await browser.newPage();
+    await stubPlanespotters(page);
     await page.setViewport({ width: 1280, height: 800 });
     page.on('console', (msg) => {
       if (msg.type() === 'error') {

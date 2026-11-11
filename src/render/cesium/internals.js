@@ -133,6 +133,34 @@ export function webglContext(scene) {
 }
 
 /**
+ * Whether the scene drew its globe depth into its own framebuffer this frame,
+ * the depth a direct read of the pick-depth textures relies on.
+ * @param {object} scene Cesium Scene.
+ * @returns {boolean|undefined}
+ */
+export function usesGlobeDepthFramebuffer(scene) {
+  return scene?._environmentState?.useGlobeDepthFramebuffer;
+}
+
+/**
+ * A Cesium Framebuffer's own WebGL framebuffer.
+ * @param {object} framebuffer Cesium Framebuffer.
+ * @returns {WebGLFramebuffer|undefined}
+ */
+export function rawFramebuffer(framebuffer) {
+  return framebuffer?._framebuffer;
+}
+
+/**
+ * A Cesium Texture's own WebGL texture.
+ * @param {object} texture Cesium Texture.
+ * @returns {WebGLTexture|undefined}
+ */
+export function rawTexture(texture) {
+  return texture?._texture;
+}
+
+/**
  * The entity Cesium's EntityView tracks: set once tracking has started and
  * framed its entity, which can be frames after `trackedEntity` is set.
  * @param {object} widget Viewer or CesiumWidget.

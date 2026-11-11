@@ -723,9 +723,15 @@ export function createAircraftModels({
     }
     const record = state._trackedModel;
     // The tracked aircraft uses the same dominant light tint as the fleet;
-    // the IR boost removes the remaining diffuse hint with flat white.
-    if (!record.tint)
-      record.tint = state._irBoost ? WHITE : rgba(_modelColor(icao24));
+    // the IR boost removes the remaining diffuse hint with flat white. It
+    // fades like the tracked billboard while the plane is stale.
+    const base = state._irBoost ? WHITE : rgba(_modelColor(icao24));
+    _treat(record, {
+      base,
+      alpha: parts.tracking._trackedStaleCue?.(icao24)?.dimmed
+        ? policy.STALE_ALPHA
+        : base[3],
+    });
     // Placed while it loads too: its first drawn frame is at this placement.
     const displayPos = _modelDisplayPosition(icao24, pos);
     if (!displayPos) {
@@ -764,6 +770,9 @@ export function createAircraftModels({
    */
 
   function _fleetTick() {
+    // Every frame, shown or not: the tracked label's stale cue follows the
+    // clock. (The tracked trail moves on in its own pass before each frame.)
+    if (state._viewer) parts.tracking._staleCueTick?.();
     try {
       _fleetPass();
     } finally {
@@ -796,6 +805,8 @@ export function createAircraftModels({
   function _fleetPass() {
     const icons = state._icons;
     if (!state._viewer || !icons || !icons.show) return;
+    // Following the world clock, the icons move on its time.
+    parts.icons._syncMotionClock?.();
     const nowMs = focusNowMs(Date.now());
 
     if (nowMs - state._lastFleetTickMs < policy.FLEET_DR_INTERVAL_MS) return;

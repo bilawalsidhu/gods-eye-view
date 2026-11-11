@@ -62,39 +62,42 @@ test('the raster cache is bounded by kind, size and halo — never by call count
   assert.ok(transitIconCacheSize() <= before + 3 + TRANSIT_ICON_KINDS.length);
 });
 
-test('all 36 variants retain the specified final halo at both display sizes', async () => {
+test('all 72 variants retain the specified final halo at both display sizes', async () => {
   const { presetSpriteScale, presetSpriteOutlinePx } =
     await import('./transitPresetStyle.js');
   for (const kind of TRANSIT_ICON_KINDS) {
     for (const selected of [false, true]) {
-      for (const style of ['normal', 'thermal', 'retro']) {
-        const display =
-          (selected ? 30 : 20) * presetSpriteScale(style, selected);
-        const svg = decode(transitIcon(kind, selected ? 96 : 48, { style }));
-        const units = Number(
-          svg.match(/stroke-opacity="(?:0.95|1)" stroke-width="([\d.]+)"/)[1],
-        );
-        assert.ok(
-          Math.abs(
-            (units * display) / 192 - presetSpriteOutlinePx(style, selected),
-          ) < 0.001,
-        );
-        const frame = haloFrame(
-          presetSpriteOutlinePx(style, selected),
-          display,
-        );
-        assert.match(
-          svg,
-          new RegExp(
-            `width="${Math.round((selected ? 96 : 48) * frame.ratio)}"`,
-          ),
-        );
-      }
+      for (const style of ['normal', 'thermal', 'retro'])
+        for (const heading of [true, false]) {
+          const display =
+            (selected ? 30 : 20) * presetSpriteScale(style, selected);
+          const svg = decode(
+            transitIcon(kind, selected ? 96 : 48, { style, heading }),
+          );
+          const units = Number(
+            svg.match(/stroke-opacity="(?:0.95|1)" stroke-width="([\d.]+)"/)[1],
+          );
+          assert.ok(
+            Math.abs(
+              (units * display) / 192 - presetSpriteOutlinePx(style, selected),
+            ) < 0.001,
+          );
+          const frame = haloFrame(
+            presetSpriteOutlinePx(style, selected),
+            display,
+          );
+          assert.match(
+            svg,
+            new RegExp(
+              `width="${Math.round((selected ? 96 : 48) * frame.ratio)}"`,
+            ),
+          );
+        }
     }
   }
   for (let i = 0; i < 100; i++)
     transitIcon('invalid', i, { haloScreenPx: i, screenPx: i });
-  assert.equal(transitIconCacheSize(), 36);
+  assert.equal(transitIconCacheSize(), 72);
 });
 
 test('every mono raster preserves the normal silhouette mask and aspect at CRT display size', async () => {
@@ -133,47 +136,53 @@ test('every mono raster preserves the normal silhouette mask and aspect at CRT d
     return { mask, aspect: (maxX - minX + 1) / (maxY - minY + 1) };
   };
   for (const selected of [false, true])
-    for (const kind of TRANSIT_ICON_KINDS) {
-      const normal = await rasterBody(
-        decode(transitIcon(kind, selected ? 96 : 48, { style: 'normal' })),
-      );
-      for (const style of ['surveillance', 'thermal', 'noir', 'nvg']) {
-        const svg = decode(transitIcon(kind, selected ? 96 : 48, { style }));
-        const mono = await rasterBody(svg);
-        assert.deepEqual(
-          mono.mask,
-          normal.mask,
-          `${kind}/${style}: no envelope`,
+    for (const heading of [true, false])
+      for (const kind of TRANSIT_ICON_KINDS) {
+        const normal = await rasterBody(
+          decode(
+            transitIcon(kind, selected ? 96 : 48, { style: 'normal', heading }),
+          ),
         );
-        assert.ok(
-          Math.abs(mono.aspect / normal.aspect - 1) <= 0.05,
-          `${kind}/${style}: aspect`,
-        );
-        const display =
-          (selected ? 30 : 20) * presetSpriteScale(style, selected);
-        const crt = (selected ? 30 : 20) * presetSpriteScale('retro', selected);
-        assert.equal(display, crt);
-        const frame = haloFrame(
-          presetSpriteOutlinePx(style, selected),
-          display,
-        );
-        const crtFrame = haloFrame(
-          presetSpriteOutlinePx('retro', selected),
-          crt,
-        );
-        assert.equal(
-          (display * frame.ratio) / frame.ratio,
-          (crt * crtFrame.ratio) / crtFrame.ratio,
-          'unpadded silhouette matches CRT; only external halo padding grows',
-        );
-        assert.equal(
-          (svg.match(/<path /g) || []).length,
-          2,
-          'only outer halo and opaque silhouette',
-        );
-        assert.match(svg, /fill="white" \/>/);
+        for (const style of ['surveillance', 'thermal', 'noir', 'nvg']) {
+          const svg = decode(
+            transitIcon(kind, selected ? 96 : 48, { style, heading }),
+          );
+          const mono = await rasterBody(svg);
+          assert.deepEqual(
+            mono.mask,
+            normal.mask,
+            `${kind}/${style}: no envelope`,
+          );
+          assert.ok(
+            Math.abs(mono.aspect / normal.aspect - 1) <= 0.05,
+            `${kind}/${style}: aspect`,
+          );
+          const display =
+            (selected ? 30 : 20) * presetSpriteScale(style, selected);
+          const crt =
+            (selected ? 30 : 20) * presetSpriteScale('retro', selected);
+          assert.equal(display, crt);
+          const frame = haloFrame(
+            presetSpriteOutlinePx(style, selected),
+            display,
+          );
+          const crtFrame = haloFrame(
+            presetSpriteOutlinePx('retro', selected),
+            crt,
+          );
+          assert.equal(
+            (display * frame.ratio) / frame.ratio,
+            (crt * crtFrame.ratio) / crtFrame.ratio,
+            'unpadded silhouette matches CRT; only external halo padding grows',
+          );
+          assert.equal(
+            (svg.match(/<path /g) || []).length,
+            2,
+            'only outer halo and opaque silhouette',
+          );
+          assert.match(svg, /fill="white" \/>/);
+        }
       }
-    }
 });
 
 test('sensor raster halo stays dark across its screen-space band on a white roof', async () => {
@@ -237,4 +246,59 @@ test('sensor raster halo stays dark across its screen-space band on a white roof
     );
     assert.ok(black.pass, JSON.stringify({ selected, black }));
   }
+});
+
+test('a vehicle with a course shows its front; one without claims no direction', async () => {
+  const sharp = (await import('sharp')).default;
+  const outline = (svg) => svg.match(/<path d="([^"]+)"\s+fill="white"/)[1];
+  // Fleet-size raster of the outline alone: row widths from front to back.
+  const rows = async (d) => {
+    const { data, info } = await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="-48 -48 96 96"><path d="${d}" fill="white"/></svg>`,
+      ),
+    )
+      .resize(20, 20)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const out = [];
+    for (let y = 0; y < info.height; y++) {
+      let sum = 0;
+      for (let x = 0; x < info.width; x++)
+        sum += data[(y * info.width + x) * 4 + 3] / 255;
+      out.push(sum);
+    }
+    return out;
+  };
+  // How much the outline differs from itself turned end for end, in pixels.
+  const asymmetry = (r) =>
+    r.reduce((a, v, i) => a + Math.abs(v - r[r.length - 1 - i]), 0);
+  for (const kind of TRANSIT_ICON_KINDS) {
+    const pointed = await rows(outline(decode(transitIcon(kind))));
+    const neutral = await rows(
+      outline(decode(transitIcon(kind, 48, { heading: false }))),
+    );
+    assert.ok(
+      asymmetry(pointed) >= 2.5,
+      `${kind}: front reads at 20 px (${asymmetry(pointed).toFixed(2)})`,
+    );
+    assert.ok(
+      asymmetry(neutral) < 0.5,
+      `${kind}: no implied heading (${asymmetry(neutral).toFixed(2)})`,
+    );
+    // The front is the narrow end: the two leading rows of ink carry less
+    // than the two trailing rows.
+    const inked = pointed.flatMap((v, i) => (v > 0.05 ? [i] : []));
+    const first = inked[0];
+    const last = inked[inked.length - 1];
+    const lead = pointed[first] + pointed[first + 1];
+    const trail = pointed[last] + pointed[last - 1];
+    assert.ok(lead < trail, `${kind}: nose toward -Y`);
+  }
+  assert.notEqual(
+    transitIcon('bus'),
+    transitIcon('bus', 48, { heading: false }),
+  );
+  assert.equal(transitIcon('bus', 48, { heading: true }), transitIcon('bus'));
 });

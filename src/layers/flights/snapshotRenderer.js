@@ -2,9 +2,11 @@ import { findCamera } from '../../render/rendererOf.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
+  staleHoldsForFix,
   synthesizeForwardKinematicsFix,
 } from '../../data/motionModel.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
+import { followsClock } from './policy.js';
 
 /** Apply reconciled aircraft records to the layer's drawing and follow state. */
 export function createFlightSnapshotRenderer({
@@ -20,8 +22,12 @@ export function createFlightSnapshotRenderer({
   queries,
 }) {
   const { refreshMilitaryRegistryIfStale, isMilitaryIcao } = militaryRegistry;
-  const { warmGroundFloor } = groundFloor;
-  return function applySnapshot(snapshot, viewer) {
+  const { warmGroundFloor, cachedGroundFloor } = groundFloor;
+  /**
+   * `replace`: the snapshot is the world at another time (the world clock
+   * jumped), so it stands in for every contact: one it lacks is gone at once.
+   */
+  return function applySnapshot(snapshot, viewer, { replace = false } = {}) {
     // Before init (or after destroy) there is no icon set to draw into.
     if (!flightState._icons) return { count: 0, ids: new Set() };
     const currentIcaos = new Set();
@@ -35,6 +41,7 @@ export function createFlightSnapshotRenderer({
     const viewerLatDeg = hasSubpoint ? pose.lat : null;
     const viewerLonDeg = hasSubpoint ? pose.lon : null;
     const floorWarmPoints = [];
+    records.beginSnapshot(snapshot.observedAtMs);
 
     // Classification and display policy consume source-independent observations.
     refreshMilitaryRegistryIfStale();
@@ -96,14 +103,17 @@ export function createFlightSnapshotRenderer({
         // Per-fix kinematics: the fix's own velocity/track ride along so the
         // extrapolation paths use the values that BELONG to the fix they
         // extend, not whatever the latest poll reported.
-        history.push(
-          motion._historyFix(
+        history.push({
+          ...motion._historyFix(
             fixEpochMs,
             position,
             meta.velocity,
             meta.true_track,
           ),
-        );
+          // Drawn at an invented height: a trail seeded from history keeps no
+          // position for it.
+          inventedHeight: meta.renderAltitudeInvented === true,
+        });
         if (history.length > POSITION_HISTORY_LIMIT) {
           history.shift();
         }
@@ -116,7 +126,10 @@ export function createFlightSnapshotRenderer({
         // Round 2 (owner): ground traffic appends too — taxi history stays
         // live after touchdown (grounded flights positions are already
         // surface-clamped via the surfaceM chain, so the ground leg drapes).
-        if (isTracked) tracking._appendTrailFix(motion._copyPosition(position));
+        if (isTracked)
+          tracking._appendTrailFix(motion._copyPosition(position), fixEpochMs, {
+            nullAltitude: meta.renderAltitudeInvented === true,
+          });
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
         if (!modelOwnsGroundVisual) {
@@ -124,24 +137,31 @@ export function createFlightSnapshotRenderer({
         }
         // Apply fresh kinematics only from a forward synthetic fix. Mutating
         // the historical fix reprojects the entire stale interval and snaps
-        // the rendered aircraft when course or speed changes late.
+        // the rendered aircraft when course or speed changes late. The stale
+        // rules apply: none for a contact that holds at its report, a coast
+        // capped from the real report, never below the ground. It is a motion
+        // aid, not a report, so it never joins the trail.
         const kinematicsChanged =
           newest.velocity !== meta.velocity || newest.track !== meta.true_track;
-        if (kinematicsChanged) {
+        const holds = staleHoldsForFix(newest, {
+          onGround: meta.onGround,
+          cachedGroundFloor,
+        });
+        if (kinematicsChanged && !holds) {
           const synthetic = synthesizeForwardKinematicsFix(newest, {
-            epochMs: Date.now(),
+            // Following the clock, the snapshot's time is the moment it moves on from.
+            epochMs: followsClock(flightState)
+              ? snapshot.observedAtMs
+              : Date.now(),
             velocity: meta.velocity,
             track: meta.true_track,
             turnRateDps: meta.turnRateDps,
+            cachedGroundFloor,
           });
           if (synthetic) {
             history.push(synthetic);
             if (history.length > POSITION_HISTORY_LIMIT) history.shift();
             meta.turnRateDps = turnRateFromFixHistory(history);
-            if (isTracked)
-              tracking._appendTrailFix(
-                motion._copyPosition(synthetic.position),
-              );
           }
         }
       }
@@ -170,6 +190,13 @@ export function createFlightSnapshotRenderer({
       // (position updates automatically via dead-reckoning CallbackProperty)
       if (isTracked && flightState._trackedEntity) {
         tracking._updateTrackedLabelModel(icao24);
+        // Re-ask the tracked plane's lookups each poll. Answered and queued
+        // keys return at once; a lookup whose source failed runs again once
+        // its cool-down has passed, and the route uses the callsign this
+        // snapshot just recorded.
+        enrichment._requestTypeEnrichment(icao24, true);
+        enrichment._requestRouteEnrichment(icao24);
+        enrichment._requestPhotoEnrichment(icao24);
       }
     }
 
@@ -184,11 +211,15 @@ export function createFlightSnapshotRenderer({
       if (!currentIcaos.has(icao24)) absentIds.push(icao24);
     }
     for (const icao24 of absentIds) {
-      const absence = records.absence(icao24, {
-        complete: snapshot.complete,
-        retainIds: snapshot.retainIds,
-        likelyLanded: queries._likelyLanded(icao24),
-      });
+      const absence = replace
+        ? 'remove'
+        : records.absence(icao24, {
+            complete: snapshot.complete,
+            retainIds: snapshot.retainIds,
+            likelyLanded: queries._likelyLanded(icao24),
+            tracked: icao24 === flightState._trackedIcao,
+            nowMs: flightState.now?.(),
+          });
       if (absence === 'retain') continue;
       if (absence === 'stale') {
         icons._applyIconPresentation(icao24); // the faded freshness alpha
@@ -214,6 +245,14 @@ export function createFlightSnapshotRenderer({
 
       icons._forgetContact(icao24); // aged out: its 3D model goes too (no orphan / cap leak)
     }
+
+    // The tracked contact at the new time: its trail starts there.
+    if (
+      replace &&
+      flightState._trackedIcao &&
+      currentIcaos.has(flightState._trackedIcao)
+    )
+      tracking._startTrail(flightState._trackedIcao);
 
     // Ambient type enrichment: give ON-SCREEN planes real types (bounded
     // sweep — see _sweepAmbientEnrichment; internally fail-silent).

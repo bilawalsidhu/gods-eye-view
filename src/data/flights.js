@@ -46,5 +46,7 @@ export const _iconForTest = flightsLayer.testing._iconForTest;
 export const _setIconForTest = flightsLayer.testing._setIconForTest;
 export const _floorGroundedIconsForTest =
   flightsLayer.testing._floorGroundedIconsForTest;
+export const _resetEnrichmentForTest =
+  flightsLayer.testing._resetEnrichmentForTest;
 export const mapAnalystRecord = flightsLayer.mapAnalystRecord;
 export default flightsLayer;

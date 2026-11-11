@@ -28,6 +28,14 @@ const MMSI_SCHEMA = Object.freeze({
   pattern: '^\\d{5,10}$',
   description: 'Maritime Mobile Service Identity, such as "366999712".',
 });
+const VESSEL_ID_SCHEMA = Object.freeze({
+  type: 'string',
+  minLength: 1,
+  maxLength: 128,
+  description:
+    'The vessel id a vessel search returned. Vessels can share an MMSI; ' +
+    'the id names one of them.',
+});
 const MAX_TRACK_POINTS = 200;
 const ALL_VESSELS = 1_000_000;
 
@@ -47,10 +55,13 @@ const vesselDestination = (value) => {
   return destination && /\p{L}/u.test(destination) ? destination : null;
 };
 
+// `id` is the vessel's key; `mmsi` is its MMSI when known (vessels can share
+// one), else null.
 function vesselRow(record, from) {
   const point = { lat: record.latitude, lon: record.longitude };
   return {
-    mmsi: record.id,
+    id: record.id,
+    mmsi: text(record.mmsi),
     name: text(record.name),
     imo: text(record.imo),
     type: vesselType(record.type),
@@ -194,7 +205,7 @@ export const findVessel = defineTool({
     const [key] = given;
     const wanted = args[key].trim().toUpperCase();
     const matches = {
-      mmsi: (record) => record.id === wanted,
+      mmsi: (record) => String(record.mmsi ?? '') === wanted,
       imo: (record) => String(record.imo).replace(/^IMO/i, '') === wanted,
       name: (record) => String(record.name).toUpperCase().includes(wanted),
     }[key];
@@ -227,25 +238,40 @@ export const getVesselTrack = defineTool({
   name: 'get_vessel_track',
   title: 'Vessel track',
   description:
-    'Recent positions of one ship by MMSI, oldest first. Long tracks are ' +
-    `evenly thinned to at most ${MAX_TRACK_POINTS} points.`,
+    'Recent positions of one ship by its vessel id or MMSI, oldest first. ' +
+    `Long tracks are evenly thinned to at most ${MAX_TRACK_POINTS} points.`,
   inputSchema: {
     type: 'object',
-    properties: { mmsi: MMSI_SCHEMA },
-    required: ['mmsi'],
+    properties: { id: VESSEL_ID_SCHEMA, mmsi: MMSI_SCHEMA },
     additionalProperties: false,
   },
   requires: ['vessels'],
   async run(args, { services, signal }) {
-    const track = await services.vessels.getTrack(args.mmsi, { signal });
+    const given = ['id', 'mmsi'].filter((key) => args[key] != null);
+    if (given.length !== 1)
+      throw new ToolError(
+        'invalid_arguments',
+        'Give exactly one of id or mmsi',
+      );
+    const [key] = given;
+    const wanted = String(args[key]).trim();
+    // A track is asked for by the source's reference for the vessel, which
+    // for an id is the reported vessel's; an MMSI is passed as it is.
+    let reference = wanted;
+    if (key === 'id') {
+      const snapshot = await readVessels(services, signal);
+      const record = snapshot.records.find((item) => item.id === wanted);
+      reference = record?.reference ?? wanted;
+    }
+    const track = await services.vessels.getTrack(reference, { signal });
     const points = track.records
       .filter((point) => Number.isFinite(point.observedAtMs))
       .sort((a, b) => a.observedAtMs - b.observedAtMs);
     const kept = thinEvenly(points, MAX_TRACK_POINTS);
     return {
       summary: points.length
-        ? `${countNoun(points.length, 'position')} for ${args.mmsi} from ${isoTime(points[0].observedAtMs)} to ${isoTime(points.at(-1).observedAtMs)}.`
-        : `No recent track is available for ${args.mmsi}.`,
+        ? `${countNoun(points.length, 'position')} for ${wanted} from ${isoTime(points[0].observedAtMs)} to ${isoTime(points.at(-1).observedAtMs)}.`
+        : `No recent track is available for ${wanted}.`,
       data: {
         view: kept.length
           ? suggestView(services, {
@@ -254,7 +280,7 @@ export const getVesselTrack = defineTool({
               altitudeM: 20_000,
             })
           : null,
-        mmsi: args.mmsi,
+        ...(key === 'id' ? { id: wanted } : { mmsi: wanted }),
         total: points.length,
         returned: kept.length,
         thinned: kept.length < points.length,

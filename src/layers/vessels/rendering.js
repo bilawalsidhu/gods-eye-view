@@ -26,7 +26,12 @@ import {
   FOCUS_UPDATE_MS,
   LABEL_GRID_PX,
   CARD_MIN_SEP_PX,
+  followsClock,
 } from './policy.js';
+import { vesselPositionAt } from './motion.js';
+
+/** How often vessels move on as the world clock plays (wall ms). */
+const FOLLOW_POSITION_MS = 250;
 
 /** The ship artwork's own raster size (px). */
 const SHIP_ICON_PX = 32;
@@ -56,11 +61,11 @@ export function createRendering({
   function prepareRecordVisual(record) {
     let visual = visualRecords.get(record);
     if (!visual) {
-      // Unkeyed records (no MMSI) are rebuilt every poll, so their rows take
-      // a fresh id that no MMSI can collide with.
+      // Unkeyed records (no id) are rebuilt every poll, so their rows take
+      // a fresh id that no vessel id can collide with.
       visual = {
         iconId:
-          record.mmsi || `ais-unkeyed:${++vesselState._unkeyedIconSequence}`,
+          record.id || `ais-unkeyed:${++vesselState._unkeyedIconSequence}`,
         visible: false,
       };
       visualRecords.set(record, visual);
@@ -71,17 +76,21 @@ export function createRendering({
 
   /**
    * Where a record's icon is anchored: VESSEL_LIFT_M above the sea surface
-   * (the geoid, once its grid has loaded).
+   * (the geoid, once its grid has loaded). Following the world clock, a
+   * vessel is drawn where it was at the time.
    * @param {Object} record - Vessel record with a finite lat/lon.
    * @returns {{x: number, y: number, z: number}} ECEF metres: icon items,
    *   focus and the layer's queries take it as it is.
    */
   function anchorPosition(record) {
+    const { lat, lon } = followsClock(vesselState)
+      ? vesselPositionAt(record, vesselState.worldNow())
+      : record;
     const heightM = components.queries.vesselDatumHeightM(
-      components.tracking.currentGeoidN(record.lat, record.lon),
+      components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
     );
-    return fromDegrees(record.lon, record.lat, heightM);
+    return fromDegrees(lon, lat, heightM);
   }
 
   // Reused projection buffers for the card pass, grown to the candidates.
@@ -155,8 +164,7 @@ export function createRendering({
   /** Whether the Cockpit's bridge camera rides this record's ship. */
   function isCockpitSubject(record) {
     return (
-      Boolean(state.cockpitSubjectMmsi) &&
-      record.mmsi === state.cockpitSubjectMmsi
+      Boolean(state.cockpitSubjectId) && record.id === state.cockpitSubjectId
     );
   }
 
@@ -166,12 +174,12 @@ export function createRendering({
    * view, so it is hidden while held.
    */
   function syncCockpitSubjectIcon() {
-    const held = state.cockpitSubjectMmsi || null;
-    if (vesselState._iconHiddenMmsi === held) return;
-    const before = vesselState._iconHiddenMmsi;
-    vesselState._iconHiddenMmsi = held;
-    for (const mmsi of [before, held]) {
-      const record = mmsi ? state.records.byMmsi.get(mmsi) : null;
+    const held = state.cockpitSubjectId || null;
+    if (vesselState._iconHiddenId === held) return;
+    const before = vesselState._iconHiddenId;
+    vesselState._iconHiddenId = held;
+    for (const id of [before, held]) {
+      const record = id ? state.records.byId.get(id) : null;
       if (record) syncRecordIcon(record);
     }
   }
@@ -302,7 +310,27 @@ export function createRendering({
   function installRuntime(viewer) {
     if (state.preRenderRemover || !viewer) return;
     state.preRenderRemover =
-      findFrame(viewer)?.on('preRender', () => updateVisibility()) ?? null;
+      findFrame(viewer)?.on('preRender', () => {
+        if (followsClock(vesselState)) followClockPositions();
+        updateVisibility();
+      }) ?? null;
+  }
+
+  // As the world clock plays, vessels between two fixes move on along them.
+  let followedAtWallMs = -Infinity;
+  let followedAtMs = null;
+  function followClockPositions() {
+    const wallMs = performance.now();
+    if (wallMs - followedAtWallMs < FOLLOW_POSITION_MS) return;
+    followedAtWallMs = wallMs;
+    const atMs = vesselState.worldNow();
+    if (atMs === followedAtMs) return;
+    followedAtMs = atMs;
+    for (const record of state.records.all) {
+      if (!record.motion) continue;
+      prepareRecordVisual(record);
+      syncRecordIcon(record);
+    }
   }
 
   function scheduleTrailingVisibilityPass(now) {
@@ -494,8 +522,7 @@ export function createRendering({
     const selected = state.selectedRecord;
     // From the bridge, the selected vessel is the viewer; its card would be
     // pinned to the camera position.
-    const selectedCarded =
-      selected && selected.mmsi !== state.cockpitSubjectMmsi;
+    const selectedCarded = selected && selected.id !== state.cockpitSubjectId;
     const entries = selectedCarded
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
@@ -591,17 +618,17 @@ export function createRendering({
           VESSEL_CARD_FADE_DISTANCE_M,
         );
         if (!card.interactive) return card;
-        const mmsi = String(card.id || '').startsWith('vessel:')
+        const id = String(card.id || '').startsWith('vessel:')
           ? card.id.slice('vessel:'.length)
           : '';
+        const mmsi = state.records.byId.get(id)?.mmsi || '';
         return {
           ...card,
-          accessibilityLabel: t('Focus vessel {name}, MMSI {mmsi}', {
-            name: card.title,
-            mmsi,
-          }),
+          accessibilityLabel: mmsi
+            ? t('Focus vessel {name}, MMSI {mmsi}', { name: card.title, mmsi })
+            : t('Focus {label}', { label: card.title }),
           activate: () => {
-            const record = state.records.byMmsi.get(mmsi);
+            const record = state.records.byId.get(id);
             if (!record) return false;
             components.selection.selectAndFocusVessel(record);
             return true;
@@ -633,7 +660,8 @@ export function createRendering({
       text &&
       text !== 'VESSEL' &&
       !/^MMSI\s*\d+$/i.test(text) &&
-      text !== record.mmsi,
+      text !== record.mmsi &&
+      text !== record.id,
     );
   }
 

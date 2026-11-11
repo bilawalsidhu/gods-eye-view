@@ -13,7 +13,7 @@ import {
   julianToEpochMs,
   secondsDifference,
 } from '../geo/julian.js';
-import { copyInto, norm180, norm360, vec } from '../geo/vector.js';
+import { copyInto, norm180, norm360, toDegrees, vec } from '../geo/vector.js';
 
 const DEG = Math.PI / 180;
 
@@ -179,6 +179,136 @@ export function staleCoastLimitSeconds({
     Number.isFinite(contactGraceSec) ? contactGraceSec : 60,
   );
   return Math.min(ceiling, Math.max(floor, contactLeadSec + grace));
+}
+
+/** @constant {number} Dead reckoning never moves a contact faster than this
+ *  (1,500 kt, the trail's continuity limit), so a corrupt reported speed
+ *  cannot fly a coasting plane hundreds of kilometres. */
+export const COAST_MAX_SPEED_MPS = (1_500 * 1852) / 3600;
+
+/** @constant {number} A contact with no fresh report coasts at most this long past it, whatever its source limit; there is no distance cap. */
+export const STALE_COAST_MAX_SEC = 300;
+
+/** @constant {number} A report this close to a known ground height holds
+ *  instead of coasting. */
+export const STALE_HOLD_MAX_HEIGHT_M = 150;
+
+/**
+ * Whether a contact whose reports have stopped holds at its last reported
+ * position instead of coasting: it reported on the ground, or a known ground
+ * floor puts it within STALE_HOLD_MAX_HEIGHT_M of the ground (landing or
+ * taking off). A plane that low has no evidence of being anywhere but where
+ * it was last heard. Where the ground is unknown, barometric altitude is not
+ * read as height above it; the contact coasts under the stale cap.
+ * @param {object} report
+ * @param {boolean} [report.onGround]
+ * @param {number} [report.heightM] - Render height (ellipsoidal metres).
+ * @param {number} [report.groundM] - Ellipsoidal ground under the report, if known.
+ * @returns {boolean}
+ */
+export function staleHoldsAtLastReport({ onGround, heightM, groundM } = {}) {
+  if (onGround === true) return true;
+  return (
+    Number.isFinite(heightM) &&
+    Number.isFinite(groundM) &&
+    heightM - groundM < STALE_HOLD_MAX_HEIGHT_M
+  );
+}
+
+/**
+ * The hold-or-coast decision for a report, made once and kept on the report,
+ * so a ground floor that resolves while the contact coasts cannot flip it and
+ * snap the icon back. Height and position come from the report itself.
+ * @param {{position: {x: number, y: number, z: number}, staleHolds?: boolean}} fix - History
+ *   fix; `staleHolds` is stored on it.
+ * @param {object} args
+ * @param {boolean} [args.onGround] - The contact's ground flag.
+ * @param {(latDeg: number, lonDeg: number) => number|null} [args.cachedGroundFloor]
+ * @returns {boolean}
+ */
+export function staleHoldsForFix(fix, { onGround, cachedGroundFloor } = {}) {
+  if (typeof fix.staleHolds === 'boolean') return fix.staleHolds;
+  const carto = toCartographicRadians(fix.position);
+  const groundM =
+    carto && typeof cachedGroundFloor === 'function'
+      ? cachedGroundFloor(toDegrees(carto.lat), toDegrees(carto.lon))
+      : null;
+  fix.staleHolds = staleHoldsAtLastReport({
+    onGround,
+    heightM: carto?.height,
+    groundM,
+  });
+  return fix.staleHolds;
+}
+
+/**
+ * Seconds a contact coasts past `newest` at a display time `elapsedSec`
+ * after it, counting any coast a synthetic fix already took since the real
+ * report it was built from (`reportEpochMs`), so a chain of synthetic fixes
+ * never coasts further than one report would.
+ * @param {object} args
+ * @param {{epochMs: number, reportEpochMs?: number, velocity?: number}} args.newest
+ * @param {number} args.elapsedSec - Display time past `newest`.
+ * @param {number} args.coastLimitSec - Source limit past `newest`.
+ * @param {boolean} args.holds
+ * @returns {number}
+ */
+export function staleCoastSecondsFrom({
+  newest,
+  elapsedSec,
+  coastLimitSec,
+  holds,
+}) {
+  const alreadySec = Number.isFinite(newest?.reportEpochMs)
+    ? Math.max(0, (newest.epochMs - newest.reportEpochMs) / 1000)
+    : 0;
+  return Math.max(
+    0,
+    staleCoastSeconds({
+      elapsedSec: elapsedSec + alreadySec,
+      coastLimitSec: coastLimitSec + alreadySec,
+      holds,
+    }) - alreadySec,
+  );
+}
+
+/** @constant {number} A coasted position sits at least this far (m) above the ground. */
+export const COAST_FLOOR_LIFT_M = 1.5;
+
+/**
+ * Lift a coasted position to COAST_FLOOR_LIFT_M above the ground where the
+ * ground is known; a coast runs level from the report and terrain may rise
+ * under it.
+ * @param {{x: number, y: number, z: number}} position - Mutated in place.
+ * @param {(latDeg: number, lonDeg: number) => number|null} [cachedGroundFloor]
+ * @returns {{x: number, y: number, z: number}}
+ */
+export function floorCoastedPosition(position, cachedGroundFloor) {
+  if (typeof cachedGroundFloor !== 'function') return position;
+  const carto = toCartographicRadians(position);
+  if (!carto) return position;
+  const ground = cachedGroundFloor(toDegrees(carto.lat), toDegrees(carto.lon));
+  if (!Number.isFinite(ground) || carto.height >= ground + COAST_FLOOR_LIFT_M)
+    return position;
+  return copyInto(
+    fromRadians(carto.lon, carto.lat, ground + COAST_FLOOR_LIFT_M),
+    position,
+  );
+}
+
+/**
+ * Seconds to coast past the last report: the elapsed time, bounded by the
+ * source's coast limit and STALE_COAST_MAX_SEC; none for a contact that
+ * holds.
+ * @param {object} args
+ * @param {number} args.elapsedSec - Display time past the last report.
+ * @param {number} args.coastLimitSec - From `staleCoastLimitSeconds`.
+ * @param {boolean} args.holds - From `staleHoldsAtLastReport`.
+ * @returns {number}
+ */
+export function staleCoastSeconds({ elapsedSec, coastLimitSec, holds }) {
+  if (holds || !(elapsedSec > 0)) return 0;
+  return Math.max(0, Math.min(elapsedSec, coastLimitSec, STALE_COAST_MAX_SEC));
 }
 
 /**
@@ -427,12 +557,21 @@ const _forwardFixArc = { east: 0, north: 0, endCourseDeg: 0 };
  * kinematics. This prevents a late course change from reprojecting the entire
  * stale interval and snapping the rendered contact by kilometres.
  *
+ * The same stale rules as the display apply: no fix for a contact that holds
+ * at its report (`staleHoldsForFix`, decided before calling), a coast of at
+ * most STALE_COAST_MAX_SEC counted from the real report
+ * (`reportEpochMs` carries it along a chain), and never below known ground.
+ * The result is a motion fix only, never a report for the trail.
+ *
  * @param {{time: object, epochMs?: number, position: {x: number, y: number, z: number},
- *   velocity?: number, track?: number}} newest Existing immutable history fix.
- * @param {{epochMs: number, velocity: number, track: number, turnRateDps?: number}} next
+ *   velocity?: number, track?: number, staleHolds?: boolean, reportEpochMs?: number}} newest
+ *   Existing immutable history fix.
+ * @param {{epochMs: number, velocity: number, track: number, turnRateDps?: number,
+ *   cachedGroundFloor?: Function}} next
  *   New kinematics and the wall/source epoch at which they become authoritative.
  * @returns {{time: object, epochMs: number, position: {x: number, y: number, z: number},
- *   velocity: number, track: number}|null} Forward synthetic fix, or null.
+ *   velocity: number, track: number, staleHolds?: boolean, reportEpochMs: number}|null}
+ *   Forward synthetic fix, or null.
  */
 export function synthesizeForwardKinematicsFix(newest, next = {}) {
   if (!newest?.position || !newest?.time || !Number.isFinite(next.epochMs))
@@ -442,12 +581,18 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     : julianToEpochMs(newest.time);
   if (!Number.isFinite(startEpochMs) || next.epochMs <= startEpochMs)
     return null;
+  if (newest.staleHolds === true) return null;
 
   const previousVelocity = Number.isFinite(newest.velocity)
     ? Math.max(0, newest.velocity)
     : 0;
   const previousTrack = Number.isFinite(newest.track) ? newest.track : 0;
-  const dtSec = (next.epochMs - startEpochMs) / 1000;
+  const dtSec = staleCoastSecondsFrom({
+    newest: { epochMs: startEpochMs, reportEpochMs: newest.reportEpochMs },
+    elapsedSec: (next.epochMs - startEpochMs) / 1000,
+    coastLimitSec: Infinity,
+    holds: false,
+  });
   arcOffsetEnu(
     previousVelocity,
     previousTrack,
@@ -455,13 +600,20 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     dtSec,
     _forwardFixArc,
   );
-  const position = framePoint(
-    eastNorthUp(newest.position),
-    vec(_forwardFixArc.east, _forwardFixArc.north, 0),
+  const position = floorCoastedPosition(
+    framePoint(
+      eastNorthUp(newest.position),
+      vec(_forwardFixArc.east, _forwardFixArc.north, 0),
+    ),
+    next.cachedGroundFloor,
   );
   return {
     time: julianFromEpochMs(next.epochMs),
     epochMs: next.epochMs,
+    reportEpochMs: Number.isFinite(newest.reportEpochMs)
+      ? newest.reportEpochMs
+      : startEpochMs,
+    staleHolds: newest.staleHolds,
     position,
     velocity: Number.isFinite(next.velocity)
       ? Math.max(0, next.velocity)

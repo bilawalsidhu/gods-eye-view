@@ -159,3 +159,62 @@ test('a row switch and slider render their markup and report choices', () => {
   assert.equal(segments[1].classList.contains('active'), true);
   render(null, container);
 });
+
+test('a row range renders start and end pickers and reports which end moved', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const picks = [];
+  const item = {
+    ...row(false),
+    key: 'shipwrecks',
+    id: 'shipwrecks',
+    controls: {
+      hidden: false,
+      chips: [],
+      segmented: null,
+      slider: null,
+      range: {
+        id: 'period',
+        label: 'Period',
+        valueText: '2010–2024',
+        from: { label: 'From', ariaLabel: 'First year', value: 2010 },
+        to: { label: 'To', ariaLabel: 'Last year', value: 2024 },
+        options: [2024, 2010, 2007].map((year) => ({
+          value: year,
+          label: String(year),
+        })),
+      },
+      legend: [],
+      info: null,
+      list: null,
+    },
+  };
+  render(
+    h(LayerRows, {
+      items: [item],
+      onRange: (id, rangeId, end, value) =>
+        picks.push([id, rangeId, end, value]),
+    }),
+    container,
+  );
+  const block = container.querySelector('.data-toggle-range');
+  assert.equal(block.dataset.rangeId, 'period');
+  assert.equal(
+    block.querySelector('.data-toggle-slider-value').textContent,
+    '2010–2024',
+  );
+  const [from, to] = block.querySelectorAll('select.data-toggle-range-select');
+  assert.equal(from.getAttribute('aria-label'), 'First year');
+  assert.equal(from.value, '2010');
+  assert.equal(to.value, '2024');
+  assert.deepEqual(
+    [...block.querySelectorAll('.data-toggle-range-caption')].map(
+      (caption) => caption.textContent,
+    ),
+    ['From', 'To'],
+  );
+  to.value = '2007';
+  to.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.deepEqual(picks, [['shipwrecks', 'period', 'to', '2007']]);
+  render(null, container);
+});

@@ -340,7 +340,7 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
     records: [record],
     selectedRecord: record,
     trail,
-    trailMmsi: record.mmsi,
+    trailId: record.mmsi,
     trailPositions: [POS],
     loaded: true,
     lastUpdate: 456,
@@ -370,8 +370,8 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
       lastMessageAt: 789,
       rawRowCount: 1,
       acceptedRowCount: 0,
-      selectedMmsi: record.mmsi,
-      trailMmsi: record.mmsi,
+      selectedId: record.mmsi,
+      trailId: record.mmsi,
       trailPositionCount: 1,
       sessionId: _getVesselFeedStateForTest().sessionId,
       firstConnectPhase: 'idle',
@@ -651,7 +651,7 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
       records: [replacement],
       selectedRecord: replacement,
       trail: replacementTrail,
-      trailMmsi: replacement.mmsi,
+      trailId: replacement.mmsi,
       trailPositions: [POS],
       loaded: true,
       lastUpdate: 200,
@@ -669,17 +669,9 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
     );
     await oldLoad;
     let feed = _getVesselFeedStateForTest();
-    assert.equal(
-      feed.loading,
-      true,
-      'old finally must not clear replacement loading ownership',
-    );
-    assert.equal(
-      feed.lastUpdate,
-      200,
-      'old response must not advance replacement freshness',
-    );
-    assert.equal(feed.selectedMmsi, replacement.mmsi);
+    assert.equal(feed.loading, true, 'old finally must not clear replacement loading ownership');
+    assert.equal(feed.lastUpdate, 200, 'old response must not advance replacement freshness');
+    assert.equal(feed.selectedId, replacement.mmsi);
 
     second.resolve(
       jsonResponse({ status: 'open', lastMessageAt: null, rows: [] }),
@@ -690,8 +682,8 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
     assert.equal(feed.lastUpdate, 200);
     assert.equal(feed.error, 'awaiting first AIS message…');
     assert.equal(feed.stale, true);
-    assert.equal(feed.selectedMmsi, replacement.mmsi);
-    assert.equal(feed.trailMmsi, replacement.mmsi);
+    assert.equal(feed.selectedId, replacement.mmsi);
+    assert.equal(feed.trailId, replacement.mmsi);
     assert.equal(replacementTrail.clearCalls, 0);
   } finally {
     globalThis.fetch = priorFetch;
@@ -920,25 +912,21 @@ test('vessel focus wire restores a hidden sprite before releasing the active pas
 
 test('vessel selection: empty-space click requests deselection', () => {
   assert.deepEqual(
-    reduceVesselSelection({ selectedMmsi: '353136000', gesture: 'click' }),
+    reduceVesselSelection({ selectedId: '353136000', gesture: 'click' }),
     { action: 'deselect' },
   );
 });
 
 test('vessel selection: no selection plus empty-space click is a no-op', () => {
   assert.deepEqual(
-    reduceVesselSelection({
-      selectedMmsi: null,
-      pickedMmsi: null,
-      gesture: 'click',
-    }),
+    reduceVesselSelection({ selectedId: null, pickedId: null, gesture: 'click' }),
     { action: 'none' },
   );
 });
 
 test('vessel selection: Escape deselects only when this layer owns a selection', () => {
   assert.deepEqual(
-    reduceVesselSelection({ selectedMmsi: 353136000, gesture: 'escape' }),
+    reduceVesselSelection({ selectedId: 353136000, gesture: 'escape' }),
     { action: 'deselect' },
   );
   assert.deepEqual(reduceVesselSelection({ gesture: 'escape' }), {
@@ -949,16 +937,16 @@ test('vessel selection: Escape deselects only when this layer owns a selection',
 test('vessel selection: another vessel replaces selection; same vessel is a no-op', () => {
   assert.deepEqual(
     reduceVesselSelection({
-      selectedMmsi: '353136000',
-      pickedMmsi: '367123450',
+      selectedId: '353136000',
+      pickedId: '367123450',
       gesture: 'click',
     }),
     { action: 'select' },
   );
   assert.deepEqual(
     reduceVesselSelection({
-      selectedMmsi: '353136000',
-      pickedMmsi: '353136000',
+      selectedId: '353136000',
+      pickedId: '353136000',
       gesture: 'click',
     }),
     { action: 'none' },
@@ -973,8 +961,9 @@ test('vessel selection: another vessel replaces selection; same vessel is a no-o
 
 const POS = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 3);
 
+// Like the layer's records, a vessel with no id of its own is keyed by its MMSI.
 function makeRecord(overrides = {}) {
-  return {
+  const record = {
     name: 'EVER GIVEN',
     mmsi: '353136000',
     type: 'Container Ship',
@@ -987,6 +976,8 @@ function makeRecord(overrides = {}) {
     position: POS,
     ...overrides,
   };
+  if (!Object.hasOwn(overrides, 'id')) record.id = record.mmsi;
+  return record;
 }
 
 function makeTrailSpy() {
@@ -1093,7 +1084,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     records: [record],
     selectedRecord: record,
     trail,
-    trailMmsi: record.mmsi,
+    trailId: record.mmsi,
     trailPositions: [POS],
     interactionKeyTarget: keyTarget,
     ...stateOverrides,
@@ -1132,7 +1123,7 @@ test('vessel interaction wire: trail pick does not deselect', () => {
       harness.record.mmsi,
     );
     assert.equal(harness.trail.clearCalls, 0);
-    assert.equal(_getVesselStateForTest().trailMmsi, harness.record.mmsi);
+    assert.equal(_getVesselStateForTest().trailId, harness.record.mmsi);
   } finally {
     harness.cleanup();
   }
@@ -1392,7 +1383,7 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
       selectedRecord: harness.record,
       enabled: false,
       trail: harness.trail,
-      trailMmsi: harness.record.mmsi,
+      trailId: harness.record.mmsi,
       trailPositions: [POS],
       interactionKeyTarget: harness.keyTarget,
     });
@@ -1476,7 +1467,7 @@ test('vessel trail lifecycle: deselect clears the selected-vessel trail', () => 
     aisLiveVesselsLayer.clearSelection();
     assert.equal(harness.trail.clearCalls, 1);
     assert.deepEqual(_getVesselStateForTest(), {
-      trailMmsi: null,
+      trailId: null,
       trailPositionCount: 0,
       vesselCount: 1,
     });
@@ -1491,14 +1482,14 @@ test('vessel trail lifecycle: reconciliation eviction clears an orphaned trail',
   _setVesselStateForTest({
     records: [record],
     trail,
-    trailMmsi: record.mmsi,
+    trailId: record.mmsi,
     trailPositions: [POS],
   });
   try {
     _reconcileVesselsForTest({}, []);
     assert.equal(trail.clearCalls, 1);
     assert.deepEqual(_getVesselStateForTest(), {
-      trailMmsi: null,
+      trailId: null,
       trailPositionCount: 0,
       vesselCount: 0,
     });
@@ -1829,6 +1820,28 @@ test('vessel interaction wire: selecting a vessel by click requests a camera tra
   }
 });
 
+test('vessel interaction wire: a vessel with an id and no MMSI is selected by click', () => {
+  const idOnly = makeRecord({ id: 'provider-7', mmsi: '', name: 'NO MMSI' });
+  const harness = installWireHarness(
+    { id: idOnly },
+    { records: [idOnly], selectedRecord: null, trailId: null },
+  );
+  const requests = [];
+  harness.windowTarget.addEventListener(
+    WORLD_FOCUS_REQUEST_EVENT,
+    (event) => requests.push(event.detail),
+  );
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.id, 'provider-7');
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, '');
+    assert.equal(requests[0]?.id, 'provider-7');
+    assert.match(harness.hud.readout.text, /MMSI: -- /);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 /**
  * Overlay-host recorder whose hitTest answers with one card id. The real host
  * only publishes rects for `interactive` entries, so a stub returning a hit is
@@ -1993,17 +2006,27 @@ for (const card of ['live', 'stale', 'absent', 'covered']) {
   });
 }
 
-test('vessel card policy: only MMSI-keyed cards publish a hit rect', () => {
+test('vessel card policy: only keyed cards publish a hit rect', () => {
   const keyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord()));
   assert.equal(keyed.interactive, true);
-  const unkeyed = applyVesselOverlayPolicy(
-    buildVesselCard(makeRecord({ mmsi: '' })),
+  const unkeyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord({ mmsi: '' })));
+  assert.equal(unkeyed.interactive, false, 'an unkeyed card has no record to select');
+  const idOnly = buildVesselCard(makeRecord({ id: 'provider-7', mmsi: '' }));
+  assert.equal(applyVesselOverlayPolicy(idOnly).interactive, true, 'a source id is a key');
+  assert.equal(idOnly.id, 'vessel:provider-7');
+});
+
+test('vessel cards are keyed by id and show the MMSI only when known', () => {
+  const shared = buildSelectedVesselCard(makeRecord({ id: 'hull-b' }));
+  assert.equal(shared.id, 'vessel:hull-b');
+  assert.equal(shared.actionable, true);
+  assert.match(shared.details.at(-1), /^MMSI 353136000 · /);
+  const unknown = buildSelectedVesselCard(
+    makeRecord({ id: 'provider-7', mmsi: '', name: 'provider-7' }),
   );
-  assert.equal(
-    unkeyed.interactive,
-    false,
-    'an unkeyed card has no record to select',
-  );
+  assert.equal(unknown.actionable, true);
+  assert.match(unknown.details.at(-1), /^MMSI -- · /);
+  assert.equal(unknown.title, 'VESSEL', 'a name that is only the id is no name');
 });
 
 test('vessel interaction wire: deselecting never moves the camera', () => {
@@ -2064,7 +2087,7 @@ test('vessel selection passes the opaque source reference to optional history', 
   });
   const harness = installWireHarness(undefined, {
     selectedRecord: null,
-    trailMmsi: null,
+    trailId: null,
   });
   try {
     harness.record.reference = 'opaque:test-reference';
@@ -2122,4 +2145,43 @@ test('vessel focus wire skips hidden sprites at rest while a target is tracked',
   assert.equal(focus(records[0]), 0.25);
   assert.equal(result.activeCount, 1);
   for (const record of records.slice(1)) assert.equal(focus(record), 1);
+});
+
+test('detection objects name the vessel card their callout gives way to', () => {
+  const vessel = (mmsi, name) => ({
+    name,
+    mmsi,
+    type: 'Cargo',
+    destination: '',
+    speed: 9.5,
+    course: 80,
+    heading: 80,
+    lastPositionUtc: '',
+    missedRefreshes: 0,
+    position: POS,
+    // Drawn and on screen (a record with no visual of its own is its own).
+    visible: true,
+  });
+  const keyed = vessel('200', 'GOLDEN BEAR');
+  const unkeyed = { ...vessel('', 'NO MMSI'), lat: 37.8, lon: -122.4 };
+  _setVesselStateForTest({
+    viewer: {},
+    records: [keyed, unkeyed],
+  });
+  try {
+    const objects = Object.fromEntries(
+      aisLiveVesselsLayer
+        .getDetectableObjects()
+        .map((object) => [object.id, object]),
+    );
+    assert.equal(objects['GOLDEN BEAR'].cardSourceId, 'ais-live-vessels');
+    assert.equal(objects['GOLDEN BEAR'].cardEntryId, 'vessel:200');
+    assert.equal(
+      objects['NO MMSI'].cardEntryId,
+      'vessel:unkeyed:NO MMSI:37.80000:-122.40000',
+      'the same identity the vessel card is published under',
+    );
+  } finally {
+    _setVesselStateForTest({ enabled: false });
+  }
 });

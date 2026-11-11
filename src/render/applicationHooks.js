@@ -17,6 +17,11 @@
  *   itself (Cockpit asks whether the aircraft it flies still draws).
  * - `installZoomOutGuard(options)`: keeps outward user zooms bounded and the
  *   Earth framed; returns its disposer.
+ * - `createOcclusionProbe()`: a probe that tests depth-tested contacts
+ *   (street vehicles) against what the frame drew, so the detection overlay
+ *   leaves out those something stands in front of (`SurfaceOcclusion` in
+ *   `src/data/detectionOcclusion.js` says what it answers); without one,
+ *   every such contact is drawn.
  * - `qaHandles`: values QA scripts read from `window.__godsEyeView`.
  * - `ownCreditDisplay`: true when the renderer shows its credits in a
  *   display of its own; otherwise the application shows what its credits

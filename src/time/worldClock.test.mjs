@@ -387,3 +387,24 @@ test('playing, listeners hear of the time every animation frame', () => {
   clock.pause();
   assert.equal(frames.size, 0);
 });
+
+test('a seek or a return to live counts as a jump; play does not', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  assert.equal(clock.getState().jumps, 0);
+  clock.seek(t.wall - 60_000);
+  assert.equal(clock.getState().jumps, 1);
+  clock.seek(t.wall - 60_000);
+  assert.equal(clock.getState().jumps, 1, 'the same paused time is no jump');
+  clock.play();
+  t.advance(1_000);
+  t.timers.forEach(({ fn }) => fn());
+  assert.equal(clock.getState().jumps, 1, 'playing on is no jump');
+  clock.pause();
+  clock.setRate(4);
+  assert.equal(clock.getState().jumps, 1);
+  clock.goLive();
+  assert.equal(clock.getState().jumps, 2);
+  clock.goLive();
+  assert.equal(clock.getState().jumps, 2, 'already live is no jump');
+});

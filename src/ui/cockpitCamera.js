@@ -156,7 +156,7 @@ function vesselSurfaceM(info, nowMs, at = info) {
     : 0;
   const query = findQuery(this.viewer) ? heightsOf(this.viewer) : null;
   let read =
-    this.vesselWaterline?.mmsi === info.mmsi ? this.vesselWaterline : null;
+    this.vesselWaterline?.vesselId === info.id ? this.vesselWaterline : null;
   if (
     query &&
     (!read || nowMs - read.sampledMs >= VESSEL_WATERLINE_REFRESH_MS)
@@ -166,7 +166,7 @@ function vesselSurfaceM(info, nowMs, at = info) {
     );
     if (!read) {
       read = {
-        mmsi: info.mmsi,
+        vesselId: info.id,
         heightM: loadedWaterlineM(query, probes, seaM),
         sampledMs: nowMs,
         // Whether a full-detail read has answered for this ship.
@@ -247,7 +247,7 @@ function updateVessel(nowMs) {
     return;
   }
   const info = this.readVesselInfo();
-  if (!info || info.mmsi !== this.subjectId) {
+  if (!info || info.id !== this.subjectId) {
     this.exit({ restoreTracking: false });
     return;
   }

@@ -43,14 +43,17 @@ import {
   BY_STYLE,
   SHARE_VIEW_FLAGS,
   SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
+  SHARE_VIEW_FOLLOW_RANGE_MAX_M,
   SHARE_VIEW_STYLE_DEFAULTS,
   SHARE_VIEW_LAYER_OPTION_ABSENT,
   SHARE_VIEW_PANELS,
   SHARE_VIEW_STYLE_PARAMS,
+  SHARE_VIEW_THING_FIELDS,
   createDefaultShareViewState,
   decodeShareView,
   encodeShareView,
   followCameraFor,
+  followOffsetFor,
   followOffsetFromEnu,
   followOffsetToEnu,
   layerTokenFromNumber,
@@ -149,6 +152,7 @@ function randomState(random) {
               String(int(100000000, 999999999)),
               '002442000',
               'tmp-7',
+              '0770e3ca-b896-c307-f499-4f9df2b8f86b',
             ])
           : pick(random, [
               int(0, 0xffffff).toString(16).padStart(6, '0'),
@@ -1357,5 +1361,213 @@ test('the world time is written only away from live, and may lie ahead', () => {
   assert.ok(
     encodeShareView({ sharedAtMs: NOW_MS, worldTime: NOW_MS - 1000 }).length >
       encodeShareView({ sharedAtMs: NOW_MS }).length,
+  );
+});
+
+/* ---------------- vessel ids that are UUIDs ---------------- */
+
+const VESSEL_UUID = '0770e3ca-b896-c307-f499-4f9df2b8f86b';
+const VESSEL_FIX = {
+  lat: 51.9301,
+  lon: 4.0512,
+  alt: 47,
+  observedAtMs: NOW_MS - 30_000,
+};
+const VESSEL_OFFSET = { range: 3200, heading: 20, pitch: -30 };
+const vesselView = (id, extra = {}) => ({
+  view: {
+    kind: 'thing',
+    entity: { kind: 'vessel', id },
+    offset: VESSEL_OFFSET,
+    lastKnown: VESSEL_FIX,
+  },
+  sharedAtMs: NOW_MS,
+  ...extra,
+});
+
+/** A thing message's bytes, wrapped as a whole payload's code. */
+function thingCode(write) {
+  const thing = new WireWriter();
+  write(thing);
+  const writer = new WireWriter();
+  writer.bytes.push(1);
+  writer.bytesField(13, thing.finish());
+  return hashOf(writer.finish());
+}
+
+test('a vessel id that is a UUID travels as its 16 bytes and round-trips', () => {
+  assert.equal(SHARE_VIEW_THING_FIELDS.vesselUuid, 13);
+  const code = assertRoundTrip(vesselView(VESSEL_UUID));
+  const { state } = decodeOk(code);
+  assert.deepEqual(state.view.entity, { kind: 'vessel', id: VESSEL_UUID });
+  // Upper case is the same id: the decoder gives it back lowercase.
+  assert.equal(
+    decodeOk(encodeShareView(vesselView(VESSEL_UUID.toUpperCase()))).state.view
+      .entity.id,
+    VESSEL_UUID,
+  );
+  // 16 bytes and a two-byte tag and length, not 36 characters of text.
+  const aircraft = encodeShareView({
+    ...vesselView('a1b2c3'),
+    view: {
+      ...vesselView('a1b2c3').view,
+      entity: { kind: 'aircraft', id: 'a1b2c3' },
+    },
+  });
+  assert.equal(aircraft.length, 44);
+  assert.equal(code.length, 62);
+  assert.equal(
+    payloadBytes(code).length - payloadBytes(aircraft).length,
+    18 - 5,
+    'the id costs 18 bytes where an ICAO address costs 5',
+  );
+  // The id field comes last, after the fix, in ascending order.
+  const bytes = payloadBytes(code);
+  assert.deepEqual(
+    [...bytes.slice(-18)],
+    [
+      0x6a,
+      16,
+      ...VESSEL_UUID.replaceAll('-', '')
+        .match(/../g)
+        .map((h) => parseInt(h, 16)),
+    ],
+  );
+  // A UUID form is only a vessel's: other kinds keep the id grammar.
+  for (const kind of ['aircraft', 'military_aircraft', 'satellite'])
+    assert.deepEqual(
+      normalizeShareViewState({
+        view: { kind: 'thing', entity: { kind, id: VESSEL_UUID } },
+      }).view,
+      { kind: 'place' },
+    );
+  // Near-UUIDs are not UUIDs, and are longer than the id grammar allows.
+  for (const id of [VESSEL_UUID.replaceAll('-', '') + '0', `${VESSEL_UUID}0`])
+    assert.deepEqual(
+      normalizeShareViewState({
+        view: { kind: 'thing', entity: { kind: 'vessel', id } },
+      }).view,
+      { kind: 'place' },
+    );
+});
+
+test('MMSI and short text vessel ids, and links made before UUIDs, are unchanged', () => {
+  // Codes written before vessel ids could be UUIDs.
+  const before = {
+    'AUCAn8wYahkYoPH_rgEogBkwKDg7QIqyP0iA-QRQXlg8Ag': '366999712',
+    AUCAn8wYah4aCTAwMjQ0MjAwMCiAGTAoODtAirI_SID5BFBeWDyl: '002442000',
+  };
+  for (const [code, id] of Object.entries(before)) {
+    assert.equal(encodeShareView(vesselView(id)), code);
+    const { state } = decodeOk(code);
+    assert.deepEqual(state.view, {
+      kind: 'thing',
+      entity: { kind: 'vessel', id },
+      offset: VESSEL_OFFSET,
+      lastKnown: VESSEL_FIX,
+    });
+  }
+  // A camera-only vessel view with a short text id, as before.
+  const tmp = 'ARCgnAEYwLgCagcaBXRtcC03GQ';
+  assert.equal(
+    encodeShareView({
+      lat: 1,
+      lon: 2,
+      view: { kind: 'thing', entity: { kind: 'vessel', id: 'tmp-7' } },
+    }),
+    tmp,
+  );
+  assert.equal(decodeOk(tmp).state.view.entity.id, 'tmp-7');
+});
+
+test('a UUID vessel id with another id, or of the wrong length, is malformed', () => {
+  const uuid = VESSEL_UUID.replaceAll('-', '')
+    .match(/../g)
+    .map((h) => parseInt(h, 16));
+  const reason = (code) => decodeShareView(code, { nowMs: NOW_MS }).reason;
+  // Two entity ids: the UUID and an MMSI, or an aircraft's address.
+  assert.equal(
+    reason(thingCode((t) => t.uintField(3, 366999712).bytesField(13, uuid))),
+    'duplicate-field',
+  );
+  assert.equal(
+    reason(thingCode((t) => t.uintField(1, 0xa1b2c3).bytesField(13, uuid))),
+    'duplicate-field',
+  );
+  assert.equal(
+    reason(thingCode((t) => t.bytesField(13, uuid).bytesField(13, uuid))),
+    'duplicate-field',
+  );
+  for (const bytes of [uuid.slice(0, 15), [...uuid, 0], []])
+    assert.equal(
+      reason(thingCode((t) => t.bytesField(13, bytes))),
+      'bad-length',
+    );
+  // The field is LEN only.
+  assert.equal(
+    reason(thingCode((t) => t.uintField(13, 5))),
+    'wire-type-mismatch',
+  );
+  // The 16 bytes alone are a vessel; any bytes spell a UUID.
+  assert.deepEqual(
+    decodeOk(thingCode((t) => t.bytesField(13, new Array(16).fill(0xff)))).state
+      .view.entity,
+    { kind: 'vessel', id: 'ffffffff-ffff-ffff-ffff-ffffffffffff' },
+  );
+});
+
+test('a decoder that predates UUID vessel ids opens the view at its derived camera', () => {
+  // Such a decoder skips thing field 13 as it skips any unknown field: the
+  // same payload with the id under a field this decoder does not know.
+  const bytes = [...payloadBytes(encodeShareView(vesselView(VESSEL_UUID)))];
+  const at = bytes.length - 18;
+  assert.equal(bytes[at], 0x6a);
+  bytes[at] = 0xf2; // field 30, LEN
+  bytes.splice(at + 1, 0, 0x01);
+  // The thing message grew by a byte: its own length too.
+  const thingLength = bytes.indexOf(0x6a) + 1;
+  bytes[thingLength] += 1;
+  const result = decodeOk(hashOf(bytes));
+  assert.equal(result.fallback, 'unknown-entity-kind');
+  assert.deepEqual(result.state.view, { kind: 'place' });
+  const camera = followCameraFor(VESSEL_FIX, VESSEL_OFFSET);
+  assert.equal(result.state.lat, Math.round(camera.lat * 1e4) / 1e4);
+  assert.equal(result.state.lon, Math.round(camera.lon * 1e4) / 1e4);
+});
+
+test('the follow offset for a camera is the inverse of followCameraFor', () => {
+  const fix = { lat: 51.9301, lon: 4.0512, alt: 47 };
+  for (const offset of [
+    { range: 3200, heading: 20, pitch: -30 },
+    { range: 250, heading: 300, pitch: -5 },
+    { range: 80_000, heading: 135, pitch: -70 },
+    { range: 2_000_000, heading: 0, pitch: -89 },
+  ])
+    assert.deepEqual(
+      followOffsetFor(fix, followCameraFor(fix, offset)),
+      offset,
+    );
+  // The codec carries ranges up to the bound a subject is checked against.
+  const far = {
+    range: SHARE_VIEW_FOLLOW_RANGE_MAX_M + 5,
+    heading: 0,
+    pitch: -35,
+  };
+  assert.equal(
+    normalizeShareViewState({
+      view: { kind: 'thing', entity: { kind: 'vessel', id: '1' }, offset: far },
+    }).view.offset.range,
+    SHARE_VIEW_FOLLOW_RANGE_MAX_M,
+  );
+  // A camera below the entity's horizontal, or at it, has no offset.
+  assert.equal(
+    followOffsetFor(fix, { lat: 51.95, lon: 4.0512, alt: 40 }),
+    null,
+  );
+  assert.equal(followOffsetFor(fix, fix), null);
+  // Far round the curve of the earth at low height: below its horizon.
+  assert.equal(
+    followOffsetFor(fix, { lat: 53.9, lon: 4.0512, alt: 1000 }),
+    null,
   );
 });

@@ -60,6 +60,7 @@ function harness({ viewer = null, floor = null } = {}) {
   parts.motion = createMotion({ flightState, services, parts, layer: {} });
   let fix = null;
   const records = {
+    beginSnapshot() {},
     receive(aircraft) {
       const meta = {
         rawLon: aircraft.lon,
@@ -78,7 +79,7 @@ function harness({ viewer = null, floor = null } = {}) {
   const apply = createMilitarySnapshotRenderer({
     flightState,
     records,
-    groundFloor: { warmGroundFloor() {} },
+    groundFloor: { warmGroundFloor() {}, cachedGroundFloor: () => floor },
     militaryRegistry: { registerMilitaryIcaos() {} },
     rendering: parts.rendering,
     tracking: {},

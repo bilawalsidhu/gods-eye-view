@@ -259,7 +259,7 @@ export class CockpitCoordinator {
         : vessel
           ? {
               kind: 'vessel',
-              id: vessel.mmsi,
+              id: vessel.id,
               layerId: vessel.layerId,
               callsign: null,
               name: vessel.name,

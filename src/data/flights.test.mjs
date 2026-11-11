@@ -1,7 +1,7 @@
 // src/data/flights.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
 // Pure function — no viewer/DOM needed; imported directly.
-import { test } from 'node:test';
+import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { followedOf } from './followed.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
@@ -18,9 +18,14 @@ import flightsLayer, {
   _clearDisplayFloorStateForTest,
   _iconForTest,
   _floorGroundedIconsForTest,
+  _resetEnrichmentForTest,
   mapAnalystRecord,
 } from './flights.js';
-import { setMilitaryLayerActive } from './militaryRegistry.js';
+import {
+  isMilitaryLayerActive,
+  registerMilitaryIcaos,
+  setMilitaryLayerActive,
+} from './militaryRegistry.js';
 import {
   GROUND_FLOOR_LIFT_M,
   reportMeshFloorCell,
@@ -35,6 +40,31 @@ import {
   initTrackedReadout,
 } from './trackedReadout.js';
 import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+
+// Unit tests never reach the network. A test that tracks a plane queues its
+// enrichment (type, route, photo), so every test ends on an empty queue, and a
+// fetch of any absolute URL fails the test it happened in. A test that needs
+// answers installs its own fetch and restores this one.
+const nodeFetch = globalThis.fetch;
+const networkRequests = [];
+before(() => {
+  globalThis.fetch = async (url) => {
+    const href = String(url?.url ?? url);
+    if (/^https?:\/\//i.test(href)) networkRequests.push(href);
+    throw new TypeError(`Failed to parse URL from ${href}`);
+  };
+});
+afterEach(() => {
+  _resetEnrichmentForTest();
+  assert.deepEqual(
+    networkRequests.splice(0),
+    [],
+    'no test reaches the network',
+  );
+});
+after(() => {
+  globalThis.fetch = nodeFetch;
+});
 
 test('share-Follow absence requires an accepted OpenSky snapshot', async () => {
   _setFlightTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -191,7 +221,10 @@ test('flights first update forwards caller cancellation into the feed request', 
 test('nonempty OpenSky payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedFlightRefreshStateForTest({
     icao24: 'abc123',
-    entity: withEntityRecord({}, { labelModel: { title: 'WARM', details: [] } }),
+    entity: withEntityRecord(
+      {},
+      { labelModel: { title: 'WARM', details: [] } },
+    ),
     icon: { show: false },
     iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
@@ -315,7 +348,10 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
 
 test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STALE', async () => {
   const icao24 = 'a1b2c3';
-  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: [] } });
+  const entity = withEntityRecord(
+    {},
+    { labelModel: { title: 'OLD', details: [] } },
+  );
   const billboard = {
     position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 9_000),
     color: Cesium.Color.WHITE,
@@ -387,16 +423,251 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
   try {
     await flightsLayer.update(viewer);
     assert.equal(readEntityRecord(entity)?.labelModel.title, 'DAL123');
-    assert.match(readEntityRecord(entity)?.labelModel.details.join(' · '), /FL350/);
-    assert.match(readEntityRecord(entity)?.labelModel.details.join(' · '), /486 kts/);
+    assert.match(
+      readEntityRecord(entity)?.labelModel.details.join(' · '),
+      /FL350/,
+    );
+    assert.match(
+      readEntityRecord(entity)?.labelModel.details.join(' · '),
+      /486 kts/,
+    );
 
     await flightsLayer.update(viewer);
     assert.match(
-      [readEntityRecord(entity)?.labelModel.title, ...readEntityRecord(entity)?.labelModel.details].join(' · '),
+      [
+        readEntityRecord(entity)?.labelModel.title,
+        ...readEntityRecord(entity)?.labelModel.details,
+      ].join(' · '),
       /STALE/,
     );
   } finally {
     globalThis.fetch = realFetch;
+  }
+});
+
+test('a tracked plane whose photo lookup failed asks again on the first poll after the cool-down', async (t) => {
+  const icao24 = 'b2c3d4';
+  const realNow = Date.now.bind(Date);
+  let offsetMs = 0;
+  t.mock.method(Date, 'now', () => realNow() + offsetMs);
+  const entity = { gevLabelModel: { title: 'OLD', details: [] } };
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  _setTrackedFlightRefreshStateForTest({
+    icao24,
+    entity,
+    billboard: {
+      position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 9_000),
+      color: Cesium.Color.WHITE,
+      show: false,
+    },
+    billboardCollection: { show: false, remove() {} },
+    viewer,
+    meta: {
+      callsign: 'UAL9',
+      altitude: 9_000,
+      renderAltitudeM: 9_050,
+      velocity: 180,
+      true_track: 80,
+      klass: 'airliner',
+      onGround: false,
+      wasAirborne: true,
+      turnRateDps: 0,
+      rawLat: 30.2,
+      rawLon: -97.7,
+    },
+  });
+  let callsign = 'UAL9 ';
+  const photoRequests = [];
+  const routeRequests = [];
+  const guardFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    url = String(url);
+    if (url.startsWith('https://api.planespotters.net/')) {
+      photoRequests.push(url);
+      return { ok: false, status: 503, json: async () => ({}) };
+    }
+    if (url.startsWith('/api/adsbdb/route/UAL')) routeRequests.push(url);
+    if (!url.startsWith('/api/flights'))
+      return { ok: true, status: 200, json: async () => ({ found: false }) };
+    const nowSec = Math.floor(Date.now() / 1000);
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        time: nowSec,
+        states: [
+          [
+            icao24,
+            callsign,
+            'United States',
+            nowSec,
+            nowSec,
+            -97.6,
+            30.3,
+            10_668,
+            false,
+            250,
+            95,
+            5,
+            null,
+            10_700,
+            null,
+            null,
+            null,
+            5,
+          ],
+        ],
+      }),
+    };
+  };
+  // Lookups drip out one per 200 ms. Wait for what must arrive (with a
+  // generous deadline, so a loaded machine cannot fail it), then a little
+  // longer so anything that must NOT arrive would have.
+  const until = async (ready) => {
+    const deadline = realNow() + 5_000;
+    while (!ready() && realNow() < deadline)
+      await new Promise((done) => setTimeout(done, 20));
+    await new Promise((done) => setTimeout(done, 450));
+  };
+  try {
+    await flightsLayer.update(viewer);
+    await until(() => photoRequests.length >= 1 && routeRequests.length >= 1);
+    assert.equal(photoRequests.length, 1, 'the first poll asks for the photo');
+    assert.deepEqual(routeRequests, ['/api/adsbdb/route/UAL9']);
+
+    // Well inside the 60 s cool-down, and well past it below, so real time
+    // spent between polls cannot move either side across the line.
+    offsetMs += 30_000;
+    callsign = 'UAL10 ';
+    await flightsLayer.update(viewer);
+    await until(() => routeRequests.length >= 2);
+    assert.equal(photoRequests.length, 1, 'not within the cool-down');
+    assert.deepEqual(
+      routeRequests,
+      ['/api/adsbdb/route/UAL9', '/api/adsbdb/route/UAL10'],
+      'the route follows the callsign the poll just recorded',
+    );
+
+    offsetMs += 60_000;
+    await flightsLayer.update(viewer);
+    await until(() => photoRequests.length >= 2);
+    assert.deepEqual(
+      photoRequests,
+      [
+        'https://api.planespotters.net/pub/photos/hex/b2c3d4',
+        'https://api.planespotters.net/pub/photos/hex/b2c3d4',
+      ],
+      'asked again on the first poll after the cool-down',
+    );
+  } finally {
+    globalThis.fetch = guardFetch;
+    // The moved clock dated this layer's dispatch and cool-downs into the
+    // future; reset before the real clock comes back.
+    _resetEnrichmentForTest();
+    t.mock.restoreAll();
+  }
+});
+
+test('a known-military aircraft tracked in the flights layer is never looked up and shows no photo', async () => {
+  const icao24 = 'ae5e01';
+  // The registry has no way to forget one hex (only a whole-registry reset,
+  // which would also drop its source), so the test uses a hex no other test
+  // reads and restores the layer-active flag it changes.
+  const militaryWasActive = isMilitaryLayerActive();
+  registerMilitaryIcaos([icao24]);
+  setMilitaryLayerActive(false);
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  _setTrackedFlightRefreshStateForTest({
+    icao24,
+    entity: { gevLabelModel: { title: 'OLD', details: [] } },
+    billboard: {
+      position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 9_000),
+      color: Cesium.Color.WHITE,
+      show: false,
+    },
+    billboardCollection: { show: false, remove() {} },
+    viewer,
+    meta: {
+      callsign: 'RCH123',
+      altitude: 9_000,
+      renderAltitudeM: 9_050,
+      velocity: 180,
+      true_track: 80,
+      klass: 'airliner',
+      onGround: false,
+      wasAirborne: true,
+      turnRateDps: 0,
+      rawLat: 30.2,
+      rawLon: -97.7,
+      // Even a photo already on the record is never shown.
+      photo: {
+        src: 'https://t.plnspttrs.net/1/ae5e01_280.jpg',
+        width: 280,
+        height: 186,
+        photographer: 'Jane Doe',
+        link: 'https://www.planespotters.net/photo/1/x',
+      },
+    },
+  });
+  const photoRequests = [];
+  const routeRequests = [];
+  const guardFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    url = String(url);
+    if (url.startsWith('https://api.planespotters.net/')) {
+      photoRequests.push(url);
+      return { ok: false, status: 503, json: async () => ({}) };
+    }
+    if (url.startsWith('/api/adsbdb/route/')) routeRequests.push(url);
+    if (!url.startsWith('/api/flights'))
+      return { ok: true, status: 200, json: async () => ({ found: false }) };
+    const nowSec = Math.floor(Date.now() / 1000);
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        time: nowSec,
+        states: [
+          [
+            icao24,
+            'RCH123 ',
+            'United States',
+            nowSec,
+            nowSec,
+            -97.6,
+            30.3,
+            10_668,
+            false,
+            250,
+            95,
+            5,
+            null,
+            10_700,
+            null,
+            null,
+            null,
+            5,
+          ],
+        ],
+      }),
+    };
+  };
+  try {
+    await flightsLayer.update(viewer);
+    // A photo lookup would go out ahead of the route; wait for the route.
+    const deadline = Date.now() + 5_000;
+    while (!routeRequests.length && Date.now() < deadline)
+      await new Promise((done) => setTimeout(done, 20));
+    assert.deepEqual(routeRequests, ['/api/adsbdb/route/RCH123']);
+    assert.deepEqual(photoRequests, [], 'no photo lookup for a military hex');
+    assert.equal(flightsLayer.getTrackedInfo()?.icao24, icao24);
+    assert.equal(flightsLayer.getTrackedInfo()?.photo, null);
+    assert.equal(flightsLayer.getTrackedSubject()?.photo, null);
+  } finally {
+    globalThis.fetch = guardFetch;
+    setMilitaryLayerActive(militaryWasActive);
   }
 });
 
@@ -590,7 +861,10 @@ test('real civil track path creates no native label and publishes every cached h
     assert.equal(entry.protected, true);
     assert.equal(entry.paintLane, 'tracked');
     assert.equal(entry.title, readEntityRecord(entity)?.labelModel.title);
-    assert.deepEqual(entry.details, readEntityRecord(entity)?.labelModel.details);
+    assert.deepEqual(
+      entry.details,
+      readEntityRecord(entity)?.labelModel.details,
+    );
 
     const display = followedOf(viewer)?.position(Date.now());
     assert.ok(display, 'the follow target must seed the frame cache');
@@ -951,7 +1225,10 @@ test('civil label chain: the awareness selection EVENT uses the canonical chain'
 });
 
 test('civil tracked readout: a callsign-less enriched contact reads as its registration', async () => {
-  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: [] } });
+  const entity = withEntityRecord(
+    {},
+    { labelModel: { title: 'OLD', details: [] } },
+  );
   seedLabelContact({ callsign: '  ', registration: ' N123AB ', tracked: true });
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
@@ -993,7 +1270,10 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
     });
     assert.match(readEntityRecord(entity)?.labelModel.title, /^N123AB\b/);
     assert.doesNotMatch(
-      [readEntityRecord(entity)?.labelModel.title, ...readEntityRecord(entity)?.labelModel.details].join(' · '),
+      [
+        readEntityRecord(entity)?.labelModel.title,
+        ...readEntityRecord(entity)?.labelModel.details,
+      ].join(' · '),
       /ae1fa4/,
     );
   } finally {
@@ -1224,7 +1504,11 @@ test('far grounded contacts take turns on the floor; near ones refloor every tic
   };
   try {
     await flightsLayer.update(viewer);
-    const start = Cesium.JulianDate.now();
+    // A grounded report holds once its time is past, so the ticks run in
+    // the 40 s before it, while the contact still taxis toward its fix.
+    const start = Cesium.JulianDate.fromDate(
+      new Date((nowSec - 2 - 40) * 1000),
+    );
     const at = (s) =>
       Cesium.JulianDate.addSeconds(start, s, new Cesium.JulianDate());
     const far = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 3_000_000);

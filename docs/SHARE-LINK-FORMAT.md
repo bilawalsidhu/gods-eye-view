@@ -28,7 +28,11 @@ Following an aircraft is 42–50: 42 when the link is made from the app's own
 follow camera with the fix taken as the link is made, 44 with a fix four
 seconds older, and 50 after orbiting to another heading and pitch. A view in
 any other style that keeps the style's own look adds only the style (two
-bytes): the 42-character followed aircraft in Noir is 44.
+bytes): the 42-character followed aircraft in Noir is 44. A selected vessel
+named by its MMSI costs what an aircraft does (46 characters for the
+44-character aircraft above); one named by a UUID costs 13 bytes more, as its
+16 bytes travel raw (62 characters where the aircraft is 44, rather than about
+88 with the UUID as text).
 
 ## Opening a short link
 
@@ -47,9 +51,22 @@ best effort: until the entity is found, and if it is not found in time, the
 camera is where the link was made, looking at the entity's last-known fix,
 and the app says that the entity isn't reporting and when the fix was taken.
 The share button makes a thing view while the camera follows an aircraft,
-military aircraft or satellite. A selected vessel is not followed (the camera
-stays where the user puts it), so a link made then is a place view; vessel
-thing views open, but the app does not make them yet.
+military aircraft or satellite. While the camera follows nothing and a vessel
+is selected, it makes a vessel thing view: the fix is the vessel's position
+as drawn (as of the world time while the vessel layer follows the world
+clock, else as of its latest position report), and the offset is the one whose derived camera is
+where the user's camera is (`followOffsetFor` in `src/share/follow.js`, the
+inverse of `followCameraFor`, taken from the fix at the format's precision).
+The opened camera is then within the offset's whole metres and degrees of
+where the link was made, looking at the vessel. When no offset can carry the
+camera, because it is not above the vessel's local horizontal (it would look
+up at the vessel, or through the earth) or its range is outside 1 m to
+10⁸ m, the link is a place view as before. A vessel is selected, not
+followed, so the camera stays where the user puts it. Following an entity
+takes priority over a selected vessel, and a followed entity the format
+cannot name still makes a place view. Opening a vessel thing view with a
+world time waits for the vessel layer's snapshot at that time and selects the
+vessel once it has it.
 
 ## Payload
 
@@ -274,14 +291,23 @@ sub-message:
 | 10  | fix alt     | sint metres                                              | 0       |
 | 11  | fix age     | sint seconds the fix predates the created-at time        | 0       |
 | 12  | observed-at | epoch, when the fix was taken; only without a created-at | none    |
+| 13  | vessel id   | UUID, 16 bytes (LEN)                                     |         |
 
 The entity kind is the field that carries the id (its code in
-`SHARE_VIEW_ENTITY_KINDS`), so it costs nothing; exactly one of fields 1–4 is
-present (two is malformed). Entity ids are the ones the layers look up: an
-aircraft's ICAO 24-bit address (six hex digits, stored as a number; other
-forms such as TIS-B `~abc123` as text), a vessel's MMSI and a satellite's
-NORAD catalog number (decimal numbers; an MMSI with a leading zero stays
-text). Ids are lowercase and match `[0-9a-z~_-]{1,16}`.
+`SHARE_VIEW_ENTITY_KINDS`, or field 13 for a vessel), so it costs nothing;
+exactly one of fields 1–4 and 13 is present (two is malformed). Entity ids are
+the ones the layers look up: an aircraft's ICAO 24-bit address (six hex
+digits, stored as a number; other forms such as TIS-B `~abc123` as text), a
+vessel's id (its MMSI, or a source's stable id, such as a UUID) and a
+satellite's NORAD catalog number (decimal numbers; an MMSI with a leading
+zero stays text). Ids are lowercase and match `[0-9a-z~_-]{1,16}`, except a
+vessel id that is a UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, lowercase
+hex): it is written as its 16 bytes in field 13 rather than as 36 characters
+of text in field 3, after the other thing fields, and decodes as the
+lowercase dashed UUID. Field 13 of any other length is malformed. A decoder
+that predates field 13 skips it, finds no entity and opens the view as a
+place at its derived camera (`unknown-entity-kind`), as for a new entity kind,
+so the field needed no new version.
 
 Fields 5–7 are the follow offset: the camera looks along (heading, pitch) at
 the entity from `range` metres away, heading clockwise from north, in the
@@ -319,8 +345,9 @@ bytes, a check byte that does not match (`checksum`), an unknown version byte,
 a truncated value, a varint over 8 bytes or above 2⁵³ − 1, an
 overlong varint, a LEN longer than what remains (at any level, including
 inside the thing sub-message), a reserved wire type, field number 0, a known
-field with the wrong wire type or repeated, two entity ids in one thing, a
-duplicate panel/option/style entry, non-ASCII text, and a latitude or
+field with the wrong wire type or repeated, two entity ids in one thing
+(field 13 counts as one), a UUID vessel id that is not 16 bytes
+(`bad-length`), a duplicate panel/option/style entry, non-ASCII text, and a latitude or
 longitude (camera or fix) beyond ±90/±180.
 
 Tolerated and reported in `unknownFields`: unknown fields at any level
@@ -358,8 +385,8 @@ the app that can open it.
    boolean takes the next flag bit instead, which costs nothing when it is at
    its default.
 6. **New view kinds and entity kinds** get the next code. A new entity kind's
-   id takes the next free thing field (13 onwards), so older apps skip it and
-   fall back to the camera. A thing that needs more than an id (for example a
+   id takes the next free thing field (14 onwards; 13 is a vessel id that is
+   a UUID), so older apps skip it and fall back to the camera. A thing that needs more than an id (for example a
    CCTV camera, a radio station or a transit vehicle) adds further thing
    fields the same way.
 7. **A new layer option** needs an entry in `SHARE_VIEW_LAYER_OPTION_ABSENT`

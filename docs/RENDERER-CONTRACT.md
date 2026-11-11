@@ -219,7 +219,10 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   stale command trimming, inline panel rendering, whether an entity is its
   own, the zoom-out guard, whether it shows its credits in a display of
   its own (`ownCreditDisplay`; otherwise the application's own line,
-  `src/ui/creditsView.js`, shows the credits port's list), and what QA
+  `src/ui/creditsView.js`, shows the credits port's list), a probe that
+  tests street vehicles against the frame's depth for the detection overlay
+  (`createOcclusionProbe`; Cesium's is `src/render/cesium/sceneOcclusionProbe.js`,
+  and without one every such vehicle's bracket shows), and what QA
   scripts read from
   `window.__godsEyeView` (Cesium's viewer there, for the scripts that drive
   it). None is a contract member, and a renderer without them runs the
@@ -232,8 +235,9 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   application on the stub with no capability at all. It fails when the page
   requests any Cesium module or asset, when the credits line is not shown
   with its data credits, on a page or console error, or when a
-  data layer (flights, transit, traffic, CCTV, vessels, weather, wind,
-  satellites, FIRMS, wildlife) fails to turn on or off; `--strict` also fails
+  data layer (flights, military aircraft, transit, traffic, CCTV, vessels,
+  weather, wind, satellites, FIRMS, wildlife, shipwrecks, news) fails to
+  turn on or off; `--strict` also fails
   a layer that draws nothing on the stub (it needs the live feeds).
   `src/app/scene.test.mjs` runs the scene itself on the stub in Node.
 
