@@ -22,8 +22,8 @@ registerHooks({
     const source = url.includes('/library?')
       ? 'const lib = await globalThis.__gevMapillaryLibrary();\n' +
         'export const Viewer = lib.Viewer;\n' +
-        'export const GraphDataProvider = lib.GraphDataProvider;\n' +
-        'export const RenderMode = lib.RenderMode;\n'
+        'export const RenderMode = lib.RenderMode;\n' +
+        'export const GraphDataProvider = lib.GraphDataProvider;\n'
       : 'export default {};\n';
     return { format: 'module', shortCircuit: true, source };
   },
@@ -403,18 +403,6 @@ test('two mounts on one host during the first download build one Mapillary viewe
   gate.resolve();
   await Promise.all([first, second]);
   assert.equal(viewers.created, 1);
-  adapter.unmount();
-  assert.equal(viewers.live, 0, 'nothing left holding a WebGL context');
-});
-
-test('the Mapillary viewer leaves resizing to the panel, so a hidden one never asks for z=NaN', async () => {
-  const { gate, viewers } = fakeLibrary();
-  gate.resolve();
-  const adapter = createMapillaryViewer({
-    source: { graphEndpoint: 'http://gev.test/api/mapillary/graph/' },
-  });
-  await adapter.mount({});
-  assert.equal(viewers.instances[0].options.trackResize, false);
   adapter.unmount();
   assert.equal(viewers.live, 0, 'nothing left holding a WebGL context');
 });

@@ -50,7 +50,6 @@ function endpointBase(endpoint) {
 }
 
 /**
-/**
  * Mapillary network access: tiles and Graph API lookups both go through this
  * app's server, which adds the client token (the browser never holds it).
  * `configured` is learned from the status route. With `graphEndpoint` (a Graph
