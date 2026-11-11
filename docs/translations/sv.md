@@ -10,7 +10,7 @@ Translation source: [God's Eye View Sverige](https://github.com/Kajjan7610/Gods-
 - Actions and hints use the imperative without a pronoun: «Försök igen», «Klicka på en kamera för att aktivera den», «Välj en tagning först», «Tillåt mikrofonen och försök igen». Avoid «du»/«ni»; "your" becomes «egen» or is left out: «Egen RTL-SDR-mottagare», «Stationen ser din IP-adress» only where a person must be addressed.
 - Sentence case, not Title Case: "Live Flights" → «Liveflyg», "Provider Settings" → «Leverantörsinställningar». UPPERCASE English stays UPPERCASE: «LIVEDATA AV», NOT AN ALL-CLEAR → «INTE FARA ÖVER».
 - Compounds are written as one word, with a hyphen after a name, code or abbreviation: «datalager», «väderrutor», «TomTom-nyckel», «AIS-fartyg», «Street View-reserv». Never split a compound with a space.
-- Short labels, chips and HUD readouts stay short; use a standard abbreviation with a period over a wrapped line: RÄCKV., HAST., NEDERB., ÖVR., MEDD., FÖRST., JMF., KAL.
+- Short labels, chips and HUD readouts stay short; use a standard abbreviation with a period over a wrapped line: RÄCKV., HAST., NEDERB., ÖVR., MEDD., FÖRST., KAL. «Jämför» is JFR, without a period.
 - The avionics codes HDG, BRG, CRS, DEST, SPD, ALT, GS, TRK, V/S, FOV and SQUAWK stay in English, as in the cockpit. Words in a sentence are translated: heading → «kurs», bearing → «bäring», range → «räckvidd».
 - A dash between clauses is a spaced en dash « – ». Quotes are ”…” (Swedish closing quotes on both sides).
 - Status and waiting messages: «Väntar på uppdatering», «Laddar …». Reasons after a dash stay lower case: «Scenen sparades inte – projektet är större än 5 MiB».
