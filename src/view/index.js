@@ -119,7 +119,8 @@ export function lookAtPoint(camera) {
   const lon = camera.lon + dLon;
   return {
     lat: clamp(camera.lat + dLat, -90, 90),
-    lon: lon > 180 ? lon - 360 : lon < -180 ? lon + 360 : lon,
+    // Near a pole one step ahead can be several turns of the parallel.
+    lon: ((((lon + 180) % 360) + 360) % 360) - 180,
   };
 }
 
@@ -387,12 +388,6 @@ export function createView({
     // photos at X, also when the camera sits behind it. It is a pair: half
     // of one is not mixed with the camera's other half.
     const given = [latitude(streetLevel.lat), longitude(streetLevel.lon)];
-    // A coordinate given off the globe is an error, not a reason to guess.
-    for (const [index, key] of ['lat', 'lon'].entries())
-      if (streetLevel[key] != null && given[index] === undefined)
-        throw new TypeError(
-          `Street-level ${key} is not a valid coordinate: ${streetLevel[key]}`,
-        );
     const seen = lookAtPoint(camera);
     const [lat, lon] = given.includes(undefined) ? [seen.lat, seen.lon] : given;
     street = Object.freeze({

@@ -812,6 +812,7 @@ export function createGevActionRunner({
         runOptions,
         current,
         reportProgress,
+        otherHandoffs,
       });
     }
 
@@ -3813,9 +3814,12 @@ async function requestStreetLevel(
     runOptions = {},
     current = () => true,
     reportProgress = () => {},
+    otherHandoffs = () => 0,
   },
 ) {
   const action = 'show_street_level';
+  // Navigations other than voice fly-tos (this request's own flight) so far.
+  const handoffs = otherHandoffs();
   let provider = null;
   let providerName = null;
   let label = null;
@@ -3972,8 +3976,9 @@ async function requestStreetLevel(
   }
 
   // A mode that hides the panel may have started during the flight. The
-  // camera is the request's from where its flight landed.
-  if (location) owner.claim();
+  // camera is the request's from where its flight landed, unless another
+  // navigation took it during the flight.
+  if (location && otherHandoffs() === handoffs) owner.claim();
   const arrived = interrupted('view');
   if (arrived) return arrived;
 

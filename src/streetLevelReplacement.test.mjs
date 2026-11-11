@@ -5,10 +5,12 @@ import { createStreetLevelLayer } from './layers/streetLevel/index.js';
 import { fakeStreetLevelProvider, fakeCesiumViewer } from './testSupport/streetLevelFakes.mjs';
 import { showStreetLevel } from './voice/gevActions.js';
 import { installViews } from './app/embed.js';
+import { groundedLookAt } from './view/index.js';
+import { composeCatalog, coreTools } from './tools/index.js';
 
 // Replacing a street-level photo, across sources and against the user's own
-// moves; posted views waiting on terrain. Offline: providers, lookups, terrain
-// and flights are fixtures.
+// moves; posted views waiting on terrain, and their look-at near a pole.
+// Offline: providers, lookups, terrain and flights are fixtures.
 globalThis.fetch = async () => { throw new Error('Unexpected network use in offline test'); };
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 function deferred() {
@@ -142,6 +144,11 @@ for (const takeover of ['navigation', 'gesture', 'none']) {
     assert.equal(h.flights.length, takeover === 'none' ? 1 : 0, 'superseded view must not reclaim the camera');
     assert.equal(a.calls.open.length, takeover === 'none' ? 1 : 0);
     assert.equal(reply.ok, takeover === 'none');
+    // Only the photos stand down: the rest of the view still applies, and
+    // the camera stays with whoever took it.
+    const steps = reply.steps.map(step => step.step);
+    assert.ok(steps.includes('clear_annotations'), JSON.stringify(steps));
+    assert.ok(!steps.includes('camera'), JSON.stringify(steps));
   });
 }
 
@@ -198,4 +205,82 @@ test('a failed replacement from another source does not keep the old photo\'s de
   assert.match(street.error, /Fixture image load failure/);
   assert.deepEqual({ imageId: street.imageId, position: street.position, creator: street.creator, externalUrl: street.externalUrl },
     { imageId: null, position: null, creator: null, externalUrl: null }, 'destroyed provider photo must not be attributed to replacement');
+});
+
+const rejections = [];
+process.on('unhandledRejection', reason => { rejections.push(String(reason?.message || reason)); });
+// 111 m from the North Pole, looking east and down: 1 km ahead is more than a
+// full turn of that parallel.
+const north = { camera: { lat: 89.999, lon: 170, altitude_m: 1000, pitch_deg: -45, heading_deg: 90 }, street_level: { provider: 'mapillary' } };
+const placed = { camera: { lat: 48, lon: 2, altitude_m: 1000, pitch_deg: -45 }, street_level: { provider: 'mapillary', lat: 48, lon: 2 } };
+
+test('a grounded look-at near a pole stays on the globe', async () => {
+  const point = await groundedLookAt(north.camera, { getHeights: async () => [{ ellipsoid: 0 }] });
+  assert.ok(Math.abs(point.lat) <= 90 && Math.abs(point.lon) <= 180, JSON.stringify(point));
+});
+
+test('show_in_gods_eye_view frames the South Pole with a tilted camera', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { app: { baseUrl: 'http://localhost:4173/' }, terrain: { getHeights: async () => [{ ellipsoid: 2835 }] } },
+  });
+  const result = await catalog.call('show_in_gods_eye_view', {
+    camera: { lat: -90, lon: 0, altitude_m: 3500, pitch_deg: -30, heading_deg: 45 },
+    street_level: { provider: 'mapillary' },
+  });
+  const street = result.data?.view?.street_level;
+  assert.ok(street && Math.abs(street.lat) <= 90 && Math.abs(street.lon) <= 180, JSON.stringify(result));
+});
+
+test('a posted polar view is answered and the next view still applies', async t => {
+  rejections.length = 0;
+  const h = await harness(t, [provider('mapillary')]);
+  const e = await embed(t, h, { getHeights: async () => [{ ellipsoid: 0 }] });
+  e.post(1, north);
+  e.post(2, placed);
+  for (let n = 0; n < 20 && !e.replies.some(r => r.id === 2); n++) await settle();
+  t.diagnostic(JSON.stringify({ replies: e.replies.filter(r => r.id), rejections }));
+  assert.ok(e.replies.some(r => r.id === 1), 'the polar view gets an answer');
+  assert.ok(e.replies.some(r => r.id === 2 && r.ok === true), 'the next view still applies');
+  assert.deepEqual(rejections, [], 'no rejection escapes the views queue');
+});
+
+test('a stalled terrain answer does not hold posted views', { timeout: 15000 }, async t => {
+  const h = await harness(t, [provider('mapillary')]);
+  let asked = 0;
+  // Hangs like a stalled upstream; gives up only when its signal aborts.
+  const terrain = {
+    getHeights: (_points, { signal } = {}) => {
+      asked++;
+      return new Promise((_, reject) => signal?.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    },
+  };
+  const e = await embed(t, h, terrain);
+  e.post(1, view(-45));
+  e.post(2, placed);
+  const started = Date.now();
+  while (Date.now() - started < 5000 && !e.replies.some(r => r.id === 2)) await new Promise(resolve => setTimeout(resolve, 100));
+  t.diagnostic(JSON.stringify({ asked, waitedMs: Date.now() - started, replies: e.replies.filter(r => r.id).map(r => r.id) }));
+  assert.equal(asked, 1);
+  assert.ok(e.replies.some(r => r.id === 1), 'the view falls back to its own estimate within 5 s');
+  assert.ok(e.replies.some(r => r.id === 2), 'the next view is not held behind it');
+});
+
+test('a posted view that throws is answered and does not hold the views behind it', async t => {
+  rejections.length = 0;
+  const h = await harness(t, [provider('mapillary')]);
+  const getAll = h.dataManager.getAll;
+  let calls = 0;
+  h.dataManager.getAll = () => {
+    if (calls++ === 0) throw new Error('Fixture layer list failure');
+    return getAll();
+  };
+  const e = await embed(t, h, null);
+  e.post(1, placed);
+  e.post(2, placed);
+  for (let n = 0; n < 20 && !e.replies.some(r => r.id === 2); n++) await settle();
+  t.diagnostic(JSON.stringify({ replies: e.replies.filter(r => r.id), rejections }));
+  assert.deepEqual(e.replies.find(r => r.id === 1), { type: 'gev:view-applied', id: 1, ok: false, error: 'Fixture layer list failure' });
+  assert.ok(e.replies.some(r => r.id === 2 && r.ok === true), 'the next view still applies');
+  assert.deepEqual(rejections, []);
 });

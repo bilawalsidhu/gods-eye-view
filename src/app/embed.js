@@ -39,6 +39,8 @@ const FOLLOW_LAYERS = {
 const FOLLOW_ATTEMPTS = 20;
 const FOLLOW_RETRY_MS = 1000;
 const FLIGHT_SECONDS = 2;
+/** How long a posted view waits for the terrain under its camera. */
+const TERRAIN_WAIT_MS = 2000;
 
 /**
  * Whether this page shows the app embedded: `?embed=1` when another page
@@ -495,51 +497,71 @@ export function installViews({
       typeof asked === 'object' &&
       asked.lat == null &&
       asked.lon == null;
-    queue = queue.then(async () => {
-      if (signal?.aborted) return;
-      if (unplaced && view.street_level) {
-        // Whoever takes the camera while the terrain answers (a drag, a
-        // search, the assistant) keeps it: the view stands down.
-        const owner = watchCameraOwner(viewer, shell);
-        const point = await groundedLookAt(view.camera, terrain, signal)
-          .catch(() => null)
-          .finally(() => owner.stop());
+    queue = queue
+      .then(async () => {
         if (signal?.aborted) return;
-        if (owner.taken()) {
-          post(
-            {
-              type: EMBED_APPLIED_MESSAGE,
-              id,
-              ok: false,
-              steps: [{ step: 'street_level', ok: false, superseded: true }],
-            },
-            replyOrigin,
-          );
-          return;
+        let apply = run;
+        if (unplaced && view.street_level) {
+          // A terrain service that does not answer soon leaves the view's
+          // own estimate.
+          const wait = AbortSignal.timeout(TERRAIN_WAIT_MS);
+          const owner = watchCameraOwner(viewer, shell);
+          const point = await groundedLookAt(
+            view.camera,
+            terrain,
+            signal ? AbortSignal.any([signal, wait]) : wait,
+          )
+            .catch(() => null)
+            .finally(() => owner.stop());
+          if (signal?.aborted) return;
+          // Whoever takes the camera meanwhile (a drag, a search, the
+          // assistant) keeps it: the photos stand down, as when the camera
+          // is taken during the action, and the rest of the view applies.
+          if (owner.taken())
+            apply = (name, ...rest) =>
+              name === 'show_street_level'
+                ? {
+                    ok: false,
+                    cancelled: true,
+                    superseded: true,
+                    error: 'The camera moved on before the photo opened',
+                  }
+                : run(name, ...rest);
+          else if (point)
+            view = createView({
+              ...event.data.view,
+              street_level: { ...asked, ...point },
+            });
         }
-        if (point)
-          view = createView({
-            ...event.data.view,
-            street_level: { ...asked, ...point },
-          });
-      }
-      const steps = await applyView(view, {
-        viewer,
-        dataManager,
-        run,
-        signal,
-        autoOpen,
-      });
-      post(
-        {
-          type: EMBED_APPLIED_MESSAGE,
-          id,
-          ok: steps.every((step) => step.ok),
-          steps,
-        },
-        replyOrigin,
+        const steps = await applyView(view, {
+          viewer,
+          dataManager,
+          run: apply,
+          signal,
+          autoOpen,
+        });
+        post(
+          {
+            type: EMBED_APPLIED_MESSAGE,
+            id,
+            ok: steps.every((step) => step.ok),
+            steps,
+          },
+          replyOrigin,
+        );
+      })
+      // A view that fails is answered, and the views behind it still apply.
+      .catch((error) =>
+        post(
+          {
+            type: EMBED_APPLIED_MESSAGE,
+            id,
+            ok: false,
+            error: error?.message || String(error),
+          },
+          replyOrigin,
+        ),
       );
-    });
   };
   windowRef.addEventListener('message', onMessage);
   void ready.then(() => {

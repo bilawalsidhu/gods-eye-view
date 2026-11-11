@@ -6573,11 +6573,10 @@ function createStreetLevelHarness({
   const lookups = [];
   const origins = [];
   const revealed = [];
-  const { viewer, styleManager, currentGeneration } = createVoiceNavigationHarness();
+  const { viewer, styleManager, currentGeneration, panelSearch } = createVoiceNavigationHarness();
   // Who owns the camera: the shell's navigation stamps and globe gestures.
-  let userNavigations = 0;
   Object.defineProperty(styleManager, '_navigationGeneration', {
-    get: () => currentGeneration() + userNavigations,
+    get: () => currentGeneration(),
   });
   viewer.scene.canvas = Object.assign(new EventTarget(), { clientWidth: 1200, clientHeight: 800 });
   let completeFlight = null;
@@ -6719,10 +6718,9 @@ function createStreetLevelHarness({
     origins,
     revealed,
     street,
-    // The user searches or flies elsewhere, or drags the globe.
-    navigate: () => {
-      userNavigations += 1;
-    },
+    // The user searches or flies elsewhere (a stamp, as the shell's), or
+    // drags the globe.
+    navigate: panelSearch,
     gesture: () => viewer.scene.canvas.dispatchEvent(new Event('pointerdown')),
   };
 }
@@ -7427,6 +7425,28 @@ test('show_street_level owns the camera from where its own flight lands', async 
   assert.equal(result.ok, true, result.error);
   assert.ok(h.order.some((step) => step.startsWith('open:mapillary')));
 });
+
+// A camera taken during the action's own flight. 'navigate' is a
+// location-panel search: a stamp that leaves the flight flying. 'gesture' is a
+// press on the globe, which does not cancel a Cesium flight either.
+for (const take of ['navigate', 'gesture']) {
+  test(`show_street_level stands down when the camera is taken during its own flight (${take})`, async () => {
+    globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+    const h = createStreetLevelHarness();
+    const pending = h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(h.order, ['fly'], 'the flight is under way');
+    h[take]();
+    h.finishFlight();
+    const result = await pending;
+    assert.deepEqual([result.ok, result.superseded], [false, true], result.error);
+    assert.deepEqual(
+      h.order.filter((step) => /^(map|params|open|arm|enable)/.test(step)),
+      [],
+      'no map switch, no source, no billed photo for the place the user left',
+    );
+  });
+}
 
 test('show_street_level closes the previous photo, so one that finds nothing leaves no other place on screen', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };

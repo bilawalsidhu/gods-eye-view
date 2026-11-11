@@ -188,8 +188,9 @@ const CAMERA_GESTURES = ['pointerdown', 'wheel'];
 /**
  * Whether the camera is still a request's: a navigation the shell stamps (a
  * search, the assistant, a link) or a press or wheel on the globe hands it to
- * someone else. `claim()` makes the camera as it is now the request's (after
- * its own flight); `stop()` removes the gesture listeners.
+ * someone else. `claim()` takes the navigation stamped so far as the
+ * request's (its own flight); a gesture is never forgiven. `stop()` removes
+ * the gesture listeners.
  */
 export function watchCameraOwner(viewer, navigation) {
   let generation = navigation?._navigationGeneration;
@@ -203,7 +204,6 @@ export function watchCameraOwner(viewer, navigation) {
   return {
     claim: () => {
       generation = navigation?._navigationGeneration;
-      taken = false;
     },
     taken: () =>
       taken ||
