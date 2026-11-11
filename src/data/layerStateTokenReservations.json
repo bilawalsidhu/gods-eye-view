@@ -12,7 +12,7 @@
   ["fire-perimeters", "2"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
-  ["gravity", "00"],
+  ["gravity", "03"],
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],
