@@ -1979,12 +1979,13 @@ count of cameras outside the view.
 The active camera's pictures follow what can be seen. The monitor plane on the
 globe stops fetching its still every 10 s while the sphere around the camera
 mount and the plane is outside the view, or all of its points are below the
-horizon (a 2D or Columbus scene always counts as visible), and fetches again
-on the first refresh tick after it returns; activating or calibrating a camera
-always fetches. The panel's still preview is requested only while the tab is
-visible and the panel is expanded, and the panel asks for the current picture
-when it is shown again. This matches the panel's live video, which already
-played only in a visible tab and an expanded panel.
+horizon of the WGS84 ellipsoid shrunk by 200 m (a 2D or Columbus scene always
+counts as visible), and fetches again on the first refresh tick after it
+returns; activating or calibrating a camera always fetches. The panel's still
+preview is requested only while the tab is visible and the panel is expanded
+(on phones, also while the Cameras sheet is open), and the panel asks for the
+current picture when it is shown again. The panel's live video follows the same
+rule.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
