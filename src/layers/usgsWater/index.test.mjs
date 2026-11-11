@@ -93,8 +93,8 @@ test('layer ids and share tokens are stable', async () => {
   );
   const token = (id) => LAYER_STATE_REGISTRY.find((e) => e.id === id)?.token;
   assert.equal(token('local-usgs-water'), '02');
-  assert.equal(token('local-usgs-lakes'), '00');
-  assert.equal(token('local-usgs-springs'), '01');
+  assert.equal(token('local-usgs-lakes'), '03');
+  assert.equal(token('local-usgs-springs'), '04');
 });
 
 function services() {
