@@ -11,6 +11,7 @@ import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
 import { loadOttawaSourcesFromOpenData } from './ottawa.js';
 import { loadQuebecSources, QUEBEC_CAMERA_SOURCE_COUNT } from './quebec.js';
+import { loadSingaporeSourcesFromOpenData } from './singapore.js';
 import { loadTaiwanSources } from './taiwan.js';
 import { loadWorldCameraSources } from './worldCameras.js';
 import {
@@ -117,6 +118,11 @@ const LIVE_PACKS = [
     name: 'calgary',
     enabled: () => envEnabled('CCTV_CALGARY_ENABLED'),
     load: loadCalgarySourcesFromOpenData,
+  },
+  {
+    name: 'singapore',
+    enabled: () => envEnabled('CCTV_SINGAPORE_ENABLED'),
+    load: loadSingaporeSourcesFromOpenData,
   },
   {
     name: 'catalonia',

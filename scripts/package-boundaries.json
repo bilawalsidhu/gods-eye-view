@@ -387,6 +387,7 @@
       "server/providers/cctv/taiwan.js",
       "server/providers/cctv/quebec.js",
       "server/providers/cctv/ottawa.js",
+      "server/providers/cctv/singapore.js",
       "server/providers/cctv/worldCameras.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
