@@ -39,6 +39,7 @@ test('civil records keep aviation units separate from render height and survive 
   assert.equal(first.meta.renderAltitudeM, 1040);
   assert.equal(first.fixEpochMs, 1700000000000);
   first.meta.typeCode = 'B738';
+  first.meta.photo = { src: 'https://t.plnspttrs.net/1/2_280.jpg' };
   const second = store.receive(
     observation({
       callsign: '',
@@ -55,6 +56,7 @@ test('civil records keep aviation units separate from render height and survive 
   assert.equal(second.meta.velocity, 120);
   assert.equal(second.meta.true_track, 90);
   assert.equal(second.meta.typeCode, 'B738');
+  assert.equal(second.meta.photo, first.meta.photo, 'the photo survives polls');
   assert.equal(Object.hasOwn(second.meta, 'cullPosition'), false);
   assert.deepEqual(JSON.parse(JSON.stringify(second.meta)), second.meta);
 });
@@ -139,4 +141,122 @@ test('civil emergency status follows the latest poll instead of sticking', () =>
   const next = store.receive(observation({ squawk: '2000' }), view());
   assert.equal(next.meta.squawk, '2000');
   assert.equal(next.meta.emergency, null);
+});
+
+test('a route belongs to its callsign: a new callsign drops it, a blank one keeps it', () => {
+  const store = records();
+  store.geoidReady = true;
+  const first = store.receive(observation({ callsign: 'UAL9' }), view());
+  first.meta.route = { origin: { code: 'AUS' }, destination: { code: 'DEN' } };
+  first.meta.airline = 'United';
+  first.meta.routeCallsign = 'UAL9';
+  const same = store.receive(observation({ callsign: 'UAL9 ' }), view());
+  assert.equal(same.meta.route, first.meta.route);
+  const blank = store.receive(observation({ callsign: '' }), view());
+  assert.equal(
+    blank.meta.route,
+    first.meta.route,
+    'a dropped callsign is sticky',
+  );
+  assert.equal(blank.meta.airline, 'United');
+  const next = store.receive(observation({ callsign: 'UAL10' }), view());
+  assert.equal(next.meta.route, null, 'the old route never shows under UAL10');
+  assert.equal(next.meta.airline, null);
+  assert.equal(next.meta.routeCallsign, null);
+});
+
+test('a contact with no altitude yet is marked as drawn at an invented height; a held one is not', () => {
+  const store = records();
+  const none = store.receive(
+    observation({ baroAltitudeM: null, ellipsoidAltitudeM: null }),
+    view(),
+  );
+  assert.equal(none.meta.renderAltitudeInvented, true);
+  const known = store.receive(
+    observation({ positionTimeMs: 1700000005000 }),
+    view(),
+  );
+  assert.equal(known.meta.renderAltitudeInvented, false);
+  const held = store.receive(
+    observation({
+      baroAltitudeM: null,
+      ellipsoidAltitudeM: null,
+      positionTimeMs: 1700000010000,
+    }),
+    view(),
+  );
+  assert.equal(held.meta.renderAltitudeInvented, false);
+  const parked = records().receive(
+    observation({ id: 'abc124', baroAltitudeM: null, onGround: true }),
+    view(),
+  );
+  assert.equal(parked.meta.renderAltitudeInvented, false);
+});
+
+test('the tracked contact is stale from its first missed update and kept until ten minutes after its newest fix', () => {
+  const realNow = Date.now;
+  const fixMs = Date.UTC(2026, 10, 9, 20, 0);
+  let clock = fixMs + 5_000;
+  Date.now = () => clock;
+  try {
+    for (const snapshot of [
+      { complete: true },
+      { complete: true, retainIds: new Set(['abc123']) },
+      { complete: false },
+    ]) {
+      const store = records();
+      store.receive(observation({ positionTimeMs: fixMs }), view());
+      const absent = (tracked) =>
+        store.absence('abc123', { ...snapshot, likelyLanded: false, tracked });
+      clock = fixMs + 15_000;
+      assert.equal(absent(true), 'stale');
+      assert.equal(store.missingPolls.get('abc123'), 1);
+      // Kept long after the untracked limits, measured from the fix time.
+      clock = fixMs + 9 * 60_000;
+      assert.equal(absent(true), 'stale');
+      clock = fixMs + 10 * 60_000 - 1;
+      assert.equal(absent(true), 'stale');
+      clock = fixMs + 10 * 60_000;
+      assert.equal(absent(true), 'remove');
+      assert.equal(store.missingPolls.has('abc123'), false);
+    }
+    // Untracked contacts keep their own limits.
+    const store = records();
+    store.receive(observation({ positionTimeMs: fixMs }), view());
+    clock = fixMs + 15_000;
+    const untracked = (snapshot) =>
+      store.absence('abc123', { ...snapshot, likelyLanded: false });
+    assert.equal(untracked({ complete: false }), 'retain');
+    assert.deepEqual(
+      [1, 2, 3].map(() => untracked({ complete: true })),
+      ['stale', 'stale', 'remove'],
+    );
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('a repeated fix time marks the contact as not updated; removal is unchanged', () => {
+  const store = records();
+  const fixMs = Date.UTC(2026, 10, 9, 20, 0);
+  store.beginSnapshot(fixMs + 2_000);
+  store.receive(observation({ positionTimeMs: fixMs }), view());
+  assert.equal(store.fixRepeated.has('abc123'), false);
+  // The next poll re-sends the same position.
+  store.beginSnapshot(fixMs + 12_000);
+  store.receive(observation({ positionTimeMs: fixMs }), view());
+  assert.equal(store.fixRepeated.has('abc123'), true);
+  assert.equal(store.missingPolls.has('abc123'), false);
+  // The same snapshot read again is not a missed update.
+  store.beginSnapshot(fixMs + 12_000);
+  store.receive(observation({ positionTimeMs: fixMs }), view());
+  assert.equal(store.fixRepeated.has('abc123'), true);
+  // A newer fix clears it.
+  store.beginSnapshot(fixMs + 22_000);
+  store.receive(observation({ positionTimeMs: fixMs + 10_000 }), view());
+  assert.equal(store.fixRepeated.has('abc123'), false);
+  store.beginSnapshot(fixMs + 32_000);
+  store.receive(observation({ positionTimeMs: fixMs + 10_000 }), view());
+  store.forget('abc123');
+  assert.equal(store.fixRepeated.has('abc123'), false);
 });

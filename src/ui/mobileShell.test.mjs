@@ -977,3 +977,20 @@ test('a slow downward pull is claimed before Android native scroll takes ownersh
   assert.equal(shell.getSheet(), null);
   shell.destroy();
 });
+
+test('on phones the News panel shows in the Context sheet only, like Weather', () => {
+  const css = readFileSync(
+    new URL('./styles/mobile-shell.css', import.meta.url),
+    'utf8',
+  );
+  // Hidden by id: the rail's own `#news-panel:not(.collapsed)` rule outranks
+  // the generic `#right-context-rail > *` hiding rule.
+  assert.match(
+    css,
+    /body\.mobile-shell #right-context-rail > #news-panel,\n[^{}]*\{\s*display: none;/,
+  );
+  assert.match(
+    css,
+    /body\.mobile-shell\[data-mobile-sheet='context'\]\s+#right-context-rail\s+> #news-panel:not\(\[hidden\]\),/,
+  );
+});

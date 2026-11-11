@@ -94,7 +94,8 @@ export const getActiveFires = defineTool({
   name: 'get_active_fires',
   title: 'Active fires',
   description:
-    'Satellite fire detections from NASA FIRMS in the last 24 hours within an ' +
+    'Satellite fire detections from NASA FIRMS in the last 24 hours (or the 24 ' +
+    'hours to window_end, when the source names one) within an ' +
     'area, most intense (fire radiative power) first. Optionally limited to a ' +
     'minimum fire radiative power in megawatts and a confidence level — the ' +
     "same filter as the Active Fires layer's intensity controls.",
@@ -171,7 +172,10 @@ export const getActiveFires = defineTool({
       summary:
         `${countNoun(fires.length, 'fire detection')}` +
         (filterNotes.length ? ` (${filterNotes.join(', ')})` : '') +
-        ` in ${area.label} in the last 24 hours` +
+        ` in ${area.label} ` +
+        (Number.isFinite(snapshot.at)
+          ? `in the 24 hours to ${isoTime(snapshot.at)}`
+          : 'in the last 24 hours') +
         (notes.length ? ` (${notes.join('; ')}).` : '.'),
       data: {
         view: suggestView(services, { area, layers: ['local-firms'] }),
@@ -182,6 +186,7 @@ export const getActiveFires = defineTool({
         stale,
         missing_sources: missing,
         fetched_at: isoTime(snapshot.fetchedAt),
+        window_end: Number.isFinite(snapshot.at) ? isoTime(snapshot.at) : null,
         ...result,
         rows: result.rows.map((fire) => ({
           lat: fire.lat,

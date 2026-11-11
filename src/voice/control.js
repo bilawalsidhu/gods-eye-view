@@ -107,7 +107,7 @@ function initialState(panel) {
         t('Hold Space to speak · tap Space to activate focused controls'),
     },
     // A typed chat error reads as chat's, without the microphone hint.
-    error: { text: '', typed: false },
+    error: { text: '', typed: false, hint: true },
     // Connection and turn state beside the selected mode's indicator.
     phase: { text: '' },
     voicePanel: {

@@ -63,7 +63,10 @@ export function createGeminiTokenHandler({
         return reply(403, 'Gemini voice requires a same-origin app request');
       apiKey = String(resolveApiKey() || '').trim();
       if (!apiKey)
-        return reply(503, 'Add a Gemini API key in Provider Settings');
+        return reply(503, {
+          error: 'Add a Gemini API key in Provider Settings',
+          code: 'API_KEY_MISSING',
+        });
       model = normalizeGeminiModel(resolveModel());
       if (!model)
         return reply(503, 'The Gemini Live model configuration is invalid');
