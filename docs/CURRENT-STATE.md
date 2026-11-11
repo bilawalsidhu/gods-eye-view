@@ -7760,7 +7760,13 @@ footprints receive a 22% outline-colored classification fill on Google 3D tiles 
 the active terrain, removed on deselect/disable and rebound on map-source changes. Labels follow the host’s Clean-UI behavior; disable/destroy
 clears the source and removes marker listeners. Named point ids carry into polygon
 views; wide named points remain until their close polygons publish. Unnamed
-polygons remain “Military area”.
+polygons remain “Military area”. The Norway supplement names five mapped areas that OSM leaves unnamed and adds Wikidata positions for five active sites without a mapped area; OSM names take precedence.
+The base name pack and optional supplement load and index independently. A failed
+or malformed supplement keeps the global base names available, then retries
+after its own increasing cooldown; it does not reload or reindex the base.
+Each acquisition has a ten-second deadline. Base-pack failure still reports
+names unavailable and retries after cooldown, and concurrent callers share
+one acquisition.
 
 Tile sources accept a separate `tileFetchImpl` for public vector tiles; API
 requests retain `fetchImpl`. The exported Overpass ALPR source uses `/api/overpass`;
