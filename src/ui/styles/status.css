@@ -388,13 +388,14 @@ html:not([lang='en']) #global-loading-detail {
 }
 
 /* ── Render failure notice ───────────────────── */
-/* Above the loading screen: a globe that fails while it loads says so too. */
+/* Above the loading screen, so a globe that fails while it loads says so too,
+   and above floating panels such as the Québec camera viewer (2000). */
 #render-failure {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 1001;
+  z-index: 2001;
   box-sizing: border-box;
   width: min(420px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
@@ -448,6 +449,12 @@ html:not([lang='en']) #global-loading-detail {
 #render-failure .gev-action-button {
   font-size: 11px;
   padding: 8px 14px;
+}
+
+@media (pointer: coarse) {
+  #render-failure .gev-action-button {
+    min-height: 44px;
+  }
 }
 
 /* ── Toast Notification ──────────────────────── */
