@@ -1,4 +1,5 @@
 export const GROUND_AIRCRAFT_MODES = Object.freeze(['show', 'dim', 'hide']);
+/** Accept supported ground-display modes, defaulting unknown values to Dim. */
 export function normalizeGroundAircraftMode(value) {
   return GROUND_AIRCRAFT_MODES.includes(value) ? value : 'dim';
 }

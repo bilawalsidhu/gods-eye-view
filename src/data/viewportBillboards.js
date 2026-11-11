@@ -29,6 +29,7 @@ const FIELDS = [
   'id',
 ];
 
+/** Test a world position against a padded projected viewport, rejecting points behind the camera. */
 export function insidePaddedViewport(position, matrix, width, height, padding) {
   if (!position) return false;
   const { x, y, z } = position;
@@ -141,6 +142,7 @@ for (const key of FIELDS) {
   });
 }
 
+/** Retain logical contacts while materializing native billboards only for the padded view and pinned subjects. */
 export class ViewportBillboardCollection {
   constructor(
     viewer,

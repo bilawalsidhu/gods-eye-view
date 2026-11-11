@@ -348,6 +348,7 @@ export function acquireAircraftSurface(
   };
 }
 
+/** Return the shared surface statistics, or null when the host has no surface. */
 export function aircraftSurfaceDiagnostics(viewer) {
   return surfaces.get(viewer)?.stats || null;
 }

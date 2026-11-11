@@ -188,6 +188,7 @@ export function rhumbPositionBounds(positions) {
   return sphere;
 }
 
+/** Materialize visible route segments and release offscreen native entities without discarding route data. */
 export function syncCableSegment(record, visible, viewer) {
   if (visible && !record.entity) {
     record.entity = new Cesium.Entity({

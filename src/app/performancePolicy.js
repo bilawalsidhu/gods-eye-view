@@ -1,5 +1,6 @@
 export const PERFORMANCE_STORAGE_KEY = 'gev:performance-mode:v1';
 
+/** Read an explicit URL preference, then storage; unavailable storage defaults to Standard. */
 export function readPerformanceMode({
   search = globalThis.location?.search || '',
   storage,

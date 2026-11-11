@@ -1,5 +1,6 @@
 // Keep the globe at CSS resolution; aircraft have their own full-DPR surface.
 export const STANDARD_RENDER_PIXEL_RATIO_MAX = 1;
+/** Bound globe resolution independently of the full-resolution aircraft surface. */
 export function standardResolutionScale(dpr = globalThis.devicePixelRatio) {
   return Math.min(
     STANDARD_RENDER_PIXEL_RATIO_MAX,
