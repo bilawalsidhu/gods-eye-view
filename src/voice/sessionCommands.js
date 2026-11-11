@@ -129,6 +129,8 @@ export function createVoiceCommands({
         event.state === 'error'
           ? event.detail || t('Voice could not be started.')
           : '',
+      // "Check microphone permission" is wrong advice for a missing key.
+      hint: () => !(event.state === 'error' && event.missingKey === true),
     });
   });
   // Captions, plan and result card nested in the control; it only reads

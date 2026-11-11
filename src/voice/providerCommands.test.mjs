@@ -871,3 +871,22 @@ test('a provider switch hands chat Settings to the new mount', async (t) => {
   assert.deepEqual(f.mounts[1].options.presentation, shown);
   assert.equal(f.facade.provider, next);
 });
+
+test('a missing-key error hides the microphone hint; other errors keep it', async (t) => {
+  const f = compositionFixture(t, {});
+  f.select('gemini');
+  await settle();
+  const instance = f.instances.at(-1);
+  const ui = f.views.at(-1);
+  instance.hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: 'Add a Gemini API key in Provider Settings',
+    missingKey: true,
+  });
+  assert.equal(ui.state.error.text, 'Add a Gemini API key in Provider Settings');
+  assert.equal(ui.state.error.hint, false);
+  instance.hooks.emit({ type: 'state', state: 'error', detail: 'Socket closed' });
+  assert.equal(ui.state.error.text, 'Socket closed');
+  assert.equal(ui.state.error.hint, true);
+});

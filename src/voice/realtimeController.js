@@ -416,7 +416,12 @@ export class GevRealtimeController extends RealtimeFacade {
    */
   setStatus(status, detail, { missingKey = false } = {}) {
     this.status = status;
-    this.emitSessionEvent({ type: 'state', state: status, detail });
+    this.emitSessionEvent({
+      type: 'state',
+      state: status,
+      detail,
+      ...(missingKey && { missingKey: true }),
+    });
     this.ui.update('root', {
       status,
       ...(status === 'error' && { errorDismissed: false }),
