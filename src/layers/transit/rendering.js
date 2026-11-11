@@ -970,7 +970,12 @@ export function createRendering({ state, services, parts }) {
     }
     flushMarkers();
     state._shownCount = state._visible.size;
-    if (changed) state._detectRevision++;
+    if (changed) {
+      state._detectRevision++;
+      // A vehicle that came into view or was shown is turned on the next
+      // rotation pass, though neither the camera nor a poll changed.
+      state._rotationDirty = true;
+    }
     syncRenderHold();
     governorRequestRender('transit-visibility');
     return state._shownCount;

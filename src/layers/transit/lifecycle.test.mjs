@@ -4373,6 +4373,21 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     0,
     'selected unknown course also stays screen-up',
   );
+  state._selectedKey = null;
+  // A vehicle coming into view is turned on the next pass, the camera still.
+  state._visible.delete(held);
+  held.marker.rotation = 0.7;
+  held.rotationCourse = undefined;
+  Object.assign(state, {
+    _visibilityAt: 0,
+    _stillIcons: { upsert: noop, remove: noop },
+    _movingIcons: { upsert: noop, remove: noop },
+  });
+  rendering.refreshVisibility();
+  assert.ok(state._visible.has(held), 'back in view');
+  t.mock.timers.tick(200);
+  rendering.onPreRender();
+  assert.notEqual(held.marker.rotation, 0.7, 'turned once in view');
 });
 
 test('a view with no feed reads its coverage prompt, not an undated feed', async (t) => {
