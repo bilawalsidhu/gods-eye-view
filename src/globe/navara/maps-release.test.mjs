@@ -65,6 +65,7 @@ function setup(core) {
           String(sequence++),
         update(next) {
           Object.assign(layer, next);
+          core?.updateLayer(layer.id, { ...next, source: layer.source.id });
         },
         delete() {
           core?.deleteLayer(layer.id);
@@ -119,7 +120,7 @@ for (const [name, source] of [
   ['Google', google],
 ]) {
   for (const action of ['clear', 'release', 'stack', 'destroy']) {
-    test(`${name} photoreal ${action} removes visible and hidden roots, geometry, source and credit`, async (t) => {
+    test(`${name} photoreal ${action} releases or parks tiles without stale surface answers or credits`, async (t) => {
       globalThis.location = { origin: 'http://localhost' };
       t.after(() => {
         delete globalThis.location;
@@ -154,10 +155,15 @@ for (const [name, source] of [
         maps.releasePhotorealTiles(maps.current().photoreal);
       if (action === 'stack') await controller.setStack('osm');
       if (action === 'destroy') state.destroy();
-      assert.deepEqual(hooks.tileRoots(), []);
-      assert.equal(state.view._meshes.size, 0);
-      assert.ok(!sources.has(layer.source));
-      assert.ok(!layers.has(layer.id));
+      const parked = action === 'clear' || action === 'stack';
+      assert.deepEqual(
+        hooks.tileRoots(),
+        parked ? tiles.map((t) => t.root) : [],
+      );
+      assert.equal(state.view._meshes.size, parked ? 2 : 0);
+      assert.equal(sources.has(layer.source), parked);
+      assert.equal(layers.has(layer.id), parked);
+      if (parked) assert.equal(layer.model.show, false);
       assert.ok(
         ![...credits].some((credit) => credit.creditLayerId === layer.id),
       );
@@ -182,6 +188,12 @@ for (const [name, source] of [
         undefined,
       );
       for (const { root, mesh, disposed } of tiles) {
+        if (parked) {
+          assert.ok(root.parent);
+          assert.ok(mesh.geometry.attributes.position);
+          assert.equal(disposed(), 0);
+          continue;
+        }
         assert.equal(root.parent, null);
         assert.equal(root.children.length, 0);
         assert.equal(mesh.geometry.attributes.position, undefined);
@@ -226,7 +238,7 @@ test('native tile eviction removes the root from layer cleanup', async (t) => {
   root.dispatchEvent({ type: 'removedFromWorld' });
   root.removeFromParent();
   state.view._meshes.delete(root.id);
-  await state.maps.setPhotorealTiles(null);
+  state.maps.releasePhotorealTiles(google);
   assert.equal(layer.listenerCount('deleted'), 0);
   assert.equal(disposed(), 0, 'native eviction already owns disposal');
 });
@@ -260,7 +272,7 @@ test('native budgeted source deletion leaves no adapter tile roots', async (t) =
       for (let frame = 0; frame < 120; frame++) {
         if (frame === 60) {
           assert.equal(added, 4, 'all native fixture models loaded');
-          await state.maps.setPhotorealTiles(null);
+          state.maps.releasePhotorealTiles(fixture);
           assert.equal(core.getSourceDescription(layer.source.id), undefined);
           assert.deepEqual(state.hooks.tileRoots(), []);
           assert.equal(state.view._meshes.size, 0);
@@ -307,5 +319,89 @@ test('native budgeted source deletion leaves no adapter tile roots', async (t) =
       state.destroy();
       core.free();
     }
+  }
+});
+
+test('native budgeted photoreal hide and restore reuse all tile payloads', async (t) => {
+  const { Core, initSync } = await import('@navaramap/engine');
+  initSync({
+    module: readFileSync(
+      new URL(
+        '../../../node_modules/@navaramap/engine/navara_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ),
+  });
+  globalThis.location = { origin: 'http://localhost' };
+  t.after(() => {
+    delete globalThis.location;
+  });
+  const core = new Core('tiles-retention-test');
+  core.start();
+  core.resize(1280, 800, 1);
+  core.setCacheBytes(768 * 1024 * 1024);
+  core.changeCamera(new Float64Array([-97.7431, 30.2672, 1100]), -90, 0, 0);
+  const state = setup(core);
+  const requested = [[], [], []];
+  let added = 0;
+  const shown = new Map();
+  try {
+    await state.maps.setPhotorealTiles(fixture);
+    const layer = [...state.layers.values()][0];
+    for (let frame = 0; frame < 180; frame++) {
+      if (frame === 60) {
+        assert.equal(added, 4);
+        await state.maps.setPhotorealTiles(null);
+      }
+      if (frame === 120) {
+        assert.deepEqual([...shown.values()], [false, false, false, false]);
+        await state.maps.setPhotorealTiles(fixture);
+      }
+      core.update(frame * 16);
+      const events = core.readEvents();
+      if (!events) continue;
+      for (const event of events.take_data_requested()) {
+        const name = new URL(event.url).pathname.split('/').at(-1);
+        requested[Math.floor(frame / 60)].push(name);
+        const bytes = readFileSync(
+          new URL(`../../../scripts/fixtures/tiles3d/${name}`, import.meta.url),
+        );
+        core.setBufferU8(event.handle, event.bits, bytes.length, (buffer) =>
+          buffer.set(bytes),
+        );
+        event.free();
+      }
+      for (const event of events.take_renderable_feature_added()) {
+        state.load(layer);
+        added++;
+        core.markFeatureIsRendered('model', event.bits);
+        event.free();
+      }
+      for (const event of events.take_renderable_feature_changed()) {
+        const feature = event.feature;
+        const model = feature.model;
+        const material = model.material;
+        shown.set(event.bits, model.active && material.show !== false);
+        material.free();
+        model.free();
+        feature.free();
+        event.free();
+      }
+      for (const event of events.take_mesh_added()) {
+        core.setTileMeshPrepared(event.tile_handle);
+        event.free();
+      }
+      events.free();
+    }
+    assert.equal(requested[0].length, 5);
+    assert.deepEqual(requested.slice(1), [[], []]);
+    assert.equal(added, 4, 'the same four decoded models are reused');
+    assert.deepEqual([...shown.values()], [true, true, true, true]);
+    assert.deepEqual(layer.model, { maxSse: 16, height: 0, show: true });
+    state.maps.releasePhotorealTiles(fixture);
+    assert.deepEqual(state.hooks.tileRoots(), []);
+  } finally {
+    state.destroy();
+    core.free();
   }
 });

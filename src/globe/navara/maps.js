@@ -13,8 +13,8 @@
 //   URL without the {z}/{x}/{y}.terrain template, so URLs always carry it.
 // - photoreal: Google 3D tiles with a browser key only (no server proxy),
 //   with Google's logo and the tiles' own
-//   copyright lines (creditLayerId) on screen. Showing them hides the base
-//   imagery; clearing them restores the last base imagery and its credit.
+//   copyright lines (creditLayerId) on screen. Showing them hides the
+//   globe surface; clearing them restores the last base imagery and its credit.
 //   Hidden, not deleted: deleting the last raster layer stops Navara 0.2.1
 //   loading terrain at the current view.
 
@@ -53,6 +53,11 @@ const GOOGLE_TILES_ROOT = 'https://tile.googleapis.com/v1/3dtiles/root.json';
 const GOOGLE_LOGO = 'https://assets.ion.cesium.com/google-credit.png';
 // Cesium3DTileset's default maximumScreenSpaceError.
 const PHOTOREAL_MAX_SSE = 16;
+
+// Hidden tiles remain cached but must not answer rendered-surface queries.
+const photorealVisibility = new WeakMap();
+export const photorealTilesVisible = (view) =>
+  photorealVisibility.get(view) !== false;
 
 const kindOf = (source) => (source?.descriptor ?? source)?.kind;
 
@@ -126,15 +131,8 @@ export function createNavaraMaps(
     }, SETTLE_EVERY_MS);
   };
   const slots = { imagery: null, terrain: null, photoreal: null };
-  // Transparent tile overlays (sea marks, ski pistes) above the base
-  // imagery: Navara draws raster layers in the order they were added.
-  const overlays = new Set();
-  function restackOverlays() {
-    for (const overlay of overlays) {
-      overlay.layer.delete();
-      overlay.layer = view.addLayer({ type: 'raster', source: overlay.source });
-    }
-  }
+  let hiddenGlobe = null;
+  photorealVisibility.set(view, false);
   // Base imagery and photoreal tiles share one switch order (display): the
   // call made last decides what shows.
   const generations = { display: 0, terrain: 0 };
@@ -163,7 +161,6 @@ export function createNavaraMaps(
     const previous = slots[name];
     const source = view.addSource(sourceDesc);
     const layer = view.addLayer({ ...layerDesc, source });
-    if (name === 'imagery') restackOverlays();
     const shown = credits.map((credit) =>
       typeof credit === 'function' ? credit(layer) : credit,
     );
@@ -190,6 +187,21 @@ export function createNavaraMaps(
       ...slot.layerDesc,
       source: slot.source,
       raster: { show: shown },
+    });
+    if (slot.credits.length)
+      view.attribution?.[shown ? 'add' : 'remove'](slot.credits);
+    changed();
+  }
+
+  function setPhotorealShown(shown) {
+    const slot = slots.photoreal;
+    photorealVisibility.set(view, shown);
+    if (!slot || slot.hidden === !shown) return;
+    slot.hidden = !shown;
+    slot.layer.update({
+      ...slot.layerDesc,
+      source: slot.source,
+      model: { ...slot.layerDesc.model, show: shown },
     });
     if (slot.credits.length)
       view.attribution?.[shown ? 'add' : 'remove'](slot.credits);
@@ -259,7 +271,7 @@ export function createNavaraMaps(
           [credit],
         );
       // Under tiles the base imagery waits hidden, credit included.
-      setImageryShown(slots.photoreal == null);
+      setImageryShown(!maps.photorealActive());
     },
     async setTerrain(source) {
       const generation = ++generations.terrain;
@@ -285,7 +297,11 @@ export function createNavaraMaps(
     async setPhotorealTiles(source) {
       const generation = ++generations.display;
       if (source == null) {
-        clear('photoreal');
+        // Keep the tileset warm across base-map switches, as Cesium does.
+        // Deleting and recreating it refetches even the cached tile contents.
+        setPhotorealShown(false);
+        hiddenGlobe?.delete();
+        hiddenGlobe = null;
         tilesSource = null;
         // The globe comes back with the last base imagery and its credit.
         if (slots.imagery) {
@@ -301,15 +317,24 @@ export function createNavaraMaps(
         throw new Error(
           'Google 3D tiles on Navara need a browser key (googleApiKey)',
         );
+      // A source-only view (terrain sampling without a renderer) has no globe.
+      const hideGlobe = view.globe
+        ? (await import('./ground/globe.js')).hideGlobe
+        : null;
       if (destroyed || generation !== generations.display) return;
       const url = tilesetUrl
         ? new URL(tilesetUrl, globalThis.location.origin).href
         : `${GOOGLE_TILES_ROOT}?key=${encodeURIComponent(key)}`;
       setImageryShown(false);
+      if (!hiddenGlobe && hideGlobe) hiddenGlobe = hideGlobe(view);
       currentBase = null;
       tilesSource = source;
       knownTiles.add(source);
-      if (slots.photoreal?.key === url) return;
+      if (slots.photoreal?.key === url) {
+        slots.photoreal.owner = source;
+        setPhotorealShown(true);
+        return;
+      }
       show(
         'photoreal',
         url,
@@ -326,43 +351,17 @@ export function createNavaraMaps(
               }),
             ],
       );
-      // Google's terms want its copyright lines on screen, as Cesium shows
-      // them; Navara lists them in its attribution card, collapsed by default.
-      if (!tilesetUrl) view.attribution?.show();
+      slots.photoreal.owner = source;
+      setPhotorealShown(true);
     },
     releasePhotorealTiles(source) {
       if (!knownTiles.delete(source)) return;
-      if (tilesSource !== source) return;
-      void maps.setPhotorealTiles(null);
-    },
-    photorealActive: () => slots.photoreal != null,
-    /**
-     * Navara-only extension: a transparent XYZ tile overlay ({z}/{x}/{y}
-     * `url`) above the base imagery, with its credit. Returns its removal.
-     */
-    addOverlay({ url, maxZoom, credit }) {
-      if (destroyed) return () => {};
-      const source = view.addSource({
-        type: 'raster-tile',
-        url,
-        ...(maxZoom && { maxZoom }),
-      });
-      const overlay = {
-        source,
-        layer: view.addLayer({ type: 'raster', source }),
-        credits: credit ? [{ attributionHtml: String(credit) }] : [],
-      };
-      overlays.add(overlay);
-      if (overlay.credits.length) view.attribution?.add(overlay.credits);
+      if (slots.photoreal?.owner !== source) return;
+      if (tilesSource === source) void maps.setPhotorealTiles(null);
+      clear('photoreal');
       changed();
-      return () => {
-        if (!overlays.delete(overlay)) return;
-        overlay.layer.delete();
-        overlay.source.delete();
-        if (overlay.credits.length) view.attribution?.remove(overlay.credits);
-        changed();
-      };
     },
+    photorealActive: () => slots.photoreal != null && !slots.photoreal.hidden,
     current: () => ({ baseImagery: currentBase, photoreal: tilesSource }),
     terrainRevision: () => terrainRevision,
   };
@@ -392,12 +391,10 @@ export function createNavaraMaps(
       destroyed = true;
       stopSettling();
       stopDiscardingTiles();
-      for (const overlay of overlays) {
-        overlay.layer.delete();
-        overlay.source.delete();
-      }
-      overlays.clear();
       for (const name of Object.keys(slots)) clear(name);
+      photorealVisibility.set(view, false);
+      hiddenGlobe?.delete();
+      hiddenGlobe = null;
     },
   };
 }

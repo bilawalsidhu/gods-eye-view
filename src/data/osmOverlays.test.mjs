@@ -115,32 +115,48 @@ test('destroy and a renderer detach remove the owned imagery', () => {
   assert.equal(layers().length, 0);
 });
 
-test('on Navara an overlay drapes through engine.maps and follows the globe', () => {
-  const added = [];
-  const engineWith = () => {
-    const engine = createFakeEngine({ kind: 'navara' });
-    engine.maps.addOverlay = (options) => {
-      const entry = { options, removed: false };
-      added.push(entry);
-      return () => (entry.removed = true);
-    };
-    return engine;
-  };
-  const [seaMarks] = createOsmOverlayLayers();
-  seaMarks.init(null, { engine: engineWith() });
-  assert.equal(added.length, 0, 'nothing until enabled');
-  seaMarks.enable();
-  assert.equal(added.length, 1);
-  assert.equal(added[0].options.url, OSM_OVERLAYS[0].urlTemplate);
-  assert.equal(added[0].options.credit, OSM_OVERLAYS[0].credit);
-  assert.equal(seaMarks.getStats().error, null);
-  // An engine switch: the drape leaves with the old globe, comes back on the next.
-  seaMarks.detachRenderer();
-  assert.equal(added[0].removed, true);
-  seaMarks.attachRenderer({ engine: engineWith() });
-  assert.equal(added.length, 2);
-  assert.equal(added[1].removed, false);
-  seaMarks.disable();
-  assert.equal(added[1].removed, true);
-  seaMarks.destroy();
-});
+for (const kind of ['cesium', 'navara']) {
+  test(`${kind}: both overlays follow imagery surfaces and survive an engine switch`, () => {
+    let surface = 'tiles';
+    const engine = createFakeEngine({ kind });
+    engine.imagery.surface = () => surface;
+    const nextEngine = createFakeEngine({
+      kind: kind === 'navara' ? 'cesium' : 'navara',
+    });
+    const layers = createOsmOverlayLayers();
+    for (const layer of layers) {
+      layer.enable();
+      layer.attachRenderer({ engine });
+      layer.enable();
+    }
+    const owned = engine.imagery.list();
+    assert.deepEqual(
+      owned.map(({ id }) => id),
+      OSM_OVERLAYS.map(({ id }) => `osm-overlay-${id}`),
+    );
+    for (const host of ['tiles', 'globe', 'none', 'tiles']) {
+      surface = host;
+      for (const layer of layers) {
+        assert.deepEqual(layer.diagnostics(), {
+          host: host === 'tiles' ? 'tileset' : host,
+          ownedCount: 1,
+        });
+        assert.equal(
+          layer.getStats().error,
+          host === 'none' ? NO_IMAGERY_HOST : null,
+        );
+      }
+      assert.deepEqual(engine.imagery.list(), owned);
+    }
+    for (const layer of layers) {
+      layer.detachRenderer();
+      layer.attachRenderer({ engine: nextEngine });
+    }
+    assert.deepEqual(engine.imagery.list(), []);
+    assert.deepEqual(nextEngine.imagery.list(), owned);
+    layers[0].disable();
+    assert.equal(nextEngine.imagery.list().length, 1);
+    for (const layer of layers) layer.destroy();
+    assert.deepEqual(nextEngine.imagery.list(), []);
+  });
+}

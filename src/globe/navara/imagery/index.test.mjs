@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEngineEvent } from '../../contract.js';
 import { MAX_IMAGERY_SLOTS, createNavaraImagery } from './index.js';
+import { createNavaraMaps } from '../maps.js';
+import { createFakeEngine } from '../../testing/fakeEngine.js';
+import {
+  OSM_OVERLAYS,
+  createOsmOverlayLayers,
+} from '../../../data/osmOverlays.js';
 
 const BOX = { west: -97.77, south: 30.25, east: -97.71, north: 30.29 };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -82,6 +88,77 @@ const tiles = (extra = {}) => ({
   credit: 'NASA GIBS',
   ...extra,
 });
+
+for (const photoreal of [false, true]) {
+  test(`map overlays keep their draped atlases across surface switches (tiles initially ${photoreal})`, async (t) => {
+    const r = Math.PI / 180;
+    const f = fixture(
+      Object.fromEntries(
+        Object.entries(BOX).map(([key, value]) => [key, value * r]),
+      ),
+    );
+    t.after(f.destroy);
+    const mapOwner = createNavaraMaps({
+      addSource() {
+        assert.fail('Map overlays must not create native globe rasters');
+      },
+    });
+    t.after(mapOwner.destroy);
+    f.setPhotoreal(photoreal);
+    const layers = createOsmOverlayLayers();
+    for (const layer of layers) {
+      // The fake engine with this adapter's maps and imagery.
+      const engine = Object.assign(createFakeEngine({ kind: 'navara' }), {
+        maps: mapOwner.maps,
+        imagery: f.imagery,
+      });
+      layer.init(null, { engine });
+      layer.enable();
+    }
+    await tick();
+    const slots = f.last().slots;
+    assert.equal(slots.length, 2);
+    for (const [i, overlay] of OSM_OVERLAYS.entries()) {
+      const source = f.imagery.list()[i];
+      assert.equal(source.id, `osm-overlay-${overlay.id}`);
+      assert.equal(source.order, 10);
+      assert.equal(f.credits.get(overlay.credit), 1);
+      assert.deepEqual(slots[i].look, [1, 0, 1, 0]);
+      assert.equal(slots[i].raise, 0, 'draped on the visible surface');
+      assert.ok(
+        f.jobs.some(({ url }) =>
+          url.startsWith(overlay.urlTemplate.split('{z}')[0]),
+        ),
+      );
+    }
+    const decoded = { close() {} };
+    f.jobs[0].resolve(decoded);
+    await tick();
+    assert.deepEqual(f.draws, [decoded]);
+    const jobs = f.jobs.length;
+    for (const active of [!photoreal, photoreal]) {
+      f.setPhotoreal(active);
+      f.changed.raiseEvent();
+      assert.equal(f.imagery.surface(), active ? 'tiles' : 'globe');
+      assert.deepEqual(
+        f.last().slots,
+        slots,
+        'the same textures and blend settings',
+      );
+      assert.equal(f.jobs.length, jobs, 'surface switches do not reload tiles');
+      for (const layer of layers)
+        assert.equal(layer.diagnostics().host, active ? 'tileset' : 'globe');
+    }
+    for (const layer of layers) layer.destroy();
+    assert.deepEqual(f.last().slots, []);
+    assert.ok(f.jobs.slice(1).every(({ signal }) => signal.aborted));
+    assert.ok(
+      f.canvases.every(({ width, height }) => width === 0 && height === 0),
+    );
+    for (const overlay of OSM_OVERLAYS)
+      assert.equal(f.credits.get(overlay.credit), 0);
+  });
+}
 
 test('a tiles layer mosaics the visible tiles into one atlas; a new source drops it and its loads', async () => {
   const f = fixture();

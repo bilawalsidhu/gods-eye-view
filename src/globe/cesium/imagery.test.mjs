@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { TILE_RETRY_DELAY_MS, createCesiumImagery } from './imagery.js';
+import { createFakeEngine } from '../testing/fakeEngine.js';
+import {
+  OSM_OVERLAYS,
+  createOsmOverlayLayers,
+} from '../../data/osmOverlays.js';
 
 const BOX = { west: -97.8, south: 30.2, east: -97.7, north: 30.3 };
 const tiles = (extra = {}) => ({
@@ -125,6 +130,44 @@ const layersOf = (collection) =>
   Array.from({ length: collection.length }, (_, i) => collection.get(i));
 /** The layers on the globe over the fixture's base imagery. */
 const drawnOn = (f) => layersOf(f.globe).filter((layer) => layer !== f.base);
+
+test('map overlays preserve transparent tile sources on the globe and tileset', (t) => {
+  const f = fixture();
+  t.after(f.destroy);
+  const layers = createOsmOverlayLayers();
+  for (const layer of layers) {
+    // The fake engine with this adapter's imagery.
+    const engine = Object.assign(createFakeEngine({ kind: 'cesium' }), {
+      imagery: f.imagery,
+    });
+    layer.init(null, { engine });
+    layer.enable();
+  }
+  for (const active of [false, true, false]) {
+    f.viewer.scene.globe.show = !active;
+    f.tileset.show = active;
+    f.frame();
+    const drawn = active ? layersOf(f.tileset.imageryLayers) : drawnOn(f);
+    assert.equal(drawn.length, 2);
+    assert.equal(
+      active ? drawnOn(f).length : f.tileset.imageryLayers.length,
+      0,
+    );
+    for (const [i, overlay] of OSM_OVERLAYS.entries()) {
+      const { options } = drawn[i].imageryProvider;
+      assert.equal(options.url, overlay.urlTemplate);
+      assert.equal(options.maximumLevel, overlay.maximumLevel);
+      assert.equal(options.credit, overlay.credit);
+      assert.equal(options.hasAlphaChannel, true);
+      assert.equal(drawn[i].alpha, 1);
+      assert.equal(drawn[i].show, true);
+      assert.equal(layers[i].diagnostics().host, active ? 'tileset' : 'globe');
+    }
+  }
+  for (const layer of layers) layer.destroy();
+  assert.deepEqual(drawnOn(f), []);
+  assert.equal(f.tileset.imageryLayers.length, 0);
+});
 
 test('a tiles layer is one Web Mercator template provider bounded to its rectangle', () => {
   const f = fixture();

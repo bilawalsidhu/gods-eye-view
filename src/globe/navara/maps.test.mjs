@@ -1,9 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
+import { Scene } from 'three';
 import { createNavaraMaps } from './maps.js';
+
+const loader = registerHooks({
+  resolve(specifier, context, next) {
+    return specifier === '@navaramap/three'
+      ? {
+          url: `data:text/javascript,${encodeURIComponent(`
+            export class EffectDesc {
+              constructor(view, ctx) { this.ctx = ctx; }
+              onCreate() { this.createPass(); }
+              onDestroy() {}
+            }
+          `)}`,
+          shortCircuit: true,
+        }
+      : next(specifier, context);
+  },
+});
+await import('./ground/globe.js');
+loader.deregister();
 
 function fakeView() {
   const view = {
+    globe: {},
+    scenes: { globe: new Scene(), mrt: new Scene() },
+    effects: new Set(),
+    effectTypes: new Map(),
+    registerEffect(key, type) {
+      view.effectTypes.set(key, type);
+    },
+    addEffect(desc) {
+      const key = Object.keys(desc)[0];
+      const Type = view.effectTypes.get(key);
+      const effect = new Type(view, { scenes: view.scenes }, desc);
+      effect.onCreate();
+      const handle = {
+        delete() {
+          if (!view.effects.delete(handle)) return;
+          effect.onDestroy();
+        },
+      };
+      view.effects.add(handle);
+      return handle;
+    },
     sources: [],
     layers: [],
     shown: [],
@@ -205,11 +247,16 @@ test('setPhotorealTiles shows Google 3D tiles with a browser key and the Google 
   assert.deepEqual(view.rasterCounts, []);
   const google = view.shown.find((item) => item.creditLayerId === tiles.id);
   assert.ok(google?.logo, 'no Google logo');
-  assert.ok(view.opened > 0, 'the copyright lines are not opened on screen');
+  assert.equal(
+    view.opened,
+    0,
+    'tiles must not force the attribution card open',
+  );
   assert.equal(maps.photorealActive(), true);
   await maps.setPhotorealTiles(null);
   assert.equal(maps.photorealActive(), false);
-  assert.equal(layersOf(view, '3d-tiles').length, 0);
+  assert.equal(layersOf(view, '3d-tiles').length, 1);
+  assert.equal(tiles.desc.model.show, false);
   assert.ok(!view.shown.some((item) => item.creditLayerId));
 });
 
@@ -229,6 +276,105 @@ test('base imagery hidden by photoreal comes back; a new one replaces it without
   assert.equal(rasters.length, 1);
   assert.match(rasters[0].desc.source.desc.url, /World_Imagery/);
   assert.deepEqual(view.rasterCounts, [1], 'a raster gap while replacing');
+});
+
+test('photoreal hides the whole globe while terrain sources and sampling stay live', async (t) => {
+  const view = fakeView();
+  const adapter = createNavaraMaps(view);
+  const { maps } = adapter;
+  t.after(adapter.destroy);
+  const point = { longitude: 1, latitude: 0.5 };
+  await maps.setBaseImagery({ kind: 'osm' });
+  await maps.setTerrain({ kind: 'keyless' });
+  const [terrain] = layersOf(view, 'terrain');
+  view.sampleTerrainMostDetailed = async (source) => {
+    assert.equal(source, terrain.desc.source);
+    return [{ height: 4200 }];
+  };
+  const revision = maps.terrainRevision();
+  const tiles = { googleApiKey: 'k' };
+  await maps.setPhotorealTiles(tiles);
+  assert.equal(view.scenes.globe.visible, false);
+  assert.equal(view.scenes.mrt.visible, true, 'tiles still write scene depth');
+  assert.deepEqual(await adapter.sampleTerrain([point]), [4200]);
+  assert.equal(maps.terrainRevision(), revision);
+  assert.equal(layersOf(view, 'terrain')[0], terrain);
+  assert.equal(layersOf(view, 'raster').length, 1);
+  await maps.setBaseImagery({ kind: 'esri-imagery' });
+  assert.equal(view.scenes.globe.visible, false);
+  await maps.setPhotorealTiles(tiles);
+  assert.equal(view.effects.size, 1, 'same tiles do not stack globe owners');
+  await maps.setPhotorealTiles({ googleApiKey: 'replacement' });
+  assert.equal(view.effects.size, 1);
+  assert.equal(view.scenes.globe.visible, false);
+  await maps.setPhotorealTiles(null);
+  assert.equal(view.scenes.globe.visible, true);
+  assert.equal(view.effects.size, 0);
+  assert.equal(layersOf(view, 'raster')[0].desc.raster.show, true);
+  assert.deepEqual(await adapter.sampleTerrain([point]), [4200]);
+});
+
+test('globe visibility is restored on release and destruction, including an already hidden globe', async () => {
+  for (const visible of [true, false]) {
+    for (const action of ['release', 'destroy']) {
+      const view = fakeView();
+      view.scenes.globe.visible = visible;
+      const { maps, destroy } = createNavaraMaps(view);
+      const tiles = { googleApiKey: 'k' };
+      await maps.setPhotorealTiles(tiles);
+      assert.equal(view.scenes.globe.visible, false);
+      if (action === 'release') maps.releasePhotorealTiles(tiles);
+      else destroy();
+      assert.equal(view.scenes.globe.visible, visible);
+      assert.equal(view.effects.size, 0);
+      destroy();
+    }
+  }
+});
+
+test('a photoreal request superseded during renderer loading cannot hide the globe', async () => {
+  const view = fakeView();
+  const { maps, destroy } = createNavaraMaps(view);
+  const pending = maps.setPhotorealTiles({ googleApiKey: 'k' });
+  await maps.setPhotorealTiles(null);
+  await pending;
+  assert.equal(view.scenes.globe.visible, true);
+  assert.equal(maps.photorealActive(), false);
+  assert.equal(view.effects.size, 0);
+  const next = maps.setPhotorealTiles({ googleApiKey: 'k' });
+  destroy();
+  await next;
+  assert.equal(view.scenes.globe.visible, true);
+  assert.equal(view.layers.length, 0);
+});
+
+test('map switches reuse the tile cache at the same detail and release a parked source', async (t) => {
+  const view = fakeView();
+  const { maps, destroy } = createNavaraMaps(view);
+  t.after(destroy);
+  const tiles = { googleApiKey: 'k' };
+  await maps.setBaseImagery({ kind: 'osm' });
+  await maps.setPhotorealTiles(tiles);
+  const [layer] = layersOf(view, '3d-tiles');
+  const source = layer.desc.source;
+  for (let i = 0; i < 3; i++) {
+    await maps.setPhotorealTiles(null);
+    assert.equal(maps.photorealActive(), false);
+    assert.equal(layer.desc.model.show, false);
+    await maps.setBaseImagery({ kind: 'osm' });
+    assert.equal(layersOf(view, 'raster')[0].desc.raster.show, true);
+    await maps.setPhotorealTiles(tiles);
+    assert.equal(maps.photorealActive(), true);
+    assert.equal(layersOf(view, '3d-tiles')[0], layer);
+    assert.equal(layer.desc.source, source);
+    assert.deepEqual(layer.desc.model, { maxSse: 16, height: 0, show: true });
+    assert.equal(view.sources.length, 2);
+  }
+  await maps.setPhotorealTiles(null);
+  maps.releasePhotorealTiles(tiles);
+  assert.equal(layersOf(view, '3d-tiles').length, 0);
+  assert.ok(!view.sources.includes(source));
+  assert.equal(view.scenes.globe.visible, true);
 });
 
 test('photoreal without a browser key rejects and changes nothing', async () => {
@@ -358,43 +504,6 @@ test('after a map change Navara keeps redrawing while tiles arrive, then stops',
   const atDestroy = view.frames;
   tick(2000);
   assert.equal(view.frames, atDestroy);
-});
-
-test('a tile overlay stays above the base imagery across map switches and credits its source', async () => {
-  const view = fakeView();
-  const { maps, destroy } = createNavaraMaps(view, {
-    setInterval: () => 1,
-    clearInterval() {},
-  });
-  await maps.setBaseImagery({ kind: 'osm' });
-  const remove = maps.addOverlay({
-    url: 'https://tiles.example/seamark/{z}/{x}/{y}.png',
-    maxZoom: 18,
-    credit: 'Sea marks © example',
-  });
-  const order = () =>
-    view.layers.map(
-      (layer) =>
-        view.sources.find((source) => source === layer.desc.source)?.desc.url,
-    );
-  assert.deepEqual(order(), [
-    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    'https://tiles.example/seamark/{z}/{x}/{y}.png',
-  ]);
-  assert.ok(
-    view.shown.some((item) => item.attributionHtml === 'Sea marks © example'),
-  );
-  // A new base layer goes in on top; the overlay is put back above it.
-  await maps.setBaseImagery({ kind: 'esri-imagery' });
-  assert.equal(order().at(-1), 'https://tiles.example/seamark/{z}/{x}/{y}.png');
-  assert.equal(order().length, 2);
-  remove();
-  assert.equal(order().length, 1);
-  assert.ok(
-    !view.shown.some((item) => item.attributionHtml === 'Sea marks © example'),
-  );
-  remove();
-  destroy();
 });
 
 test('world terrain publishes endpoint credits and removes them on replacement', async () => {

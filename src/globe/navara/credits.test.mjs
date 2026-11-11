@@ -65,11 +65,11 @@ test('destroy removes every credit; a view without attribution UI is a no-op', (
   remove();
 });
 
-test('onScreen credits open the attribution list on screen; others do not', () => {
+test('static credits never force the attribution card open', () => {
   const attribution = fakeAttribution();
   const { credits } = createNavaraCredits({ attribution });
   credits.addStatic('Quiet');
   assert.equal(attribution.opened, 0);
   credits.addStatic('Loud', { onScreen: true });
-  assert.equal(attribution.opened, 1);
+  assert.equal(attribution.opened, 0);
 });

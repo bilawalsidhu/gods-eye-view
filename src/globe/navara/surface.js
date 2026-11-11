@@ -21,6 +21,7 @@ import {
 } from 'three';
 import * as geo from '../../geo/index.js';
 import { normalizeSurfaceOptions } from '../surfaceDetail.js';
+import { photorealTilesVisible } from './maps.js';
 
 const { cartesian3, cartographic, math } = geo;
 const WGS84 = geo.ellipsoid.WGS84;
@@ -266,7 +267,7 @@ export function createNavaraSurface(
   };
   const sampleHeightDetailed = (place, options) => {
     const { exclude } = normalizeSurfaceOptions(options);
-    if (!supported) return terrainDetail(place);
+    if (!supported || !photorealTilesVisible(view)) return terrainDetail(place);
     const ray = surfaceRay(place);
     const roots = hooks.tileRoots();
     const excluded = exclude.length ? new Set(exclude) : NO_EXCLUDE;
@@ -299,6 +300,7 @@ export function createNavaraSurface(
   const raycast = ({ origin, direction, far, exclude = [] }) => {
     if (
       !supported ||
+      !photorealTilesVisible(view) ||
       ![
         origin?.x,
         origin?.y,

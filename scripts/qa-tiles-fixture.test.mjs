@@ -307,12 +307,13 @@ test('Navara accepts the local 3D source without a key or Google credit, and rej
   globals(t, { location: new URL('http://localhost:4303/') });
   const sources = [],
     credits = [];
+  const update = t.mock.fn();
   const view = {
     addSource: (desc) => {
       sources.push(desc);
       return { delete() {} };
     },
-    addLayer: () => ({ id: 'fixture', delete() {} }),
+    addLayer: () => ({ id: 'fixture', update, delete() {} }),
     forceUpdate() {},
     attribution: {
       add: (items) => credits.push(...items),
@@ -342,6 +343,11 @@ test('Navara accepts the local 3D source without a key or Google credit, and rej
   assert.equal(sources.length, 1);
   await owner.maps.setPhotorealTiles(null);
   assert.equal(owner.maps.photorealActive(), false);
+  assert.deepEqual(update.mock.calls[0].arguments[0].model, {
+    maxSse: 16,
+    height: 0,
+    show: false,
+  });
 });
 
 test('strict keyless assertion permits only the opted-in fixture and its real tileset URL', async (t) => {

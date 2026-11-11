@@ -16,12 +16,10 @@ import { NO_IMAGERY_HOST } from '../layers/shared/imageryHost.js';
  *    needs a vector-tile rendering pipeline, not an imagery-layer drop-in.
  *
  * The overlays drape through the globe engine on whatever surface the
- * active map stack offers: `engine.imagery` (on Cesium the globe on the OSM
- * and Bing stacks, the Google Photorealistic tileset's own imagery on Google
- * 3D; the engine follows stack switches), or Navara's own raster overlay
- * (`engine.maps.addOverlay`, per-tile levels on its terrain) where the
- * engine has one. Only a surface with neither leaves them hidden, and the
- * row says so.
+ * active map stack offers through `engine.imagery`: the globe on imagery
+ * stacks and the tiles' surface on Google 3D. The engine follows stack
+ * switches; native globe rasters would disappear when tiles hide the globe.
+ * Only a surface with neither leaves them hidden, and the row says so.
  * @module data/osmOverlays
  */
 
@@ -69,22 +67,20 @@ export function createOsmOverlayLayer(overlay) {
     throw new TypeError(`Unknown open map overlay: ${overlay?.id}`);
   let engine = null;
   let enabled = false;
-  /** The drape this instance owns while enabled: an imagery layer or a removal. */
+  /** The imagery layer this instance owns while enabled. */
   let owned = null;
 
   /** Where the drape lies now: 'globe', 'tileset' or 'none'. */
   function hostKind() {
     if (!owned) return 'none';
-    if (owned.remove) return 'globe';
     return HOST_KIND[engine?.imagery?.surface?.()] ?? 'none';
   }
 
   function release() {
     if (!owned) return;
-    const { layer, remove } = owned;
+    const layer = owned;
     owned = null;
-    if (remove) remove();
-    else layer.destroy();
+    layer.destroy();
   }
 
   /** Create or drop the owned drape to match the state. */
@@ -94,28 +90,17 @@ export function createOsmOverlayLayer(overlay) {
       return;
     }
     if (owned) return;
-    const remove = engine.maps?.addOverlay?.({
-      url: overlay.urlTemplate,
-      maxZoom: overlay.maximumLevel,
-      credit: overlay.credit,
-    });
-    if (typeof remove === 'function') {
-      owned = { remove };
-      return;
-    }
     if (!engine.imagery) return;
-    owned = {
-      layer: engine.imagery.createLayer({
-        id: `osm-overlay-${overlay.id}`,
-        source: {
-          kind: 'tiles',
-          url: overlay.urlTemplate,
-          maxLevel: overlay.maximumLevel,
-          credit: overlay.credit,
-        },
-        order: OVERLAY_ORDER,
-      }),
-    };
+    owned = engine.imagery.createLayer({
+      id: `osm-overlay-${overlay.id}`,
+      source: {
+        kind: 'tiles',
+        url: overlay.urlTemplate,
+        maxLevel: overlay.maximumLevel,
+        credit: overlay.credit,
+      },
+      order: OVERLAY_ORDER,
+    });
   }
 
   return {

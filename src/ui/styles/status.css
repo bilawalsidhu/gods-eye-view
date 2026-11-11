@@ -439,15 +439,42 @@ html:not([lang='en']) #global-loading-detail {
   transform: translateX(-50%) translateY(0);
 }
 
-/* The experimental Navara engine (?engine=navara) shows its attributions in
-   its own card, fixed bottom-right over the location tray. Keep it on the
-   left, above the HUD's coordinate lines and clear of the left panel rail:
-   the list is capped (Google's lines come first; the rest scrolls). */
-body .navara-attr-dock {
-  right: auto;
-  left: 16px;
-  bottom: 176px;
-  align-items: flex-start;
+/* Navara uses the shared credit strip's position and typography. Its native
+   card and logos stay owned by the plugin, inside the renderer's container. */
+#cesium-credits .navara-attr-logoframe:not([hidden]) {
+  position: static;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+#cesium-credits .navara-attr-logo {
+  height: auto;
+}
+#cesium-credits .navara-attr-dock {
+  position: static;
+  display: inline-block;
+  inset: auto;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+#cesium-credits .navara-attr-toggle {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: inherit;
+}
+#cesium-credits .navara-attr-card {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  white-space: normal;
+  text-shadow: none;
+}
+#cesium-credits .navara-attr-card a {
+  color: var(--nvr-attr-link, #3a6595);
 }
 body .navara-attr-list {
   max-height: 120px;
