@@ -9,7 +9,10 @@ import {
   moveCamera,
 } from './cameraVerbs.js';
 import { createGevActionRunner } from './voice/gevActions.js';
-import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from './testSupport/fakeCameraPort.mjs';
 import {
   fakeSceneFrame,
   fakeSceneQuery,
@@ -56,8 +59,10 @@ function harness(
   const double = {
     camera,
     scene,
-    trackedEntity: undefined,
+    // Cesium's entity tracking, without entities of its own: the camera
+    // port follows on a tracking widget of the fake's.
     trackedEntityChanged: new Cesium.Event(),
+    entities: {},
     clock: { onTick: new Cesium.Event() },
   };
   // The Cesium renderer's own camera port over the real camera; frames from
@@ -251,9 +256,7 @@ test('a pivoting tilt yields when tracking takes the camera', (t) => {
   const h = harness(t);
   assert.equal(moveCamera({ motion: 'tilt', pitchDeg: -45 }).ok, true);
   h.tick();
-  const entity = { id: 'tracked' };
-  h.viewer.trackedEntity = entity;
-  h.viewer.trackedEntityChanged.raiseEvent(entity);
+  followEntity(h.viewer, { id: 'tracked' });
   assert.equal(getActiveCameraMotion(), null);
 });
 
@@ -560,10 +563,10 @@ test('a regional tilt-up nudge goes to the camera horizon limit', (t) => {
 
 test('a voice tilt from a tracked view judges its limit from the camera pitch', (t) => {
   const h = harness(t, { height: 20000, pitch: -5.2 });
-  h.viewer.trackedEntity = { id: 'tracked' };
+  followEntity(h.viewer, { id: 'tracked' });
   // Voice releases the follow camera before the motion starts.
   const release = (start) => {
-    h.viewer.trackedEntity = undefined;
+    followEntity(h.viewer, null);
     return start();
   };
   const result = moveCamera({ motion: 'tilt', direction: 'up' }, release);

@@ -7,9 +7,9 @@ import * as Cesium from 'cesium';
 import { applyShareFollowOffset, placeFollowEye } from './shareFollow.js';
 import { followOffsetToEnu } from '../share/viewCodec.js';
 import { withEntityRecord } from '../data/entityRecords.js';
-import { followedOf } from '../data/followed.js';
+import { entityFollowTarget, followedOf } from '../data/followed.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
-import { findCamera } from '../render/rendererOf.js';
+import { findCamera, rendererOf } from '../render/rendererOf.js';
 
 function realCamera() {
   const scene = {
@@ -58,15 +58,40 @@ function following(start = START) {
     camera,
     scene,
     clock: { currentTime: Cesium.JulianDate.now() },
-    trackedEntity: withEntityRecord(
-      {},
-      { trackedId: 'satellites:25544', displayPosition: () => TARGET },
-    ),
   };
   bindFakeCesiumCamera(viewer, {
     frame: {
       on: (phase, cb) =>
         phase === 'preUpdate' ? scene.preUpdate.addEventListener(cb) : () => {},
+    },
+  });
+  // The port follows the satellite, already framed in its orbit frame; its
+  // follow offset is the eye in that frame, as the Cesium follow's is.
+  const renderer = rendererOf(viewer);
+  const port = renderer.camera;
+  const followed = entityFollowTarget(
+    withEntityRecord(
+      {},
+      { trackedId: 'satellites:25544', displayPosition: () => TARGET },
+    ),
+    { position: () => TARGET, frame: 'autodetect' },
+  );
+  renderer.camera = Object.create(port, {
+    followed: { get: () => followed },
+    followFramed: { get: () => true },
+    followOffset: {
+      value: Object.freeze({
+        get() {
+          const p = camera.position;
+          return { x: p.x, y: p.y, z: p.z };
+        },
+        set(offset) {
+          camera.lookAtTransform(
+            camera.transform,
+            new Cesium.Cartesian3(offset.x, offset.y, offset.z),
+          );
+        },
+      }),
     },
   });
   return viewer;

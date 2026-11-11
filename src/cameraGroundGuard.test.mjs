@@ -3,7 +3,11 @@
 // Arrival framing is computed before the destination's tiles exist, so it
 // works from a predicted ground height. The guard measures the real surface
 // after arrival and lifts the eye; these tests pin when it acts.
-import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from './testSupport/fakeCameraPort.mjs';
+import { rendererOf } from './render/rendererOf.js';
 import { fakeSceneQuery } from './testSupport/fakeCesiumScene.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,7 +53,33 @@ test('the clearance frames a subject without turning into an overflight', () => 
   assert.ok(MIN_EYE_CLEARANCE_M <= 250);
 });
 
-function fakeViewer({ cameraHeightM, surfaceM }) {
+/**
+ * Count the listeners for `viewer`'s camera port follow changes, from now on.
+ * @returns {() => number}
+ */
+function countFollowListeners(viewer) {
+  const renderer = rendererOf(viewer);
+  const port = renderer.camera;
+  let listeners = 0;
+  renderer.camera = Object.create(port, {
+    on: {
+      value(event, cb, options) {
+        const off = port.on(event, cb, options);
+        if (event !== 'followChanged') return off;
+        listeners += 1;
+        let live = true;
+        return () => {
+          if (live) listeners -= 1;
+          live = false;
+          off();
+        };
+      },
+    },
+  });
+  return () => listeners;
+}
+
+function fakeViewer({ cameraHeightM, surfaceM, tracks = false }) {
   const flights = [];
   const position = Cesium.Cartographic.fromDegrees(
     -97.7603,
@@ -80,6 +110,13 @@ function fakeViewer({ cameraHeightM, surfaceM }) {
       },
     },
   };
+  // Cesium's entity tracking, without entities of its own: the camera
+  // port follows on a tracking widget of the fake's.
+  if (tracks)
+    Object.assign(viewer, {
+      trackedEntityChanged: new Cesium.Event(),
+      entities: {},
+    });
   return bindFakeCesiumCamera(viewer, { query: fakeSceneQuery(viewer) });
 }
 
@@ -136,10 +173,14 @@ import { LayerLifecycle } from './data/lifecycle.js';
 
 function handoffFixture(t) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const viewer = fakeViewer({ cameraHeightM: 172, surfaceM: 171 });
+  const viewer = fakeViewer({
+    cameraHeightM: 172,
+    surfaceM: 171,
+    tracks: true,
+  });
+  const followListeners = countFollowListeners(viewer);
   viewer.scene.canvas = new EventTarget();
   viewer.scene.canvas.ownerDocument = new EventTarget();
-  viewer.trackedEntityChanged = new Cesium.Event();
   viewer.camera.cancelFlight = () => {};
   viewer.camera.lookAtTransform = () => {};
   viewer.camera.flyToBoundingSphere = function () {
@@ -175,7 +216,7 @@ function handoffFixture(t) {
     showToast() {},
   });
   guardCameraAboveGround(viewer, { lat: 30.3, lon: -97.7 });
-  return { viewer, navigation, originalFly };
+  return { viewer, navigation, originalFly, followListeners };
 }
 
 for (const handoff of [
@@ -192,7 +233,8 @@ for (const handoff of [
   'app-stop',
 ]) {
   test(`arrival guard relinquishes and removes hooks on ${handoff}`, async (t) => {
-    const { viewer, navigation, originalFly } = handoffFixture(t);
+    const { viewer, navigation, originalFly, followListeners } =
+      handoffFixture(t);
     const methods = [
       'flyTo',
       'flyToBoundingSphere',
@@ -209,9 +251,7 @@ for (const handoff of [
         },
       });
     } else if (handoff === 'tracking') {
-      // As Cesium's setter does: the value changes, then the event fires.
-      viewer.trackedEntity = { id: 'contact' };
-      viewer.trackedEntityChanged.raiseEvent(viewer.trackedEntity);
+      followEntity(viewer, { id: 'contact' });
     } else if (handoff === 'follow' || handoff === 'UI') {
       navigation._stampNavigation({ cancelPendingSelection: false });
     } else if (handoff === 'keyboard') {
@@ -247,7 +287,7 @@ for (const handoff of [
       methods,
       'the guard never replaces camera methods',
     );
-    assert.equal(viewer.trackedEntityChanged.numberOfListeners, 0);
+    assert.equal(followListeners(), 0);
     navigation.destroy();
   });
 }

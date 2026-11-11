@@ -13,7 +13,11 @@
 //
 // computeFrustumGeometry is PURE (no viewer, no scene queries) so it runs under
 // plain node:test.
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { entityFollowTarget, followedOf } from './followed.js';
 import { test } from 'node:test';
 // Preserve structural pins across component qualification and formatter wrapping.
 function componentFunctionSource(fn) {
@@ -883,14 +887,18 @@ test('CCTV disable→enable defers the active-camera re-probe until its next act
 test('CCTV focus distinguishes tracking ownership from a missing active camera', () => {
   let flyCalls = 0;
   const viewer = {
-    trackedEntity: { id: 'tracked-flight' },
     camera: {
       flyToBoundingSphere() {
         flyCalls += 1;
       },
     },
+    // Cesium's entity tracking, without entities of its own: the camera
+    // port follows on a tracking widget of the fake's.
+    trackedEntityChanged: new Cesium.Event(),
+    entities: {},
   };
   bindFakeCesiumCamera(viewer);
+  followEntity(viewer, { id: 'tracked-flight' });
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
@@ -1021,7 +1029,6 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
 function makeDeselectViewer() {
   const viewer = {
     isDestroyed: () => false,
-    trackedEntity: { id: 'sibling-track-owner' },
     camera: {
       positionWC: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 4_000),
       positionCartographic: Cesium.Cartographic.fromDegrees(
@@ -1050,6 +1057,11 @@ function makeDeselectViewer() {
     camera: {
       pose: () => (viewer.eye ? { ...viewer.eye } : undefined),
       on: () => () => {},
+      // A sibling layer's follow owns the camera.
+      followed: entityFollowTarget({ id: 'sibling-track-owner' }, {}),
+      follow(target) {
+        this.followed = target;
+      },
     },
   }).draw;
   return viewer;
@@ -1263,7 +1275,7 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
       pitch: viewer.camera.pitch,
       roll: viewer.camera.roll,
       transform: Cesium.Matrix4.clone(viewer.camera.transform),
-      trackedEntity: viewer.trackedEntity,
+      followed: followedOf(viewer),
     };
 
     assert.equal(deactivateActiveCamera(), true);
@@ -1288,7 +1300,7 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     assert.equal(viewer.camera.pitch, pose.pitch);
     assert.equal(viewer.camera.roll, pose.roll);
     assert.deepEqual(viewer.camera.transform, pose.transform);
-    assert.equal(viewer.trackedEntity, pose.trackedEntity);
+    assert.equal(followedOf(viewer), pose.followed);
     assert.equal(viewer.camera.flyCalls || 0, 0);
     unsubscribe();
   } finally {

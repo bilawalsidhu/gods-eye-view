@@ -50,7 +50,8 @@ import { withEntityRecord } from './entityRecords.js';
 import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
-import { bindRenderer } from '../render/rendererOf.js';
+import { bindRenderer, rendererOf } from '../render/rendererOf.js';
+import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 const militaryAwarenessSource = readLayerSource(
@@ -90,6 +91,46 @@ test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(9960), '10\u00a0km');
 });
 
+
+/**
+ * Give `viewer`'s bound camera port a follow of its own, as the renderer's
+ * is: `follow(target)` sets `followed` and raises `followChanged`.
+ */
+function followable(viewer) {
+  const renderer = rendererOf(viewer);
+  const port = renderer.camera;
+  const listeners = new Set();
+  let followed = null;
+  renderer.camera = Object.create(port, {
+    followed: { get: () => followed },
+    follow: {
+      value(target) {
+        followed = target;
+        for (const cb of [...listeners]) cb();
+      },
+    },
+    on: {
+      value(event, cb, options) {
+        if (event !== 'followChanged') return port.on(event, cb, options);
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      },
+    },
+  });
+}
+
+/**
+ * Follow `entity` (an entity holder) through `viewer`'s camera port, as a
+ * layer does; null stops following.
+ */
+function followIn(viewer, entity) {
+  rendererOf(viewer).camera.follow(
+    entity ? entityFollowTarget(entity, {}) : null,
+  );
+}
+
+/** The entity holder `viewer`'s camera follows, if any. */
+const followedEntity = (viewer) => followedOf(viewer)?.entity;
 function installAwarenessRuntime({
   isEnabled = () => true,
   isEffectivelyEnabled = isEnabled,
@@ -194,6 +235,7 @@ function installAwarenessRuntime({
     draw: fakeDrawPort(),
     frame: fakeSceneFrame(viewer),
   });
+  followable(viewer);
   const layers = new Map(
     AWARENESS_DEPENDENCIES.map((layerId) => [
       layerId,
@@ -889,7 +931,7 @@ for (const fixture of [
         {},
         { trackedId: `${subject.layerId}:${subject.id}` },
       );
-      runtime.viewer.trackedEntity = trackedEntity;
+      followIn(runtime.viewer, trackedEntity);
       replaceMethod(
         fixture.layer,
         'getTrackedSubject',
@@ -930,7 +972,7 @@ for (const fixture of [
         'adoption must not recreate the existing track',
       );
       assert.equal(
-        runtime.viewer.trackedEntity,
+        followedEntity(runtime.viewer),
         trackedEntity,
         'adoption must not replace the source-owned tracked entity',
       );
@@ -990,9 +1032,9 @@ test('Contacts activation adopts the production military tracked-subject descrip
       ),
       'mutating one accessor result must not alter the tracked source position',
     );
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: `military:${id}` },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `military:${id}` }),
     );
     replaceMethod(flightsLayer, 'getTrackedSubject', () => null, restores);
     replaceMethod(
@@ -1098,9 +1140,9 @@ test('production military tracked-subject label falls back to registration befor
       'getAllPositions id stays the identity hex',
     );
 
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: `military:${id}` },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `military:${id}` }),
     );
     replaceMethod(flightsLayer, 'getTrackedSubject', () => null, restores);
     replaceMethod(flightsLayer, 'trackById', () => true, restores);
@@ -1173,9 +1215,9 @@ test('a cached Context subject re-reads its label when enrichment lands after se
       meta,
     });
 
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: `flights:${id}` },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `flights:${id}` }),
     );
     replaceMethod(
       militaryFlightsLayer,
@@ -1319,9 +1361,9 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
       ),
       'mutating one accessor result must not alter the tracked source position',
     );
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: `flights:${id}` },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `flights:${id}` }),
     );
     replaceMethod(
       militaryFlightsLayer,
@@ -1409,9 +1451,9 @@ test('Contacts activation reconciles to a newer cross-layer tracked flight after
   const restores = [];
 
   try {
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: 'flights:first' },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: 'flights:first' }),
     );
     replaceMethod(
       flightsLayer,
@@ -1435,9 +1477,9 @@ test('Contacts activation reconciles to a newer cross-layer tracked flight after
 
     civilianTracked = null;
     militaryTracked = awarenessSubject('military', 'latest', positions.latest);
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: 'military:latest' },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: 'military:latest' }),
     );
     releaseDependencies();
     await nextTurn();
@@ -1482,9 +1524,9 @@ test('tracked flight cleared during Contacts activation suppresses fallback auto
   const focused = [];
 
   try {
-    runtime.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: 'flights:selected' },
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: 'flights:selected' }),
     );
     replaceMethod(flightsLayer, 'getTrackedSubject', () => tracked, restores);
     replaceMethod(
@@ -1508,7 +1550,7 @@ test('tracked flight cleared during Contacts activation suppresses fallback auto
     );
 
     tracked = null;
-    runtime.viewer.trackedEntity = undefined;
+    followIn(runtime.viewer, null);
     // Deliberately untagged: this is the DESELECT case, and an untagged clear
     // must default to deliberate. An eviction (`reason: 'evicted'`) instead
     // keeps the subject as CONTACT LOST — see the eviction tests below — but

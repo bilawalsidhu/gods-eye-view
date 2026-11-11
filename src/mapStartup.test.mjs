@@ -75,6 +75,8 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     createStandaloneCatalog: () => ({}),
     createGoogleTokenSource: () => createGoogleTokenSource({ fetchImpl }),
     selectMapStartupRoute,
+    // The default renderer's load; the scene below draws with none.
+    loadDefaultRenderer: () => null,
     // The real scene forwards these credentials to this same loader.
     createStandaloneScene: async (options) => ({
       ...(await loadPhotorealisticTileset(Cesium, options)),

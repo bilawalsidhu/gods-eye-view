@@ -15,8 +15,8 @@ import * as Cesium from 'cesium';
 import {
   bindFakeCesiumCamera,
   followEntity,
-  followedEntity,
 } from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import {
   FAKE_EVENT_TYPES,
@@ -640,7 +640,7 @@ test('a double-click on a site focuses it and keeps the orbital view', async (t)
   const { cockpit, viewer, handler } = scene;
   scene.doubleClick(SITES.alpha.at);
   assert.equal(handler.stockDoubleClicks, 0, 'Cesium does not track the site');
-  assert.equal(followedEntity(viewer), undefined);
+  assert.equal(followedOf(viewer), null);
   scene.frame();
   assert.equal(cockpit.active, true, 'still in orbit');
   assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
@@ -726,7 +726,7 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   assert.equal(newTrack.length, 1);
   assert.ok(newTrack[0].timestamp > firstTrack.timestamp, 'the new ride’s own time');
   assert.deepEqual(satellites.calls.slice(-2), [['track', 49260], ['subject', 49260]]);
-  assert.equal(followedEntity(viewer), undefined, 'the Cockpit keeps the camera');
+  assert.equal(followedOf(viewer), null, 'the Cockpit keeps the camera');
   assert.equal(cockpit.subjectId, 49260);
   assert.equal(cockpit.orbital.focus, null, 'the focus is reset');
   assert.equal(modeEvents.at(-1)?.active, true);

@@ -5,6 +5,7 @@ import {
   fakeCameraPort,
 } from '../testSupport/fakeCameraPort.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import {
   buildRadioTunerBand,
@@ -1666,16 +1667,23 @@ test('Radio recovery preserves closer altitude and caps extreme full-globe zoom'
 
 test('Radio camera navigation yields to every live tracked-entity owner', () => {
   const viewer = {};
-  bindRenderer(viewer, { camera: fakeCameraPort().port });
+  // A camera port that follows: the layers' tracked entities are followed
+  // through it.
+  const { port: camera } = fakeCameraPort();
+  camera.followed = null;
+  camera.follow = (target) => {
+    camera.followed = target;
+  };
+  bindRenderer(viewer, { camera });
   assert.equal(radioCameraNavigationAllowed(viewer), true);
   assert.equal(radioCameraNavigationAllowed({}), false, 'no camera to move');
   for (const trackedId of ['flights:abc123', 'military:def456']) {
     const trackedEntity = withEntityRecord({}, { trackedId });
-    viewer.trackedEntity = trackedEntity;
+    camera.follow(entityFollowTarget(trackedEntity, {}));
     assert.equal(radioCameraNavigationAllowed(viewer), false, trackedId);
-    assert.equal(viewer.trackedEntity, trackedEntity);
+    assert.equal(followedOf(viewer)?.entity, trackedEntity);
   }
-  viewer.trackedEntity = undefined;
+  camera.follow(null);
   assert.equal(radioCameraNavigationAllowed(viewer), true);
   assert.equal(radioCameraNavigationAllowed({ trackedEntity: {} }), false);
   assert.equal(radioCameraNavigationAllowed(null), false);

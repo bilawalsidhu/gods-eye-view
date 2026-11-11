@@ -3,7 +3,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import alprCamerasLayer, {
   createAlprCamerasLayer,
@@ -337,6 +340,10 @@ function cameraHarness(layer = alprCamerasLayer) {
       postRender: new Cesium.Event(),
       pick: () => picked,
     },
+    // Cesium's entity tracking, without entities of its own: the camera
+    // port follows on a tracking widget of the fake's.
+    trackedEntityChanged: new Cesium.Event(),
+    entities: {},
   };
   const ports = fakeScenePorts(viewer);
   bindFakeCesiumCamera(viewer, ports);
@@ -1240,14 +1247,14 @@ test('nearby count and discovery control frame a real loaded camera without fetc
     );
     assert.equal(flights[0].options.offset.range, 800);
     assert.equal(h.requests.length, 1);
-    h.viewer.trackedEntity = {};
+    followEntity(h.viewer, {});
     assert.equal(alprCamerasLayer.getRowControls().chips[0].disabled, true);
     assert.equal(
       controls.chips[0].onClick(),
       false,
       'a stale button cannot steal the follow camera',
     );
-    h.viewer.trackedEntity = undefined;
+    followEntity(h.viewer, null);
     alprCamerasLayer.disable();
     assert.equal(alprCamerasLayer.getStats().countLabel, '');
     assert.equal(controls.chips[0].onClick(), false);

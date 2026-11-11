@@ -14,6 +14,8 @@ import {
   trackedLabelModelFromText,
 } from './trackedReadout.js';
 import { entityRecord, readEntityRecord, withEntityRecord } from './entityRecords.js';
+import { entityFollowTarget } from './followed.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 function makeCesiumEvent() {
   const listeners = new Set();
@@ -24,6 +26,31 @@ function makeCesiumEvent() {
     },
     raise() { for (const callback of [...listeners]) callback(); },
     get size() { return listeners.size; },
+  };
+}
+
+/**
+ * A viewer whose camera port follows `entity` (null: nothing), with
+ * `follow(next)` to change it and announce the change on `changed`.
+ */
+function followingViewer(entity, changed) {
+  const camera = {
+    followed: null,
+    on: (event, callback) =>
+      event === 'followChanged' ? changed.addEventListener(callback) : () => {},
+  };
+  const viewer = {};
+  bindRenderer(viewer, { camera });
+  const follow = (next) => {
+    camera.followed = next ? entityFollowTarget(next, {}) : null;
+  };
+  follow(entity);
+  return {
+    viewer,
+    follow(next) {
+      follow(next);
+      changed.raise();
+    },
   };
 }
 
@@ -130,7 +157,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
   const changed = makeCesiumEvent();
   const display = { x: 10, y: 20, z: 30 };
   const entity = withEntityRecord({ id: 'generated' }, { trackedId: 'flights:abc123', displayPosition: () => display, labelModel: { title: 'UAL123', details: ['FL350 · 451 kts'], accent: '#39d0ff' } });
-  const viewer = { trackedEntity: entity, trackedEntityChanged: changed };
+  const { viewer, follow } = followingViewer(entity, changed);
   const recorder = makeHostRecorder();
   globalThis.window = fakeWindow;
   _setTrackedOverlayHostForTest(recorder.host);
@@ -158,8 +185,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
       'FL360 · 455 kts',
     ]);
 
-    viewer.trackedEntity = null;
-    changed.raise();
+    follow(null);
     assert.equal(getActiveTrackedReadoutId(), null);
     assert.equal(recorder.calls.at(-1).op, 'clear');
   } finally {
@@ -173,7 +199,7 @@ test('selection lifecycle leaves installations to their own entry and retains AL
   const originalWindow = globalThis.window;
   const fakeWindow = new EventTarget();
   const changed = makeCesiumEvent();
-  const viewer = { trackedEntity: null, trackedEntityChanged: changed };
+  const { viewer } = followingViewer(null, changed);
   const recorder = makeHostRecorder();
   const installation = withEntityRecord({}, { trackedId: 'installations:fort-test', displayPosition: () => ({ x: 1, y: 2, z: 3 }), labelModel: { title: 'FORT TEST', details: ['AIRFIELD'], accent: '#5aa9ff' } });
   globalThis.window = fakeWindow;
@@ -218,7 +244,7 @@ test('selection lifecycle leaves installations to their own entry and retains AL
     const clearsBeforeDestroy = recorder.calls.filter(({ op }) => op === 'clear').length;
     destroyTrackedReadout();
     assert.ok(recorder.calls.filter(({ op }) => op === 'clear').length > clearsBeforeDestroy);
-    assert.equal(changed.size, 0, 'trackedEntityChanged listener was removed');
+    assert.equal(changed.size, 0, 'the followChanged listener was removed');
     assert.ok(recorder.calls.some(({ op, visible }) => op === 'visible' && visible === false));
   } finally {
     destroyTrackedReadout();

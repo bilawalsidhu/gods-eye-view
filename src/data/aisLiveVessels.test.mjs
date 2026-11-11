@@ -42,6 +42,7 @@ import {
 } from '../hudReadouts.js';
 import { createVesselIconBook } from '../layers/vessels/iconBook.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(
@@ -1045,13 +1046,31 @@ function installWireHarness(picked, stateOverrides = {}) {
       this.keydown?.(event);
     },
   };
-  const trackedEntityChanged = makeCesiumEvent();
   const viewer = {
     scene: { pick: () => picked },
-    trackedEntity: undefined,
-    trackedEntityChanged,
   };
   const input = fakeInput(viewer);
+  // The camera port other layers follow through, with no pose to read; its
+  // followChanged event counts who listens.
+  const followChanged = makeCesiumEvent();
+  const camera = {
+    pose: () => null,
+    followed: null,
+    follow(target) {
+      this.followed = target;
+      followChanged.raise();
+    },
+    on: (name, callback) =>
+      name === 'followChanged'
+        ? followChanged.addEventListener(callback)
+        : () => {},
+  };
+  const unbindRenderer = bindRenderer(viewer, {
+    camera,
+    get canvas() {
+      return viewer.scene?.canvas;
+    },
+  });
   const handler = { click: (event) => input.click(event.position) };
   const record = makeRecord();
   const trail = makeTrailSpy();
@@ -1088,11 +1107,14 @@ function installWireHarness(picked, stateOverrides = {}) {
     trail,
     hud,
     viewer,
+    camera,
+    followChanged,
     windowTarget,
     input: input.input,
     cleanup() {
       stopReadout();
       aisLiveVesselsLayer.destroy();
+      unbindRenderer();
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
       if (hadDocument) globalThis.document = priorDocument;
@@ -1314,19 +1336,18 @@ test('vessel interaction wire: Escape deselects the selected vessel', () => {
 test('vessel interaction wire: trackedEntityChanged clears only with tracking and a selection', () => {
   const harness = installWireHarness(undefined);
   try {
-    harness.viewer.trackedEntityChanged.raise();
+    harness.followChanged.raise();
     assert.equal(
       aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
       harness.record.mmsi,
     );
     assert.equal(harness.trail.clearCalls, 0);
 
-    harness.viewer.trackedEntity = { id: 'tracked-flight' };
-    harness.viewer.trackedEntityChanged.raise();
+    harness.camera.follow(entityFollowTarget({ id: 'tracked-flight' }, {}));
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
     assert.equal(harness.trail.clearCalls, 1);
 
-    harness.viewer.trackedEntityChanged.raise();
+    harness.followChanged.raise();
     assert.equal(harness.trail.clearCalls, 1);
   } finally {
     harness.cleanup();
@@ -1344,8 +1365,8 @@ test('vessel interaction lifecycle: destroy removes the exact bound keydown list
     assert.equal(harness.keyTarget.removed[0].type, 'keydown');
     assert.strictEqual(harness.keyTarget.removed[0].callback, added.callback);
     assert.equal(harness.keyTarget.keydown, null);
-    assert.equal(harness.viewer.trackedEntityChanged.removeCalls, 1);
-    assert.equal(harness.viewer.trackedEntityChanged.listenerCount, 0);
+    assert.equal(harness.followChanged.removeCalls, 1);
+    assert.equal(harness.followChanged.listenerCount, 0);
   } finally {
     harness.cleanup();
   }
@@ -1363,8 +1384,8 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
     assert.equal(harness.keyTarget.keydown, null);
     assert.equal(harness.keyTarget.removed.length, 1);
     assert.strictEqual(harness.keyTarget.removed[0].callback, disabledKeydown);
-    assert.equal(harness.viewer.trackedEntityChanged.removeCalls, 1);
-    assert.equal(harness.viewer.trackedEntityChanged.listenerCount, 0);
+    assert.equal(harness.followChanged.removeCalls, 1);
+    assert.equal(harness.followChanged.listenerCount, 0);
 
     _setVesselStateForTest({
       records: [harness.record],
@@ -1390,8 +1411,8 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
 
     assert.equal(harness.input.subscriberCount(), 1);
     assert.equal(harness.keyTarget.added.length, 2);
-    assert.equal(harness.viewer.trackedEntityChanged.addCalls, 2);
-    assert.equal(harness.viewer.trackedEntityChanged.listenerCount, 1);
+    assert.equal(harness.followChanged.addCalls, 2);
+    assert.equal(harness.followChanged.listenerCount, 1);
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
 

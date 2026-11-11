@@ -11,6 +11,7 @@ import { FREE_LOOK_MAX_HEIGHT_METERS } from '../globeInView.js';
 import * as globeInView from '../globeInView.js';
 import { createCesiumCamera } from '../render/cesium/camera.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
 
 /** The camera port bound over each real Cesium camera a test makes. */
 const cameraPorts = new WeakMap();
@@ -697,9 +698,15 @@ test('globe recovery leaves partial, low, locked and following views alone', () 
   assert.equal(globeOutOfFrame(locked.camera), true);
   assert.ok(moveEndKeepsView(locked.camera), 'locked camera');
 
-  // Tracking an entity that has no position yet keeps an identity transform.
+  // Following an entity that has no position yet keeps an identity transform.
   const tracked = realCamera();
-  tracked.viewer.trackedEntity = { id: 'pending-fix' };
+  const pending = entityFollowTarget(
+    { id: 'pending-fix' },
+    { position: () => null },
+  );
+  Object.defineProperty(cameraPorts.get(tracked.camera), 'followed', {
+    get: () => pending,
+  });
   installGlobeInViewRecovery(tracked.viewer);
   aim(tracked.camera, reportedStuckView);
   assert.ok(moveEndKeepsView(tracked.camera), 'tracked camera');

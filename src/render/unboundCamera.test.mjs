@@ -57,8 +57,7 @@ const INJECTED = {};
 
 /**
  * Modules whose use of the bridge holds up without the factory: with no
- * port they read Cesium's `trackedEntity` instead, which is all an unbound
- * viewer can follow by.
+ * camera port they report nothing followed.
  */
 const FALLS_BACK = new Set(['src/data/followed.js']);
 
@@ -192,6 +191,18 @@ const CAMERA_FROM_CALLER = new Set([
   './ui/visual-settings',
   './application/controls',
   './application/data',
+  // The scene binds the renderer it creates (the default one loaded only
+  // when it is given none), so its own viewer needs no factory.
+  './application/scene',
+  // The map stacks switch through the renderer's map engine or its globe
+  // port (`maps/globeEngine.js`), which a viewer of the caller's own gets
+  // from `./render/cesium/unbound`.
+  './maps/defaults',
+  // It restores a shared view through the camera, frame and canvas of the
+  // renderer bound to the viewer it is given; it loads no factory.
+  './ui/share-restoration',
+  // It reads the eye from the camera port's pose, and none without one.
+  './agent/world-packet',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

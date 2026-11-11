@@ -17,7 +17,12 @@ import {
   createCesiumQuery,
   queryCapabilities,
 } from '../render/cesium/query.js';
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { entityFollowTarget } from '../data/followed.js';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { entityRecord } from '../data/entityRecords.js';
 
@@ -139,7 +144,15 @@ function createRealViewer(target, { frames = true } = {}) {
   // `camera.changed`, so the fixture has to carry one.
   scene.preRender = new Cesium.Event();
   camera.getPickRay = () => new Cesium.Ray();
-  return { viewer: withPorts({ camera, scene }, { frames }), target };
+  // Cesium's entity tracking, without entities of its own: the camera port
+  // follows on a tracking widget of the fake's.
+  const viewer = {
+    camera,
+    scene,
+    trackedEntityChanged: new Cesium.Event(),
+    entities: {},
+  };
+  return { viewer: withPorts(viewer, { frames }), target };
 }
 
 /** Place a real camera in an orbit around `target` and release the frame. */
@@ -556,7 +569,7 @@ for (const [label, altitude, range] of [
       trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
     });
     entityRecord(entity).displayPosition = () => target;
-    viewer.trackedEntity = entity;
+    followEntity(viewer, entity);
     const follow = new Cesium.EntityView(entity, viewer.scene);
     follow.update(viewer.clock.currentTime);
     viewer.camera.lookAt(
@@ -585,7 +598,7 @@ for (const [label, altitude, range] of [
         follow.update(viewer.clock.currentTime);
         const transform = Cesium.Matrix4.clone(viewer.camera.transform);
         viewer.scene.preUpdate.raiseEvent();
-        assert.equal(viewer.trackedEntity, entity);
+        assert.equal(followedEntity(viewer), entity);
         assert.ok(
           Cesium.Matrix4.equalsEpsilon(
             viewer.camera.transform,
@@ -605,7 +618,7 @@ for (const [label, altitude, range] of [
     }
     target = Cesium.Cartesian3.fromDegrees(-96, 31, altitude);
     follow.update(viewer.clock.currentTime);
-    assert.equal(viewer.trackedEntity, entity);
+    assert.equal(followedEntity(viewer), entity);
     assert.ok(Math.abs(readCameraTargetFrame(viewer).range - range) < 1e-5);
   });
 }
@@ -619,10 +632,10 @@ test('orientation animation cancels on replacement and explicit cancellation', (
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.animate(frame, { heading: 0, pitch: OBLIQUE_PITCH });
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
-  viewer.trackedEntity = {};
+  followEntity(viewer, {});
   viewer.scene.preUpdate.raiseEvent();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-  viewer.trackedEntity = undefined;
+  followEntity(viewer, null);
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.cancel();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
@@ -631,9 +644,17 @@ test('orientation animation cancels on replacement and explicit cancellation', (
 test('orientation navigation preserves follow and selection; new navigation cancels animation', () => {
   const calls = [];
   const entity = {};
-  const viewer = { trackedEntity: entity };
+  const viewer = {};
   bindRenderer(viewer, {
-    camera: { cancelFlight: () => calls.push('cancel-flight') },
+    camera: {
+      cancelFlight: () => calls.push('cancel-flight'),
+      // The camera follows `entity`.
+      followed: entityFollowTarget(entity, {}),
+      follow(target) {
+        this.followed = target;
+      },
+      on: () => () => {},
+    },
   });
   let cockpit = false;
   const navigation = new NavigationController({
@@ -651,7 +672,7 @@ test('orientation navigation preserves follow and selection; new navigation canc
     navigation.runOrientation('camera', () => 'animated'),
     'animated',
   );
-  assert.equal(viewer.trackedEntity, entity);
+  assert.equal(followedEntity(viewer), entity);
   assert.deepEqual(calls, [
     'cancel-orientation',
     'interrupt-motion',

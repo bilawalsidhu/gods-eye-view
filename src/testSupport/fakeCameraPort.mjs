@@ -267,7 +267,9 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
       value: () => (fake.computeViewRectangle ? real.viewRectangle() : null),
     },
     on: {
-      value(event, cb) {
+      value(event, cb, options) {
+        // What the port itself raises (a follow's change) comes from it.
+        if (event === 'followChanged') return real.on(event, cb, options);
         const source = fake[event];
         const off = source?.addEventListener?.(cb);
         if (typeof off === 'function') return off;

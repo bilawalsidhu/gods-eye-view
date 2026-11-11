@@ -509,8 +509,8 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   await settle();
   assert.equal(cockpit.enter(), true);
   // NEXT hands the view to a military aircraft; Contacts turned its layer on.
+  // The follow's change adopts it as the ridden aircraft.
   retrack({ layerId: 'military', info: MILITARY });
-  assert.equal(cockpit._adoptTrackedEntity(performance.now()), true);
   assert.equal(cockpit.readSubjectLayerId(), 'military');
   await manager.setEnabled('ais-live-vessels', false, { origin: 'user' });
   await settle();

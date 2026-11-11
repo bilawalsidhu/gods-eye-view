@@ -29,6 +29,7 @@ import {
   followEntity,
   followedEntity,
 } from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { fakeInput } from '../input/testDoubles.mjs';
 
@@ -412,7 +413,7 @@ test('entering takes the camera and shows only the orbital HUD', async (t) => {
   assert.equal(cockpit.subjectKind, 'satellite');
   assert.equal(cockpit.subjectId, ISS.noradId);
   assert.deepEqual(satellites.calls, [['subject', ISS.noradId]]);
-  assert.equal(followedEntity(viewer), undefined);
+  assert.equal(followedOf(viewer), null);
   assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, false);
   assert.ok(document.body.classList.contains('cockpit-mode'));
   assert.ok(document.body.classList.contains('cockpit-orbit'));
