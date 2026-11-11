@@ -317,6 +317,13 @@ export function createLocalAdsbLayer({
         aircraftClass: marker.evidence ? marker.klass : null,
         typeCode: meta?.typeCode ?? null,
         altitudeFt: record.altitudeFt,
+        ...(Number.isFinite(record.altitudeFt)
+          ? {
+              altitudeQuality: record.altitudeQuality,
+              altitudeObservedAt: record.altitudeObservedAt,
+              altitudeSource: record.altitudeSource,
+            }
+          : {}),
         groundSpeedKt: record.groundSpeedKt,
         trackDeg: record.trackDeg,
         verticalRateFpm: record.verticalRateFpm,
@@ -431,7 +438,7 @@ export function createLocalAdsbLayer({
     // Gated before anything reads the record, so the marker height, the card,
     // the 3D-model ceiling and route plausibility agree on one altitude.
     const altitudesRejectedBefore = marker.altitude.rejected;
-    const record = gateLocalAdsbAltitude(heard, marker.altitude);
+    const record = gateLocalAdsbAltitude(heard, marker.altitude, at);
     rejectedAltitudes += marker.altitude.rejected - altitudesRejectedBefore;
     marker.record = record;
     marker.onGround = Boolean(record.onGround);
@@ -857,6 +864,13 @@ export function createLocalAdsbLayer({
           altitudeM: Number.isFinite(record.altitudeFt)
             ? Math.round(record.altitudeFt * 0.3048)
             : null,
+          ...(Number.isFinite(record.altitudeFt)
+            ? {
+                altitudeQuality: record.altitudeQuality,
+                altitudeObservedAt: record.altitudeObservedAt,
+                altitudeSource: record.altitudeSource,
+              }
+            : {}),
           speedKts: num(record.groundSpeedKt),
           heading: num(record.trackDeg),
           onGround: record.onGround === true,
