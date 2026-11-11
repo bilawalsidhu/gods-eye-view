@@ -1265,6 +1265,54 @@ test('a wide oblique view does not hide the fleet that is plainly in it', async 
   );
 });
 
+test('a wide view of Norway polls Entur though its centre lies in Sweden', async (t) => {
+  // The reviewer's reproduction: Lindesnes to Vardø in view below the gate.
+  const app = harness(t, {
+    at: { lat: 64.5, lon: 17.8 },
+    altitude: 2_000_000,
+    view: { west: 4.5, south: 57.9, east: 31.2, north: 71.2 },
+  });
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.ok(
+    app.requested.some((url) => url.endsWith('/entur-norway')),
+    'Entur is polled for a screen full of Norway',
+  );
+});
+
+test('a close view keeps the centre rule, and a horizon view does not poll the continent', async (t) => {
+  // 200 km up over Karlstad with a sliver of Norway at the western edge: the
+  // centre rule decides, and Karlstad is not Norway.
+  const close = harness(t, {
+    at: { lat: 59.38, lon: 13.5 },
+    altitude: 200_000,
+    view: { west: 11.0, south: 58.4, east: 16.0, north: 60.4 },
+  });
+  close.layer.enable(close.viewer);
+  await close.layer.update();
+  assert.equal(
+    close.requested.some((url) => url.endsWith('/entur-norway')),
+    false,
+  );
+});
+
+test('a horizon-grazing oblique view falls back to the centre rule', async (t) => {
+  // High and tilted over Utrecht: the rectangle spans most of the northern
+  // hemisphere, Norway included, but only the feed under the centre is polled.
+  const app = harness(t, {
+    at: { lat: 52.09, lon: 5.12 },
+    altitude: 1_500_000,
+    view: { west: -78.084, south: 20, east: 88.084, north: 84 },
+  });
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.equal(
+    app.requested.some((url) => url.endsWith('/entur-norway')),
+    false,
+  );
+  assert.ok(app.requested.some((url) => url.endsWith('/ovapi-nl')));
+});
+
 test('a lone visible vehicle is offered to DETECT out of a large hidden fleet', async (t) => {
   // The stride used to run over the WHOLE fleet and discard the hidden ones
   // afterwards, so one visible bus among thousands could fall outside the

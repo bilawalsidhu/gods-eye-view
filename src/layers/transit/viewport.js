@@ -4,13 +4,19 @@ import {
   ACTIVATION_EXIT_ALTITUDE_M,
   CAMERA_DEBOUNCE_MS,
   RANGE_SLACK_KM,
+  WIDE_VIEW_ALTITUDE_M,
+  WIDE_VIEW_MAX_SPAN_DEG,
   inflateViewBounds,
 } from './policy.js';
-import { transitFeedsInRange } from '../../data/transitFeeds.js';
+import {
+  transitFeedsInRange,
+  transitFeedsInView,
+} from '../../data/transitFeeds.js';
 
 /**
- * Camera-driven feed activation: only the feeds whose coverage circle contains
- * the look-at point are polled, and only below the altitude gate.
+ * Camera-driven feed activation, only below the altitude gate: a feed is
+ * polled when its coverage holds the look-at point, and, in a wide view, when
+ * its coverage reaches into the visible rectangle.
  * @param {object} context
  * @returns {object}
  */
@@ -41,6 +47,34 @@ export function createViewport({ state, services, parts }) {
       };
     }
     return null;
+  }
+
+  /**
+   * The visible rectangle (degrees) of a wide, map-like view, or null for a
+   * close view, a horizon-grazing oblique one or none at all.
+   */
+  function getWideViewRect(altitude, viewer = state._viewer) {
+    if (!(altitude >= WIDE_VIEW_ALTITUDE_M)) return null;
+    const rect = viewer?.camera?.computeViewRectangle?.(
+      viewer.scene.globe?.ellipsoid,
+    );
+    if (!rect) return null;
+    const view = {
+      south: Cesium.Math.toDegrees(rect.south),
+      north: Cesium.Math.toDegrees(rect.north),
+      west: Cesium.Math.toDegrees(rect.west),
+      east: Cesium.Math.toDegrees(rect.east),
+    };
+    const lonSpan =
+      view.east >= view.west
+        ? view.east - view.west
+        : view.east + 360 - view.west;
+    if (
+      view.north - view.south > WIDE_VIEW_MAX_SPAN_DEG.lat ||
+      lonSpan > WIDE_VIEW_MAX_SPAN_DEG.lon
+    )
+      return null;
+    return view;
   }
 
   function altitudeGateOpen(altitude) {
@@ -100,6 +134,15 @@ export function createViewport({ state, services, parts }) {
       )) {
         if (state._activeFeeds.has(feed.id)) desired.set(feed.id, feed);
       }
+      const wide = getWideViewRect(altitude);
+      if (wide) {
+        for (const feed of transitFeedsInView(wide)) {
+          desired.set(feed.id, feed);
+        }
+        for (const feed of transitFeedsInView(wide, RANGE_SLACK_KM)) {
+          if (state._activeFeeds.has(feed.id)) desired.set(feed.id, feed);
+        }
+      }
     }
     for (const feedId of [...state._activeFeeds.keys()]) {
       if (!desired.has(feedId)) {
@@ -143,6 +186,7 @@ export function createViewport({ state, services, parts }) {
     refreshViewBounds,
     getCameraAltitude,
     getCameraCenterLatLon,
+    getWideViewRect,
     altitudeGateOpen,
     runProximityCheck,
     onCameraChanged,
