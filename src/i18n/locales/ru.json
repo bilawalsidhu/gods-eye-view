@@ -425,8 +425,6 @@
   "Link copied!": "Ссылка скопирована!",
   "Link shared": "Ссылка отправлена",
   "This share link can't be opened": "Не удаётся открыть эту ссылку",
-  "{id} isn't reporting now — showing where it was at {time}": "{id} сейчас не передаёт данные — показано последнее известное место ({time})",
-  "{id} isn't reporting now — showing where it was last seen": "{id} сейчас не передаёт данные — показано последнее известное место",
   "Shared vessel is unavailable": "Судно по ссылке недоступно",
   "Copy failed": "Не удалось скопировать",
   "VISUAL PRESETS": "ПРЕСЕТЫ",
@@ -3616,5 +3614,17 @@
   "Play speed": "Скорость воспроизведения",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутите или сведите пальцы для масштаба, перетащите для перемещения · двойной щелчок — показать всё",
   "1 min/s": "1 мин/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "The shared flight isn't reporting now — showing where it was last seen": "Общий рейс сейчас не передаёт данные — показано последнее известное место",
+  "The shared flight isn't reporting now — showing where it was at {time}": "Общий рейс сейчас не передаёт данные — показано место в {time}",
+  "The shared military flight isn't reporting now — showing where it was last seen": "Общий военный рейс сейчас не передаёт данные — показано последнее известное место",
+  "The shared military flight isn't reporting now — showing where it was at {time}": "Общий военный рейс сейчас не передаёт данные — показано место в {time}",
+  "The shared vessel isn't reporting now — showing where it was last seen": "Общее судно сейчас не передаёт данные — показано последнее известное место",
+  "The shared vessel isn't reporting now — showing where it was at {time}": "Общее судно сейчас не передаёт данные — показано место в {time}",
+  "The shared satellite isn't reporting now — showing where it was last seen": "Общий спутник сейчас не передаёт данные — показано последнее известное место",
+  "The shared satellite isn't reporting now — showing where it was at {time}": "Общий спутник сейчас не передаёт данные — показано место в {time}",
+  "ICAO: {id}": "ICAO: {id}",
+  "NORAD: {id}": "NORAD: {id}",
+  "MMSI: {id}": "MMSI: {id}",
+  "Vessel UUID: {id}": "UUID судна: {id}"
 }

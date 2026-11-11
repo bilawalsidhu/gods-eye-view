@@ -190,6 +190,7 @@ export function createLifecycle({
         );
       }
       restoreSpriteOrderOnEnable('flights', viewer);
+      flightState.timeline?.start();
     },
 
     /**
@@ -198,6 +199,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer
      */
     disable(viewer) {
+      flightState.timeline?.stop();
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._billboardCollection)
@@ -240,6 +242,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer
      */
     destroy(viewer) {
+      flightState.timeline?.stop();
       flightState.lifetime.abort();
       flightState._enrichActive = 0;
       flightState._enrichLastDispatchMs = 0;

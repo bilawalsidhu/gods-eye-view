@@ -186,6 +186,15 @@ export const TRAIL_MAX_POINTS = 2000;
 
 export const RENDER_DELAY_SEC = 15;
 
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (state) => state.timeline?.active() === true;
+
+/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
+ *  following the clock, whose snapshots are loaded ahead of the time. */
+export const displayDelayMs = (state) =>
+  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
+
 /** @constant {number} Polls an aircraft may miss before removal (transient adsb.lol dropouts). */
 
 // --- Landed-plane fast cull (mirror of flights.js; owner field report

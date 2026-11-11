@@ -20,7 +20,8 @@ import {
   TRACKED_MODEL_RETRY_BACKOFF_MS,
   TRAIL_MAX_POINTS,
   DR_CORRECTION_MS,
-  RENDER_DELAY_SEC,
+  displayDelayMs,
+  followsClock,
   TRAIL_COLOR,
   BILLBOARD_SCALE,
   GROUND_SCALE,
@@ -574,7 +575,7 @@ export function createTracking({
       TRAIL_MAX_POINTS,
       {
         nullAltitude,
-        displayMs: flightState.now() - RENDER_DELAY_SEC * 1000,
+        displayMs: flightState.now() - displayDelayMs(flightState),
         settleMs: DR_CORRECTION_MS,
       },
     );
@@ -590,7 +591,7 @@ export function createTracking({
 
   function _trailTick() {
     if (!flightState._trackedIcao || !flightState._trail) return;
-    const displayMs = flightState.now() - RENDER_DELAY_SEC * 1000;
+    const displayMs = flightState.now() - displayDelayMs(flightState);
     let changed = false;
     if (
       flightState._trailFixes.length &&
@@ -651,7 +652,7 @@ export function createTracking({
       flightState._trailFixes,
       trailBodyCount(
         flightState._trailFixes,
-        flightState.now() - RENDER_DELAY_SEC * 1000,
+        flightState.now() - displayDelayMs(flightState),
       ),
       parts.motion._trackedModelCenterWorld(),
       parts.motion._trackedModelEnvelopeM(),
@@ -789,15 +790,16 @@ export function createTracking({
 
   async function _backfillTrail(icao24, token, oldestFixEpochSec) {
     let trace = null;
+    // Following the world clock, the track ends at the world's time.
+    const atMs = followsClock(flightState) ? flightState.now() : undefined;
     try {
+      const signal = AbortSignal.any([
+        flightState.lifetime.signal,
+        AbortSignal.timeout(8000),
+      ]);
       const track = await flightState.feed._source.getTrack?.(
         flightState.records.data.get(icao24)?.sourceReference ?? icao24,
-        {
-          signal: AbortSignal.any([
-            flightState.lifetime.signal,
-            AbortSignal.timeout(8000),
-          ]),
-        },
+        atMs === undefined ? { signal } : { signal, atMs },
       );
       trace = track?.records ?? null;
     } catch {
@@ -825,6 +827,7 @@ export function createTracking({
         lon = point.longitude;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       if (!Number.isFinite(t) || t >= oldestFixEpochSec) continue;
+      if (atMs !== undefined && !(point.observedAtMs <= atMs)) continue;
       parsed.push({
         lat,
         lon,

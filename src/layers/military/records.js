@@ -11,8 +11,15 @@ import {
 
 /** Portable military aircraft metadata and bounded missing-poll retention. */
 export class MilitaryFlightRecords {
-  constructor({ geoidHeight, cachedGroundFloor, floorAltitudeM }) {
+  constructor({
+    geoidHeight,
+    cachedGroundFloor,
+    floorAltitudeM,
+    now = () => Date.now(),
+  }) {
     this.services = { geoidHeight, cachedGroundFloor, floorAltitudeM };
+    /** The time records are judged at: the layer's clock. */
+    this.now = now;
     this.data = new Map();
     this.missingPolls = new Map();
     // Contacts whose last poll re-sent a fix no newer than the one before.
@@ -170,7 +177,7 @@ export class MilitaryFlightRecords {
     const fixEpochMs = aircraft.positionTimeMs ?? observedAtMs;
     const meta = {
       sourceReference: aircraft.reference,
-      observedReceiptMs: Date.now(),
+      observedReceiptMs: this.now(),
       newestFixMs: this._noteFix(icao24, prevMeta, fixEpochMs),
       callsign: stickyText(callsign, prevMeta?.callsign),
       type: stickyType,
@@ -230,7 +237,10 @@ export class MilitaryFlightRecords {
       fixEpochMs,
     };
   }
-  absence(id, { complete, retainIds, likelyLanded, tracked = false }) {
+  absence(
+    id,
+    { complete, retainIds, likelyLanded, tracked = false, nowMs = this.now() },
+  ) {
     const misses = (this.missingPolls.get(id) || 0) + 1;
     // The tracked contact has missed an update: it is stale from the first
     // one, and kept (so the camera keeps its target) until ten minutes after
@@ -239,7 +249,7 @@ export class MilitaryFlightRecords {
     const meta = this.data.get(id);
     const fixMs = meta?.newestFixMs ?? meta?.observedReceiptMs;
     if (tracked && Number.isFinite(fixMs)) {
-      if (Date.now() - fixMs < TRACKED_RETENTION_MS) {
+      if (nowMs - fixMs < TRACKED_RETENTION_MS) {
         this.missingPolls.set(id, misses);
         return 'stale';
       }
@@ -251,7 +261,7 @@ export class MilitaryFlightRecords {
     // still takes the landed limit.
     if (
       (!complete || (retainIds?.has(id) && !likelyLanded)) &&
-      Date.now() - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
+      nowMs - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
     )
       return 'retain';
     const limit = likelyLanded ? LANDED_MISSING_POLL_LIMIT : MISSING_POLL_LIMIT;
@@ -261,6 +271,14 @@ export class MilitaryFlightRecords {
     }
     this.missingPolls.delete(id);
     return 'remove';
+  }
+  /** Forget every observation, as when the world clock jumps to another time. */
+  reset() {
+    this.data.clear();
+    this.missingPolls.clear();
+    this.fixRepeated.clear();
+    this.lastSnapshotMs = null;
+    this.snapshotAdvanced = true;
   }
   forget(id) {
     this.data.delete(id);

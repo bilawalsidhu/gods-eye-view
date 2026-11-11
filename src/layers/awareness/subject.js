@@ -85,7 +85,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
       .filter(
         (item) =>
-          !parts.queries.isSame(subject, item, 'ais-live-vessels', 'mmsi'),
+          !parts.queries.isSame(subject, item, 'ais-live-vessels', 'id'),
       );
     const coverage = installationsState.stats?.coverage;
     const installationRadius =
@@ -519,7 +519,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
     return {
       layerId: record.layerId,
-      id: record.properties?.mmsi || record.id,
+      id: record.properties?.vesselId || record.id,
       label: record.label || record.id,
       memberNames: record.properties?.memberNames || [],
       position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
