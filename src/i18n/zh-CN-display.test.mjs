@@ -89,17 +89,18 @@ test('radio option text and accessible name use the same localized parentheses',
   try {
     for (const [locale, label, expected] of [['zh-CN', '全部', '全部（750）'], ['en', 'All', 'All (750)']]) {
       setLocale(locale);
+      let shown = null;
       const host = {
-        _radioPanel: element(), _radioFilter: element(),
+        _radioPanel: element(),
+        store: { publish: (view) => (shown = view), publishTuner() {} },
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {
         enabled: true, categories: [{ id: 'all', label, count: 750, color: '' }],
         filter: 'all', filteredCount: 750, stationCount: 750, volume: 1,
       });
-      const option = host._radioFilter.children[0];
-      assert.equal(option.textContent, `● ${expected}`);
-      assert.equal(option.attributes['aria-label'], expected);
+      // The Radio panel shows it as `● label` and names the option `label`.
+      assert.equal(shown.filter.options[0].label, expected);
     }
   } finally {
     globalThis.document = originalDocument;

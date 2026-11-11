@@ -17,7 +17,9 @@ class Button extends EventTarget {
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 function fixture(t, elements = {}) {
   const calls = [];
+  const views = [];
   const controls = new ContextControls({
+    publish: (view) => views.push(view),
     elements,
     installations: {},
     actions: {
@@ -35,7 +37,7 @@ function fixture(t, elements = {}) {
     controls.stop();
     controls.disconnect();
   });
-  return { controls, calls };
+  return { controls, calls, views };
 }
 
 test('Context starts with an explicit idle snapshot', (t) => {
@@ -70,7 +72,9 @@ test('a pending Context tab cannot reopen a disposed panel', async (t) => {
 
 test('stopping during installations enable prevents the delayed search', async (t) => {
   const button = new Button();
-  const { controls, calls } = fixture(t, { _installationsSearchBtn: button });
+  const { controls, calls, views } = fixture(t, {
+    _installationsSearchBtn: button,
+  });
   let release;
   controls._dataManager = {
     layers: new Map([['military-installations', {}]]),
@@ -87,11 +91,8 @@ test('stopping during installations enable prevents the delayed search', async (
   release(true);
   await turn();
   assert.equal(calls.length, 0);
-  assert.equal(
-    button.getAttribute('aria-busy'),
-    'true',
-    'disposed controls are not mutated by completion',
-  );
+  assert.equal(views.length, 1, 'disposed controls publish nothing more');
+  assert.equal(views[0].installationsBusy, true);
 });
 
 test('a late installations search cannot publish a notice after disposal', async (t) => {

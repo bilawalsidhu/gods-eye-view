@@ -76,6 +76,10 @@ function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
   const tick = async (ms) => {
     t.mock.timers.tick(ms);
     for (let i = 0; i < 30; i++) await Promise.resolve();
+    t.mock.timers.tick(0);
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    t.mock.timers.tick(0);
+    for (let i = 0; i < 30; i++) await Promise.resolve();
   };
   return { layer, viewer, move, tick };
 }

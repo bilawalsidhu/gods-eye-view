@@ -39,14 +39,13 @@ try {
       'scene-select',
       'cctv-camera-select',
       'hud-layout-select',
-      'draw-color-select',
       'radio-filter',
       'sdr-gain-select',
     ].map((id) => document.getElementById(id));
     return {
       ids: selects.map((node) => node.id),
       shared:
-        selects.length === 6 &&
+        selects.length === 5 &&
         selects.every((node) => node.classList.contains('gev-field')),
       native: selects.every(
         (node) =>
@@ -58,7 +57,7 @@ try {
     };
   });
   check(
-    'all six panel dropdowns retain native select semantics and shared surface',
+    'all five panel dropdowns retain native select semantics and shared surface',
     inventory.shared && inventory.native,
     inventory,
   );
@@ -198,8 +197,14 @@ try {
   const begin = async (field) => {
     await page.evaluate(async (field) => {
       document.activeElement?.blur();
-      window.__godsEyeView.styleManager.setPanelCollapsed('cctv-panel', false, { explicit: true, persist: false, syncShare: false });
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      window.__godsEyeView.styleManager.setPanelCollapsed('cctv-panel', false, {
+        explicit: true,
+        persist: false,
+        syncShare: false,
+      });
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
       const owner = window.__godsEyeView.styleManager._cctvControls;
       owner._beginCctvCalValueEdit(
         document.querySelector(`[data-cal-field="${field}"]`),
@@ -292,13 +297,6 @@ try {
         syncShare: false,
       });
   });
-  if (
-    await page.$eval(
-      '#draw-toggle',
-      (node) => node.getAttribute('aria-pressed') !== 'true',
-    )
-  )
-    await page.click('#draw-toggle');
   for (const lang of ['en']) {
     await page.evaluate((lang) => {
       document.documentElement.lang = lang;
@@ -312,12 +310,7 @@ try {
             .width > 0,
       );
       const layout = await page.evaluate(() => {
-        const ids = [
-          'scene-select',
-          'cctv-camera-select',
-          'hud-layout-select',
-          'draw-color-select',
-        ];
+        const ids = ['scene-select', 'cctv-camera-select', 'hud-layout-select'];
         return ids.map((id) => {
           const node = document.getElementById(id),
             rect = node.getBoundingClientRect(),
@@ -452,19 +445,11 @@ try {
         syncShare: false,
       });
   });
-  if (
-    await page.$eval(
-      '#draw-toggle',
-      (node) => node.getAttribute('aria-pressed') !== 'true',
-    )
-  )
-    await page.click('#draw-toggle');
   const translated = await page.evaluate(() => {
     const nodes = [
       'scene-select',
       'cctv-camera-select',
       'hud-layout-select',
-      'draw-color-select',
     ].map((id) => document.getElementById(id));
     return (
       document.documentElement.lang === 'ru' &&

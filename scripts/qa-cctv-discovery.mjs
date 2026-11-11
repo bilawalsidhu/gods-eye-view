@@ -16,9 +16,16 @@ try {
   await page.goto(`${origin}/qa-cctv-discovery`);
   await page.evaluate(async () => {
     const { CctvControls } = await import('/src/ui/cctvControls.js');
-    document.body.innerHTML = await (
-      await fetch('/src/ui/templates/layer-panels.html')
-    ).text();
+    const { createUiRuntime } = await import('/src/ui/vueRuntime.js');
+    const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const { default: CctvPanel } = await import('/src/ui/views/panels/CctvPanel.vue');
+    const { useCctvStore } = await import('/src/ui/stores/cctv.js');
+    const runtime = createUiRuntime();
+    const pinia = runtime.pinia;
+    const host = document.body.appendChild(document.createElement('div'));
+    window.panelApp = runtime;
+    runtime.mount(CctvPanel, host);
+    window.vueTick = nextTick;
     const ids = {
       _cctvPanel: 'cctv-panel',
       _cctvSelect: 'cctv-camera-select',
@@ -55,6 +62,7 @@ try {
       activeCamera: cameras[0],
     };
     window.controls = new CctvControls({
+      store: useCctvStore(pinia),
       elements: Object.fromEntries(
         Object.entries(ids).map(([key, id]) => [
           key,
@@ -84,6 +92,7 @@ try {
       },
     });
     window.controls.connect();
+    await nextTick();
   });
   const options = () =>
     page.$$eval('#cctv-camera-select option:not(:disabled)', (opts) =>
@@ -111,10 +120,11 @@ try {
   await page.select('#cctv-camera-scope', 'view');
   await page.click('#cctv-next-btn');
   assert.equal(await page.evaluate(() => window.selected), 'cape');
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     window.view = { ...window.view, south: 0, north: 1, center: { lat: 0.5, lon: 18.5 } };
     window.selected = null;
     window.mapMoved();
+    await window.vueTick();
   });
   assert.deepEqual(await options(), []);
   assert.match(
@@ -127,7 +137,7 @@ try {
   assert.equal(await page.evaluate(() => window.selected), 'cape');
   assert.deepEqual(await options(), []);
   await page.select('#cctv-camera-scope', 'all');
-  const stableOptions = await page.evaluate(() => {
+  const stableOptions = await page.evaluate(async () => {
     const select = document.getElementById('cctv-camera-select');
     window.state.discoveryIndex = Array.from({ length: 4000 }, (_, i) => ({
       id: `camera-${i}`,
@@ -140,12 +150,14 @@ try {
     window.state.activeCamera = null;
     window.view.center = { lat: 0, lon: 0 };
     window.mapMoved();
+    await window.vueTick();
     const before = new Map(
       Array.from(select.options, (option) => [option.value, option]),
     );
     const firstLabel = select.options[0].textContent;
     window.view.center = { lat: 1, lon: 1 };
     window.mapMoved();
+    await window.vueTick();
     const changedLabel = select.options[0].textContent !== firstLabel;
     const sameNodes = Array.from(select.options).every(
       (option) => before.get(option.value) === option,
@@ -153,6 +165,7 @@ try {
     // Reversing distance order must move existing nodes, too.
     window.view.center = { lat: 40, lon: 20 };
     window.mapMoved();
+    await window.vueTick();
     return {
       changedLabel,
       sameNodes,
@@ -169,21 +182,15 @@ try {
     count: 4000,
   });
   const translated = await page.evaluate(async () => {
-    const { setLocale, applyDocumentTranslations } =
-      await import('/src/i18n/index.js');
-    const template = await (
-      await fetch('/src/ui/templates/layer-panels.html')
-    ).text();
+    const { setLocale } = await import('/src/i18n/index.js');
     const results = [];
     for (const locale of ['es', 'ru']) {
       setLocale(locale);
-      const fresh = document.createElement('div');
-      fresh.innerHTML = template;
-      applyDocumentTranslations(fresh);
       window.mapMoved();
+    await window.vueTick();
       results.push({
         status: document.getElementById('cctv-discovery-status').textContent,
-        placeholder: fresh.querySelector('#cctv-camera-search').placeholder,
+        placeholder: document.querySelector('#cctv-camera-search').placeholder,
       });
     }
     return results;

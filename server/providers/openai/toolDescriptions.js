@@ -135,7 +135,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_cockpit: {
     description:
-      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (establishes Contacts itself; no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
+      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (needs only its own Flights/Military layer on, not Contacts; opens Contacts itself, no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
     $position: 1,
     parameters: {
       properties: {
@@ -405,7 +405,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   annotate_map: {
     description:
-      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints and boundaries, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
+      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
     $position: 1,
     parameters: {
       properties: {
@@ -523,13 +523,17 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         direction: {
           description:
-            'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
+            'Pan/rotate/tilt steps; orbit/rotate_globe default right.',
           $position: 2,
         },
         mode: {
           description:
             'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.',
           $position: 2,
+        },
+        pitchDeg: {
+          description: 'Absolute; -45 default, -89 top-down.',
+          $position: 1,
         },
       },
     },
@@ -547,9 +551,48 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  resolve_area: {
+    description:
+      'Named place → reusable areaId for analyst_query scope {kind:area} and other area tools. draw=true outlines it ("outline Bagmati province"); around=true is "an area around <landmark>": its enclosing mapped area, else a buffer marked approximate. needsClarification: ask which, then call again with its candidateId. AREA_TIMEOUT: retry once.',
+    $position: 1,
+    parameters: {
+      properties: {
+        query: {
+          description: 'The place as said, with any kind word.',
+          $position: 1,
+        },
+        level: {
+          description: 'Only when the user names the kind.',
+          $position: 1,
+        },
+        within: {
+          description: 'Country or state the user added.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  find_imagery: {
+    description:
+      'Recent satellite imagery (Sentinel-2/Landsat 30 m, VIIRS daily; last 30 days): pins the best acquisition in the Recent Imagery panel. areaId from resolve_area; area=pointer for "this spot"; omit for the view. BOX_REFUSED: offer to zoom in. DISPLACED: leave it.',
+    $position: 1,
+    parameters: {
+      properties: {
+        maxCloudPct: {
+          description: '"cloud-free" → 10.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  osm_query: {
+    description:
+      'OpenStreetMap places of one kind ("hospitals in Kathmandu"). areaId from resolve_area; omit for the view. Shows them in OSM Places with numbered referents; they become the last answer. countScope bounding-box means an approximate count. OSM_TIMEOUT: retry once.',
+    $position: 1,
+  },
   analyst_query: {
     description:
-      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
+      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), NEEDS_CLARIFICATION (ask which), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
     $position: 1,
     parameters: {
       properties: {
@@ -560,7 +603,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         scope: {
           description:
-            'Always set it (see WHERE). Explicit "in view" uses view; "nearby" uses view when Contacts is off. Around the active Contacts subject uses radius with the requested km and center omitted, never view: the five closest within 250 km use scope:{kind:"radius",km:250}, sortBy:"distance", limit:5. For another requested radius use its actual km, not 250. pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>" or explicit coordinates; anywhere = no place ("biggest anywhere", "today"). Preserve explicit view, named place, pointer and explicit center even while Contacts is active; never invent coordinates. There is no drawn-area scope yet: say so rather than answering for the view.',
+            'Always set it (see WHERE). Explicit "in view" uses view; "nearby" uses view when Contacts is off. Around the active Contacts subject uses radius with the requested km and center omitted, never view: the five closest within 250 km use scope:{kind:"radius",km:250}, sortBy:"distance", limit:5. For another requested radius use its actual km, not 250. pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>" or explicit coordinates; anywhere = no place ("biggest anywhere", "today"); area + areaId from resolve_area; drawn = "the area I drew"; annotation = "the area you outlined". Preserve explicit view, named place, pointer and explicit center even while Contacts is active; never invent coordinates.',
           $position: 2,
           properties: {
             name: {

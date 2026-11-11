@@ -43,6 +43,18 @@ test('the selection card calls a Toronto 501 a streetcar', () => {
   assert.doesNotMatch(copy.details.join(' | '), /Tram/);
 });
 
+test('the selection card reads a bearing that rounds to north as hdg 0°', () => {
+  const hdg = (bearing) =>
+    buildTransitSelectionCopy(
+      ttc(),
+      { id: '4400', routeId: '501', timestamp: 0, bearing },
+      'tram',
+      0,
+    ).details.find((line) => line.includes('hdg'));
+  assert.equal(hdg(359.4), 'reported hdg 359°');
+  assert.equal(hdg(359.6), 'reported hdg 0°');
+});
+
 test('detection labels carry the operator vocabulary within the field width', () => {
   const klass = transitDetectionClass('tram', ttc());
   assert.equal(klass, 'STREETCAR TTC');

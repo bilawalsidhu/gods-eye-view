@@ -6,6 +6,7 @@
 // setup as hudPageVisibility.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { registerHooks } from 'node:module';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
@@ -30,19 +31,7 @@ registerHooks({
 const { IntelHUD } = await import('./hud.js');
 
 function installPage() {
-  const elements = new Map(
-    [
-      'hud-alt',
-      'hud-summary',
-      'hud-mgrs',
-      'hud-latlon',
-      'hud-bottom-line',
-      'hud-gsd',
-      'hud-coll',
-      'hud-ona',
-      'hud-mode',
-    ].map((id) => [id, { textContent: '' }]),
-  );
+  const { elements, publish } = hudReadouts();
   const previous = { document: globalThis.document, window: globalThis.window };
   globalThis.document = {
     hidden: false,
@@ -69,6 +58,7 @@ function installPage() {
   };
   return {
     viewer,
+    publish,
     restore() {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete globalThis[key];
@@ -82,7 +72,10 @@ function installPage() {
 function createHud(t, summaryService) {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const page = installPage();
-  const hud = new IntelHUD(page.viewer, { summaryService });
+  const hud = new IntelHUD(page.viewer, {
+    summaryService,
+    publish: page.publish,
+  });
   t.after(() => {
     hud.destroy();
     page.restore();

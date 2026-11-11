@@ -46,8 +46,6 @@
   max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
 }
 #recent-imagery-panel.collapsed #recent-imagery-panel-body,
 #recent-imagery-panel.collapsed #recent-imagery-panel-count,
@@ -168,7 +166,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
-  scrollbar-width: thin;
   outline: none;
   border-radius: 6px;
 }

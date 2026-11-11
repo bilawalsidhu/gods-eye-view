@@ -1,6 +1,9 @@
+import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { nextTick } from 'vue';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { mountVoiceView } from '../testSupport/voiceView.mjs';
 import { GevRealtimeController } from './realtimeController.js';
 import {
   POINTER_OPEN_MIC_RECENT_MS,
@@ -63,16 +66,7 @@ function controllerFixture(pointer, { pushToTalk = false } = {}) {
   const sent = [];
   const events = [];
   const controller = new GevRealtimeController({
-    ui: {
-      root: {
-        dataset: {},
-        classList: { remove() {} },
-        querySelectorAll: () => [],
-      },
-      status: { textContent: '' },
-      detail: { textContent: '', title: '' },
-      errorDetail: { textContent: '' },
-    },
+    ui: createTestVoiceUi(),
     runner: async () => ({ ok: true }),
     debugSink: null,
     pointer,
@@ -299,20 +293,26 @@ test('card: the chip says what "this" or "here" resolved to and resets per turn'
   assert.equal(unchanged, state, 'a stale pointer on an empty chip is a no-op');
 });
 
-test('markup: the chip sits under the user caption with a screen-reader separator', () => {
-  const control = readFileSync(
-    new URL('./control.js', import.meta.url),
-    'utf8',
+test('markup: the chip sits under the user caption with a screen-reader separator', async (t) => {
+  const { pinia } = mountVoiceView(t);
+  const ui = createTestVoiceUi({ pinia });
+  t.after(() => ui.remove());
+  await nextTick();
+  const card = document.getElementById('gev-voice-card');
+  const order = [...card.children].map((node) => node.id);
+  const user = order.indexOf('gev-voice-card-user');
+  const chip = order.indexOf('gev-voice-card-pointer');
+  const assistant = order.indexOf('gev-voice-card-assistant');
+  assert.ok(user >= 0 && user < chip && chip < assistant);
+  const pointer = document.getElementById('gev-voice-card-pointer');
+  assert.equal(pointer.className, 'gev-voice-card-pointer');
+  assert.equal(pointer.hidden, true);
+  const separator = pointer.querySelector('.gev-voice-card-sr');
+  assert.equal(separator.textContent, ': ');
+  assert.equal(
+    separator.previousElementSibling.id,
+    'gev-voice-card-pointer-kind',
   );
-  const user = control.indexOf('id="gev-voice-card-user"');
-  const chip = control.indexOf('id="gev-voice-card-pointer"');
-  const assistant = control.indexOf('id="gev-voice-card-assistant"');
-  assert.ok(user < chip && chip < assistant);
-  assert.match(
-    control,
-    /id="gev-voice-card-pointer" class="gev-voice-card-pointer" hidden/,
-  );
-  assert.match(control, /<span class="gev-voice-card-sr">: <\/span>/);
 });
 
 test('deixis prompt lint: one short rule, and every sentinel it names exists in the schema', () => {
@@ -346,14 +346,22 @@ test('deixis prompt lint: one short rule, and every sentinel it names exists in 
   // Budget: the whole Realtime prompt (instructions + tools), measured in
   // characters. It was 56,308 after the area/imagery/OSM merge; stating each
   // policy once (WHERE precedence, AREAS routing, AFTER TOOLS speech) brought
-  // it to 51,646. A new tool or rule has to fit under this ceiling.
+  // it to 51,646. Voice geometry (resolve_area, find_imagery, osm_query and
+  // the analyst area scopes) raised the ceiling to 55,500; tightening the
+  // AREAS rule and the area tool descriptions left it at 55,103 as measured
+  // below (every tool, osm_query included); main's Sea Marks and Ski Pistes
+  // layers bring it to 55,210, and the tilt pitchDeg argument (with its -45
+  // default) and main's cockpit entry rule to 55,339. integrationContract's
+  // Overpass prompt is the tightest, at 55,499 (1 under). A new tool or rule
+  // has to fit under this ceiling.
   const size = instructions.length + JSON.stringify(GEV_REALTIME_TOOLS).length;
-  assert.ok(size <= 52000, `prompt size ${size}`);
+  assert.ok(size <= 55_500, `prompt size ${size}`);
 });
 
-
 test('after-tool speech allows returned items to answer requested lists and rankings', () => {
-  const rule = realtimeInstructions().split('\n').find(line => line.startsWith('AFTER TOOLS:'));
+  const rule = realtimeInstructions()
+    .split('\n')
+    .find((line) => line.startsWith('AFTER TOOLS:'));
   assert.match(rule, /requested analyst list or ranking/);
   assert.match(rule, /returned items.*returned values/);
   assert.match(rule, /keep their order/);

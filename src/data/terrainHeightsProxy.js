@@ -190,7 +190,8 @@ export async function fetchTerrainChunkWithRetry(
  * Resolve a requested point batch against a per-point cache and a missing-only
  * fetcher. Results are reconstructed by canonical key in exact request order,
  * including duplicates. Stale values remain eligible only when refresh fails.
- * If any position has no real height, return 502 with no fabricated result.
+ * If any position has no real height, return 502 with no fabricated result;
+ * the body's `partial` lists the real heights it has, null for the rest.
  *
  * @param {object} options
  * @param {Array<[number, number]>} options.points
@@ -269,11 +270,19 @@ export async function resolveTerrainHeightRequest({
     return entry && validTerrainResult(entry.result) ? entry.result : null;
   });
   if (results.some((result) => result == null)) {
+    // The real heights this request does have, null elsewhere, so the page
+    // keeps them and uses its geoid only for the rest. Named `partial`, not
+    // `results`, so no reader mistakes it for a complete answer; left out when
+    // no point has a height.
+    const partial = results.some((result) => result != null)
+      ? { partial: results }
+      : {};
     return {
       status: 502,
       body: {
         error:
           'terrain heights fetch failed and no cache available for every point',
+        ...partial,
       },
       cacheChanged,
       upstreamError,

@@ -20,16 +20,17 @@ function locationSearchHandler() {
 
 test('the ACTIVE STYLE indicator is written from the style name and nothing else', () => {
   // A free-text location search used to write the searched CITY into the
-  // top-right style slot, so the corner read "ACTIVE STYLE / TOKYO".
-  const writes = [...ui.matchAll(/this\._styleIndicator\.textContent\s*=/g)];
+  // top-right style slot, so the corner read "ACTIVE STYLE / TOKYO". The
+  // corner renders the style VisualSettings publishes, from one writer.
+  const writes = [...ui.matchAll(/\.publishStyle\(/g)];
   assert.equal(writes.length, 1, 'the style indicator must have exactly one writer');
   assert.match(
-    ui.slice(writes[0].index, writes[0].index + 160),
-    /this\._styleIndicator\.textContent = STYLE_STATUS_LABELS\[styleName\]\s*\?\s*t\(STYLE_STATUS_LABELS\[styleName\]\)\s*:\s*styleName\.toUpperCase\(\);/,
+    ui.slice(writes[0].index, writes[0].index + 200),
+    /\.publishStyle\(\{\s*name,\s*label: STYLE_STATUS_LABELS\[name\]\s*\?\s*t\(STYLE_STATUS_LABELS\[name\]\)\s*:\s*name\.toUpperCase\(\),/,
   );
 
   const handler = locationSearchHandler();
-  assert.doesNotMatch(handler, /_styleIndicator/, 'location search must not touch the style indicator');
+  assert.doesNotMatch(handler, /publishStyle|_publishActiveStyle/, 'location search must not touch the style indicator');
   assert.doesNotMatch(handler, /active-style-name/, 'location search must not touch the style indicator');
 });
 

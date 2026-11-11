@@ -1,3 +1,4 @@
+import { isIPv6 } from 'node:net';
 import { makeRateLimiter } from '../../../src/sources/rateLimit.js';
 export { makeRateLimiter } from '../../../src/sources/rateLimit.js';
 
@@ -59,4 +60,47 @@ export function makeCostRateLimiter(envValue, defaultPerMin) {
  */
 export function clientKey(req) {
   return String(req.socket?.remoteAddress || 'local');
+}
+
+const IPV4_MAPPED_RE = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i;
+
+/**
+ * Whether a socket peer address is this machine: IPv4 loopback in any of its
+ * forms (`127.0.0.0/8`, including the IPv4-mapped `::ffff:127.x` a dual-stack
+ * listener reports) or the IPv6 loopback. Non-address keys are not loopback.
+ * @param {string} address - A `clientKey` value.
+ * @returns {boolean}
+ */
+export function isLoopbackPeer(address) {
+  const raw = String(address || '');
+  const v4 = IPV4_MAPPED_RE.exec(raw)?.[1] ?? raw;
+  return v4.startsWith('127.') || raw === '::1';
+}
+
+/**
+ * Rate-limit key that survives address rotation, for limiters whose global
+ * backstop everyone shares. IPv6 privacy extensions hand one host a fresh
+ * address at will inside its /64, so keying by the full address lets a single
+ * host mint per-peer quota until the global window closes for everyone else.
+ * IPv6 peers are keyed by their /64 prefix instead, and an IPv4-mapped
+ * address folds to its IPv4 form so one host cannot hold two buckets. Any
+ * other value (IPv4, or the `local` fallback) passes through unchanged.
+ * @param {import('node:http').IncomingMessage} req
+ * @returns {string}
+ */
+export function clientNetworkKey(req) {
+  const address = clientKey(req);
+  const mapped = IPV4_MAPPED_RE.exec(address);
+  if (mapped) return mapped[1];
+  const bare = address.replace(/%.*$/, ''); // link-local zone id
+  if (!isIPv6(bare)) return address;
+  const [head, tail = ''] = bare.split('::');
+  const headParts = head ? head.split(':') : [];
+  const tailParts = tail ? tail.split(':') : [];
+  const missing = Math.max(0, 8 - headParts.length - tailParts.length);
+  const hextets = [...headParts, ...Array(missing).fill('0'), ...tailParts];
+  return `${hextets
+    .slice(0, 4)
+    .map((h) => h.toLowerCase().replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
 }

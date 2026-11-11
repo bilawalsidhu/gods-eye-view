@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import test from 'node:test';
 import { GevRealtimeController } from './realtimeController.js';
 import {
@@ -16,7 +17,7 @@ function harness(result) {
   const sent = [];
   const calls = [];
   const controller = new GevRealtimeController({
-    ui: {},
+    ui: createTestVoiceUi(),
     runner: async (name, args, context) => {
       calls.push(name);
       return typeof result === 'function'

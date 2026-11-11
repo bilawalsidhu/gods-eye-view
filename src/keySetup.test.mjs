@@ -4,61 +4,13 @@ import {
   collectKeyUpdates,
   keySetupChipLabel,
   stripKeylessBasemapFromHash,
-  bindKeySetupPlacement,
   waitForChatGptOAuth,
   initKeySetup,
 } from './keySetup.js';
-import { describeUnsavedWork } from './i18n/index.js';
+import { createPinia } from 'pinia';
+import { useProviderSettingsStore } from './ui/stores/providerSettings.js';
 
-test('setup placement moves the same button only in Cyber and disconnects on teardown', () => {
-  const home = {
-    prepend: (node) => {
-      node.parentNode = home;
-    },
-  };
-  const chip = { parentNode: home, hidden: true };
-  let moves = 0;
-  const toolbar = {
-    append: (node) => {
-      moves++;
-      node.parentNode = toolbar;
-    },
-  };
-  const theme = { dataset: { uiTheme: 'tactical' } };
-  let notify,
-    disconnected = false;
-  class Observer {
-    constructor(callback) {
-      notify = callback;
-    }
-    observe(target, options) {
-      assert.equal(target, theme);
-      assert.deepEqual(options.attributeFilter, ['data-ui-theme']);
-    }
-    disconnect() {
-      disconnected = true;
-    }
-  }
-  const dispose = bindKeySetupPlacement(
-    {
-      documentElement: theme,
-      getElementById: () => toolbar,
-      defaultView: { MutationObserver: Observer },
-    },
-    chip,
-  );
-  assert.equal(chip.parentNode, home);
-  for (const variant of ['cyber', 'tactical', 'cyber', 'minimal']) {
-    theme.dataset.uiTheme = variant;
-    notify();
-    assert.equal(chip.parentNode, variant === 'cyber' ? toolbar : home);
-    notify();
-  }
-  assert.equal(moves, 2, 'identical theme sync does not reparent again');
-  assert.equal(chip.hidden, true, 'placement cannot reveal a retired button');
-  dispose();
-  assert.equal(disconnected, true);
-});
+const freshStore = () => useProviderSettingsStore(createPinia());
 
 test('the chip counts what is missing, and retires the count at zero', () => {
   assert.equal(keySetupChipLabel({ setCount: 0, total: 8 }), 'POWER UP · 8 KEYS WAITING');
@@ -153,64 +105,26 @@ test('the first Google key strips ONLY the keyless OSM basemap from the share ha
 });
 
 test('aborting pending setup removes its surface and ignores a late response', async () => {
-  const { initKeySetup } = await import('./keySetup.js');
-  const removed = [];
-  const chip = { remove: () => removed.push('chip') };
-  const root = { dataset: {}, remove: () => removed.push('root') };
+  const store = freshStore();
+  const root = { dataset: {} };
   let resolveResponse;
   let requestSignal;
   const controller = new AbortController();
   const pending = initKeySetup({
-    documentRef: { getElementById: (id) => id === 'key-setup-chip' ? chip : root },
+    documentRef: { getElementById: (id) => (id === 'key-setup' ? root : null) },
     signal: controller.signal,
+    store,
     fetchImpl: (_url, { signal }) => {
       requestSignal = signal;
       return new Promise((resolve) => { resolveResponse = resolve; });
     },
   });
+  assert.equal(store.controls !== null, true);
   controller.abort();
   assert.equal(requestSignal.aborted, true);
-  assert.deepEqual(removed, ['chip', 'root']);
+  assert.equal(store.view.available, false);
+  assert.equal(store.controls, null);
   resolveResponse({ ok: true, json: async () => ({ keys: [] }) });
   assert.equal(await pending, null);
-});
-
-test('a pasted, unsaved key makes the language switch ask first until teardown', async () => {
-  const node = () => ({
-    dataset: {},
-    addEventListener() {},
-    removeEventListener() {},
-    setAttribute() {},
-    querySelector: () => null,
-    remove() {},
-  });
-  const chip = node();
-  const input = { dataset: { envVar: 'GOOGLE_MAPS_API_KEY' }, value: '' };
-  const root = {
-    ...node(),
-    querySelectorAll: (selector) =>
-      selector === 'input[data-env-var]' ? [input] : [],
-  };
-  const controller = new AbortController();
-  const setup = await initKeySetup({
-    documentRef: {
-      getElementById: (id) => (id === 'key-setup-chip' ? chip : root),
-      addEventListener() {},
-      removeEventListener() {},
-    },
-    signal: controller.signal,
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({ keys: [], setCount: 0, total: 1 }),
-    }),
-  });
-  assert.ok(setup);
-  assert.deepEqual(describeUnsavedWork(), []);
-  input.value = '   ';
-  assert.deepEqual(describeUnsavedWork(), []);
-  input.value = 'AIza-pasted';
-  assert.deepEqual(describeUnsavedWork(), ['unsaved provider keys']);
-  // The field still holds the key, so only teardown dropping the check clears it.
-  controller.abort();
-  assert.deepEqual(describeUnsavedWork(), []);
+  assert.equal(store.view.available, false);
 });
