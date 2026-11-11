@@ -66,6 +66,7 @@ const REGISTRY_FIELDS = new Set([
   'positions',
   'headers',
   'headerClock',
+  'speedUnit',
   'pollIntervalMs',
   'tripUpdatesUrl',
   'tripUpdatesIntervalMs',
@@ -471,4 +472,20 @@ test('feeds that read routes from their schedule pack can build one', () => {
       ...(feed.staticHeaders || {}),
     }))
       assert.ok(!/@/.test(value), feed.id);
+});
+
+test('a feed Transit also reads declares the same speed unit', async () => {
+  const { TRANSIT_FEED_REGISTRY } = await import('./transitFeeds.js');
+  const transitByUrl = new Map(
+    TRANSIT_FEED_REGISTRY.map((feed) => [feed.url, feed]),
+  );
+  let shared = 0;
+  for (const feed of RAIL_FEED_REGISTRY) {
+    const transit = transitByUrl.get(feed.url);
+    if (!transit) continue;
+    shared += 1;
+    assert.equal(feed.speedUnit, transit.speedUnit, feed.id);
+  }
+  assert.ok(shared > 0);
+  assert.equal(getRegisteredRailFeed('tam-montpellier').speedUnit, 'km/h');
 });

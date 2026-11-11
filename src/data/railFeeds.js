@@ -476,7 +476,9 @@ const OWNER_AUTHORIZED_NO_TERMS =
  * 64 MiB: railMaxBodyBytes; the feeds that set one publish small documents
  * and set a lower cap), and `headerClock: 'untrusted'` marks a feed whose
  * header time is wrong and whose vehicles carry none: every train is then
- * stamped with the fetch time.
+ * stamped with the fetch time. `speedUnit: 'km/h'` marks a feed that
+ * publishes km/h where the spec requires m/s; the proxy converts it, as for
+ * Transit (src/data/transitFeeds.js).
  * `tripUpdatesUrl` is the operator's GTFS-RT TripUpdates feed, served as
  * `/api/rail/updates/<id>`.
  *
@@ -509,6 +511,7 @@ const OWNER_AUTHORIZED_NO_TERMS =
  *   url: string,
  *   positions?: 'gps'|'event',
  *   headers?: Record<string, string>, headerClock?: 'untrusted',
+ *   speedUnit?: 'km/h',
  *   pollIntervalMs?: number, tripUpdatesUrl?: string,
  *   tripUpdatesIntervalMs?: number, maxBodyBytes?: number,
  *   limits?: {quote: string, note?: string},
@@ -1307,6 +1310,10 @@ export const RAIL_FEED_REGISTRY = Object.freeze([
     format: 'gtfs-rt',
     // Every TaM vehicle (about 15 KB); the tram routes are kept.
     url: 'https://gtfsproxy.e-tam.fr/COMMON/VehiclePosition.pb',
+    // Speeds are km/h where the spec asks m/s (the Transit layer's entry for
+    // this feed measured readings at 3.3 times the movement); the proxy
+    // converts them.
+    speedUnit: 'km/h',
     tripUpdatesUrl: 'https://gtfsproxy.e-tam.fr/COMMON/TripUpdate.pb',
     tripUpdatesIntervalMs: 60_000,
     staticGtfsUrl: 'https://gtfsproxy.e-tam.fr/COMMON/GTFS.zip',
