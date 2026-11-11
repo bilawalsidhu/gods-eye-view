@@ -5135,7 +5135,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 ### Interface localization (October 2026)
 
 Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, **he**,
-**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and
+**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **sv**, **uk**, **zh-CN** and
 **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
