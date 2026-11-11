@@ -66,7 +66,24 @@ async function showRow(page) {
     el.classList.contains('collapsed'),
   );
   // The panel starts collapsed behind the DATA LAYERS entry in the left rail.
-  if (collapsed) await page.click('button ::-p-text(DATA LAYERS)');
+  if (collapsed) {
+    // The rail can move during startup; a click may land off the button.
+    // Check whether it opened before attempting the gesture again.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await page.click('button ::-p-text(DATA LAYERS)');
+      await sleep(150);
+      if (
+        !(await page.$eval('#data-panel', (el) =>
+          el.classList.contains('collapsed'),
+        ))
+      )
+        break;
+    }
+    await page.$eval('#data-panel', (el) => {
+      if (el.classList.contains('collapsed'))
+        throw new Error('DATA LAYERS click did not open the panel');
+    });
+  }
   await page.$eval(SLIDER, (input) =>
     input.scrollIntoView({ block: 'center' }),
   );
