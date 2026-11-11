@@ -1,7 +1,1 @@
-{
-  "src/agent/worldPacket.js": 2,
-  "src/data/followed.js": 5,
-  "src/layers/vessels/lifecycle.js": 1,
-  "src/layers/weather/imageryHost.js": 3,
-  "src/maps/imageryHost.js": 4
-}
+{}

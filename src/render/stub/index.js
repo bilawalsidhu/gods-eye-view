@@ -89,9 +89,69 @@ function uncaught(error) {
     });
 }
 
+/** Size the stub's viewport and its canvas to `size` (CSS pixels). */
+function sizeCanvas(canvas, viewport, size) {
+  Object.assign(viewport, size);
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  // A page's canvas measures itself; a stand-in reports the viewport.
+  if (!canvas.ownerDocument) {
+    canvas.clientWidth = viewport.width;
+    canvas.clientHeight = viewport.height;
+  }
+}
+
+/**
+ * The stub's canvas: in a page (`container` given), a real canvas filling
+ * the container, which the viewport follows; otherwise a stand-in that
+ * takes event listeners and measures as the viewport does.
+ */
+function createCanvas(container, viewport) {
+  const document = container?.ownerDocument;
+  if (document) {
+    const canvas = document.createElement('canvas');
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    container.appendChild(canvas);
+    if (container.clientWidth > 0 && container.clientHeight > 0)
+      Object.assign(viewport, {
+        width: container.clientWidth,
+        height: container.clientHeight,
+      });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    return canvas;
+  }
+  const canvas = /** @type {HTMLCanvasElement} */ (
+    /** @type {unknown} */ (
+      Object.assign(new EventTarget(), {
+        width: viewport.width,
+        height: viewport.height,
+        clientWidth: viewport.width,
+        clientHeight: viewport.height,
+        style: {},
+        getBoundingClientRect: () => ({
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          width: viewport.width,
+          height: viewport.height,
+          right: viewport.width,
+          bottom: viewport.height,
+        }),
+      })
+    )
+  );
+  return canvas;
+}
+
 /**
  * @param {object} [options]
  * @param {Iterable<import('../contract/common').Capability>} [options.capabilities] Default: all.
+ * @param {HTMLElement} [options.container] In a page: the element the stub's
+ *   canvas fills, as a plugin's `CreateOptions.container`.
  * @param {{width: number, height: number}} [options.viewport] CSS size; default 1280 × 720.
  * @param {number} [options.time] Scene time, epoch ms.
  * @returns {import('../contract/renderer').Renderer & {testing: StubTesting}}
@@ -1460,14 +1520,7 @@ export function createStubRenderer(options = {}) {
 
   // --- Renderer --------------------------------------------------------------
 
-  const canvas = /** @type {HTMLCanvasElement} */ (
-    /** @type {unknown} */ ({
-      width: viewport.width,
-      height: viewport.height,
-      clientWidth: viewport.width,
-      clientHeight: viewport.height,
-    })
-  );
+  const canvas = createCanvas(options.container, viewport);
 
   const renderer = {
     id: 'stub',
@@ -1518,6 +1571,13 @@ export function createStubRenderer(options = {}) {
       return { state: blockers.length ? 'timeout' : 'settled', blockers };
     },
     resize() {
+      // In a page, the stub's canvas follows its container's size.
+      const container = options.container;
+      if (container?.clientWidth > 0 && container?.clientHeight > 0)
+        sizeCanvas(canvas, viewport, {
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
       requestRender('resize');
     },
     releaseUnused() {
@@ -1540,6 +1600,7 @@ export function createStubRenderer(options = {}) {
       // A flight in progress ends cancelled and gives back its input hold.
       camera.endFlight();
       destroyed = true;
+      if (options.container) canvas.remove?.();
       for (const clear of onceTimers) clear();
       onceTimers.clear();
       sets.clear();
@@ -1588,9 +1649,7 @@ export function createStubRenderer(options = {}) {
         settled[kind] = value;
       },
       setViewport(size) {
-        Object.assign(viewport, size);
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        sizeCanvas(canvas, viewport, size);
       },
       /**
        * Where a drawn item is drawn now (or `aheadMs` from now), ECEF, or
@@ -1630,3 +1689,26 @@ export function createStubRenderer(options = {}) {
  * @property {() => object} effects
  * @property {(error: Error) => void} emitError
  */
+
+/**
+ * The stub as a renderer plugin (`RendererPlugin`), for running the whole
+ * application on it: each renderer it makes fills the container it is given
+ * with a canvas, as any plugin's does. Nothing runs on its own: the caller
+ * drives the loop (`testing.tick()`), each frame or as a test needs.
+ * @param {Parameters<typeof createStubRenderer>[0]} [options] For each
+ *   renderer it makes (`capabilities`, `viewport`, `time`...).
+ * @param {(renderer: ReturnType<typeof createStubRenderer>) => void} [onCreate]
+ *   Hears each renderer it makes.
+ * @returns {import('../contract/renderer').RendererPlugin}
+ */
+export function createStubRendererPlugin(options = {}, onCreate) {
+  return Object.freeze({
+    id: 'stub',
+    async create({ container, signal }) {
+      signal?.throwIfAborted();
+      const renderer = createStubRenderer({ ...options, container });
+      onCreate?.(renderer);
+      return renderer;
+    },
+  });
+}

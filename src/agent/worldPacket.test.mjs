@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 
 import { getWorldPacket } from './worldPacket.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { createStubRenderer } from '../render/stub/index.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 
 function withoutVoicePresentation(result) {
@@ -63,6 +65,14 @@ function harness() {
     getCockpitState: () => null,
     getControlState: () => ({ hud: { visible: 'auto' } }),
   };
+  // The packet reads the eye from the camera port of the renderer bound to
+  // the scene object.
+  const renderer = createStubRenderer();
+  renderer.camera.setView({
+    destination: { lon: -97.74, lat: 30.26, height: 500 },
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 },
+  });
+  bindRenderer(viewer, renderer);
   return { viewer, dataManager, styleManager };
 }
 

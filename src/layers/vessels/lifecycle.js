@@ -1,5 +1,6 @@
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { msg, t } from '../../i18n/index.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { AIS_FIRST_CONNECT_GRACE_MS, AIS_HEALTHY_STATUSES } from './policy.js';
 
 export function createLifecycle({
@@ -190,9 +191,9 @@ export function createLifecycle({
       );
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();
-      const moveEnd = activeViewer?.camera?.moveEnd;
-      if (typeof moveEnd?.addEventListener === 'function')
-        state.feed.removeViewListener = moveEnd.addEventListener(() => {
+      const camera = findCamera(activeViewer);
+      if (camera)
+        state.feed.removeViewListener = camera.on('moveEnd', () => {
           components.ingestion.refreshIfMoved(activeViewer);
         });
       return components.ingestion.loadLivePositions(activeViewer);

@@ -4,17 +4,13 @@
  *
  * A layer follows through the camera port with a FollowTarget that also
  * carries what the app shows about it (key, display position, sprite, label).
- * Until every layer does, a layer may still track an entity of its own
- * through Cesium's `trackedEntity`; that entity is seen here through the
- * same fields, read from its entity record. Readers ask this module, never
- * `trackedEntity`, so they work either way. A layer that still draws its
- * target as an entity follows through the port with `entityFollowTarget`,
- * whose presentation fields read that same record.
+ * A layer that keeps its target as a holder of its own (an entity record)
+ * follows through the port with `entityFollowTarget`, whose presentation
+ * fields read that record. Readers ask this module, never the renderer.
  *
  * Its readers (the tracked card, Cockpit, the share link's thing view,
- * north-up) still read the drawn entity and its `displayPosition`: a port
- * target without them is followed by the camera but not shown by them,
- * until those readers move with the drawing to the renderer.
+ * north-up) read the target's `displayPosition`: a port target without one
+ * is followed by the camera but not shown by them.
  */
 import { findCamera } from '../render/rendererOf.js';
 import { readEntityRecord } from './entityRecords.js';
@@ -29,8 +25,8 @@ import { readEntityRecord } from './entityRecords.js';
  * @property {object} [sprite] Size of the drawn billboard.
  * @property {object} [labelModel]
  * @property {string} [selectionOrigin]
- * @property {object} [entity] The tracked entity, for a layer that still
- *   tracks one itself.
+ * @property {object} [entity] The holder whose entity record the
+ *   presentation fields read (`entityFollowTarget`).
  */
 
 /** @type {WeakMap<object, Followed>} */
@@ -78,10 +74,7 @@ function entityView(entity) {
  */
 export function followedOf(viewer) {
   if (!viewer) return null;
-  const target = findCamera(viewer)?.followed;
-  if (target) return target;
-  const entity = viewer.trackedEntity;
-  return entity ? entityView(entity) : null;
+  return findCamera(viewer)?.followed ?? null;
 }
 
 /** Whether `viewer`'s camera follows anything. */
@@ -100,8 +93,7 @@ export function onFollowChanged(viewer, cb) {
   let port = null;
   let offPort = null;
   // The port is looked up again on every change: a renderer bound after
-  // this subscribed replaces the one it listened to. A Cesium port's follow
-  // also sets `trackedEntity`, so the change still arrives through it.
+  // this subscribed replaces the one it listened to.
   const listenToPort = () => {
     const current = findCamera(viewer);
     if (current === port) return;
@@ -117,20 +109,17 @@ export function onFollowChanged(viewer, cb) {
     cb(now);
   }
   listenToPort();
-  const offTracking = viewer.trackedEntityChanged?.addEventListener(check);
   return () => {
     offPort?.();
     offPort = null;
-    offTracking?.();
   };
 }
 
-/** Stop the camera following anything, a layer's own tracking included. */
+/** Stop the camera following anything. */
 export function stopFollowing(viewer) {
   if (!viewer) return;
   const camera = findCamera(viewer);
   if (camera?.followed) camera.follow(null);
-  else if (viewer.trackedEntity) viewer.trackedEntity = undefined;
 }
 
 /**
@@ -157,30 +146,22 @@ export function entityFollowTarget(entity, camera) {
 }
 
 /**
- * Follow `followed` again after `stopFollowing`: a port target through the
- * camera port, a layer's own tracked entity through `trackedEntity`.
+ * Follow `followed` again after `stopFollowing`, through the camera port.
  * @param {object} viewer
  * @param {Followed|null} followed What `followedOf` gave.
  */
 export function resumeFollowing(viewer, followed) {
   if (!viewer || !followed) return;
-  if (entityViews.get(followed.entity) === followed)
-    viewer.trackedEntity = followed.entity;
-  else findCamera(viewer)?.follow(followed);
+  findCamera(viewer)?.follow(followed);
 }
 
 /**
- * Where `followed` is shown this frame: the layer's display cache, else its
- * entity's position at the viewer's time; null when neither answers.
+ * Where `followed` is shown this frame: the layer's display cache; null
+ * when it has none, or it answers nothing.
  * @param {object} viewer
  * @param {Followed|null} followed
  */
 export function followedPosition(viewer, followed) {
   const display = followed?.displayPosition;
-  const shown = typeof display === 'function' ? display() : null;
-  return (
-    shown ||
-    followed?.entity?.position?.getValue?.(viewer?.clock?.currentTime) ||
-    null
-  );
+  return (typeof display === 'function' ? display() : null) || null;
 }

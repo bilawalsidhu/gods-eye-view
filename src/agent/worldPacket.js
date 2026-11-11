@@ -1,4 +1,4 @@
-import { toLonLatH } from '../geo/index.js';
+import { findCamera } from '../render/rendererOf.js';
 import {
   feedProvenanceEnvelope,
   layerSnapshot,
@@ -104,12 +104,12 @@ export function getWorldPacket(options = {}) {
   // A default parameter only covers undefined; null or NaN would age every
   // feed against the epoch and report stale data as "just now".
   const now = Number.isFinite(requestedNow) ? requestedNow : Date.now();
-  if (!viewer?.camera?.positionWC)
-    throw new TypeError('World Packet requires a viewer camera');
+  const pose = findCamera(viewer)?.pose();
+  if (!pose) throw new TypeError('World Packet requires a viewer camera');
   if (!dataManager || typeof dataManager.getAll !== 'function')
     throw new TypeError('World Packet requires a data manager');
 
-  const eye = toLonLatH(viewer.camera.positionWC);
+  const eye = { lon: pose.lon, lat: pose.lat, height: pose.height };
   // Read the roster once. Voice must not rewalk disabled layers: preserving the
   // current enabled-only view keeps the model's context budget bounded.
   const rows = dataManager.getAll();
