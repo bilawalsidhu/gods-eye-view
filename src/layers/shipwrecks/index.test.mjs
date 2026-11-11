@@ -41,6 +41,8 @@ function harness({ snapshots, now = () => 1 } = {}) {
   const handlers = [];
   const opened = [];
   let pickResult = null;
+  // A touch's wider contact search, when it finds what the exact pick missed.
+  let nearResult = null;
   const viewer = {};
   const { draw } = bindFakeDraw(viewer);
   const queue = [...(snapshots || [])];
@@ -63,7 +65,14 @@ function harness({ snapshots, now = () => 1 } = {}) {
     input: () => ({
       onClick(callback) {
         const handler = {
-          click: (event) => callback({ ...event, id: pickResult }),
+          click: (event) =>
+            callback({
+              ...event,
+              topHit: pickResult
+                ? { set: 'shipwrecks:', id: pickResult, surface: false }
+                : null,
+              id: pickResult ?? nearResult,
+            }),
           destroyed: false,
         };
         handlers.push(handler);
@@ -100,6 +109,11 @@ function harness({ snapshots, now = () => 1 } = {}) {
     opened,
     pick(id) {
       pickResult = id ? `shipwreck:${id}` : null;
+    },
+    // What a touch's contact search finds near the tap, the exact pick
+    // being `pick`'s.
+    near(pickId) {
+      nearResult = pickId;
     },
     lastCard: () => cards.at(-1),
   };
@@ -193,6 +207,24 @@ test('a click opens the card; a period that excludes the wreck closes it', async
     ['shipwreck:new'],
   );
   assert.equal(h.layer.getStats().count, 1);
+});
+
+test('a tap selects only the wreck exactly under it, as a click does', async () => {
+  const h = harness({ snapshots: [snapshot([wreck('a')])] });
+  h.layer.enable();
+  await h.layer.update();
+  // Near a wreck but on nothing: no card.
+  h.near('shipwreck:a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.cards.flat().length, 0);
+  h.pick('a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.lastCard()[0].id, 'shipwreck-card:a');
+  // On nothing, near another layer's contact: the card is closed.
+  h.pick(null);
+  h.near('flight:abc');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.deepEqual(h.lastCard(), []);
 });
 
 test('the year pickers list only years with a wreck, and each era is counted', async () => {

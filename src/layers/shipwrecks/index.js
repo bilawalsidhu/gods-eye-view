@@ -285,8 +285,11 @@ export function createShipwrecksLayer({
         if (_selectedLink) openExternal(_selectedLink);
         return;
       }
-      // A marker's item id is its pick id, `shipwreck:<id>`.
-      const pickId = click.id ?? null;
+      // A marker's item id is its pick id, `shipwreck:<id>`. Read from what is
+      // exactly under the click: a touch's wider contact search would pick a
+      // wreck the tap missed, or a contact near one.
+      const picked = click.topHit;
+      const pickId = picked ? (picking.resolvePickId(picked) ?? null) : null;
       const id = pickedRecordId(pickId);
       if (id) {
         _selectedId = id;
