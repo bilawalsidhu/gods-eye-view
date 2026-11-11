@@ -920,3 +920,20 @@ DEM qualification remains outstanding. After merging upstream weather frame
 sources and contact-clock support, all 335 focused weather/aircraft tests and
 the full unit, build and tracking gates passed again. No new tests or scripts
 were added for this audit.
+
+### Upstream merge refresh — 11 November 2026
+
+Merged upstream `aa95c2c2` and resolved translation-catalog conflicts without
+dropping either branch's strings. Added the nine existing resource/grounded-plane
+messages to upstream's new Swedish locale, including its same-as-English
+allowance for the Swedish word “Standard”. No new tests or scripts were added.
+
+On Node 24.22.1, the final exact `npm test` run passed 12,327 ordinary tests
+with 3 skipped and no failures, plus all 15 serialized allocation checks.
+Production build, 111 tracking browser checks, 26 aircraft-surface browser
+checks, formatting (1,959 files), all 3,259 messages per locale, package/import
+boundaries and published layer tokens (38 unchanged, no new tokens) passed.
+The tracking run used the documented offline imagery/terrain fixtures. Earlier
+sandbox-restricted attempts could not open local test servers; the final unit
+and browser runs used the required localhost/process permissions. Previously
+recorded live CCTV/voice qualification limits remain unchanged.
