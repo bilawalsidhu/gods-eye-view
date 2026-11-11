@@ -379,6 +379,11 @@ test('styles: 44 px corner eye, safe areas, fade, and the modes that own the scr
     css,
     /body:is\(\.cockpit-mode, \.scene-playback-mode, \.recording-mode, \.ui-embed\)\s+#clean-view-eye \{\s*display: none !important;/,
   );
+  // In normal mobile-shell view the eye must not cover the More dock tab.
+  assert.match(
+    css,
+    /body\.mobile-shell:not\(\.ui-clean-view\) #clean-view-eye\s*\{[^}]*bottom:\s*calc\(var\(--mobile-tab-space\) \+ 8px\)/,
+  );
   // Phones: the eye replaces the EXIT pill.
   assert.match(
     css,
