@@ -257,7 +257,11 @@ export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
     truncated: decoded.truncated,
     count: decoded.vehicles.length,
     vehicles: repairVehicleTimestamps(
-      decoded.vehicles,
+      feed.speedUnit === 'km/h'
+        ? decoded.vehicles.map((v) =>
+            v.speedMps === null ? v : { ...v, speedMps: v.speedMps / 3.6 },
+          )
+        : decoded.vehicles,
       decoded.timestamp,
       Math.floor(now / 1000),
     ),
@@ -265,16 +269,31 @@ export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
 }
 
 /**
+ * Fresh window for one feed's cached snapshot: the shared TTL, stretched by a
+ * registry `refreshMs` for upstreams that rate-limit below one request per
+ * TTL (data.gov.my allows 4 a minute). Never shorter than the shared TTL.
+ * @param {{ refreshMs?: number }|null|undefined} feed Registry entry.
+ * @returns {number}
+ */
+export function transitFeedTtlMs(feed) {
+  const refresh = feed?.refreshMs;
+  return Number.isFinite(refresh) && refresh > TRANSIT_PROXY_TTL_MS
+    ? refresh
+    : TRANSIT_PROXY_TTL_MS;
+}
+
+/**
  * Classify a cache entry for the request policy.
  * @param {{ at: number }|null|undefined} entry Cached snapshot (`at` = fetch ms).
  * @param {number} now
+ * @param {number} [ttlMs] Fresh window; `transitFeedTtlMs(feed)` for a feed.
  * @returns {'none'|'fresh'|'stale'|'expired'}
  */
-export function transitCacheState(entry, now) {
+export function transitCacheState(entry, now, ttlMs = TRANSIT_PROXY_TTL_MS) {
   if (!entry || !Number.isFinite(entry.at)) return 'none';
   const age = now - entry.at;
   if (age < 0) return 'fresh';
-  if (age < TRANSIT_PROXY_TTL_MS) return 'fresh';
+  if (age < ttlMs) return 'fresh';
   if (age < TRANSIT_PROXY_STALE_MAX_MS) return 'stale';
   return 'expired';
 }

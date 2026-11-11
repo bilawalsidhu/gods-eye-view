@@ -15,6 +15,7 @@ import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { VesselRecords } from '../layers/vessels/records.js';
 
 const RECORD = Object.freeze({
+  id: '211000000',
   mmsi: '211000000',
   name: 'NORDIC STAR',
   type: '70',
@@ -65,9 +66,9 @@ function vesselLayer(record) {
       enabled && selected
         ? { ...vesselCockpitInfo(selected), seaSurfaceHeightM: 0 }
         : null,
-    setCockpitSubject(mmsi) {
-      calls.push(['subject', mmsi]);
-      subject = mmsi;
+    setCockpitSubject(id) {
+      calls.push(['subject', id]);
+      subject = id;
       return true;
     },
     // Like the layer, leaves out the ship whose bridge the Cockpit rides.
@@ -75,7 +76,7 @@ function vesselLayer(record) {
       radarQueries.push({ lat, lon, rangeM, maxCount });
       const own = {
         ...NEIGHBOUR,
-        id: record.mmsi,
+        id: record.id,
         latitude: record.lat,
         longitude: record.lon,
       };
@@ -257,7 +258,7 @@ test('entering the bridge hides the vessel and shows bridge readouts', async (t)
   await settle();
   assert.equal(cockpit.active, true);
   assert.equal(cockpit.subjectKind, 'vessel');
-  assert.deepEqual(vessels.calls, [['subject', RECORD.mmsi]]);
+  assert.deepEqual(vessels.calls, [['subject', RECORD.id]]);
   assert.equal(document.body.classList.contains('cockpit-mode'), true);
 
   assert.equal(
@@ -303,7 +304,7 @@ test('exiting the bridge releases the vessel and returns to its map view', async
   assert.equal(cockpit.active, false);
   assert.equal(cockpit.subjectKind, null);
   assert.deepEqual(vessels.calls, [
-    ['subject', RECORD.mmsi],
+    ['subject', RECORD.id],
     ['subject', null],
     ['focus'],
   ]);
@@ -374,7 +375,7 @@ test('tracking an aircraft from the bridge ends it without refocusing the vessel
   assert.equal(viewer.trackedEntity, aircraft, 'the aircraft keeps tracking');
   assert.equal(aircraft.show, true, 'the aircraft was never adopted');
   assert.deepEqual(vessels.calls, [
-    ['subject', RECORD.mmsi],
+    ['subject', RECORD.id],
     ['subject', null],
   ]);
 });
@@ -1474,7 +1475,7 @@ test('a fix the feed keeps re-serving goes on ageing into a stale feed', async (
       effects,
     );
   poll();
-  const record = records.byMmsi.get(RECORD.mmsi);
+  const record = records.byId.get(RECORD.id);
   const { $, cockpit, shots } = fixture(t, { record });
   cockpit.enter();
   await settle();
@@ -1540,7 +1541,12 @@ test("a ship's double-click memory does not carry over to another ship", async (
   heightSensitiveProjection(viewer);
   cockpit.onScenePointerDown(1000);
   // Within the memory another ship is selected, drawn elsewhere.
-  vessels.select({ ...RECORD, mmsi: '211000009', name: 'OTHER' });
+  vessels.select({
+    ...RECORD,
+    id: '211000009',
+    mmsi: '211000009',
+    name: 'OTHER',
+  });
   heightSensitiveProjection(viewer, { x: 900 });
   assert.equal(cockpit.onSceneDoubleClick({ x: 400, y: 300 }, 1250), false);
   assert.equal(cockpit.active, false);

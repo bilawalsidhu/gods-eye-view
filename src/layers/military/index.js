@@ -8,6 +8,9 @@ import { createIngestion } from './ingestion.js';
 import { createLifecycle } from './lifecycle.js';
 import { createTesting } from './testing.js';
 import { createQueries } from './queries.js';
+import { createClockFollow } from './clockFollow.js';
+import { createSnapshotTimeline } from '../../time/snapshotTimeline.js';
+import { worldClock } from '../../time/worldClock.js';
 /** Compose one military-flight layer with application-owned scene services. */
 export function createMilitaryFlightLayer({
   source,
@@ -25,6 +28,7 @@ export function createMilitaryFlightLayer({
   parts.lifecycle = createLifecycle(context);
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);
+  parts.clockFollow = createClockFollow(context);
   const applySnapshot = createMilitarySnapshotRenderer({
     flightState,
     records: flightState.records,
@@ -38,12 +42,29 @@ export function createMilitaryFlightLayer({
   });
   parts.ingestion = createIngestion({
     feed: flightState.feed,
-    applySnapshot,
+    applySnapshot: (snapshot, viewer, options) => {
+      if (options?.replace) parts.clockFollow.resetMotion();
+      return applySnapshot(snapshot, viewer, options);
+    },
+    followsClock: () => flightState.timeline.active(),
     setSourceLabel: (source) => {
       layer.source = source;
     },
     applyPendingTrackingRestore: () =>
       parts.tracking._applyPendingTrackingRestore(),
+  });
+
+  // Contacts follow the world clock while the source declares a timeline.
+  flightState.timeline = createSnapshotTimeline({
+    id: 'military',
+    clock: worldClock,
+    source: () => flightState.feed._source,
+    load: (atMs, { signal, replace }) =>
+      parts.ingestion.methods.loadAt(atMs, { signal, replace }),
+    clear: () => parts.clockFollow.clear(),
+    resumeLive: () => {
+      layer.update(flightState._viewer).catch(() => {});
+    },
   });
 
   Object.assign(

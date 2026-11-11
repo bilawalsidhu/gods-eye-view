@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
+import { weatherFrameSource } from './source.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
@@ -66,6 +67,7 @@ export function createWeatherLayer({
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
+  // A feed may also supply decoded frames; see weatherFrameSource.
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
   const satellite = !radar && !lightning;
@@ -288,6 +290,7 @@ export function createWeatherLayer({
         cesium,
         getHost,
         onChange: notify,
+        frameSource: weatherFrameSource(feed),
       });
       checkHost(false);
       eventTarget?.addEventListener?.(

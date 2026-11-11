@@ -5,10 +5,14 @@ import {
   speedRamp,
   courseBetweenCartesians,
   COURSE_HOLD_SPEED_MPS,
+  floorCoastedPosition,
   staleCoastLimitSeconds,
+  staleCoastSecondsFrom,
+  staleHoldsForFix,
   arcOffsetEnu,
   courseSlewCapDps,
   limitCourseStep,
+  COAST_MAX_SPEED_MPS,
 } from '../../data/motionModel.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
@@ -16,7 +20,8 @@ import {
   modelAnchorWorld,
 } from '../../data/modelVisualAnchor.js';
 import {
-  RENDER_DELAY_SEC,
+  displayDelayMs,
+  followsClock,
   TRACKED_MODEL_MAX_PX,
   TRACKED_MODEL_MIN_PX,
   BILLBOARD_SCALE,
@@ -69,7 +74,7 @@ export function createMotion({
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now()),
-      -RENDER_DELAY_SEC,
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchRenderTime,
     );
 
@@ -141,23 +146,86 @@ export function createMotion({
       );
     }
 
-    // Continue through fresh adsb.lol contacts even when the position epoch has
-    // not advanced, but keep an absolute stale-feed drift ceiling.
+    // Coast on the last speed and heading for five minutes past the newest
+    // fix, then stop, dimmed as SIGNAL LOST. A contact last heard on or near
+    // the ground holds there instead, and a coast never goes below the ground.
+    const { coastSec } = _coastPlan(newest, info, elapsedSec);
+    const cachedGroundFloor = services.groundFloor?.cachedGroundFloor;
+    _extrapolateFix(
+      newest,
+      info,
+      coastSec,
+      out,
+      (info && info.turnRateDps) || 0,
+    );
+    return coastSec > 0 ? floorCoastedPosition(out, cachedGroundFloor) : out;
+  }
+
+  /**
+   * How far a contact coasts past its newest fix at a display time
+   * `elapsedSec` after it: up to five minutes, or not at all for a contact
+   * that holds at a report on or near the ground. The hold decision is made once
+   * per report and kept on it.
+   * @param {{epochMs?: number, time: Cesium.JulianDate}} newest
+   * @param {object|undefined} info - The contact's record.
+   * @param {number} elapsedSec
+   * @returns {{coastSec: number, holds: boolean}}
+   */
+  function _coastPlan(newest, info, elapsedSec) {
     const coastLimitSec = staleCoastLimitSeconds({
-      // Captured at poll normalization so the fleet tick does not allocate a
-      // Date for every aircraft twelve times per second.
+      // `epochMs` is captured once when the poll is normalized. Avoid allocating
+      // a Date per aircraft on every fleet tick.
       fixEpochMs: Number.isFinite(newest.epochMs)
         ? newest.epochMs
         : Cesium.JulianDate.toDate(newest.time).getTime(),
       lastContactEpochMs: info?.lastContactEpochMs,
+      // Five minutes of flight after the last report, as flights.
+      minimumSec: 300,
+      maximumSec: 300,
     });
-    return _extrapolateFix(
+    const holds = staleHoldsForFix(newest, {
+      onGround: info?.onGround,
+      cachedGroundFloor: services.groundFloor?.cachedGroundFloor,
+    });
+    return {
+      coastSec: staleCoastSecondsFrom({
+        newest,
+        elapsedSec,
+        coastLimitSec,
+        holds,
+      }),
+      holds,
+    };
+  }
+
+  /**
+   * Whether a contact has stopped where its coast ended (or held at its last
+   * report) with no newer report, and since when it has had none.
+   * @param {string} icao24
+   * @returns {{reportEpochMs: number, holds: boolean}|null} Null while a
+   *   report is ahead of the display time or the contact is still coasting.
+   */
+  function _signalLost(icao24) {
+    const newest = flightState._positionHistory.get(icao24)?.at(-1);
+    if (!newest) return null;
+    const newestMs = Number.isFinite(newest.epochMs)
+      ? newest.epochMs
+      : Cesium.JulianDate.toDate(newest.time).getTime();
+    const elapsedSec =
+      (flightState.now() - displayDelayMs(flightState) - newestMs) / 1000;
+    if (!(elapsedSec > 0)) return null;
+    const { coastSec, holds } = _coastPlan(
       newest,
-      info,
-      Math.min(elapsedSec, coastLimitSec),
-      out,
-      (info && info.turnRateDps) || 0,
+      flightState.records.data.get(icao24),
+      elapsedSec,
     );
+    if (!(elapsedSec > coastSec)) return null;
+    return {
+      reportEpochMs: Number.isFinite(newest.reportEpochMs)
+        ? newest.reportEpochMs
+        : newestMs,
+      holds,
+    };
   }
 
   /**
@@ -172,9 +240,12 @@ export function createMotion({
    */
 
   function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
-    const speed = Number.isFinite(fix.velocity)
-      ? fix.velocity
-      : (info && info.speedMps) || 0;
+    const speed = Math.min(
+      Number.isFinite(fix.velocity)
+        ? fix.velocity
+        : (info && info.speedMps) || 0,
+      COAST_MAX_SPEED_MPS,
+    );
     const heading = Number.isFinite(fix.track)
       ? fix.track
       : (info && info.track) || 0;
@@ -215,7 +286,7 @@ export function createMotion({
     if (!history || history.length === 0) return true;
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now()),
-      -RENDER_DELAY_SEC,
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchWarmupTime,
     );
     return Cesium.JulianDate.lessThan(renderTime, history[0].time);
@@ -300,9 +371,15 @@ export function createMotion({
     }
 
     const nowMs = Date.now();
+    // How far the contact may move between frames goes by the world's time,
+    // which plays faster than the wall clock when following it at a rate.
+    const worldMs = followsClock(flightState) ? flightState.now() : nowMs;
     const info = flightState.records.data.get(icao24);
     if (sameTrack) {
-      const dtSec = Math.max(0.001, (nowMs - flightState._drPrevMs) / 1000);
+      const dtSec = Math.max(
+        0.001,
+        (worldMs - flightState._drPrevWorldMs) / 1000,
+      );
       const speed = (info && info.speedMps) || 0;
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
@@ -333,6 +410,7 @@ export function createMotion({
     Cesium.Cartesian3.clone(raw, flightState._drPrevRaw);
     Cesium.Cartesian3.clone(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;
+    flightState._drPrevWorldMs = worldMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;
     const focusSizePx = _trackedFocusSizePx(
@@ -514,6 +592,7 @@ export function createMotion({
   }
   return {
     _deadReckon,
+    _signalLost,
     _extrapolateFix,
     _isTrackWarmingUp,
     _trackedFocusSizePx,

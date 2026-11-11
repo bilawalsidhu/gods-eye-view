@@ -117,7 +117,7 @@ export function createPanel({ state: layerState, parts }) {
       .slice(page, page + AWARENESS_PAGE_SIZE)
       .map((item, index) => {
         const label = formatAwarenessLabel(item);
-        const targetId = item.icao24 || item.mmsi || item.id;
+        const targetId = item.icao24 || item.id || item.mmsi;
         const distance = presentAwarenessDistance(item.distanceM);
         if (!targetId)
           return {
@@ -182,6 +182,29 @@ export function createPanel({ state: layerState, parts }) {
       : null;
   }
 
+  /** The tracked airliner's photo with its credit, or null. The subject
+   *  refresh resolves it; only the subject it was resolved for shows it. */
+  function presentPhoto(subject) {
+    const held = layerState.subjectPhoto;
+    if (
+      !held ||
+      held.layerId !== subject.layerId ||
+      String(held.id) !== String(subject.id)
+    )
+      return null;
+    const { photo } = held;
+    return {
+      src: photo.src,
+      width: photo.width ?? null,
+      height: photo.height ?? null,
+      link: photo.link,
+      // A photo whose answer names no photographer shows no credit line.
+      credit: photo.photographer
+        ? t('Photo © {photographer}', { photographer: photo.photographer })
+        : '',
+    };
+  }
+
   function renderResults() {
     if (!layerState.enabled || !layerState.results) return hidePanel();
     ensurePanel();
@@ -191,6 +214,7 @@ export function createPanel({ state: layerState, parts }) {
       kind: 'results',
       subject: `${subject.label} · ${t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) })}`,
       subjectNames: presentNames(subject.memberNames),
+      photo: presentPhoto(subject),
       navigation: presentNavigation(),
       rows: cohorts.map(presentRow),
       note: t(
