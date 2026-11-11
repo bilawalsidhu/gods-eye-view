@@ -306,8 +306,8 @@ Configure issue is resolved. On macOS, the Keychain via
 </details>
 
 The server binds to **localhost** on both paths, and Provider Settings answers
-requests only from your machine. Browser-side keys (Google Maps, Cesium ion)
-must be restricted at their providers — [SECURITY.md](SECURITY.md) shows how,
+requests only from your machine. The browser-side Google Maps key
+must be restricted at its provider — [SECURITY.md](SECURITY.md) shows how,
 and it carries the LAN-sharing rules alongside [Keys & Costs](#-api-keys).
 
 ---
@@ -536,7 +536,7 @@ How the globe handles live data:
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
-- **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
+- **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only key the browser sees is the Google Maps key (restrict it at the provider); the Cesium ion and Mapillary tokens stay on the server.
 - **A small stack.** **Vue 3** and **Pinia** for the interface, **CesiumJS** for the globe and **Vite** to build it — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
 
 ```
@@ -586,7 +586,7 @@ metered and Liveuamap is a paid subscription:
 | 🟡  | **AISStream**   | 🚢 Live global ships                                                                                                                                                                 | [aisstream.io](https://aisstream.io) — free signup                                                                                                                   |
 | 🟡  | **NASA FIRMS**  | 🔥 Live active fires                                                                                                                                                                 | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free                                                                             |
 | 🟡  | **TomTom**      | 🚦 Live flow speeds and congestion colors for the simulated traffic layer                                                                                                            | [my.tomtom.com](https://my.tomtom.com/keys) — free tier available                                                                                                    |
-| 🟡  | **Mapillary**   | 📷 Street Level coverage and photos. A public client token by design (see SECURITY.md)                                                                                               | [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers) — register an app, copy its Client Token                                        |
+| 🟡  | **Mapillary**   | 📷 Street Level coverage and photos. The client token stays on the server (see SECURITY.md)                                                                                               | [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers) — register an app, copy its Client Token                                        |
 | 🟡  | **World News API** | 📰 News layer, Local: the news of the country in view. The free plan allows 50 points a day; `WORLDNEWSAPI_DAILY_READS` (default 30) keeps Core inside it. Core keeps each country's news for up to 1 hour, and World News API's [terms](https://worldnewsapi.com/terms/) allow caching only with its prior written permission, which is yours to get. The Data attribution popover credits it with a link | [worldnewsapi.com/console](https://worldnewsapi.com/console/) — free plan |
 | 🔴  | **Liveuamap**   | 📰 News layer, Conflicts: Liveuamap's mapped items beside GDELT's reports (🟢 Conflicts works without) | [liveuamap.com/promo/api](https://liveuamap.com/promo/api) — paid API |
 
