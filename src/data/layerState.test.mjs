@@ -247,7 +247,15 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   // News, Shipwrecks and Rail hold 00–02; USGS holds 03–05.
   assert.equal(nextLayerStateToken(), '06');
   const beforeNews = { ...LAYER_STATE_TOKEN_RESERVATIONS };
-  for (const id of ['news', 'shipwrecks', 'rail', 'local-usgs-water', 'local-usgs-lakes', 'local-usgs-springs']) delete beforeNews[id];
+  for (const id of [
+    'news',
+    'shipwrecks',
+    'rail',
+    'local-usgs-water',
+    'local-usgs-lakes',
+    'local-usgs-springs',
+  ])
+    delete beforeNews[id];
   assert.equal(nextLayerStateToken(beforeNews), '00');
   assert.equal(
     nextLayerStateToken({
