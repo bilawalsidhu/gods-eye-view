@@ -358,6 +358,18 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'singapore-cctv',
+    html:
+      // The Singapore Open Data Licence asks for a notice with the date of
+      // access and a link to the licence. Frames are read live, so the date
+      // is the day this app loaded.
+      'Traffic cameras (Singapore): Land Transport Authority. ' +
+      `Contains information from Traffic Images accessed on ${new Date().toISOString().slice(0, 10)} from ` +
+      '<a href="https://data.gov.sg/" target="_blank" rel="noopener">data.gov.sg</a> ' +
+      'which is made available under the terms of the ' +
+      '<a href="https://data.gov.sg/open-data-licence" target="_blank" rel="noopener">Singapore Open Data Licence version 1.0</a>',
+  },
+  {
     key: 'florida-cctv',
     html:
       'Traffic cameras (Florida): FL511, Florida Department of Transportation. ' +
