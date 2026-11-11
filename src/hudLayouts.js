@@ -47,7 +47,7 @@ export function cyberVisualDefaultsForHudTransition(
  * attribute lives on <html> so theme tokens are available to every UI surface.
  * @param {HTMLElement|{dataset?: Record<string, string>}|null|undefined} root
  * @param {unknown} layout
- * @returns {'cyber'|null}
+ * @returns {'cyber'|'minimal'|null}
  */
 export function applyHudUiTheme(root, layout) {
   if (!root?.dataset) return null;
@@ -57,8 +57,10 @@ export function applyHudUiTheme(root, layout) {
     syncRadioPanelPlacement(root.ownerDocument);
     return 'cyber';
   }
-  delete root.dataset.uiTheme;
+  if (normalizeHudLayout(layout) === 'minimal')
+    root.dataset.uiTheme = 'minimal';
+  else delete root.dataset.uiTheme;
   applyCyberSonarThemePhase(root, false);
   syncRadioPanelPlacement(root.ownerDocument);
-  return null;
+  return root.dataset.uiTheme ?? null;
 }

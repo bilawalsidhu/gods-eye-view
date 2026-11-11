@@ -81,7 +81,7 @@ test('Escape hands focus to the rail item when collapsing hides the panel', () =
   };
   fixture.panel.getClientRects = () => (fixture.collapsed() ? [] : [{}]);
   fixture.document.querySelector = (selector) => {
-    assert.equal(selector, '.ui-rail [data-rail-item="data-panel"]');
+    assert.equal(selector, '.gev-panel-rail [data-rail-item="data-panel"]');
     return railItem;
   };
   assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);

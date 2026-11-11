@@ -10,6 +10,9 @@ import { initKeySetup } from '../keySetup.js';
 import { CLOUD_VOICE_AUTH_STORAGE_KEY } from '../voice/cloudVoiceAuth.js';
 import { useProviderSettingsStore } from './stores/providerSettings.js';
 import ProviderSettingsView from './views/ProviderSettingsView.vue';
+import { useLocaleStore } from './stores/locale.js';
+import { useDisplayStore } from './stores/display.js';
+import { useHudStore } from './stores/hud.js';
 
 const STATUS = Object.freeze({
   total: 3,
@@ -89,8 +92,48 @@ async function fixture(t, { status = STATUS, respond = null } = {}) {
   });
   const $ = (selector) => document.querySelector(selector);
   const text = (selector) => $(selector)?.textContent.trim();
-  return { $, text, store, setup, requests, toolbar };
+  return { $, text, store, setup, requests, toolbar, pinia };
 }
+
+test('Minimal consolidates API keys, language and style under one settings gear', async t => {
+  const f = await fixture(t);
+  const calls = [];
+  useLocaleStore(f.pinia).publishPicker({ current: 'en', onSelect: locale => calls.push(['language', locale]) });
+  useHudStore(f.pinia).publish({ variant: 'minimal' });
+  useDisplayStore(f.pinia).connect({ setHudLayout: value => calls.push(['layout', value]), setStyle: value => calls.push(['style', value]) });
+  document.documentElement.dataset.uiTheme = 'minimal';
+  await wait(); await nextTick();
+  assert.ok(f.$('#minimal-settings-trigger'));
+  assert.equal(f.$('#key-setup-chip'), null);
+  assert.equal(f.$('#locale-picker'), null);
+  f.$('#minimal-settings-trigger').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await nextTick(); await wait();
+  f.$('#minimal-api-settings').click();
+  await nextTick(); await wait(50);
+  assert.equal(f.$('#key-setup').hidden, false);
+  f.$('[data-key-setup-close]').click();
+  f.$('#minimal-settings-trigger').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await nextTick(); await wait();
+  for (const [selector, label] of [['[data-setting="language"]', 'Deutsch'], ['[data-setting="layout"]', 'Cyber'], ['[data-setting="map-style"]', 'Noir']]) {
+    if (!f.$(selector)) { f.$('#minimal-settings-trigger').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await nextTick(); await wait(30); }
+    f.$(selector).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await nextTick(); await wait(30);
+    const item = [...document.querySelectorAll('[role="menuitemradio"]')].find(item => item.textContent.trim() === label);
+    assert.ok(item, label); item.click(); await nextTick(); await wait(30);
+  }
+  assert.deepEqual(calls, [['language', 'de'], ['layout', 'cyber'], ['style', 'noir']]);
+});
+
+test('Minimal keeps interface settings when provider setup is unavailable', async t => {
+  const f = await fixture(t, { status: null });
+  document.documentElement.dataset.uiTheme = 'minimal';
+  await wait(); await nextTick();
+  assert.ok(f.$('#minimal-settings-trigger'));
+  f.$('#minimal-settings-trigger').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await nextTick(); await wait();
+  assert.ok(f.$('[data-setting="layout"]'));
+  assert.equal(f.$('#minimal-api-settings').getAttribute('aria-disabled'), 'true');
+});
 
 test('an unavailable setup endpoint removes the chip and the dialog', async (t) => {
   const { $ } = await fixture(t, { status: null });

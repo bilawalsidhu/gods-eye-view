@@ -1,5 +1,6 @@
 import { h, render as renderVue } from 'vue';
 import LayerRows from './layerPanel/LayerRows.vue';
+import { publishLayerSearch, clearLayerSearch } from './layerSearchCatalog.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
@@ -282,6 +283,7 @@ export class LayerPanel {
     this.subscribeRowControls = subscribeRowControls;
     this.onHiddenRefresh = onHiddenRefresh;
     this._generation = 0;
+    this._bulkPending = false;
     this._removers = [];
     this._destroyed = false;
     /** @type {Map<string, HTMLElement>} lists of their own, by element id */
@@ -356,6 +358,7 @@ export class LayerPanel {
   }
   destroy() {
     if (this._destroyed) return;
+    clearLayerSearch(this);
     this._destroyed = true;
     this._releaseBindings();
     this._weatherPanel?.destroy();
@@ -438,6 +441,15 @@ export class LayerPanel {
   _paint() {
     if (this._destroyed || !this._toggleContainer) return;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
+    publishLayerSearch(
+      this,
+      [...layers.values()].map((layer) => ({
+        id: layer.id,
+        name: panelLabel(layer),
+        enabled: layer.enabled,
+      })),
+      (id) => this._toggle(id, this._generation),
+    );
     // Each list renders its own rows: Data Layers, and any group's own list.
     const lists = new Map([[null, []]]);
     for (const id of this._groupContainers.keys()) lists.set(id, []);
@@ -456,6 +468,8 @@ export class LayerPanel {
       renderVue(
         h(LayerRows, {
           items,
+          master: id === null ? this._presentMaster() : null,
+          onToggleAll: (enabled) => this._setAllEnabled(enabled, generation),
           onToggle: (layerId) => this._toggle(layerId, generation),
           onChip: (layerId, chipId) =>
             this._selectChip(layerId, chipId, generation),
@@ -542,6 +556,51 @@ export class LayerPanel {
         : null,
       list: controls?.list || null,
     };
+  }
+
+  _presentMaster() {
+    const shown = this.getAll().filter((layer) => layer.showInTogglePanel);
+    const eligible = shown.filter(
+      (layer) => layer.enabled || !presentLayerToggle(layer).ariaDisabled,
+    );
+    const checked =
+      eligible.length > 0 && eligible.every((layer) => layer.enabled);
+    const enabled = shown.filter((layer) => layer.enabled).length;
+    return {
+      checked: enabled > 0,
+      partial: enabled > 0 && !checked,
+      enabled,
+      total: shown.length,
+      disabled: eligible.length === 0,
+      busy:
+        this._bulkPending || shown.some((layer) => this._pending.has(layer.id)),
+    };
+  }
+
+  async _setAllEnabled(enabled, generation) {
+    if (this._destroyed || generation !== this._generation || this._bulkPending)
+      return;
+    this._bulkPending = true;
+    this._paint();
+    try {
+      const ids = this.getAll()
+        .filter(
+          (layer) =>
+            layer.showInTogglePanel && Boolean(layer.enabled) !== enabled,
+        )
+        .map((layer) => layer.id);
+      await Promise.all(
+        ids.map((id) => {
+          // Each row re-reads availability, pending state and mount ownership.
+          const layer = this.getAll().find((entry) => entry.id === id);
+          if (layer && Boolean(layer.enabled) !== enabled)
+            return this._toggle(id, generation);
+        }),
+      );
+    } finally {
+      this._bulkPending = false;
+      if (!this._destroyed) this._paint();
+    }
   }
 
   async _toggle(id, generation) {

@@ -46,6 +46,7 @@ export class LocationControls {
       onCity,
       onPoi,
       onSearch,
+      onSearchEdit,
       onReset,
       publish,
       doc,
@@ -139,6 +140,13 @@ export class LocationControls {
     };
   }
   /** A city pill was clicked. */
+  search(query) {
+    const value = String(query ?? '').trim();
+    if (!this.destroyed && value) return this.onSearch(value);
+  }
+  editSearch() {
+    if (!this.destroyed) this.onSearchEdit?.();
+  }
   chooseCity(id) {
     if (!this.destroyed) this.onCity(id);
   }

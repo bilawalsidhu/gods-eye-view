@@ -23,10 +23,39 @@ export class PanelNavigation {
     this._hosts = [];
     this._observer = null;
     this._destroyed = false;
+    this._onOutsidePointer = (event) => {
+      if (
+        document.documentElement.dataset.uiTheme !== 'minimal' ||
+        document.body.classList.contains('mobile-shell') ||
+        document.body.classList.contains('cockpit-mode')
+      )
+        return;
+      if (
+        event.target.closest?.(
+          '.gev-panel-rail, [data-panel-id], #command-dock, #world-timeline, #corner-actions, #key-setup',
+        )
+      )
+        return;
+      if (!event.target.closest?.('#cesiumContainer, #world-overlay-root'))
+        return;
+      const surfaces = [
+        ...Object.values(this._stacks)
+          .filter(Boolean)
+          .flatMap((stack) => [...stack.children])
+          .filter((panel) => panel.matches('[data-panel-id]')),
+        document.getElementById('location-bar'),
+        document.getElementById('control-panel'),
+      ];
+      for (const panel of surfaces) {
+        if (panel && !panel.hidden && !panel.classList.contains('collapsed'))
+          this._setPanelCollapsed(panel.id, true, { explicit: true });
+      }
+    };
   }
 
   init() {
     if (this._destroyed) return;
+    document.addEventListener('pointerdown', this._onOutsidePointer);
     for (const side of ['left', 'right']) {
       const stack = this._stacks[side];
       if (!stack) continue;
@@ -47,7 +76,23 @@ export class PanelNavigation {
       // Only the panels themselves matter: their order, disclosure and
       // availability, not changes inside them or inside the rails.
       this._observer = new MutationObserver((records) => {
-        if (records.some((record) => this._isPanelRecord(record))) this.sync();
+        if (
+          records.some(
+            (record) =>
+              record.target === document.documentElement ||
+              record.target === document.body ||
+              this._isPanelRecord(record),
+          )
+        )
+          this.sync();
+      });
+      this._observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-ui-theme'],
+      });
+      this._observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class'],
       });
       for (const stack of Object.values(this._stacks)) {
         if (!stack) continue;
@@ -65,6 +110,31 @@ export class PanelNavigation {
   /** Publish both sides' panels in display order. */
   sync() {
     if (this._destroyed) return;
+    // A restored view or a skin switch may begin with two expanded sides.
+    // Fold the extra surface for this presentation without rewriting saved
+    // preferences. Normal user/feature opens are handled by PanelChrome.
+    if (
+      document.documentElement.dataset.uiTheme === 'minimal' &&
+      !document.body.classList.contains('mobile-shell') &&
+      !document.body.classList.contains('cockpit-mode')
+    ) {
+      const expanded = [this._stacks.right, this._stacks.left]
+        .filter(Boolean)
+        .flatMap((stack) => [...stack.children])
+        .filter(
+          (panel) =>
+            panel.matches('[data-panel-id]') &&
+            !panel.hidden &&
+            !panel.classList.contains('collapsed'),
+        );
+      for (const panel of expanded.slice(1)) {
+        this._setPanelCollapsed(panel.id, true, {
+          restore: true,
+          persist: false,
+          syncShare: false,
+        });
+      }
+    }
     for (const side of ['left', 'right']) {
       const stack = this._stacks[side];
       const panels = stack
@@ -117,6 +187,7 @@ export class PanelNavigation {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    document.removeEventListener('pointerdown', this._onOutsidePointer);
     this._observer?.disconnect();
     this._observer = null;
     for (const unmount of this._unmounts) unmount();

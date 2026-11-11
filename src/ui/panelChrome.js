@@ -210,15 +210,20 @@ export class PanelChrome {
         const panel = document.getElementById(panelId);
         if (!panel?.getClientRects || panel.getClientRects().length > 0)
           return null;
-        const item = document.querySelector?.(
-          `.ui-rail [data-rail-item="${panelId}"]`,
-        );
-        return item &&
-          !item.disabled &&
-          item.getClientRects().length > 0 &&
-          getComputedStyle(item).visibility === 'visible'
-          ? item
-          : null;
+        for (const selector of [
+          `.gev-panel-rail [data-rail-item="${panelId}"]`,
+          '.minimal-filter-controls [data-minimal-tools-trigger]',
+        ]) {
+          const item = document.querySelector?.(selector);
+          if (
+            item &&
+            !item.disabled &&
+            item.getClientRects().length > 0 &&
+            getComputedStyle(item).visibility === 'visible'
+          )
+            return item;
+        }
+        return null;
       },
     });
   }
@@ -304,6 +309,9 @@ export class PanelChrome {
       disclosure: panel.querySelector(`[data-dock-toggle-target="${panelId}"]`),
       openDelayMs,
       closeDelayMs,
+      // Minimal trays open deliberately, without pointer-driven surprises.
+      hoverEnabled: () =>
+        document.documentElement?.dataset.uiTheme !== 'minimal',
       // A phone sheet holds its trays open; the tab bar closes them.
       isActive: () =>
         !this._disposed &&
@@ -441,11 +449,43 @@ export class PanelChrome {
     if (
       !restore &&
       !nextCollapsed &&
+      document.documentElement?.dataset.uiTheme === 'minimal' &&
+      !document.body?.classList?.contains('mobile-shell') &&
+      !document.body?.classList?.contains('cockpit-mode')
+    ) {
+      const trays = ['location-bar', 'control-panel'];
+      const peers = sideStack
+        ? trays.map((id) => document.getElementById(id))
+        : trays.includes(panelId)
+          ? [this._leftPanelStack, this._rightPanelStack]
+              .filter(Boolean)
+              .flatMap((stack) => [...stack.children])
+              .filter((peer) => peer.matches('[data-panel-id]'))
+          : [];
+      for (const peer of peers) {
+        if (peer && peer !== panelEl && !peer.classList.contains('collapsed'))
+          this.setPanelCollapsed(peer.id, true, {
+            explicit,
+            persist,
+            syncShare: false,
+          });
+      }
+    }
+    if (
+      !restore &&
+      !nextCollapsed &&
       sideStack &&
       // Phone sheets show several rail panels at once.
       !document.body?.classList?.contains('mobile-shell')
     ) {
-      for (const peer of sideStack.children) {
+      // Minimal has one docked inspector shared by both sides. Keep the
+      // existing per-side accordion in Cockpit and the other skins.
+      const stacks =
+        document.documentElement?.dataset.uiTheme === 'minimal' &&
+        !document.body?.classList?.contains('cockpit-mode')
+          ? [this._leftPanelStack, this._rightPanelStack].filter(Boolean)
+          : [sideStack];
+      for (const peer of stacks.flatMap((stack) => [...stack.children])) {
         if (
           peer !== panelEl &&
           peer.matches('[data-panel-id]') &&

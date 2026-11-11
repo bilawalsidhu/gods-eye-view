@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+The Minimal HUD layout is a compact map-first console with shadcn-vue controls
+built on Reka UI. It uses 11px UI text, 10px secondary text, line icons and square
+layer switches. Location, Layers, world time and Tools sit above the map; panels
+open on demand, one at a time, without a persistent footer. Layer categories
+collapse independently, and the All layers switch controls available layers even
+inside collapsed categories. The top-right command search (Cmd/Ctrl K) finds
+places, coordinates, layer actions and panels through their existing owners.
+The settings gear groups API keys, language, UI style and map style. Search
+closes and stays hidden in clean view and recording; an open timeline also stays
+hidden in those modes. Tactical and Cyber remain separate UI styles.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.

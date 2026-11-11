@@ -507,3 +507,76 @@ test('a layer with no feed in view says why instead of "never"', async () => {
     setLocale('en');
   }
 });
+
+test('the master switch disables partial selections and enables eligible layers once, including collapsed sections', async (t) => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { nextTick } = await import('vue');
+  document.body.replaceChildren();
+  document.documentElement.dataset.uiTheme = 'minimal';
+  const container = document.body.appendChild(document.createElement('div'));
+  const layers = [
+    { id: 'flights', enabled: true },
+    { id: 'cctv', enabled: false },
+    { id: 'street-level', enabled: false, stats: { sourceUnavailable: true } },
+    { id: 'hidden-layer', enabled: true, showInTogglePanel: false },
+  ].map((layer) => ({
+    name: layer.id,
+    source: 'Test',
+    showInTogglePanel: true,
+    stats: {},
+    ...layer,
+  }));
+  const calls = [];
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    isEnabled: (id) => layers.find((layer) => layer.id === id).enabled,
+    async setEnabled(id, enabled) {
+      calls.push([id, enabled]);
+      layers.find((layer) => layer.id === id).enabled = enabled;
+    },
+    hasRowControls: () => false,
+    getRowControls: () => null,
+  });
+  t.after(() => {
+    panel.destroy();
+    delete document.documentElement.dataset.uiTheme;
+  });
+  panel.mount(container);
+  await nextTick();
+  await nextTick();
+  assert.equal(
+    container.querySelector('[data-layer-master]').getAttribute('aria-checked'),
+    'true',
+  );
+  assert.equal(
+    container.querySelector('[data-layer-master]').getAttribute('data-partial'),
+    'true',
+  );
+  container.querySelectorAll('.console-section-trigger')[1].click();
+  await nextTick();
+  await panel._setAllEnabled(false, panel._generation);
+  assert.deepEqual(calls, [['flights', false]]);
+  assert.equal(layers[3].enabled, true);
+  const enabling = panel._setAllEnabled(true, panel._generation);
+  assert.equal(
+    container.querySelector('[data-layer-master]').getAttribute('aria-busy'),
+    'true',
+  );
+  await panel._setAllEnabled(true, panel._generation);
+  await enabling;
+  assert.deepEqual(calls, [
+    ['flights', false],
+    ['flights', true],
+    ['cctv', true],
+  ]);
+  await panel._setAllEnabled(true, panel._generation);
+  assert.equal(calls.length, 3);
+  await panel._setAllEnabled(false, panel._generation - 1);
+  assert.equal(calls.length, 3);
+  assert.equal(
+    container
+      .querySelectorAll('.console-section-trigger')[1]
+      .getAttribute('aria-expanded'),
+    'false',
+  );
+});

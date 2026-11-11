@@ -3,7 +3,7 @@
 import '../../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { h, render } from 'vue';
+import { h, render, nextTick } from 'vue';
 import LayerRows from './LayerRows.vue';
 
 const row = (countLine) => ({
@@ -158,6 +158,73 @@ test('a row switch and slider render their markup and report choices', () => {
   assert.equal(input.getAttribute('aria-valuetext'), '≥ 120 MW');
   assert.equal(segments[1].classList.contains('active'), true);
   render(null, container);
+});
+
+test('layer switches expose their live checked state and preserve the toggle action', async () => {
+  document.documentElement.dataset.uiTheme = 'minimal';
+  document.body.replaceChildren();
+  const host = document.body.appendChild(document.createElement('div'));
+  const calls = [];
+  const value = row(false);
+  value.toggle.classes = { active: true };
+  value.toggle.feedState = 'loading';
+  value.toggle.text = 'LOADING';
+  render(
+    h(LayerRows, { items: [value], onToggle: (id) => calls.push(id) }),
+    host,
+  );
+  await nextTick();
+  const toggle = host.querySelector('[role="switch"]');
+  assert.equal(toggle.getAttribute('aria-checked'), 'true');
+  assert.ok(toggle.querySelector('[data-slot="switch-thumb"]'));
+  toggle.click();
+  assert.deepEqual(calls, ['flights']);
+  value.toggle.classes = { active: false };
+  render(
+    h(LayerRows, { items: [{ ...value }], onToggle: (id) => calls.push(id) }),
+    host,
+  );
+  assert.equal(toggle.getAttribute('aria-checked'), 'false');
+  render(null, host);
+  delete document.documentElement.dataset.uiTheme;
+});
+
+test('Minimal sections collapse without changing layer state and remain collapsed through live refreshes', async (t) => {
+  document.body.replaceChildren();
+  document.documentElement.dataset.uiTheme = 'minimal';
+  const host = document.body.appendChild(document.createElement('div'));
+  const calls = [];
+  const items = [
+    { key: 'group:Movement', heading: 'Movement' },
+    row(false),
+    { key: 'group:Cameras', heading: 'Cameras' },
+    { ...row(false), key: 'cctv', id: 'cctv', name: 'Cameras' },
+  ];
+  const props = { items, onToggle: (id) => calls.push(id) };
+  t.after(() => {
+    render(null, host);
+    delete document.documentElement.dataset.uiTheme;
+  });
+  render(h(LayerRows, props), host);
+  await nextTick();
+  await nextTick();
+  const trigger = host.querySelector('.console-section-trigger');
+  assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+  trigger.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+  assert.deepEqual(calls, []);
+  assert.equal(host.querySelector('[data-layer-id="cctv"]').hidden, false);
+  render(h(LayerRows, { ...props, items: [...items] }), host);
+  await nextTick();
+  assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+  trigger.click();
+  await nextTick();
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+  host.querySelector('[data-layer-id="flights"] [role="switch"]').click();
+  assert.deepEqual(calls, ['flights']);
 });
 
 test('a row range renders start and end pickers and reports which end moved', () => {

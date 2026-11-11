@@ -137,15 +137,15 @@ test('visual styles retain Cyber through real preset application without droppin
   );
 });
 
-test('non-Cyber style presets and explicit HUD choices remain authoritative', (t) => {
+test('Minimal stays selected through imagery presets; Tactical keeps preset layouts', (t) => {
   const { owner, hud, root } = styleOwner(t);
   for (const variant of ['tactical', 'minimal']) {
     owner._setHudVariant(variant);
     assert.equal(hud.getVariant(), variant);
-    assert.equal(root.dataset.uiTheme, undefined);
+    assert.equal(root.dataset.uiTheme, variant === 'minimal' ? 'minimal' : undefined);
     owner.setStyle('normal');
     owner.setStyle('surveillance');
-    assert.equal(hud.getVariant(), 'tactical');
+    assert.equal(hud.getVariant(), variant);
   }
 });
 
@@ -579,7 +579,9 @@ test('the Cyber HUD owns the global shell skin and leaving it restores defaults'
   const root = { dataset: { unrelated: 'preserved' } };
   assert.equal(applyHudUiTheme(root, 'cyber'), 'cyber');
   assert.equal(root.dataset.uiTheme, 'cyber');
-  assert.equal(applyHudUiTheme(root, 'minimal'), null);
+  assert.equal(applyHudUiTheme(root, 'minimal'), 'minimal');
+  assert.equal(root.dataset.uiTheme, 'minimal');
+  assert.equal(applyHudUiTheme(root, 'tactical'), null);
   assert.equal(root.dataset.uiTheme, undefined);
   assert.equal(root.dataset.unrelated, 'preserved');
 });
@@ -662,7 +664,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);
-  assert.match(stylesheet, /@import '\.\/src\/ui\/styles\/cyber\.css';\s*$/);
+  assert.match(stylesheet, /@import '\.\/src\/ui\/styles\/cyber\.css';\s*@import '\.\/src\/ui\/styles\/shadcn\.css';\s*@import '\.\/src\/ui\/styles\/minimal\.css';\s*$/);
   assert.match(cyberStyles, /:root\[data-ui-theme='cyber'\]/);
   assert.match(cyberStyles, /\.material-symbols-outlined/);
   assert.match(cyberStyles, /\.pp-label/);

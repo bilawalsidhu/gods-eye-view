@@ -83,6 +83,7 @@ export function createHoverDisclosure({
   onEscape,
   focusTarget = null,
   isActive = () => true,
+  hoverEnabled = () => true,
   openDelayMs = 850,
   closeDelayMs = 1000,
   documentRef = panelEl?.ownerDocument,
@@ -130,9 +131,10 @@ export function createHoverDisclosure({
 
   const scheduleOpen = () => {
     clearOpen();
+    if (!hoverEnabled()) return;
     openTimer = window.setTimeout(() => {
       openTimer = null;
-      if (destroyed || !isActive()) return;
+      if (destroyed || !isActive() || !hoverEnabled()) return;
       if (!panelEl.matches(':hover')) return;
       if (performance.now() - lastWheelTime < 280) return;
       if (!panelEl.classList.contains('collapsed')) return;
@@ -163,9 +165,10 @@ export function createHoverDisclosure({
 
   const scheduleClose = () => {
     clearClose();
+    if (!hoverEnabled()) return;
     closeTimer = window.setTimeout(() => {
       closeTimer = null;
-      if (destroyed || !isActive()) return;
+      if (destroyed || !isActive() || !hoverEnabled()) return;
       if (panelEl.matches(':hover') || keyboardFocusInside()) return;
       if (panelEl.classList.contains('dock-pinned')) return;
       if (panelEl.classList.contains('collapsed')) return;

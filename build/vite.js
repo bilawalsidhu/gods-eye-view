@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import cesium from 'vite-plugin-cesium';
 import vue from '@vitejs/plugin-vue';
+import tailwindcss from '@tailwindcss/vite';
 import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
@@ -186,6 +187,7 @@ export function createBrowserViteConfig({
       cesium(),
       // Application views are Vue single-file components.
       vue(VUE_PLUGIN_OPTIONS),
+      tailwindcss(),
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),

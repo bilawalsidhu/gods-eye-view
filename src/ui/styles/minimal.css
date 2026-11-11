@@ -1,0 +1,1169 @@
+/* Minimal is a map-first skin, with top dropdowns and on-demand panels.
+   Keep phone sheets and Cockpit under their existing layout owners. */
+.ui-line-icon,
+.minimal-layer-icon,
+.minimal-display-icon,
+.minimal-brand-icon,
+.minimal-layer-meta {
+  display: none;
+}
+:root[data-ui-theme='minimal'] {
+  --font-sans: Arial, 'Helvetica Neue', ui-sans-serif, system-ui, sans-serif;
+  --console-ui-size: 11px;
+  --console-caption-size: 10px;
+  --console-line-height: 16px;
+  --accent: #a8c6b3;
+  --accent-dim: rgba(168, 198, 179, 0.12);
+  --accent-glow: transparent;
+  --glass-bg: #131819;
+  --glass-border: rgba(230, 239, 233, 0.1);
+  --glass-border-hover: rgba(230, 239, 233, 0.22);
+  --text-primary: #e8ede9;
+  --text-secondary: #a8b3ad;
+  --text-dim: #87968d;
+  --menu-bg: #171d1b;
+  --scroll-thumb: rgba(168, 198, 179, 0.4);
+  --scroll-track: transparent;
+  --panel-radius: 2px;
+  --btn-radius: 2px;
+  --dock-label-color: var(--text-secondary);
+  --dock-label-font-size: 11px;
+  --dock-label-letter-spacing: 0;
+  --panel-surface-shadow: none;
+}
+
+@media (min-width: 721px) {
+  :root[data-ui-theme='minimal'] body:not(.mobile-shell):not(.cockpit-mode) {
+    --world-timeline-lift: 0px;
+  }
+
+  :root[data-ui-theme='minimal'] .minimal-filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :root[data-ui-theme='minimal'] .minimal-filter-toggle,
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(#location-bar-toggle, #control-panel-toggle) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    background: var(--glass-bg);
+    font: 500 var(--console-ui-size)/var(--console-line-height) var(--font-sans);
+    letter-spacing: 0;
+    cursor: pointer;
+  }
+
+  :root[data-ui-theme='minimal'] .minimal-filter-toggle[aria-expanded='true'] {
+    border-color: var(--accent);
+    background: var(--menu-bg);
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #world-timeline {
+    display: none;
+    position: fixed;
+    inset: 96px auto auto 12px;
+    width: min(560px, calc(100vw - 24px));
+    transform: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode):not(.ui-clean-view):not(
+      .recording-mode
+    ):has(.minimal-filter-controls[data-timeline-open='true'])
+    #world-timeline {
+    display: flex;
+  }
+  :root[data-ui-theme='minimal'] body:not(.mobile-shell):not(.cockpit-mode) {
+    --minimal-rail-width: 0px;
+    --minimal-header-height: 48px;
+    --minimal-footer-height: 0px;
+    --minimal-inspector-width: 320px;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #title-bar {
+    position: fixed;
+    inset: 0 0 auto;
+    height: var(--minimal-header-height);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    background: var(--glass-bg);
+    border-bottom: 1px solid var(--glass-border);
+    z-index: 90;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #title-bar
+    h1 {
+    gap: 8px;
+    font: 600 12px/16px var(--font-sans);
+    letter-spacing: 0.04em;
+    text-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal'] #title-bar .title-logo {
+    width: 25px;
+    filter: grayscale(1);
+  }
+
+  :root[data-ui-theme='minimal'] #top-center-actions {
+    top: 8px;
+    gap: 4px;
+  }
+
+  :root[data-ui-theme='minimal'] #top-center-actions > button {
+    width: 32px;
+    height: 32px;
+    border-radius: 2px;
+    border-color: var(--glass-border);
+    color: var(--text-secondary);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #corner-actions {
+    bottom: auto;
+    height: 32px;
+  }
+
+  :root[data-ui-theme='minimal'] :is(#key-setup-chip, .locale-picker-button) {
+    color: var(--text-secondary);
+    background: transparent;
+    border-color: var(--glass-border);
+    box-shadow: none;
+    font: 11px var(--font-sans);
+    letter-spacing: 0;
+    border-radius: 2px;
+  }
+
+  :root[data-ui-theme='minimal']
+    #corner-actions
+    .material-symbols-outlined:not(.ui-icon) {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    .locale-picker-popup {
+    top: calc(100% + 8px);
+    bottom: auto;
+  }
+
+  :root[data-ui-theme='minimal']
+    :is(#title-bar .subtitle, #title-bar .title-glow, #style-indicator) {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal'] #intel-hud {
+    text-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #intel-hud
+    :is(.hud-top-left, .hud-bottom-left) {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal'] #intel-hud .hud-bottom-bar {
+    inset: auto 20px 14px auto;
+    width: auto;
+    max-width: calc(100vw - 180px);
+    transform: none;
+    border: 0;
+    background: rgba(19, 24, 25, 0.85);
+    border-radius: 4px;
+    padding: 5px 8px;
+    color: var(--text-secondary);
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(#left-panel-stack, #right-context-rail) {
+    position: fixed;
+    top: 96px !important;
+    bottom: auto !important;
+    inset-inline-start: 12px;
+    inset-inline-end: auto;
+    width: min(
+      var(--minimal-inspector-width),
+      calc(100vw - var(--minimal-rail-width) - 16px)
+    );
+    height: auto !important;
+    max-height: calc(100dvh - 152px) !important;
+    align-items: stretch;
+    gap: 0;
+    transition: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(#left-panel-stack, #right-context-rail)
+    > [data-panel-id].collapsed {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(#left-panel-stack, #right-context-rail)
+    > [data-panel-id]:not(.collapsed):not([hidden]) {
+    position: relative;
+    inset: auto;
+    flex: 0 1 auto !important;
+    width: 100%;
+    height: auto !important;
+    max-height: calc(100dvh - 152px) !important;
+    margin: 0;
+    border-radius: 2px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(#left-panel-stack, #right-context-rail)
+    > [data-panel-id]
+    > :is(
+      [data-panel-surface],
+      .panel-inner,
+      .data-panel-inner,
+      .utilities-panel-inner,
+      .scene-panel-inner,
+      .cctv-panel-inner,
+      .street-level-panel-inner,
+      .global-context-panel-inner
+    ) {
+    width: 100%;
+    min-height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  :root[data-ui-theme='minimal'] :is(.panel-glow, .pp-glow) {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    .gev-panel-rail--right {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    .gev-panel-rail--left {
+    position: fixed;
+    inset: 56px auto auto 188px;
+    width: auto;
+    padding: 0;
+    display: block;
+    overflow: visible;
+    background: transparent;
+    border: 0;
+    transition: none;
+  }
+
+  /* The inspector uses one header edge and one content gutter throughout.
+     Density comes from spacing, while labels and feed status stay legible. */
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(#left-panel-stack, #right-context-rail)
+    .panel-divider {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(.data-panel-inner, .utilities-panel-inner, .scene-panel-inner) {
+    padding: 0;
+    gap: 0;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    :is(#left-panel-stack, #right-context-rail)
+    :is(.panel-header, .pp-header-row, [data-panel-header]) {
+    height: 32px;
+    min-height: 32px;
+    flex: 0 0 32px;
+    margin: 0;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--glass-border);
+    gap: 8px;
+  }
+
+  :root[data-ui-theme='minimal']
+    :is(.panel-header, .pp-header-row, [data-panel-header])
+    :is(.panel-title, .pp-header-label, .panel-surface-title) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  :root[data-ui-theme='minimal'] .data-toggle-list {
+    gap: 0;
+    padding: 4px 8px 8px;
+    scrollbar-gutter: auto;
+  }
+
+  :root[data-ui-theme='minimal'] .data-layer-group-heading {
+    margin: 8px 4px 0;
+    padding: 8px 0 4px;
+    font-size: 10px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+  }
+
+  :root[data-ui-theme='minimal'] .data-layer-group-heading:first-child {
+    margin-top: 0;
+    padding-top: 4px;
+  }
+
+  :root[data-ui-theme='minimal'] .data-toggle-row {
+    padding: 2px 4px;
+    min-height: 36px;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(230, 239, 233, 0.04);
+  }
+
+  :root[data-ui-theme='minimal'] .data-toggle-top {
+    min-height: 20px;
+    gap: 4px;
+  }
+
+  :root[data-ui-theme='minimal'] .data-toggle-left {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  :root[data-ui-theme='minimal'] .data-icon {
+    width: 16px;
+    flex: 0 0 16px;
+    font-size: 14px;
+    text-align: center;
+  }
+
+  :root[data-ui-theme='minimal'] .data-name {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0;
+  }
+
+  :root[data-ui-theme='minimal'] .data-toggle-meta {
+    padding-left: 20px;
+    margin-top: 0;
+    font-size: 9px;
+    line-height: 12px;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :root[data-ui-theme='minimal'] .data-toggle-right {
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #pp-toggles {
+    padding: 0;
+    gap: 0;
+    border: 0;
+    border-inline-end: 1px solid var(--glass-border);
+    overflow: hidden;
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles .pp-panel-body {
+    display: block;
+    width: 100%;
+    align-self: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles .pp-toggle-group {
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles .pp-toggle-btn {
+    min-height: 32px;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles .pp-slider-row {
+    min-height: 28px;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles .pp-slider-mini-label {
+    flex: 0 0 72px;
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles #clean-view-toggle {
+    width: 100%;
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--glass-border);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  :root[data-ui-theme='minimal'] #pp-toggles #detection-toggle.active {
+    background: var(--accent-dim);
+    box-shadow: none;
+    filter: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #pp-toggles
+    #detection-toggle.active
+    .pp-label {
+    color: var(--accent);
+    text-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal'] :is(.pp-label, .pp-slider-mini-label) {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    :is(.panel-title, .pp-header-label, .panel-surface-title) {
+    font-family: var(--font-sans);
+    font-size: var(--console-ui-size);
+    letter-spacing: 0;
+    color: var(--text-primary);
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock {
+    left: 12px;
+    right: auto;
+    top: 56px;
+    bottom: auto;
+    width: 168px;
+    max-width: none;
+    height: 32px;
+    min-height: 32px;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none !important;
+    transition: none;
+    backdrop-filter: none;
+  }
+
+  :root[data-ui-theme='minimal'] #command-dock > #gev-voice-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 0 12px;
+    min-height: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    > :is(#location-bar, #control-panel) {
+    height: 32px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(#location-bar .location-inner, #control-panel .panel-inner) {
+    height: 32px;
+    min-height: 32px;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(#gev-voice-button, #gev-chat-button) {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    border-radius: 2px;
+    box-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    #gev-voice-control
+    .gev-mic-orbit {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal'] #command-dock #gev-chat-button > svg {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    #gev-voice-control
+    > .gev-voice-visualizer,
+  :root[data-ui-theme='minimal']
+    #command-dock
+    #gev-voice-control[data-assistant-mode='idle']
+    > .gev-chat-thinking {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(.gev-mic-label, .gev-chat-label) {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal'] #command-dock .gev-voice-heading {
+    position: static;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(.gev-voice-kicker, .gev-voice-visualizer),
+  :root[data-ui-theme='minimal'] #command-dock .panel-title::after,
+  :root[data-ui-theme='minimal'] #command-dock .location-toolbar-label::after {
+    display: none;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(.panel-title, .location-toolbar-label) {
+    color: var(--text-primary);
+    font: 500 11px var(--font-sans);
+    letter-spacing: 0;
+  }
+
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(.dock-popover-content, #control-panel .dock-popover-content) {
+    background: var(--menu-bg);
+    border-color: var(--glass-border);
+    border-radius: 2px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  }
+
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #cesium-credits {
+    inset-inline-start: auto !important;
+    left: auto !important;
+    right: 12px !important;
+    width: max-content !important;
+    max-width: calc(100vw - 180px);
+  }
+
+  :root[data-ui-theme='minimal']
+    #cesium-credits
+    :is(
+      .cesium-credit-logoContainer,
+      .cesium-credit-textContainer,
+      .cesium-credit-expand-link
+    ) {
+    position: static !important;
+  }
+}
+
+/* Map-first controls stay anchored to the top; nothing reserves a footer. */
+@media (min-width: 721px) {
+  :root[data-ui-theme='minimal'] .minimal-filter-controls > button:first-child {
+    width: 88px;
+  }
+  :root[data-ui-theme='minimal'] #minimal-time-select {
+    width: 104px;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #left-panel-stack:has(> #data-panel:not(.collapsed)) {
+    inset-inline-start: 188px;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #location-bar {
+    flex: 0 0 168px;
+    width: 168px;
+    height: 32px;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #control-panel {
+    position: fixed;
+    left: 484px;
+    right: auto;
+    top: 56px;
+    bottom: auto;
+    width: 112px;
+    height: 32px;
+    flex-basis: 112px;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(#location-bar .location-inner, #control-panel .panel-inner) {
+    width: 100%;
+    padding: 0;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(.location-toolbar, .panel-header) {
+    height: 32px;
+    margin: 0;
+  }
+
+  :root[data-ui-theme='minimal'] #command-dock #location-bar .location-toolbar,
+  :root[data-ui-theme='minimal'] #command-dock #control-panel .panel-header {
+    width: 100%;
+    min-width: 0;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(#location-bar-toggle, #control-panel-toggle) {
+    width: 100%;
+    height: 32px;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(.panel-title, .location-toolbar-label) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    font-size: var(--console-ui-size);
+    white-space: nowrap;
+    text-transform: none;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    :is(
+      .dock-label-icon,
+      .panel-divider,
+      .panel-mini-status,
+      .location-mini-status
+    ) {
+    display: none;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    #location-bar
+    .dock-popover-content {
+    top: calc(100% + 8px);
+    bottom: auto;
+    left: 0;
+    right: auto;
+    margin: 0;
+    width: min(464px, calc(100vw - 24px));
+    max-height: calc(100dvh - 152px);
+    overflow-y: auto;
+    transform-origin: top left;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    #control-panel
+    .dock-popover-content {
+    position: fixed;
+    top: 96px;
+    bottom: auto;
+    left: 12px;
+    right: auto;
+    margin: 0;
+    width: min(464px, calc(100vw - 24px));
+    max-height: calc(100dvh - 152px);
+    overflow-y: auto;
+    transform-origin: top left;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #gev-voice-control {
+    position: fixed;
+    bottom: auto;
+    flex-basis: 80px;
+    padding: 0;
+    gap: 8px;
+  }
+  :root[data-ui-theme='minimal']
+    #command-dock
+    #gev-voice-control
+    :is(
+      .gev-voice-panel,
+      .gev-chat-panel,
+      .gev-voice-help-tray,
+      .gev-voice-card
+    ) {
+    top: calc(100% + 8px);
+    bottom: auto;
+    left: auto;
+    right: 0;
+    transform: none;
+    max-height: calc(100dvh - 72px);
+  }
+  :root[data-ui-theme='minimal'] #intel-hud .hud-bottom-bar {
+    display: none;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #cesium-credits {
+    top: auto !important;
+    bottom: 8px !important;
+  }
+}
+@media (min-width: 721px) and (max-width: 1000px) {
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #gev-voice-control {
+    left: 604px;
+    right: auto;
+    top: 56px;
+  }
+}
+
+/* A single line-icon and type system for the quiet skin. */
+:root[data-ui-theme='minimal'] .ui-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 0 !important;
+  vertical-align: middle;
+}
+:root[data-ui-theme='minimal'] .ui-line-icon {
+  display: block;
+}
+:root[data-ui-theme='minimal']
+  :is(
+    .ui-material-icon,
+    .legacy-layer-icon,
+    .legacy-layer-meta,
+    .legacy-display-icon,
+    #title-bar .title-logo
+  ) {
+  display: none;
+}
+:root[data-ui-theme='minimal']
+  :is(.minimal-layer-icon, .minimal-display-icon, .minimal-brand-icon) {
+  display: inline-flex;
+  color: var(--text-secondary);
+}
+:root[data-ui-theme='minimal'] #title-bar h1 {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  font-weight: 600;
+}
+:root[data-ui-theme='minimal'] .data-toggle-row {
+  padding: 3px 8px;
+  border-bottom-color: var(--glass-border);
+}
+:root[data-ui-theme='minimal'] .data-toggle-left {
+  gap: 8px;
+}
+:root[data-ui-theme='minimal'] .data-name {
+  font: 400 var(--console-ui-size)/var(--console-line-height) var(--font-sans);
+  letter-spacing: 0;
+}
+:root[data-ui-theme='minimal'] .data-toggle-right {
+  gap: 12px;
+}
+:root[data-ui-theme='minimal'] .data-count {
+  font: 400 var(--console-ui-size)/var(--console-line-height) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: right;
+}
+:root[data-ui-theme='minimal'] .minimal-layer-meta {
+  display: block;
+  margin-left: 0;
+  color: var(--text-secondary);
+  font: var(--console-caption-size)/14px var(--font-sans);
+}
+:root[data-ui-theme='minimal'] .minimal-layer-state {
+  margin-inline-start: 8px;
+  font-size: 10px;
+  color: var(--accent);
+}
+:root[data-ui-theme='minimal'] .data-layer-group-heading {
+  font: 500 var(--console-caption-size)/var(--console-line-height)
+    var(--font-sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-ui-theme='minimal']
+  :is(.pp-label, .pp-slider-mini-label, .panel-title, .pp-header-label) {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+:root[data-ui-theme='minimal'] #minimal-settings-trigger {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+:root[data-ui-theme='minimal'] #minimal-settings-trigger:hover {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+@media (min-width: 721px) {
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #control-panel {
+    display: none;
+  }
+  :root[data-ui-theme='minimal'] #location-bar .location-search-wrap {
+    display: none;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #corner-actions {
+    top: 8px;
+    right: 12px;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #gev-voice-control {
+    display: none;
+    left: auto;
+    top: 96px;
+    right: 12px;
+    width: auto;
+    min-height: 32px;
+    height: auto;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #gev-voice-control:is(
+      [data-chat-open='true'],
+      [data-status='error'],
+      [data-assistant-mode='voice']
+    ) {
+    display: flex;
+  }
+  :root[data-ui-theme='minimal']
+    body:not(.mobile-shell):not(.cockpit-mode)
+    #command-dock
+    > #gev-voice-control:has(.gev-voice-panel:not([hidden])) {
+    display: flex;
+  }
+}
+@media (min-width: 721px) and (max-width: 800px) {
+  :root[data-ui-theme='minimal'] #top-center-actions {
+    top: 56px;
+    right: 12px;
+    left: auto;
+    transform: none;
+  }
+}
+
+:root[data-ui-theme='minimal'] .data-toggle-meta {
+  padding-left: 24px;
+  margin-top: 0;
+}
+.minimal-panel-close {
+  display: none;
+}
+:root[data-ui-theme='minimal'] .legacy-panel-glyph {
+  display: none;
+}
+:root[data-ui-theme='minimal'] .minimal-panel-close {
+  display: block;
+}
+:root[data-ui-theme='minimal'] :is(.panel-title, .pp-header-label) {
+  text-transform: lowercase;
+  font-weight: 600;
+}
+:root[data-ui-theme='minimal']
+  :is(.panel-title, .pp-header-label)::first-letter {
+  text-transform: uppercase;
+}
+:root[data-ui-theme='minimal'] #minimal-api-settings > span:nth-child(2) {
+  flex: 1;
+}
+:root[data-ui-theme='minimal']
+  .data-toggle-row:has([data-feed-state='unavailable'])
+  .minimal-layer-state {
+  color: #e4a099;
+}
+:root[data-ui-theme='minimal']
+  .data-toggle-row:has(
+    :is(
+      [data-feed-state='stale'],
+      [data-feed-state='degraded'],
+      [data-feed-state='uncertain']
+    )
+  )
+  .minimal-layer-state {
+  color: #d9be87;
+}
+/* The search surface keeps one visible keyboard ring around all its parts. */
+/* Reka UI owns focus, dismissal, switch state and command navigation. */
+:root[data-ui-theme='minimal'] [data-reka-popper-content-wrapper] {
+  z-index: 200 !important;
+}
+
+/* Standard shadcn controls share the console's compact grid. */
+@media (min-width: 721px) {
+  :root[data-ui-theme='minimal'] .console-search-trigger {
+    position: fixed;
+    top: 8px;
+    right: 56px;
+    width: clamp(220px, 26vw, 320px);
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 1px solid #303034;
+    border-radius: 4px;
+    background: #18181b;
+    color: #a1a1aa;
+    font: var(--console-ui-size)/var(--console-line-height) var(--font-sans);
+    cursor: pointer;
+  }
+  :root[data-ui-theme='minimal'] .console-search-trigger span:not(.ui-icon) {
+    flex: 1;
+    text-align: left;
+  }
+  :root[data-ui-theme='minimal'] .console-search-trigger kbd {
+    font: 10px var(--font-sans);
+  }
+}
+:root[data-ui-theme='minimal'] .console-search-content {
+  max-width: calc(100vw - 24px);
+}
+:root[data-ui-theme='minimal'] .console-search-error {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #fca5a5;
+}
+:root[data-ui-theme='minimal'] .console-time-trigger {
+  width: auto;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #303034;
+  border-radius: 4px;
+  background: #18181b;
+  color: #d4d4d8;
+  font: var(--console-ui-size)/var(--console-line-height) var(--font-sans);
+}
+:root[data-ui-theme='minimal'] .console-layer-switch {
+  flex-shrink: 0;
+}
+
+/* Flat square switches for the Minimal skin. */
+:root[data-ui-theme='minimal'] .console-layer-switch,
+:root[data-ui-theme='minimal']
+  .console-layer-switch
+  [data-slot='switch-thumb'] {
+  border-radius: 0;
+}
+:root[data-ui-theme='minimal'] [data-slot='command-input']:focus-visible {
+  outline: none !important;
+}
+:root[data-ui-theme='minimal']
+  [data-slot='command-input-wrapper']:focus-within {
+  box-shadow: inset 0 -1px #a1a1aa;
+}
+
+/* Each boundary has a single rule; section headings own the group dividers. */
+:root[data-ui-theme='minimal']
+  #command-dock
+  #location-bar
+  .location-toolbar::after,
+:root[data-ui-theme='minimal']
+  #command-dock
+  #control-panel
+  .panel-header::after {
+  display: none;
+}
+:root[data-ui-theme='minimal'] .console-layer-master {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 4px 8px;
+  font: 500 var(--console-ui-size)/var(--console-line-height) var(--font-sans);
+}
+:root[data-ui-theme='minimal'] .console-layer-master > span {
+  flex: 1;
+}
+:root[data-ui-theme='minimal'] .console-layer-master small,
+:root[data-ui-theme='minimal'] .console-section-trigger small {
+  color: var(--text-dim);
+  font: var(--console-caption-size)/var(--console-line-height) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-ui-theme='minimal'] .console-layer-section {
+  border-top: 1px solid var(--glass-border);
+}
+:root[data-ui-theme='minimal'] .console-layer-heading {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+:root[data-ui-theme='minimal'] .console-section-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  text-align: start;
+  font: 500 var(--console-caption-size)/var(--console-line-height)
+    var(--font-sans);
+  cursor: pointer;
+}
+:root[data-ui-theme='minimal'] .console-section-trigger > span:not(.ui-icon) {
+  flex: 1;
+}
+:root[data-ui-theme='minimal'] .console-section-trigger:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+:root[data-ui-theme='minimal']
+  .console-section-trigger[aria-expanded='false']
+  .ui-icon {
+  transform: rotate(-90deg);
+}
+:root[data-ui-theme='minimal']
+  .console-section-content
+  > .data-toggle-row:last-child {
+  border-bottom: 0;
+}
+:root[data-ui-theme='minimal'] .console-switch-partial {
+  display: block;
+  color: #18181b;
+  font: 600 14px/16px var(--font-sans);
+  text-align: center;
+}
+
+/* Compact console typography, shared by native controls and panel content. */
+:root[data-ui-theme='minimal'] body {
+  font: var(--console-ui-size)/var(--console-line-height) var(--font-sans);
+}
+:root[data-ui-theme='minimal'] .data-toggle-top {
+  min-height: 18px;
+}
+:root[data-ui-theme='minimal']
+  :is(
+    .panel-title,
+    .panel-surface-title,
+    .pp-header-label,
+    .location-toolbar-label
+  ) {
+  font-size: var(--console-ui-size);
+  line-height: var(--console-line-height);
+}
+:root[data-ui-theme='minimal'] #key-setup-title {
+  font: 600 16px/20px var(--font-sans);
+}
+:root[data-ui-theme='minimal']
+  :is(
+    #key-setup-description,
+    .key-setup-row-head strong,
+    .key-setup-unlocks,
+    .key-setup-note
+  ) {
+  font-family: var(--font-sans);
+  font-size: var(--console-ui-size);
+  line-height: var(--console-line-height);
+}
+:root[data-ui-theme='minimal']
+  :is(
+    [data-panel-surface],
+    [data-panel-popup],
+    #gev-chat-panel,
+    .gev-voice-mini p
+  ) {
+  font-family: var(--font-sans);
+  font-size: var(--console-ui-size);
+  line-height: var(--console-line-height);
+}
+:root[data-ui-theme='minimal']
+  #gev-chat-panel
+  :is(.gev-chat-message > span, #gev-chat-input, #gev-chat-mini-text) {
+  font-size: var(--console-ui-size);
+  line-height: var(--console-line-height);
+}
+:root[data-ui-theme='minimal'] #gev-chat-empty h3 {
+  font-size: 13px;
+  line-height: 18px;
+}

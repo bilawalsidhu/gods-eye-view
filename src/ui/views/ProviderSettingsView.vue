@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef } from 'vue';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { vFieldValue } from '../rail/fieldValue.js';
@@ -8,6 +8,12 @@ import { vStatusText } from '../rail/statusText.js';
 import { useLocaleStore } from '../stores/locale.js';
 import { useProviderSettingsStore } from '../stores/providerSettings.js';
 import LocalePicker from './panels/LocalePicker.vue';
+import UiIcon from '../kit/UiIcon.vue';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '../shadcn/dropdown-menu/index.ts';
+import { useHudStore } from '../stores/hud.js';
+import { useDisplayStore } from '../stores/display.js';
+import { usePanelChromeStore } from '../stores/panelChrome.js';
+import { LOCALES, LOCALE_NAMES } from '../../i18n/locale.js';
 
 const { picker } = storeToRefs(useLocaleStore());
 // The key setup owner (src/keySetup.js) presents the chip, the dialog and its
@@ -21,10 +27,27 @@ const dialog = computed(() => view.value?.dialog ?? { hidden: true, visible: fal
 // Cyber puts the chip in the top toolbar; every other theme keeps it first in
 // the corner row, beside the language picker.
 const cyber = shallowRef(false);
+const minimal = shallowRef(false);
+const settingsOpen = shallowRef(false);
+const hud = useHudStore();
+const display = useDisplayStore();
+const chrome = usePanelChromeStore();
+const styles = [ ['normal', 'Normal'], ['retro', 'CRT'], ['surveillance', 'Night vision'], ['thermal', 'Thermal'], ['anime', 'Anime'], ['noir', 'Noir'] ];
+async function settingsAction(action) {
+  settingsOpen.value = false;
+  await nextTick();
+  action?.();
+}
+function restoreSettingsFocus(event) {
+  const active = document.activeElement;
+  if (active && active !== document.body && active.id !== 'minimal-settings-trigger' && !active.closest('#minimal-settings-menu')) event.preventDefault();
+}
 let themeObserver = null;
 onMounted(() => {
   const theme = document.documentElement;
   const sync = () => {
+    minimal.value = theme.dataset.uiTheme === 'minimal';
+    if (!minimal.value) settingsOpen.value = false;
     cyber.value =
       theme.dataset.uiTheme === 'cyber' &&
       Boolean(document.getElementById('top-center-actions'));
@@ -55,13 +78,35 @@ const removeTitle = (title) =>
   <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing) and
        the language picker, once the shell publishes it. -->
   <div id="corner-actions">
-    <Teleport v-if="available" :to="cyber ? '#top-center-actions' : 'body'" :disabled="!cyber">
+    <DropdownMenu v-if="minimal" v-model:open="settingsOpen">
+      <DropdownMenuTrigger as-child><button id="minimal-settings-trigger" type="button" :aria-label="t('Settings')" :title="t('Settings')"><UiIcon name="settings" :size="18" /></button></DropdownMenuTrigger>
+      <DropdownMenuContent id="minimal-settings-menu" @close-auto-focus="restoreSettingsFocus" class="w-56" align="end" :side-offset="8" :collision-padding="12">
+        <DropdownMenuLabel>{{ t('Settings') }}</DropdownMenuLabel>
+        <DropdownMenuItem id="minimal-api-settings" :disabled="!available || !controls" @select="settingsAction(() => controls?.open())"><UiIcon name="key" :size="16" />{{ t('API keys') }}</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub v-if="picker">
+          <DropdownMenuSubTrigger data-setting="language">{{ t('Language') }}<span class="ml-auto text-xs text-muted-foreground">{{ LOCALE_NAMES[picker.current] }}</span></DropdownMenuSubTrigger>
+          <DropdownMenuSubContent><DropdownMenuRadioGroup :model-value="picker.current" @update:model-value="picker.onSelect($event)"><DropdownMenuRadioItem v-for="locale in LOCALES" :key="locale" :value="locale">{{ LOCALE_NAMES[locale] }}</DropdownMenuRadioItem></DropdownMenuRadioGroup></DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger data-setting="layout">{{ t('UI style') }}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent><DropdownMenuRadioGroup :model-value="hud.hud?.variant ?? 'minimal'" @update:model-value="display.act('setHudLayout', $event)"><DropdownMenuRadioItem v-for="[value,label] in [['minimal','Minimal'],['tactical','Tactical'],['cyber','Cyber']]" :key="value" :value="value">{{ t(label) }}</DropdownMenuRadioItem></DropdownMenuRadioGroup></DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger data-setting="map-style">{{ t('Map style') }}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent><DropdownMenuRadioGroup :model-value="display.style?.name ?? 'normal'" @update:model-value="display.act('setStyle', $event)"><DropdownMenuRadioItem v-for="[value,label] in styles" :key="value" :value="value">{{ t(label) }}</DropdownMenuRadioItem></DropdownMenuRadioGroup></DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem @select="settingsAction(() => chrome.act('toggle', 'pp-toggles'))"><UiIcon name="tune" :size="16" />{{ t('Display settings') }}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <Teleport v-if="available && !minimal" :to="cyber ? '#top-center-actions' : 'body'" :disabled="!cyber">
       <button id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
         <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
         <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
       </button>
     </Teleport>
-    <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
+    <LocalePicker v-if="picker && !minimal" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
   </div>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">
     <div class="key-setup-scanline" aria-hidden="true"></div>

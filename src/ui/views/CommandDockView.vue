@@ -12,11 +12,15 @@ import { usePointerReticleStore } from '../stores/pointerReticle.js';
 import { useVoiceStore } from '../stores/voice.js';
 import PhoneTabBar from './panels/PhoneTabBar.vue';
 import VoiceControl from './panels/VoiceControl.vue';
+import UiIcon from '../kit/UiIcon.vue';
+import { useHudStore } from '../stores/hud.js';
 
 // VisualSettings publishes the active style and the map source controls
 // their chip row; until they do, the dock shows its initial markup. A style
 // button calls the Display controls' owner, a chip the map source controls.
 const display = useDisplayStore();
+const hudStore = useHudStore();
+const minimal = computed(() => hudStore.hud?.variant === 'minimal');
 const { style, mapSource, mapSourceControls } = storeToRefs(display);
 // LocationControls publishes the location tray; pills call the controls,
 // and the search field keeps their listeners.
@@ -75,7 +79,7 @@ function selectMapSource(chip) {
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
         data-dock-toggle-target="control-panel" :aria-expanded="String(panels['control-panel']?.collapsed === false)"
         aria-controls="control-panel-popover" :aria-label="trayWords('control-panel', t('VISUAL PRESETS'), t('Expand Visual Presets'))" :title="trayWords('control-panel', t('VISUAL PRESETS'), undefined)">
-        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>{{ t('VISUAL PRESETS') }}</span>
+        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>{{ minimal ? t('Map style') : t('VISUAL PRESETS') }}<UiIcon v-if="minimal" name="chevron_down" :size="14" /></span>
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
@@ -135,7 +139,7 @@ function selectMapSource(chip) {
     <div class="location-inner">
       <div class="location-toolbar">
         <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" :aria-expanded="String(panels['location-bar']?.collapsed === false)" :aria-label="trayWords('location-bar', t('LOCATION'), t('Expand LOCATION'))" :title="trayWords('location-bar', t('LOCATION'), t('Expand LOCATION'))">
-          <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>{{ t('LOCATION') }}</span>
+          <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>{{ minimal ? (loc?.cities?.find(city => city.active)?.label ?? t('Location')) : t('LOCATION') }}<UiIcon v-if="minimal" name="chevron_down" :size="14" /></span>
         </button>
         <button class="panel-collapse-btn" data-collapse-target="location-bar" :title="t('Collapse panel')" @click="chrome.act('toggle', 'location-bar')">+</button>
       </div>

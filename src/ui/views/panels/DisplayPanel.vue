@@ -9,6 +9,7 @@ import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
 
@@ -60,7 +61,7 @@ const allocationOptions = computed(() => [
   <Teleport :to="cockpitPortal?.hud ?? 'body'" :disabled="!cockpitPortal?.hud">
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: hud?.visible }" id="hud-toggle" @click="act('toggleHud')" :title="t('Intelligence HUD (H)')">
-      <span class="pp-icon">&#x25CE;</span>
+      <span class="pp-icon legacy-display-icon">&#x25CE;</span><UiIcon class="minimal-display-icon" name="radar" :size="16" />
       <span class="pp-label" translate="no">HUD</span>
     </button>
     <div class="pp-slider-row" :class="{ visible: hud?.visible }" id="hud-layout-row">
@@ -106,7 +107,7 @@ const allocationOptions = computed(() => [
   <Teleport :to="cockpitPortal?.detection ?? 'body'" :disabled="!cockpitPortal?.detection">
   <div class="pp-toggle-group">
     <UiButton class="pp-toggle-btn" :class="{ active: detectButton?.active, panoptic: detectButton?.panoptic }" :pressed="detectButton?.pressed ?? false" id="detection-toggle" @click="act('cycleDetection')" :title="t('Detection Overlay (D)')" :aria-label="detectButton?.ariaLabel ?? t('Detection overlay')">
-      <span class="pp-icon">&#x25A3;</span>
+      <span class="pp-icon legacy-display-icon">&#x25A3;</span><UiIcon class="minimal-display-icon" name="layers" :size="16" />
       <span class="pp-label">{{ detectButton?.label ?? t('DETECT') }}</span>
     </UiButton>
     <div class="pp-slider-row detection-slider-row" :class="{ visible: detection?.rowsVisible }" id="detection-slider-row">
@@ -148,7 +149,7 @@ const allocationOptions = computed(() => [
          convention as #scope-toggle. ui.js re-syncs both from durable layer state, which
          is what flips them back for a share link or a stored session carrying 3D off. -->
     <UiButton class="pp-toggle-btn" :pressed="models3dOn" pressed-class="active" id="models3d-toggle" @click="act('toggleModels')" :title="t('3D aircraft — flat icons zoomed out, 3D models up close')">
-      <span class="pp-icon">&#x2708;</span>
+      <span class="pp-icon legacy-display-icon">&#x2708;</span><UiIcon class="minimal-display-icon" name="flight" :size="16" />
       <span class="pp-label">3D</span>
     </UiButton>
     <div class="pp-slider-row" :class="{ visible: models3d?.rowVisible ?? true }" id="models3d-mode-row">
@@ -159,7 +160,7 @@ const allocationOptions = computed(() => [
   </Teleport>
   <div class="pp-toggle-group">
     <label class="pp-toggle-btn pp-scope-toggle" :title="t('Scope — the circular viewport mask')">
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
+      <span class="pp-icon legacy-display-icon material-symbols-outlined" aria-hidden="true">adjust</span><UiIcon class="minimal-display-icon" name="eye" :size="16" />
       <span class="pp-label">{{ t('Scope') }}</span>
       <input type="checkbox" id="scope-toggle" @change="act('setScopeEnabled', $event.target.checked)" :checked="scopeOn" />
     </label>
@@ -171,17 +172,17 @@ const allocationOptions = computed(() => [
   </div>
   <div class="pp-toggle-group">
     <UiButton class="pp-toggle-btn" :pressed="celestial?.active ?? false" pressed-class="active" id="celestial-toggle" @click="act('toggleCelestial')" :title="celestialTitle" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
+      <span class="pp-icon legacy-display-icon material-symbols-outlined" aria-hidden="true">flare</span><UiIcon class="minimal-display-icon" name="sparkles" :size="16" />
       <span class="pp-label">{{ t('Celestial') }}</span>
     </UiButton>
   </div>
   <button class="pp-toggle-btn" id="clean-view-toggle" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
-    <span class="pp-icon">&#x25A1;</span>
+    <span class="pp-icon legacy-display-icon">&#x25A1;</span><UiIcon class="minimal-display-icon" name="layers" :size="16" />
     <span class="pp-label">{{ t('Clean UI') }}</span>
   </button>
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: view?.bloom.active }" id="bloom-toggle" @click="act('toggleBloom')" :title="t('Bloom / Glow')">
-      <span class="pp-icon">&#x2728;</span>
+      <span class="pp-icon legacy-display-icon">&#x2728;</span><UiIcon class="minimal-display-icon" name="sparkles" :size="16" />
       <span class="pp-label">{{ t('Bloom') }}</span>
     </button>
     <div class="pp-slider-row" :class="{ visible: view?.bloom.active }" id="bloom-slider-row">
@@ -191,7 +192,7 @@ const allocationOptions = computed(() => [
   </div>
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: view?.sharpen.active }" id="sharpen-toggle" @click="act('toggleSharpen')" :title="t('Sharpening')">
-      <span class="pp-icon">&#x1F50D;</span>
+      <span class="pp-icon legacy-display-icon">&#x1F50D;</span><UiIcon class="minimal-display-icon" name="search" :size="16" />
       <span class="pp-label">{{ t('Sharpen') }}</span>
     </button>
     <div class="pp-slider-row" :class="{ visible: view?.sharpen.active }" id="sharpen-slider-row">

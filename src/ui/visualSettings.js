@@ -676,6 +676,23 @@ export class VisualSettings {
     const previousVariant = this.hud.getVariant();
     this.hud.setVariant(variantName);
     const nextVariant = this.hud.getVariant();
+    if (
+      applyVisualDefaults &&
+      previousVariant !== 'minimal' &&
+      nextVariant === 'minimal'
+    ) {
+      // Start an explicitly chosen map-first workspace with its map exposed.
+      // Shared/restored views still retain their requested disclosure state.
+      for (const panel of document.querySelectorAll?.(
+        '#left-panel-stack > [data-panel-id], #right-context-rail > [data-panel-id]',
+      ) ?? []) {
+        this.setPanelCollapsed?.(panel.id, true, {
+          restore: true,
+          persist: false,
+          syncShare: false,
+        });
+      }
+    }
     const enteredCyber = previousVariant !== 'cyber' && nextVariant === 'cyber';
     const leftCyber = previousVariant === 'cyber' && nextVariant !== 'cyber';
     if (!applyVisualDefaults) {
@@ -793,9 +810,12 @@ export class VisualSettings {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
 
-    // Cyber is an explicit shell choice, independent of the imagery filter.
+    // Minimal and Cyber are shell choices, independent of the imagery filter.
     // Scene/share restoration still applies its own HUD through _setHudVariant.
-    if (preset.hudVariant && this.hud.getVariant() !== 'cyber') {
+    if (
+      preset.hudVariant &&
+      !['minimal', 'cyber'].includes(this.hud.getVariant())
+    ) {
       this._setHudVariant(preset.hudVariant);
     }
     if (typeof preset.hudVisible === 'boolean') {

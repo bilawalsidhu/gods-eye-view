@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -7,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,17 @@ const require = createRequire(import.meta.url);
 // The compiler loads on the first component that is not cached, so a test
 // process that imports no views, or only cached ones, never pays for it.
 let compiler = null;
-const sfcCompiler = () => (compiler ??= require('vue/compiler-sfc'));
+const sfcCompiler = () => {
+  if (!compiler) {
+    compiler = require('vue/compiler-sfc');
+    compiler.registerTS(() => require('typescript'));
+  }
+  return compiler;
+};
+const compilerFs = {
+  fileExists: existsSync,
+  readFile: (file) => readFileSync(file, 'utf8'),
+};
 
 /**
  * Compile a single-file component to an ES module for Node, so unit tests (the
@@ -35,11 +46,15 @@ export function compileVueModule(source, filename) {
   if (errors.length) throw errors[0];
   const id = filename;
   if (descriptor.scriptSetup) {
-    return compileScript(descriptor, {
+    const compiled = compileScript(descriptor, {
       id,
       inlineTemplate: true,
+      fs: compilerFs,
       templateOptions: VUE_TEMPLATE_OPTIONS,
     }).content;
+    return descriptor.scriptSetup.lang === 'ts'
+      ? stripTypeScriptTypes(compiled, { mode: 'strip', sourceUrl: filename })
+      : compiled;
   }
   const script = descriptor.script
     ? compileScript(descriptor, { id, genDefaultAs: '__sfc__' }).content

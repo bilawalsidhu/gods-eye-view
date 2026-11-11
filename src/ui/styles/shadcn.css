@@ -1,0 +1,106 @@
+@layer theme, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tw-animate-css';
+@tailwind utilities source(none);
+@source "../shadcn";
+@source "../MinimalSearch.vue";
+@source "../PanelRailView.vue";
+@source "../views/ProviderSettingsView.vue";
+@custom-variant dark (&:where([data-ui-theme='minimal'], [data-ui-theme='minimal'] *));
+@theme inline {
+  --color-background: var(--console-background);
+  --color-foreground: var(--console-foreground);
+  --color-popover: var(--console-background);
+  --color-popover-foreground: var(--console-foreground);
+  --color-primary: #afc6ae;
+  --color-primary-foreground: #142018;
+  --color-secondary: #27272a;
+  --color-secondary-foreground: #fafafa;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: #27272a;
+  --color-accent-foreground: #fafafa;
+  --color-border: #303034;
+  --color-input: #3f3f46;
+  --color-ring: #a1a1aa;
+  --color-destructive: #f87171;
+}
+:root[data-ui-theme='minimal'] {
+  --console-background: #18181b;
+  --console-foreground: #f4f4f5;
+}
+/* The legacy app has no preflight reset. Apply the necessary box model locally. */
+:root[data-ui-theme='minimal'] [data-slot],
+:root[data-ui-theme='minimal'] [data-slot] * {
+  box-sizing: border-box;
+}
+:root[data-ui-theme='minimal'] [data-slot] {
+  font-family: var(--font-sans);
+  font-size: var(--console-ui-size);
+  line-height: var(--console-line-height);
+  letter-spacing: normal;
+  text-transform: none;
+  border-color: #303034;
+  border-style: solid;
+  border-width: 0;
+}
+:root[data-ui-theme='minimal'] [data-slot='dropdown-menu-content'],
+:root[data-ui-theme='minimal'] [data-slot='dropdown-menu-sub-content'],
+:root[data-ui-theme='minimal'] [data-slot='popover-content'],
+:root[data-ui-theme='minimal'] [data-slot='select-content'] {
+  border-width: 1px;
+  z-index: 1200;
+}
+:root[data-ui-theme='minimal'] [data-slot='command-input-wrapper'] {
+  border-bottom-width: 1px;
+}
+:root[data-ui-theme='minimal'] [data-slot='command-input'] {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+:root[data-ui-theme='minimal'] [data-slot='switch'] {
+  padding: 0;
+  border-width: 1px;
+  cursor: pointer;
+}
+
+/* Keep shadcn's interactions while using the console's smaller type scale. */
+:root[data-ui-theme='minimal']
+  :is(
+    [data-slot='dropdown-menu-item'],
+    [data-slot='dropdown-menu-sub-trigger'],
+    [data-slot='dropdown-menu-radio-item'],
+    [data-slot='dropdown-menu-label'],
+    [data-slot='select-item'],
+    [data-slot='command-item']
+  ) {
+  min-height: 24px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+:root[data-ui-theme='minimal'] [data-slot] .text-xs {
+  font-size: var(--console-caption-size);
+  line-height: 14px;
+}
+:root[data-ui-theme='minimal']
+  :is(
+    [data-slot='dropdown-menu-item'],
+    [data-slot='dropdown-menu-sub-trigger'],
+    [data-slot='dropdown-menu-radio-item'],
+    [data-slot='select-item'],
+    [data-slot='command-item']
+  )
+  svg {
+  width: 14px;
+  height: 14px;
+}
+:root[data-ui-theme='minimal'] [data-slot='command-input-wrapper'] {
+  height: 32px;
+}
+:root[data-ui-theme='minimal'] [data-slot='command-input'] {
+  height: 32px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}

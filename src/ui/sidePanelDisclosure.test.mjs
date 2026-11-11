@@ -62,11 +62,11 @@ test('explicit opening collapses side peers and claims their restoration lanes i
       f.cctv.classList.add('accordion-collapsed');
       f.owner.setPanelCollapsed('cctv-panel', true, { explicit: true });
       assert.equal(f.cctv.classList.contains('accordion-collapsed'), false);
-      // The left side has its own accordion; the right side is untouched.
+      // Minimal shares one inspector across both sides.
       f.owner.setPanelCollapsed('scene-panel', false, { explicit: true });
       assert.equal(f.scenes.classList.contains('collapsed'), false);
       assert.equal(f.layers.classList.contains('collapsed'), true);
-      assert.equal(f.display.classList.contains('collapsed'), false);
+      assert.equal(f.display.classList.contains('collapsed'), theme === 'minimal');
     } finally { globalThis.document = prior; }
   }
 });

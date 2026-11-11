@@ -342,6 +342,17 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 **Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` CCTV · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
+**Minimal workspace:** In **Display → HUD → Layout**, choose **Minimal** for
+a map-first view with compact Location, Layers, time and Tools controls.
+Panels open on demand, one at a time, with no persistent sidebar or footer.
+Layer categories collapse independently; the square **All layers** switch turns
+the current selection off or enables available layers, including collapsed categories.
+The top-right search (⌘/Ctrl K) finds places, layers and commands. The settings
+gear groups API keys, language, UI style and map style using shadcn-vue controls
+built on Reka UI. **Settings → UI style** switches back to Tactical or Cyber; changing the imagery
+filter keeps Minimal selected. Time replay is available when an enabled layer
+has historical coverage. Phones retain their bottom tabs and sheets.
+
 ---
 
 ## 🛩️ The Cockpit

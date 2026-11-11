@@ -172,6 +172,24 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   };
 }
 
+test('Minimal trays stay click-operated while keyboard focus handoff still works', () => {
+  const h = harness();
+  h.document.documentElement = { dataset: { uiTheme: 'minimal' } };
+  h.panel.hovered = true;
+  h.emit(h.panel, 'pointerenter', { pointerType: 'mouse' });
+  h.drain();
+  assert.equal(h.panel.classes.has('collapsed'), true);
+  h.key();
+  h.tick();
+  assert.equal(h.document.activeElement, h.active);
+  h.panel.hovered = false;
+  h.emit(h.panel, 'pointerleave', { pointerType: 'mouse' });
+  h.drain();
+  assert.equal(h.panel.classes.has('collapsed'), false);
+  h.click();
+  assert.equal(h.panel.classes.has('collapsed'), true);
+});
+
 test('Enter focuses selected OSM rather than the first chip', () => {
   const h = harness(); h.key(); h.tick();
   assert.equal(h.document.activeElement, h.active);
