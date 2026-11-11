@@ -650,6 +650,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({
+    id: 'eclipse-paths',
+    token: '02',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'fire-perimeters',
     token: '2',
     disposition: 'enabled-only',

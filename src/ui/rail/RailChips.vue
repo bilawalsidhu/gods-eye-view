@@ -1,7 +1,8 @@
 <script setup>
 import UiButton from '../kit/UiButton.vue';
 
-// Keyed chips shared by rail cards; the owner decides what a click does.
+// Keyed chips shared by rail cards; the owner decides what a click does. A
+// chip with `breakBefore` starts a new line of chips.
 defineProps({
   chips: { type: Array, default: () => [] },
   onSelect: { type: Function, default: () => {} },
@@ -12,19 +13,24 @@ const chipClass = (chip) =>
 </script>
 
 <template>
-  <UiButton
-    v-for="chip in chips"
-    :key="chip.id"
-    :data-chip-id="chip.id"
-    :class="chipClass(chip)"
-    :pressed="Boolean(chip.active)"
-    pressed-class="active"
-    :style="chip.color ? `--chip-color: ${chip.color}` : undefined"
-    :data-chip-color="chip.color || undefined"
-    :title="chip.title || undefined"
-    :disabled="Boolean(chip.disabled)"
-    :aria-busy="String(Boolean(chip.busy))"
-    @click="onSelect(chip)"
-    >{{ chip.label }}</UiButton
+  <template v-for="chip in chips" :key="chip.id"
+    ><span
+      v-if="chip.breakBefore"
+      class="data-toggle-chip-break"
+      aria-hidden="true"
+    ></span
+    ><UiButton
+      :data-chip-id="chip.id"
+      :class="chipClass(chip)"
+      :pressed="Boolean(chip.active)"
+      pressed-class="active"
+      :style="chip.color ? `--chip-color: ${chip.color}` : undefined"
+      :data-chip-color="chip.color || undefined"
+      :title="chip.title || undefined"
+      :disabled="Boolean(chip.disabled)"
+      :aria-busy="String(Boolean(chip.busy))"
+      @click="onSelect(chip)"
+      >{{ chip.label }}</UiButton
+    ></template
   >
 </template>

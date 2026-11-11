@@ -83,6 +83,7 @@ const PANEL_GROUPS = [
       'gnss-integrity',
       's2-ghostmaps',
       'shipwrecks',
+      'eclipse-paths',
       'news',
     ],
   },

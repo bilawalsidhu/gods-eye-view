@@ -167,6 +167,126 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Eclipse Paths — NASA's Besselian elements
+
+The Events group includes **Eclipse Paths** (`eclipse-paths`, share-link token
+`02`), off by default. It draws the Moon's shadow on the Earth at the world
+time and the path of one chosen solar eclipse. Nothing is fetched at runtime:
+`src/layers/eclipses/elements.json` (about 1 MB, read when the layer is first
+turned on) bundles the Besselian elements of the 3,397 solar eclipses from
+1583, the first full year of the Gregorian calendar, to 3000, the end of the
+catalogue (919 total, 1,149 annular, 123 hybrid, 1,206 partial), taken from the Five Millennium Canon of Solar Eclipses by Fred
+Espenak and Jean Meeus (NASA's GSFC) with
+`scripts/build-eclipse-elements.mjs`, which checks each row against the
+catalogue's own gamma before writing it.
+
+All geometry is computed in the page (`src/layers/eclipses/besselian.js`): the
+elements become an Earth-fixed shadow axis and two cones (umbra and penumbra),
+met with the WGS84 ellipsoid. At greatest eclipse the computed point, central
+duration and path width agree with the catalogue to 0.01°, 1 s and 1 km for
+every central eclipse (`besselian.test.mjs`). Delta T is the catalogue's value
+for each eclipse: a prediction for future centuries, so far from the present
+the path keeps its shape and latitude but may sit east or west of where it
+will fall.
+
+- **The shadow** is a post-process stage (`shadow.js`), on only while an
+  eclipse's penumbra is on the Earth at the world time. Each pixel's view ray is
+  met with the ellipsoid and the ground point tested against the two cones, so
+  the penumbra darkens toward the axis as more of the Sun is covered, with a
+  fine line at its edge and at each quarter of the Sun's diameter covered, and
+  the umbra is the dark core ringed by a warm glow (orange for an annular
+  eclipse). It falls on terrain and 3D tiles alike, only where the Sun is up;
+  moving it costs seven uniforms a frame and rebuilds no geometry. With the
+  camera near the ground inside the shadow, the sky darkens too.
+- **The path** of the chosen eclipse: the band the umbra sweeps with one
+  closed line round it, the central line, a mark and a time label (UTC) each
+  half hour, and a mark and label at the point of greatest eclipse. The band
+  is the outline of everything the umbra covers: at each point of the central
+  line, how far to either side any of the umbra's rims reaches (48 directions
+  round the axis each minute, every 10 s near the ends, cut by the Earth's limb
+  where the umbra hangs off it), closed by a rounded end behind the first and
+  last central points. Its width at greatest eclipse matches the catalogue to
+  about a kilometre. Marks are billboards, not point primitives. A partial eclipse
+  has no path, only its peak. Colour is by kind: total, annular, hybrid,
+  partial. A dashed line marks the limit of the region that sees any of the
+  eclipse (`visibility.js`). Each node of a 1° grid takes, over samples two
+  minutes apart, the best of the lesser of two margins: how far inside the
+  penumbra (past 1% of the Sun's diameter) and how far the Sun is above the
+  horizon. That value changes smoothly across the penumbra's edge and across
+  sunrise and sunset alike, so its zero line, contoured by marching squares and
+  rounded by two corner-cutting passes, is one smooth limit. It takes about
+  0.15 s, so it is drawn a beat after the path and kept for the session.
+  Every line is two entities: draped on the ground for a camera below 2,500 km
+  and lifted 12 km over it above that, because a draped line breaks into
+  uneven dots seen from far off.
+- **The sky view** (`skyView.js`, `skyPanel.js`) is a small picture, bottom
+  right, of the eclipse as seen from one place on the ground while the shadow
+  is on the Earth: the Moon's disc crossing the Sun with the zenith up, the
+  corona in totality, the ring in an annular eclipse, and the share of the Sun
+  covered. The place is marked by a flag on the globe: it stands where the
+  chosen eclipse peaks, a click on the globe moves it (unless another tool
+  holds the pointer or the click lands on another layer's object), and it
+  returns to the peak when another eclipse is chosen. The pictures aim to look real: by day a white-hot Sun with its glare and
+  rays in a blue sky that whitens toward it; for a lunar eclipse the Moon's
+  face worked out pixel by pixel (`moonAlbedo`: seas, highlands, Tycho's
+  rays) under the Earth's shadow (`moonShade`: a penumbra that only looks dim
+  near the umbra, a soft-edged copper umbra the eye sees best once the whole
+  Moon is inside). A row chip, or the
+  cross in the view's corner, turns the view and its flag off.
+- **Look at the Sun** and **Look at the Moon** are off (the layer's `sunView`
+  option, false by default): the code stays for a later decision. Turned on,
+  it turns the real camera
+  round: it flies down to 12 km over the flag and looks up at the Sun through
+  a 4° lens, keeping it centred as the clock moves (with no eclipse under way
+  it first goes to the chosen eclipse's peak, at the point of greatest
+  eclipse). The scene's own Sun is a glare with no disc, so while the camera
+  faces the Sun the shadow stage draws both bodies where the elements put
+  them: the Sun's disc with its glare, the Moon's unlit disc in front, a blue
+  sky that falls dark as the Sun is covered, and the corona in totality; the
+  scene's Sun and Moon are hidden meanwhile. **Look at the Earth** restores the
+  lens and flies back to where the camera stood. It stays below the 1,000 km
+  under which the app allows free look, so the globe-in-view recovery leaves
+  it alone.
+- **Lunar eclipses** (`lunar.js`, `lunar.json`): the 3,440 lunar eclipses of
+  the same years (970 total, 1,216 partial, 1,254 penumbral) from the Five
+  Millennium Canon of Lunar Eclipses, built by
+  `scripts/build-lunar-eclipses.mjs` from NASA's century tables. A lunar
+  eclipse looks the same from everywhere the Moon is up, so the catalogue's own
+  figures are enough: gamma, the two magnitudes and the phase durations give
+  the shadow's radii and the Moon's speed across it (they reproduce the
+  catalogue's partial and total durations to half a minute, and the published
+  contact times of 7 September 2025 to the minute), and the place with the Moon
+  overhead at greatest eclipse, carried west at 14.49° an hour, gives where the
+  Moon is in the sky. That place is given to the nearest degree and the Moon's
+  declination is held fixed, so the horizon lines are good to about a degree.
+  While one is under way the shadow stage tints the half of the Earth that has
+  the Moon in its sky (copper as the Moon enters the umbra) and marks its edge;
+  the chosen eclipse draws the lines where the Moon sits on the horizon at the
+  first and last contact with the penumbra (dashed) and the umbra (solid). The
+  sky view shows the Moon with the Earth's shadow across it, north up, and
+  **Look at the Moon** (off, see above) turns the camera to it, where the stage draws the Moon's
+  disc with the penumbra's dimming and the copper umbra. A switch in the row
+  lists all eclipses, the Sun's or the Moon's.
+- **The world clock**: the layer follows it (`worldClock.hold`) and registers
+  the chosen eclipse's hours as its coverage, with greatest eclipse marked, so
+  the timeline can scrub through it. Whichever eclipse the clock is inside
+  becomes the chosen one. Live, the layer repaints once a second while a shadow
+  is on the Earth, and holds no continuous-render lock.
+- **The row** groups its chips in lines (Earlier / Later; −100 / +100
+  years; Play and Sky view; Follow shadow: a chip with `breakBefore` starts a new
+  line, a small addition to the shared `RailChips`), a year slider over one
+  century at a time (it jumps to the first eclipse of the year), a list of the eclipses
+  around the chosen one (choosing one flies to its peak), a legend and the
+  eclipse's facts. Play seeks to the start of the eclipse, runs the clock at
+  480× and stops on its last moment. **Follow shadow**, on by default and offered only for solar eclipses,
+  keeps the camera over the shadow while the layer plays, at the height and
+  tilt it has. It rides the central line and no farther: the camera waits at
+  the line's start until the umbra lands and stops at its end, while the
+  penumbra is still crossing the Earth (a partial eclipse, with no line,
+  is followed by the ground nearest the axis). The choice is not stored in share links
+  (`enabled-only`); enabled, the layer starts on the eclipse under way or the
+  next one to come.
+
 ## Shipwrecks — EMODnet and Wikidata
 
 The Events group includes **Shipwrecks** (`shipwrecks`, share-link token `01`),
@@ -4927,6 +5047,7 @@ its criteria cannot be silently ignored.
 | Fire Perimeters 🔥                   | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/perimeters/` via `src/app/layers/perimeters.js`                                                                                               | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                                                                    | 5 min (server caches: catalog 1 h; publication 30 min)                                                                      |
 | Prohibited & Restricted Airspace 🚫  | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js`                                                                                         | `/api/drone-airspace`                                                                                                        | 1 h (server cache 1 h; stale-on-error)                                                                                      |
 | Shipwrecks ⚓ (`shipwrecks`)         | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js`                                                                                               | `/api/shipwrecks`                                                                                                            | 6 h page check; server refresh once a day (stale-on-error up to 7 days)                                                     |
+| Eclipse Paths 🌘 (`eclipse-paths`)   | Five Millennium Canons of Solar and Lunar Eclipses (Espenak and Meeus, NASA's GSFC): Besselian elements of the 3,397 solar eclipses and the circumstances of the 3,440 lunar eclipses from 1583 to 3000, bundled; paths, shadows and sky views are computed in the page                                                                                                                                                                                                                                                                                                                                    | `src/layers/eclipses/` via `src/app/layers/eclipses.js`                                                                                                   | none (bundled `elements.json`, `lunar.json`)                                                                                 | none; the shadow follows the world clock                                                                                    |
 | News ◆ (`news`)                      | The last 24 h of reports in two sections, Conflicts and Local, with hotspots, outlines and disputed areas: from a news server (`GEV_NEWS_ORIGIN`), else Core's own reading of GDELT 2.0 events (no key), Liveuamap (`LIVEUAMAP_API_KEY`) and World News API (`WORLDNEWSAPI_KEY`)                                                                                                                                                                                                                                                                                                                           | `src/layers/news/` via `src/app/layers/news.js`; panel `src/ui/newsPanel.js`, `src/ui/news/`; server `server/providers/news.js`, `server/providers/news/` | `/api/news/hotspots`, `/api/news/feed`, `/api/news/outline` (forwarded to `GEV_NEWS_ORIGIN` when set, else answered by Core) | 2 min map refresh; Local re-read when the camera settles 0.8 s in a new half-degree cell below 3,000 km                     |
 | Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js`                                                                                 | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                                           | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
 
