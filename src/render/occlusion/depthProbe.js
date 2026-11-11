@@ -41,7 +41,7 @@ import {
  *   gl: WebGLRenderingContext|WebGL2RenderingContext, webgl2: boolean,
  *   width: number, height: number, framebuffers: WebGLFramebuffer[],
  *   textures: WebGLTexture[],
- *   encoding?: 'packed' | 'depth',
+ *   encoding?: 'packed' | 'depth', contextGeneration?: number,
  *   frustums: Array<{near: number, far: number}>, logDepth: boolean,
  *   view: Float64Array, tanHalfFovX: number, tanHalfFovY: number,
  * }} DepthSource
@@ -50,6 +50,9 @@ import {
  *   packed four bytes to a texel, and `framebuffers` the framebuffers they are
  *   attached to (the WebGL 1 fallback reads them). `'depth'`: depth textures,
  *   read on the GPU only.
+ * - `contextGeneration`: changes when the same context is lost and restored,
+ *   which leaves every GPU object made on it before dead; the probe then
+ *   makes its own again.
  * - `logDepth`: depth is `log2(1 + d - near) / log2(far - near + 1)` of the
  *   view distance `d`; otherwise standard perspective depth.
  * - `view`: the view matrix in ECEF, column-major; `tanHalfFovX`/`Y` the
@@ -187,6 +190,7 @@ export class DepthOcclusionProbe {
     this._snapshot = null;
     this._snapshotAt = Number.NEGATIVE_INFINITY;
     this._spent = 0;
+    this._contextGeneration = undefined;
   }
 
   /**
@@ -343,7 +347,13 @@ export class DepthOcclusionProbe {
   _openSource() {
     this._source = null;
     if (this._now < this._retryAt) return;
-    const source = this._readSource(this._scene, this._view);
+    let source;
+    try {
+      source = this._readSource(this._scene, this._view);
+    } catch {
+      this._fail();
+      return;
+    }
     if (!source) {
       this.mode = 'off';
       return;
@@ -352,7 +362,18 @@ export class DepthOcclusionProbe {
       // A different context (a rebuilt viewer) orphans whatever was in flight.
       this.destroy();
       this._gl = source.gl;
+    } else if (
+      source.contextGeneration !== undefined &&
+      source.contextGeneration !== this._contextGeneration
+    ) {
+      // The same context lost and restored: everything made on it before is
+      // gone, and nothing is left to delete.
+      this.reset();
+      this._queryPool.length = 0;
+      this._resources = null;
+      this._unsupportedGl = null;
     }
+    this._contextGeneration = source.contextGeneration;
     try {
       if (source.gl.isContextLost?.()) {
         // Everything made on the lost context went with it.
@@ -648,6 +669,9 @@ export class DepthOcclusionProbe {
       for (let i = batches.length - 1; i >= 0; i--) {
         const batch = batches[i];
         if (batch.frame >= overdue) continue;
+        // A batch whose control point never answered counts as a failed one:
+        // a query path that never answers stands down like one that says no.
+        if (batch.cursor === 0) this._controlFailures++;
         for (let k = batch.cursor; k < batch.queries.length; k++)
           gl.deleteQuery(batch.queries[k]);
         for (
@@ -657,6 +681,12 @@ export class DepthOcclusionProbe {
         )
           batch.contacts[k].pending = false;
         batches.splice(i, 1);
+      }
+      if (this._controlFailures >= PROBE_MAX_CONTROL_FAILURES) {
+        // Rebuild from scratch on the retry: the GPU objects may be what
+        // stopped answering.
+        this.destroy();
+        this._fail();
       }
     } catch {
       for (const batch of batches) this._release(batch.contacts);

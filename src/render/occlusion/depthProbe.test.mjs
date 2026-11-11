@@ -93,3 +93,58 @@ test('with no target nothing is tested', () => {
   assert.equal(test.add(point(), { x: 0, y: 0, z: -500 }), false);
   assert.equal(test.mode, 'off');
 });
+
+test('a depth reader that throws turns the test off instead of throwing', () => {
+  const test = createDepthOcclusionTest({
+    readSource: () => {
+      throw new Error('no eye');
+    },
+    target: () => ({}),
+  });
+  test.beginFrame(0);
+  assert.equal(test.add(point(), { x: 0, y: 0, z: -500 }), false);
+  assert.equal(test.mode, 'off');
+  test.endFrame();
+});
+
+test('after the context is lost and restored, the probe makes its GPU objects again', () => {
+  const gl = createFakeGl();
+  let programs = 0;
+  const createProgram = gl.createProgram;
+  gl.createProgram = () => {
+    programs++;
+    return createProgram();
+  };
+  let generation = 1;
+  const test = createDepthOcclusionTest({
+    readSource: () => ({ ...depthSource(gl), contextGeneration: generation }),
+    target: () => ({}),
+  });
+  const run = (now) => {
+    test.beginFrame(now);
+    test.add(point(), { x: -250, y: 0, z: -500 });
+    test.endFrame();
+  };
+  run(0);
+  run(1);
+  assert.equal(programs, 1);
+  generation = 2;
+  run(2);
+  assert.equal(programs, 2, 'made again on the restored context');
+  assert.equal(test.mode, 'async');
+});
+
+test('batches that never answer stand the probe down', () => {
+  const gl = createFakeGl();
+  const test = createDepthOcclusionTest({
+    readSource: () => depthSource(gl),
+    target: () => ({}),
+  });
+  // No finishGpu: nothing ever answers.
+  for (let frame = 0; frame < 200 && test.mode !== 'off'; frame++) {
+    test.beginFrame(frame);
+    test.add(point(), { x: -250, y: 0, z: -500 });
+    test.endFrame();
+  }
+  assert.equal(test.mode, 'off');
+});
