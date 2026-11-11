@@ -19,8 +19,8 @@ const MESSAGES = {
 };
 // Focus moves to the first action each time the notice appears, so a
 // keyboard user can act on it at once. When the globe draws again, it goes
-// back where it was, or to the map if that is gone, unless the user has moved
-// it since.
+// back where it was, or to the map if that cannot take it, unless the user
+// has moved it since.
 let focusBefore;
 watch(
   () => Boolean(failure.value),
@@ -38,16 +38,43 @@ watch(
     const active = document.activeElement;
     if (active && active !== document.body) return;
     if (previous?.isConnected && previous !== document.body) {
-      previous.focus();
-      return;
+      previous.focus({ preventScroll: true });
+      // A control disabled, hidden or made inert since does not take it.
+      if (document.activeElement === previous) return;
     }
-    const map = document.getElementById('cesiumContainer');
-    if (!map) return;
-    if (!map.hasAttribute('tabindex')) map.tabIndex = -1;
-    map.focus();
+    focusMap();
   },
   { immediate: true },
 );
+
+// The globe's canvas, which the map's keys (Enter to finish a drawing, Space
+// to talk) read as the map. It takes focus only this once: when focus moves
+// on, or the globe is pressed, it goes back to a canvas that cannot take
+// focus, and a press leaves focus on the page, as Cesium has it.
+function focusMap() {
+  const canvas = document.querySelector(
+    '#cesiumContainer .cesium-widget canvas',
+  );
+  if (!canvas) return;
+  if (!canvas.hasAttribute('tabindex')) {
+    canvas.tabIndex = -1;
+    const done = new AbortController();
+    const release = () => {
+      done.abort();
+      canvas.removeAttribute('tabindex');
+    };
+    canvas.addEventListener('blur', release, { signal: done.signal });
+    canvas.addEventListener(
+      'pointerdown',
+      () => {
+        release();
+        canvas.blur();
+      },
+      { capture: true, signal: done.signal },
+    );
+  }
+  canvas.focus({ preventScroll: true });
+}
 </script>
 
 <template>

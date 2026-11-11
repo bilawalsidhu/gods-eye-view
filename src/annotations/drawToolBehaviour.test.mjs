@@ -68,9 +68,17 @@ class FakeElement {
   }
   closest(selector) {
     // Only what the tool asks: "am I inside an activatable control?"
-    const activatable = ['button', 'a', 'select', '[role="button"]', '[role="radio"]'];
+    const activatable = [
+      'button',
+      'a',
+      'select',
+      '[role="button"]',
+      '[role="radio"]',
+    ];
     if (!activatable.some((part) => selector.includes(part))) return null;
-    return this.tagName === 'BUTTON' || this.tagName === 'A' || this.tagName === 'SELECT'
+    return this.tagName === 'BUTTON' ||
+      this.tagName === 'A' ||
+      this.tagName === 'SELECT'
       ? this
       : null;
   }
@@ -175,7 +183,14 @@ function fakeViewer() {
 }
 
 function fakeAnnotations() {
-  const calls = { annotate: [], clear: 0, restyle: [], setHidden: [], frame: [], remove: [] };
+  const calls = {
+    annotate: [],
+    clear: 0,
+    restyle: [],
+    setHidden: [],
+    frame: [],
+    remove: [],
+  };
   const marks = [];
   const listeners = new Set();
   const changed = () => listeners.forEach((listener) => listener());
@@ -300,7 +315,11 @@ test('Draw refuses to start when something else holds the pointer', async () => 
       h.shown.view.hint,
       'Directions is using the pointer — close it first.',
     );
-    assert.equal(h.tool.diagnostics().sceneHandler, false, 'no handler was bound');
+    assert.equal(
+      h.tool.diagnostics().sceneHandler,
+      false,
+      'no handler was bound',
+    );
 
     releasePointer(other);
     h.act('toggleDraw');
@@ -342,7 +361,10 @@ test('both stock viewer click actions are borrowed for the session and given bac
     const stockClick = () => 'viewer picks and selects';
     const stockDouble = () => 'viewer tracks';
     h.viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
-    h.viewer.screenSpaceEventHandler.setInputAction(stockDouble, LEFT_DOUBLE_CLICK);
+    h.viewer.screenSpaceEventHandler.setInputAction(
+      stockDouble,
+      LEFT_DOUBLE_CLICK,
+    );
 
     h.act('toggleDraw');
     assert.equal(
@@ -380,20 +402,61 @@ test('Enter finishes from the canvas and the label field, never from a focused b
     h.tool.addVertex(-97.74, 30.27);
 
     // Enter while the Clear button has keyboard focus means "press Clear".
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.element('draw-clear') });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.element('draw-clear'),
+    });
     await Promise.resolve();
     assert.equal(
       h.annotations.calls.annotate.length,
       0,
       'a focused button keeps its own Enter',
     );
-    assert.equal(h.tool.session.vertices.length, 3, 'and the shape is untouched');
+    assert.equal(
+      h.tool.session.vertices.length,
+      3,
+      'and the shape is untouched',
+    );
 
     // Enter from the page body (the canvas has focus in practice) finishes it.
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
-    assert.equal(h.annotations.calls.annotate.length, 1, 'Enter on the map finishes');
+    assert.equal(
+      h.annotations.calls.annotate.length,
+      1,
+      'Enter on the map finishes',
+    );
+    assert.equal(h.annotations.calls.annotate[0].specs[0].type, 'area');
+  } finally {
+    h.restore();
+  }
+});
+
+test('Enter on the globe canvas finishes, as after the render failure notice hands focus back', async () => {
+  const h = harness();
+  try {
+    h.act('toggleDraw');
+    h.tool.setShape('area');
+    h.tool.addVertex(-97.75, 30.26);
+    h.tool.addVertex(-97.74, 30.26);
+    h.tool.addVertex(-97.74, 30.27);
+    // src/ui/views/panels/RenderFailure.vue focuses the canvas when the
+    // globe draws again and the control that had focus is gone.
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.viewer.scene.canvas,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(
+      h.annotations.calls.annotate.length,
+      1,
+      'Enter on the canvas finishes',
+    );
     assert.equal(h.annotations.calls.annotate[0].specs[0].type, 'area');
   } finally {
     h.restore();
@@ -422,7 +485,10 @@ test('the live preview hangs at the height the click landed on', async () => {
 
     // …and the finished shape is still flattened, deliberately: the renderer
     // drapes, so a height carried further would be discarded out of sight.
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
     const spec = h.annotations.calls.annotate[0].specs[0];
@@ -478,8 +544,16 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       stockClick,
       'the viewer got its selecting click back',
     );
-    assert.equal(h.viewer._attached.length, 0, 'the preview data source is detached');
-    assert.equal(h.annotations.listeners.size, 0, 'and it no longer follows the board');
+    assert.equal(
+      h.viewer._attached.length,
+      0,
+      'the preview data source is detached',
+    );
+    assert.equal(
+      h.annotations.listeners.size,
+      0,
+      'and it no longer follows the board',
+    );
 
     // Idempotent: a second destroy is harmless.
     await h.tool.destroy();
@@ -498,7 +572,11 @@ test('Clear wipes the board and the shape in progress', async () => {
 
     h.act('clearDraw');
     assert.equal(h.annotations.calls.clear, 1, 'placed marks are removed');
-    assert.equal(h.tool.session.vertices.length, 0, 'and so is the shape in progress');
+    assert.equal(
+      h.tool.session.vertices.length,
+      0,
+      'and so is the shape in progress',
+    );
   } finally {
     h.restore();
   }
@@ -512,7 +590,13 @@ test('the controls choose the shape and colour the next shape is drawn with; it 
     h.act('setDrawColor', 'amber');
     assert.deepEqual(
       { ...h.shown.view, hint: undefined },
-      { active: true, shape: 'line', color: 'amber', hint: undefined, marks: [] },
+      {
+        active: true,
+        shape: 'line',
+        color: 'amber',
+        hint: undefined,
+        marks: [],
+      },
       'the view shows what the controls chose',
     );
     h.act('setDrawColor', 'purple');
@@ -524,7 +608,10 @@ test('the controls choose the shape and colour the next shape is drawn with; it 
     assert.equal(h.tool.session.vertices.length, 0);
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
-    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Enter',
+      target: h.documentDouble.body,
+    });
     await Promise.resolve();
     await Promise.resolve();
     const spec = h.annotations.calls.annotate[0].specs[0];
@@ -549,12 +636,31 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
   try {
     const board = h.annotations;
     board.marks.push(
-      { id: 'a1', type: 'route', manual: true, name: null, label: '950 m', color: 'amber', hidden: false },
-      { id: 'a2', type: 'pin', manual: false, label: 'Voice pin', color: 'primary', hidden: false },
+      {
+        id: 'a1',
+        type: 'route',
+        manual: true,
+        name: null,
+        label: '950 m',
+        color: 'amber',
+        hidden: false,
+      },
+      {
+        id: 'a2',
+        type: 'pin',
+        manual: false,
+        label: 'Voice pin',
+        color: 'primary',
+        hidden: false,
+      },
     );
     board.changed();
     assert.deepEqual(
-      h.shown.view.marks.map(({ id, placeholder, hidden }) => ({ id, placeholder, hidden })),
+      h.shown.view.marks.map(({ id, placeholder, hidden }) => ({
+        id,
+        placeholder,
+        hidden,
+      })),
       [{ id: 'a1', placeholder: 'Line · 950 m', hidden: false }],
       'only hand-drawn marks are listed, an unnamed line by its length',
     );
@@ -569,7 +675,11 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
     ]);
     assert.deepEqual(board.calls.setHidden, [['a1', true]]);
     assert.deepEqual(board.calls.frame, ['a1']);
-    assert.deepEqual(navigations, ['drawing'], 'fly-to goes through the navigation policy');
+    assert.deepEqual(
+      navigations,
+      ['drawing'],
+      'fly-to goes through the navigation policy',
+    );
     assert.deepEqual(board.calls.remove, ['a1']);
     assert.deepEqual(h.shown.view.marks, [], 'the row goes with its mark');
   } finally {
@@ -577,7 +687,7 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
   }
 });
 
-test('an application\'s row actions show on the shapes they are for and run with the shape', async () => {
+test("an application's row actions show on the shapes they are for and run with the shape", async () => {
   const ran = [];
   const h = harness({
     markActions: [
@@ -601,30 +711,102 @@ test('an application\'s row actions show on the shapes they are for and run with
   try {
     const board = h.annotations;
     board.marks.push(
-      { id: 'r1', type: 'area', manual: true, name: 'Strait', color: 'primary', hidden: false, ring: [[29, 41], [29.1, 41], [29.1, 41.1]] },
-      { id: 'l1', type: 'route', manual: true, name: null, label: '9 km', color: 'amber', hidden: false, path: [{ lon: 29, lat: 41.05, height: 0 }, { lon: 29.1, lat: 41.05, height: 0 }] },
-      { id: 'p1', type: 'pin', manual: true, name: 'Camp', color: 'red', hidden: false },
+      {
+        id: 'r1',
+        type: 'area',
+        manual: true,
+        name: 'Strait',
+        color: 'primary',
+        hidden: false,
+        ring: [
+          [29, 41],
+          [29.1, 41],
+          [29.1, 41.1],
+        ],
+      },
+      {
+        id: 'l1',
+        type: 'route',
+        manual: true,
+        name: null,
+        label: '9 km',
+        color: 'amber',
+        hidden: false,
+        path: [
+          { lon: 29, lat: 41.05, height: 0 },
+          { lon: 29.1, lat: 41.05, height: 0 },
+        ],
+      },
+      {
+        id: 'p1',
+        type: 'pin',
+        manual: true,
+        name: 'Camp',
+        color: 'red',
+        hidden: false,
+      },
     );
     board.changed();
     assert.deepEqual(
       h.shown.view.marks.map(({ id, actions }) => [id, actions]),
       [
-        ['r1', [
-          { id: 'tag', icon: 'sell', label: 'Tag Strait' },
-          { id: 'measure', icon: 'straighten', label: 'Measure Strait' },
-        ]],
+        [
+          'r1',
+          [
+            { id: 'tag', icon: 'sell', label: 'Tag Strait' },
+            { id: 'measure', icon: 'straighten', label: 'Measure Strait' },
+          ],
+        ],
         ['l1', [{ id: 'tag', icon: 'sell', label: 'Tag Line · 9 km' }]],
         ['p1', []],
       ],
     );
     assert.equal(h.act('runDrawMarkAction', 'l1', 'tag'), true);
-    assert.equal(h.act('runDrawMarkAction', 'l1', 'measure'), false, 'a line is not offered an area action');
+    assert.equal(
+      h.act('runDrawMarkAction', 'l1', 'measure'),
+      false,
+      'a line is not offered an area action',
+    );
     assert.equal(h.act('runDrawMarkAction', 'p1', 'tag'), false);
     assert.equal(h.act('runDrawMarkAction', 'gone', 'tag'), false);
     assert.equal(h.act('runDrawMarkAction', 'r1', 'measure'), true);
     assert.deepEqual(ran, [
-      ['tag', { id: 'l1', shape: 'line', name: '', title: 'Line · 9 km', geometry: { type: 'LineString', coordinates: [[29, 41.05], [29.1, 41.05]] } }],
-      ['measure', { id: 'r1', shape: 'area', name: 'Strait', title: 'Strait', geometry: { type: 'Polygon', coordinates: [[[29, 41], [29.1, 41], [29.1, 41.1], [29, 41]]] } }],
+      [
+        'tag',
+        {
+          id: 'l1',
+          shape: 'line',
+          name: '',
+          title: 'Line · 9 km',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [29, 41.05],
+              [29.1, 41.05],
+            ],
+          },
+        },
+      ],
+      [
+        'measure',
+        {
+          id: 'r1',
+          shape: 'area',
+          name: 'Strait',
+          title: 'Strait',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [29, 41],
+                [29.1, 41],
+                [29.1, 41.1],
+                [29, 41],
+              ],
+            ],
+          },
+        },
+      ],
     ]);
   } finally {
     h.restore();
@@ -634,16 +816,40 @@ test('an application\'s row actions show on the shapes they are for and run with
 test('an action that throws is reported and leaves the row alone', async () => {
   const h = harness({
     markActions: [
-      { id: 'boom', icon: 'bolt', label: () => { throw new Error('label'); }, shapes: ['area'], run: () => { throw new Error('run'); } },
+      {
+        id: 'boom',
+        icon: 'bolt',
+        label: () => {
+          throw new Error('label');
+        },
+        shapes: ['area'],
+        run: () => {
+          throw new Error('run');
+        },
+      },
     ],
   });
   const warn = console.warn;
   const warned = [];
   console.warn = (...args) => warned.push(args[0]);
   try {
-    h.annotations.marks.push({ id: 'r1', type: 'area', manual: true, name: null, color: 'primary', hidden: false, ring: [[0, 0], [1, 0], [1, 1]] });
+    h.annotations.marks.push({
+      id: 'r1',
+      type: 'area',
+      manual: true,
+      name: null,
+      color: 'primary',
+      hidden: false,
+      ring: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    });
     h.annotations.changed();
-    assert.deepEqual(h.shown.view.marks[0].actions, [{ id: 'boom', icon: 'bolt', label: 'boom' }]);
+    assert.deepEqual(h.shown.view.marks[0].actions, [
+      { id: 'boom', icon: 'bolt', label: 'boom' },
+    ]);
     assert.equal(h.act('runDrawMarkAction', 'r1', 'boom'), false);
     assert.deepEqual(warned, ['[draw] boom failed']);
   } finally {
@@ -652,7 +858,7 @@ test('an action that throws is reported and leaves the row alone', async () => {
   }
 });
 
-test('what a row action answers is its row\'s note; the row is busy until then, and a removed shape drops it', async () => {
+test("what a row action answers is its row's note; the row is busy until then, and a removed shape drops it", async () => {
   const pending = [];
   const h = harness({
     markActions: [
@@ -661,34 +867,73 @@ test('what a row action answers is its row\'s note; the row is busy until then, 
         icon: 'straighten',
         label: (name) => `Measure ${name}`,
         shapes: ['area'],
-        run: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+        run: () =>
+          new Promise((resolve, reject) => pending.push({ resolve, reject })),
       },
-      { id: 'now', icon: 'bolt', label: () => 'Now', shapes: ['area'], run: () => '  12 km²  ' },
-      { id: 'long', icon: 'notes', label: () => 'Long', shapes: ['area'], run: () => `${'word '.repeat(60)}end` },
+      {
+        id: 'now',
+        icon: 'bolt',
+        label: () => 'Now',
+        shapes: ['area'],
+        run: () => '  12 km²  ',
+      },
+      {
+        id: 'long',
+        icon: 'notes',
+        label: () => 'Long',
+        shapes: ['area'],
+        run: () => `${'word '.repeat(60)}end`,
+      },
     ],
   });
   const warn = console.warn;
   console.warn = () => {};
   try {
     const board = h.annotations;
-    const area = (id) => ({ id, type: 'area', manual: true, name: null, color: 'primary', hidden: false, ring: [[0, 0], [1, 0], [1, 1]] });
+    const area = (id) => ({
+      id,
+      type: 'area',
+      manual: true,
+      name: null,
+      color: 'primary',
+      hidden: false,
+      ring: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    });
     board.marks.push(area('r1'), area('r2'));
     board.changed();
     const row = (id) => h.shown.view.marks.find((entry) => entry.id === id);
     assert.equal(h.act('runDrawMarkAction', 'r1', 'now'), true);
     assert.deepEqual([row('r1').busy, row('r1').note], [false, '12 km²']);
     h.act('runDrawMarkAction', 'r1', 'long');
-    assert.ok(row('r1').note.length <= 200 && row('r1').note.endsWith('word…'), 'a long note is cut at a word');
+    assert.ok(
+      row('r1').note.length <= 200 && row('r1').note.endsWith('word…'),
+      'a long note is cut at a word',
+    );
     assert.equal(h.act('runDrawMarkAction', 'r1', 'measure'), true);
     assert.deepEqual([row('r1').busy, row('r1').note], [true, '']);
-    assert.equal(h.act('runDrawMarkAction', 'r1', 'now'), false, 'a busy row takes no second press');
+    assert.equal(
+      h.act('runDrawMarkAction', 'r1', 'now'),
+      false,
+      'a busy row takes no second press',
+    );
     pending[0].resolve('412 km², 38 km of edge');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual([row('r1').busy, row('r1').note], [false, '412 km², 38 km of edge']);
+    assert.deepEqual(
+      [row('r1').busy, row('r1').note],
+      [false, '412 km², 38 km of edge'],
+    );
     h.act('runDrawMarkAction', 'r1', 'measure');
     pending[1].reject(new Error('refused'));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual([row('r1').busy, row('r1').note], [false, ''], 'a failure clears the note');
+    assert.deepEqual(
+      [row('r1').busy, row('r1').note],
+      [false, ''],
+      'a failure clears the note',
+    );
     h.act('runDrawMarkAction', 'r2', 'measure');
     board.marks.splice(1, 1);
     board.changed();
@@ -697,7 +942,11 @@ test('what a row action answers is its row\'s note; the row is busy until then, 
     assert.equal(row('r2'), undefined);
     board.marks.push(area('r2'));
     board.changed();
-    assert.deepEqual([row('r2').busy, row('r2').note], [false, ''], 'a late answer never reaches a shape that went');
+    assert.deepEqual(
+      [row('r2').busy, row('r2').note],
+      [false, ''],
+      'a late answer never reaches a shape that went',
+    );
   } finally {
     console.warn = warn;
     h.restore();
@@ -710,30 +959,49 @@ test('Backspace on the page removes the last vertex', () => {
     h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
-    h.documentDouble.emit('keydown', { key: 'Backspace', target: h.documentDouble.body });
+    h.documentDouble.emit('keydown', {
+      key: 'Backspace',
+      target: h.documentDouble.body,
+    });
     assert.equal(h.tool.session.vertices.length, 1);
   } finally {
     h.restore();
   }
 });
 
-test('keys on the shape list are the list\'s, not the drawing\'s', async () => {
+test("keys on the shape list are the list's, not the drawing's", async () => {
   const h = harness();
   try {
     const listButton = new FakeElement('BUTTON');
-    listButton.closest = (selector) => (selector === '#draw-mark-list' ? {} : null);
+    listButton.closest = (selector) =>
+      selector === '#draw-mark-list' ? {} : null;
     const elsewhere = new FakeElement('INPUT', 'location-search');
     h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
     h.documentDouble.emit('keydown', { key: 'Escape', target: listButton });
-    assert.equal(h.tool.session.vertices.length, 2, 'Escape in the list keeps the shape');
+    assert.equal(
+      h.tool.session.vertices.length,
+      2,
+      'Escape in the list keeps the shape',
+    );
     assert.equal(h.tool.active, true, 'and keeps Draw on');
     h.documentDouble.emit('keydown', { key: 'Enter', target: elsewhere });
     await Promise.resolve();
-    assert.equal(h.annotations.calls.annotate.length, 0, 'another field keeps its Enter');
-    h.documentDouble.emit('keydown', { key: 'Escape', target: h.documentDouble.body });
-    assert.equal(h.tool.session.vertices.length, 0, 'Escape on the page drops the open shape');
+    assert.equal(
+      h.annotations.calls.annotate.length,
+      0,
+      'another field keeps its Enter',
+    );
+    h.documentDouble.emit('keydown', {
+      key: 'Escape',
+      target: h.documentDouble.body,
+    });
+    assert.equal(
+      h.tool.session.vertices.length,
+      0,
+      'Escape on the page drops the open shape',
+    );
   } finally {
     h.restore();
   }

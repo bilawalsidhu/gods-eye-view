@@ -109,8 +109,17 @@ test('focus goes back where it was when the globe draws again', async (t) => {
   assert.equal(document.activeElement, search);
 });
 
-test('focus goes to the map when the element it came from is gone', async (t) => {
+// The globe's canvas, as CesiumWidget builds it inside the container.
+const addGlobeCanvas = () => {
+  const widget = document.createElement('div');
+  widget.className = 'cesium-widget';
+  document.getElementById('cesiumContainer').appendChild(widget);
+  return widget.appendChild(document.createElement('canvas'));
+};
+
+test('focus goes to the globe canvas when the element it came from is gone', async (t) => {
   const store = mount(t);
+  const canvas = addGlobeCanvas();
   const search = document.body.appendChild(document.createElement('input'));
   search.focus();
   store.publishRenderFailure(failure());
@@ -118,9 +127,29 @@ test('focus goes to the map when the element it came from is gone', async (t) =>
   search.remove();
   store.publishRenderFailure(null);
   await settle();
-  const map = document.getElementById('cesiumContainer');
-  assert.equal(document.activeElement, map);
-  assert.equal(map.getAttribute('tabindex'), '-1');
+  // The map's keys, Enter to finish a drawing among them, read the canvas
+  // as the map (src/annotations/drawTool.js).
+  assert.equal(document.activeElement, canvas);
+  assert.equal(canvas.getAttribute('tabindex'), '-1');
+  canvas.blur();
+  assert.equal(canvas.hasAttribute('tabindex'), false, 'only this once');
+});
+
+test('focus goes to the globe canvas when the element it came from cannot take it', async (t) => {
+  const store = mount(t);
+  const canvas = addGlobeCanvas();
+  const button = document.body.appendChild(document.createElement('button'));
+  button.focus();
+  store.publishRenderFailure(failure());
+  await settle();
+  button.disabled = true;
+  store.publishRenderFailure(null);
+  await settle();
+  assert.equal(document.activeElement, canvas);
+  // A press on the globe leaves focus on the page again, as Cesium has it.
+  canvas.dispatchEvent(new Event('pointerdown'));
+  assert.equal(document.activeElement, document.body);
+  assert.equal(canvas.hasAttribute('tabindex'), false);
 });
 
 test('focus the user moved while the notice was up stays put', async (t) => {

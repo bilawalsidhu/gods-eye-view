@@ -2225,9 +2225,12 @@ black globe behind controls that still respond. `installRenderFailureNotice()`
 Cesium stops its render loop, and for the canvas' `webglcontextlost`. It logs
 the error and publishes a notice to the status store, which
 `RenderFailure.vue` renders as an alert dialog that takes focus. When the
-globe draws again, focus goes back to the element that had it, or to the map
-(`#cesiumContainer`, made focusable with `tabindex="-1"`) if that element is
-gone, unless the user has moved focus since. The
+globe draws again, focus goes back to the element that had it, or, if that
+element is gone or cannot take focus, to the globe's canvas, which the map's
+keys (Enter to finish a drawing, Space to talk) read as the map. The canvas
+gets `tabindex="-1"` only until focus moves on or the globe is pressed, and a
+press leaves focus on the page, as Cesium has it. Focus the user moved
+meanwhile stays put. The
 application scene creates its viewer with `showRenderLoopErrors: false`, so
 Cesium's own "Rendering has stopped" panel, which offers no way back, no longer
 appears; `applicationViewerOptions()` and `createApplicationViewer()` keep
