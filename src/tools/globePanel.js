@@ -14,7 +14,7 @@ export const PANEL_WORKER_PRELUDE_PATH = 'cesium/worker-prelude.js';
 
 /**
  * Sites the app's browser code loads from directly: map imagery, 3D tiles,
- * terrain, fonts, and Street Level's Mapillary Graph API and image CDN (its
+ * terrain, and Street Level's Mapillary Graph API and image CDN (its
  * coverage tiles come through the app's server), Google Street View,
  * KartaView and Panoramax. Everything from the app's own server comes
  * through the MCP server.
@@ -35,8 +35,6 @@ const PROVIDER_ORIGINS = Object.freeze([
   'https://tile.openstreetmap.org',
   'https://tiles.openfreemap.org',
   'https://gibs.earthdata.nasa.gov',
-  'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com',
   'https://graph.mapillary.com',
   // Google Street View's tiles, controls and contributed photos (the Maps
   // JavaScript API itself comes from maps.googleapis.com above).
@@ -124,7 +122,7 @@ function panelHtml(runtime, panelKey) {
  * The panel as an MCP resource. `runtime` is the panel's script, a function
  * of its configuration that runs in the panel page; the application supplies
  * it (src/app/globePanelRuntime.js), as it is browser code. The security
- * policy lets the panel load map imagery, tiles and fonts from their
+ * policy lets the panel load map imagery and tiles from their
  * providers; everything from the app's own server arrives through the MCP
  * server instead. `panelKey` is the key the panel's requests must carry
  * (see src/tools/queries/panelRequest.js), which this page holds.

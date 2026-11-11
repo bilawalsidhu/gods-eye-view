@@ -700,6 +700,7 @@ and restart:
 - `GEV_TERRAIN_URL`: the https URL of your own quantized-mesh terrain, or
   `none` for flat terrain with no terrain requests.
 
+The interface fonts are bundled under `public/fonts/` and need no setting.
 Layers you turn on still contact their own providers.
 
 ---

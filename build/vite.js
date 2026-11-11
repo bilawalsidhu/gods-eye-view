@@ -74,8 +74,8 @@ export const BROWSER_CSP = [
   // Facebook video SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js);
   // and the Maps JavaScript API that Street Level's Google Street View runs on.
   "script-src 'self' 'unsafe-eval' blob: https://www.youtube.com https://connect.facebook.net https://platform.twitter.com https://maps.googleapis.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
   "connect-src 'self' blob: data: https: wss: ws:",

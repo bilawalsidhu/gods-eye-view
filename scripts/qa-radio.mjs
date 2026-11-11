@@ -4504,17 +4504,6 @@ async function main() {
     check('mobile playing state keeps both broadcast waves visible and on-screen', mobile.broadcastVisible && mobile.broadcastInsideViewport, JSON.stringify(mobile));
     await page.click('#radio-stop-btn');
     const actionableConsoleErrors = [...consoleErrors];
-    const externalFontFailures = [];
-    for (let i = actionableConsoleErrors.length - 1; i >= 0; i -= 1) {
-      const entry = actionableConsoleErrors[i];
-      if (entry.includes('Failed to load resource: the server responded with a status of 404')
-        && entry.includes('[https://fonts.gstatic.com/')) {
-        externalFontFailures.push(...actionableConsoleErrors.splice(i, 1));
-      }
-    }
-    if (externalFontFailures.length > 0) {
-      console.log(`INFO external Google Fonts resource unavailable (${externalFontFailures.length}); Radio assertions continued with the local fallback font`);
-    }
     if (externalCesiumEndpointFailures.length > 0) {
       const requestEventIndex = actionableConsoleErrors.findIndex((entry) => (
         entry.startsWith('[object RequestErrorEvent]')

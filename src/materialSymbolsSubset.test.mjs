@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WILDLIFE_BADGE_GLYPHS } from './layers/wildlifeSightings/sprites.js';
@@ -8,6 +8,7 @@ import { WILDLIFE_BADGE_GLYPHS } from './layers/wildlifeSightings/sprites.js';
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = path.resolve(SRC_ROOT, '..');
 const INDEX_HTML = path.join(REPO_ROOT, 'index.html');
+const BUNDLED_FONTS = path.join(REPO_ROOT, 'public', 'fonts', 'fonts.css');
 
 /** The glyph written as element text: `<span class="material-symbols-outlined">radar</span>`. */
 const SPAN_TEXT =
@@ -98,13 +99,13 @@ function referencedGlyphs() {
   return found;
 }
 
-/** The `icon_names` list index.html asks Google for. */
-function subsettedGlyphs(html = readFileSync(INDEX_HTML, 'utf8')) {
+/** The `icon_names` subset the bundled icon font was generated from. */
+function subsettedGlyphs(css = readFileSync(BUNDLED_FONTS, 'utf8')) {
   const match =
-    /Material\+Symbols\+Outlined[^"]*[?&]icon_names=([a-z0-9_,]+)/.exec(html);
+    /Material\+Symbols\+Outlined[^\s]*[?&]icon_names=([a-z0-9_,]+)/.exec(css);
   assert.ok(
     match,
-    'index.html must request Material Symbols with an icon_names subset',
+    'public/fonts/fonts.css must record the icon_names subset it bundles',
   );
   return new Set(match[1].split(','));
 }
@@ -118,8 +119,9 @@ test('every glyph the sources render is in the icon_names subset', () => {
   assert.deepEqual(
     missing,
     [],
-    'Glyphs named by the sources but absent from the index.html icon_names list. ' +
-      'Add them there — an unlisted glyph renders as its own name on screen: ' +
+    'Glyphs named by the sources but absent from the bundled icon font. Add ' +
+      'them to ICON_NAMES in scripts/vendor-fonts.mjs and rerun it — an ' +
+      'unlisted glyph renders as its own name on screen: ' +
       missing.join(', '),
   );
 });
@@ -133,4 +135,25 @@ test('the unused Material Icons Round family is not loaded', () => {
     /Material\+Icons\+Round/,
     'index.html loads an icon font nothing renders',
   );
+});
+
+test('the page loads its fonts from this server, not a font host', () => {
+  const html = readFileSync(INDEX_HTML, 'utf8');
+  assert.match(html, /<link rel="stylesheet" href="\/fonts\/fonts\.css" \/>/);
+  assert.doesNotMatch(html, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
+  const css = readFileSync(BUNDLED_FONTS, 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
+  const sources = [...css.matchAll(/url\(([^)]+)\)/g)].map(([, url]) => url);
+  assert.ok(sources.length > 0);
+  for (const url of new Set(sources)) {
+    assert.match(url, /^\/fonts\/[\w-]+\.woff2$/, url);
+    assert.ok(
+      existsSync(path.join(REPO_ROOT, 'public', url)),
+      `${url} is bundled`,
+    );
+  }
+  for (const family of ['Inter', 'JetBrains Mono', 'Material Symbols Outlined'])
+    assert.match(css, new RegExp(`font-family: '${family}'`), family);
 });
