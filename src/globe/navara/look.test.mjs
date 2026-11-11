@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildNavaraLook } from './look.js';
-import { navaraScenePlan } from './viewOptions.js';
+import { navaraScenePlan, MAP_AERIAL_PERSPECTIVE } from './viewOptions.js';
+import { createStylesPort } from './stylePass.js';
+import { STYLES } from '../../ui/visualPresets.js';
 import { createWorldClock } from '../../time/worldClock.js';
 
 function fakeView(dateMs) {
@@ -59,7 +61,7 @@ test('the sky follows world time through seek and live without moving live feeds
   assert.equal(view.atmosphere.date.getTime(), wall);
 });
 
-/** A cinematic look past its two warm-up frames (updates cleared). */
+/** A cinematic look after its initial visibility updates (cleared). */
 function warmCinematic(view, internals) {
   const look = buildNavaraLook(
     view,
@@ -74,35 +76,24 @@ function warmCinematic(view, internals) {
   return look;
 }
 
-test('the night-side shader variants are both compiled on the first two frames', () => {
-  const view = fakeView(0);
-  const look = buildNavaraLook(
-    view,
-    plugin([]),
-    navaraScenePlan('cinematic'),
-    () => 0,
-  );
-  const aerial = view.added.find(({ desc }) =>
-    Object.hasOwn(desc, 'aerialPerspective'),
-  );
-  assert.equal(look.frame(900), true);
-  assert.equal(look.frame(900), true);
-  assert.deepEqual(aerial.updates, [
-    { aerialPerspective: { irradiance: true } },
-    { aerialPerspective: { irradiance: false } },
-  ]);
-  assert.equal(look.frame(900), false, 'then the usual rules');
-  const minimal = fakeView(0);
-  const plain = buildNavaraLook(
-    minimal,
-    plugin([]),
-    navaraScenePlan('minimal'),
-    () => 0,
-  );
-  assert.equal(plain.frame(900), false, 'no aerial perspective: no warm-up');
+test('map colours are unlit before the first frame, with no night-side warm-up', () => {
+  for (const name of ['minimal', 'cinematic']) {
+    const view = fakeView(0);
+    const look = buildNavaraLook(
+      view,
+      plugin([]),
+      navaraScenePlan(name),
+      () => 0,
+    );
+    assert.equal(view.lit, false);
+    assert.equal(view.toneMappingExposure, 1);
+    assert.equal(look.frame(900), false);
+    assert.equal(look.frame(900), false);
+    assert.ok(view.added.every(({ updates }) => updates.length === 0));
+  }
 });
 
-test('the photoreal look is the default plugin scene, untouched', () => {
+test('the photoreal look keeps its plugin scene with the same map colour rules', () => {
   const calls = [];
   const view = fakeView(0);
   const look = buildNavaraLook(
@@ -114,7 +105,7 @@ test('the photoreal look is the default plugin scene, untouched', () => {
   assert.deepEqual(calls, [[]]);
   assert.deepEqual(look.handles, [{ id: 'sky' }]);
   assert.equal(look.frame(8_000_000), false, 'no globe lighting');
-  assert.equal(view.lit, true);
+  assert.equal(view.lit, false);
 });
 
 test('the cinematic look adds its descriptors in order', () => {
@@ -131,23 +122,59 @@ test('the cinematic look adds its descriptors in order', () => {
   );
 });
 
-test('from space the globe is lit by the atmosphere; near the ground the tiles keep their own light', () => {
+test('all styles retain map colours across height, sunlight, motion and daylight inspection', () => {
   const view = fakeView(0);
-  const look = warmCinematic(view);
-  const effect = (name) =>
-    view.added.find(({ desc }) => Object.hasOwn(desc, name));
-  assert.equal(look.frame(900), false, 'nothing changes at street level');
-  assert.equal(look.frame(8_000_000), true);
-  assert.equal(view.lit, true, 'no tile material recompiles');
-  assert.deepEqual(effect('aerialPerspective').updates, [
-    { aerialPerspective: { irradiance: true } },
-  ]);
-  assert.equal(look.frame(7_000_000), false, 'no change while it stays up');
-  assert.equal(look.frame(1_200_000), false, 'hysteresis');
-  assert.equal(look.frame(500_000), true);
-  assert.deepEqual(effect('aerialPerspective').updates.at(-1), {
-    aerialPerspective: { irradiance: false },
+  let now = 0;
+  let elevation = 40;
+  view.atmosphere.getSunElevation = () => elevation;
+  const look = buildNavaraLook(view, plugin([]), navaraScenePlan(), () => now);
+  const port = createStylesPort(view, {
+    shaders: STYLES,
+    onActiveChange: (active) => look.setStyled(active),
   });
+  const aerial = view.added.find(({ desc }) => desc.aerialPerspective);
+  const tone = view.added.find(({ desc }) => desc.toneMapping);
+  assert.deepEqual(aerial.desc.aerialPerspective, MAP_AERIAL_PERSPECTIVE);
+  for (const style of ['normal', ...Object.keys(STYLES), 'normal']) {
+    for (const name of Object.keys(STYLES))
+      port.set(name, { intensity: name === style ? 1 : 0, uniforms: {} });
+    for (const landscape of [true, false]) {
+      for (elevation of [40, -3, -25, -90]) {
+        now += 6 * 3600_000;
+        for (const height of [
+          600,
+          12_000,
+          100_000,
+          1_000_000,
+          1_500_000,
+          1_700_000,
+          8_000_000,
+          19_000_000,
+          Number.NaN,
+        ]) {
+          for (const moving of [true, false]) {
+            look.frame(height, moving, 0, { lat: 40, lng: 10 }, landscape);
+            assert.equal(view.lit, false);
+            assert.equal(view.toneMappingExposure, 1);
+            assert.equal(
+              aerial.updates.length,
+              0,
+              'no height or motion can relight the map',
+            );
+            assert.equal(
+              (tone.updates.at(-1) ?? tone.desc).toneMapping.mode,
+              style === 'normal' ? 6 : 0,
+              style,
+            );
+          }
+        }
+      }
+    }
+  }
+  assert.ok(
+    view.added.every(({ desc }) => !desc.ambient),
+    'no additive fill can wash out the map',
+  );
 });
 
 test('cumulus rises over mountain terrain and leaves the orbital view clear', () => {
@@ -169,87 +196,51 @@ test('cumulus rises over mountain terrain and leaves the orbital view clear', ()
   assert.deepEqual(clouds.updates.at(-1), { visible: true }, 'above the deck');
 });
 
-test('globe lighting switches on only at rest, and off even in motion', () => {
+test('plugin tone mapping restores after styles and its aerial pass preserves map colours', () => {
   const view = fakeView(0);
-  const look = warmCinematic(view);
-  const aerial = view.added.find(({ desc }) =>
-    Object.hasOwn(desc, 'aerialPerspective'),
+  const aerial = view.addEffect({ aerialPerspective: {} });
+  const tone = view.addEffect({ toneMapping: { mode: 7 } });
+  const look = buildNavaraLook(
+    view,
+    {
+      addDefaultPhotorealScene: () => ({
+        aerialPerspective: aerial,
+        toneMapping: tone,
+      }),
+    },
+    navaraScenePlan('photoreal'),
+    () => 0,
   );
-  look.frame(20_000, true);
-  look.frame(2_300_000, true);
-  assert.deepEqual(aerial.updates, []);
-  assert.equal(look.frame(8_000_000, false), true, 'at rest');
-  assert.equal(look.frame(500_000, true), true, 'coming down');
-  assert.deepEqual(aerial.updates.at(-1), {
-    aerialPerspective: { irradiance: false },
-  });
+  assert.deepEqual(aerial.updates, [
+    { aerialPerspective: MAP_AERIAL_PERSPECTIVE },
+  ]);
+  assert.equal(look.setStyled(true), true);
+  assert.equal(look.setStyled(true), false, 'no recompile on uniform updates');
+  look.frame(8_000_000);
+  assert.equal(view.toneMappingExposure, 1);
+  assert.equal(look.setStyled(false), true);
+  assert.deepEqual(tone.updates, [
+    { toneMapping: { mode: 0 } },
+    { toneMapping: { mode: 7 } },
+  ]);
 });
 
-test('daylight inspection restores live exposure, tone mapping and time when left', () => {
+test('daylight inspection changes sky time without changing map exposure or tone mapping', () => {
   const view = fakeView(0);
   const look = warmCinematic(view);
-  const tone = view.added.find(({ desc }) =>
-    Object.hasOwn(desc, 'toneMapping'),
-  );
-  const aerial = view.added.find(({ desc }) =>
-    Object.hasOwn(desc, 'aerialPerspective'),
-  );
-  const opacity = { value: 1 };
-  aerial.ref = { raw: { rawEffect: { blendMode: { opacity } } } };
+  const tone = view.added.find(({ desc }) => desc.toneMapping);
   const fuji = { lat: 35.2599, lng: 138.6574 };
   look.frame(6508, false, 2600, fuji, true);
-  assert.equal(view.toneMappingExposure, 10);
-  assert.equal(opacity.value, 1);
-  assert.equal(tone.updates.at(-1).toneMapping.mode, 7);
+  assert.equal(view.toneMappingExposure, 1);
   assert.ok(
     Math.abs(view.atmosphere.date.getTime() / 3_600_000 + fuji.lng / 15 - 13) <
       1e-6,
   );
   look.frame(750_149, false, 0, fuji, true);
-  assert.ok(opacity.value < 1);
-  const ambient = view.added.find(({ desc }) => Object.hasOwn(desc, 'ambient'));
-  assert.equal(ambient.desc.ambient.intensity, 1);
   look.frame(6508, false, 2600, fuji, false);
-  assert.equal(ambient.updates.at(-1).ambient.intensity, 0);
   assert.equal(view.toneMappingExposure, 1);
-  assert.equal(opacity.value, 1);
-  assert.equal(tone.updates.at(-1).toneMapping.mode, 6);
+  assert.deepEqual(tone.updates, []);
   assert.equal(view.atmosphere.date.getTime(), 0);
-});
-
-test('the dark side retains satellite imagery down to the surface', () => {
-  const view = fakeView(0);
-  const look = warmCinematic(view);
-  const aerial = view.added.find(({ desc }) =>
-    Object.hasOwn(desc, 'aerialPerspective'),
-  );
-  const opacity = { value: 1 };
-  aerial.ref = { raw: { rawEffect: { blendMode: { opacity } } } };
-  const origin = { lat: 21.975, lng: 20.9038 };
-  const fuji = { lat: 35.2599, lng: 138.6574 };
-  let elevation = 40;
-  view.atmosphere.getSunElevation = () => elevation;
-  look.frame(33_529_370, false, 0, origin, true);
-  const sun = view.atmosphere.date;
-  const ambient = view.added.find(({ desc }) => Object.hasOwn(desc, 'ambient'));
-  elevation = -30;
-  for (const height of [2_000_000, 100_000, 50_000, 6508, 600]) {
-    look.frame(height, true, 0, fuji, true);
-    assert.equal(opacity.value, 0.8);
-    assert.equal(
-      ambient.updates.length,
-      0,
-      'the orbital fill remains at full strength',
-    );
-    assert.equal(view.atmosphere.date, sun);
-  }
-  elevation = -3;
-  look.frame(600, false, 0, fuji, true);
-  assert.equal(ambient.updates.at(-1).ambient.intensity, 0.5);
-  elevation = 10;
-  look.frame(600, false, 0, origin, true);
-  assert.equal(ambient.updates.at(-1).ambient.intensity, 0);
-  assert.equal(opacity.value, 1);
 });
 
 test('inspection sunlight stays fixed through orbit, zoom and move end', () => {
@@ -268,29 +259,6 @@ test('inspection sunlight stays fixed through orbit, zoom and move end', () => {
   const restored = view.atmosphere.date;
   look.frame(50_151_111, false, 0, origin, true);
   assert.equal(view.atmosphere.date, restored);
-});
-
-test('a street map keeps the night fill after dusk, as Cesium keeps it lit', () => {
-  // OSM over Austin at 12 km on the live sun: not a landscape, so the sun
-  // is the wall clock's and the map has no orbital fill.
-  const view = fakeView(0);
-  const look = warmCinematic(view);
-  const austin = { lat: 30.27, lng: -97.74 };
-  let elevation = 40;
-  view.atmosphere.getSunElevation = () => elevation;
-  look.frame(12_000, false, 0, austin, false);
-  const ambient = () =>
-    view.added.find(({ desc }) => Object.hasOwn(desc, 'ambient'));
-  assert.equal(ambient(), undefined, 'no fill in daylight');
-  elevation = -3;
-  look.frame(12_000, false, 0, austin, false);
-  assert.equal(ambient().desc.ambient.intensity, 0.5, 'half at dusk');
-  elevation = -40;
-  look.frame(12_000, false, 0, austin, false);
-  assert.equal(ambient().updates.at(-1).ambient.intensity, 1, 'full at night');
-  elevation = 10;
-  look.frame(12_000, false, 0, austin, false);
-  assert.equal(ambient().updates.at(-1).ambient.intensity, 0, 'none by day');
 });
 
 test('the sun follows the wall clock, a minute at most behind, only on drawn frames', () => {

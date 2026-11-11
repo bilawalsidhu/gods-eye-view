@@ -2,12 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_NAVARA_LOOK,
-  GLOBE_LIGHTING_ENTER_M,
-  GLOBE_LIGHTING_EXIT_M,
   NAVARA_CONTEXT_ATTRIBUTES,
   NAVARA_LOOKS,
   cloudTerrainOffset,
-  globeLightingAt,
   navaraScenePlan,
   navaraViewOptions,
   resolveNavaraLook,
@@ -61,7 +58,7 @@ test('cinematic is the default look; photoreal is the default plugin scene; mini
     meshes: [],
     lights: [],
     effects: [],
-    globeLighting: false,
+    inspectionDaylight: false,
     atmosphereLuminance: 1,
     daylightHidesStars: false,
   });
@@ -70,7 +67,7 @@ test('cinematic is the default look; photoreal is the default plugin scene; mini
     meshes: [{ sky: {} }, { stars: {} }],
     lights: [{ skyLightProbe: {} }, { sun: { castShadow: false } }],
     effects: [],
-    globeLighting: false,
+    inspectionDaylight: false,
     atmosphereLuminance: 1,
     daylightHidesStars: false,
   });
@@ -99,10 +96,10 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
     'smaa',
   ]);
   const [aerial, clouds, , toneMapping] = plan.effects;
-  // Forward lighting up close: no irradiance, shadow or specular terms.
   assert.deepEqual(aerial.aerialPerspective, {
-    useNormalBuffer: false,
-    albedoScale: 2,
+    irradiance: false,
+    transmittance: false,
+    inscatter: false,
   });
   assert.equal(clouds.clouds.coverage, 0.36);
   assert.equal(clouds.clouds.shadows, false, 'no cloud shadow maps');
@@ -119,7 +116,7 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
     'cloud layers sit above the city views',
   );
   assert.equal(toneMapping.toneMapping.mode, 6, 'ACES filmic');
-  assert.equal(plan.globeLighting, true);
+  assert.equal(plan.inspectionDaylight, true);
   // Legibility: none of the effects that blur, rain on or grey the map.
   for (const rejected of ['depthOfField', 'rainDrop', 'ssao', 'ssr'])
     assert.ok(!names(plan.effects).includes(rejected), rejected);
@@ -146,18 +143,6 @@ test('?look= picks a look, anything else the cinematic default', () => {
   assert.equal(resolveNavaraLook('?look=%20Minimal%20'), 'minimal');
   assert.equal(resolveNavaraLook('?look=rain'), 'cinematic');
   assert.equal(resolveNavaraLook('?look=constructor'), 'cinematic');
-});
-
-test('globe lighting turns on from space and off near the ground, with hysteresis', () => {
-  assert.equal(globeLightingAt(GLOBE_LIGHTING_ENTER_M - 1, false), false);
-  assert.equal(globeLightingAt(GLOBE_LIGHTING_ENTER_M, false), true);
-  assert.equal(globeLightingAt(8_000_000, false), true);
-  assert.equal(globeLightingAt(1_200_000, true), true, 'inside the gap');
-  assert.equal(globeLightingAt(1_200_000, false), false, 'inside the gap');
-  assert.equal(globeLightingAt(GLOBE_LIGHTING_EXIT_M, true), false);
-  assert.equal(globeLightingAt(900, true), false);
-  assert.equal(globeLightingAt(Number.NaN, true), true, 'unknown keeps it');
-  assert.ok(GLOBE_LIGHTING_EXIT_M < GLOBE_LIGHTING_ENTER_M);
 });
 
 test('cumulus layers rise over mountains, with sea-level bases from space', () => {

@@ -61,6 +61,15 @@ export function resolveNavaraLook(search = '') {
 // postprocessing's ToneMappingMode.ACES_FILMIC (Navara's default is AGX, 7).
 export const ACES_FILMIC = 6;
 export const AGX = 7;
+export const LINEAR = 0;
+
+// Map textures already encode their lighting. Atmosphere belongs in the sky
+// and clouds, not in a second lighting or haze pass over those colours.
+export const MAP_AERIAL_PERSPECTIVE = Object.freeze({
+  irradiance: false,
+  transmittance: false,
+  inscatter: false,
+});
 
 // Pick early afternoon at the starting landscape longitude. The look keeps
 // this timestamp while the user explores; telemetry uses its own clock.
@@ -69,25 +78,6 @@ export function landscapeSunTime(now, longitude) {
   const day = 24 * hour;
   const offset = (longitude / 15) * hour;
   return Math.floor((now + offset) / day) * day + 13 * hour - offset;
-}
-
-// Camera heights (m) where the cinematic look switches the globe to
-// atmosphere lighting (night side and terminator) and back. The gap keeps a
-// camera hovering near one height from toggling.
-export const GLOBE_LIGHTING_ENTER_M = 1_500_000;
-export const GLOBE_LIGHTING_EXIT_M = 1_000_000;
-
-/**
- * Whether the cinematic look lights the globe from the atmosphere (deferred
- * irradiance: a real night side) at this camera height. Up close the Google
- * tiles keep their baked lighting: relit, they turn grey and dark (their
- * shadows and shading would count twice). Hysteresis between the two heights.
- */
-export function globeLightingAt(height, current = false) {
-  if (!Number.isFinite(height)) return current;
-  return current
-    ? height > GLOBE_LIGHTING_EXIT_M
-    : height >= GLOBE_LIGHTING_ENTER_M;
 }
 
 // Navara cloud layers use ellipsoid heights. Over uplands raise the two
@@ -100,15 +90,14 @@ export function cloudTerrainOffset(height, ground) {
   return Math.ceil(Math.max(0, ground - 500) / 500) * 750;
 }
 
-// Navara's sky, clouds and haze come from the atmosphere model in physical
+// Navara's sky and clouds come from the atmosphere model in physical
 // radiance, scaled for a tone-mapping exposure near 10, while the Google
 // tiles carry baked colours that need exposure 1. At exposure 1 the noon sky
 // came out dark navy (sRGB about 39, 58, 90 at Manhattan facing the
 // horizon), and the stars showed through it. The cinematic look multiplies
-// the atmosphere's radiance-to-luminance factors (sky, clouds, aerial
-// perspective; not the stars) by this scale instead of raising
-// the exposure, so the sky turns daylight blue and the tiles keep their
-// colours.
+// the atmosphere's radiance-to-luminance factors (not the stars) by this
+// scale instead of raising the exposure, so the sky turns daylight blue
+// and the tiles keep their colours.
 export const ATMOSPHERE_LUMINANCE_SCALE = 3;
 
 // Stars show from space or once the sun is well below the horizon at the
@@ -172,11 +161,7 @@ const cinematic = (mobile) => ({
   // would cost every frame and darken nothing the tiles show).
   lights: [{ skyLightProbe: {} }, { sun: { castShadow: false } }],
   effects: [
-    // Depth-reconstructed normals: Navara 0.2.1's G-buffer normals are zero
-    // for Google tiles and the globe, which turns atmosphere lighting black.
-    // albedoScale brightens that lighting's day side to the photoreal
-    // look's (it scales the albedo only where the atmosphere lights it).
-    { aerialPerspective: { useNormalBuffer: false, albedoScale: 2 } },
+    { aerialPerspective: { ...MAP_AERIAL_PERSPECTIVE } },
     ...(mobile
       ? []
       : [
@@ -203,7 +188,7 @@ const cinematic = (mobile) => ({
     { toneMapping: { mode: ACES_FILMIC } },
     mobile ? { fxaa: {} } : { smaa: {} },
   ],
-  globeLighting: true,
+  inspectionDaylight: true,
   atmosphereLuminance: ATMOSPHERE_LUMINANCE_SCALE,
   daylightHidesStars: true,
 });
@@ -215,7 +200,7 @@ const PLANS = {
     // Match cinematic: Google tiles already carry baked sunlight.
     lights: [{ skyLightProbe: {} }, { sun: { castShadow: false } }],
     effects: [],
-    globeLighting: false,
+    inspectionDaylight: false,
     atmosphereLuminance: 1,
     daylightHidesStars: false,
   }),
@@ -224,7 +209,7 @@ const PLANS = {
     meshes: [],
     lights: [],
     effects: [],
-    globeLighting: false,
+    inspectionDaylight: false,
     atmosphereLuminance: 1,
     daylightHidesStars: false,
   }),
@@ -238,8 +223,7 @@ const PLANS = {
  *   aerial perspective, lens flare, AgX tone mapping, SMAA);
  * - `cinematic` (the app's default): photoreal plus volumetric clouds for
  *   mountain and coastal views, ACES tone mapping, brighter stars, no sun shadow
- *   maps, and atmosphere lighting of the globe from space (`globeLighting`,
- *   see globeLightingAt), a brighter atmosphere (ATMOSPHERE_LUMINANCE_SCALE)
+ *   maps, a brighter atmosphere (ATMOSPHERE_LUMINANCE_SCALE)
  *   and stars only at night or from space (starsVisibleAt). On a mobile-optimized
  *   view it drops the clouds and the lens flare and uses FXAA.
  */

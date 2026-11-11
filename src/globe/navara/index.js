@@ -154,6 +154,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
       styles: createNavaraStyles(view, {
         shaders: STYLE_SHADERS,
         onStarsDimmed: (amount) => look.setStarsDimmed(amount),
+        onActiveChange: (active) => look.setStyled(active),
       }),
       movers: createNavaraMovers(view, {
         overlay,
@@ -201,7 +202,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
         const placed = readCameraPlace(camera);
         const landscape =
           placed &&
-          plan.globeLighting &&
+          plan.inspectionDaylight &&
           automaticLandscape &&
           worldClock.isLive() &&
           (engine.maps.baseKind === 'sentinel2' ||

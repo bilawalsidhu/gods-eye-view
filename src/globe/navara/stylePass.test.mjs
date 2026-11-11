@@ -260,3 +260,28 @@ test('the styles port adds the pass once, hides it at 0 and fades the stars with
   assert.equal(view.deleted, 1);
   assert.deepEqual(dimmed, [0.5, 0, 0.9, 0], 'destroy brings the stars back');
 });
+
+test('display tone mapping spans a crossfade and restores only after the last style leaves', () => {
+  const active = [];
+  const port = createStylesPort(fakeView(), {
+    shaders: STYLES,
+    onActiveChange: (value) => active.push(value),
+  });
+  const set = (name, intensity) => port.set(name, { intensity, uniforms: {} });
+  set('retro', 0.001);
+  assert.deepEqual(active, [], 'below the drawing threshold');
+  set('retro', 0.1);
+  set('surveillance', 0.5);
+  set('retro', 0);
+  set('thermal', 0.5);
+  set('surveillance', 0);
+  set('thermal', 1);
+  assert.deepEqual(active, [true], 'uniform changes never recompile the look');
+  set('thermal', 0);
+  assert.deepEqual(active, [true, false]);
+  set('noir', 1);
+  port.destroy();
+  assert.deepEqual(active, [true, false, true, false]);
+  port.destroy();
+  assert.equal(active.length, 4, 'destroy restores once');
+});

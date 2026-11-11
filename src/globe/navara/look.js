@@ -1,22 +1,19 @@
 // Builds a Navara look (viewOptions.js navaraScenePlan) on an initialised
 // view and keeps it current while the view renders: the sun follows `now`
-// (the world time in the app, shared with the HUD's SUN elevation); the cinematic look
-// lights the globe
-// from the atmosphere when seen from space, places its clouds above the terrain while the sun is up, brightens the atmosphere
-// (createLuminanceScaler, uniforms from internals.js), compiles both
-// night-side shader variants at startup and shows its stars only at night
-// or from space. All of it runs only on frames the view draws anyway, so an
-// idle view stays idle.
+// (the world time in the app, shared with the HUD's SUN elevation). The sky
+// and clouds keep the cinematic lighting; map colours stay readable at any
+// time and height. All of it runs only on frames the view draws anyway, so
+// an idle view stays idle.
 
 import {
   cloudsSunlitAt,
-  ACES_FILMIC,
   AGX,
+  LINEAR,
+  MAP_AERIAL_PERSPECTIVE,
   cloudTerrainOffset,
   landscapeSunTime,
   CUMULUS_BASES,
   LOCAL_CLOUD_COVERAGE,
-  globeLightingAt,
   starsVisibleAt,
   sunDateStale,
 } from './viewOptions.js';
@@ -46,15 +43,21 @@ export function buildNavaraLook(
   { forEachLuminanceUniform = null } = {},
 ) {
   const handles = [];
+  let scene = null;
   if (plan.pluginDefault) {
-    const scene = plugin.addDefaultPhotorealScene();
+    scene = plugin.addDefaultPhotorealScene();
     handles.push(...Object.values(scene).filter(Boolean));
   } else {
     for (const desc of plan.meshes) handles.push(view.addMesh(desc));
     for (const desc of plan.lights) handles.push(view.addLight(desc));
     for (const desc of plan.effects) handles.push(view.addEffect(desc));
   }
+  // Set before tiles compile: neither forward nor deferred sunlight should
+  // relight imagery that already contains its own shadows.
+  view.lit = false;
+  view.toneMappingExposure = 1;
   const effect = (name) => {
+    if (scene) return scene[name] ?? null;
     const at = plan.effects.findIndex((desc) => Object.hasOwn(desc, name));
     return at < 0
       ? null
@@ -64,7 +67,10 @@ export function buildNavaraLook(
     const at = plan.meshes.findIndex((desc) => Object.hasOwn(desc, name));
     return at < 0 ? null : handles[at];
   };
-  const aerial = plan.globeLighting ? effect('aerialPerspective') : null;
+  if (scene)
+    effect('aerialPerspective')?.update({
+      aerialPerspective: { ...MAP_AERIAL_PERSPECTIVE },
+    });
   const clouds = effect('clouds');
   const stars = plan.daylightHidesStars ? mesh('stars') : null;
   const brighten = createLuminanceScaler(
@@ -77,19 +83,14 @@ export function buildNavaraLook(
       clouds,
     },
   );
-  let globeLit = false;
-  // Both aerial-perspective variants (with and without the night side) are
-  // compiled on the first two frames, during startup, so a later switch
-  // finds its shader compiled (a cold switch stalled a frame for up to
-  // 0.8 s, mid-flight on the way down from space).
-  let warmUp = aerial ? 2 : 0;
   let cloudsShown = true;
   let cloudsSunlit = true;
   let landscape = false;
   let daylightTime = null;
-  let fillLight;
-  let fill = 0;
   const tone = effect('toneMapping');
+  const toneMode =
+    plan.effects.find((desc) => desc.toneMapping)?.toneMapping.mode ?? AGX;
+  let styled = false;
   let starsShown = true;
 
   const frame = (
@@ -100,17 +101,14 @@ export function buildNavaraLook(
     landscapeRequested = false,
   ) => {
     // Every drawn frame: a material Navara rebuilds comes back unscaled.
-    let changed = brighten(!landscapeRequested);
-    if (landscapeRequested !== landscape && tone) {
+    let changed = brighten();
+    if (landscapeRequested !== landscape) {
       landscape = landscapeRequested;
       daylightTime = null;
-      view.toneMappingExposure = landscape ? 10 : 1;
-      tone.update({ toneMapping: { mode: landscape ? AGX : ACES_FILMIC } });
-      changed = true;
     }
     const atmosphere = view.atmosphere;
-    // Choose inspection daylight once. Rotating the camera must not rotate
-    // the terminator across the geography.
+    // Choose inspection daylight once so rotating the camera leaves the
+    // sky's sun direction fixed.
     if (landscape && place && daylightTime === null)
       daylightTime = landscapeSunTime(now(), place.lng);
     const time = daylightTime ?? now();
@@ -122,50 +120,6 @@ export function buildNavaraLook(
       place && typeof atmosphere?.getSunElevation === 'function'
         ? atmosphere.getSunElevation(place)
         : Number.NaN;
-    // Keep the map legible from orbit and when descending into darkness.
-    // At low altitude the fill increases from sunset to civil dusk. Every
-    // base map takes the night fill: the tiles are lit by the sun and the
-    // sky, so a street map turned black after dusk, where Cesium (the
-    // reference) keeps it legible; the orbital fill stays the landscape's.
-    const orbitalFill = Number.isFinite(height)
-      ? Math.min(1, Math.max(0, (height - 50_000) / 250_000))
-      : 0;
-    const nightFill = Number.isFinite(elevation)
-      ? Math.min(1, Math.max(0, -elevation / 6))
-      : 0;
-    const nextFill = landscape ? Math.max(orbitalFill, nightFill) : nightFill;
-    if (nextFill !== fill) {
-      fill = nextFill;
-      if (fillLight) fillLight.update({ ambient: { intensity: fill } });
-      else fillLight = view.addLight({ ambient: { intensity: fill } });
-      changed = true;
-    }
-    const opacity = aerial?.ref?.raw?.rawEffect?.blendMode.opacity;
-    const strength = 1 - 0.2 * fill;
-    if (opacity && opacity.value !== strength) {
-      opacity.value = strength;
-      changed = true;
-    }
-    if (warmUp) {
-      warmUp -= 1;
-      aerial.update(warmUp ? IRRADIANCE_ON : IRRADIANCE_OFF);
-      return true;
-    }
-    if (aerial) {
-      const next = globeLightingAt(height, globeLit);
-      // Switching rebuilds the aerial perspective's shader (warmed up
-      // above): it switches on only at rest (a flight from city to city
-      // through space never switches) and off as soon as the camera comes
-      // down, before the tiles would show relit.
-      if (next !== globeLit && !(next && moving)) {
-        globeLit = next;
-        // Only the aerial perspective changes: the tiles already draw plain
-        // albedo, so view.lit stays (toggling it recompiles every tile
-        // material, a frame of about 0.8 s mid-flight).
-        aerial.update(next ? IRRADIANCE_ON : IRRADIANCE_OFF);
-        changed = true;
-      }
-    }
     // Terrain-relative layers keep distant cumulus above mountain ridges.
     // Keep the deck visible from aircraft altitude, then clear it for regional views.
     if (clouds) {
@@ -212,6 +166,14 @@ export function buildNavaraLook(
   return {
     handles,
     frame,
+    // Sensor shaders expect display colours, as on Cesium. A filmic curve
+    // before their gain/thresholds changes both contrast and clipping.
+    setStyled(active) {
+      if (!tone || active === styled) return false;
+      styled = active;
+      tone.update({ toneMapping: { mode: styled ? LINEAR : toneMode } });
+      return true;
+    },
     resetDaylight() {
       daylightTime = null;
     },
@@ -246,12 +208,6 @@ export function buildNavaraLook(
 /** Navara's own stars intensity, for a look that does not set one. */
 const NAVARA_STARS_INTENSITY = 10;
 
-const IRRADIANCE_ON = Object.freeze({
-  aerialPerspective: Object.freeze({ irradiance: true }),
-});
-const IRRADIANCE_OFF = Object.freeze({
-  aerialPerspective: Object.freeze({ irradiance: false }),
-});
 const VISIBLE = Object.freeze({ visible: true });
 const HIDDEN = Object.freeze({ visible: false });
 

@@ -241,9 +241,14 @@ export class GevStylesPass extends Pass {
  * its Milky Way the same way).
  * The caller registers the effect (stylePasses.js createNavaraStyles).
  * @param {object} view an initialised ThreeView
- * @param {{ shaders: Record<string, { name: string, uniforms?: object, fragmentShader: string }>, onStarsDimmed?: (amount: number) => void }} options
+ * `onActiveChange` selects display tone mapping while any style draws,
+ * including both sides of a crossfade.
+ * @param {{ shaders: Record<string, { name: string, uniforms?: object, fragmentShader: string }>, onStarsDimmed?: (amount: number) => void, onActiveChange?: (active: boolean) => void }} options
  */
-export function createStylesPort(view, { shaders, onStarsDimmed = null }) {
+export function createStylesPort(
+  view,
+  { shaders, onStarsDimmed = null, onActiveChange = null },
+) {
   const order = Object.keys(shaders);
   for (const name of order)
     navaraStyleFragmentShader(shaders[name].fragmentShader);
@@ -265,6 +270,7 @@ export function createStylesPort(view, { shaders, onStarsDimmed = null }) {
       });
       if (name === 'anime') onStarsDimmed?.(state.intensity);
       const next = controller.visible().length > 0;
+      if (next !== shown) onActiveChange?.(next);
       if (!handle) {
         if (!next) return;
         handle = view.addEffect({
@@ -285,6 +291,7 @@ export function createStylesPort(view, { shaders, onStarsDimmed = null }) {
     destroy() {
       handle?.delete();
       handle = null;
+      if (shown) onActiveChange?.(false);
       shown = false;
       if (states.get('anime')?.intensity) onStarsDimmed?.(0);
       states.clear();
