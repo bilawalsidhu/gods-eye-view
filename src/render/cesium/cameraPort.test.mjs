@@ -305,6 +305,53 @@ test('setFov holds the vertical angle across resizes, and waits for a first one'
   assert.throws(() => port.setFov({ vertical: NaN }), RangeError);
 });
 
+test('a pose measures heading, pitch and roll as Cesium does, and leaves the camera as it was', () => {
+  const { camera, port } = headlessPort();
+  const bits = () =>
+    [
+      camera.positionWC,
+      camera.directionWC,
+      camera.upWC,
+      camera.rightWC,
+      camera.position,
+      camera.direction,
+      camera.up,
+    ].flatMap((v) => [v.x, v.y, v.z]);
+  const views = [
+    { heading: 0.3, pitch: -0.7, roll: 0 },
+    { heading: 5.9, pitch: -Math.PI / 2, roll: 0 },
+    { heading: 2.1, pitch: -0.05, roll: 0.4 },
+    { heading: 0, pitch: Math.PI / 2 - 1e-5, roll: 0 },
+    { heading: 4, pitch: 0.6, roll: 6 },
+  ];
+  for (const [k, orientation] of views.entries()) {
+    port.setView({
+      destination: {
+        lon: -170 + 70 * k,
+        lat: -80 + 40 * k,
+        height: 3e3 * 10 ** k,
+      },
+      orientation,
+    });
+    if (k === 4)
+      camera.lookAtTransform(
+        Cesium.Transforms.eastNorthUpToFixedFrame(camera.positionWC),
+      );
+    const before = bits();
+    const pose = port.pose();
+    assert.deepEqual(bits(), before, 'the camera is not moved to measure it');
+    // Cesium's own reads move the camera there and back three times; the
+    // first, heading, is read as the pose reads it.
+    const heading = camera.heading;
+    const pitch = camera.pitch;
+    const roll = camera.roll;
+    assert.equal(pose.heading, heading, `heading ${k}`);
+    assert.ok(Math.abs(pose.pitch - pitch) < 1e-12, `pitch ${k}`);
+    const turn = Math.abs(pose.roll - roll);
+    assert.ok(Math.min(turn, 2 * Math.PI - turn) < 1e-12, `roll ${k}`);
+  }
+});
+
 test('an unmoved camera answers its pose from the last read; any change reads it anew', () => {
   const { camera, port } = headlessPort();
   port.setView({
@@ -315,7 +362,7 @@ test('an unmoved camera answers its pose from the last read; any change reads it
   // pitch and roll by moving the camera there and back, which can change
   // its last bits, so the two are compared to within a whisker.)
   const fresh = () => {
-    const carto = camera.positionCartographic;
+    const carto = cartographic.get.call(camera);
     return {
       lon: Cesium.Math.toDegrees(carto.longitude),
       lat: Cesium.Math.toDegrees(carto.latitude),
@@ -336,16 +383,17 @@ test('an unmoved camera answers its pose from the last read; any change reads it
         `${name}: ${got[name]} vs ${value}`,
       );
   };
-  // Counts Cesium's heading reads: an answer from the memo makes none.
+  // Counts the camera's cartographic position read: an answer from the
+  // memo reads none.
   let reads = 0;
-  const heading = Object.getOwnPropertyDescriptor(
+  const cartographic = Object.getOwnPropertyDescriptor(
     Cesium.Camera.prototype,
-    'heading',
+    'positionCartographic',
   );
-  Object.defineProperty(camera, 'heading', {
+  Object.defineProperty(camera, 'positionCartographic', {
     get() {
       reads += 1;
-      return heading.get.call(this);
+      return cartographic.get.call(this);
     },
   });
   const a = port.pose();

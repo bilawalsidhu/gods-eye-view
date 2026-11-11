@@ -64,6 +64,13 @@ export function toOrientation(o = {}) {
 /** The follow offset of a camera that cannot follow. */
 const NO_FOLLOW_OFFSET = Object.freeze({ get: () => null, set() {} });
 
+/** A Cesium matrix's 16 values, column by column, as `Matrix4.toArray` lists them. */
+function matrixArray(matrix) {
+  const out = new Float64Array(16);
+  for (let i = 0; i < 16; i++) out[i] = matrix[i];
+  return out;
+}
+
 /**
  * @param {{scene: object, camera: object, report: (error: unknown) => void,
  *   widget?: object, capabilities?: ReadonlySet<string>}} options `scene`
@@ -351,10 +358,8 @@ export function createCesiumCamera({
     // 2D and Columbus view frames are projected map coordinates).
     matrices() {
       return {
-        view: Float64Array.from(Cesium.Matrix4.toArray(camera.viewMatrix)),
-        projection: Float64Array.from(
-          Cesium.Matrix4.toArray(camera.frustum.projectionMatrix),
-        ),
+        view: matrixArray(camera.viewMatrix),
+        projection: matrixArray(camera.frustum.projectionMatrix),
       };
     },
     viewRectangle() {
@@ -369,15 +374,14 @@ export function createCesiumCamera({
       };
     },
     pose() {
-      // An unmoved camera answers from the pose last read: Cesium measures
-      // each of heading, pitch and roll by moving the camera into the
-      // eye's east-north-up frame and back, and a frame reads the pose
-      // many times over. Each caller gets objects of its own.
+      // An unmoved camera answers from the pose last read: a frame reads
+      // the pose many times over. Each caller gets objects of its own.
       if (!poseKeyHolds() || !poseMemo) {
         poseMemo = readPose();
-        // Measuring heading, pitch and roll moves the camera there and
-        // back, which can change its last bits: keyed as it is left.
-        poseKeyHolds();
+        // Outside 3D, Cesium measures heading, pitch and roll by moving the
+        // camera into the eye's frame and back, which can change its last
+        // bits: keyed as it is left.
+        if (scene.mode !== Cesium.SceneMode.SCENE3D) poseKeyHolds();
       }
       return copyPose(poseMemo);
     },
@@ -432,9 +436,54 @@ export function createCesiumCamera({
     for (let i = 0; i < 16; i++) put(t[i]);
     return same;
   }
+  const enuScratch = new Cesium.Matrix4();
+  /**
+   * Heading, pitch and roll as Cesium's camera measures them: the eye's
+   * direction and up in its east-north-up frame, put through Cesium's own
+   * formulas. Cesium moves the camera into that frame and back for each of
+   * the three; in 3D this reads the frame once and leaves the camera be
+   * (the same heading, and pitch and roll to the last bit or so). In other
+   * modes Cesium's frames differ, and it is asked.
+   */
+  function headingPitchRoll() {
+    if (scene.mode !== Cesium.SceneMode.SCENE3D)
+      return {
+        heading: camera.heading,
+        pitch: camera.pitch,
+        roll: camera.roll,
+      };
+    const m = Cesium.Transforms.eastNorthUpToFixedFrame(
+      camera.positionWC,
+      scene.mapProjection?.ellipsoid ?? Cesium.Ellipsoid.default,
+      enuScratch,
+    );
+    // Into the frame as Cesium's inverse transformation takes them.
+    const d = camera.directionWC;
+    const u = camera.upWC;
+    const dx = m[0] * d.x + m[1] * d.y + m[2] * d.z;
+    const dy = m[4] * d.x + m[5] * d.y + m[6] * d.z;
+    const dz = m[8] * d.x + m[9] * d.y + m[10] * d.z;
+    const ux = m[0] * u.x + m[1] * u.y + m[2] * u.z;
+    const uy = m[4] * u.x + m[5] * u.y + m[6] * u.z;
+    const uz = m[8] * u.x + m[9] * u.y + m[10] * u.z;
+    // Right as Cesium crosses it there: direction × up.
+    const rz = dx * uy - dy * ux;
+    const M = Cesium.Math;
+    const level = !M.equalsEpsilon(Math.abs(dz), 1.0, M.EPSILON3);
+    const heading =
+      M.TWO_PI -
+      M.zeroToTwoPi(
+        (level ? Math.atan2(dy, dx) : Math.atan2(uy, ux)) - M.PI_OVER_TWO,
+      );
+    const pitch = M.PI_OVER_TWO - M.acosClamped(dz);
+    const roll = level ? M.zeroToTwoPi(Math.atan2(-rz, uz) + M.TWO_PI) : 0.0;
+    return { heading, pitch, roll };
+  }
+
   /** A pose read from Cesium's camera (after `poseKeyHolds` keyed it). */
   function readPose() {
     const v = (c) => ({ x: c.x, y: c.y, z: c.z });
+    const { heading, pitch, roll } = headingPitchRoll();
     // Cesium has no cartographic position for an eye at the earth's
     // centre; the pose then says so with NaN.
     const carto = camera.positionCartographic ?? {
@@ -449,9 +498,9 @@ export function createCesiumCamera({
       direction: v(camera.directionWC),
       up: v(camera.upWC),
       right: v(camera.rightWC),
-      heading: camera.heading,
-      pitch: camera.pitch,
-      roll: camera.roll,
+      heading,
+      pitch,
+      roll,
       height: carto.height,
       fovy: camera.frustum.fovy,
       aspectRatio: camera.frustum.aspectRatio,
@@ -474,8 +523,7 @@ export function createCesiumCamera({
   // Cesium keeps the eye in `camera.transform`: a tracked entity's frame, a
   // `lookAt` target's, or the identity.
   if (!capabilities || capabilities.has('followFrame'))
-    cameraPort.followFrame = () =>
-      Float64Array.from(Cesium.Matrix4.toArray(camera.transform));
+    cameraPort.followFrame = () => matrixArray(camera.transform);
 
   return {
     port: cameraPort,
