@@ -3053,6 +3053,7 @@ to a set time, naming its end as `at` (epoch ms): the row then reads
 `window_end`. The dev proxy never sets `at`.
 
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
+FIRMS ages round to whole hours before choosing a unit, so a 47.6-hour age reads "2d", not "48h"; with detections filtered to 24 hours, this shows mostly in the `STALE · cached {age}` stats line.
 The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
 including zero-padded hours and minutes; missing or invalid dates and times
 remain `null`, including impossible calendar dates from a custom source.
