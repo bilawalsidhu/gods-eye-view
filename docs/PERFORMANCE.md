@@ -876,10 +876,44 @@ Its three city samples measured 56.8/58.1/59.0 FPS; street samples measured
 a guaranteed frame rate on other hardware.
 
 Tracking passed all 111 checks with `--offline-imagery --offline-terrain
---hardware --dpr 2`. The new opt-in terrain fixture serves flat, zero-height
-Cesium heightmap tiles only for Re:Earth's exact terrain paths. Live terrain
+--hardware --dpr 2`. The opt-in terrain fixture serves flat, zero-height Cesium heightmap tiles for
+Re:Earth's exact terrain paths and matching `/api/terrain/heights` responses. Live terrain
 returned HTTP 429 during an earlier run; that run passed every behavioral
 tracking assertion but failed its two no-console-error checks. The fixture keeps
 all tracking/ground-floor assertions enabled; it does not validate live terrain
 availability. The expanded sharp-surface browser gate passes 26 checks, including
 the parked-source deletion repaint regression.
+
+### Contributing-guidelines audit — 10 November 2026
+
+The current PR was checked against `CONTRIBUTING.md` and the PR template using
+Node 24.22.1. The exact `npm test` command passed: 12,051 ordinary tests passed,
+3 skipped, and the 1 focus plus 14 overlay allocation checks passed. The local
+run used isolated temporary files and Git settings; no assertions were disabled.
+The previous temporary-directory cleanup failure did not recur in this run.
+
+Production build, setup doctor, `npm run format`, `format:check`, package/import
+boundaries, translation catalogs and published layer-token checks passed. The
+token check used `upstream/main`, the actual merge-time base for this fork:
+38 published assignments remain unchanged and no new layer token is claimed.
+The runtime reference and numbered changelog fragment are present. No data
+source or layer was added, so the new-layer checklist does not apply. Missing
+JSDoc on exported performance helpers was added.
+
+The required tracking command passed all 111 checks using documented imagery
+and terrain fixtures. Offline terrain now covers its point-height API as well as
+mesh tiles, keeping all corridor-prefetch and ground-floor assertions enabled
+without sharing a live DEM quota with other browser gates. This is a test-only
+fixture; it does not change production terrain or qualify live DEM availability.
+
+The existing transit heading gate (5 checks) and map-source control lifecycle
+gate (8 checks) passed. The weather teardown gate also passed: weather data
+loaded, all scene resource counts returned exactly to baseline, and no uncaught
+page errors occurred. Provider console diagnostics were retained in its report.
+The broader map-tray gate was attempted but reported push-to-talk/focus/notice
+failures and a 503 from the unconfigured realtime-token endpoint; it is not
+reported as passing. The CCTV gate was also attempted: catalog, queue drain,
+activation and geometry checks ran, but the required live-DEM completion check
+had no height while the terrain proxy reported HTTP 429. The run was stopped
+without treating its remaining checks as passed. Live CCTV DEM qualification
+therefore remains outstanding. No new tests or scripts were added for this audit.

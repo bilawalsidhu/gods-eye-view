@@ -92,7 +92,7 @@
  *   --hardware         Use headless Metal on macOS (default headless uses SwiftShader)
  *   --dpr <number>     Browser device-pixel ratio (default 1)
  *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
- *   --offline-terrain  Use a flat local heightmap for Re:Earth requests
+ *   --offline-terrain  Use flat terrain tiles and matching point-height responses
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
@@ -298,6 +298,29 @@ async function main() {
           contentType: 'image/jpeg',
           headers: { 'Access-Control-Allow-Origin': '*' },
           body: offlineImageryTile,
+        });
+        return;
+      }
+      // Ground-floor prefetch uses a separate point-height API. Match the
+      // flat tile fixture there too, keeping corridor/cache assertions active.
+      if (
+        OFFLINE_TERRAIN &&
+        request.method() === 'GET' &&
+        url.origin === APP_ORIGIN &&
+        url.pathname === '/api/terrain/heights'
+      ) {
+        const results = (url.searchParams.get('points') || '')
+          .split(';')
+          .filter(Boolean)
+          .map((point) => {
+            const [longitude, latitude] = point.split(',').map(Number);
+            return { longitude, latitude, ellipsoid: 0 };
+          });
+        offlineTerrainRequests++;
+        request.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ results }),
         });
         return;
       }
