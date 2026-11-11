@@ -154,7 +154,11 @@ try {
     );
     check('double-click restores full alpha', (await overlayAlpha(page)) === 1);
     check('double-click removes lop', !(await search(page)).includes('lop'));
-    check('no uncaught browser errors', errors.length === 0, errors.join('; '));
+    check(
+      'no uncaught browser errors',
+      errors.length === 0,
+      `${errors.length} page errors`,
+    );
     await page.close();
 
     // A fresh load of the dimmed address restores the setting.
@@ -199,7 +203,11 @@ try {
         `hostile lop leaves the layer at 100 % (${query.slice(0, 30)})`,
         (await sliderValue(page)) === 100 && (await overlayAlpha(page)) === 1,
       );
-      check('and throws nothing', errors.length === 0, errors.join('; '));
+      check(
+        'and throws nothing',
+        errors.length === 0,
+        `${errors.length} page errors`,
+      );
       await page.close();
     }
   }
