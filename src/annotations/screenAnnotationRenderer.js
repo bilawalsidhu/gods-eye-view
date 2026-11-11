@@ -12,10 +12,10 @@ import { heightsOf } from '../queries/heights.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { distance } from '../geo/vector.js';
 import {
+  canvasOf as sceneCanvasOf,
   findCamera,
   findFrame,
   findQuery,
-  rendererOf,
 } from '../render/rendererOf.js';
 
 /** A label whose detailed outline could not be resolved. */
@@ -93,7 +93,7 @@ export function createScreenAnnotationRenderer(
   let passQuery = null;
   let passCanvas = null;
   // The renderer's canvas; a viewer with no renderer bound, its own.
-  const canvasOf = () => rendererOf(viewer)?.canvas ?? viewer.canvas;
+  const canvasOf = () => sceneCanvasOf(viewer);
   const records = new Map(); // anno.id -> { key, anno, group, parts }
   const leaving = new Map(); // key -> a removed mark's record while it fades out
   const byKey = new Map(); // key -> record, live or fading

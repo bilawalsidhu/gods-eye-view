@@ -1,4 +1,4 @@
-import { findCamera, rendererOf } from '../../render/rendererOf.js';
+import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import { renderedFrames } from '../../data/renderedFrames.js';
 import {
   fromDegrees,
@@ -130,7 +130,7 @@ export function createMotion({
    *  renderer is bound), or 0 without either. */
   function _viewportHeightPx() {
     const viewer = flightState._viewer;
-    const canvas = rendererOf(viewer)?.canvas ?? viewer?.canvas;
+    const canvas = canvasOf(viewer);
     return Number(canvas?.clientHeight) || 0;
   }
 

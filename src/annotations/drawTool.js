@@ -62,7 +62,11 @@ import {
 import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
 import { fromDegrees } from '../geo/index.js';
 import { cssColor } from '../render/color.js';
-import { drawOf, findFrame, rendererOf } from '../render/rendererOf.js';
+import {
+  canvasOf as sceneCanvasOf,
+  drawOf,
+  findFrame,
+} from '../render/rendererOf.js';
 /** The longest note a row action leaves under its row, in characters. */
 const NOTE_MAX = 200;
 /** An action's answer as a row note: trimmed, and cut at a word with an ellipsis. */
@@ -157,7 +161,7 @@ export function initDrawTool({
     previewPoints.dispose();
   };
   /** The canvas the renderer draws in (the viewer's own when none is bound). */
-  const canvasOf = () => rendererOf(viewer)?.canvas ?? viewer.canvas;
+  const canvasOf = () => sceneCanvasOf(viewer);
   const requestRender = () => findFrame(viewer)?.requestRender('draw-preview');
   // Teardown finishes synchronously; `whenSettled()` keeps its promise.
   const attaching = Promise.resolve();

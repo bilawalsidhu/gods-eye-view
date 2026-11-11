@@ -8,10 +8,10 @@ import {
 import { horizonFrom } from '../../geo/horizon.js';
 import { distance } from '../../geo/vector.js';
 import {
+  canvasOf,
   findCamera,
   findFrame,
   findQuery,
-  rendererOf,
 } from '../../render/rendererOf.js';
 
 /** Equirectangular metres between {lon, lat} points, the short way round ±180°; street scale. */
@@ -77,7 +77,7 @@ function raisedEllipsoid(height) {
 
 /** The CSS size of the canvas the viewer draws on; zeros without one. */
 export function canvasSize(viewer) {
-  const canvas = rendererOf(viewer)?.canvas ?? viewer?.canvas;
+  const canvas = canvasOf(viewer);
   return {
     width: canvas?.clientWidth || canvas?.width || 0,
     height: canvas?.clientHeight || canvas?.height || 0,

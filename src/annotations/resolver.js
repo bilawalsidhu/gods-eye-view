@@ -46,7 +46,7 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { heightsOf } from '../queries/heights.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
-import { findCamera, findQuery, rendererOf } from '../render/rendererOf.js';
+import { canvasOf, findCamera, findQuery } from '../render/rendererOf.js';
 
 /** Prepare only local dateline outlines for planar admission and centering. */
 function localOutlineFrame(fp) {
@@ -2292,7 +2292,7 @@ export function createAnnotationResolver({
   function pickWorldFromScreen(viewer, nx, ny) {
     const query = viewer ? findQuery(viewer) : null;
     // The renderer's canvas; a viewer with no renderer bound, its own.
-    const canvas = rendererOf(viewer)?.canvas ?? viewer?.canvas;
+    const canvas = canvasOf(viewer);
     if (!query || !canvas) return null;
     const w = canvas.clientWidth || canvas.width || 0;
     const h = canvas.clientHeight || canvas.height || 0;

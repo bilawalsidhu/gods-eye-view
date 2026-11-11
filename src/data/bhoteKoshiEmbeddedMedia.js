@@ -1,8 +1,8 @@
 import {
+  canvasOf,
   findCamera,
   findFrame,
   findQuery,
-  rendererOf,
 } from '../render/rendererOf.js';
 import { dot, sub } from '../geo/vector.js';
 import { t, msg, onLocaleChange } from '../i18n/index.js';
@@ -558,7 +558,7 @@ function anchorOnScreen(viewer, anchor, root) {
   const pixel = query.project(anchor);
   if (!pixel) return null;
   // The renderer's canvas; a viewer with no renderer bound, its own.
-  const canvas = rendererOf(viewer)?.canvas ?? viewer.canvas;
+  const canvas = canvasOf(viewer);
   const canvasBounds = canvas?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;

@@ -24,9 +24,9 @@ import { sphereFromPoints } from '../geo/sphere.js';
 import { eyeZoomed } from '../geo/eyeMoves.js';
 import {
   cameraOf,
+  canvasOf,
   findCamera,
   findQuery,
-  rendererOf,
 } from '../render/rendererOf.js';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
@@ -4447,9 +4447,6 @@ function selectedEntityContext(dataManager) {
   if (!record) return null;
   return summarizeContextRecord(record, { includeProperties: true });
 }
-
-/** The canvas the renderer draws in (the viewer's own when none is bound). */
-const canvasOf = (viewer) => rendererOf(viewer)?.canvas ?? viewer.canvas;
 
 function visibleEntityContexts(
   viewer,

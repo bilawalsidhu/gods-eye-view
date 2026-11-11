@@ -71,9 +71,9 @@ import { eyeMoved, eyeRotatedAbout, eyeTurned } from './geo/eyeMoves.js';
 import { heightsOf } from './queries/heights.js';
 import {
   cameraOf,
+  canvasOf,
   findCamera,
   findFrame,
-  rendererOf,
 } from './render/rendererOf.js';
 
 let _isCockpitActive = null;
@@ -1612,9 +1612,6 @@ function liveView(camera, pose = camera.pose()) {
   }
   return { ...pose, projection, live: true };
 }
-
-/** The canvas the renderer draws in (the viewer's own when none is bound). */
-const canvasOf = (viewer) => rendererOf(viewer)?.canvas ?? viewer.canvas;
 
 /**
  * Whether a projection is a perspective one centred on the view: what the

@@ -5,6 +5,7 @@ import { t, msg, formatDate } from '../i18n/index.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
 import { followedOf } from '../data/followed.js';
+import { canvasOf } from '../render/rendererOf.js';
 import { isWorldTime, worldClock } from '../time/worldClock.js';
 
 // A link made away from live opens at its world time, paused. One without a
@@ -206,14 +207,14 @@ export class ShareRestoration {
         this.navigation._stampNavigation(options),
       );
     };
-    this.viewer?.canvas?.addEventListener(
+    canvasOf(this.viewer)?.addEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
       {
         passive: true,
       },
     );
-    this.viewer?.canvas?.addEventListener(
+    canvasOf(this.viewer)?.addEventListener(
       'wheel',
       this._initialShareGestureHandler,
       {
@@ -595,11 +596,11 @@ export class ShareRestoration {
       share: null,
       layers: [],
     });
-    this.viewer?.canvas?.removeEventListener(
+    canvasOf(this.viewer)?.removeEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
     );
-    this.viewer?.canvas?.removeEventListener(
+    canvasOf(this.viewer)?.removeEventListener(
       'wheel',
       this._initialShareGestureHandler,
     );

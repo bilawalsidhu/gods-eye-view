@@ -25,10 +25,10 @@ import {
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
 import { t } from '../i18n/index.js';
 import {
+  canvasOf,
   findCamera,
   findFrame,
   findQuery,
-  rendererOf,
 } from '../render/rendererOf.js';
 
 /**
@@ -1308,7 +1308,7 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
  */
 function ensureCanvasSize() {
   // The renderer's canvas; a viewer with no renderer bound, its own.
-  const sceneCanvas = rendererOf(_viewer)?.canvas ?? _viewer?.canvas;
+  const sceneCanvas = canvasOf(_viewer);
   if (!_canvas || !sceneCanvas) return false;
   const width = Math.max(0, Math.round(Number(sceneCanvas.clientWidth) || 0));
   const height = Math.max(0, Math.round(Number(sceneCanvas.clientHeight) || 0));

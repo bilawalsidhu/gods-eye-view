@@ -1,10 +1,10 @@
 import { governorRequestRender } from './renderGovernor.js';
 import {
   cameraOf,
+  canvasOf,
   findCamera,
   findFrame,
   findQuery,
-  rendererOf,
 } from './render/rendererOf.js';
 import {
   moonPositionInertial,
@@ -585,7 +585,7 @@ export class CelestialRing {
 
   /** The renderer's canvas; a viewer with no renderer bound, its own. */
   _canvas() {
-    return rendererOf(this.viewer)?.canvas ?? this.viewer.canvas;
+    return canvasOf(this.viewer);
   }
 
   /** Whether the current camera already frames the complete globe inside the keyhole. */
