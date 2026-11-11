@@ -9,7 +9,12 @@ import {
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
-import { BILLBOARD_SCALE, GROUND_SCALE, TRACKED_ICON_COLOR } from './policy.js';
+import {
+  BILLBOARD_SCALE,
+  GROUND_SCALE,
+  TRACKED_ICON_COLOR,
+  followsClock,
+} from './policy.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
@@ -27,7 +32,11 @@ export function createMilitarySnapshotRenderer({
     groundFloor;
   const { sampleMeshFloorCells } = meshFloor;
   const { registerMilitaryIcaos } = militaryRegistry;
-  return function applySnapshot(snapshot, viewer) {
+  /**
+   * `replace`: the snapshot is the world at another time (the world clock
+   * jumped), so it stands in for every contact: one it lacks is gone at once.
+   */
+  return function applySnapshot(snapshot, viewer, { replace = false } = {}) {
     const currentIcaos = new Set();
     const receiptNowMs = snapshot.observedAtMs;
     records.beginSnapshot(snapshot.observedAtMs);
@@ -120,7 +129,10 @@ export function createMilitarySnapshotRenderer({
         });
         if (kinematicsChanged && !holds) {
           const synthetic = synthesizeForwardKinematicsFix(newest, {
-            epochMs: Date.now(),
+            // Following the clock, the snapshot's time is the moment it moves on from.
+            epochMs: followsClock(flightState)
+              ? snapshot.observedAtMs
+              : Date.now(),
             velocity: meta.speedMps,
             track: meta.track,
             turnRateDps: meta.turnRateDps,
@@ -272,12 +284,15 @@ export function createMilitarySnapshotRenderer({
     // feed gap, and the full grace left phantom planes parked at airports.
     for (const [icao24, bb] of flightState._billboards) {
       if (currentIcaos.has(icao24)) continue;
-      const absence = records.absence(icao24, {
-        complete: snapshot.complete,
-        retainIds: snapshot.retainIds,
-        likelyLanded: queries._likelyLanded(icao24),
-        tracked: icao24 === flightState._trackedIcao,
-      });
+      const absence = replace
+        ? 'remove'
+        : records.absence(icao24, {
+            complete: snapshot.complete,
+            retainIds: snapshot.retainIds,
+            likelyLanded: queries._likelyLanded(icao24),
+            tracked: icao24 === flightState._trackedIcao,
+            nowMs: flightState.now?.(),
+          });
       if (absence === 'retain') continue;
       if (absence === 'stale') {
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity) {
@@ -310,6 +325,14 @@ export function createMilitarySnapshotRenderer({
       flightState._displayCourse.delete(icao24);
       flightState._groundSnap.forget(icao24);
     }
+
+    // The tracked contact at the new time: its trail starts there.
+    if (
+      replace &&
+      flightState._trackedIcao &&
+      currentIcaos.has(flightState._trackedIcao)
+    )
+      tracking._startTrail(flightState._trackedIcao);
 
     // Fresh courses arrived — force a rotation pass on the next fleet tick
     flightState._lastCamPoseSig = '';

@@ -11,10 +11,14 @@ export function createFlightState({ source, services }) {
   flightState.records = new FlightRecords({
     ...services.geoid,
     ...services.groundFloor,
+    now: () => flightState.now(),
   });
   flightState._cullPositions = new Map();
   /** The time contacts are drawn behind by the render delay, in epoch ms. */
   flightState.now = worldTimeFor('flights');
+  /** Follows the world clock while the source declares a timeline (set by the
+   *  layer); see followsClock and displayDelayMs in policy.js. */
+  flightState.timeline = null;
 
   /** Per-class model spec. Hangar-fleet classes (CLASS_MODEL_REAL) ship GLBs
    *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
@@ -373,6 +377,9 @@ export function createFlightState({ source, services }) {
   flightState._drPrevDisplay = new Cesium.Cartesian3();
 
   flightState._drPrevMs = 0;
+
+  /** World time of that frame: the wall clock live, the cursor following the clock. */
+  flightState._drPrevWorldMs = 0;
 
   flightState._drReconcileValid = false;
 

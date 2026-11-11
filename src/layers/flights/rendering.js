@@ -39,13 +39,13 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
-  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
   HIDDEN_CONTACT_DR_TICKS,
   hiddenContactDrPhase,
   STALE_ALPHA,
+  displayDelayMs,
 } from './policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
@@ -951,7 +951,7 @@ export function createRendering({
     // Every contact in this pass shares the same delayed display instant.
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now(), flightState._scratchFleetRenderTime),
-      -RENDER_DELAY_SEC,
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchFleetRenderTime,
     );
 

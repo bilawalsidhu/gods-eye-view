@@ -887,7 +887,7 @@ the parked-source deletion repaint regression.
 ### Contributing-guidelines audit — 10 November 2026
 
 The current PR was checked against `CONTRIBUTING.md` and the PR template using
-Node 24.22.1. The exact `npm test` command passed: 12,051 ordinary tests passed,
+Node 24.22.1. The exact `npm test` command passed: 12,152 ordinary tests passed,
 3 skipped, and the 1 focus plus 14 overlay allocation checks passed. The local
 run used isolated temporary files and Git settings; no assertions were disabled.
 The previous temporary-directory cleanup failure did not recur in this run.
@@ -912,8 +912,11 @@ loaded, all scene resource counts returned exactly to baseline, and no uncaught
 page errors occurred. Provider console diagnostics were retained in its report.
 The broader map-tray gate was attempted but reported push-to-talk/focus/notice
 failures and a 503 from the unconfigured realtime-token endpoint; it is not
-reported as passing. The CCTV gate was also attempted: catalog, queue drain,
-activation and geometry checks ran, but the required live-DEM completion check
-had no height while the terrain proxy reported HTTP 429. The run was stopped
-without treating its remaining checks as passed. Live CCTV DEM qualification
-therefore remains outstanding. No new tests or scripts were added for this audit.
+reported as passing. The CCTV retry completed with 52 checks passed and one
+failed: its live-DEM completion probe received no height. The earlier attempt
+also encountered HTTP 429 from the terrain proxy. Frame loading, calibration,
+click ownership, viewshed reuse and idle raycast checks passed, but live CCTV
+DEM qualification remains outstanding. After merging upstream weather frame
+sources and contact-clock support, all 335 focused weather/aircraft tests and
+the full unit, build and tracking gates passed again. No new tests or scripts
+were added for this audit.

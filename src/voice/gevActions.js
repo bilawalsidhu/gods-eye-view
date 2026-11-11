@@ -2824,7 +2824,7 @@ async function trackEntity(
       () => {
         let trackedOk = false;
         if (family.kind === 'vessel') {
-          trackedOk = !!module.selectById?.(found.mmsi);
+          trackedOk = !!module.selectById?.(found.id ?? found.mmsi);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
@@ -4003,8 +4003,13 @@ function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
         ?.module?.getAnalystRecords?.()
         .filter(
           (item) =>
-            String(item.icao24 ?? item.mmsi ?? item.noradId ?? item.id) ===
-            String(id),
+            String(
+              item.icao24 ??
+                item.vesselId ??
+                item.mmsi ??
+                item.noradId ??
+                item.id,
+            ) === String(id),
         ) || [];
     // Bikeshare uses station names as IDs: retain the coordinate identity
     // even if a namesake disappears. Moving records use their fresh fix.
@@ -5344,6 +5349,7 @@ function cameraViewBox(viewer) {
 /** Identity fields every compact analyst item keeps when present. */
 const ANALYST_IDENTITY_FIELDS = Object.freeze([
   'icao24',
+  'vesselId',
   'mmsi',
   'registration',
   'label',
@@ -5361,6 +5367,7 @@ const ANALYST_CANONICAL_FIELDS = new Set([
   'layerKey',
   'id',
   'icao24',
+  'vesselId',
   'mmsi',
   'noradId',
   'registration',
@@ -5373,7 +5380,7 @@ const ANALYST_CANONICAL_FIELDS = new Set([
  * follow-up can fly to it), distance, and that layer's manifest fields with
  * times as ISO text. The full record set stays engine-side for follow-ups.
  *
- * `icao24`/`mmsi` ride along because the tool instructions tell the model to
+ * `icao24`/`vesselId`/`mmsi` ride along because the tool instructions tell the model to
  * hand this result straight to track_entity, and `id` is a DISPLAY label
  * (callsign, else registration, else hex). A callsign-less contact therefore
  * handed track_entity a tail number the lookup could not resolve, and the
