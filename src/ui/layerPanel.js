@@ -81,6 +81,7 @@ const PANEL_GROUPS = [
       'local-firms',
       'fire-perimeters',
       'gnss-integrity',
+      'air-accidents',
       's2-ghostmaps',
       'shipwrecks',
       'news',

@@ -22,6 +22,7 @@ import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
 import { createNewsSource } from '../layers/news/source.js';
 import { createShipwrecksSource } from '../layers/shipwrecks/source.js';
+import { createAirAccidentsSource } from '../layers/airAccidents/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
@@ -67,6 +68,7 @@ export function createStandaloneLayerSources(
     // unavailable without retrying.
     news: createNewsSource(),
     shipwrecks: createShipwrecksSource(),
+    'air-accidents': createAirAccidentsSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
