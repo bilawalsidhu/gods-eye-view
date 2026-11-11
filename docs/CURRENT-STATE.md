@@ -7577,7 +7577,8 @@ on purpose:
   outright and never counts toward a re-anchor, so a feed that keeps relaying
   one corrupt value cannot make it the reference. A reference accepted before
   the category arrived is dropped once the category is known. With nothing to
-  hold, the altitude shows as unknown. A6, A7 and every B category have no
+  hold, the altitude shows as unknown, and the record carries
+  `altitudeQuality: 'unknown-after-rejection'`. A6, A7 and every B category have no
   ceiling: gliders have soared to 76,000 ft and balloons fly above
   100,000 ft.
 - **Trail.** A selected aircraft draws a magenta trail of the positions the

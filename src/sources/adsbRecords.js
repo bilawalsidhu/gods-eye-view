@@ -23,9 +23,10 @@
  *   altitudeAt: number|null,      // epoch ms of the message `altitudeFt` came
  *                                 // from; a feed does not say, so its records
  *                                 // carry `lastMessageAt`
- *   altitudeQuality?: 'held-after-rejection', // set only by
- *                                 // gateLocalAdsbAltitude: `altitudeFt` is the
- *                                 // last accepted value, not the newest report
+ *   altitudeQuality?: 'held-after-rejection'|'unknown-after-rejection',
+ *                                 // set only by gateLocalAdsbAltitude:
+ *                                 // `altitudeFt` is the last accepted value, or
+ *                                 // null in place of an impossible report
  *   lastMessageAt: number,        // epoch ms of the newest CRC-valid message
  *   messageCount: number,
  *   rssiDbfs: number|null,
@@ -278,7 +279,8 @@ export function createLocalAdsbAltitudeGate() {
  * For categories with a ceiling ({@link localAdsbAltitudeCeilingFt}) a report
  * above it is refused outright and never re-anchors, a reference above it is
  * dropped once the category is known, and with nothing to hold the altitude
- * is returned as null: unknown, not impossible.
+ * is returned as null, marked `altitudeQuality: 'unknown-after-rejection'`:
+ * unknown, not impossible.
  *
  * Only a report with a newer `altitudeAt` (else `lastMessageAt`) is judged.
  * The layer re-reads the same record several times a second, and the browser
@@ -332,7 +334,7 @@ export function gateLocalAdsbAltitude(record, gate) {
       : record;
   // Nothing accepted to hold: an impossible altitude is shown as unknown.
   return aboveCeiling(altitudeFt)
-    ? { ...record, altitudeFt: null }
+    ? { ...record, altitudeFt: null, altitudeQuality: 'unknown-after-rejection' }
     : record;
 }
 

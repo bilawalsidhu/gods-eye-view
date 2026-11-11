@@ -510,6 +510,17 @@ test('a fixed-wing altitude above the ceiling is unknown until a real one arrive
     ]),
     { altitudes: [null, 35_000], rejected: 1 },
   );
+  const gate = createLocalAdsbAltitudeGate();
+  const refused = gateLocalAdsbAltitude(
+    { icao: 'abc123', lastMessageAt: 0, altitudeFt: 108_800, ...A3 },
+    gate,
+  );
+  assert.equal(refused.altitudeFt, null);
+  assert.equal(
+    refused.altitudeQuality,
+    'unknown-after-rejection',
+    'a refused altitude is not mistaken for one that was never reported',
+  );
 });
 
 test('a feed stuck on an impossible altitude never makes it the reference', () => {
