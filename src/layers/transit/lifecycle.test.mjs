@@ -4377,7 +4377,8 @@ test('parked transit reprojects held and reported courses at the bounded camera 
   // A vehicle coming into view is turned on the next pass, the camera still.
   state._visible.delete(held);
   held.marker.rotation = 0.7;
-  held.rotationCourse = undefined;
+  // Its course as last turned: the camera moved while it was out of view.
+  held.rotationCourse = held.courseDeg;
   Object.assign(state, {
     _visibilityAt: 0,
     _stillIcons: { upsert: noop, remove: noop },

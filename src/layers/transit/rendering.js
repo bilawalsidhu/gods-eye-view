@@ -944,6 +944,9 @@ export function createRendering({ state, services, parts }) {
       const wasVisible = state._visible.has(entry);
       if (visible) state._visible.add(entry);
       else state._visible.delete(entry);
+      // Turned afresh once back in view: the camera may have moved while it
+      // was out, after the pass that would have turned it.
+      if (visible && !wasVisible) entry.rotationCourse = undefined;
       if (visible && entry.track?.count) {
         if (!wasVisible && !entry.qaFixture) syncPlayback(entry, now);
         // Re-entry can advance into an unprepared corridor; loaded tiles can
