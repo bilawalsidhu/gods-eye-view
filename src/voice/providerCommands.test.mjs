@@ -884,9 +884,16 @@ test('a missing-key error hides the microphone hint; other errors keep it', asyn
     detail: 'Add a Gemini API key in Provider Settings',
     missingKey: true,
   });
-  assert.equal(ui.state.error.text, 'Add a Gemini API key in Provider Settings');
+  assert.equal(
+    ui.state.error.text,
+    'Add a Gemini API key in Provider Settings',
+  );
   assert.equal(ui.state.error.hint, false);
-  instance.hooks.emit({ type: 'state', state: 'error', detail: 'Socket closed' });
+  instance.hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: 'Socket closed',
+  });
   assert.equal(ui.state.error.text, 'Socket closed');
   assert.equal(ui.state.error.hint, true);
 });

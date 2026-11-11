@@ -3641,16 +3641,22 @@ test('cancelling a queued globe reset also skips its dependent rotation', async 
 
 test('a missing server key reaches the error state flagged, other token failures do not', async () => {
   for (const [body, missingKey] of [
-    [{ error: 'Add a Gemini API key in Provider Settings', code: 'API_KEY_MISSING' }, true],
+    [
+      {
+        error: 'Add a Gemini API key in Provider Settings',
+        code: 'API_KEY_MISSING',
+      },
+      true,
+    ],
     [{ error: 'Gemini quota is unavailable. Try again later.' }, undefined],
   ]) {
     const h = harness({
       fetchImpl: async () => Response.json(body, { status: 503 }),
     });
     await h.c.start();
-    const error = h.events.filter(
-      (event) => event.type === 'state' && event.state === 'error',
-    ).at(-1);
+    const error = h.events
+      .filter((event) => event.type === 'state' && event.state === 'error')
+      .at(-1);
     assert.equal(error?.detail, body.error);
     assert.equal(error?.missingKey, missingKey);
     assert.equal(h.sockets.length, 0);
