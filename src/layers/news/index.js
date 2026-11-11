@@ -2,7 +2,12 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { cssColor } from '../../render/color.js';
-import { findCamera, findDraw, findFrame } from '../../render/rendererOf.js';
+import {
+  findCamera,
+  findDraw,
+  findFrame,
+  rendererOf,
+} from '../../render/rendererOf.js';
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import {
   isOwnedByOtherLayer,
@@ -610,6 +615,18 @@ export function createNewsLayer({
     }
   }
 
+  /**
+   * Drawing-buffer pixels per CSS pixel: the renderer's own resolution
+   * scale (its quality port's `pixelRatio`, 1 while that is 0, browser
+   * recommended), not the device's.
+   */
+  function scenePixelRatio() {
+    const ratio = viewer
+      ? rendererOf(viewer)?.quality?.get?.()?.pixelRatio
+      : undefined;
+    return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  }
+
   // News placed no closer than a country: one badge at its centre with the
   // number of reports, in place of that many markers piled there.
   function renderCountryBadges(list, drawn, labels) {
@@ -621,10 +638,7 @@ export function createNewsLayer({
       countryBadges.set(group.key, group);
       const position = fromDegrees(group.lon, group.lat);
       const size = COUNTRY_BADGE_PX;
-      const sprite = countSprite(
-        group.count,
-        size * (globalThis.devicePixelRatio || 1),
-      );
+      const sprite = countSprite(group.count, size * scenePixelRatio());
       const id = `${COUNTRY_PREFIX}${group.key}`;
       if (sprite)
         list.place('icons', {

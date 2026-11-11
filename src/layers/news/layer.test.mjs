@@ -48,6 +48,7 @@ function fixture(
     centre = () => ({ lat: 49, lon: 36 }),
     credits = [],
     now = () => NOW,
+    quality,
   } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
@@ -112,6 +113,7 @@ function fixture(
   const { draw, unbind } = bindFakeDraw(viewer, {
     camera: cameraPort.port,
     frame: { requestRender() {}, on: () => () => {} },
+    ...(quality ? { quality } : {}),
   });
   // The items of the layer's draw set named `part` (`points`, `icons`, …).
   const items = (part) => [
@@ -917,6 +919,66 @@ test("a country's own news is one badge with a count, not markers piled on its c
   layer.setParams({ reportId: 'own-1' });
   await flush();
   assert.ok(ids().includes('news:report:own-1~0'));
+});
+
+test("a country badge is painted at the scene's pixel ratio, not the device's", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  // A canvas that paints nothing and names its size in its data URL.
+  const context = new Proxy(
+    {},
+    { get: () => () => ({ width: 0 }), set: () => true },
+  );
+  const originalDocument = globalThis.document;
+  const originalRatio = globalThis.devicePixelRatio;
+  globalThis.document = {
+    createElement: () => ({
+      width: 0,
+      height: 0,
+      getContext: () => context,
+      toDataURL() {
+        return `data:image/png;test,${this.width}`;
+      },
+    }),
+  };
+  globalThis.devicePixelRatio = 3;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+    if (originalRatio === undefined) delete globalThis.devicePixelRatio;
+    else globalThis.devicePixelRatio = originalRatio;
+  });
+  const anchor = {
+    lat: 49,
+    lon: 36,
+    place: 'Ukraine',
+    precision: 'country',
+    mappable: true,
+  };
+  const { layer, items } = fixture(t, {
+    height: 1_000_000,
+    quality: { get: () => ({ pixelRatio: 2 }) },
+    source: {
+      getFeed: async () => ({
+        reports: [
+          report('own-1', { relevance: 'minor', pins: [anchor] }),
+          report('own-2', { relevance: 'minor', pins: [anchor] }),
+        ],
+        nextBefore: null,
+      }),
+    },
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { section: 'local' } });
+  await flush();
+  const badge = items('icons').find(
+    (item) => String(item.id) === 'news:country:Ukraine',
+  );
+  assert.ok(badge, 'the badge is an icon');
+  // 34 CSS px at 2 drawing-buffer pixels each: a 68 px disc on an 84 px
+  // canvas (64/52 of it). At the device's 3 it would be 126.
+  assert.equal(badge.image, 'data:image/png;test,84');
+  assert.deepEqual(badge.size, [42, 42]);
 });
 
 test('Local reports are listed an hour at most while they cannot be read again', async (t) => {
