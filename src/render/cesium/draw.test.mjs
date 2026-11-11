@@ -4445,7 +4445,8 @@ test('a draped rectangle turns, its image fill with it, on a ground primitive th
     const [flat] = grounds();
     assert.equal(flat.geometryInstances[0].geometry._rotation, 0);
     plain.dispose();
-    // An image it cannot take is refused before anything is built.
+    // An atlas slot fills as the image it holds; one not registered is
+    // refused before anything is built.
     const made = scene.added.length;
     assert.throws(
       () =>
@@ -4455,9 +4456,16 @@ test('a draped rectangle turns, its image fill with it, on a ground primitive th
             overlay(),
             overlay({ id: 'b', fill: { image: { atlas: 'a', slot: 's' } } }),
           ]),
-      /URL, SVG and canvas images only/,
+      /atlas a has no slot s registered/,
     );
     assert.equal(scene.added.length, made, 'nothing drawn');
+    draw.atlas('a', { s: 'slot.png' });
+    const slotted = draw.shapes({ id: 'atlas-registered' });
+    slotted.set([
+      overlay({ id: 'b', fill: { image: { atlas: 'a', slot: 's' } } }),
+    ]);
+    assert.ok(scene.added.length > made, 'drawn from the slot');
+    slotted.dispose();
   }));
 
 test('scene data packs draw their geometry and media marker through the Cesium draw port on a viewer of its own', async (t) => {

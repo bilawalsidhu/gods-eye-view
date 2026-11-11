@@ -1650,6 +1650,71 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.icons.images',
+      'icons draw every kind of image (URL, SVG, blob, keyed canvas and an atlas slot of each), on billboards and moving alike, and are picked',
+      async (h, r) => {
+        await overAustin(h, r);
+        const kinds = {
+          url: PIXEL_PNG,
+          svg: DOT,
+          blob: { blob: new Blob([DOT.svg], { type: 'image/svg+xml' }) },
+        };
+        const canvas = globalThis.document?.createElement('canvas');
+        const g = canvas?.getContext?.('2d');
+        if (g) {
+          canvas.width = canvas.height = 16;
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, 16, 16);
+          kinds.canvas = { canvas, key: 'conf:images-square' };
+        }
+        r.draw.atlas('conf:images', kinds);
+        const images = Object.entries(kinds).flatMap(([kind, image]) => [
+          [kind, image],
+          [`atlas-${kind}`, { atlas: 'conf:images', slot: kind }],
+        ]);
+        // Two sets: still icons, and icons that recede (drawn as moving
+        // ones are, where a renderer draws them apart).
+        const rows = [
+          ['still', {}, AUSTIN.lat + 0.004],
+          ['receding', { recede: true }, AUSTIN.lat - 0.004],
+        ];
+        const at = (i, lat) =>
+          h.toEcef({
+            lon: AUSTIN.lon + (i - (images.length - 1) / 2) * 0.0012,
+            lat,
+            height: 0,
+          });
+        const sets = rows.map(([name, extra, lat]) => {
+          const set = r.draw.icons({ id: `conf:images-${name}` });
+          set.set(
+            images.map(([id, image], i) => ({
+              id,
+              pos: at(i, lat),
+              image,
+              size: [20, 20],
+              ...extra,
+            })),
+          );
+          return set;
+        });
+        await drawn(h, r);
+        await settled(r);
+        await drawn(h, r);
+        for (const [name, , lat] of rows)
+          images.forEach(([id], i) => {
+            const s = r.query.project(at(i, lat));
+            ok(s, `${name} ${id} projects`);
+            const hit = r.query.pick(s.x, s.y);
+            deepEqual(
+              [hit?.set, hit?.id],
+              [`conf:images-${name}`, id],
+              `${name} ${id} drawn and picked`,
+            );
+          });
+        for (const set of sets) set.dispose();
+      },
+    ),
+    check(
       'draw.icons.update',
       'an upserted icon keeps drawing, as it now is, from the next frame: picked at its new size with its new meta, even while a new image loads; a removed one is gone',
       async (h, r) => {

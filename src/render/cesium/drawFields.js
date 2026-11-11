@@ -10,7 +10,8 @@
  * - An image is read when it is first named, as a Cesium material reads
  *   one: to show new pixels, name another canvas. URL, SVG and blob images
  *   are decoded before they are handed over, so the frame they replace
- *   stays until they can be drawn; atlas slots are refused.
+ *   stays until they can be drawn; an atlas slot is read as the image it
+ *   holds when the field is drawn or updated.
  * - An `update` of `image` alone, inside the same rectangle and height,
  *   swaps the texture on the drawn surface: Cesium keeps drawing the old
  *   one until the new one is uploaded. A new `rectangle` or `heightM` is
@@ -371,7 +372,10 @@ const immediate = (ref) => Boolean(ref?.canvas);
 
 /** An image reference decoded into something a material uploads. */
 async function decode(ref) {
-  if (ref?.atlas) throw new TypeError('a raster shell takes no atlas images');
+  if (ref?.atlas)
+    throw new TypeError(
+      `atlas ${ref.atlas} has no slot ${ref.slot} registered`,
+    );
   const url = ref?.blob
     ? URL.createObjectURL(ref.blob)
     : ref?.svg
@@ -391,7 +395,9 @@ async function decode(ref) {
 /**
  * The fields part of a Cesium draw port.
  * @param {{scene: object, report?: (error: unknown) => void,
- *   cesium?: object}} options `cesium` is for test doubles.
+ *   cesium?: object, resolveImage?: (ref: unknown) => unknown}} options
+ *   `cesium` is for test doubles; `resolveImage` reads an atlas slot as the
+ *   image it holds.
  * @returns {{field: (spec: object) => object, has: (id: string) => boolean,
  *   dispose: () => void}}
  */
@@ -399,6 +405,7 @@ export function createCesiumFields({
   scene,
   report = uncaught,
   cesium = Cesium,
+  resolveImage = (ref) => ref,
 }) {
   const fields = new Map();
   const live = () => !scene.isDestroyed?.();
@@ -515,10 +522,12 @@ export function createCesiumFields({
     }
     function load(c) {
       const seq = (contentSeq += 1);
-      const refs = [c.image, c.detail?.image];
+      const refs = [c.image, c.detail?.image].map((ref) =>
+        ref == null ? ref : resolveImage(ref),
+      );
       if (refs.every((ref) => ref == null || immediate(ref))) {
         placedSeq = seq;
-        place(c, c.image.canvas, c.detail?.image.canvas ?? null);
+        place(c, refs[0].canvas, refs[1]?.canvas ?? null);
         return;
       }
       // A stage of older content must not take the drawn one's place while

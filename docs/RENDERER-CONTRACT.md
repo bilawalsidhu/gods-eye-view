@@ -126,6 +126,13 @@ optional, so a renderer written before it still conforms:
   [The application and its renderer](#the-application-and-its-renderer).
 - `frame.renderNow()` throws when the frame fails to draw.
 
+The Cesium port takes every kind of `ImageRef` wherever an image is drawn
+(icons on billboards and on the GPU, line patterns, shape fills, quads and
+raster shells): a URL, SVG, a blob (by an object URL made once per blob), a
+keyed canvas, and an atlas slot as the image it holds (an icon waits for an
+unregistered slot; anything else refuses it). The check `draw.icons.images`
+draws each kind on still and receding icons.
+
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass), lines in the
 `inertial` frame (turned each frame by the set's motion clock; never draped

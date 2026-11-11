@@ -13,8 +13,8 @@
  * an item first needs it (or it first takes columns), and stays one. They
  * refuse loudly what billboards draw and they do not: clamped heights,
  * `fadeByDistance`, `displayRange`, pixel offsets, anchors other than the
- * centre, axis and screen rotations, opaque and additive blends, and
- * images other than URLs, SVG and atlas slots of those. Their images
+ * centre, axis and screen rotations, and opaque and additive blends. Their
+ * images (URLs, SVG, blobs, keyed canvases and atlas slots of those)
  * are rasterised square into the icon atlas every GPU icon set shares, and
  * refused when it has no room left for them: an SVG at its own size (its
  * root's larger `width`/`height`, as a billboard rasterises it), any other
@@ -53,7 +53,7 @@ import {
   LERP_STEP_MS,
   motionEndsAt,
 } from '../motion/iconMotion.js';
-import { toCartesian } from './common.js';
+import { blobUrl, toCartesian } from './common.js';
 
 /** The capabilities GPU icon sets bring. */
 export const GPU_ICON_CAPABILITIES = Object.freeze([
@@ -68,11 +68,17 @@ const nonZero = (v) =>
 /** Whether a curve is one (as the billboards read it). */
 const isCurve = (curve) => Boolean(curve) && curve.far > curve.near;
 
-/** An image's atlas URL: itself, or SVG as a data URL; else null. */
+/**
+ * An image's atlas key: a URL itself, SVG as a data URL, a blob as its
+ * object URL, a generated canvas by its key; else null.
+ */
 function imageUrl(image) {
   if (typeof image === 'string') return image;
   if (typeof image?.svg === 'string')
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(image.svg)}`;
+  if (image?.blob) return blobUrl(image.blob);
+  if (image?.canvas && typeof image.key === 'string')
+    return `\u0000key\u0000${image.key}`;
   return null;
 }
 
@@ -219,13 +225,11 @@ export function createGpuIcons({
         // An atlas slot as what it holds now (none yet draws once it does).
         const image =
           typeof given?.atlas === 'string' ? peekImage(given) : given;
-        if (
-          image !== undefined &&
-          typeof image !== 'string' &&
-          typeof image?.svg !== 'string'
-        )
-          refuse('images but URLs and SVG');
-        const url = imageUrl(image);
+        const url = image === undefined ? null : imageUrl(image);
+        if (image !== undefined && url === null)
+          throw new TypeError(
+            'an image is a URL, SVG, blob, keyed canvas or atlas slot',
+          );
         const px = rasterPxOf(url, item);
         if (url !== null && !iconAtlas.has(url, px)) fresh.add(`${px}|${url}`);
       }
@@ -300,9 +304,10 @@ export function createGpuIcons({
       const resolved = imageOf(record, image);
       if (resolved === undefined) return -1;
       const url = imageUrl(resolved);
-      if (url !== null) return iconAtlas.slot(url, rasterPxOf(url, item));
-      throw new Error(
-        "the Cesium renderer's GPU icons have no images but URLs and SVG",
+      if (url !== null)
+        return iconAtlas.slot(url, rasterPxOf(url, item), resolved?.canvas);
+      throw new TypeError(
+        'an image is a URL, SVG, blob, keyed canvas or atlas slot',
       );
     }
 

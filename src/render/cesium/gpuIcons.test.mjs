@@ -330,7 +330,6 @@ test('GPU icon sets refuse what they cannot draw, changing nothing', () => {
     { anchor: 'bottom' },
     { rotationMode: 'axis' },
     { rotationMode: 'screen', rotation: 1 },
-    { image: { blob: {} } },
   ])
     assert.throws(
       () => set.upsert([icon('b', { motion: { kind: 'hold' }, ...extra })]),
@@ -603,6 +602,43 @@ test('a row takes its item’s motion changed in place', () => {
     Math.abs(course('a', Date.now()) - 90) < 0.01,
     'the written copy is not the item, so the change is seen',
   );
+});
+
+test('GPU icons take blobs and keyed canvases into the atlas, an atlas slot of each too', async () => {
+  const { iconAtlas } = await import('../../data/iconAtlas.js');
+  const { part, draw } = drawOver();
+  const blob = new Blob(['<svg xmlns="http://www.w3.org/2000/svg"/>'], {
+    type: 'image/svg+xml',
+  });
+  const canvas = { width: 16, height: 16 };
+  draw.atlas('gpu:kinds', { blob: { blob }, canvas: { canvas, key: 'sq' } });
+  const set = draw.icons({ id: 'gpu:kinds' });
+  const moving = { motion: { kind: 'hold' }, size: [20, 20] };
+  set.set([
+    icon('blob', { image: { blob }, ...moving }),
+    icon('canvas', { image: { canvas, key: 'sq' }, ...moving }),
+    icon('atlas-blob', {
+      image: { atlas: 'gpu:kinds', slot: 'blob' },
+      ...moving,
+    }),
+    icon('atlas-canvas', {
+      image: { atlas: 'gpu:kinds', slot: 'canvas' },
+      ...moving,
+    }),
+  ]);
+  const { set: rowsOf } = rows(part, 'gpu:kinds');
+  const far = (id) => rowsOf.imageFar(rowsOf.row(id));
+  assert.ok(far('blob') >= 0 && far('canvas') >= 0);
+  assert.notEqual(far('blob'), far('canvas'));
+  assert.equal(far('atlas-blob'), far('blob'), 'one slot per blob');
+  assert.equal(far('atlas-canvas'), far('canvas'), 'one slot per canvas key');
+  assert.ok(iconAtlas.has('\u0000key\u0000sq', 20), 'the canvas by its key');
+  assert.throws(
+    () => set.upsert([icon('bad', { image: { nope: 1 }, ...moving })]),
+    /an image is a URL, SVG, blob, keyed canvas or atlas slot/,
+  );
+  assert.equal(set.size(), 4, 'refused, changing nothing');
+  set.dispose();
 });
 
 test('an SVG takes the atlas at its own size, other images at the item’s', async () => {

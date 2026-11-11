@@ -35,7 +35,7 @@ import * as Cesium from 'cesium';
 import { temeToPseudoFixed } from '../../geo/celestial.js';
 import { alongLength } from '../../geo/polyline.js';
 import { provideUnboundDraw } from '../rendererOf.js';
-import { listenerList, toCartesian, uncaught } from './common.js';
+import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
@@ -54,13 +54,23 @@ export function toColor(color, alpha = 1) {
   return c.withAlpha(c.alpha * alpha);
 }
 
-/** An image reference as something a billboard takes. */
+/**
+ * An image reference as something a billboard or material takes: a URL, an
+ * SVG as a data URL, a blob as its object URL, or the canvas itself. An
+ * atlas slot is read through the draw port's atlases first
+ * (`createCesiumDraw`'s `imageAt`).
+ */
 export function toImage(image) {
   if (typeof image === 'string') return image;
   if (image?.svg)
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(image.svg)}`;
+  if (image?.blob) return blobUrl(image.blob);
   if (image?.canvas) return image.canvas;
-  throw new Error('the Cesium renderer takes URL, SVG and canvas images only');
+  if (typeof image?.atlas === 'string')
+    throw new TypeError(
+      `atlas ${image.atlas} has no slot ${image.slot} registered`,
+    );
+  throw new TypeError('an image is a URL, SVG, blob, canvas or atlas slot');
 }
 
 /** Cesium's height reference for an item's `height` and `clampTo`. */
@@ -371,7 +381,14 @@ export function createCesiumDraw({
 }) {
   const sets = new Map();
   // Fields share the sets' ids.
-  const fieldPart = createCesiumFields({ scene, report });
+  const fieldPart = createCesiumFields({
+    scene,
+    report,
+    resolveImage: (ref) =>
+      typeof ref?.atlas === 'string'
+        ? (atlases.get(ref.atlas)?.[ref.slot] ?? ref)
+        : ref,
+  });
   let setSeq = 0;
   // Bumped whenever what height queries see through may have changed: a
   // set made, rebuilt, restyled or gone, or items added or removed (icons
@@ -915,6 +932,19 @@ export function createCesiumDraw({
     return atlases.get(image.atlas)?.[image.slot];
   }
 
+  /**
+   * What a line pattern, a shape's fill or a quad draws: `toImage` of the
+   * image, an atlas slot as the slot holds it when it is drawn (one not
+   * registered is refused, as an image it cannot read).
+   */
+  function imageAt(image) {
+    return toImage(
+      typeof image?.atlas === 'string'
+        ? (atlases.get(image.atlas)?.[image.slot] ?? image)
+        : image,
+    );
+  }
+
   function buildIcons(record) {
     // A GPU host keeps drawing: what a rebuild changes, it reads live.
     if (record.gpu) return;
@@ -944,7 +974,7 @@ export function createCesiumDraw({
     if (typeof image === 'string') return image;
     if (typeof image?.svg === 'string') return `\u0000svg\u0000${image.svg}`;
     if (isKeyed(image)) return `\u0000key\u0000${image.key}`;
-    return image?.canvas ?? image;
+    return image?.canvas ?? image?.blob ?? image;
   }
 
   /** How a billboard draws an icon item at `position`, but its image and id. */
@@ -1838,7 +1868,7 @@ export function createCesiumDraw({
         return {
           type: 'Image',
           uniforms: {
-            image: toImage(style.image),
+            image: imageAt(style.image),
             repeat: new Cesium.Cartesian2(style.repeat, 1),
           },
         };
@@ -3422,7 +3452,7 @@ export function createCesiumDraw({
       if (imageFill && scene.context?.depthTexture === false)
         throw new Error('the Cesium renderer cannot drape images here');
       // Refused before anything is made, so nothing is left half built.
-      const image = imageFill ? toImage(imageFill.image) : null;
+      const image = imageFill ? imageAt(imageFill.image) : null;
       // Hidden colour fills are built too, hidden, so showing them is a
       // change of their show, not a rebuild of every fill; a hidden one it
       // cannot build stays out, as before, and showing it rebuilds. Hidden
@@ -4134,7 +4164,7 @@ export function createCesiumDraw({
       const lit = item.lit ?? solid;
       if (imageFill && !item.outlineOnly) {
         const material = ownMaterial(
-          imageMaterial(toImage(imageFill.image), imageFill.repeat),
+          imageMaterial(imageAt(imageFill.image), imageFill.repeat),
         );
         // Its image is changed in place (`writeImage`); it never recolours.
         part.image = { material, texture: null };
@@ -4257,7 +4287,7 @@ export function createCesiumDraw({
       : Math.min(px, scene.maximumAliasedLineWidth ?? 1);
   const quadSets = createQuadSets({
     toColor,
-    toImage,
+    toImage: imageAt,
     pickId,
     replaceHost,
     lineWidth,

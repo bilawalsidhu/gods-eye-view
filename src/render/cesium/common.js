@@ -65,3 +65,13 @@ export function uncaught(error) {
       throw error;
     });
 }
+
+/** Each blob's object URL, made once and kept while the blob lives. */
+const blobUrls = new WeakMap();
+
+/** A blob's object URL: the same one every time it is drawn. */
+export function blobUrl(blob) {
+  let url = blobUrls.get(blob);
+  if (!url) blobUrls.set(blob, (url = URL.createObjectURL(blob)));
+  return url;
+}

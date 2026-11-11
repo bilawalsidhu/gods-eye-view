@@ -81,12 +81,15 @@ function createAtlas() {
     },
 
     /**
-     * The slot for `url` rasterised at `sizePx` square.
+     * The slot for `url` rasterised at `sizePx` square. Given a `source` (a
+     * canvas, or anything else `drawImage` takes), `url` is only its key:
+     * the source is packed at once, as it is now, and never loaded.
      * @param {string} url
      * @param {number} sizePx
+     * @param {CanvasImageSource} [source]
      * @returns {number}
      */
-    slot(url, sizePx) {
+    slot(url, sizePx, source) {
       const key = `${sizePx}|${url}`;
       const known = slotOfKey.get(key);
       if (known !== undefined) return known;
@@ -98,7 +101,8 @@ function createAtlas() {
       const entry = { url, sizePx, image: null, x: 0, y: 0 };
       entries.push(entry);
       slotOfKey.set(key, slot);
-      load(entry);
+      if (source) placeLoaded(entry, source);
+      else load(entry);
       return slot;
     },
 
@@ -129,23 +133,32 @@ function createAtlas() {
     },
   };
 
+  /** Pack an entry's loaded image, or leave its slot empty when it does not fit. */
+  function placeLoaded(entry, image) {
+    entry.image = image;
+    // Node: nothing to pack into.
+    if (
+      typeof document === 'undefined' &&
+      typeof OffscreenCanvas === 'undefined'
+    )
+      return;
+    if (!pack()) {
+      entry.image = null; // does not fit: leave its slot empty, keep the rest
+      entry.failed = true;
+      console.warn(
+        `[iconAtlas] No room for ${entry.sizePx} px icon; slot stays empty`,
+      );
+      pack();
+    }
+  }
+
   function load(entry) {
     if (typeof Image === 'undefined') return; // Node: slots only
     const image = new Image(entry.sizePx, entry.sizePx);
     image.decoding = 'async';
     // A cross-origin image would taint the canvas and every texture upload.
     image.crossOrigin = 'anonymous';
-    image.onload = () => {
-      entry.image = image;
-      if (!pack()) {
-        entry.image = null; // does not fit: leave its slot empty, keep the rest
-        entry.failed = true;
-        console.warn(
-          `[iconAtlas] No room for ${entry.sizePx} px icon; slot stays empty`,
-        );
-        pack();
-      }
-    };
+    image.onload = () => placeLoaded(entry, image);
     image.onerror = () => {
       entry.failed = true;
       console.warn(
