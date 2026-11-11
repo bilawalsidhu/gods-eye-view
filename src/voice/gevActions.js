@@ -3961,19 +3961,28 @@ async function requestStreetLevel(
   if (atViewCentre || (args.fly === false && hasCoordinates)) {
     if (hasCoordinates) point = { lat: latitude, lon: longitude };
   } else {
-    location = await runGevAction(
-      'fly_to_location',
-      {
-        ...(entity
-          ? { entity }
-          : hasCoordinates
-            ? { latitude, longitude }
-            : { query }),
-        viewMode: 'close',
-        waitForArrival: true,
-      },
-      runOptions,
-    );
+    try {
+      location = await runGevAction(
+        'fly_to_location',
+        {
+          ...(entity
+            ? { entity }
+            : hasCoordinates
+              ? { latitude, longitude }
+              : { query }),
+          viewMode: 'close',
+          waitForArrival: true,
+        },
+        runOptions,
+      );
+    } catch (error) {
+      // A geocoder that throws (offline, a provider down) is this stage's
+      // failure too, not an error past the action.
+      return fail('location', `Could not arrive at ${label}`, {
+        cancelled: !current(),
+        detail: String(error?.message || error),
+      });
+    }
     if (location?.ok !== true || !current())
       return fail(
         'location',

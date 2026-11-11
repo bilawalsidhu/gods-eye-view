@@ -7005,6 +7005,25 @@ test('show_street_level tells a failed enable, a delisted source, a key refused 
   assert.deepEqual(unconfigured.order, [], 'nothing changed');
 });
 
+test('show_street_level reports a geocoder that throws as its location stage', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const h = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
+  const runner = createGevActionRunner({
+    viewer: createVoiceNavigationHarness().viewer,
+    styleManager: { mapStackController: { getActiveId: () => 'osm' }, setMapStack: async () => ({ ok: true }) },
+    dataManager: h.dataManager,
+    placeSearch: {
+      geocode: async () => {
+        throw new Error('geocoder unreachable');
+      },
+    },
+  });
+  const result = await runner('show_street_level', { query: 'Capitol Mall', provider: 'mapillary' });
+  assert.deepEqual([result.ok, result.stage], [false, 'location']);
+  assert.equal(result.error, 'Could not arrive at Capitol Mall');
+  assert.deepEqual(h.order.filter((step) => /^(params|open|arm)/.test(step)), [], 'nothing switched or looked up');
+});
+
 test('show_street_level reports a flight that lands without a position', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const hit = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
