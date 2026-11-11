@@ -8,7 +8,6 @@ import { setContextMode as contextModeAction } from './ui/contextActions.js';
 import { ContextControls } from './ui/contextControls.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
-const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
 const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
 // Source-contract pins read the actual Context owners and root disposal wiring. Each pin guards a bug that shipped or nearly shipped:
 //  - session bookkeeping ran AFTER the exit early-return, so the compensating
@@ -21,8 +20,6 @@ const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', imp
 //  - the right-rail entry ignored the activation result entirely.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 const src = readShellSource();
 
@@ -97,6 +94,15 @@ test('context restore settles the Contacts coordinator before dependency fanout'
   assert.match(restore, /excludeLayerIds: settleContactsCoordinator[\s\S]*?contactsCoordinatorId/);
 });
 
+test('Clear All during the Contacts settle stops the snapshot coming back', () => {
+  const restore = _restoreContextSession.toString();
+  const coordinatorOff = restore.indexOf('const coordinatorSettled = await this._dataManager.setEnabled(');
+  const cancelled = restore.indexOf('if (restoreState.cancelled) return;', coordinatorOff);
+  const fanout = restore.indexOf('await this._dataManager.restoreEnabledLayerIds(', coordinatorOff);
+  assert.ok(cancelled > coordinatorOff, 'the cancellation is checked after Contacts settles');
+  assert.ok(fanout > cancelled, 'and before the snapshot fans out');
+});
+
 test('context restore preserves its exact pending target after a failed transition', () => {
   const restore = _restoreContextSession.toString();
   assert.match(restore, /const replayError = await settleContextIntentReplay\(\{/);
@@ -162,7 +168,7 @@ test('every user-facing Context exit route settles through the failure surface',
 test('the Radio chip catches lifecycle rejection and semantic false through the toast wrapper', () => {
   const radioControls = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
-    radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
+    radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
   assert.match(radioControls, /await this\.actions\.runUserAction\(/);
   assert.match(radioControls, /Radio could not \$\{enabling \? 'start' : 'stop'\} cleanly/);
@@ -172,7 +178,7 @@ test('the Radio chip catches lifecycle rejection and semantic false through the 
 test('only the expanded Radio Enable gesture requests the contained post-enable reveal', () => {
   const radioControls = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
-    radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
+    radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
   assert.match(radioControls, /revealAfterEnable = enabling && trigger === this\._radioEnableBtn/);
   assert.match(radioControls, /if \(revealAfterEnable\)\s*await this\._revealRadioControlsAfterExplicitEnable\(trigger\)/);

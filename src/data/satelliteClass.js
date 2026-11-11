@@ -1,70 +1,62 @@
 /**
- * Satellite classification — CelesTrak source group → operator-legible class.
+ * Satellite labels and colours by CelesTrak source group, beneath the six
+ * classes.
  *
- * The catalog already tags every satellite with the CelesTrak group it was
- * ingested from (`CATALOG_GROUPS` in satellites.js), so classification is a
- * pure lookup: no extra fetch, no heuristics, no per-frame work. This module is
- * the single source of truth for the class a satellite belongs to, the label
- * shown on its card, and the point color it renders in — the render path, the
- * tracked card, and the row legend all read the same table, so a palette edit
- * can never leave one surface disagreeing with another.
+ * The class a satellite is filed under (STATIONS, IMAGING, TELECOM,
+ * STARLINK, PROBES or DEBRIS) is decided in src/layers/satellites/classes.js
+ * from SATCAT, the UCS database, names and the group, and that module owns
+ * each class's colour, legend label and toggle. This module keeps the
+ * group-based layer: the constellation subtype a card adds to the class
+ * (`TELECOM · GPS`, `STATIONS · ISS`; satelliteClassText), the group's own
+ * label for a satellite with no class (satelliteClassLabel), and the colour
+ * per group (satelliteClassColor), which the layer's base point styles use
+ * where a satellite has no class (src/layers/satellites/policy.js).
  *
- * Deliberately Cesium-free: colors are CSS hex strings that satellites.js
- * converts once at module load. That keeps this file unit-testable and lets the
- * legend swatches reuse the exact same strings the points are drawn with.
- *
- * Class order below is the legend order: crewed first (the objects people look
- * for), then the constellations users can actually name, then the grab-bag.
+ * Deliberately Cesium-free: colors are CSS hex strings that the layer
+ * converts once at module load, so this file stays unit-testable.
  */
 
+import { t, msg } from '../i18n/index.js';
+import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
+
 /**
- * Class registry. `label` is the card/legend token, `color` the point color,
- * `blurb` the plain-language gloss for the legend tooltip.
- * @type {Readonly<Record<string, { label: string, color: string, blurb: string }>>}
+ * Class registry: the point color of each class. The card and legend text is
+ * in CLASS_DISPLAY_KEYS.
+ * @type {Readonly<Record<string, { color: string }>>}
  */
 export const SATELLITE_CLASSES = Object.freeze({
   station: Object.freeze({
-    label: 'STATION',
     // Warm white — "crewed", and the brightest class in the sky. Deliberately
     // NOT amber: 40-48deg amber is the app's known-military convention
     // (flights.js MIL_TINT / militaryFlights.js MIL_ICON_COLOR) and must not
     // leak into another domain. Slightly warm so it also separates from the
     // pure white the civilian air fleet draws in.
     color: '#fff6e5',
-    blurb: 'Crewed stations and their visiting vehicles',
   }),
   nav: Object.freeze({
-    label: 'NAV',
     // Cyan — the strongest accent goes to the class users actually name
     // ("how many GPS satellites are up?"). Takes over the slot the catch-all
     // VISUAL group used to occupy, so this adds no new hue to the app.
     color: '#4fd8ff',
-    blurb: 'GNSS navigation — GPS, GLONASS, Galileo',
   }),
   geo: Object.freeze({
-    label: 'GEO',
     // Violet, unchanged. Already the app's "space" semantic (the detection
     // overlay paints the SAT tier #bda4ff), and the geostationary belt draws
     // as one clean equatorial ring at globe scale.
     color: '#c89bff',
-    blurb: 'Geostationary belt — comms and weather, fixed over the equator',
   }),
   visual: Object.freeze({
-    label: 'VISUAL',
     // Muted blue-gray. This is the catch-all bucket, so it gives up the bright
     // cyan it used to hold and recedes behind the three classes that mean
     // something. Still well clear of the dense shell by luminance.
     color: '#9fb3c4',
-    blurb: 'Brightest naked-eye objects — CelesTrak visual group',
   }),
   comms: Object.freeze({
-    label: 'COMMS',
     // Dim slate — thousands of these appear in DENSE mode. They must read as
     // texture behind the core catalog, never compete with it. Rec.601 luma
     // ~0.40 against VISUAL's ~0.69 keeps the two separable even when the
     // NVG/FLIR shaders collapse the scene to a single channel.
     color: '#54697f',
-    blurb: 'Broadband constellation shell — shown only in DENSE mode',
   }),
 });
 
@@ -76,6 +68,32 @@ export const SATELLITE_CLASS_ORDER = Object.freeze([
   'visual',
   'comms',
 ]);
+
+// What the card and legend show for each class.
+const CLASS_DISPLAY_KEYS = Object.freeze({
+  station: Object.freeze({
+    label: msg('STATION'),
+    blurb: msg('Crewed stations and their visiting vehicles'),
+  }),
+  nav: Object.freeze({
+    label: msg('NAV'),
+    blurb: msg('GNSS navigation — GPS, GLONASS, Galileo'),
+  }),
+  geo: Object.freeze({
+    label: msg('GEO'),
+    blurb: msg(
+      'Geostationary belt — comms and weather, fixed over the equator',
+    ),
+  }),
+  visual: Object.freeze({
+    label: msg('VISUAL'),
+    blurb: msg('Brightest naked-eye objects — CelesTrak visual group'),
+  }),
+  comms: Object.freeze({
+    label: msg('COMMS'),
+    blurb: msg('Broadband constellation shell — shown only in DENSE mode'),
+  }),
+});
 
 /**
  * CelesTrak group tag → { class, subtype }. Subtype names the specific
@@ -134,59 +152,40 @@ export function satelliteClassColor(group) {
  * The ISS is always a STATION regardless of which group ingested it — see
  * satelliteClassOf, which owns that rule for every consumer.
  * @param {string|undefined|null} group CelesTrak group tag.
- * @param {{ isIss?: boolean }} [options] Whether this is the ISS.
+ * @param {{ isIss?: boolean, localize?: boolean }} [options] isIss: the ISS;
+ *   localize: false keeps the English label (data for the AI tools).
  * @returns {string} Display label.
  */
-export function satelliteClassLabel(group, { isIss = false } = {}) {
+export function satelliteClassLabel(
+  group,
+  { isIss = false, localize = true } = {},
+) {
   const { klass, subtype } = satelliteClassOf(group, { isIss });
-  const base = SATELLITE_CLASSES[klass].label;
+  const label = CLASS_DISPLAY_KEYS[klass].label;
+  const base = localize ? t(label) : label;
   return subtype ? `${base} · ${subtype}` : base;
 }
 
 /**
- * Tally satellites into a class → count record.
- * Split from the legend builder so the counting rule stays independent of how
- * the legend is presented. Entries may be bare group tags, or `{ group, isIss }`
- * descriptors when the caller can identify the ISS — the tally classifies
- * through satelliteClassOf, so the legend and the card always agree.
- * @param {Iterable<string|undefined|null|{group?: string, isIss?: boolean}>} entries
- *   One entry per satellite.
- * @returns {Record<string, number>} Class key → count.
+ * The class a satellite shows on its card, label, overlay and orbital
+ * readout: its class (src/layers/satellites/classes.js) with the CelesTrak group's
+ * subtype where one says more ("TELECOM · GPS", "STATIONS · ISS"). A subtype
+ * that only repeats the class ("STARLINK · STARLINK") is dropped. Without a
+ * class the group's label stands (satelliteClassLabel).
+ * @param {string|null|undefined} satelliteClass Six-class id.
+ * @param {string|undefined|null} group CelesTrak group tag.
+ * @param {{ isIss?: boolean, localize?: boolean }} [options] As for
+ *   satelliteClassLabel.
+ * @returns {string} Display label.
  */
-export function tallySatelliteClasses(entries) {
-  const counts = Object.create(null);
-  for (const entry of entries || []) {
-    const descriptor =
-      entry && typeof entry === 'object' ? entry : { group: entry };
-    const { klass } = satelliteClassOf(descriptor.group, {
-      isIss: descriptor.isIss,
-    });
-    counts[klass] = (counts[klass] || 0) + 1;
-  }
-  return counts;
-}
-
-/**
- * Build the layer-row legend from a class tally.
- * Classes with no members are omitted so the legend never advertises a class
- * that is not on screen (COMMS only appears once DENSE is on).
- * @param {Record<string, number>} counts Class key → count (see tallySatelliteClasses).
- * @returns {Array<{ klass: string, label: string, color: string, blurb: string, count: number }>}
- *   Present classes in legend order.
- */
-export function satelliteClassLegend(counts) {
-  const result = [];
-  for (const klass of SATELLITE_CLASS_ORDER) {
-    const count = counts?.[klass];
-    if (!(count > 0)) continue;
-    const spec = SATELLITE_CLASSES[klass];
-    result.push({
-      klass,
-      label: spec.label,
-      color: spec.color,
-      blurb: spec.blurb,
-      count,
-    });
-  }
-  return result;
+export function satelliteClassText(
+  satelliteClass,
+  group,
+  { isIss = false, localize = true } = {},
+) {
+  const display = SATELLITE_CLASS_DISPLAY[satelliteClass];
+  if (!display) return satelliteClassLabel(group, { isIss, localize });
+  const base = localize ? t(display.label) : display.label;
+  const { subtype } = satelliteClassOf(group, { isIss });
+  return subtype && subtype !== display.label ? `${base} · ${subtype}` : base;
 }

@@ -13,6 +13,7 @@ import {
   releasePointer,
 } from '../data/inputOwnership.js';
 import { validateBox } from '../layers/recentImagery/model.js';
+import { msg } from '../i18n/index.js';
 
 /** The id this tool claims the pointer under. */
 export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
@@ -150,7 +151,7 @@ export function initImageryBoxTool({
     if (!active || destroyed || anchor) return;
     const point = worldAt(event.position);
     if (!point) {
-      onCancel?.('sky', 'Press on the ground, not the sky');
+      onCancel?.('sky', msg('Press on the ground, not the sky'));
       return;
     }
     anchor = point;
@@ -169,7 +170,8 @@ export function initImageryBoxTool({
     corner = worldAt(event.position) || corner;
     const box = dragBox();
     const result = validateBox(box);
-    if (result.reason === 'degenerate') result.message = 'Drag to size the box';
+    if (result.reason === 'degenerate')
+      result.message = msg('Drag to size the box');
     endDrag();
     setActive(false);
     if (result.ok) onBox(result.box);

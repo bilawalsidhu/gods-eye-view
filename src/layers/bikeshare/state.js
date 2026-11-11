@@ -19,6 +19,10 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} Manager that repaints the layer's row. */
+
+  layerState._dataManager = null;
+
   /** @type {Cesium.PointPrimitiveCollection|null} Primitive collection for station dots. */
 
   layerState._pointCollection = null;
@@ -99,9 +103,17 @@ export function createState({ services }) {
 
   layerState._loadingOps = 0;
 
-  /** Most recent error message string, or null. */
+  /**
+   * @type {Set<string>} City ids whose most recent fetch failed.
+   *
+   * Per city rather than one layer-wide flag: feeds are fetched independently,
+   * so a retired operator must not mark a layer that other cities are still
+   * populating as failed. Entries are dropped when their city leaves range.
+   * The layer reports failure only when these cost it everything it had to
+   * draw, and degraded otherwise — see `getStats()` in controls.js.
+   */
 
-  layerState._error = null;
+  layerState._failedCityIds = new Set();
 
   /** Whether the MAX_TOTAL_POINTS cap warning has already been logged. */
 

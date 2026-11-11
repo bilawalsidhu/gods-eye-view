@@ -1,7 +1,10 @@
+import { createDirectionsSource } from '../layers/directions/source.js';
+import { createRecentImagerySource } from '../layers/recentImagery/source.js';
+import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
 import {
-  createOpenSkySource,
-  createAdsbLolSource,
-  createAisStreamSource,
+  createFlightSource,
+  createMilitarySource,
+  createVesselSource,
 } from '../sources/live/standalone.js';
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
@@ -11,35 +14,69 @@ import { createBikeshareSource } from '../layers/bikeshare/source.js';
 import { createInstallationSource } from '../layers/installations/source.js';
 import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
-import { createOverpassAlprSource } from '../layers/alpr/source.js';
+import { createAlprTileSource } from '../layers/alpr/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
+import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
+import { createNewsSource } from '../layers/news/source.js';
+import { createShipwrecksSource } from '../layers/shipwrecks/source.js';
+import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources() {
-  return {
+export function createStandaloneLayerSources(
+  overrides = {},
+  { createMapTiles = createOpenFreeMapSource } = {},
+) {
+  if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
+    throw new TypeError('Source overrides must be an object');
+  const trafficTiles = createMapTiles({
+    selectDecoded: ({ roads }) => ({ roads }),
+  });
+  const installationTiles = createMapTiles({
+    selectDecoded: ({ military }) => ({ military }),
+  });
+  const defaults = {
     ...createReferenceSources(),
-    flights: createOpenSkySource(),
-    military: createAdsbLolSource(),
-    vessels: createAisStreamSource({
-      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
+    directions: createDirectionsSource(),
+    'recent-imagery': createRecentImagerySource(),
+    flights: createFlightSource(),
+    military: createMilitarySource(),
+    vessels: createVesselSource({
+      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
+      // Resolved against the document's address, which a panel host may
+      // serve from its own scheme.
+      origin: () => globalThis.document?.baseURI ?? 'http://localhost',
     }),
     cctv: createCctvSource(),
     radio: createRadioSource(),
-    traffic: createTrafficSource(),
+    traffic: createTrafficSource({ mapTiles: trafficTiles }),
     transit: createTransitSource(),
     bikeshare: createBikeshareSource(),
-    installations: createInstallationSource(),
+    installations: createInstallationSource({ mapTiles: installationTiles }),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
-    alpr: createOverpassAlprSource(),
+    alpr: createAlprTileSource(),
     firms: createFirmsSource(),
+    's2-ghostmaps': createGhostMapsSource(),
+    // Same-origin /api/news: the local server proxies GEV_NEWS_ORIGIN and,
+    // without it, answers "not configured", which the layer shows as
+    // unavailable without retrying.
+    news: createNewsSource(),
+    shipwrecks: createShipwrecksSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
+    mapillary: createMapillarySource({
+      token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
+    }),
   };
+  for (const name of Object.keys(overrides)) {
+    if (!Object.hasOwn(defaults, name))
+      throw new TypeError(`Unknown source: ${name}`);
+  }
+  return { ...defaults, ...overrides };
 }

@@ -1,7 +1,6 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   CCTV_WORLD_CLICK_FOCUS_DURATION_SEC,
   CCTV_FOCUS_REQUEST_EVENT,

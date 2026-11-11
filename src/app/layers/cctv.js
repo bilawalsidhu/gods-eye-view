@@ -1,8 +1,9 @@
 import { createCctvLayer } from '../../layers/cctv/index.js';
+import * as credits from '../../data/dataCredits.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as activation from '../../cctvFocusRequest.js';
 import * as overlays from '../../overlays/worldOverlay.js';
-import * as locations from '../../locations.js';
+import { CITY_POIS } from '../../cityPois.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as focus from '../../data/focusDeemphasis.js';
 import * as render from '../../renderGovernor.js';
@@ -13,10 +14,11 @@ export function createApplicationCctv({ surface, source }) {
   return createCctvLayer({
     source,
     services: {
+      credits,
       sprites,
       activation,
       overlays,
-      locations,
+      locations: { CITY_POIS },
       picking,
       terrain,
       ground,

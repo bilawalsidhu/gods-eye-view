@@ -8,10 +8,14 @@ import * as Cesium from 'cesium';
 import { createFirmsHeatmapLayer, applyFirmsOverlayPolicy, buildCellCard } from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import { getSelectedEntityContext } from './contextStore.js';
+import { setLocale } from '../i18n/index.js';
+import { shownEntityLabel } from '../voice/speech.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { HEAT_REBUILD_MS } from '../layers/firms/policy.js';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -116,9 +120,10 @@ test('fire detection key survives a refetch that renumbers the index', () => {
 });
 
 test('two satellites over the same pixel at the same time stay distinct', () => {
-  // The proxy merges SNPP + NOAA-20 + NOAA-21 without dedup and their orbits
-  // overlap, so position and time alone are NOT unique. Collapsing them let a
-  // restored selection land on the other satellite's record.
+  // The proxy merges NOAA-20 + NOAA-21 without dedup and their orbits overlap,
+  // so position and time alone are NOT unique. Collapsing them let a restored
+  // selection land on the other satellite's record. Archived Suomi NPP (`N`)
+  // rows must stay distinct too.
   const base = makeFire({ satellite: 'N20' });
   const twin = makeFire({ satellite: 'N21' });
   const suomi = makeFire({ satellite: 'N' });
@@ -234,6 +239,27 @@ test('clicking a fire CARD behaves exactly like clicking its sprite', () => {
   }
 });
 
+// The voice model reads these labels as data (track_entity, get_entity_context,
+// pointer_context); the voice card translates them where it shows them.
+test('fire labels stay English data in a translated interface', () => {
+  const h = harness({ fires: [makeFire()], picked: { id: 'firms-7' } });
+  try {
+    setLocale('ru');
+    h.click();
+    assert.equal(getSelectedEntityContext().label, 'Fire · FRP 1520 MW');
+    // The card's pattern must match what the producer actually writes.
+    assert.equal(
+      shownEntityLabel(getSelectedEntityContext().label),
+      'Пожар · FRP 1520 МВт',
+    );
+    assert.equal(h.layer.getSelectedInfo().label, 'Fire · FRP 1520 MW');
+    assert.equal(h.layer.getStrongestFire().label, 'Fire · FRP 1520 MW');
+  } finally {
+    h.cleanup();
+    setLocale('en');
+  }
+});
+
 test('a click on neither sprite nor card clears without moving the camera', () => {
   const h = harness({ picked: { primitive: {}, content: {}, featureId: 0 } });
   try {
@@ -250,7 +276,7 @@ test('a click on neither sprite nor card clears without moving the camera', () =
 const SIBLING_PICKS = [
   ['flights', 'a1b2c3', { id: 'a1b2c3' }],
   ['flights', 'a1b2c3', { primitive: { id: 'a1b2c3' } }],
-  ['ais-live-vessels', '353136000', { id: { mmsi: '353136000', name: 'EVER GIVEN' } }],
+  ['ais-live-vessels', '353136000', { id: { id: '353136000', mmsi: '353136000', name: 'EVER GIVEN' } }],
   ['cctv', 'atx-cam-3', { id: { id: 'atx-cam-3', name: 'entity-like' } }],
   ['satellites', '25544', { id: 25544 }],
 ];
@@ -367,4 +393,154 @@ test('disable cancels a pending source and a late response cannot repopulate the
     assert.equal(h.layer.getStats().lastUpdate, before.lastUpdate);
     assert.equal(h.layer.getStats().loading, false);
   } finally { h.layer.destroy(h.viewer); h.cleanup(); }
+});
+
+test('the heatmap is preloaded under the markers before the first zoom-out', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const priorDocument = globalThis.document;
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        createImageData: (w, hh) => ({ data: new Uint8ClampedArray(w * hh * 4) }),
+        putImageData() {},
+        createRadialGradient: () => ({ addColorStop() {} }),
+        fillRect() {},
+      }),
+      toDataURL: () => 'data:image/png;base64,AAAA',
+    }),
+  };
+  const h = harness({
+    withDataSource: true,
+    cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 1_000_000),
+  });
+  h.viewer.camera = { positionCartographic: { height: 1_000_000 } };
+  h.viewer.scene.primitives = { add() {}, remove() {}, raiseToTop() {}, contains: () => true };
+  h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
+  const added = [];
+  try {
+    h.layer.attachShellServices({
+      imageryHost: () => ({
+        kind: 'globe',
+        collection: {
+          addImageryProvider: (provider) => {
+            const layer = { provider, show: true, alpha: 1 };
+            added.push(layer);
+            return layer;
+          },
+          remove() {},
+          raiseToTop() {},
+        },
+      }),
+    });
+    h.layer._renderLodForTest('close');
+    assert.equal(added.length, 0, 'the markers paint first; the build trails');
+    t.mock.timers.tick(HEAT_REBUILD_MS);
+    assert.equal(added.length, 1, 'then the heatmap is draped');
+    assert.equal(added[0].alpha, 0, 'invisible until the hand-off');
+    assert.equal(added[0].show, true, 'but mapped onto the globe tiles');
+  } finally {
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});
+
+test('far zoom drapes one heatmap and the hand-off cross-fades it with the markers', () => {
+  // A canvas stub for the heat drape and the detection glow sprites.
+  const priorDocument = globalThis.document;
+  const restoreDocument = () => {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  };
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        createImageData: (w, hh) => ({
+          data: new Uint8ClampedArray(w * hh * 4),
+        }),
+        putImageData() {},
+        createRadialGradient: () => ({ addColorStop() {} }),
+        fillRect() {},
+      }),
+      toDataURL: () => 'data:image/png;base64,AAAA',
+    }),
+  };
+  const h = harness({
+    fires: [makeFire(), makeFire({ index: 8, lat: 30.6, lon: -98.3, frp: 12 })],
+    withDataSource: true,
+    cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 12_000_000),
+  });
+  const added = [];
+  const removed = [];
+  let markers = null;
+  // The fade reads the camera height; the cull reads scene.camera.
+  const setHeight = (height) => {
+    h.viewer.camera = { positionCartographic: { height } };
+  };
+  setHeight(12_000_000);
+  h.viewer.scene.primitives = {
+    add(primitive) {
+      markers = primitive;
+    },
+    remove() {},
+    raiseToTop() {},
+    contains: () => true,
+  };
+  h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
+  try {
+    const collection = {
+      addImageryProvider: (provider) => {
+        const layer = { provider, show: true, alpha: 1 };
+        added.push(layer);
+        return layer;
+      },
+      remove: (layer, destroy) => removed.push({ layer, destroy }),
+      raiseToTop() {},
+    };
+    h.layer.attachShellServices({
+      imageryHost: () => ({ kind: 'globe', collection }),
+    });
+    h.layer._renderLodForTest('global');
+    assert.equal(added.length, 1, 'one heat imagery layer');
+    assert.equal(added[0].show, true);
+    assert.equal(added[0].alpha, 1);
+    assert.equal(h.layer._entityCountForTest(), 0, 'no rectangle entities');
+    assert.ok(h.published.length > 0, 'the far band still paints cards');
+    assert.equal(markers.length, 2, 'the markers are built under the heatmap');
+    assert.equal(markers.show, false, 'and hidden while the heatmap is whole');
+
+    h.layer._renderLodForTest('regional');
+    assert.equal(added.length, 1, 'switching far bands reuses the raster');
+
+    setHeight(1_000_000);
+    h.layer._renderLodForTest('close');
+    assert.equal(added.length, 1, 'the markers band keeps the same heat layer');
+    assert.equal(added[0].show, true, 'still mapped onto the globe tiles');
+    assert.equal(added[0].alpha, 0, 'faded out under the markers');
+    assert.equal(markers.show, true);
+    assert.equal(markers.get(0).color.alpha, 1);
+
+    // Mid hand-off both are drawn, half each, in either band.
+    setHeight(4_500_000);
+    h.layer._applyHandoffFadeForTest();
+    assert.equal(added[0].alpha, 0.5);
+    assert.equal(markers.show, true);
+    assert.equal(markers.get(0).color.alpha, 0.5);
+    h.layer._renderLodForTest('regional');
+    assert.equal(added[0].alpha, 0.5);
+    assert.equal(markers.get(1).color.alpha, 0.5, 'rebuilt markers get the fade');
+
+    h.layer.disable();
+    assert.equal(added[0].show, false, 'disable hides the heatmap');
+
+    h.layer.destroy(h.viewer);
+    assert.deepEqual(
+      removed.map((entry) => [entry.layer, entry.destroy]),
+      [[added[0], true]],
+    );
+  } finally {
+    h.cleanup();
+    restoreDocument();
+  }
 });

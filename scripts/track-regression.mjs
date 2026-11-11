@@ -17,9 +17,9 @@
  * `fetch` shim in the page that intercepts the poll endpoints and returns
  * SYNTHETIC aircraft positioned near the camera, in the EXACT upstream payload
  * shapes the layers parse:
- *   - flights  → GET /api/opensky      → { states: [ <state-vector[]> ] }
- *   - military → GET /api/adsblol/mil  → { ac: [ <adsblol-aircraft{}> ] }
- *   - vessels  → GET /api/ais-live     → connected, zero-row snapshot
+ *   - flights  → GET /api/flights      → { states: [ <state-vector[]> ] }
+ *   - military → GET /api/military  → { ac: [ <adsblol-aircraft{}> ] }
+ *   - vessels  → GET /api/vessels     → connected, zero-row snapshot
  * The shim stays installed so the layers' setInterval pollers keep the
  * synthetic planes alive (under MISSING_POLL_LIMIT=3 so they're never pruned).
  *
@@ -42,8 +42,9 @@
  *                           and a real mouse click on the tracked plane is a
  *                           NO-OP (no deselect, no camera spike).
  *   M3. AGE-OUT RELEASE   — when the tracked plane's fixes stop arriving
- *                           (3 missed polls via the shim), tracking clears and
- *                           the camera is RELEASED IN PLACE: viewer.trackedEntity
+ *                           it stays tracked (STALE, then SIGNAL LOST) until
+ *                           10 min after its newest fix; then tracking clears
+ *                           and the camera is RELEASED IN PLACE: viewer.trackedEntity
  *                           undefined, NO jump (owner decision 2026-07-02 —
  *                           the old ~80 km overview flyTo is gone).
  *
@@ -94,6 +95,8 @@
 
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { respondToPlanespotters } from './qa-photo-stub.mjs';
+import { arrivalAngleViolated, arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
 import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
 
@@ -286,6 +289,8 @@ async function main() {
         });
         return;
       }
+      // Aircraft photo lookups never reach the third party: no photos.
+      if (respondToPlanespotters(request)) return;
       if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
         request.respond({
           status: 200,
@@ -343,7 +348,7 @@ async function main() {
         const url = new URL(requestUrl, window.location.href);
         const isAppRequest = url.origin === appOrigin;
         // OpenSky (commercial flights): { states: [ state-vector[] ] }
-        if (isAppRequest && url.pathname === '/api/opensky') {
+        if (isAppRequest && url.pathname === '/api/flights') {
           window.__SYNTH_HITS.opensky++;
           // A withheld contact models the ordinary case where the recipient's
           // first authoritative refresh does not yet carry the shared aircraft.
@@ -358,7 +363,12 @@ async function main() {
             'Synthetica',      // 2 origin_country
             Math.floor(Date.now() / 1000), // 3 time_position
             Math.floor(Date.now() / 1000), // 4 last_contact
-            f.lon,             // 5 longitude
+            // A plane given `moveFromMs` flies east at its reported speed
+            // (the trail-head check needs a moving icon); others hold still.
+            Number.isFinite(f.moveFromMs)
+              ? f.lon + (f.vel * (Date.now() - f.moveFromMs)) / 1000
+                / (111320 * Math.cos((f.lat * Math.PI) / 180))
+              : f.lon,         // 5 longitude
             f.lat,             // 6 latitude
             f.alt,             // 7 baro_altitude (m)
             f.onGround === true, // 8 on_ground (ground-traffic phase flips this live)
@@ -371,11 +381,11 @@ async function main() {
         // Trail backfill (fires on trackById). Stub with valid-but-empty
         // payloads so the deterministic run never 404s against the dev proxy.
         // flights: { path: [ [time, lat, lon, baroAlt, true_track, on_ground] ] }
-        if (isAppRequest && url.pathname === '/api/opensky-track') {
+        if (isAppRequest && url.pathname === '/api/flights/track') {
           return Promise.resolve(jsonResponse({ path: [] }));
         }
         // military: { timestamp: <epochSec>, trace: [ [secAfter, lat, lon, ...] ] }
-        if (isAppRequest && url.pathname === '/api/adsblol/trace') {
+        if (isAppRequest && url.pathname === '/api/military/track') {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(Date.now() / 1000), trace: [] }));
         }
         // adsbdb enrichment (fires for tracked/model-eligible planes): empty
@@ -388,7 +398,7 @@ async function main() {
         // Contacts enables the optional AIS source alongside aircraft. Keep
         // this tracking harness independent of local AIS credentials while
         // preserving the truthful "awaiting first message" lifecycle.
-        if (isAppRequest && url.pathname === '/api/ais-live') {
+        if (isAppRequest && url.pathname === '/api/vessels') {
           return Promise.resolve(jsonResponse({
             status: 'connected',
             rows: [],
@@ -407,6 +417,15 @@ async function main() {
             retrievedAt: new Date().toISOString(),
             status: 'ready',
           }));
+        }
+        // CelesTrak SATCAT, which the satellite classes read beside the TLEs.
+        // An empty CSV (header only) keeps the run hermetic: the classes fall
+        // back to names and groups, as they do when SATCAT is unavailable.
+        if (isAppRequest && url.pathname.startsWith('/api/celestrak-satcat/')) {
+          return Promise.resolve(new Response(
+            'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,LAUNCH_DATE\n',
+            { status: 200, headers: { 'Content-Type': 'text/csv' } },
+          ));
         }
         // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
         // the satellite assertions are deterministic and the run never depends
@@ -443,14 +462,17 @@ async function main() {
         // for nearby names. Answer both with empty results: the entity-context
         // assertions are about the SELECTED contact, and a live lookup would
         // make the run non-hermetic (and bill the owner's Google quota).
-        if (url.hostname === 'maps.googleapis.com' && url.pathname.startsWith('/maps/api/geocode')) {
+        if (
+          isAppRequest &&
+          (url.pathname === '/api/google/reverse-geocode' || url.pathname === '/api/google/geocode')
+        ) {
           return Promise.resolve(jsonResponse({ status: 'ZERO_RESULTS', results: [] }));
         }
         if (isAppRequest && url.pathname === '/api/google/nearby-places') {
           return Promise.resolve(jsonResponse({ places: [] }));
         }
         // adsb.lol military: { ac: [ aircraft{} ] }  (must come AFTER /trace check)
-        if (isAppRequest && url.pathname === '/api/adsblol/mil') {
+        if (isAppRequest && url.pathname === '/api/military') {
           window.__SYNTH_HITS.mil++;
           const ac = window.__SYNTH.military.map((m) => ({
             hex: m.hex,
@@ -608,6 +630,7 @@ async function main() {
       if (models3dButton) {
         if (!models3dButton.classList.contains('active')) models3dButton.click();
         models3dButton.click(); // → OFF: both layers must follow the one control
+        await new Promise((resolve) => setTimeout(resolve)); // the view renders
         models3dOff.button = models3dButton.classList.contains('active');
         models3dOff.fl = fl.getParams().models3d;
         models3dOff.mil = mil.getParams().models3d;
@@ -1482,6 +1505,110 @@ async function main() {
     }
 
     // ============================================================
+    // TRAIL HEAD ENDS AT THE DRAWN ICON, every rendered frame.
+    //   The head's last vertex is where the tracked plane is drawn (the
+    //   display position, or the model's tail anchor while the model is the
+    //   visual). getTrackedInfo reports the dead-reckoned position without
+    //   the brief post-report easing; its gap is logged, not asserted.
+    // ============================================================
+    console.log('\nTrail head — ends at the drawn icon on every frame');
+    // The fixture planes repeat one position, so the icon holds and draws no
+    // head. Fly the tracked one east for this check; the display runs 30 s
+    // behind, so give it time to reach the moving reports.
+    await evalPage((icao) => {
+      const f = window.__SYNTH.flights.find((p) => p.icao === icao);
+      f.moveFromMs = Date.now();
+    }, trackedIcao);
+    await sleep(55_000);
+    const headSamples = await sampleFrames(page, 40, (icao) => {
+      const viewer = window.__godsEyeView.viewer;
+      const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
+      const ent = viewer.trackedEntity;
+      const time = viewer.clock.currentTime;
+      const head = viewer.entities.values.find((e) => String(e.id).startsWith('gev-trail:fl-head-'));
+      const line = head?.polyline?.positions?.getValue(time);
+      const drawn = ent?.position?.getValue(time);
+      if (!line?.length || !drawn) return null;
+      const end = line[line.length - 1];
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+      const ti = fl.getTrackedInfo();
+      let infoGap = null;
+      if (ti && ti.icao24 === icao) {
+        // WGS84 lat/lon → ECEF on the ellipsoid; the angle at the centre to
+        // the drawn position, times the mean radius, is the ground gap.
+        const a = 6378137, e2 = 6.69437999014e-3;
+        const lat = (ti.latitude * Math.PI) / 180, lon = (ti.longitude * Math.PI) / 180;
+        const n = a / Math.sqrt(1 - e2 * Math.sin(lat) ** 2);
+        const p = {
+          x: n * Math.cos(lat) * Math.cos(lon),
+          y: n * Math.cos(lat) * Math.sin(lon),
+          z: n * (1 - e2) * Math.sin(lat),
+        };
+        const dot = p.x * drawn.x + p.y * drawn.y + p.z * drawn.z;
+        const cos = dot / (Math.hypot(p.x, p.y, p.z) * Math.hypot(drawn.x, drawn.y, drawn.z));
+        infoGap = 6371008.8 * Math.acos(Math.min(1, cos));
+      }
+      // While the 3D model is the visual the head ends at the model's tail
+      // anchor, which sits on the drawn (pixel-size-enlarged) model.
+      const model = window.__findTrackedModel ? window.__findTrackedModel() : null;
+      const sphere = model && model.ready && model.show ? model.boundingSphere : null;
+      // boundingSphere leaves out the minimum-pixel-size enlargement that
+      // computedScale carries; the drawn model is that much larger.
+      const enlarge = sphere && Number.isFinite(model.computedScale) && model.scale > 0
+        ? Math.max(1, model.computedScale / model.scale)
+        : 1;
+      const radius = sphere ? sphere.radius * enlarge : null;
+      return {
+        end: dist(end, drawn),
+        onModel: sphere ? dist(end, sphere.center) <= radius + 50 : false,
+        modelRadius: radius,
+        infoGap,
+        vertices: line.length,
+      };
+    }, trackedIcao);
+    // The same reading between frames, the way a page script polls it: the
+    // head holds the last rendered frame while getTrackedInfo dead-reckons
+    // the current instant. Logged only, to tell the two apart.
+    const betweenFrames = [];
+    for (let i = 0; i < 8; i++) {
+      await sleep(600);
+      betweenFrames.push(await evalPage((icao) => {
+        const viewer = window.__godsEyeView.viewer;
+        const head = viewer.entities.values.find((e) => String(e.id).startsWith('gev-trail:fl-head-'));
+        const line = head?.polyline?.positions?.getValue(viewer.clock.currentTime);
+        const drawn = viewer.trackedEntity?.position?.getValue(viewer.clock.currentTime);
+        if (!line?.length || !drawn) return null;
+        const end = line[line.length - 1];
+        return Math.hypot(end.x - drawn.x, end.y - drawn.y, end.z - drawn.z);
+      }, trackedIcao));
+    }
+    console.log(`  (between frames: head end vs entity position, m: ${
+      betweenFrames.map((v) => (v == null ? '-' : v.toFixed(1))).join(' ')})`);
+    // Freeze the plane where it got to, so later checks see a still contact.
+    await evalPage((icao) => {
+      const f = window.__SYNTH.flights.find((p) => p.icao === icao);
+      f.lon += (f.vel * (Date.now() - f.moveFromMs)) / 1000
+        / (111320 * Math.cos((f.lat * Math.PI) / 180));
+      delete f.moveFromMs;
+    }, trackedIcao);
+    const headUsable = headSamples.values.filter((v) => v != null);
+    if (headUsable.length < 10) {
+      skip('trail head: ends at the drawn icon on every frame',
+        `only ${headUsable.length} frames with a drawn head (timedOut=${headSamples.timedOut})`);
+    } else {
+      const worst = Math.max(...headUsable.map((v) => v.end));
+      const off = headUsable.filter((v) => !(v.end <= 50 || v.onModel));
+      const onModel = headUsable.filter((v) => v.end > 50 && v.onModel).length;
+      const radii = headUsable.map((v) => v.modelRadius).filter((v) => v != null);
+      const gaps = headUsable.map((v) => v.infoGap).filter((v) => v != null);
+      record('trail head: last vertex on the drawn icon (within 50 m, or on the drawn 3D model) on every frame',
+        off.length === 0,
+        `${off.length} of ${headUsable.length} frames off; max end-to-centre=${worst.toFixed(1)} m, ${onModel} frames ending on the model's tail (model radius ${
+          radii.length ? Math.max(...radii).toFixed(0) : 'n/a'} m); getTrackedInfo vs drawn icon max=${
+          gaps.length ? Math.max(...gaps).toFixed(1) : 'n/a'} m (logged only)`);
+    }
+
+    // ============================================================
     // INVARIANT 2: NO PULL-OUT on a track switch
     //   tracking B while tracking A must not fly to ~80 km overview.
     // ============================================================
@@ -1727,7 +1854,8 @@ async function main() {
 
     // ============================================================
     // REGRESSION M3 (rewritten 2026-07-02 — deliberate behavior change):
-    // when the TRACKED plane ages out (3 missed polls), tracking must clear
+    // when the TRACKED plane ages out (10 min after its newest fix, past the
+    // 3 missed polls that remove an untracked plane), tracking must clear
     // and the camera must be RELEASED IN PLACE — viewer.trackedEntity
     // undefined and NO jump (the old contract flew an ~80 km overview; the
     // owner field-ruled that wrong: "it randomly zooms way up and loses my
@@ -1748,27 +1876,48 @@ async function main() {
       const beforeTracking = !!fl.getTrackedInfo();
       // Simulate the age-out via the shim: the plane stops arriving.
       window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => f.icao !== icao);
-      // MISSING_POLL_LIMIT = 3 consecutive absent polls → removal + clear.
-      // Capture the camera pose right BEFORE the removing poll — the follow
-      // camera drifts with the coasting plane until the instant of release,
-      // so this is the "where the user was looking" reference.
+      // The tracked plane outlives MISSING_POLL_LIMIT (3 absent polls): it is
+      // kept until 10 min after its newest fix, so the camera keeps its target.
       await fl.update(v);
       await fl.update(v);
-      const c0 = v.camera.positionCartographic;
-      const atAgeOut = {
-        lonDeg: (c0.longitude * 180) / Math.PI,
-        latDeg: (c0.latitude * 180) / Math.PI,
-        height: c0.height,
-      };
-      await fl.update(v); // third miss → removal + clear + in-place release
-      return {
-        beforeTracking,
-        atAgeOut,
-        stillTrackedAfter: !!fl.getTrackedInfo(),
-        viewerStillTracking: !!v.trackedEntity,
-      };
+      await fl.update(v);
+      const trackedThroughMisses = !!fl.getTrackedInfo();
+      // Jump the page clock past the 10 min retention instead of waiting.
+      const realNow = Date.now;
+      Date.now = () => realNow() + 11 * 60 * 1000;
+      try {
+        // Let the follow camera settle on the stopped plane, then capture the
+        // pose right BEFORE the removing poll: the "where the user was
+        // looking" reference.
+        await new Promise((res) => {
+          const stop = v.scene.postRender.addEventListener(() => {
+            stop();
+            res();
+          });
+          v.scene.requestRender();
+        });
+        const c0 = v.camera.positionCartographic;
+        const atAgeOut = {
+          lonDeg: (c0.longitude * 180) / Math.PI,
+          latDeg: (c0.latitude * 180) / Math.PI,
+          height: c0.height,
+        };
+        await fl.update(v); // past retention → removal + clear + in-place release
+        return {
+          beforeTracking,
+          trackedThroughMisses,
+          atAgeOut,
+          stillTrackedAfter: !!fl.getTrackedInfo(),
+          viewerStillTracking: !!v.trackedEntity,
+        };
+      } finally {
+        Date.now = realNow;
+      }
     }, m3Icao);
 
+    record('M3: the tracked plane stays tracked through 3 missed polls (kept 10 min after its newest fix)',
+      m3.trackedThroughMisses,
+      `trackedThroughMisses=${m3.trackedThroughMisses}`);
     record('M3: tracking cleared after the tracked plane ages out (getTrackedInfo null)',
       m3.beforeTracking && !m3.stillTrackedAfter,
       `before=${m3.beforeTracking} trackedAfter=${m3.stillTrackedAfter}`);
@@ -2692,16 +2841,19 @@ async function main() {
     //       reappear wearing its stale/creation-north nose for up to 1 s).
     // Staged deterministically: park the camera nadir over the synthetic
     // cluster, let rotations settle, TAMPER a billboard's rotation, then
-    // trigger each path with the camera idle. The idle-drift catch-up
-    // (ROTATION_REFRESH_MS = 1 s) can coincidentally mask a regression in a
-    // ~300 ms SwiftShader frame window, so a regression shows as an
-    // intermittent (not guaranteed) failure — never a false failure.
+    // trigger each path with the camera idle. The fleet runs every 80 ms,
+    // independently of rendered FPS. Observe the first completed settle frame
+    // within 500 ms of forcing moveEnd and the first reveal frame within
+    // 500 ms of that settle frame: each budget sits inside the 1 s idle
+    // rotation refresh that could otherwise repair an incorrect first reveal,
+    // and a ~300 ms headless SwiftShader frame fits inside each of them.
     // ============================================================
     console.log('\nChange 4 — arrival rotation: moveEnd settle pass + horizon-reveal pass');
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
       const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
+      const { observeArrivalRotationWithRetry } = await import(`${window.__gevQaSourceBase || '/src'}/tooling/trackArrivalObservation.mjs`);
       // 3D models OFF for this phase: a model-handed-off billboard is hidden
       // and skips rotation updates entirely — the probes need live billboards
       // (this is also the app's default state the field report came from).
@@ -2763,39 +2915,44 @@ async function main() {
         const bb = findBB(id);
         if (!bb || !bb.show) return { error: `${id} missing/hidden` };
         const r0 = bb.rotation; // settled tamper origin; correctness uses a fresh projection below
-        // (a) settle pass: tamper, then raise moveEnd with the camera IDLE —
-        // the pose signature is unchanged, so only the moveEnd hook can fix
-        // this before the 1 s catch-up.
-        bb.rotation = r0 + 1.5;
-        v.camera.moveEnd.raiseEvent();
-        await nextFrames(2);
-        const afterMoveEnd = bb.rotation;
-        // A real-GPU fleet tick can land near the edge of the frame budget and
-        // advance the contact before the probe reads it. Compare with the
-        // production projection at the CURRENT position, not the now-stale r0.
-        const expectedMoveEnd = screenProjectedRotation(v.scene, bb.position, course, null);
-        // (b) reveal pass: tamper + hide — the next fleet tick must flip it
-        // visible AND correct the nose in that same tick (camera still idle,
-        // no moveEnd raised). Diagnostic fields (round 5): record WHICH frame
-        // the flip landed on (flipFrame; -1 = never within the extended
-        // window) and whether a 3D model owns this id — distinguishes "tick
-        // slow under load" from "occluder says hidden" from "model handoff".
-        bb.rotation = r0 + 1.5;
-        bb.show = false;
-        let flipFrame = -1;
-        for (let f = 1; f <= 6; f++) {
-          await nextFrames(1);
-          if (bb.show && flipFrame === -1) flipFrame = f;
-          if (f >= 2 && flipFrame !== -1) break;
-        }
-        const expectedReveal = screenProjectedRotation(v.scene, bb.position, course, null);
         const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
-        return {
-          r0,
-          dMoveEnd: angDiff(afterMoveEnd, expectedMoveEnd),
-          dReveal: angDiff(bb.rotation, expectedReveal),
-          shown: bb.show, flipFrame, hasModel,
-        };
+        // A wall-clock timeout is inconclusive, not a wrong angle: the frame
+        // landed where the 1 s idle refresh could already have repaired it
+        // (seen once on headless SwiftShader: a 926 ms first frame). Such an
+        // observation gets one more attempt; one that measured a wrong angle —
+        // a wrong first reveal, or a wrong settle frame before a reveal
+        // timeout — never does.
+        const observed = await observeArrivalRotationWithRetry({
+          async prepare() {
+            // Freshen both layers' rotation passes right before the probe, so
+            // the settle frame is measured against a pass that just ran rather
+            // than one left over from the previous probe — with the camera
+            // idle, a layer otherwise runs a pass only every
+            // ROTATION_REFRESH_MS.
+            v.camera.moveEnd.raiseEvent();
+            await nextFrames(1);
+          },
+          scene: v.scene,
+          startMoveEnd() {
+            // Only moveEnd can repair the tampered angle at the idle pose.
+            bb.rotation = r0 + 1.5;
+            v.camera.moveEnd.raiseEvent();
+          },
+          startReveal() {
+            // Hide immediately after the confirmed settle frame. The next
+            // eligible fleet tick must reveal AND re-aim in that same tick.
+            bb.rotation = r0 + 1.5;
+            bb.show = false;
+          },
+          read() {
+            return {
+              shown: bb.show,
+              rotationError: angDiff(bb.rotation,
+                screenProjectedRotation(v.scene, bb.position, course, null)),
+            };
+          },
+        });
+        return { r0, ...observed, hasModel };
       };
       const flightCourse = window.__SYNTH.flights.find((f) => f.icao === 'aaa002')?.track ?? 0;
       const militaryCourse = window.__SYNTH.military.find((m) => m.hex === 'bbb101')?.track ?? 0;
@@ -2804,22 +2961,13 @@ async function main() {
         military: await probe('bbb101', militaryCourse),
       };
     });
-    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? a.error
-      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} hasModel=${a.hasModel}`);
+    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; ${arrivalAngleViolated(a) ? 'angle violation (not retried); ' : ''}${Number.isFinite(a.dMoveEnd) ? `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° ` : ''}${Number.isFinite(a.dReveal) ? `reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° ` : ''}elapsed=${Number(a.elapsedMs).toFixed(1)} ms attempts=${a.attempts}`
+      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms attempts=${a.attempts} hasModel=${a.hasModel}`);
     const TAMPER_DEG = 1.5 * 180 / Math.PI; // ≈ 86° — an uncorrected nose stays this far off
-    // Reveal budget re-pinned 2 → 4 frames (round 5): the diagnostic probe
-    // shows the military flip consistently lands on frame 2 — the exact edge
-    // of the old budget — so any load hiccup flaked it (flights lands frame
-    // 1). The regression this protects against is a reveal that waits for
-    // the 1 s idle catch-up (~30-60 frames) or never re-aims; 4 frames still
-    // catches that with a wide margin, with zero-headroom flakes gone.
-    const arrOk = (a) => !!a && !a.error && a.shown
-      && (a.flipFrame === -1 ? false : a.flipFrame <= 4)
-      && a.dMoveEnd * 180 / Math.PI < 10 && a.dReveal * 180 / Math.PI < 10;
-    record(`arrival: moveEnd + reveal both re-aim within 4 frames, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
-      arrOk(arrival.flights), fmtArr(arrival.flights));
-    record(`arrival: moveEnd + reveal both re-aim within 4 frames, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
-      arrOk(arrival.military), fmtArr(arrival.military));
+    record(`arrival: moveEnd + first reveal both re-aim before idle refresh, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
+      arrivalRotationPassed(arrival.flights), fmtArr(arrival.flights));
+    record(`arrival: moveEnd + first reveal both re-aim before idle refresh, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
+      arrivalRotationPassed(arrival.military), fmtArr(arrival.military));
 
     // ============================================================
     // DISPLAY FLOOR (2026-08-19): a grounded contact must never render below

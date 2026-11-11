@@ -1,3 +1,5 @@
+import { cancelCameraArrival } from './cameraArrival.js';
+
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -70,9 +72,20 @@ function refreshFailureFromStats(stats, label) {
 /**
  * LayerLifecycle — Manages registration, toggling, and update loops
  * for real-time data overlays on the CesiumJS globe.
+ * Hosts may inject a visibilityTarget with hidden/visibilityState and event
+ * listener methods. Without one, periodic work retains its headless behavior.
  */
 export class LayerLifecycle {
-  constructor(viewer, { allowQaRegistration = false } = {}) {
+  constructor(
+    viewer,
+    {
+      allowQaRegistration = false,
+      getSourceAvailability,
+      visibilityTarget = null,
+    } = {},
+  ) {
+    this._catalogSourceAvailability = getSourceAvailability;
+    this._visibilityTarget = visibilityTarget;
     this.viewer = viewer;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
@@ -226,6 +239,7 @@ export class LayerLifecycle {
 
   _normalizedStats(entry) {
     const moduleStats = this._moduleStats(entry);
+    const availability = this._sourceAvailability(entry.module.id);
     const lifecycleLoading =
       entry.lifecycleState === 'enabling' ||
       entry.lifecycleState === 'disabling';
@@ -233,6 +247,13 @@ export class LayerLifecycle {
       count: 0,
       lastUpdate: null,
       ...moduleStats,
+      ...(availability?.available === false
+        ? {
+            status: 'unavailable',
+            sourceUnavailable: true,
+            error: availability.reason,
+          }
+        : {}),
       loading: lifecycleLoading || moduleStats.loading === true,
       refreshing: entry.refreshing || moduleStats.refreshing === true,
       managerRefreshError: entry.managerRefreshError,
@@ -514,6 +535,13 @@ export class LayerLifecycle {
     }
   }
 
+  _stopUpdateLoop(entry) {
+    clearInterval(entry.intervalId);
+    entry.intervalId = null;
+    entry.removeVisibilityListener?.();
+    entry.removeVisibilityListener = null;
+  }
+
   _armUpdateLoop(layerId, entry) {
     const configuredRefreshInterval = Number(entry.module.refreshInterval);
     const updateInterval = Number(entry.module.updateInterval);
@@ -524,9 +552,45 @@ export class LayerLifecycle {
           ? updateInterval
           : 0;
     if (refreshInterval > 0) {
-      entry.intervalId = setInterval(() => {
+      const visibilityDocument = this._visibilityTarget;
+      let intervalId = null;
+      let dueAt = 0;
+      const canPoll = () =>
+        !visibilityDocument?.hidden &&
+        visibilityDocument?.visibilityState !== 'hidden' &&
+        entry.enabled &&
+        !entry.destroying &&
+        !entry.refreshing &&
+        entry.intervalId === intervalId;
+      // dueAt and the interval phase share one origin, so every interval tick
+      // is a due poll. A visibility catch-up re-arms the interval at the new
+      // deadline; otherwise the old phase would skip its next tick.
+      const schedule = () => {
+        clearInterval(intervalId);
+        dueAt = Date.now() + refreshInterval;
+        intervalId = setInterval(onInterval, refreshInterval);
+        entry.intervalId = intervalId;
+      };
+      const onInterval = () => {
+        if (!canPoll()) return;
+        dueAt = Date.now() + refreshInterval;
         void this._runPeriodicUpdate(layerId, entry);
-      }, refreshInterval);
+      };
+      const onVisibilityChange = () => {
+        if (!canPoll() || Date.now() < dueAt) return;
+        schedule();
+        void this._runPeriodicUpdate(layerId, entry);
+      };
+      schedule();
+      visibilityDocument?.addEventListener?.(
+        'visibilitychange',
+        onVisibilityChange,
+      );
+      entry.removeVisibilityListener = () =>
+        visibilityDocument?.removeEventListener?.(
+          'visibilitychange',
+          onVisibilityChange,
+        );
     } else if (updateInterval === 0) {
       entry.intervalId = setInterval(() => {
         if (!entry.enabled) return;
@@ -758,8 +822,7 @@ export class LayerLifecycle {
         entry.lifecycleUncertain = !compensated && !cleanupConfirmed;
         settleLifecycle();
         if (!entry.enabled && entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         this._publishActivity({ type: 'status' });
         if (!compensated) {
@@ -819,8 +882,7 @@ export class LayerLifecycle {
       }
       if (signal?.aborted) return finishCancelledDisable('disable');
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
       entry.enabled = false;
       entry.lifecycleUncertain = false;
@@ -831,8 +893,7 @@ export class LayerLifecycle {
       let abortCleanup = null;
       const cancelEnable = () => {
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         // Disable immediately so modules with their own AbortController (Radio)
         // cancel pending update work at the same turn boundary. A second
@@ -862,8 +923,7 @@ export class LayerLifecycle {
         // a later abort cannot revoke a successful retry.
         signal?.removeEventListener('abort', cancelEnable);
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         await abortCleanup;
         let cleanupConfirmed = false;
@@ -904,8 +964,7 @@ export class LayerLifecycle {
       };
       const finishFailedEnable = async (phase, error) => {
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         let cleanupConfirmed = false;
         try {
@@ -1015,8 +1074,7 @@ export class LayerLifecycle {
       // Always clear any stale interval before assigning a new one, so we never
       // orphan a running timer and end up double-polling.
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
 
       // Manager-owned periodic refresh work has one normalized loading/error
@@ -1074,6 +1132,7 @@ export class LayerLifecycle {
     const entry = this.layers.get(layerId);
     if (!entry) return { intentEpoch: null, promise: Promise.resolve() };
     const desiredState = Boolean(shouldEnable);
+    if (!desiredState) cancelCameraArrival(this.viewer);
     if (entry.destroying) {
       return {
         intentEpoch: null,
@@ -1591,6 +1650,15 @@ export class LayerLifecycle {
         }
       }
     }
+    // Clear All owns the whole selection, not only the layers it switched off
+    // itself. A layer already off for a passive reason (isolated by a context
+    // mode, released by a dependency owner, or superseded mid-batch) gets no
+    // OFF of its own here, so publish the set that is still on afterwards.
+    this._notifyListeners({
+      type: 'selection-cleared',
+      origin,
+      enabledLayerIds: [...this.getEnabledLayerIds()],
+    });
     const items = targetIds.map((id) => {
       const state = this.getLayerLifecycleState(id) || {
         enabled: false,
@@ -2095,6 +2163,7 @@ export class LayerLifecycle {
   async destroyLayer(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry || entry.destroying) return false;
+    cancelCameraArrival(this.viewer);
     entry.destroying = true;
     this._invalidateRefresh(layerId, entry, 'layer-destroyed');
     // Teardown becomes authoritative before the first await. Advancing the
@@ -2142,8 +2211,7 @@ export class LayerLifecycle {
         return false;
       }
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
       entry.enabled = false;
     }
@@ -2278,7 +2346,17 @@ export class LayerLifecycle {
     }
   }
 
+  _sourceAvailability(layerId) {
+    return (
+      this._catalogSourceAvailability?.(layerId) ??
+      this.layers.get(layerId)?.module.getSourceAvailability?.()
+    );
+  }
+
   async _visibilityBlockReason(change) {
+    const availability = this._sourceAvailability(change.layerId);
+    if (change.enabled && availability?.available === false)
+      return availability.reason || 'Data source unavailable';
     for (const callback of this._visibilityGuards) {
       try {
         const result = await callback(change);
@@ -2307,9 +2385,25 @@ export class LayerLifecycle {
   /**
    * Ask presentation to repaint layer rows now, for data that lands outside
    * the manager tick (Transit's proximity polls, Directions' route steps).
+   * @param {string} [layerId] - The layer whose row changed.
    */
-  refreshLayerStats() {
+  refreshLayerStats(layerId) {
+    this._dropRecoveredRefreshError(layerId);
     this._publishActivity({ type: 'status' });
+  }
+
+  /**
+   * Drop a tick failure the layer's stats no longer report (the camera left
+   * that feed) instead of showing it until the next tick.
+   */
+  _dropRecoveredRefreshError(layerId) {
+    const entry = layerId ? this.layers.get(layerId) : null;
+    if (!entry?.managerRefreshError || entry.refreshing) return;
+    const failure = refreshFailureFromStats(
+      this._moduleStats(entry),
+      entry.module.name || layerId,
+    );
+    if (!failure) entry.managerRefreshError = null;
   }
 
   _publishActivity(change) {

@@ -7,8 +7,8 @@
  */
 
 /**
- * Map proxy fire records into internal fire records. Records with
- * non-finite coordinates are skipped; `index` is the post-skip position
+ * Map proxy fire records into internal fire records. Records with missing,
+ * non-numeric or out-of-range (WGS84) coordinates are skipped; `index` is the post-skip position
  * (it keys pick ids and context-store ids, so it must stay sequential).
  * `contextEntity`/`position` start null and are lazily filled by the layer.
  * @param {?Array<Object>} records - /api/firms `fires` array.
@@ -21,7 +21,15 @@ export function adaptFirmsRecords(records) {
   for (const record of records) {
     const lat = Number(record?.lat);
     const lon = Number(record?.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (
+      !hasCoordinateValue(record?.lat) ||
+      !hasCoordinateValue(record?.lon) ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    )
+      continue;
     fires.push({
       index: fires.length,
       lat,
@@ -73,21 +81,44 @@ export function parseAcquisitionMs(date, time, cache = new Map()) {
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
+  // Same calendar as the CSV gate. Date.UTC would otherwise roll 30 February
+  // into March, and the fire's age would describe a detection that never happened.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    cache.set(key, 0);
+    return 0;
+  }
+  const timeText = String(time ?? '').trim();
+  if (!/^\d{1,4}$/.test(timeText)) {
+    cache.set(key, 0);
+    return 0;
+  }
+  const hhmm = timeText.padStart(4, '0');
   const year = Number(date.slice(0, 4));
   const month = Number(date.slice(5, 7));
   const day = Number(date.slice(8, 10));
-  const hhmm = String(time ?? '0000').padStart(4, '0');
   const hours = Number(hhmm.slice(0, 2));
   const minutes = Number(hhmm.slice(2, 4));
-  const valid =
-    Number.isFinite(year) &&
-    Number.isFinite(month) &&
-    Number.isFinite(day) &&
-    Number.isFinite(hours) &&
-    Number.isFinite(minutes);
-  const ms = valid ? Date.UTC(year, month - 1, day, hours, minutes) : 0;
-  cache.set(key, ms);
-  return ms;
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hours > 23 ||
+    minutes > 59
+  ) {
+    cache.set(key, 0);
+    return 0;
+  }
+  const ms = Date.UTC(year, month - 1, day, hours, minutes);
+  const parsed = new Date(ms);
+  const result =
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+      ? ms
+      : 0;
+  cache.set(key, result);
+  return result;
 }
 
 /**
@@ -109,4 +140,12 @@ function clamp01(value) {
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+// Same rule as parseFirmsCsv: a blank or non-numeric value is not a zero.
+function hasCoordinateValue(value) {
+  return (
+    typeof value === 'number' ||
+    (typeof value === 'string' && value.trim() !== '')
+  );
 }

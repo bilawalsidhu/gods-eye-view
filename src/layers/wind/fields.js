@@ -1,16 +1,27 @@
+import { msg } from '../../i18n/marker.js';
 import { normalizeLongitude, sampleWind } from './model.js';
+
+// Imported by src/tools: the catalog-free marker, not src/i18n/index.js. The
+// texts stay English data and the wind layer and layer panel show them
+// translated.
+
+/** Status of a scalar overlay the provider could not supply, by overlay. */
+export const SCALAR_UNAVAILABLE = Object.freeze({
+  temperature: msg('Temperature field unavailable'),
+  pressure: msg('Mean sea level pressure field unavailable'),
+});
 
 /** Fixed physical scales shared by imagery and the field legend. */
 export const WIND_FIELDS = Object.freeze({
   speed: Object.freeze({
-    label: 'Wind speed',
+    label: 'Wind speed', // i18n-ignore: internal field name; the shown label comes from index.js
     units: 'm/s',
     min: 0,
     max: 30,
     stops: ['#133a67', '#2876a3', '#66c9d1', '#c8dfac', '#f1cf79', '#ee9761'],
   }),
   temperature: Object.freeze({
-    label: '2 m air temperature',
+    label: '2 m air temperature', // i18n-ignore: internal field name; the shown label comes from index.js
     units: '°C',
     min: -40,
     max: 50,
@@ -30,7 +41,7 @@ export const WIND_FIELDS = Object.freeze({
     ],
   }),
   pressure: Object.freeze({
-    label: 'Mean sea-level pressure',
+    label: 'Mean sea-level pressure', // i18n-ignore: internal field name; the shown label comes from index.js
     units: 'hPa',
     min: 960,
     max: 1050,

@@ -108,6 +108,7 @@ export function createLifecycle({
       layerState._loading = false;
       layerState._stale = false;
       layerState._degraded = false;
+      layerState._rejectedStationCount = 0;
       layerState._error = null;
       layerState._updatedAt = null;
       layerState._managerLifecyclePresentation = null;

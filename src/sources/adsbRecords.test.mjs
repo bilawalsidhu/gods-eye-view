@@ -47,6 +47,7 @@ test('dump1090 aircraft.json maps to the shared local ADS-B records', () => {
     trackDeg: 330.5,
     verticalRateFpm: 64,
     lastPositionAt: now - 34_600,
+    altitudeAt: now - 30_500,
     lastMessageAt: now - 30_500,
     messageCount: 74,
     rssiDbfs: -30,
@@ -118,6 +119,7 @@ test('decoder tracks map to the same record shape', () => {
     messages: 48,
     lastSeen: 5_000,
     lastPositionAt: 4_000,
+    altitudeAt: 4_000,
     cprEven: {},
   });
   assert.deepEqual(record, {
@@ -132,6 +134,7 @@ test('decoder tracks map to the same record shape', () => {
     trackDeg: 330.5,
     verticalRateFpm: 64,
     lastPositionAt: 4_000,
+    altitudeAt: 4_000,
     lastMessageAt: 5_000,
     messageCount: 48,
     rssiDbfs: null,
@@ -170,6 +173,20 @@ test('a feed document names its band on every record', () => {
   assert.equal(uat.length, 4);
   assert.ok(uat.every((record) => record.band === '978'));
   assert.ok(uat.every((record) => record.source === 'feed'));
+});
+
+test('a decoder feed reads a GNSS-sourced vertical rate when no baro rate is sent', () => {
+  // dump1090-fa and readsb file a velocity message's rate under geom_rate
+  // instead of baro_rate when its source bit says GNSS.
+  const rate = (fields) =>
+    normalizeDump1090Aircraft(
+      { aircraft: [{ hex: 'abc123', seen: 1, ...fields }] },
+      10_000,
+    )[0].verticalRateFpm;
+  assert.equal(rate({ geom_rate: -832 }), -832);
+  assert.equal(rate({ baro_rate: -768, geom_rate: -832 }), -768);
+  assert.equal(rate({ baro_rate: 0, geom_rate: -832 }), 0);
+  assert.equal(rate({}), null);
 });
 
 function heard(overrides = {}) {
@@ -400,6 +417,47 @@ test('a corrupt altitude is held at the last accepted one and judged once', () =
       rejected: 1,
     },
   );
+});
+
+test('newer messages that keep an altitude do not re-judge it', () => {
+  // The browser decoder keeps the altitude of the last airborne position
+  // while velocity and identification messages advance `lastMessageAt`. One
+  // 108,800 ft frame followed by two such messages is one refusal, not the
+  // three that would re-anchor onto it.
+  assert.deepEqual(
+    gateReports([
+      [0, 35_000, { altitudeAt: 0 }],
+      [1, 108_800, { altitudeAt: 1_000 }],
+      [1.2, 108_800, { altitudeAt: 1_000 }],
+      [1.4, 108_800, { altitudeAt: 1_000 }],
+      [1.5, 35_000, { altitudeAt: 1_500 }],
+      [2, 35_025, { altitudeAt: 2_000 }],
+    ]),
+    {
+      altitudes: [35_000, 35_000, 35_000, 35_000, 35_000, 35_025],
+      rejected: 1,
+    },
+  );
+});
+
+test('a held altitude is marked as held, a fresh one is not', () => {
+  const gate = createLocalAdsbAltitudeGate();
+  const fresh = gateLocalAdsbAltitude(
+    { icao: 'abc123', lastMessageAt: 0, altitudeFt: 35_000 },
+    gate,
+  );
+  assert.equal(fresh.altitudeQuality, undefined);
+  const held = gateLocalAdsbAltitude(
+    { icao: 'abc123', lastMessageAt: 1_000, altitudeFt: 108_800 },
+    gate,
+  );
+  assert.equal(held.altitudeFt, 35_000);
+  assert.equal(held.altitudeQuality, 'held-after-rejection');
+  const next = gateLocalAdsbAltitude(
+    { icao: 'abc123', lastMessageAt: 1_500, altitudeFt: 35_025 },
+    gate,
+  );
+  assert.equal(next.altitudeQuality, undefined);
 });
 
 test('a bad first altitude clears itself on the third refusal', () => {

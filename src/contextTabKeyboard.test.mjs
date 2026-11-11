@@ -1,20 +1,16 @@
-import { readShellSource } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
-import { _syncContextModeButtons } from './ui/contextPresentation.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
-const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
-const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
+const contextView = readRadioSource(new URL('./ui/views/ContextView.vue', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-const ui = readShellSource();
+const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {
@@ -25,77 +21,12 @@ test('Contacts and Space Missions both participate in the ordinary Tab sequence'
     assert.match(button[0], /tabindex="0"/);
   }
 
-  const syncSource = _syncContextModeButtons.toString();
-  assert.match(syncSource, /\[\s*this\._globalContextFlightsBtn,\s*this\._globalContextMissionsBtn,?\s*\]/);
-  assert.match(syncSource, /button\.tabIndex = 0/);
-  assert.doesNotMatch(syncSource, /tabIndex\s*=\s*[^;]*\?\s*-1/);
-});
-
-test('Context transition state preserves focus and Tab availability until settle', () => {
-  const syncSource = _syncContextModeButtons.toString();
-
-  const attributes = () => new Map();
-  const makeButton = () => {
-    const attrs = attributes();
-    let disabled = false;
-    const button = {
-      attrs,
-      tabIndex: -1,
-      classList: { toggle() {} },
-      setAttribute(name, value) { attrs.set(name, String(value)); },
-      get disabled() { return disabled; },
-      set disabled(value) {
-        disabled = Boolean(value);
-        // Model the browser behavior that exposed this regression: native
-        // disabled drops focus immediately.
-        if (disabled && globalThis.document?.activeElement === button) {
-          globalThis.document.activeElement = null;
-        }
-      },
-    };
-    return button;
-  };
-  const contacts = makeButton();
-  const missions = makeButton();
-  const panel = { classList: { toggle() {} }, setAttribute() {} };
-  const priorDocument = globalThis.document;
-  globalThis.document = { activeElement: missions, getElementById: () => panel };
-  const owner = {
-    _globalContextPanel: panel,
-    actions: { syncDetection() {}, scheduleLayout() {} },
-    _contextMode: null,
-    _contextModeChanging: true,
-    _globalContextFlightsBtn: contacts,
-    _globalContextMissionsBtn: missions,
-    _contextModeStandby: {},
-    _contextFlightsView: {},
-    _contextMissionsView: {},
-    cockpitView: { syncEntry() {} },
-    _syncContactsDetection() {},
-    _scheduleRightPanelLayout() {},
-  };
-  try {
-    _syncContextModeButtons.call(owner);
-    assert.equal(globalThis.document.activeElement, missions, 'busy sync retains focused Space Missions');
-    for (const button of [contacts, missions]) {
-      assert.equal(button.disabled, false);
-      assert.equal(button.tabIndex, 0);
-      assert.equal(button.attrs.get('aria-disabled'), 'true');
-      assert.equal(button.attrs.get('aria-busy'), 'true');
-    }
-
-    owner._contextModeChanging = false;
-    owner._contextMode = 'space-missions';
-    _syncContextModeButtons.call(owner);
-    assert.equal(globalThis.document.activeElement, missions, 'settled sync retains focused Space Missions');
-    for (const button of [contacts, missions]) {
-      assert.equal(button.disabled, false);
-      assert.equal(button.tabIndex, 0);
-      assert.equal(button.attrs.get('aria-disabled'), 'false');
-      assert.equal(button.attrs.get('aria-busy'), 'false');
-    }
-  } finally {
-    globalThis.document = priorDocument;
+  // The view keeps both tabs' tabindex static and never disables them; the
+  // transition itself is covered over happy-dom in ui/contextPanel.test.mjs.
+  for (const id of ['global-context-flights-btn', 'global-context-missions-btn']) {
+    const tag = contextView.match(new RegExp(`<button id="${id}"[^>]*>`))?.[0];
+    assert.ok(tag, `${id} is missing from the view`);
+    assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
   }
 });
 
@@ -134,20 +65,68 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 
 test('Context async action buttons remain focused while busy', () => {
   const init = _initGlobalContextPanel.toString();
-  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._contextRadioToggleBtn,'));
-  const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('if (this._radioFilter)'));
+  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this._storeToken = this.store?.connect?.('));
+  const radioPanel = readFileSync(new URL('./ui/views/panels/RadioPanel.vue', import.meta.url), 'utf8');
   const clear = clearSelectedLayers.toString();
 
-  assert.match(init, /button\.getAttribute\('aria-busy'\) === 'true'/);
-  assert.doesNotMatch(init, /button\.disabled\s*=\s*true/);
+  assert.match(init, /if \(this\._installationsSearchBusy\) return;/);
+  assert.doesNotMatch(init, /\.disabled\s*=\s*true/);
+  const search = contextView.match(/<button id="installations-search-btn"[^>]*>/)?.[0];
+  assert.ok(search, 'nearby sites search is missing');
+  assert.doesNotMatch(search, /:disabled|\sdisabled/);
+  assert.match(search, /:aria-busy=/);
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
-  for (const name of ['_radioEnableBtn', '_contextRadioMiniEnableBtn', '_cockpitRadioEnableBtn']) {
-    assert.match(radioSync, new RegExp(`${name}\\.disabled = false`));
-  }
-  assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
+  const cockpitRadio = readFileSync(new URL('./ui/views/panels/CockpitUtilityControls.vue', import.meta.url), 'utf8');
+  const cockpitEnable = cockpitRadio.match(/<UiButton id="cockpit-radio-enable-btn"[^>]*>/)?.[0];
+  assert.ok(cockpitEnable, 'Cockpit Radio Enable button is missing');
+  assert.doesNotMatch(cockpitEnable, /disabled(?!=")|:disabled/);
+  assert.match(cockpitEnable, /:aria-busy=/);
+  // The Radio view never disables its Enable button; it marks it busy.
+  const enable = radioPanel.match(/<UiButton id="radio-enable-btn"[^>]*>/)?.[0];
+  assert.ok(enable, 'Radio Enable button is missing');
+  assert.doesNotMatch(enable, /disabled(?!=")|:disabled/);
+  assert.match(enable, /:aria-busy=/);
   assert.match(clear, /this\.setClearBusy\(true\)/);
-  const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');
-  assert.match(control, /button\.setAttribute\('aria-busy', String\(busy\)\)/);
-  assert.doesNotMatch(control, /button\.disabled\s*=/);
+  // The globe actions view marks the clear button busy, never disabled.
+  const globeActions = readFileSync(new URL('./ui/views/panels/GlobeActions.vue', import.meta.url), 'utf8');
+  const clearButton = globeActions.match(/<button id="clear-selected-layers"[^>]*>/)?.[0];
+  assert.ok(clearButton, 'Clear selected layers button is missing');
+  assert.doesNotMatch(clearButton, /disabled(?!=")|:disabled=/);
+  assert.match(clearButton, /:aria-busy=/);
+});
+
+test('Context header holds only its title and collapse control', () => {
+  const panel = html.match(/<div id="global-context-panel"[\s\S]*?<div class="cyber-panel-body[ "]/);
+  assert.ok(panel, 'Global Context panel is missing');
+  const header = panel[0].match(/<div class="ui-panel__head panel-header">([\s\S]*?)<\/div>\s*<div class="cyber-panel-body[ "]/);
+  assert.ok(header, 'Global Context header is missing');
+  // The kit's own ui-* classes carry no Core styles.
+  const tags = [...header[1].matchAll(/<(\w+)\s+(?:type="button"\s+)?class="([^"]+)"/g)].map(([, tag, cls]) =>
+    `${tag}.${cls.split(' ').filter((name) => !/^ui-/.test(name)).join(' ')}`);
+  assert.deepEqual(tags, ['span.panel-title', 'span.panel-divider', 'button.panel-collapse-btn']);
+});
+
+test('Context reads as one segmented control with legible type and no halo', () => {
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const clean = (selector) => selector.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim();
+  const rule = (selector) => rules.find(([, s]) => clean(s) === selector)?.[2] || '';
+  const px = (body, prop) => Number(body.match(new RegExp(`${prop}:[^;]*?(\\d+(?:\\.\\d+)?)px`))?.[1] || 0);
+
+  assert.match(rule('#global-context-panel .panel-glow'), /display:\s*none/);
+  const modes = rule('.global-context-modes');
+  assert.match(modes, /border:\s*1px solid/);
+  assert.match(modes, /padding:\s*2px/);
+  assert.ok(px(rule('.context-mode-button'), 'font') >= 10, 'mode labels must stay at least 10px');
+  assert.doesNotMatch(rule('.context-mode-button.active'), /box-shadow/);
+  const standby = rule('.context-mode-standby');
+  assert.ok(px(standby, 'font') >= 10, 'standby guidance must stay at least 10px');
+  assert.doesNotMatch(standby, /dashed/);
+  assert.ok(px(rule('.global-context-actions .panel-layer-toggle'), 'font-size') >= 10);
+  // The shared rail title colour (brighter than --text-secondary) keeps the
+  // open Context title legible; no Context-only rule dims it again.
+  assert.equal(
+    rule(":root:not([data-ui-theme='cyber']) #global-context-panel:not(.collapsed) .panel-title"),
+    '',
+  );
 });

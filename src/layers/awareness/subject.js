@@ -3,12 +3,27 @@ import {
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
 import * as Cesium from 'cesium';
+import { layerFeedState } from '../../data/feedState.js';
+import { t } from '../../i18n/index.js';
 import {
   AWARENESS_QUERY_LIMIT,
   SOURCE_LABEL,
   SUBJECT_PRESENCE,
   AWARENESS_PAGE_SIZE,
 } from './policy.js';
+
+// coverageLabel is machine-composed English from installations/controls.js
+// (pinned by src/data/militaryInstallations.test.mjs); translate the known
+// forms here, pass anything else through.
+const WITHIN_KM_RE = /^WITHIN (\d+) KM$/;
+
+function localizeCoverageLabel(label) {
+  if (typeof label !== 'string' || !label) return label;
+  if (label === 'CURRENT VIEWPORT ONLY') return t('CURRENT VIEWPORT ONLY');
+  const within = WITHIN_KM_RE.exec(label);
+  if (within) return t('WITHIN {km} KM', { km: within[1] });
+  return label;
+}
 
 export function createSubject({ state: layerState, services, parts, source }) {
   const aisLiveVesselsLayer = services.vessels;
@@ -37,50 +52,108 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const militaryState = sourceStates.military;
     const vesselsState = sourceStates['ais-live-vessels'];
     const installationsState = sourceStates['military-installations'];
+    const evaluatedAt = Date.now();
+    // A poll in flight keeps FALLBACK or STALE: the revision key ignores loading.
+    // Before the first answer there is no snapshot, so loading stays.
+    const sourceStatus = (sourceState) => {
+      const feedState = layerFeedState(
+        sourceState.available
+          ? { ...sourceState.stats, loading: false }
+          : sourceState.stats,
+      );
+      return feedState === 'fallback' || feedState === 'stale'
+        ? feedState
+        : null;
+    };
+    const retainedProvenance = (id, label, sourceState, fallbackSource) => {
+      const retainedSource = sourceState.stats.source || fallbackSource;
+      return {
+        id,
+        name: label,
+        enabled: sourceState.enabled,
+        source: retainedSource,
+        stats: { ...sourceState.stats, source: retainedSource },
+      };
+    };
     // Same engine the voice analyst calls — see collectAircraftProximityWindow.
-    const { flights, military } = parts.queries.collectAircraftProximityWindow(
+    const aircraftWindow = parts.queries.collectAircraftProximityWindow(
       position,
       { subject },
     );
+    const { flights, military, completeByLayer } = aircraftWindow;
     const vessels = aisLiveVesselsLayer
       .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
       .filter(
         (item) =>
-          !parts.queries.isSame(subject, item, 'ais-live-vessels', 'mmsi'),
+          !parts.queries.isSame(subject, item, 'ais-live-vessels', 'id'),
       );
+    const coverage = installationsState.stats?.coverage;
+    const installationRadius =
+      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+        ? coverage.radiusM
+        : AWARENESS_RADIUS_M;
     const installations = militaryInstallationsLayer
-      .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
+      .getNearby(position, installationRadius, AWARENESS_QUERY_LIMIT)
       .filter(
         (item) =>
           !parts.queries.isSame(subject, item, 'military-installations', 'id'),
       );
     return {
       subject,
-      evaluatedAt: Date.now(),
+      evaluatedAt,
       radiusM: AWARENESS_RADIUS_M,
       cohorts: [
         {
           id: 'flights',
-          label: 'Flights',
+          label: t('Flights'),
           source: flightsState.stats.source || SOURCE_LABEL.flights,
+          sourceStatus: sourceStatus(flightsState),
+          provenance: retainedProvenance(
+            'flights',
+            'Flights',
+            flightsState,
+            SOURCE_LABEL.flights,
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             flights,
             flightsState,
+            {
+              navigationLimit: AWARENESS_QUERY_LIMIT,
+              complete: completeByLayer.flights,
+            },
           ),
         },
         {
           id: 'military',
-          label: 'Military flights',
+          label: t('Military flights'),
           source: militaryState.stats.source || SOURCE_LABEL.military,
+          sourceStatus: sourceStatus(militaryState),
+          provenance: retainedProvenance(
+            'military',
+            'Military flights',
+            militaryState,
+            SOURCE_LABEL.military,
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             military,
             militaryState,
+            {
+              navigationLimit: AWARENESS_QUERY_LIMIT,
+              complete: completeByLayer.military,
+            },
           ),
         },
         {
           id: 'ais-live-vessels',
-          label: 'AIS vessels',
+          label: t('AIS vessels'),
           source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'],
+          sourceStatus: sourceStatus(vesselsState),
+          provenance: retainedProvenance(
+            'ais-live-vessels',
+            'AIS vessels',
+            vesselsState,
+            SOURCE_LABEL['ais-live-vessels'],
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             vessels,
             vesselsState,
@@ -88,11 +161,20 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'military-installations',
-          label: 'Mapped installations',
+          label: t('Mapped installations'),
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
-          coverage: 'CURRENT VIEWPORT ONLY',
+          sourceStatus: sourceStatus(installationsState),
+          provenance: retainedProvenance(
+            'military-installations',
+            'Mapped installations',
+            installationsState,
+            SOURCE_LABEL['military-installations'],
+          ),
+          coverage:
+            localizeCoverageLabel(installationsState.stats.coverageLabel) ||
+            t('CURRENT VIEWPORT ONLY'),
           summary: parts.queries.summarizeInstallationViewport(
             installations,
             installationsState,
@@ -296,19 +378,48 @@ export function createSubject({ state: layerState, services, parts, source }) {
    *
    * Identity (`subject.id`) is NEVER re-derived — only the rendered string.
    * @param {{layerId: string, id: string, label: string}} subject Current subject.
+   * @param {?object} [tracked] The subject's tracked descriptor, when the
+   *   caller already has it (see trackedSubjectOf).
    * @returns {string} The current label, or the cached one when the owning layer
    *   has no tracked subject (e.g. a cross-layer handoff is in flight).
    */
 
-  function resolveSubjectLabel(subject) {
-    if (!parts.navigation.isFlightLayer(subject?.layerId))
-      return subject?.label;
+  function resolveSubjectLabel(subject, tracked = trackedSubjectOf(subject)) {
+    return tracked?.label || subject?.label;
+  }
+
+  /**
+   * The owning flight layer's tracked-subject descriptor when it describes
+   * this subject, else null. Built once per refresh and shared by the label
+   * and the photo.
+   * @param {{layerId: string, id: string}|null} subject Current subject.
+   * @returns {?{id: string, label: string, photo?: ?object}}
+   */
+  function trackedSubjectOf(subject) {
+    if (!parts.navigation.isFlightLayer(subject?.layerId)) return null;
     const layer =
       subject.layerId === 'flights' ? flightsLayer : militaryFlightsLayer;
     const tracked = layer.getTrackedSubject?.();
-    if (tracked?.label && String(tracked.id) === String(subject.id))
-      return tracked.label;
-    return subject.label;
+    return tracked && String(tracked.id) === String(subject.id)
+      ? tracked
+      : null;
+  }
+
+  /**
+   * The tracked airliner's Planespotters photo, for the Contacts panel.
+   *
+   * Only the flights layer looks photos up, and only for the plane it tracks;
+   * a vessel, an installation, a military aircraft or an untracked flight has
+   * none.
+   * @param {{layerId: string, id: string}|null} subject Current subject.
+   * @param {?object} [tracked] The subject's tracked descriptor, when the
+   *   caller already has it.
+   * @returns {?{src: string, width: ?number, height: ?number, photographer: string, link: string}}
+   */
+  function resolveSubjectPhoto(subject, tracked = trackedSubjectOf(subject)) {
+    return subject?.layerId === 'flights' && tracked?.photo
+      ? tracked.photo
+      : null;
   }
 
   /** Refresh proximity counts/distances against the subject's current live position. */
@@ -326,12 +437,30 @@ export function createSubject({ state: layerState, services, parts, source }) {
     });
     if (!resolved) return;
     const { position, presence } = resolved;
+    // Mapped installations load around the subject, not the (follow/Cockpit)
+    // camera view. The installation layer moves its window only after the
+    // subject travels far enough, so this per-refresh call is cheap.
+    if (!layerState.passive)
+      militaryInstallationsLayer.setContextAnchor?.(position);
     // UNCHECKED leaves the verdict alone: this tick simply did not look.
     if (presence === SUBJECT_PRESENCE.LIVE) layerState.subjectMissing = false;
     else if (presence === SUBJECT_PRESENCE.MISSING)
       layerState.subjectMissing = true;
-    const nextLabel = resolveSubjectLabel(layerState.subject);
+    const tracked = trackedSubjectOf(layerState.subject);
+    const nextLabel = resolveSubjectLabel(layerState.subject, tracked);
     const labelChanged = nextLabel !== layerState.subject.label;
+    // The panel reads the photo from here, with the subject it belongs to.
+    const photo = resolveSubjectPhoto(layerState.subject, tracked);
+    layerState.subjectPhoto = photo
+      ? {
+          layerId: layerState.subject.layerId,
+          id: layerState.subject.id,
+          photo,
+        }
+      : null;
+    // A photo arriving after selection is render-worthy on its own, as a label.
+    const photoChanged =
+      (photo?.src ?? null) !== (layerState.panelView?.photo?.src ?? null);
     layerState.subject = { ...layerState.subject, position, label: nextLabel };
     const movementM = layerState.lastEvaluatedPosition
       ? Cesium.Cartesian3.distance(layerState.lastEvaluatedPosition, position)
@@ -352,7 +481,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       // kept the ICAO hex until unrelated movement, a source-revision bump, or
       // page rotation happened to repaint it. Gated on an ACTUAL change so the
       // common no-op refresh (every 750 ms) still costs no repaint.
-      if (labelChanged) parts.panel.renderResults();
+      if (labelChanged || photoChanged) parts.panel.renderResults();
       parts.rendering.scheduleDirectionOverlayUpdate(force);
       return;
     }
@@ -390,8 +519,9 @@ export function createSubject({ state: layerState, services, parts, source }) {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
     return {
       layerId: record.layerId,
-      id: record.properties?.mmsi || record.id,
+      id: record.properties?.vesselId || record.id,
       label: record.label || record.id,
+      memberNames: record.properties?.memberNames || [],
       position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
     };
   }
@@ -411,8 +541,10 @@ export function createSubject({ state: layerState, services, parts, source }) {
   }
 
   function clearAwarenessSubject() {
+    militaryInstallationsLayer.setContextAnchor?.(null);
     layerState.autoFocusRetryPending = false;
     layerState.subject = null;
+    layerState.subjectPhoto = null;
     layerState.subjectMissing = false;
     layerState.results = null;
     layerState.navigationHistory = [];
@@ -439,6 +571,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     resolveSubjectPosition,
     collectionSubjectPosition,
     resolveSubjectLabel,
+    resolveSubjectPhoto,
     refreshSelectedSubject,
     subjectFromContext,
     markSubjectEvicted,

@@ -25,6 +25,7 @@ export function createNavigation({
     {
       displayLimit = AWARENESS_MAX_EXAMPLES,
       navigationLimit = AWARENESS_MAX_NAVIGATION_EXAMPLES,
+      complete = true,
     } = {},
   ) {
     const summary = summarizeAwarenessCohort(items, {
@@ -34,6 +35,8 @@ export function createNavigation({
     if (summary.count === null) return summary;
     return {
       ...summary,
+      complete: Boolean(complete),
+      truncated: !complete,
       nearest: summary.nearest.slice(0, displayLimit),
       navigationNearest: summary.nearest,
     };

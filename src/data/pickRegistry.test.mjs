@@ -16,6 +16,7 @@ import {
   unregisterPickOwner,
   isOwnedByOtherLayer,
   resolvePickId,
+  pickContact,
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
@@ -32,10 +33,12 @@ test('resolvePickId: numeric pick id (satellite NORAD numbers) → String', () =
   assert.equal(resolvePickId({ id: undefined, primitive: { id: 43013 } }), '43013');
 });
 
-test('resolvePickId: AIS vessel record object → its mmsi', () => {
-  const record = { mmsi: '367123450', name: 'EVER GIVEN', billboard: {} };
+test('resolvePickId: AIS vessel record object → its id, not its MMSI', () => {
+  const record = { id: '367123450', mmsi: '367123450', name: 'EVER GIVEN', billboard: {} };
   assert.equal(resolvePickId({ id: record }), '367123450');
   assert.equal(resolvePickId({ primitive: { id: record } }), '367123450');
+  const shared = { id: 'hull-b', mmsi: '367123450', name: 'EVER GIVEN' };
+  assert.equal(resolvePickId({ id: shared }), 'hull-b');
 });
 
 test('resolvePickId: Cesium-Entity-like object → its string id', () => {
@@ -47,7 +50,7 @@ test('resolvePickId: unresolvable picks → null', () => {
   assert.equal(resolvePickId(null), null);
   assert.equal(resolvePickId(undefined), null);
   assert.equal(resolvePickId({}), null);
-  assert.equal(resolvePickId({ id: {} }), null); // object with no mmsi/id
+  assert.equal(resolvePickId({ id: {} }), null); // object with no id
   assert.equal(resolvePickId({ primitive: {} }), null);
 });
 
@@ -66,8 +69,8 @@ test('ownership: sibling layers recognize each other via String-coerced ids', ()
   try {
     // Flights asking about a satellite pick (raw numeric id → String upstream)
     assert.equal(isOwnedByOtherLayer('flights', resolvePickId({ id: 25544 })), true);
-    // Flights asking about a vessel pick (record object → mmsi)
-    assert.equal(isOwnedByOtherLayer('flights', resolvePickId({ id: { mmsi: '367123450' } })), true);
+    // Flights asking about a vessel pick (record object → id)
+    assert.equal(isOwnedByOtherLayer('flights', resolvePickId({ id: { id: '367123450', mmsi: '367123450' } })), true);
     // A layer never owns its own pick via the sibling scan
     assert.equal(isOwnedByOtherLayer('satellites', '25544'), false);
     // Unknown ids belong to nobody
@@ -96,4 +99,123 @@ test('ownership: unregister removes the predicate', () => {
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), true);
   unregisterPickOwner('bikeshare');
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), false);
+});
+
+function primaryPointer(t, coarse) {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
+  Object.defineProperty(globalThis, 'matchMedia', {
+    configurable: true,
+    value: (query) => ({ matches: query === '(pointer: coarse)' && coarse }),
+  });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'matchMedia', previous);
+    else delete globalThis.matchMedia;
+  });
+}
+
+function contactOwners(t) {
+  registerPickOwner('flights', (id) => id === 'civil');
+  registerPickOwner('military', (id) => id === 'military');
+  registerPickOwner('ais-live-vessels', (id) => id === '123456789');
+  t.after(() => {
+    for (const id of ['flights', 'military', 'ais-live-vessels'])
+      unregisterPickOwner(id);
+  });
+}
+
+const mapTile = { primitive: { isCesium3DTileset: true } };
+
+test('touch contact pick expands only a surface miss, bounded to 8 hits in 14 CSS pixels', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  const position = { x: 30, y: 50 };
+  const contact = { primitive: { id: 'civil' } };
+  let drills = 0;
+  const scene = {
+    pick(point) {
+      assert.equal(point, position);
+      return mapTile;
+    },
+    drillPick(...args) {
+      drills++;
+      assert.deepEqual(args, [position, 8, 14, 14]);
+      return [mapTile, contact];
+    },
+  };
+  assert.equal(pickContact(scene, position), contact);
+  assert.equal(drills, 1);
+});
+
+test('touch contact pick returns the first registered sibling, never a caller-specific preference', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const first of [{ id: 'military' }, { id: { id: '123456789', mmsi: '123456789' } }]) {
+    const scene = {
+      pick: () => mapTile,
+      drillPick: () => [mapTile, first, { id: 'civil' }],
+    };
+    assert.equal(pickContact(scene, { x: 1, y: 1 }), first);
+  }
+});
+
+test('touch contact pick does not drill through exact registered or unregistered interactive picks', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const exact of [
+    { id: 'military' },
+    { id: 'custom-annotation' },
+    { primitive: { id: 'custom-gizmo' } },
+    { primitive: { id: 'civil', isCesium3DTileset: true } },
+  ]) {
+    const scene = {
+      pick: () => exact,
+      drillPick: () => assert.fail('must keep exact interactive hit'),
+    };
+    assert.equal(pickContact(scene, { x: 1, y: 1 }), exact);
+  }
+});
+
+test('touch expansion stops at a non-surface object and respects the drill bound', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const hits of [
+    [mapTile, { id: 'custom-annotation' }, { id: 'civil' }],
+    [...Array(8).fill(mapTile), { id: 'civil' }],
+    [mapTile],
+  ]) {
+    assert.equal(
+      pickContact(
+        { pick: () => mapTile, drillPick: () => hits },
+        { x: 1, y: 1 },
+      ),
+      mapTile,
+    );
+  }
+});
+
+test('fine primary pointers keep the existing exact mouse pick without a drill', (t) => {
+  primaryPointer(t, false);
+  contactOwners(t);
+  const scene = {
+    pick: () => mapTile,
+    drillPick: () => assert.fail('mouse must not expand'),
+  };
+  assert.equal(pickContact(scene, { x: 1, y: 1 }), mapTile);
+});
+
+test('touch picking tolerates unavailable or failing drill support and preserves empty sky', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const drillPick of [
+    undefined,
+    () => {
+      throw new Error('context lost');
+    },
+    () => [],
+  ]) {
+    assert.equal(
+      pickContact({ pick: () => undefined, drillPick }, { x: 1, y: 1 }),
+      undefined,
+    );
+  }
 });

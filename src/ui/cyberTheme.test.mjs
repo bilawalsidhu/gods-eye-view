@@ -1,3 +1,4 @@
+import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -9,19 +10,29 @@ import {
   normalizeHudLayout,
 } from '../hudLayouts.js';
 import { GEV_ACTION_SCHEMAS } from '../voice/actionSchemas.js';
+import { createGevActionRunner } from '../voice/gevActions.js';
+import { StyleManager } from './applicationShell.js';
+import { createPinia } from 'pinia';
+import { useDisplayStore } from './stores/display.js';
 import { VisualSettings } from './visualSettings.js';
 import { STYLES } from './visualPresets.js';
 
 test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () => {
-  for (const file of ['layer-panels.html', 'context.html']) {
+  for (const file of ['panels/CctvPanel.vue', 'ContextView.vue']) {
     const markup = readFileSync(
-      new URL(`./templates/${file}`, import.meta.url),
+      new URL(`./views/${file}`, import.meta.url),
       'utf8',
     );
-    assert.match(markup, /class="cyber-panel-body" data-rail-scroller/);
+    // The body wears the shared scrollbar skin where Cyber makes it scroll.
+    assert.match(
+      markup,
+      /class="cyber-panel-body ui-scroll" data-rail-scroller/,
+    );
     assert.ok(
-      markup.indexOf('class="panel-header"') <
-        markup.indexOf('class="cyber-panel-body"'),
+      // The header is RailPanel's; the body is its first content.
+      markup.indexOf('<RailPanel ') > -1 &&
+        markup.indexOf('<RailPanel ') <
+        markup.indexOf('class="cyber-panel-body ui-scroll"'),
     );
   }
   const shared = readFileSync(
@@ -50,8 +61,9 @@ function styleOwner(t, initialVariant = 'cyber') {
   const hud = {
     getVariant: () => variant,
     setVariant: (value) => {
-      variant = value;
-      applyHudUiTheme(root, value);
+      // Normalize like the real HUD so retired layouts fall back.
+      variant = normalizeHudLayout(value);
+      applyHudUiTheme(root, variant);
     },
     setMode: (value) => calls.push(['mode', value]),
     onStyleChange: (value) => calls.push(['style', value]),
@@ -60,6 +72,7 @@ function styleOwner(t, initialVariant = 'cyber') {
   const owner = Object.create(VisualSettings.prototype);
   Object.assign(owner, {
     activeStyle: 'normal',
+    store: { publish() {} },
     readHud: () => hud,
     readShareLinks: () => ({ onStyleChange() {} }),
     _visualEffects: {
@@ -71,8 +84,6 @@ function styleOwner(t, initialVariant = 'cyber') {
       ),
     },
     services: { governorRequestRender() {}, setDetectionStyle() {} },
-    _hudLayoutSelect: { value: initialVariant },
-    _styleIndicator: {},
     _setBloomEnabled: (value) => calls.push(['bloom', value]),
     _setSharpenEnabled: (value) => calls.push(['sharpen', value]),
     _applyDetectionPreset: (value) => calls.push(['detection', value]),
@@ -81,14 +92,17 @@ function styleOwner(t, initialVariant = 'cyber') {
   for (const name of [
     'setCelestialRingEnabled',
     '_startTransition',
-    '_updateStyleMiniStatus',
+    '_publishActiveStyle',
     '_updateSliderPanel',
     '_updateHudButtonState',
     '_syncIrBoost',
     '_syncCockpitInheritedStyle',
     '_syncCyberSonarControl',
     '_scheduleAdaptivePanelLayout',
-    '_applyDetectionFadeFromUi',
+    '_setDetectionFade',
+    // Intensities: the fixture has no post-process stages to drive.
+    '_setBloomIntensity',
+    '_setSharpenIntensity',
   ])
     owner[name] = () => {};
   return { owner, hud, root, calls };
@@ -101,7 +115,6 @@ test('visual styles retain Cyber through real preset application without droppin
     'normal',
     'noir',
     'anime',
-    'snow',
     'thermal',
     'retro',
   ]) {
@@ -109,7 +122,6 @@ test('visual styles retain Cyber through real preset application without droppin
     assert.equal(owner.activeStyle, style);
     assert.equal(hud.getVariant(), 'cyber');
     assert.equal(root.dataset.uiTheme, 'cyber');
-    assert.equal(owner._hudLayoutSelect.value, 'cyber');
     assert.deepEqual(calls.at(-1), ['share', 'cyber']);
   }
   assert.equal(owner.stages.thermal.uniforms.sensitivity, 0.85);
@@ -127,7 +139,7 @@ test('visual styles retain Cyber through real preset application without droppin
 
 test('non-Cyber style presets and explicit HUD choices remain authoritative', (t) => {
   const { owner, hud, root } = styleOwner(t);
-  for (const variant of ['tactical', 'operator', 'minimal']) {
+  for (const variant of ['tactical', 'minimal']) {
     owner._setHudVariant(variant);
     assert.equal(hud.getVariant(), variant);
     assert.equal(root.dataset.uiTheme, undefined);
@@ -135,6 +147,194 @@ test('non-Cyber style presets and explicit HUD choices remain authoritative', (t
     owner.setStyle('surveillance');
     assert.equal(hud.getVariant(), 'tactical');
   }
+});
+
+test('leaving Cyber without a preset choice restores the prior visual preset', (t) => {
+  const { owner, hud } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'thermal');
+  assert.equal(owner._preCyberStyle, 'noir');
+  assert.equal(owner._cyberStyleUserSelected, false);
+
+  owner._setHudVariant('minimal', { applyVisualDefaults: true });
+  assert.equal(hud.getVariant(), 'minimal');
+  assert.equal(owner.activeStyle, 'noir');
+  assert.equal(owner._preCyberStyle, null);
+  assert.equal(owner._cyberStyleUserSelected, false);
+});
+
+test('a preset explicitly selected in Cyber survives exit and resets for re-entry', (t) => {
+  const { owner, hud } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  owner.setStyle('anime', { userInitiated: true });
+  assert.equal(owner.activeStyle, 'anime');
+  assert.equal(owner._preCyberStyle, 'noir');
+  assert.equal(owner._cyberStyleUserSelected, true);
+
+  // Reselecting the active mode must not erase the user's preset intent.
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  assert.equal(owner._preCyberStyle, 'noir');
+  owner._setHudVariant('minimal', { applyVisualDefaults: true });
+  assert.equal(hud.getVariant(), 'minimal');
+  assert.equal(owner.activeStyle, 'anime');
+  assert.equal(owner._preCyberStyle, null);
+  assert.equal(owner._cyberStyleUserSelected, false);
+
+  // A later untouched Cyber round trip restores the new pre-Cyber preset.
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'thermal');
+  assert.equal(owner._preCyberStyle, 'anime');
+  owner._setHudVariant('minimal', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'anime');
+});
+
+test('an explicit same-value FLIR choice is preserved on Cyber exit', (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+
+  owner.setStyle('thermal', { userInitiated: true });
+  assert.equal(owner.activeStyle, 'thermal');
+  assert.equal(owner._cyberStyleUserSelected, true);
+  owner._setHudVariant('minimal', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'thermal');
+});
+
+test('an authoritative same-Cyber reset clears local preset ownership', (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  owner.setStyle('anime', { userInitiated: true });
+  assert.equal(owner._cyberStyleUserSelected, true);
+
+  owner._setHudVariant('cyber');
+  assert.equal(owner.activeStyle, 'anime');
+  assert.equal(owner._preCyberStyle, null);
+  assert.equal(owner._cyberStyleUserSelected, false);
+  owner._setHudVariant('minimal', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'anime');
+});
+
+test('Display and voice HUD routes preserve explicit Cyber entry and exit authority', async (t) => {
+  const makeOwner = () => {
+    const { owner, hud } = styleOwner(t, 'tactical');
+    owner.setStyle('noir');
+    owner.setHudLayout = (...args) =>
+      StyleManager.prototype.setHudLayout.call(owner, ...args);
+    owner.getControlState = () => ({
+      hud: { layout: hud.getVariant(), visible: true },
+    });
+    return { owner, hud };
+  };
+
+  const display = makeOwner();
+  // The Display panel's layout select and the dock's style buttons call
+  // these actions through the display store.
+  const store = useDisplayStore(createPinia());
+  const token = store.connect({
+    setHudLayout: (value) => display.owner.setHudLayout(value),
+    setStyle: (value) => display.owner.setStyle(value, { userInitiated: true }),
+  });
+  store.act('setHudLayout', 'cyber');
+  assert.equal(display.hud.getVariant(), 'cyber');
+  assert.equal(display.owner.activeStyle, 'thermal');
+  store.act('setStyle', 'anime');
+  assert.equal(display.owner.activeStyle, 'anime');
+  store.act('setHudLayout', 'minimal');
+  assert.equal(display.hud.getVariant(), 'minimal');
+  assert.equal(display.owner.activeStyle, 'anime');
+  store.detach(token);
+
+  const voice = makeOwner();
+  const eventSource = { addEventListener() {}, removeEventListener() {} };
+  const viewer = {
+    camera: { moveEnd: { addEventListener() {} } },
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: eventSource },
+  };
+  const runVoiceAction = createGevActionRunner({
+    viewer,
+    styleManager: voice.owner,
+    dataManager: {},
+  });
+  const entered = await runVoiceAction('set_hud', { layout: 'cyber' });
+  assert.equal(entered.ok, true);
+  assert.equal(voice.hud.getVariant(), 'cyber');
+  assert.equal(voice.owner.activeStyle, 'thermal');
+  const selected = await runVoiceAction('set_visual_style', { style: 'anime' });
+  assert.equal(selected.ok, true);
+  assert.equal(voice.owner.activeStyle, 'anime');
+  const exited = await runVoiceAction('set_hud', { layout: 'minimal' });
+  assert.equal(exited.ok, true);
+  assert.equal(voice.hud.getVariant(), 'minimal');
+  assert.equal(voice.owner.activeStyle, 'anime');
+});
+
+test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  const previous = { enabled: isScopeMaskEnabled(), feather: getScopeMaskFeather() };
+  t.after(() => { setScopeMaskEnabled(previous.enabled); setScopeMaskFeather(previous.feather); });
+  Object.assign(owner.services, { setScopeMaskEnabled, setScopeMaskFeather });
+  let shown = null;
+  owner.store = { publish: (view) => (shown = view.scope) };
+  await owner.restoreShareState({ scopeEnabled: false, scopeFeatherPct: 200 });
+  assert.deepEqual(shown, { enabled: false, featherPct: 200 });
+  for (const layout of ['minimal', 'cyber', 'tactical']) {
+    owner._setHudVariant(layout, { applyVisualDefaults: true });
+    assert.equal(isScopeMaskEnabled(), false, layout);
+    assert.equal(getScopeMaskFeather(), 2, layout);
+    assert.equal(shown.enabled, false, layout);
+  }
+  await owner.applyVisualState({ scope: { enabled: true, featherPct: 175 } });
+  assert.equal(isScopeMaskEnabled(), true);
+  assert.equal(getScopeMaskFeather(), 1.75);
+  assert.deepEqual(shown, { enabled: true, featherPct: 175 });
+  await owner.applyVisualState({ scope: { featherPct: 500 } });
+  assert.equal(getScopeMaskFeather(), 2);
+  assert.deepEqual(shown, { enabled: true, featherPct: 200 });
+});
+
+test('a scene shot saved with the retired Snow style plays on Normal', async (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+  await owner.applyVisualState({ style: 'snow' });
+  assert.equal(owner.activeStyle, 'normal');
+});
+
+test('scene and share HUD transitions do not restore a local pre-Cyber preset', async (t) => {
+  const { owner, hud } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  owner.setStyle('anime', { userInitiated: true });
+  assert.equal(owner._cyberStyleUserSelected, true);
+
+  await owner.applyVisualState({ style: 'retro', hud: { variant: 'cyber' } });
+  assert.equal(hud.getVariant(), 'cyber');
+  assert.equal(owner.activeStyle, 'retro');
+  assert.equal(owner._preCyberStyle, null);
+  assert.equal(owner._cyberStyleUserSelected, false);
+  owner._setHudVariant('minimal', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'retro');
+
+  owner.setStyle('surveillance');
+  owner._setHudVariant('cyber', { applyVisualDefaults: true });
+  assert.equal(owner._preCyberStyle, 'surveillance');
+  owner.setStyle('anime', { userInitiated: true });
+  await owner.restoreShareState({
+    style: 'thermal',
+    hudVariant: 'cyber',
+  });
+  assert.equal(hud.getVariant(), 'cyber');
+  assert.equal(owner.activeStyle, 'thermal');
+  assert.equal(owner._preCyberStyle, null);
+  assert.equal(owner._cyberStyleUserSelected, false);
+  owner._setHudVariant('tactical', { applyVisualDefaults: true });
+  assert.equal(owner.activeStyle, 'thermal');
+  assert.equal(owner._preCyberStyle, null);
 });
 
 test('scene and share restoration override Cyber and preserve restored Cyber parameters', async (t) => {
@@ -146,7 +346,8 @@ test('scene and share restoration override Cyber and preserve restored Cyber par
     style: 'surveillance',
     hudVariant: 'operator',
   });
-  assert.equal(hud.getVariant(), 'operator');
+  // A link saved with the retired Operator layout restores as Tactical.
+  assert.equal(hud.getVariant(), 'tactical');
   await owner.restoreShareState({
     style: 'thermal',
     hudVariant: 'cyber',
@@ -178,6 +379,104 @@ test('Cyber setup uses a compact toolbar icon and highlights the north-up letter
   );
 });
 const cyberStyles = read('./styles/cyber.css');
+
+// Source guards supplement rendered popup/hit-target checks. Inspect one rule
+// at a time so a safe declaration on a child cannot excuse a clipped ancestor.
+function cssRuleBody(styles, selector) {
+  const match = styles.match(new RegExp(`${selector.source}\\s*\\{([^}]+)\\}`));
+  assert.ok(match, `Missing CSS rule: ${selector.source}`);
+  return match[1];
+}
+
+test('Cyber Voice clips its decoration without clipping descendant help and errors', () => {
+  const owner = cssRuleBody(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\] #command-dock > #gev-voice-control/,
+  );
+  assert.match(owner, /isolation:\s*isolate;/);
+  assert.match(owner, /overflow:\s*visible;/);
+  assert.match(owner, /clip-path:\s*none;/);
+
+  const decoration = cssRuleBody(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\] #command-dock > #gev-voice-control::before/,
+  );
+  assert.match(decoration, /clip-path:\s*polygon\(/);
+  assert.match(decoration, /pointer-events:\s*none;/);
+  assert.match(decoration, /inset:\s*0;/);
+  assert.match(decoration, /z-index:\s*-1;/);
+});
+
+test('Cyber dock pins escape the tray mask and its decoration overrides the legacy arrow geometry', () => {
+  const owner = cssRuleBody(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\] #command-dock \.dock-popover-content/,
+  );
+  assert.match(owner, /clip-path:\s*none;/);
+  assert.match(owner, /isolation:\s*isolate;/);
+
+  // Including the tray owners beats #control-panel's more specific old
+  // ::after arrow positioning. Otherwise left:auto can collapse the frame.
+  const decoration = cssRuleBody(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\]\s+#command-dock\s+:is\(#location-bar, #control-panel\)\s+\.dock-popover-content::after/,
+  );
+  assert.match(decoration, /inset:\s*0;/);
+  assert.match(decoration, /width:\s*auto;/);
+  assert.match(decoration, /height:\s*auto;/);
+  assert.match(decoration, /transform:\s*none;/);
+  assert.match(decoration, /clip-path:\s*var\(--cyber-panel-frame\);/);
+  assert.match(decoration, /pointer-events:\s*none;/);
+});
+
+test('Cyber lower-left telemetry tracks the credit anchor with clearance for its logo row', () => {
+  const telemetry = cssRuleBody(
+    cyberStyles,
+    /#intel-hud\[data-variant='cyber'\] \.hud-bottom-left/,
+  );
+  const offset = telemetry.match(/bottom:\s*calc\(2vh \+ ([\d.]+)rem \+ var\(--world-timeline-lift, 0px\)\);/);
+  assert.ok(offset, 'telemetry must retain the attribution viewport anchor');
+  const credits = read('./styles/command-dock-trays.css');
+  const creditOffsets = [
+    ...credits.matchAll(
+      /#cesium-credits\s*\{[^}]*bottom:\s*calc\(2vh \+ ([\d.]+)rem \+ var\(--world-timeline-lift, 0px\)\);/g,
+    ),
+  ];
+  assert.ok(creditOffsets.length > 0);
+  for (const credit of creditOffsets) {
+    assert.ok(
+      Number(offset[1]) - Number(credit[1]) >= 2.75,
+      'reserve the 28px logo row, baseline descent and 12px clearance at the 16px root size',
+    );
+  }
+  assert.doesNotMatch(cyberStyles, /\.hud-bottom-left\s*\{\s*bottom:\s*60px;/);
+});
+
+test('shared panel hooks affect only opted-in rail surfaces without overriding disclosure and concealment', () => {
+  const styles = read('./styles/panel-surfaces.css');
+  const rail = cssRuleBody(
+    styles,
+    /:is\(#left-panel-stack, #right-context-rail\)\s+> \[data-panel-id\]:has\(> \[data-panel-surface\]\)/,
+  );
+  assert.match(rail, /pointer-events:\s*auto;/);
+  assert.doesNotMatch(rail, /(?:display|visibility):/);
+  assert.doesNotMatch(
+    styles,
+    /:is\(#left-panel-stack, #right-context-rail\)\s*> \[data-panel-id\]\s*\{/,
+  );
+  assert.match(
+    styles,
+    /\[data-panel-surface\]:not\(\[hidden\]\):not\(dialog:not\(\[open\]\)\)\s*\{\s*display: flex;/,
+  );
+  assert.match(
+    styles,
+    /dialog\[data-panel-surface\]:not\(\[open\]\)\s*\{\s*display: none !important;/,
+  );
+  assert.match(
+    styles,
+    /body:is\(\.ui-clean-view, \.recording-mode\)[^{]+\{[^}]*visibility: hidden !important;[^}]*pointer-events: none !important;/,
+  );
+});
 
 test('Cyber clipped expand controls retain an inset keyboard-focus outline in map and cockpit', () => {
   assert.match(
@@ -240,11 +539,11 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /#left-panel-stack\s*> :is\(#data-panel, #scene-panel\)\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
+    /#left-panel-stack\s*> :is\(#data-panel, #utilities-panel, #scene-panel\)\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
   );
   assert.match(
     cyberStyles,
-    /:is\(#data-panel, #scene-panel\)\.collapsed\s+:is\(\.data-panel-inner, \.scene-panel-inner\) \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
+    /:is\(#data-panel, #utilities-panel, #scene-panel\)\.collapsed\s+:is\(\.data-panel-inner, \.utilities-panel-inner, \.scene-panel-inner\) \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
   );
   assert.match(
     cyberStyles,
@@ -254,6 +553,14 @@ test('Cyber side panels share one width and one framed surface material', () => 
     cyberStyles,
     /#pp-toggles\s*> \.pp-header-row\s+\.pp-collapse-btn \{[\s\S]*?width: var\(--cyber-panel-control-size\);[\s\S]*?height: var\(--cyber-panel-control-size\);/,
   );
+  assert.match(
+    cyberStyles,
+    /#right-context-rail\s+:is\(\s*\.cctv-panel-inner,\s*\.weather-panel-inner,\s*\.recent-imagery-panel-inner,\s*\.street-level-panel-inner,\s*\.global-context-panel-inner\s*\) \{\s*padding-inline-end: 8px;/,
+  );
+  assert.match(
+    cyberStyles,
+    /#right-context-rail[\s\S]*?:is\(\s*#cctv-panel,\s*#weather-panel,\s*#recent-imagery-panel,\s*#street-level-panel,\s*#global-context-panel\s*\)\.collapsed[\s\S]*?> \.panel-header \{[\s\S]*?height: 48px;[\s\S]*?padding: 0 10px 0 14px;/,
+  );
   assert.doesNotMatch(
     cyberStyles,
     /\.cockpit-utility-control\.is-expanded\s*\{[^}]*order:/,
@@ -262,8 +569,9 @@ test('Cyber side panels share one width and one framed surface material', () => 
 });
 
 test('Cyber is a canonical HUD layout with a safe Tactical fallback', () => {
-  assert.deepEqual(HUD_LAYOUTS, ['tactical', 'operator', 'minimal', 'cyber']);
+  assert.deepEqual(HUD_LAYOUTS, ['tactical', 'minimal', 'cyber']);
   assert.equal(normalizeHudLayout('CYBER'), 'cyber');
+  assert.equal(normalizeHudLayout('operator'), 'tactical');
   assert.equal(normalizeHudLayout('unknown'), 'tactical');
 });
 
@@ -295,7 +603,7 @@ test('an explicit transition into Cyber selects FLIR with Ironbow 0.42 once', ()
   );
   assert.equal(cyberVisualDefaultsForHudTransition('tactical', 'cyber'), null);
   assert.equal(
-    cyberVisualDefaultsForHudTransition('cyber', 'operator', {
+    cyberVisualDefaultsForHudTransition('cyber', 'minimal', {
       explicit: true,
     }),
     null,
@@ -321,26 +629,36 @@ test('Cyber visual defaults update the style, thermal palette and render state',
 
   assert.equal(owner.stages.thermal.uniforms.palette, 0.42);
   assert.deepEqual(calls, [
-    ['style', 'thermal', { applyPreset: false, revealParameters: false }],
+    [
+      'style',
+      'thermal',
+      {
+        applyPreset: false,
+        revealParameters: false,
+        preserveCyberRestore: true,
+      },
+    ],
     ['sliders', 'thermal', { reveal: false }],
     ['render', 'cyber-visual-defaults'],
   ]);
 });
 
 test('the Display selector, voice schema and final stylesheet expose Cyber', () => {
-  const display = read('./templates/display-controls.html');
+  const display = read('./views/panels/DisplayPanel.vue');
   const stylesheet = read('../../style.css');
+  const rightRail = read('./rightPanelRail.js');
   const hud = read('../hud.js');
+  const hudView = read('./views/IntelHudView.vue');
   const detection = read('../data/detection.js');
   const civilRendering = read('../layers/flights/rendering.js');
   const militaryRendering = read('../layers/military/rendering.js');
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
-  assert.match(display, /<option value="cyber">Cyber<\/option>/);
+  assert.match(display, /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/);
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,
-    /id="cyber-sonar-opacity"[^>]*value="84"[^>]*aria-label="Cyber contact and label opacity"/,
+    /id="cyber-sonar-opacity"[^>]*:model-value="sonar\?\.opacity \?\? 84" :aria-label="t\('Cyber contact and label opacity'\)"/,
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);
@@ -360,7 +678,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
     /\.panel-collapsible:not\(#location-bar\):not\(#control-panel\)::after/,
   );
   assert.match(cyberStyles, /clip-path: var\(--cyber-panel-frame\);/);
-  assert.match(hud, /class="hud-sonar" aria-hidden="true"/);
+  assert.match(hudView, /class="hud-sonar" aria-hidden="true"/);
   assert.match(cyberStyles, /\.hud-sonar::before/);
   assert.match(cyberStyles, /\.hud-sonar::after/);
   assert.match(cyberStyles, /@keyframes cyber-sonar-sweep/);
@@ -403,10 +721,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /\.hud-top-left/);
   assert.match(cyberStyles, /transparent 0 min\(40vw, 52vh\)/);
   assert.match(cyberStyles, /\.hud-bottom-bar \{\s*display: none;/);
-  assert.match(
-    cyberStyles,
-    /#intel-hud\[data-variant='cyber'\] \.hud-top-bar \{\s*display: none;/,
-  );
+  assert.doesNotMatch(cyberStyles, /\.hud-top-bar/);
   // Cyber shares the measured rail/credit keep-out rather than overriding it.
   assert.doesNotMatch(
     cyberStyles,
@@ -415,20 +730,23 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /--cyber-hud-card-top: max\(100px, 10\.25vh\);/);
   assert.match(
     cyberStyles,
-    /--cyber-left-rail-top: max\([\s\S]*?252px,[\s\S]*?calc\(var\(--cyber-hud-card-top\) \+ 146px\)/,
+    /--cyber-left-rail-top: max\([\s\S]*?220px,[\s\S]*?calc\(var\(--cyber-hud-card-top\) \+ 120px\)/,
   );
   assert.match(
     cyberStyles,
     /\.hud-top-left \{[\s\S]*?top: var\(--cyber-hud-card-top\);/,
   );
-  assert.match(cyberStyles, /\.hud-bottom-left \{\s*bottom: 60px;/);
   assert.match(
     cyberStyles,
-    /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;/,
+    /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;[\s\S]*?bottom: calc\(2vh \+ 13rem \+ var\(--world-timeline-lift, 0px\)\);/,
   );
   assert.match(
     cyberStyles,
     /\.hud-left-edge \{\s*top: calc\(var\(--cyber-left-rail-top\) - 18px\);\s*left: 14px;/,
+  );
+  assert.match(
+    rightRail,
+    /const leftStackTop = settledLeftRailTop\([\s\S]*?const alignedTop = Number\.isFinite\(leftStackTop\)[\s\S]*?baseTop: alignedTop,/,
   );
   assert.match(
     cyberStyles,
@@ -448,12 +766,34 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /\.panel-collapsible\.collapsed::after/);
   assert.match(cyberStyles, /\.panel-collapsible:not\(\.collapsed\)::after/);
   assert.match(cyberStyles, /\.context-mode-standby:not\(\[hidden\]\)/);
+  // The base standby is borderless plain text, so the focus card must name its
+  // own frame width and centring rather than inherit them.
+  assert.match(
+    cyberStyles,
+    /\.context-mode-standby:not\(\[hidden\]\) \{[^}]*place-content: center;[^}]*border: 1px solid[^}]*text-align: center;/,
+  );
+  assert.match(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\] \.global-context-modes \{[^}]*border: 0;/,
+  );
   assert.match(cyberStyles, /mask-image: linear-gradient\(/);
   assert.match(cyberStyles, /flex: 1 1 auto;/);
   assert.match(cyberStyles, /#left-panel-stack:has/);
-  assert.match(cyberStyles, /left: 54px;/);
-  assert.match(cyberStyles, /right: 62px;/);
-  assert.match(cyberStyles, /bottom: calc\(2vh \+ 11rem\);/);
+  assert.match(
+    cyberStyles,
+    /inset-inline-start: calc\(54px \+ var\(--panel-rail-clearance\)\);/,
+  );
+  assert.match(cyberStyles, /right: calc\(51px \+ var\(--panel-rail-clearance\)\);/);
+  // Each side's edge line shows only beside an open panel.
+  assert.match(
+    cyberStyles,
+    /#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed, \[hidden\]\)\) \{\s*border-inline-start-color:/,
+  );
+  assert.match(
+    cyberStyles,
+    /#right-context-rail:has\(> \[data-panel-id\]:not\(\.collapsed, \[hidden\]\)\) \{\s*border-inline-end-color:/,
+  );
+  assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem \+ var\(--world-timeline-lift, 0px\)\);/);
   assert.doesNotMatch(cyberStyles, /NAV 01  \/\/  COMMAND BUS  \/\/  VIS 03/);
   assert.match(cyberStyles, /data-layer-id='satellites'/);
   assert.match(cyberStyles, /#search-toggle::before/);
@@ -514,7 +854,7 @@ test('Cyber Cockpit keeps Data Layers inside its bounded rail', () => {
   );
   assert.match(
     cyberStyles,
-    /body\.cockpit-mode #left-panel-stack > #data-panel \{[\s\S]*?max-height: min\(64vh, 610px\);/,
+    /body\.cockpit-mode\s+#left-panel-stack\s+> :is\(#data-panel, #utilities-panel\) \{[\s\S]*?max-height: min\(64vh, 610px\);/,
   );
 });
 
@@ -525,7 +865,7 @@ test('Cyber desktop cockpit collapsed utility frames match the 50px Data Layers 
   );
   assert.match(
     desktop,
-    /:root\[data-ui-theme='cyber'\]\s+body\.cockpit-mode\s+\.cockpit-utility-control:not\(\.is-expanded\)\s+\.cockpit-utility-launcher\s*\{\s*height: 50px;\s*min-height: 50px;\s*padding: 8px 18px 10px 24px;/,
+    /:root\[data-ui-theme='cyber'\]\s+body\.cockpit-mode\s+\.cockpit-utility-control:not\(\.is-expanded\)\s+\.cockpit-utility-launcher\s*\{\s*height: 50px;\s*min-height: 50px;\s*padding: 9px 18px 9px 24px;/,
   );
   assert.match(
     desktop,
@@ -547,7 +887,7 @@ test('Cyber panels retain clean edges without the added footer band', () => {
 
 test('Cyber keeps Sonar on/off without the removed CSS effect switch or dimmer', () => {
   const template = readFileSync(
-    new URL('./templates/display-controls.html', import.meta.url),
+    new URL('./views/panels/DisplayPanel.vue', import.meta.url),
     'utf8',
   );
   assert.match(template, /id="cyber-sonar-toggle"/);

@@ -2,13 +2,15 @@ import { createNominatimProvider } from './nominatim.js';
 import { createGeospatialServices } from './geospatial.js';
 import { createHttpGeospatialProvider } from './http.js';
 import { createPlaceSearch } from './placeSearch.js';
+import { createNominatimStatus } from '../sources/nominatimStatus.js';
 import { createGoogleGeocoder } from './google.js';
 import { createPhotonGeocoder } from '../keylessGeocoder.js';
 import { createCoordinateGeocoder } from './coordinateGeocoder.js';
 import { createPresetGeocoder } from './presetGeocoder.js';
+import { createAlpsGeocoder } from './alpsGeocoder.js';
 
 /**
- * Coordinates and bundled names first — both answer offline and with no key —
+ * Coordinates, bundled names and the unqualified Alps first — all offline —
  * then Google when configured, then keyless Photon, then the local Nominatim
  * route as a last resort. Transport stays local to setup.
  *
@@ -27,6 +29,9 @@ export function createDefaultPlaceSearch({
 } = {}) {
   if (geocoding && geocoding.provider !== 'nominatim')
     throw new TypeError('Unsupported geocoding provider');
+  const nominatimConfigured = endpoints.nominatim
+    ? null
+    : createNominatimStatus({ fetchImpl });
   const selected = geocoding
     ? createNominatimProvider({ ...geocoding, fetchImpl })
     : null;
@@ -37,29 +42,50 @@ export function createDefaultPlaceSearch({
     providers: providers.geocode || [
       createCoordinateGeocoder(),
       ...(presets ? [createPresetGeocoder({ presets })] : []),
+      createAlpsGeocoder(),
       ...(selected
         ? [selected]
         : [
+            // Google answers through the local proxy, which holds the server
+            // key: its Geocoding web service refuses referrer-restricted keys,
+            // so calling it from here would force the bundled browser key to be
+            // left unrestricted (#363). That key still gates the provider,
+            // because a keyless session must not spend a request to learn it
+            // has no Google: the proxy's "not configured" reads as an
+            // unanswered provider, which stops the chain caching the negative
+            // Photon or Nominatim then produces.
             createGoogleGeocoder({
               request(query, { bias, signal }) {
-                const key = resolveApiKey?.();
-                if (!key) return null;
-                const url = new URL(
-                  endpoints.geocode ||
-                    'https://maps.googleapis.com/maps/api/geocode/json',
+                if (!resolveApiKey?.()) return null;
+                const params = new URLSearchParams({ address: query });
+                if (bias) params.set('bounds', bias);
+                return fetchImpl(
+                  `${endpoints.geocode || '/api/google/geocode'}?${params}`,
+                  { signal },
                 );
-                url.searchParams.set('address', query);
-                url.searchParams.set('key', key);
-                if (bias) url.searchParams.set('bounds', bias);
-                return fetchImpl(url.toString(), { signal });
               },
             }),
-            createPhotonGeocoder({ fetchImpl, endpoint: endpoints.photon }),
+            // `endpoints.photon === null` is the operator's "no Photon".
+            ...(endpoints.photon === null
+              ? []
+              : [
+                  createPhotonGeocoder({
+                    fetchImpl,
+                    endpoint: endpoints.photon ?? undefined,
+                  }),
+                ]),
             // Last resort: the local Nominatim route, which answers with no key when
             // neither of the two above did. It speaks the same result shape, so it
             // rides the existing Google adapter rather than needing its own.
             createGoogleGeocoder({
-              request(query, { bias, signal }) {
+              async request(query, { bias, signal }) {
+                // The app's own route says up front when Nominatim is off.
+                const capability = nominatimConfigured
+                  ? await nominatimConfigured()
+                  : null;
+                // A search cancelled during the probe starts no request.
+                signal?.throwIfAborted();
+                if (capability === false) return null;
                 const params = new URLSearchParams({ q: query });
                 if (bias) params.set('bounds', bias);
                 return fetchImpl(

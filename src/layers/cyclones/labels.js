@@ -64,7 +64,7 @@ const SHARED_CARD = Object.freeze({
  * @param {boolean} selected
  * @returns {object}
  */
-export function cycloneStormEntry(storm, selected) {
+function cycloneStormEntry(storm, selected) {
   return {
     ...SHARED_CARD,
     ...markerClearance(
@@ -92,7 +92,7 @@ export function cycloneStormEntry(storm, selected) {
  * @param {{tauHours:number,position:object}} point
  * @returns {object}
  */
-export function cycloneLeadEntry(stormId, point) {
+function cycloneLeadEntry(stormId, point) {
   return {
     ...SHARED_CARD,
     ...markerClearance(CYCLONE_MARKER_PX.forecast),

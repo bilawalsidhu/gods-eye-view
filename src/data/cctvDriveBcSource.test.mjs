@@ -14,9 +14,12 @@ import {
   DEFAULT_ONTARIO_MAX_SOURCES,
   DEFAULT_FINTRAFFIC_MAX_SOURCES,
   DEFAULT_TXDOT_MAX_SOURCES,
+  DEFAULT_OTTAWA_MAX_SOURCES,
+  CCTV_SHARED_SOURCE_SLOTS,
   DEFAULT_TALLINN_MAX_SOURCES,
   DEFAULT_TARKTEE_MAX_SOURCES,
   DEFAULT_NSW_MAX_SOURCES,
+  DEFAULT_CATALONIA_MAX_SOURCES,
   DRIVEBC_WEBCAMS_URL,
 } from '../../server/providers/cctv/constants.js';
 import {
@@ -221,7 +224,7 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
   );
 });
 
-test('default per-pack camera caps fit inside the default catalog cap', () => {
+test('default caps of the original packs fit inside the shared catalog slots', () => {
   // Every default pack at its own cap (Warendorf ships 1 curated camera).
   const packs =
     DEFAULT_AUSTIN_MAX_SOURCES +
@@ -230,14 +233,18 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_ONTARIO_MAX_SOURCES +
     DEFAULT_FINTRAFFIC_MAX_SOURCES +
     DEFAULT_DRIVEBC_MAX_SOURCES +
+    DEFAULT_OTTAWA_MAX_SOURCES +
     DEFAULT_TXDOT_MAX_SOURCES +
     DEFAULT_TALLINN_MAX_SOURCES +
     DEFAULT_TARKTEE_MAX_SOURCES +
     DEFAULT_NSW_MAX_SOURCES +
+    DEFAULT_CATALONIA_MAX_SOURCES +
     1;
+  // The reserved Québec and World packs sit above the shared floor, so the
+  // shared packs must fit the floor itself, not the whole default cap.
   assert.ok(
-    packs <= DEFAULT_CCTV_MAX_SOURCES,
-    `default packs (${packs}) would be thinned by the catalog cap (${DEFAULT_CCTV_MAX_SOURCES})`,
+    packs <= CCTV_SHARED_SOURCE_SLOTS,
+    `default packs (${packs}) would be thinned by the shared slots (${CCTV_SHARED_SOURCE_SLOTS})`,
   );
   assert.ok(
     DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING,

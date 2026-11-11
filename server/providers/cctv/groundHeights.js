@@ -3,7 +3,7 @@ import path from 'node:path';
 import { poseHash } from '../../../src/data/cctvFootprint.js';
 
 /** Sidecar written by scripts/precompute-cctv-heights.mjs. */
-export const DEFAULT_GROUND_HEIGHTS_FILE =
+const DEFAULT_GROUND_HEIGHTS_FILE =
   'src/data/local_data/cctv_ground_heights/cctv_ground_heights.json';
 
 /** @type {{path:string, mtimeMs:number, cameras:object}|null} */

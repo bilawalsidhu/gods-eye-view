@@ -1,5 +1,6 @@
 import { applicationServices } from './services/application.js';
 import * as Cesium from 'cesium';
+import { greatCircleMeters } from './geoDistance.js';
 import {
   deriveWeatherEffectProfile,
   weatherAltitudeFactors,
@@ -127,23 +128,9 @@ function compileShader(gl, type, source) {
 }
 
 function greatCircleM(a, b) {
-  if (
-    ![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(
-      Number.isFinite,
-    )
-  )
-    return Infinity;
-  const latitudeA = Cesium.Math.toRadians(a.latitude);
-  const latitudeB = Cesium.Math.toRadians(b.latitude);
-  const latitudeDelta = Cesium.Math.toRadians(b.latitude - a.latitude);
-  const longitudeDelta = Cesium.Math.toRadians(b.longitude - a.longitude);
-  const haversine =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(latitudeA) *
-      Math.cos(latitudeB) *
-      Math.sin(longitudeDelta / 2) ** 2;
-  return (
-    6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  return greatCircleMeters(
+    { lat: a?.latitude, lon: a?.longitude },
+    { lat: b?.latitude, lon: b?.longitude },
   );
 }
 
@@ -184,10 +171,22 @@ export function cockpitWeatherEnabledFromStoredValue(value) {
 }
 
 /**
+ * Whether the cloud pass runs for a Cockpit subject's layer. Not in orbit:
+ * the pass fades out above 24 km (weatherAltitudeFactors), so a satellite
+ * would pay for it and see nothing. The saved preference is left as it is
+ * for the next aircraft or bridge; cloud cover from orbit is the Weather
+ * layer's.
+ * @param {string|null|undefined} layerId
+ */
+export function cockpitCloudsShowFor(layerId) {
+  return layerId !== 'satellites';
+}
+
+/**
  * Weather-backed volumetric cloud pass that exists only while cockpit mode is
  * active. It owns no Cesium fog/post-process stages and cannot affect map mode.
  */
-export class CockpitCloudEffectsController {
+class CockpitCloudEffectsController {
   constructor(viewer, { weatherService = applicationServices.weather } = {}) {
     this.weatherService = weatherService;
     this.viewer = viewer;
@@ -220,10 +219,12 @@ export class CockpitCloudEffectsController {
     this.enabled = this.readEnabledPreference();
 
     this.onResize = () => this.resize();
+    this.orbit = false;
     this.onCockpitMode = (event) => {
       const active =
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
+      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
       if (active && this.enabled) this.start();
       else this.stop();
     };
@@ -357,7 +358,8 @@ export class CockpitCloudEffectsController {
       this.destroyed ||
       !this.enabled ||
       this.frame !== null ||
-      this.suspended
+      this.suspended ||
+      this.orbit
     )
       return;
     if (!this.gl) {

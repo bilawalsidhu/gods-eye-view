@@ -44,7 +44,7 @@ CCTV_NSW_ENABLED="${CCTV_NSW_ENABLED:-1}"
 CCTV_NSW_MAX_SOURCES="${CCTV_NSW_MAX_SOURCES:-250}"
 CCTV_CALGARY_ENABLED="${CCTV_CALGARY_ENABLED:-1}"
 CCTV_CALGARY_MAX_SOURCES="${CCTV_CALGARY_MAX_SOURCES:-220}"
-CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-4000}"
+CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-7350}"
 
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are
@@ -347,7 +347,7 @@ case "${OPENSKY_AUTH_MODE}" in
     echo "OpenSky auth: disabled (anonymous mode)"
     ;;
 esac
-[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC disabled"
+[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC off unless a Codex ChatGPT sign-in is selected in Provider Settings (experimental)"
 [[ -n "${AISSTREAM_API_KEY}" ]] && echo "AISStream key (live vessels): configured" || echo "AISStream key (live vessels): not set — ships layer empty"
 if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
   echo "Startup map: Google Photorealistic 3D Tiles (direct)"

@@ -427,6 +427,9 @@ try {
     shot.interactions = [];
     fields[0].value = JSON.stringify(scene);
     fields[1].value = JSON.stringify(shot);
+    // Typing fires input; the dialog reads its fields from those events.
+    for (const field of fields)
+      field.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await page.click('[data-director-apply-details]');
   await page.waitForFunction(

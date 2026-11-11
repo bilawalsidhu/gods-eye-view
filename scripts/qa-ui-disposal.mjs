@@ -40,14 +40,12 @@ try {
         cancelable: true,
       }),
     );
+    // The title bar renders the readout on Vue's next flush.
+    await Promise.resolve();
     const fpsReadout = document.querySelector('.frame-rate-readout');
     const fpsWasVisible = fpsReadout && !fpsReadout.hidden;
     const watchObserver = (name) => {
-      const owner =
-        name === '_draggableResizeObserver'
-          ? ui._panelPosition
-          : ui._panelLayout;
-      const observer = owner[name];
+      const observer = ui._panelLayout[name];
       if (!observer) return false;
       const disconnect = observer.disconnect.bind(observer);
       counts[name] = 0;
@@ -59,7 +57,6 @@ try {
     };
     const observed = [
       '_commandDockTrayObserver',
-      '_draggableResizeObserver',
       '_leftStackResizeObserver',
       '_rightStackResizeObserver',
       '_leftStackMutationObserver',
@@ -123,10 +120,18 @@ try {
       if (type === 'resize' && callback === resizeHandler) counts.resize++;
       return removeEventListener.call(this, type, callback, options);
     };
-    const { setSplitFlapText } = await import('/src/splitFlap.js');
+    // Through the owner, so its copy of the label and the store agree.
     const feedbackLabel = document.getElementById('global-loading-label');
-    setSplitFlapText(feedbackLabel, 'CHECKING LIVE DATA');
-    setSplitFlapText(feedbackLabel, 'LOAD COMPLETE');
+    for (const label of ['CHECKING LIVE DATA', 'LOAD COMPLETE']) {
+      ui._feedback._publishLoading({
+        hidden: false,
+        state: 'loading',
+        label,
+        detail: '',
+      });
+      // Vue renders on a microtask; a task later the label shows it.
+      await new Promise((resolve) => setTimeout(resolve));
+    }
     const permanentText =
       feedbackLabel.querySelector('.gev-flap-text')?.firstChild;
     let stateNotifications = 0;
@@ -139,7 +144,6 @@ try {
       const focusBefore = document.activeElement;
       const stoppedBeforeRestoration =
         ui._panelLayout.destroyed &&
-        ui._panelPosition.destroyed &&
         ui._feedback.destroyed &&
         ui._recording.destroyed &&
         cockpit.destroyed &&
@@ -194,11 +198,7 @@ try {
               counts[field] === 1 && ui._contextControls[field] === null,
           ),
         observersReleased: observed.every(
-          (name) =>
-            counts[name] === 1 &&
-            (name === '_draggableResizeObserver'
-              ? ui._panelPosition
-              : ui._panelLayout)[name] === null,
+          (name) => counts[name] === 1 && ui._panelLayout[name] === null,
         ),
         subscriptionReleased:
           counts.cctv === 1 && ui._cctvControls._cctvUnsubscribe === null,
@@ -212,6 +212,7 @@ try {
           feedbackLabel.querySelector('.gev-flap-text')?.firstChild ===
             permanentText &&
           permanentText.data === 'LOAD COMPLETE' &&
+          document.getElementById('global-loading-status').hidden &&
           !feedbackLabel.classList.contains('gev-flap-active') &&
           feedbackLabel.querySelector('.gev-flap-cells')?.childNodes.length ===
             0,
@@ -221,7 +222,9 @@ try {
           ui._lifetime.timers.size === 0 &&
           ui._lifetime.removers.size === 0,
         frameRateReleased:
-          fpsWasVisible && !fpsReadout.isConnected && fpsReadout.hidden,
+          fpsWasVisible &&
+          !fpsReadout.isConnected &&
+          !document.querySelector('.frame-rate-readout'),
         stateStopped: stateNotifications === 0,
         idempotent: once === JSON.stringify(counts),
       };

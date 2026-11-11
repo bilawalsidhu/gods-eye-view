@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../sources/capability.js';
 import { requireFeatureSource } from '../sources/featureSource.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
 import {
@@ -10,6 +11,7 @@ import {
   approximateAreaM2,
   approximateDistanceM,
   pointInPolygon,
+  nearestPointOnLines,
 } from '../sources/featureGeometry.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
@@ -19,14 +21,90 @@ import {
   findNaturalRegion,
 } from '../data/naturalEarthRegions.js';
 import {
+  findAdminArea,
+  findAdminAreaAt,
+  polygonsContain as polygonsContainPoint,
+} from '../data/adminBoundaries.js';
+import {
+  findNeighborhoodArea,
+  findNeighborhoodAreaAt,
+  findPlaceArea,
+  findPlaceAreaAt,
+  NEIGHBORHOOD_NEAR_KM,
+  normalizePlaceName,
+  PLACE_NEAR_KM,
+} from '../data/placeBoundaries.js';
+import {
   registerDynamicCredit,
   NATURAL_EARTH_CREDIT,
+  US_CENSUS_CREDIT,
+  OSM_CREDIT,
+  OPENMAPTILES_CREDIT,
+  WOF_CREDIT,
 } from '../data/dataCredits.js';
+import { createOutlineRungs } from './outlineRungs.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
+/** Prepare only local dateline outlines for planar admission and centering. */
+function localOutlineFrame(fp) {
+  const original = { ring: fp?.ring, polygons: fp?.polygons, reference: null };
+  if (!Array.isArray(fp?.ring) || fp.ring.length < 3) return original;
+  let west = Infinity;
+  let east = -Infinity;
+  for (const [lon] of fp.ring) {
+    west = Math.min(west, lon);
+    east = Math.max(east, lon);
+  }
+  if (east - west <= 180) return original;
+  const reference = fp.ring[0][0];
+  west = Infinity;
+  east = -Infinity;
+  const shift = (ring) =>
+    ring.map(([lon, lat]) => {
+      const x = lon - 360 * Math.round((lon - reference) / 360);
+      west = Math.min(west, x);
+      east = Math.max(east, x);
+      return [x, lat];
+    });
+  const ring = shift(fp.ring);
+  const polygons = Array.isArray(fp.polygons)
+    ? fp.polygons.map((part) => part.map(shift))
+    : fp.polygons;
+  // Shapes still spanning half the globe retain their existing behavior. Source coordinates
+  // are never rewritten, including holes and unrelated multipart geometry.
+  if (!Number.isFinite(east - west) || east - west >= 180) return original;
+  return { ring, polygons, reference };
+}
+
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
-export const REGION_FALLBACK_BUDGET_MS = 3_000;
+const REGION_FALLBACK_BUDGET_MS = 3_000;
+
+/** How far a street may run from its anchor when the ribbon holds neither. */
+const STREET_SNAP_MAX_M = 100;
+
+/**
+ * Names that end like a landmark rather than a district: "Central Park",
+ * "Lake Merritt"-style suffixes are checked on the last word only, so "Park
+ * Slope" and "Notting Hill" stay districts.
+ */
+const LANDMARK_NAME =
+  /\b(?:park|gardens?|square|plaza|lake|river|bay|beach|pier|harbou?r|airport|station|stadium|arena|cemetery|zoo|university|college|campus|palace|castle|cathedral|church|temple|mosque|bridge|market|mall|cent(?:er|re)|tower|museum|reservoir|forest|woods?|heath|common|green)$/i;
+
+/** The name part of an ask, before any comma qualifier. */
+function stripQualifiers(query) {
+  return String(query || '')
+    .split(',')[0]
+    .trim();
+}
+
+/** Entity facts that rule out a state/county reading of the ask. */
+const NON_ADMIN_ENTITY_KINDS = new Set([
+  'building',
+  'compound',
+  'street',
+  'point_feature',
+]);
 
 /** Own annotation lookup caches and ranking of supplied feature candidates. */
 export function createAnnotationResolver({
@@ -36,8 +114,12 @@ export function createAnnotationResolver({
     boundarySource,
     signal: lifetime,
   }),
+  // Overpass-free rungs (OpenFreeMap tiles, guarded Nominatim) around the ladder.
+  outlineRungs = createOutlineRungs(),
 } = {}) {
   requireFeatureSource(featureSource);
+  const featureOutlineCredit =
+    featureSource.outlineCredit === 'osm' ? 'osm' : null;
   lifetime?.throwIfAborted();
 
   /**
@@ -90,18 +172,6 @@ export function createAnnotationResolver({
     if (signal?.aborted) return; // superseded — never cache
     if (!definitive) return; // transient upstream failure — allow a retry
     cacheWrite(cache, key, null);
-  }
-
-  /** Wire an external AbortSignal to a local controller; returns a detach fn. */
-  function linkAbort(controller, externalSignal) {
-    if (!externalSignal) return () => {};
-    if (externalSignal.aborted) {
-      controller.abort();
-      return () => {};
-    }
-    const onAbort = () => controller.abort();
-    externalSignal.addEventListener('abort', onAbort, { once: true });
-    return () => externalSignal.removeEventListener('abort', onAbort);
   }
 
   /**
@@ -165,6 +235,21 @@ export function createAnnotationResolver({
     // locality suffixes; the types classify the entity (point-like vs area-like).
     let placesPrimary = null;
     let placeTypes = [];
+    // A coarse bundled admin-1 shape that carries a city's name (Natural
+    // Earth's 11-vertex "Paris"): kept as the fallback while the finer rungs
+    // (Census, Nominatim) try first.
+    let coarseCityShape = null;
+    let bundledCenter = null;
+    const coarseCityHolds = (point) =>
+      coarseCityShape &&
+      point &&
+      polygonsContainPoint(coarseCityShape.polygons, point.lat, point.lon);
+    const compoundAsk =
+      entityKind === 'compound' ||
+      isCampusAsk(target) ||
+      isGroundsLikeQuery(target) ||
+      isGroundsLikeQuery(labelHint);
+    const askNamesAdmin = Boolean(adminScopeFromAsk(target, entityKind));
     // Instrumentation (logged once per target at the end): which sources were tried and what they returned.
     const trace = {
       query: String(target || '').trim(),
@@ -175,6 +260,40 @@ export function createAnnotationResolver({
     // Guard bypass is an ASK-SIDE fact. A returned admin type can be a wrong match
     // ("the Texas Capitol" → the state), so geocode types must never grant it.
     const bypassNearViewGuards = Boolean(adminScopeFromAsk(target, entityKind));
+
+    // Bundled administrative outlines resolve settled names without a lookup.
+    // Georgia uses its qualifier or camera; city/state homonyms defer to geocoding.
+    if (
+      footprint &&
+      (!Number.isFinite(lat) || !Number.isFinite(lon)) &&
+      trace.query &&
+      !compoundAsk &&
+      !NON_ADMIN_ENTITY_KINDS.has(entityKind)
+    ) {
+      const center =
+        pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+      bundledCenter = center;
+      const admin = await findAdminArea(trace.query, { near: center }).catch(
+        () => null,
+      );
+      signal?.throwIfAborted();
+      if (admin && !askNamesAdmin && isCoarseCityShape(admin))
+        coarseCityShape = admin;
+      else if (admin)
+        return bundledAdminTarget(viewer, admin, trace.query, signal);
+      // Bundled US places and neighborhoods named at or near the view. A
+      // campus, grounds or monument ask ("Stanford" as a compound, "the
+      // Capitol grounds") wants that feature, not a district of its name,
+      // and "the area around X" is drawn by the ladder below.
+      if (intent !== 'around_the_thing' && !isMonumentLikeQuery(trace.query)) {
+        const area = await bundledAreaNear(trace.query, center, {
+          entityKind,
+          viewRadiusKm: viewportProximity(viewer)?.radiusKm ?? null,
+        });
+        signal?.throwIfAborted();
+        if (area) return bundledAdminTarget(viewer, area, trace.query, signal);
+      }
+    }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       const query = String(target || '').trim();
@@ -301,7 +420,10 @@ export function createAnnotationResolver({
       }
     }
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon))
+      return coarseCityHolds(bundledCenter)
+        ? bundledAdminTarget(viewer, coarseCityShape, trace.query, signal)
+        : null;
 
     // Monument/memorial/statue names geocode unreliably — Google scatters them across the city (e.g.
     // several Texas Capitol monuments landed blocks-to-miles apart, looking "all over the map"). When
@@ -366,7 +488,9 @@ export function createAnnotationResolver({
               `osmSnap=${trace.osmSnap} → FINAL source=rejected (proximity gate, ${drift.driftKm.toFixed(0)}km > ${drift.limitKm.toFixed(0)}km)`,
           );
         }
-        return null;
+        return coarseCityHolds(bundledCenter)
+          ? bundledAdminTarget(viewer, coarseCityShape, trace.query, signal)
+          : null;
       }
     }
 
@@ -386,7 +510,18 @@ export function createAnnotationResolver({
     // an admin boundary for a city/state, the enclosing compound for a mall/campus, a single
     // building for a premise. The voice model's entityKind (an entity FACT) refines an
     // unresolved 'auto' scope only — real geocode types always win.
-    const baseScope = refineScope(scopeFromTypes(geocodeTypes), entityKind);
+    // A campus or grounds ask ("Stanford University", "Stanford campus",
+    // "the Capitol grounds", in the target or its label) or a compound by
+    // entity fact wants that compound even when the geocoder types the town
+    // or the state: never a Census place, neighborhood or admin boundary.
+    const typedScope = refineScope(scopeFromTypes(geocodeTypes), entityKind);
+    const baseScope =
+      compoundAsk &&
+      ['country', 'state', 'county', 'city', 'neighborhood'].includes(
+        typedScope,
+      )
+        ? 'compound'
+        : typedScope;
     // Point-like targets (monuments/statues/memorials/…) resolve POINT-FIRST: only an
     // (almost) exactly-named, monument-scale polygon may replace the point; a nearby polygon
     // sharing locality words must not (docs/field-test-rootcause-2026-06-30.md §1).
@@ -415,7 +550,8 @@ export function createAnnotationResolver({
      * The inline path awaits it right here; progressive callers (deferFootprint) invoke it
      * AFTER the anchor mark is drawn and upgrade the mark in place.
      */
-    const resolveOutline = async () => {
+    const resolveBaseOutline = async () => {
+      signal?.throwIfAborted();
       let scope = baseScope;
       const isAdmin =
         scope === 'country' ||
@@ -441,8 +577,10 @@ export function createAnnotationResolver({
         const ne = await lookupNaturalRegionOutline(target, lat, lon).catch(
           () => null,
         );
+        signal?.throwIfAborted();
         if (ne) {
           registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
+          traceBundledOutline(ne.name, 'natural-earth');
           const neCentroid = ringCentroid(ne.ring);
           return {
             ring: ne.ring,
@@ -450,6 +588,7 @@ export function createAnnotationResolver({
             buildingHeight: null,
             synthesized: false,
             naturalRegion: ne.name,
+            outlineSource: 'natural-earth',
             lat: neCentroid?.lat ?? lat,
             lon: neCentroid?.lon ?? lon,
             height: sampleGroundHeight(
@@ -474,8 +613,45 @@ export function createAnnotationResolver({
         // GROUNDS-like ask must not short-circuit here: the model phrases "the Capitol
         // grounds" as around_the_thing, but the grounds ARE the thing — the real enclosing
         // polygon (below) beats a 400 m disc (field test 8's "spherical round one").
+        const availability = await fetchEnclosingArea(
+          lat,
+          lon,
+          signal,
+          matchName,
+        );
+        if (
+          isUnavailableCapability(availability) ||
+          isRateLimitedOutcome(availability)
+        )
+          return availability;
+        if (availability === undefined) return undefined;
         fp = synthesizeBufferedArea(lat, lon, AROUND_LANDMARK_RADIUS_M);
       } else if (isAdmin) {
+        // A country, state or county the geocoder typed: the bundled unit that carries the
+        // name AND contains the geocoded point (offline; the pack's ambiguity
+        // marks don't apply — the geocoder already chose "Georgia" the state).
+        if (scope === 'state' || scope === 'county' || scope === 'country') {
+          const admin = await findAdminAreaAt(
+            [target, matchName],
+            lat,
+            lon,
+            scope,
+          ).catch(() => null);
+          signal?.throwIfAborted();
+          if (admin && !askNamesAdmin && isCoarseCityShape(admin))
+            coarseCityShape ||= admin;
+          else if (admin) return bundledAdminOutline(viewer, admin, signal);
+        }
+        // A geocoded US city, town or CDP: the Census place that holds it.
+        if (scope === 'city') {
+          const place = await findPlaceAreaAt(
+            [target, matchName],
+            lat,
+            lon,
+          ).catch(() => null);
+          signal?.throwIfAborted();
+          if (place) return bundledAdminOutline(viewer, place, signal);
+        }
         // Pure admin: only an admin boundary is correct — never fall back to a
         // building/landuse (a city is never a single building).
         fp = await fetchAdminArea(lat, lon, matchName, scope, signal);
@@ -485,7 +661,21 @@ export function createAnnotationResolver({
         // resolve here instantly to a REAL boundary, sidestepping the slow/flaky live-Overpass
         // path that times out and falls back to points (see docs/field-test-2-analysis.md).
         const ext = await lookupNeighborhoodRing(lat, lon, matchName);
-        if (ext) fp = { ring: ext.ring, kind: 'area', heightM: null };
+        signal?.throwIfAborted();
+        if (ext) {
+          traceBundledOutline(ext.name || matchName, 'datasf');
+          fp = { ring: ext.ring, kind: 'area', heightM: null };
+        }
+        // THEN a bundled Who's On First neighborhood carrying the name at the point.
+        if (!fp) {
+          const wof = await findNeighborhoodAreaAt(
+            [target, matchName],
+            lat,
+            lon,
+          ).catch(() => null);
+          signal?.throwIfAborted();
+          if (wof) return bundledAdminOutline(viewer, wof, signal);
+        }
         // Else fall through to the OSM admin/place → named-landuse → synthesis ladder. Each
         // returns a footprint, null (definitively no polygon), or undefined (transient
         // upstream failure). Synthesize a blob (the "Mission" problem, research §3b) ONLY
@@ -501,6 +691,7 @@ export function createAnnotationResolver({
           // A neighborhood whose canonical name carries a city suffix ("Presidio of San
           // Francisco") can match the CITY admin; treat an oversized admin as a DEFINITIVE
           // no-neighborhood-polygon so it still falls through to the named-landuse path.
+          if (isUnavailableCapability(adminFp)) return adminFp;
           if (adminFp && exceedsScopeArea(adminFp, scope)) adminFp = null;
           if (adminFp) {
             fp = adminFp;
@@ -515,6 +706,7 @@ export function createAnnotationResolver({
               signal,
               'strict',
             );
+            if (isUnavailableCapability(footFp)) return footFp;
             if (footFp) {
               fp = footFp;
             } else if (footFp === null) {
@@ -531,6 +723,7 @@ export function createAnnotationResolver({
                 signal,
                 'loose',
               );
+              if (isUnavailableCapability(looseFp)) return looseFp;
               if (looseFp && looseFp.kind !== 'building') fp = looseFp;
               else if (looseFp === null)
                 fp = synthesizeBufferedArea(lat, lon, NEIGHBORHOOD_RADIUS_M);
@@ -580,6 +773,7 @@ export function createAnnotationResolver({
         // synthesized disc only when OSM DEFINITIVELY has none.
         if (groundsLike && (fp === null || fp?.kind === 'building')) {
           const area = await fetchEnclosingArea(lat, lon, signal, matchName);
+          if (isUnavailableCapability(area)) return area;
           if (area) {
             fp = area; // real grounds polygon (synthesized:false) — beats both the dome and a disc
             // It's a grounds/compound feature (already capped at SCOPE_AREA_CAP_M2.compound inside
@@ -607,6 +801,12 @@ export function createAnnotationResolver({
           }
         }
       }
+      return finishOutline(fp, scope);
+    };
+
+    /** Validate a footprint for its scope and re-centre it (resolveOutline's patch). */
+    const finishOutline = (fp, scope) => {
+      const frame = localOutlineFrame(fp);
       // Scope sanity: reject a real footprint whose area is wildly wrong for the asked
       // scope (a building/compound/neighborhood intent must never draw a state-sized
       // blob). Synthesized discs are deliberately sized and exempt.
@@ -615,20 +815,50 @@ export function createAnnotationResolver({
         !fp.synthesized &&
         Array.isArray(fp.ring) &&
         fp.ring.length >= 3 &&
-        exceedsScopeArea(fp, scope)
+        exceedsScopeArea(frame, scope)
       ) {
         fp = null;
       }
-      if (isRateLimitedOutcome(fp)) return fp;
+      if (isUnavailableCapability(fp) || isRateLimitedOutcome(fp)) return fp;
       if (fp === undefined) return undefined; // TRANSIENT — a backoff retry may still find it
       if (!fp || !Array.isArray(fp.ring) || fp.ring.length < 3) return null;
-      const centroid = ringCentroid(fp.ring);
+      let centroid = ringCentroid(frame.ring);
       if (!centroid) return null;
+      // An outer-ring mean can lie in a hole or outside a concave part. Keep
+      // a filled original anchor or decline, without changing ordinary centering
+      // or inventing a new interior point.
+      if (
+        Array.isArray(frame.polygons) &&
+        !polygonsContainPoint(frame.polygons, centroid.lat, centroid.lon)
+      ) {
+        const anchorLon =
+          frame.reference === null
+            ? lon
+            : lon - 360 * Math.round((lon - frame.reference) / 360);
+        if (polygonsContainPoint(frame.polygons, lat, anchorLon)) {
+          centroid = { lat, lon };
+        } else if (Array.isArray(fp.lines)) {
+          // A bent street's ribbon rarely holds its ring mean, and a geocoded
+          // anchor can sit beside the centreline: centre on the street itself,
+          // only when it runs beside the anchor.
+          const onStreet = nearestPointOnLines(fp.lines, lat, lon);
+          if (!onStreet || onStreet.distanceM > STREET_SNAP_MAX_M) return null;
+          centroid = { lat: onStreet.lat, lon: onStreet.lon };
+        } else {
+          return null;
+        }
+      }
+      if (
+        frame.reference !== null &&
+        (centroid.lon < -180 || centroid.lon >= 180)
+      )
+        centroid.lon = ((((centroid.lon + 180) % 360) + 360) % 360) - 180;
       // Same drift bound as the anchor gate: a polygon whose centroid would drag a good
       // anchor out of plausibility is the wrong feature — drop it, keep the point.
       if (
         fromGeocode &&
         !bypassNearViewGuards &&
+        !allowDistant &&
         gateDrift(centroid.lat, centroid.lon)
       )
         return null;
@@ -637,23 +867,69 @@ export function createAnnotationResolver({
         footprintKind: fp.kind,
         buildingHeight: fp.heightM,
         synthesized: Boolean(fp.synthesized),
+        outlineCredit: fp.outlineCredit || null,
+        ...(Array.isArray(fp.polygons) ? { polygons: fp.polygons } : {}),
+        ...(fp.adminArea ? { adminArea: fp.adminArea } : {}),
+        ...(fp.adminLevel ? { adminLevel: fp.adminLevel } : {}),
         lat: centroid.lat,
         lon: centroid.lon,
         height: sampleGroundHeight(viewer, centroid.lon, centroid.lat),
       };
     };
 
+    // Streets and pointed-at buildings from tiles, then this ladder, then the
+    // guarded Nominatim outline (see outlineRungs.js).
+    const outlineContext = {
+      scope: baseScope,
+      target,
+      matchName,
+      lat,
+      lon,
+      fromName: fromGeocode || source === 'places' || source === 'osm-local',
+      pointLike,
+      groundsLike,
+      around: intent === 'around_the_thing',
+      view: viewportProximity(viewer),
+      signal,
+      credit: (kind) =>
+        registerDynamicCredit(
+          viewer,
+          kind === 'tiles' ? OPENMAPTILES_CREDIT : OSM_CREDIT,
+        ),
+    };
+    const resolveOutline = async () => {
+      const result = await outlineRungs.resolve(outlineContext, {
+        base: resolveBaseOutline,
+        finish: finishOutline,
+      });
+      signal?.throwIfAborted();
+      // Nothing finer answered (no polygon, Nominatim off, busy or capped):
+      // the coarse bundled shape beats a point.
+      if (
+        coarseCityHolds({ lat, lon }) &&
+        !(result?.ring && !result.synthesized)
+      )
+        return bundledAdminOutline(viewer, coarseCityShape, signal);
+      return result;
+    };
+
     let ring = null;
     let footprintKind = null; // 'building' | 'area'
     let buildingHeight = null; // meters, only for buildings
+    let outlineUnavailable = false;
     let synthesized = false; // true = buffered/approximate area, render dashed/feathered
+    let polygons = null; // every part of a multi-part outline, when known
+    let outlineCredit = null;
     if (footprint && !deferFootprint) {
       const fp = await resolveOutline();
-      if (fp && !isRateLimitedOutcome(fp)) {
+      outlineUnavailable = isUnavailableCapability(fp);
+      if (fp && !outlineUnavailable && !isRateLimitedOutcome(fp)) {
         ring = fp.ring;
         footprintKind = fp.footprintKind;
         buildingHeight = fp.buildingHeight;
         synthesized = fp.synthesized;
+        polygons = fp.polygons || null;
+        outlineCredit = fp.outlineCredit || null;
         // Re-center the anchor on the resolved footprint centroid.
         lat = fp.lat;
         lon = fp.lon;
@@ -680,6 +956,9 @@ export function createAnnotationResolver({
       label,
       source,
       synthesized,
+      outlineUnavailable,
+      outlineCredit,
+      ...(polygons ? { polygons } : {}),
       viewport: placeViewport,
       ...(footprint && deferFootprint ? { resolveOutline } : {}),
     };
@@ -719,6 +998,191 @@ export function createAnnotationResolver({
   const GROUNDS_RADIUS_M = 300; // "X grounds/compound/campus" loose disc when OSM has no polygon
   const GROUNDS_RADIUS_MIN_M = 150; // viewport-derived grounds disc is clamped to this band so a tiny
   const GROUNDS_RADIUS_MAX_M = 1200; // place can't shrink to a dot, nor a city-wide viewport balloon
+  const COARSE_CITY_MAX_KM2 = 5_000; // city-sized admin-1 units (see isCoarseCityShape)
+  const COARSE_CITY_MAX_VERTICES = 32;
+
+  /** Credit the pack a bundled boundary came from. */
+  function creditAdminSource(viewer, admin) {
+    const credit = {
+      'natural-earth': NATURAL_EARTH_CREDIT,
+      'us-census': US_CENSUS_CREDIT,
+      wof: WOF_CREDIT,
+    }[admin.source];
+    if (credit) registerDynamicCredit(viewer, credit);
+  }
+
+  /**
+   * The bundled US place or neighborhood an ask names at or near the view,
+   * from Census places, the San Francisco DataSF pack (first in SF), then
+   * Who's On First. How far "near" reaches follows the view (half its
+   * radius); a state-qualified place ("Springfield, Illinois") needs no
+   * view. A district ask takes a neighborhood first and a place only when
+   * the view is inside it ("Richmond" over SF is not Richmond, CA). Without
+   * an entity kind the candidate that holds the view wins, else the nearer.
+   * A name that ends like a landmark ("Central Park", "Lake Merritt") is
+   * left to the landmark ladder unless the ask is a district.
+   */
+  async function bundledAreaNear(
+    query,
+    center,
+    { entityKind = null, viewRadiusKm = null } = {},
+  ) {
+    const district = entityKind === 'district';
+    if (!district && LANDMARK_NAME.test(stripQualifiers(query))) return null;
+    const reach = Number.isFinite(viewRadiusKm) ? viewRadiusKm / 2 : null;
+    const clamp = (km, lo, hi) =>
+      km === null ? hi : Math.min(hi, Math.max(lo, km));
+    const placeReach = district ? 0 : clamp(reach, 3, PLACE_NEAR_KM);
+    const place = await findPlaceArea(query, {
+      near: center,
+      nearKm: placeReach,
+    }).catch(() => null);
+    const holds = (area) =>
+      Boolean(center) &&
+      polygonsContainPoint(area.polygons, center.lat, center.lon);
+    // A district ask only takes a place the view is inside (or one a state
+    // qualifier named outright).
+    const placeOk =
+      place && (!district || holds(place) || /,/.test(query)) ? place : null;
+    if (!center) return placeOk;
+    let hood = null;
+    const sf = await lookupNeighborhoodRing(center.lat, center.lon, query, {
+      exact: true,
+    }).catch(() => null);
+    if (sf) hood = sfNeighborhoodArea(sf);
+    else
+      hood = await findNeighborhoodArea(query, {
+        near: center,
+        nearKm: clamp(reach, 1, NEIGHBORHOOD_NEAR_KM),
+      }).catch(() => null);
+    // Outside a district ask, an alternate name unrelated to the name is too
+    // weak: Se in Sao Paulo lists "Sao Paulo" among its names, and "outline
+    // Sao Paulo" means the city ("Richmond" for Richmond District still counts).
+    // Whole words: an alias hit on "York" does not keep "Yorkville".
+    if (
+      !district &&
+      hood?.byAlias &&
+      !` ${normalizePlaceName(hood.name)} `.includes(
+        ` ${normalizePlaceName(stripQualifiers(query))} `,
+      )
+    )
+      hood = null;
+    if (!hood || !placeOk) return district ? hood || placeOk : placeOk || hood;
+    if (district) return hood;
+    const hoodHolds = holds(hood);
+    const placeHolds = holds(placeOk);
+    if (hoodHolds !== placeHolds) return hoodHolds ? hood : placeOk;
+    const distance = (area) =>
+      approximateDistanceM(
+        center.lat,
+        center.lon,
+        area.label.lat,
+        area.label.lon,
+      );
+    return distance(hood) <= distance(placeOk) ? hood : placeOk;
+  }
+
+  /** An SF DataSF ring in the bundled-area shape `bundledAdminTarget` takes. */
+  function sfNeighborhoodArea({ ring, name }) {
+    const lons = ring.map((p) => p[0]);
+    const lats = ring.map((p) => p[1]);
+    return {
+      kind: 'neighborhood',
+      name,
+      region: null,
+      source: 'datasf',
+      polygons: [[ring]],
+      ring,
+      bbox: [
+        Math.min(...lons),
+        Math.min(...lats),
+        Math.max(...lons),
+        Math.max(...lats),
+      ],
+      label: ringCentroid(ring),
+      candidates: 1,
+    };
+  }
+
+  /**
+   * Outline patch (resolveOutline's contract) for a bundled administrative unit.
+   * `ring` is the main part, closed; `polygons` carries every part with its
+   * holes (Hawaii's islands, Berlin inside Brandenburg) for renderers that
+   * draw them. Like the Natural Earth rung, it bypasses the scope caps and the
+   * centroid drift bound: the unit IS the asked scope.
+   */
+  function bundledAdminOutline(viewer, admin, signal) {
+    signal?.throwIfAborted();
+    creditAdminSource(viewer, admin);
+    traceBundledOutline(admin.name, admin.source, admin.polygons?.length);
+    const { lat, lon } = admin.label;
+    return {
+      ring: closeRing([...admin.ring]), // copy: closeRing mutates, the pack is shared
+      polygons: admin.polygons,
+      footprintKind: 'area',
+      buildingHeight: null,
+      synthesized: false,
+      adminArea: admin.name,
+      outlineSource: admin.source,
+      lat,
+      lon,
+      height: sampleGroundHeight(viewer, lon, lat),
+    };
+  }
+
+  /**
+   * Whether a bundled unit is too coarse to stand for a city of its name: a
+   * Natural Earth admin-1 at city size (up to 5,000 km²) drawn with fewer
+   * than 32 vertices. Paris (11), Buenos Aires (11), Washington DC (9),
+   * Vienna and Prague (23) and Seoul (28) are; Berlin (48), Hamburg (43),
+   * Bremen (39) and every larger state are not. Countries never are.
+   */
+  function isCoarseCityShape(admin) {
+    if (admin?.source !== 'natural-earth' || admin.kind !== 'state')
+      return false;
+    if (!(admin.areaKm2 <= COARSE_CITY_MAX_KM2)) return false;
+    const vertices = (admin.polygons || []).reduce(
+      (n, poly) => n + poly.reduce((m, ring) => m + ring.length, 0),
+      0,
+    );
+    return vertices < COARSE_CITY_MAX_VERTICES;
+  }
+
+  /** One trace line per outline a bundled pack answered (same shape as outlineRungs). */
+  function traceBundledOutline(name, source, parts = 1) {
+    console.log(
+      `[Outline] "${name}": bundled → ${source} (${parts || 1} part(s))`,
+    );
+  }
+
+  /** A complete resolved target for a bundled administrative unit (no outline pending). */
+  function bundledAdminTarget(viewer, admin, query, signal) {
+    const outline = bundledAdminOutline(viewer, admin, signal);
+    const [west, south, east, north] = admin.bbox;
+    console.log(
+      `[Resolver] "${query}": bundled ${admin.kind} "${admin.name}"` +
+        `${admin.region ? `, ${admin.region}` : ''} (${admin.source}, ` +
+        `${admin.polygons.length} part(s), ${admin.candidates} candidate(s)) → FINAL source=bundled`,
+    );
+    return {
+      lon: outline.lon,
+      lat: outline.lat,
+      height: outline.height,
+      ring: outline.ring,
+      polygons: outline.polygons,
+      footprintKind: 'area',
+      buildingHeight: null,
+      label: admin.name,
+      source: 'bundled',
+      outlineSource: admin.source,
+      synthesized: false,
+      outlineUnavailable: false,
+      viewport: {
+        low: { latitude: south, longitude: west },
+        high: { latitude: north, longitude: east },
+      },
+    };
+  }
 
   /**
    * Synthesize an approximate circular AREA by buffering a label point. Returns a ring
@@ -1004,7 +1468,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(candidates)) return candidates;
+    if (isUnavailableCapability(candidates) || isRateLimitedOutcome(candidates))
+      return candidates;
     if (!candidates) return undefined; // transient upstream failure (vs null = definitive miss)
 
     const queryWords = normalizedWords(query);
@@ -1067,7 +1532,8 @@ export function createAnnotationResolver({
     // without first trying the place= polygon (and a named landuse via the caller).
     if (scope === 'neighborhood' && (!best || bestCoverage < 0.8)) {
       const place = await fetchPlaceArea(lat, lon, query, signal);
-      if (isRateLimitedOutcome(place)) return place;
+      if (isUnavailableCapability(place) || isRateLimitedOutcome(place))
+        return place;
       if (place) {
         cacheWrite(footprintCache, cacheKey, place);
         return place;
@@ -1097,7 +1563,8 @@ export function createAnnotationResolver({
       const relEls = await featureSource.getAreaGeometry(cand.el.id, {
         signal: signal,
       });
-      if (isRateLimitedOutcome(relEls)) return relEls;
+      if (isUnavailableCapability(relEls) || isRateLimitedOutcome(relEls))
+        return relEls;
       if (relEls === null) {
         transient = true;
         break;
@@ -1118,7 +1585,12 @@ export function createAnnotationResolver({
               ? 40
               : 120;
       ring = simplifyRing(ring, tolM);
-      const fp = { ring, kind: 'area', heightM: null };
+      const fp = {
+        ring,
+        kind: 'area',
+        heightM: null,
+        outlineCredit: featureOutlineCredit,
+      };
 
       // Scope sanity BEFORE caching: a city-suffixed neighborhood name ("Downtown San
       // Francisco") can match the CITY admin. Caching an oversized ring would poison the
@@ -1126,7 +1598,8 @@ export function createAnnotationResolver({
       if (exceedsScopeArea(fp, scope)) {
         if (scope === 'neighborhood') {
           const place = await fetchPlaceArea(lat, lon, query, signal);
-          if (isRateLimitedOutcome(place)) return place;
+          if (isUnavailableCapability(place) || isRateLimitedOutcome(place))
+            return place;
           if (place) {
             cacheWrite(footprintCache, cacheKey, place);
             return place;
@@ -1149,7 +1622,8 @@ export function createAnnotationResolver({
     // caller relies on that to gate named-landuse fallback / synthesis.
     if (scope === 'neighborhood') {
       const place = await fetchPlaceArea(lat, lon, query, signal);
-      if (isRateLimitedOutcome(place)) return place;
+      if (isUnavailableCapability(place) || isRateLimitedOutcome(place))
+        return place;
       if (place) {
         cacheWrite(footprintCache, cacheKey, place);
         return place;
@@ -1171,7 +1645,7 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(els)) return els;
+    if (isUnavailableCapability(els) || isRateLimitedOutcome(els)) return els;
     if (els === null) return undefined; // transient upstream failure (vs [] = no match)
     let bestRing = null;
     let bestScore = 0;
@@ -1200,7 +1674,14 @@ export function createAnnotationResolver({
         bestRing = closeRing(coords.map((p) => [p.lon, p.lat]));
       }
     }
-    return bestRing ? { ring: bestRing, kind: 'area', heightM: null } : null;
+    return bestRing
+      ? {
+          ring: bestRing,
+          kind: 'area',
+          heightM: null,
+          outlineCredit: featureOutlineCredit,
+        }
+      : null;
   }
 
   /**
@@ -1220,7 +1701,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(areaEls)) return areaEls;
+    if (isUnavailableCapability(areaEls) || isRateLimitedOutcome(areaEls))
+      return areaEls;
     if (areaEls) {
       let bestRing = null;
       let bestScore = 0;
@@ -1242,7 +1724,12 @@ export function createAnnotationResolver({
         }
       }
       if (bestRing) {
-        const fp = { ring: bestRing, kind: 'area', heightM: null };
+        const fp = {
+          ring: bestRing,
+          kind: 'area',
+          heightM: null,
+          outlineCredit: featureOutlineCredit,
+        };
         cacheWrite(footprintCache, cacheKey, fp);
         return fp;
       }
@@ -1253,7 +1740,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(wayEls)) return wayEls;
+    if (isUnavailableCapability(wayEls) || isRateLimitedOutcome(wayEls))
+      return wayEls;
     if (wayEls) {
       const segments = [];
       for (const el of wayEls) {
@@ -1272,6 +1760,7 @@ export function createAnnotationResolver({
             ring: bufferCorridor(line, 11),
             kind: 'area',
             heightM: null,
+            outlineCredit: featureOutlineCredit,
           };
           cacheWrite(footprintCache, cacheKey, fp);
           return fp;
@@ -1326,7 +1815,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(elements)) return elements;
+    if (isUnavailableCapability(elements) || isRateLimitedOutcome(elements))
+      return elements;
     if (elements === null || signal?.aborted) return undefined;
     const fp = selectFootprint(elements, lat, lon, query, mode);
     if (fp) {
@@ -1374,7 +1864,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(elements)) return elements;
+    if (isUnavailableCapability(elements) || isRateLimitedOutcome(elements))
+      return elements;
     if (elements === null) return undefined; // transient upstream failure (vs [] = definitive no-match)
 
     const queryWords = normalizedWords(query);
@@ -1408,7 +1899,12 @@ export function createAnnotationResolver({
         areaM2 < bestArea * 0.999 ||
         (areaM2 <= bestArea * 1.05 && nameMatch && !bestNameMatch); // near-tie: name-match wins
       if (better) {
-        best = { ring: ringLonLat, kind: 'area', heightM: null };
+        best = {
+          ring: ringLonLat,
+          kind: 'area',
+          heightM: null,
+          outlineCredit: featureOutlineCredit,
+        };
         bestArea = areaM2;
         bestNameMatch = nameMatch;
       }
@@ -1434,6 +1930,19 @@ export function createAnnotationResolver({
   /** A target that reads like an enclosing GROUNDS / COMPOUND / CAMPUS (e.g. "Texas Capitol grounds")
    *  rather than a single building — used to synthesize a loose-footprint disc when OSM has no real
    *  polygon, instead of failing outright. */
+  /**
+   * A university, college or campus named as such: "Stanford University",
+   * "Boston College", "University of Texas", "Stanford campus". Towns named
+   * after one ("College Station", "University Park") are not.
+   */
+  function isCampusAsk(query) {
+    const text = stripQualifiers(String(query || '')).trim();
+    return (
+      /\b(?:university|college|campus)$/i.test(text) ||
+      /^(?:the\s+)?(?:university|college)\s+of\b/i.test(text)
+    );
+  }
+
   function isGroundsLikeQuery(query) {
     return /\b(grounds|compound|campus|complex|quad|plaza)\b/i.test(
       String(query || ''),
@@ -1497,7 +2006,11 @@ export function createAnnotationResolver({
         pending = featureSource
           .getMonuments({ lat, lon }, { signal: undefined })
           .then((elements) => {
-            if (elements === null || isRateLimitedOutcome(elements))
+            if (
+              elements === null ||
+              isUnavailableCapability(elements) ||
+              isRateLimitedOutcome(elements)
+            )
               return null; // transient — NEVER cached (a poisoned bucket
             // would silently disable the snap for the whole session, field test 7 §1)
             const feats = [];
@@ -1653,6 +2166,7 @@ export function createAnnotationResolver({
         best = {
           ring: closeRing(coords.map((p) => [p.lon, p.lat])),
           kind: isBuilding ? 'building' : 'area',
+          outlineCredit: featureOutlineCredit,
           heightM: isBuilding
             ? (element.heightM ??
               Math.max(10, Math.min(70, Math.sqrt(Math.max(1, areaM2)) * 0.6)))
@@ -1873,8 +2387,8 @@ export function createAnnotationResolver({
   /**
    * Region ring for ANALYST queries ("how many flights over Texas / the Alps") —
    * a name-only entry point that reuses this module's boundary machinery
-   * without the annotation pipeline. Natural Earth pack first (offline,
-   * instant; largest-area match is correct for a global name-only ask), then
+   * without the annotation pipeline. Unique Natural Earth names resolve first
+   * (offline); duplicate names require a geocoded containment anchor, then
    * geocode + admin boundary for states/countries/counties (Tier A disk-cached
    * Overpass, so repeat asks are instant). Returns null when the name doesn't
    * resolve to a region-like boundary — the analyst engine reports that
@@ -1889,7 +2403,7 @@ export function createAnnotationResolver({
    * @param {AbortSignal} [signal]
    * @param {object} [placeSearch]
    * @param {{budgetMs?: number}} [options]  `Infinity` waits for the lookup.
-   * @returns {Promise<{name:string, ring:Array<[number,number]>}|{name:string, ring:null, error:'region-timeout'}|null>}
+   * @returns {Promise<{name:string, ring:Array<[number,number]>, source:string}|{name:string, ring:null, error:'region-timeout'}|null>}
    */
   async function resolveRegionRingForQuery(
     name,
@@ -1906,12 +2420,24 @@ export function createAnnotationResolver({
     const q = String(name || '').trim();
     if (!q) return null;
     const ne = await findNaturalRegion(q).catch(() => null);
-    if (ne?.polygons?.length) {
+    signal?.throwIfAborted();
+    if (ne?.candidates === 1 && ne.polygons?.length) {
       // Largest ring carries the query scope; multi-ring regions (Andes) keep
       // their main cordillera — good enough for containment counting.
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
-      if (ring?.length >= 3) return { name: ne.name, ring };
+      if (ring?.length >= 3)
+        return { name: ne.name, ring, source: 'natural-earth' };
     }
+    // Bundled states/provinces/counties by name (offline); the main part only,
+    // like the Natural Earth rung above.
+    const admin = await findAdminArea(q).catch(() => null);
+    signal?.throwIfAborted();
+    if (admin)
+      return {
+        name: admin.name,
+        ring: [...admin.ring],
+        source: 'bundled-admin',
+      };
     const lookup = resolveAdminRegionRing(q, signal, placeSearch);
     if (!Number.isFinite(budgetMs)) return lookup;
     let timer;
@@ -1932,13 +2458,54 @@ export function createAnnotationResolver({
     const geo = await geocodePlace(q, null, signal, placeSearch).catch(
       () => null,
     );
+    signal?.throwIfAborted();
     if (!geo) return null;
     const scope = scopeFromTypes(geo.types);
+    if (
+      scope === 'auto' ||
+      (scope === 'compound' && geo.types?.includes('natural_feature'))
+    ) {
+      const natural = await lookupNaturalRegionOutline(
+        q,
+        geo.lat,
+        geo.lon,
+      ).catch(() => null);
+      signal?.throwIfAborted();
+      if (natural)
+        return {
+          name: natural.name,
+          ring: natural.ring,
+          source: 'natural-earth',
+        };
+    }
     if (!['country', 'state', 'county', 'city'].includes(scope)) return null;
+    if (scope === 'state' || scope === 'county' || scope === 'country') {
+      const admin = await findAdminAreaAt(
+        [q, geo.primaryName],
+        geo.lat,
+        geo.lon,
+        scope,
+      ).catch(() => null);
+      signal?.throwIfAborted();
+      if (admin)
+        return { name: q, ring: [...admin.ring], source: 'bundled-admin' };
+    }
+    if (scope === 'city') {
+      const place = await findPlaceAreaAt(
+        [q, geo.primaryName],
+        geo.lat,
+        geo.lon,
+      ).catch(() => null);
+      signal?.throwIfAborted();
+      if (place)
+        return { name: q, ring: [...place.ring], source: 'bundled-admin' };
+    }
     const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(
       () => null,
     );
-    if (fp?.ring?.length >= 3) return { name: q, ring: fp.ring };
+    signal?.throwIfAborted();
+    if (fp?.ring?.length >= 3)
+      return { name: q, ring: fp.ring, source: 'remote-boundary' };
     return null;
   }
 
