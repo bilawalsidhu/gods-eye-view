@@ -1265,11 +1265,12 @@ body.ui-clean-view #clean-view-eye[data-idle='true'] {
   }
 }
 
-/* On phones the mobile tab bar owns the bottom edge in normal view. */
+/* In normal phone view keep the eye above the tab bar, voice dock and view
+   switcher. The timeline lifts those controls together. */
 @media (min-height: 521px) {
   body.mobile-shell:not(.ui-clean-view) #clean-view-eye {
     bottom: calc(
-      var(--mobile-tab-space) + var(--world-timeline-lift, 0px) + 8px
+      var(--mobile-tab-space) + var(--world-timeline-lift, 0px) + 164px
     );
   }
 }
