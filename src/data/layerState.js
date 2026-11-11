@@ -686,17 +686,17 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({
     id: 'local-usgs-lakes',
-    token: '03',
-    disposition: 'enabled-only',
-  }),
-  Object.freeze({
-    id: 'local-usgs-springs',
     token: '04',
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'local-usgs-springs',
+    token: '05',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'local-usgs-water',
-    token: '02',
+    token: '03',
     disposition: 'enabled-only',
   }),
   Object.freeze({

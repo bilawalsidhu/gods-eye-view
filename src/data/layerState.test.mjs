@@ -536,9 +536,9 @@ test('Nepal event and locator have distinct enabled-only share tokens', () => {
 
 test('USGS water layers have stable enabled-only share tokens', () => {
   for (const [token, id] of [
-    ['02', 'local-usgs-water'],
-    ['03', 'local-usgs-lakes'],
-    ['04', 'local-usgs-springs'],
+    ['03', 'local-usgs-water'],
+    ['04', 'local-usgs-lakes'],
+    ['05', 'local-usgs-springs'],
   ]) {
     const decoded = decodeLayerStateParams(
       new URLSearchParams(`v=2&l=${token}`),
