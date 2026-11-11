@@ -20,15 +20,28 @@ import {
 } from './detection.js';
 import {
   destroyWorldOverlay,
+  getOverlayPaintRect,
   initWorldOverlay,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
+import { applyVesselOverlayPolicy } from './vesselLabels.js';
+import {
+  getKeyholeFadeTuning,
+  getKeyholeGeometry,
+  keyholeLabelAlphaFromGeometry,
+} from '../celestialRing.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
 import {
   clearAwarenessEchoField,
   setAwarenessEchoField,
 } from '../awarenessEcho.js';
 import { composeLabel, resolveTier } from './detectionDraw.js';
+import {
+  createFakeDepthScene,
+  createFakeGl,
+  depthImage,
+  viewDistanceToDepth,
+} from './fixtures/fakeDepthScene.mjs';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
   assert.equal(countFadingRenderEntries([
@@ -575,6 +588,178 @@ test('every style paints its OWN plate token through the production callout path
       }
     }
   } finally {
+    env.cleanup();
+  }
+});
+
+/** A vessel detection contact that names its ambient card, like the AIS layer does. */
+function shipWithCard(mmsi, position) {
+  return {
+    position,
+    sourceId: mmsi,
+    id: `SHIP-${mmsi}`,
+    metric: '6 kn',
+    type: 'SEA',
+    cardSourceId: 'ais-live-vessels',
+    cardEntryId: `vessel:${mmsi}`,
+  };
+}
+
+/** The production ambient vessel card (not protected: it goes through the arbiter). */
+function ambientVesselCard(mmsi, position) {
+  return applyVesselOverlayPolicy({
+    id: `vessel:${mmsi}`,
+    position,
+    title: `CARD-${mmsi}`,
+    details: ['CARGO · 6KT · 80°'],
+    gapPx: 10,
+  });
+}
+
+test('a callout stays readable when its own card is faded out at the keyhole rim', () => {
+  // Default keyhole tuning: 7% feather, 1% outside opacity.
+  assert.deepEqual(getKeyholeFadeTuning(), { fadeRatio: 0.07, outsideOpacity: 0.01 });
+  const width = 1600;
+  const height = 900;
+  const keyhole = getKeyholeGeometry(width, height);
+  const env = installEnvironment({ width, height, dpr: 1 });
+  // Just outside the keyhole's left rim: the card sits above or below the
+  // anchor (outside, 1% alpha), the callout to its right (inside the feather).
+  const position = new Cesium.Cartesian3(270 / (width / 2) - 1, 1 - 460 / (height / 2), 6_356_752);
+  const ship = shipWithCard('200', position);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const [alone] = getDetectionDiagnostics().calloutRects;
+    assert.ok(alone && alone.alpha >= 0.5, 'without a card the callout is clearly visible');
+
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', position)]);
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const rect = getOverlayPaintRect('ais-live-vessels', 'vessel:200');
+    assert.ok(rect, 'the host paints the card (at the outside opacity)');
+    const cardAlpha = keyholeLabelAlphaFromGeometry(rect.x + rect.w / 2, rect.y + rect.h / 2, keyhole);
+    assert.ok(cardAlpha <= 0.05, `the card is invisible at the rim (keyhole alpha ${cardAlpha})`);
+
+    const callouts = getDetectionDiagnostics().calloutRects;
+    assert.equal(callouts.length, 1, 'the callout keeps painting while its card is faded out');
+    assert.ok(callouts[0].alpha >= 0.4, 'and stays readable');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a callout stays hidden while its card fades out after leaving the published cohort', () => {
+  const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
+  const at = (x, y) => new Cesium.Cartesian3(x, y, 6_356_752);
+  const ship = shipWithCard('200', at(0.1, 0.1));
+  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  const frame = (ms) => {
+    env.ctx.calls.length = 0;
+    env.advance(ms);
+    env.postRender.raise();
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    for (let i = 0; i < 6; i++) frame(250);
+    frame(16);
+    assert.ok(painted('CARD-200') && !painted('SHIP-200'), 'steady state: card only');
+
+    // The vessel layer republishes its screen-grid cohort after a camera move:
+    // this vessel's card is replaced by another one, the vessel stays detectable.
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('300', at(-0.5, -0.4))]);
+    frame(16);
+    assert.ok(getOverlayPaintRect('ais-live-vessels', 'vessel:200'), 'the dropped card is still fading out');
+    assert.ok(painted('CARD-200'), 'and its text still paints');
+    assert.ok(!painted('SHIP-200'), 'no full callout under the fading card');
+
+    for (let i = 0; i < 4; i++) frame(250);
+    assert.ok(!painted('CARD-200'), 'the card has faded out');
+    assert.ok(painted('SHIP-200'), 'and the callout is back');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a vessel whose ambient card loses the collision keeps its callout', () => {
+  const env = installEnvironment({ width: 900, height: 600, dpr: 1 });
+  // Four vessels a few pixels apart: their cards collide (a card goes only
+  // above or below its anchor), so the arbiter paints only some of them.
+  const ships = [0, 1, 2, 3].map((i) =>
+    shipWithCard(String(100 + i), new Cesium.Cartesian3(-0.2 + i * 0.005, i * 0.005, 6_356_752)),
+  );
+  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
+    setOverlayEntries(
+      'ais-live-vessels',
+      ships.map((ship) => ambientVesselCard(ship.sourceId, ship.position)),
+    );
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    env.ctx.calls.length = 0;
+    settleFrame(env);
+
+    const winners = ships.filter((ship) => getOverlayPaintRect('ais-live-vessels', ship.cardEntryId));
+    assert.ok(
+      winners.length >= 1 && winners.length < ships.length,
+      `the colliding cards leave some unpainted (${winners.length} of ${ships.length} painted)`,
+    );
+    for (const ship of ships) {
+      const carded = winners.includes(ship);
+      assert.equal(
+        painted(ship.id),
+        !carded,
+        carded ? `${ship.id} draws no callout under its card` : `${ship.id} keeps its callout`,
+      );
+    }
+    assert.equal(
+      getDetectionDiagnostics().calloutRects.length,
+      ships.length - winners.length,
+      'only the callouts that painted are reported',
+    );
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a callout fades out while its card fades in instead of vanishing at once', () => {
+  const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
+  const ship = shipWithCard('200', new Cesium.Cartesian3(0.1, 0.1, 6_356_752));
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const [alone] = getDetectionDiagnostics().calloutRects;
+    assert.ok(alone.alpha >= 0.9, 'the callout starts fully visible');
+
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    const alphas = [];
+    for (let i = 0; i < 30; i++) {
+      env.advance(16);
+      env.postRender.raise();
+      alphas.push(getDetectionDiagnostics().calloutRects[0]?.alpha ?? 0);
+    }
+    assert.ok(
+      alphas.some((alpha) => alpha > 0.1 && alpha < alone.alpha - 0.1),
+      `the callout passes through partial opacity: ${alphas.map((a) => a.toFixed(2)).join(' ')}`,
+    );
+    assert.equal(alphas.at(-1), 0, 'and is gone once the card is fully in');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
     env.cleanup();
   }
 });
@@ -1189,4 +1374,290 @@ test('transit contacts take the vehicle tier, not the civil-air one', () => {
   assert.equal(resolveTier({ type: 'VEH' }), 'vehicle');
   assert.equal(resolveTier({ type: 'AIR' }), 'civil');
   assert.equal(resolveTier({ type: 'SEA' }), 'sea');
+});
+
+/**
+ * Give the host environment a scene that keeps frame depth: the camera 10,000
+ * km up the +Z axis looking down it, and one depth range in which the whole
+ * frame is a surface `surfaceDistance()` metres in front of the camera.
+ */
+function installDepthScene(env, surfaceDistance, { webgl2 = true } = {}) {
+  const near = 1;
+  const far = 100_000_000;
+  const gl = createFakeGl({ webgl2 });
+  const camera = env.viewer.camera;
+  camera.viewMatrix = Cesium.Matrix4.fromTranslation(new Cesium.Cartesian3(0, 0, -10_000_000));
+  camera.frustum.fovy = Math.PI / 2;
+  camera.frustum.aspectRatio = 800 / 600;
+  const paint = () =>
+    depthImage(8, 6, () => viewDistanceToDepth(surfaceDistance(), near, far, true));
+  const image = paint();
+  const scene = createFakeDepthScene({ gl, ranges: [{ near, far, image }] });
+  Object.assign(env.viewer.scene, scene, { camera });
+  return {
+    gl,
+    /** Draw the next frame's depth. */
+    redraw() {
+      image.data.set(paint().data);
+    },
+  };
+}
+
+/** Street contacts 3,643 km and 2,000 km below the camera, and a flight. */
+function occlusionLayers() {
+  return [
+    {
+      id: 'traffic',
+      getDetectableObjects: () => [
+        { position: new Cesium.Cartesian3(-0.4, 0, 6_356_752), id: 'VEH-0001', type: 'VEH', depthTested: true },
+        { position: new Cesium.Cartesian3(0.4, 0, 8_000_000), id: 'VEH-0002', type: 'VEH', depthTested: true },
+      ],
+    },
+    {
+      id: 'flights',
+      // The same nearer surface is in front of it, but it is not depth-tested.
+      getDetectableObjects: () => [
+        { position: new Cesium.Cartesian3(-0.4, 0.3, 6_356_752), sourceId: 'f1', id: 'AIR1', metric: 'FL300', type: 'AIR' },
+      ],
+    },
+  ];
+}
+
+function paintedText(env) {
+  return env.ctx.calls.filter(([name]) => name === 'fillText').map(([, text]) => text);
+}
+
+/** One rendered frame 16 ms on; `settleFrame` is one 250 ms on (a solve). */
+function nextFrame(env) {
+  env.advance(16);
+  env.postRender.raise();
+}
+
+test('a depth-tested contact behind drawn geometry loses its bracket and callout, tested on the GPU without anything read back', () => {
+  const env = installEnvironment();
+  // A roof 3,000 km below the camera: in front of VEH-0001, behind VEH-0002.
+  let surface = 3_000_000;
+  const depth = installDepthScene(env, () => surface);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, occlusionLayers(), () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    let diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceDepthMode, 'async');
+    assert.equal(diagnostics.surfaceTestedCount, 2, 'only the depth-tested contacts');
+    assert.equal(diagnostics.surfaceProbeTests, 2);
+    // New to the view, so held back for the frame or two the first answer
+    // takes: neither is drawn yet. The flight is.
+    assert.equal(diagnostics.surfaceHiddenCount, 2, 'no answer has arrived yet');
+    assert.equal(diagnostics.visibleCount, 1);
+    assert.equal(depth.gl.counts.queries, 3, 'a control point and one query per contact');
+
+    // Frames before the GPU answers start nothing new and wait for nothing.
+    nextFrame(env);
+    nextFrame(env);
+    assert.equal(depth.gl.counts.queries, 3);
+    assert.equal(depth.gl.counts.resultReads, 0);
+
+    // The answers land. The contact above the roof is drawn from then on; the
+    // one under it never is.
+    depth.gl.finishGpu();
+    nextFrame(env);
+    depth.gl.finishGpu();
+    settleFrame(env);
+    env.ctx.calls.length = 0;
+    nextFrame(env);
+    assert.ok(!paintedText(env).includes('VEH-0001'));
+    assert.ok(paintedText(env).includes('VEH-0002'));
+
+    // It stays gone, frame after frame and solve after solve.
+    for (let i = 0; i < 40; i++) {
+      depth.gl.finishGpu();
+      env.ctx.calls.length = 0;
+      nextFrame(env);
+      assert.ok(!paintedText(env).includes('VEH-0001'), `frame ${i}`);
+    }
+    depth.gl.finishGpu();
+    settleFrame(env);
+    diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceHiddenCount, 1);
+    assert.equal(diagnostics.visibleCount, 2, 'the hidden contact has no bracket');
+    assert.ok(diagnostics.labeledKeys.includes('traffic:VEH-0002'));
+    assert.ok(!diagnostics.labeledKeys.includes('traffic:VEH-0001'));
+    assert.ok(diagnostics.labeledKeys.includes('flights:f1'));
+    assert.ok(paintedText(env).includes('AIR1'));
+    assert.equal(depth.gl.counts.readPixels, 0, 'depth never left the GPU');
+
+    // The roof goes away: the bracket returns once visible answers have kept
+    // coming for the reappear time, and the callout once a solve re-admits it.
+    surface = 5_000_000;
+    depth.redraw();
+    for (let i = 0; i < 80; i++) {
+      depth.gl.finishGpu();
+      nextFrame(env);
+    }
+    for (let i = 0; i < 8; i++) {
+      depth.gl.finishGpu();
+      settleFrame(env);
+    }
+    diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceHiddenCount, 0);
+    assert.equal(diagnostics.visibleCount, 3);
+    assert.ok(diagnostics.labeledKeys.includes('traffic:VEH-0001'));
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('a labelled contact that goes behind something loses its callout at once, and does not get it back by leaving the view', () => {
+  const env = installEnvironment();
+  // To begin with the drawn surface is below both vehicles.
+  let surface = 5_000_000;
+  const depth = installDepthScene(env, () => surface);
+  const layers = occlusionLayers();
+  const everyVehicle = layers[0].getDetectableObjects;
+  const answerAndSolve = (count) => {
+    for (let i = 0; i < count; i++) {
+      depth.gl.finishGpu();
+      settleFrame(env);
+    }
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, layers, () => {});
+    setMode('DENSE');
+    answerAndSolve(6);
+    assert.ok(getDetectionDiagnostics().labeledKeys.includes('traffic:VEH-0001'));
+    env.ctx.calls.length = 0;
+    nextFrame(env);
+    assert.ok(paintedText(env).includes('VEH-0001'));
+
+    // A roof is drawn over VEH-0001. Its callout goes on the frame the answer
+    // lands, which is not a solve: no carry-over, no fade.
+    surface = 3_000_000;
+    depth.redraw();
+    let gone = -1;
+    for (let i = 0; i < 30 && gone < 0; i++) {
+      depth.gl.finishGpu();
+      env.ctx.calls.length = 0;
+      nextFrame(env);
+      if (!paintedText(env).includes('VEH-0001')) gone = i;
+    }
+    assert.ok(gone >= 0, 'the callout went');
+    // The layer stops reporting it (it drove out of view). The arbiter still
+    // remembers where its callout was; it must not paint it there again.
+    layers[0].getDetectableObjects = () => everyVehicle().slice(1);
+    for (let i = 0; i < 12; i++) {
+      depth.gl.finishGpu();
+      env.ctx.calls.length = 0;
+      nextFrame(env);
+      assert.ok(!paintedText(env).includes('VEH-0001'), `frame ${i}`);
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('without scene depth every contact keeps its bracket and callout', () => {
+  const env = installEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, occlusionLayers(), () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    settleFrame(env);
+    const diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceDepthMode, 'off');
+    assert.equal(diagnostics.surfaceTestedCount, 2);
+    assert.equal(diagnostics.surfaceProbeTests, 0);
+    assert.equal(diagnostics.surfaceHiddenCount, 0);
+    assert.equal(diagnostics.visibleCount, 3);
+    assert.ok(diagnostics.labeledKeys.includes('traffic:VEH-0001'));
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('scene depth that goes away puts hidden contacts back', () => {
+  const env = installEnvironment();
+  const depth = installDepthScene(env, () => 3_000_000);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, occlusionLayers(), () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    depth.gl.finishGpu();
+    settleFrame(env);
+    assert.equal(getDetectionDiagnostics().surfaceHiddenCount, 1);
+    // The scene stops keeping pick depth (a 2D view, depth picking turned off).
+    depth.gl.finishGpu();
+    env.viewer.scene.useDepthPicking = false;
+    // The hidden time runs on painted frames, so paint a second's worth.
+    for (let i = 0; i < 70; i++) nextFrame(env);
+    settleFrame(env);
+    const diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceDepthMode, 'off');
+    assert.equal(diagnostics.surfaceHiddenCount, 0);
+    assert.equal(diagnostics.visibleCount, 3);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('turning detection off drops every test in flight; tearing it down frees the GPU objects', () => {
+  const env = installEnvironment();
+  const depth = installDepthScene(env, () => 3_000_000);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, occlusionLayers(), () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    assert.equal(depth.gl.liveQueries.size, 3);
+    // Off keeps the GPU objects (the shader is not compiled again on the next
+    // on) but the answers in flight are no longer wanted.
+    setMode('OFF');
+    assert.equal(depth.gl.counts.deleted, 0);
+    depth.gl.finishGpu();
+    setMode('DENSE');
+    settleFrame(env);
+    assert.equal(depth.gl.counts.queries, 6, 'both contacts are tested afresh');
+    assert.equal(depth.gl.liveQueries.size, 3, 'on the same queries, reused');
+    depth.gl.finishGpu();
+    nextFrame(env);
+    settleFrame(env);
+    assert.equal(getDetectionDiagnostics().surfaceHiddenCount, 1);
+    assert.equal(getDetectionDiagnostics().visibleCount, 2);
+  } finally {
+    env.cleanup();
+  }
+  // Tearing detection down releases everything.
+  assert.equal(depth.gl.liveQueries.size, 0);
+  assert.equal(depth.gl.counts.deleted, 5);
+});
+
+test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
+  const env = installEnvironment();
+  const depth = installDepthScene(env, () => 3_000_000, { webgl2: false });
+  const originalInfo = console.info;
+  const reported = [];
+  console.info = (...args) => reported.push(args.join(' '));
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, occlusionLayers(), () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 30; i++) nextFrame(env);
+    settleFrame(env);
+    const diagnostics = getDetectionDiagnostics();
+    assert.equal(diagnostics.surfaceDepthMode, 'sync');
+    assert.equal(diagnostics.surfaceHiddenCount, 1);
+    assert.equal(diagnostics.visibleCount, 2);
+    // Half a second of frames: a read about every eighth of one, not one per
+    // frame and not one per contact.
+    assert.ok(depth.gl.counts.readPixels >= 3 && depth.gl.counts.readPixels <= 6, `${depth.gl.counts.readPixels} reads`);
+    assert.equal(reported.length, 1);
+    assert.match(reported[0], /synchronously/);
+  } finally {
+    console.info = originalInfo;
+    env.cleanup();
+  }
 });

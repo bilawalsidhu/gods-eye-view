@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import {
+  DATA_CREDITS,
+  LIVEUAMAP_CREDIT,
+  NYC_DOT_DISCLAIMER,
+  transitFeedCredit,
+} from './dataCredits.js';
+import { getTransitFeed } from './transitFeeds.js';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -36,6 +42,13 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /PlaneBase/);
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
+});
+
+test('Planespotters is credited with a plain followable link', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'planespotters');
+  assert.ok(credit, 'the tracked aircraft photos come from Planespotters');
+  assert.match(credit.html, /href="https:\/\/www\.planespotters\.net"/);
+  assert.doesNotMatch(credit.html, /nofollow/);
 });
 
 test('the UCS Satellite Database is acknowledged with its version and webpage', () => {
@@ -177,6 +190,26 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
     );
 });
 
+test('the News layer credits its built-in sources', () => {
+  const credit = (key) => DATA_CREDITS.find((entry) => entry.key === key);
+  // GDELT's terms ask for a citation and a link.
+  assert.match(
+    credit('gdelt-news').html,
+    /href="https:\/\/www\.gdeltproject\.org\/"[^>]*>GDELT Project</,
+  );
+  // World News API's free plan asks for this exact link.
+  assert.match(
+    credit('worldnewsapi').html,
+    /<a href="https:\/\/worldnewsapi\.com\/"[^>]*>World News API<\/a>/,
+  );
+  assert.match(LIVEUAMAP_CREDIT.html, />Liveuamap</);
+  assert.ok(
+    !DATA_CREDITS.some((entry) => entry.key === LIVEUAMAP_CREDIT.key),
+    'Liveuamap is credited only once its key is in use',
+  );
+  assert.doesNotMatch(credit('news').html, /No single provider/);
+});
+
 test('the PR #1506 camera packs are credited with their sources and terms', () => {
   const html = (key) => DATA_CREDITS.find((entry) => entry.key === key)?.html;
   assert.match(html('ottawa-cctv') || '', /traffic\.ottawa\.ca/);
@@ -189,4 +222,25 @@ test('the PR #1506 camera packs are credited with their sources and terms', () =
     html('mlit-river-cctv') || '',
     /href="https:\/\/www\.river\.go\.jp\//,
   );
+});
+
+test('Warsaw and Poznań credits carry the data date their licences ask for', () => {
+  const warsaw = getTransitFeed('ztm-warszawa');
+  // 2026-11-09T06:00:00Z as a GTFS-RT header timestamp (seconds).
+  const credit = transitFeedCredit(warsaw, { feedTimestamp: 1_794_204_000 });
+  assert.match(credit.html, /, data of 2026-11-09\)/);
+  assert.match(credit.html, /href="http:\/\/api\.um\.warszawa\.pl"/);
+  assert.equal(credit.key, 'transit-ztm-warszawa-2026-11-09');
+  // Without a feed timestamp the fetch time is the download date.
+  const poznan = transitFeedCredit(getTransitFeed('ztm-poznan'), {
+    feedTimestamp: null,
+    fetchedAt: Date.UTC(2026, 10, 10, 12),
+  });
+  assert.match(poznan.html, /data of 2026-11-10/);
+  // Undated feeds keep one credit line for the session.
+  const mbta = transitFeedCredit(getTransitFeed('mbta'), {
+    feedTimestamp: 1_794_204_000,
+  });
+  assert.equal(mbta.key, 'transit-mbta');
+  assert.doesNotMatch(mbta.html, /data of/);
 });

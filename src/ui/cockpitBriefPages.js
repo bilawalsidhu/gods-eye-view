@@ -1,8 +1,28 @@
 /**
  * The Cockpit briefing's pages and the state it starts in. It needs only the
- * i18n module, so the controller and the view can both read it.
+ * i18n module and the regional-news window, so the controller and the view
+ * can both read it.
  */
+import { REGIONAL_NEWS_WINDOW_HOURS } from '../data/regionalNewsWindow.js';
 import { msg, t } from '../i18n/index.js';
+
+// i18n-ignore: provider name
+/** The news feed named before any briefing has answered. */
+export const DEFAULT_NEWS_SOURCE = 'GOOGLE NEWS RSS';
+
+/**
+ * The Regional News footer for a fresh, empty or unavailable list: the feed
+ * and the window its articles are held to.
+ * @param {string} [source]
+ * @param {number} [hours]
+ * @returns {string}
+ */
+export function newsWindowFooter(
+  source = DEFAULT_NEWS_SOURCE,
+  hours = REGIONAL_NEWS_WINDOW_HOURS,
+) {
+  return t('{source} · LAST {hours} H', { source, hours });
+}
 
 export const COCKPIT_BRIEF_PAGES = [
   {
@@ -15,8 +35,7 @@ export const COCKPIT_BRIEF_PAGES = [
     id: 'news',
     kickerKey: msg('REGIONAL NEWS'),
     subtitleKey: msg('LATEST LOCATION-MATCHED REPORTING'),
-    sourceKey: msg('{source} · LOCATION QUERY · RECENT'),
-    sourceName: 'GOOGLE NEWS RSS', // i18n-ignore: provider name
+    // The news footer comes from the news state (`news.footer`), not here.
   },
   {
     id: 'local',
@@ -60,6 +79,7 @@ export function createBriefState() {
       statusHidden: false,
       state: null,
       status: t('ACQUIRING REGIONAL NEWS'),
+      footer: newsWindowFooter(),
       articles: [],
     },
     local: {

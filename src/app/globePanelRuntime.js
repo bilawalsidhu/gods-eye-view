@@ -462,8 +462,11 @@ export function panelRuntime(config) {
    * Load God's Eye View into this page from the app's panel build, in
    * inline embed mode, starting at the first view as its link would.
    */
-  async function startApp(url, view) {
+  async function startApp(url, view, fresh = false) {
     window.GEV_EMBED_INLINE = true;
+    // Whether this result was just issued, not handed back by a host that
+    // mounted the panel again: only then may its link open a billed photo.
+    window.GEV_EMBED_FRESH = fresh;
     window.GEV_APP_BASE_URL = config.appBaseUrl;
     try {
       history.replaceState(
@@ -551,13 +554,21 @@ export function panelRuntime(config) {
     );
   }
 
-  // Tool results: the first view starts the app, later ones move it.
+  // Tool results: the first view starts the app, later ones move it. A
+  // result issued longer ago than this was handed back on a remount.
+  const FRESH_RESULT_MS = 5 * 60 * 1000;
   let started = false;
   let ready = false;
   let queued = null;
+  let queuedFresh = false;
   let currentUrl = null;
-  const postView = (view) =>
-    window.postMessage({ type: 'gev:view', id: nextId++, view }, '*');
+  // Every view carries whether its result was issued just now: only those may
+  // open a billed photo, whichever result on this mount they came in.
+  const postView = (view, fresh) =>
+    window.postMessage(
+      { type: 'gev:view', id: nextId++, view, fresh: fresh === true },
+      '*',
+    );
   function show(result) {
     const data = result?.structuredContent;
     const view = data?.view;
@@ -565,13 +576,18 @@ export function panelRuntime(config) {
     if (!view || !url) return;
     currentUrl = url;
     open.hidden = false;
-    if (ready) return postView(view);
+    const issuedAt = Number(data.issued_at);
+    const fresh =
+      Number.isFinite(issuedAt) &&
+      Math.abs(Date.now() - issuedAt) <= FRESH_RESULT_MS;
+    if (ready) return postView(view, fresh);
     queued = view;
+    queuedFresh = fresh;
     if (started) return;
     started = true;
     // i18n-ignore: host-panel script, no app catalogs
     say("Loading God's Eye View…");
-    startApp(url, view).catch((error) =>
+    startApp(url, view, fresh).catch((error) =>
       // i18n-ignore: host-panel script, no app catalogs
       say(`God's Eye View could not load here: ${error?.message || error}.`),
     );
@@ -592,7 +608,7 @@ export function panelRuntime(config) {
       if (message?.type === 'gev:ready') {
         ready = true;
         status.remove();
-        if (queued) postView(queued);
+        if (queued) postView(queued, queuedFresh);
         queued = null;
       }
       return;
