@@ -5241,7 +5241,7 @@ falls back to every cell and says so. The MASS CHANGE rail card
 (replays from the first solution, never faster than a field arrives), and a
 click on open ground charts that one-degree cell's whole record from
 `/api/gravity/cell`, broken at the mission gap. Share links keep the month,
-land/ocean and opacity (layer token `02`). `scripts/qa-gravity.mjs` covers the
+land/ocean and opacity (layer token `03`). `scripts/qa-gravity.mjs` covers the
 live record, months and playback, the probe chart, land and ocean, a stubbed
 loading failure, a phone viewport and disable; it accepts `--ready-ms` for a
 fresh server's first download.
