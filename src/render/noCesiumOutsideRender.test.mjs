@@ -348,8 +348,12 @@ test('the files that name the adapter by design take named exports, never Cesium
           parent?.type === 'AwaitExpression' &&
             declarator?.type === 'VariableDeclarator' &&
             declarator.id.type === 'ObjectPattern' &&
+            declarator.id.properties.length > 0 &&
             declarator.id.properties.every(
-              (p) => p.type === 'ObjectProperty' && !p.computed,
+              (p) =>
+                p.type === 'ObjectProperty' &&
+                !p.computed &&
+                (p.key.name ?? p.key.value) !== 'default',
             ),
           `${file} must destructure import(${source}) by name`,
         );

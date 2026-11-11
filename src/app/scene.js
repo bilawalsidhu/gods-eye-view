@@ -32,6 +32,10 @@ export function loadDefaultRenderer() {
     const { cesiumRenderer } = await import('../render/cesium/application.js');
     return cesiumRenderer;
   })();
+  // A load that failed is tried again by the next call.
+  defaultLoad.catch(() => {
+    defaultLoad = null;
+  });
   return defaultLoad;
 }
 

@@ -127,6 +127,14 @@ function readDrawn() {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const server = args.url ? null : await startViteServer(args.port);
+  try {
+    await run(args);
+  } finally {
+    await server?.close();
+  }
+}
+
+async function run(args) {
   const base = (args.url ?? `http://127.0.0.1:${args.port}`).replace(/\/$/, '');
   const browser = await puppeteer.launch({
     headless: true,
@@ -220,7 +228,13 @@ async function main() {
           window.__godsEyeView.dataManager
             .setEnabled(layerId, true, { origin: 'user' })
             .then(
-              (value) => ({ ok: true, value: value ?? null }),
+              // It can answer false rather than throw: on is what it says.
+              (value) => ({
+                ok:
+                  value !== false &&
+                  window.__godsEyeView.dataManager.isEnabled(layerId),
+                value: value ?? null,
+              }),
               (error) => ({ ok: false, error: String(error?.stack || error) }),
             ),
         id,
@@ -264,7 +278,11 @@ async function main() {
           window.__godsEyeView.dataManager
             .setEnabled(layerId, false, { origin: 'user' })
             .then(
-              () => ({ ok: true }),
+              (value) => ({
+                ok:
+                  value !== false &&
+                  !window.__godsEyeView.dataManager.isEnabled(layerId),
+              }),
               (error) => ({ ok: false, error: String(error?.stack || error) }),
             ),
         id,
@@ -303,7 +321,6 @@ async function main() {
     report.cesiumStylesheets = cesiumStylesheets;
     report.errors = errors;
     await browser.close();
-    await server?.close();
   }
   const pageErrors = errors.filter((error) => error.kind === 'page');
   const consoleErrors = errors.filter((error) => error.kind === 'console');

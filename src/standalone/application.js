@@ -37,7 +37,9 @@ export function createStandaloneApplication({
     throw new Error('The standalone application already owns this page');
   constructed = true;
   // The default renderer starts loading now, beside the page's own setup.
+  // A failed load is the scene's to report, when it asks for the renderer.
   const rendererPlugin = renderer ?? loadDefaultRenderer();
+  if (!renderer) Promise.resolve(rendererPlugin).catch(() => {});
   // Locale is resolved before any UI initialization so <html lang>/<html dir>
   // and every catalog lookup agree from the first painted frame. Module
   // scripts execute after parsing, so the DOM is ready here: the views

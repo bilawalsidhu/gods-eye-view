@@ -9,8 +9,8 @@
  * fields read that record. Readers ask this module, never the renderer.
  *
  * Its readers (the tracked card, Cockpit, the share link's thing view,
- * north-up) read the target's `displayPosition`: a port target without one
- * is followed by the camera but not shown by them.
+ * north-up) read where the target is shown (`followedPosition`): its
+ * `displayPosition`, else its own `position` at scene time.
  */
 import { findCamera, findFrame } from '../render/rendererOf.js';
 import { readEntityRecord } from './entityRecords.js';

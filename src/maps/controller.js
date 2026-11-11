@@ -296,6 +296,15 @@ export class MapSourceController {
       this._engine.addTileset(this.viewer, tileset);
       this._ownedTilesets.add(tileset);
     }
+    // A base that loads as it is shown (a globe port's photoreal) is shown
+    // first and waited for, the stack before it still in place: one that
+    // fails throws here, and that stack stays.
+    if (this._engine.tilesetReady) {
+      this._showTileset(tileset);
+      const ready = this._engine.tilesetReady(tileset);
+      if (ready) await ready;
+      if (gen !== this._switchGen) return;
+    }
     this._removeImageryLayer();
     this._credits.show(source.credit || null);
     this._showTileset(tileset);

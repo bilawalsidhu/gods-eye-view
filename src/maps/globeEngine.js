@@ -42,18 +42,31 @@ function applyPhotoreal(handle, shown) {
   if (handle.shown === shown || released.has(handle)) return;
   handle.shown = shown;
   const switchId = (handle.switches = (handle.switches ?? 0) + 1);
+  /** Whether this switch failed to show the base; false once it is off. */
   const failed = (error) => {
-    if (handle.switches !== switchId || released.has(handle)) return;
+    if (handle.switches !== switchId || released.has(handle)) return false;
     console.warn('[MapStack] photoreal switch failed', error);
-    if (!shown) return;
+    if (!shown) return false;
     handle.shown = false;
     handle.globe.setGlobeVisible(true);
     shownGlobes.set(handle.globe, true);
+    return true;
   };
-  handle.globe.setPhotoreal(shown ? handle.spec : null).then((status) => {
-    if (shown && status?.route === 'none')
-      failed(status.error?.message ?? 'photoreal unavailable');
-  }, failed);
+  handle.pending = handle.globe
+    .setPhotoreal(shown ? handle.spec : null)
+    .then(
+      (status) =>
+        shown && status?.route === 'none'
+          ? (status.error?.message ?? 'photoreal unavailable')
+          : null,
+      (error) => error ?? 'photoreal unavailable',
+    )
+    .then((error) => {
+      if (error === null || !failed(error)) return;
+      throw error instanceof Error ? error : new Error(String(error));
+    });
+  // A failure nobody waits for is reported above, not unhandled.
+  handle.pending.catch(() => {});
 }
 
 /**
@@ -166,6 +179,12 @@ export const globeMapEngine = Object.freeze({
   showTileset(handle, shown) {
     if (handle) applyPhotoreal(handle, shown);
   },
+  /**
+   * Settles once `handle`'s last switch has: rejects when showing it failed
+   * (the base is off again and the globe shown), so the map stack falls
+   * back as from any failed switch.
+   */
+  tilesetReady: (handle) => handle?.pending ?? null,
   addImageryLayer(host, handle, index) {
     const globe = findGlobe(host);
     if (!globe || released.has(handle)) return;

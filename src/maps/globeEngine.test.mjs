@@ -5,6 +5,8 @@ import { mapEngineFor, provideMapEngine } from './engine.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { provideApplicationHooks } from '../render/applicationHooks.js';
 import { createStubRenderer } from '../render/stub/index.js';
+import { MapSourceController } from './controller.js';
+import { createDefaultMapSources } from './defaultSources.js';
 
 function scene(capabilities) {
   const renderer = createStubRenderer(capabilities ? { capabilities } : {});
@@ -105,6 +107,7 @@ test('photoreal loads through the port, hides and shows, and is released', async
   engine.showTileset(handle, false);
   assert.equal(engine.tilesetShown(handle), false);
   assert.equal(calls(renderer, 'setPhotoreal').at(-1).args[0], null);
+  await engine.tilesetReady(handle);
   engine.showTileset(handle, true);
   assert.equal(calls(renderer, 'setPhotoreal').at(-1).args[0], spec);
   engine.release(handle);
@@ -138,7 +141,11 @@ test('photoreal that fails to come back leaves the globe shown, and is tried aga
   console.warn = () => {};
   try {
     engine.showTileset(handle, true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await assert.rejects(
+      engine.tilesetReady(handle),
+      /refused/,
+      'the map stack hears it failed',
+    );
   } finally {
     console.warn = warn;
   }
@@ -151,4 +158,37 @@ test('photoreal that fails to come back leaves the globe shown, and is tried aga
   };
   engine.showTileset(handle, true);
   assert.equal(tried, 1, 'a later switch tries again');
+});
+
+test('a photoreal stack that fails to come back leaves the stack before it in place', async () => {
+  const { host, renderer } = scene(['photoreal']);
+  const loaded = await engine.loadPhotoreal(host, { googleApiKey: 'key' });
+  const errors = [];
+  const controller = new MapSourceController(host, {
+    registry: createDefaultMapSources({
+      googleTileset: loaded.tileset,
+      engine,
+    }),
+    engine,
+    googleTileset: loaded.tileset,
+    onError: (message) => errors.push(message),
+  });
+  await controller.setStack('esri-imagery', { silent: true });
+  assert.equal(renderer.globe.imagery.list().length, 1);
+  renderer.globe.setPhotoreal = async (spec) => ({
+    route: spec ? 'none' : 'google',
+    error: { code: 'refused', message: 'refused' },
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    await controller.setStack('photoreal', { silent: true });
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(controller.getState().activeId, 'esri-imagery');
+  assert.equal(renderer.globe.imagery.list().length, 1, 'its imagery stays');
+  assert.equal(engine.globeShown(host), true, 'on the shown globe');
+  assert.match(errors.at(-1), /refused/);
+  controller.destroy();
 });
