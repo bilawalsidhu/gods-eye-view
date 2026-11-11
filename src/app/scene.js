@@ -17,19 +17,28 @@ import { t } from '../i18n/index.js';
 import { applicationHooksOf } from '../render/applicationHooks.js';
 import { createSceneHost } from '../render/rendererOf.js';
 
+let defaultLoad = null;
+
 /**
  * The application's composition root picks the renderer: the one given, else
  * the default (Cesium), loaded only then, so a page on the stub never
- * loads it. This is the only part of an adapter the application imports.
+ * loads it. This is the only part of an adapter the application imports. A
+ * page that starts on the default calls this as it starts, so the renderer
+ * loads beside the rest of the page rather than after it.
+ * @returns {Promise<object>} The default `RendererPlugin`.
  */
-async function defaultRenderer() {
-  const { cesiumRenderer } = await import('../render/cesium/application.js');
-  return cesiumRenderer;
+export function loadDefaultRenderer() {
+  defaultLoad ??= (async () => {
+    const { cesiumRenderer } = await import('../render/cesium/application.js');
+    return cesiumRenderer;
+  })();
+  return defaultLoad;
 }
 
 /**
  * Construct the application globe using the caller's local configuration.
- * `renderer` is the `RendererPlugin` that draws it (default: Cesium). The
+ * `renderer` is the `RendererPlugin` that draws it, or a promise of one
+ * (default: Cesium, `loadDefaultRenderer`). The
  * application runs on a renderer with only the contract's required members:
  * what a renderer's plugin hands it beside the contract
  * (`src/render/applicationHooks.js`) it uses where given, and does without
@@ -63,7 +72,7 @@ export async function createApplicationScene({
     });
   }
   loaderStatus.textContent = t('Configuring viewer...');
-  const rendererPlugin = givenPlugin ?? (await defaultRenderer());
+  const rendererPlugin = (await givenPlugin) ?? (await loadDefaultRenderer());
   signal.throwIfAborted();
   const container = document.getElementById('cesiumContainer');
   const renderer = await rendererPlugin.create({
@@ -96,6 +105,12 @@ export async function createApplicationScene({
       }
     }
   });
+  // The renderer follows its container's size (`Renderer.resize`).
+  if (typeof ResizeObserver === 'function' && container) {
+    const resizes = new ResizeObserver(() => renderer.resize());
+    resizes.observe(container);
+    defer(() => resizes.disconnect());
+  }
   // Before any layer binds a click: every layer and tool shares this one.
   // Deferred after the renderer, so it is released before the renderer goes.
   const input = inputFor(viewer);

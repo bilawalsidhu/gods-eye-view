@@ -12,7 +12,11 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import * as Cesium from 'cesium';
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import {
   FAKE_EVENT_TYPES,
@@ -210,7 +214,7 @@ function satellitesLayer(viewer) {
       if (!positions.has(id)) return false;
       layer.calls.push(['track', id]);
       layer.tracked = id;
-      viewer.trackedEntity = { position: { getValue: () => layer.position(id) } };
+      followEntity(viewer, { position: { getValue: () => layer.position(id) } });
       return true;
     },
     setCockpitSubject(noradId) {
@@ -243,7 +247,6 @@ function fixture(t, { reducedMotion = false } = {}) {
   const shots = [];
   const picks = new Map();
   const viewer = {
-    trackedEntity: undefined,
     clock: { currentTime: null },
     camera: {
       frustum: { fov: 1, aspectRatio: ASPECT },
@@ -273,9 +276,7 @@ function fixture(t, { reducedMotion = false } = {}) {
   handler.stockDouble = ({ position }) => {
     handler.stockDoubleClicks += 1;
     const picked = picks.get(`${position.x},${position.y}`);
-    viewer.trackedEntity = picked
-      ? { position: { getValue: () => null } }
-      : undefined;
+    followEntity(viewer, picked ? { position: { getValue: () => null } } : null);
   };
   // The viewer's stock handler holds them, so the scene's input has them to
   // hold off.
@@ -639,7 +640,7 @@ test('a double-click on a site focuses it and keeps the orbital view', async (t)
   const { cockpit, viewer, handler } = scene;
   scene.doubleClick(SITES.alpha.at);
   assert.equal(handler.stockDoubleClicks, 0, 'Cesium does not track the site');
-  assert.equal(viewer.trackedEntity, undefined);
+  assert.equal(followedEntity(viewer), undefined);
   scene.frame();
   assert.equal(cockpit.active, true, 'still in orbit');
   assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
@@ -725,7 +726,7 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   assert.equal(newTrack.length, 1);
   assert.ok(newTrack[0].timestamp > firstTrack.timestamp, 'the new ride’s own time');
   assert.deepEqual(satellites.calls.slice(-2), [['track', 49260], ['subject', 49260]]);
-  assert.equal(viewer.trackedEntity, undefined, 'the Cockpit keeps the camera');
+  assert.equal(followedEntity(viewer), undefined, 'the Cockpit keeps the camera');
   assert.equal(cockpit.subjectId, 49260);
   assert.equal(cockpit.orbital.focus, null, 'the focus is reset');
   assert.equal(modeEvents.at(-1)?.active, true);

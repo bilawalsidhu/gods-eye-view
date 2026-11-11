@@ -2,7 +2,7 @@ import { createStandaloneCatalog } from './catalog.js';
 import { createStandalonePlaceSearch } from './placeSearch.js';
 import { CITY_POIS } from '../cityPois.js';
 import { createApplication } from '../app/application.js';
-import { createStandaloneScene } from './scene.js';
+import { createStandaloneScene, loadDefaultRenderer } from './scene.js';
 import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
@@ -36,6 +36,8 @@ export function createStandaloneApplication({
   if (constructed)
     throw new Error('The standalone application already owns this page');
   constructed = true;
+  // The default renderer starts loading now, beside the page's own setup.
+  const rendererPlugin = renderer ?? loadDefaultRenderer();
   // Locale is resolved before any UI initialization so <html lang>/<html dir>
   // and every catalog lookup agree from the first painted frame. Module
   // scripts execute after parsing, so the DOM is ready here: the views
@@ -72,7 +74,7 @@ export function createStandaloneApplication({
       const scene = await createStandaloneScene({
         ...context,
         // The renderer plugin; the default (Cesium) when none is given.
-        renderer,
+        renderer: rendererPlugin,
         googleApiKey,
         // Without a key, Google 3D can still load with tokens from the
         // app's server when it offers them.

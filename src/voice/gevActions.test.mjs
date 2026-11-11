@@ -36,7 +36,8 @@ import { presentResult } from './resultDisplay.js';
 import { withEntityRecord } from '../data/entityRecords.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
-import { cameraOf } from '../render/rendererOf.js';
+import { bindRenderer, cameraOf } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -1505,7 +1506,6 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     getAll: () => [],
   };
   const viewer = {
-    trackedEntity: withEntityRecord({}, { trackedId: 'flights:active' }),
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       preRender: { addEventListener() {} },
@@ -1513,6 +1513,18 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     camera: { moveEnd: { addEventListener() {} } },
     clock: { onTick: { addEventListener() {} } },
   };
+  // The camera follows the active aircraft through its port.
+  const camera = {
+    followed: entityFollowTarget(
+      withEntityRecord({}, { trackedId: 'flights:active' }),
+      {},
+    ),
+    follow(target) {
+      camera.followed = target;
+    },
+    on: () => () => {},
+  };
+  bindRenderer(viewer, { camera, canvas: viewer.scene.canvas });
   const runner = createGevActionRunner({
     viewer,
     styleManager: {},
@@ -1527,8 +1539,8 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     error: 'Tracking could not be cleared for: flights, military',
   });
   assert.equal(
-    viewer.trackedEntity,
-    undefined,
+    camera.followed,
+    null,
     'camera ownership still releases after partial failure',
   );
 });

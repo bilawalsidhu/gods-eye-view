@@ -1406,7 +1406,10 @@
       "src/data/adminBoundaries.js",
       "src/data/retryableLoad.js",
       "src/maps/imageryHost.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/applicationHooks.js",
+      "src/maps/globeEngine.js",
+      "src/maps/engine.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -2086,7 +2089,10 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/layers/recentImagery/display.js"
+      "src/layers/recentImagery/display.js",
+      "src/render/applicationHooks.js",
+      "src/maps/globeEngine.js",
+      "src/maps/engine.js"
     ],
     "external": ["cesium"]
   },
@@ -5310,7 +5316,10 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/applicationHooks.js",
+      "src/maps/globeEngine.js",
+      "src/maps/engine.js"
     ],
     "external": [
       "hls.js",

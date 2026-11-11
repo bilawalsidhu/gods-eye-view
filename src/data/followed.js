@@ -12,7 +12,7 @@
  * north-up) read the target's `displayPosition`: a port target without one
  * is followed by the camera but not shown by them.
  */
-import { findCamera } from '../render/rendererOf.js';
+import { findCamera, findFrame } from '../render/rendererOf.js';
 import { readEntityRecord } from './entityRecords.js';
 
 /**
@@ -156,12 +156,17 @@ export function resumeFollowing(viewer, followed) {
 }
 
 /**
- * Where `followed` is shown this frame: the layer's display cache; null
- * when it has none, or it answers nothing.
+ * Where `followed` is shown this frame: the layer's display cache, else the
+ * target's own position at the frame port's scene time; null when neither
+ * answers.
  * @param {object} viewer
  * @param {Followed|null} followed
  */
 export function followedPosition(viewer, followed) {
   const display = followed?.displayPosition;
-  return (typeof display === 'function' ? display() : null) || null;
+  const shown = typeof display === 'function' ? display() : null;
+  if (shown) return shown;
+  if (typeof followed?.position !== 'function') return null;
+  const time = findFrame(viewer)?.time?.();
+  return followed.position(Number.isFinite(time) ? time : Date.now()) || null;
 }

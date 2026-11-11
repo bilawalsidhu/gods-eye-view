@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { NO_IMAGERY_HOST, resolveImageryHost } from './imageryHost.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { createStubRenderer } from '../render/stub/index.js';
+import { globeMapEngine } from './globeEngine.js';
 
 /** A scene object bound to a stub renderer, its globe shown or hidden. */
 function scene({ globeShown, capabilities } = {}) {
@@ -28,15 +29,18 @@ test('a hidden globe hands imagery to the shown base tileset', () => {
   assert.deepEqual(host, { collection: tileset, kind: 'tileset' });
 });
 
-test('without globe visibility, the globe hosts unless a tileset is shown', () => {
+test('without globe visibility, the map engine says whether the globe is shown', () => {
   const { viewer, renderer } = scene({ capabilities: [] });
   assert.equal(renderer.globe.isGlobeVisible, undefined);
   const tileset = { id: 'tiles' };
+  globeMapEngine.setGlobeShown(viewer, false);
   assert.deepEqual(resolveImageryHost({ viewer, tileset }), {
     collection: tileset,
     kind: 'tileset',
   });
-  assert.deepEqual(resolveImageryHost({ viewer, tileset: null }), {
+  // A globe stack shows the globe: a tileset kept from startup is not the host.
+  globeMapEngine.setGlobeShown(viewer, true);
+  assert.deepEqual(resolveImageryHost({ viewer, tileset }), {
     collection: renderer.globe.imagery,
     kind: 'globe',
   });

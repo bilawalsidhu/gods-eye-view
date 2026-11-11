@@ -121,3 +121,34 @@ test('a renderer without photoreal reports none, with the reason it gave', async
   assert.equal(result.tileset, null);
   assert.equal(result.route, 'none');
 });
+
+test('photoreal that fails to come back leaves the globe shown, and is tried again', async () => {
+  const { host, renderer } = scene(['photoreal']);
+  const loaded = await engine.loadPhotoreal(host, { googleApiKey: 'key' });
+  const handle = loaded.tileset;
+  engine.showTileset(handle, false);
+  engine.setGlobeShown(host, false);
+  // The port cannot draw photoreal any more.
+  renderer.globe.setPhotoreal = async (spec) => ({
+    route: 'none',
+    error: { code: 'refused', message: 'refused' },
+    spec,
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    engine.showTileset(handle, true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(engine.tilesetShown(handle), false, 'off again');
+  assert.equal(engine.globeShown(host), true, 'the base is not blank');
+  let tried = 0;
+  renderer.globe.setPhotoreal = async () => {
+    tried += 1;
+    return { route: 'google' };
+  };
+  engine.showTileset(handle, true);
+  assert.equal(tried, 1, 'a later switch tries again');
+});

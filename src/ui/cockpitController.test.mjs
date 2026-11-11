@@ -4,6 +4,7 @@ import { CockpitViewController } from './cockpitController.js';
 import { withEntityRecord } from '../data/entityRecords.js';
 import { fakeInput } from '../input/testDoubles.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget, followedOf } from '../data/followed.js';
 import {
   cockpitAnchorCorrectionStep,
   cockpitGroundSafeHeight,
@@ -37,18 +38,30 @@ function environment() {
       preUpdate: event,
       screenSpaceCameraController: { enableInputs: true },
     },
-    trackedEntityChanged: event,
-    entities: { contains: () => false },
+  };
+  // What the camera follows, as a layer's follow sets it.
+  const camera = {
+    followed: null,
+    follow(target) {
+      camera.followed = target;
+    },
+    on: (name, fn) =>
+      name === 'followChanged' ? event.addEventListener(fn) : () => {},
   };
   // The renderer's frame port: Cockpit moves the camera on its preUpdate.
   bindRenderer(viewer, {
+    camera,
     frame: {
       on: (phase, fn) =>
         phase === 'preUpdate' ? event.addEventListener(fn) : () => {},
     },
   });
+  /** Follow a holder of an entity record, as a layer's follow does. */
+  const follow = (holder) =>
+    camera.follow(holder ? entityFollowTarget(holder, {}) : null);
   return {
     viewer,
+    follow,
     callbacks,
     restore() {
       Object.assign(globalThis, original);
@@ -96,7 +109,7 @@ test('disposing an active Cockpit releases the supplied render owner without ret
       env.viewer.scene.screenSpaceCameraController.enableInputs,
       true,
     );
-    assert.equal(env.viewer.trackedEntity, undefined);
+    assert.equal(followedOf(env.viewer), null);
     assert.equal(owner.active, false);
   } finally {
     env.restore();
@@ -122,15 +135,9 @@ test('aircraft identity is read from the supplied layer instances', () => {
         militaryFlightsLayer: { getTrackedInfo: () => military },
       },
     });
-    env.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: 'military:def456' },
-    );
+    env.follow(withEntityRecord({}, { trackedId: 'military:def456' }));
     assert.deepEqual(owner.readAircraftInfo(), military);
-    env.viewer.trackedEntity = withEntityRecord(
-      {},
-      { trackedId: 'flights:abc123' },
-    );
+    env.follow(withEntityRecord({}, { trackedId: 'flights:abc123' }));
     assert.deepEqual(owner.readAircraftInfo(), civilian);
     owner.dispose();
   } finally {

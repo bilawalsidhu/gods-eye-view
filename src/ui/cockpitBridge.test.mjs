@@ -11,7 +11,11 @@ import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import * as Cesium from 'cesium';
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { VesselRecords } from '../layers/vessels/records.js';
@@ -109,7 +113,10 @@ function sceneQuery(viewer, ports) {
       return Number.isFinite(height) ? height : null;
     },
     sampleHeight(points, { mostDetailed = false } = {}) {
-      if (!mostDetailed || typeof scene().sampleHeightMostDetailed !== 'function')
+      if (
+        !mostDetailed ||
+        typeof scene().sampleHeightMostDetailed !== 'function'
+      )
         return Promise.resolve(points.map(() => null));
       // Answered as soon as the scene's read lands, as the adapter does.
       return scene()
@@ -156,7 +163,6 @@ function fixture(
   // Each placed camera: where it is and where it looks.
   const shots = [];
   const viewer = {
-    trackedEntity: undefined,
     clock: { currentTime: null },
     camera: {
       cancelFlight() {},
@@ -415,10 +421,10 @@ test('tracking an aircraft from the bridge ends it without refocusing the vessel
   const { cockpit, viewer, vessels, aircraft } = fixture(t);
   cockpit.enter();
   await settle();
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   cockpit.update();
   assert.equal(cockpit.active, false);
-  assert.equal(viewer.trackedEntity, aircraft, 'the aircraft keeps tracking');
+  assert.equal(followedEntity(viewer), aircraft, 'the aircraft keeps tracking');
   assert.equal(aircraft.show, true, 'the aircraft was never adopted');
   assert.deepEqual(vessels.calls, [
     ['subject', RECORD.mmsi],
@@ -432,7 +438,7 @@ test('following a satellite or a site from the bridge ends it too', async (t) =>
   await settle();
   // A satellite's or an installation's follow carrier has no position of
   // its own (the camera reads the follow target's).
-  viewer.trackedEntity = { id: 'satellites:25544', noradId: 25544 };
+  followEntity(viewer, { id: 'satellites:25544', noradId: 25544 });
   cockpit.update();
   assert.equal(cockpit.active, false);
   assert.deepEqual(vessels.calls.at(-1), ['subject', null]);
@@ -473,7 +479,7 @@ test("turning off the ridden aircraft's layer ends the cockpit", async (t) => {
   const { cockpit, viewer, aircraft, disableFlights } = fixture(t, {
     aircraftInfo,
   });
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   assert.equal(cockpit.enter({ kind: 'aircraft' }), true);
   await settle();
   cockpit.update();
@@ -876,7 +882,7 @@ test('arrows do nothing new in an aircraft cockpit', async (t) => {
   const { cockpit, viewer, aircraft, shots, store } = fixture(t, {
     aircraftInfo,
   });
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   assert.equal(cockpit.enter({ kind: 'aircraft' }), true);
   await settle();
   assert.equal(cockpit.subjectKind, 'aircraft');
@@ -926,7 +932,7 @@ test('C neither enters nor leaves an aircraft cockpit', async (t) => {
     onGround: false,
   };
   const { cockpit, viewer, aircraft } = fixture(t, { aircraftInfo });
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   const outside = press(cockpit, 'c');
   await settle();
   assert.equal(cockpit.active, false, 'C does not enter');
@@ -1562,7 +1568,7 @@ test('a followed aircraft keeps its own double-click hit area', async (t) => {
     onGround: false,
   };
   const { cockpit, viewer, aircraft } = fixture(t, { aircraftInfo });
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   heightSensitiveProjection(viewer);
   // Drawn at (400, -2700) as the press begins, at (600, -2700) by the
   // double-click: a click there is not on the aircraft.
@@ -1588,7 +1594,7 @@ test("a ship's double-click memory does not carry over to an aircraft followed s
   // The press finds the ship at (400, 300).
   cockpit.onScenePointerDown(1000);
   // Within the memory, an aircraft is followed, drawn elsewhere.
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   heightSensitiveProjection(viewer, { x: 900 });
   assert.equal(cockpit.onSceneDoubleClick({ x: 400, y: 300 }, 1250), false);
   assert.equal(cockpit.active, false);

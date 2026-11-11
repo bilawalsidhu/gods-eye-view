@@ -7,6 +7,7 @@
 
 import { msg } from '../i18n/marker.js';
 import { findGlobe } from '../render/rendererOf.js';
+import { mapEngineFor } from './engine.js';
 
 /** Guidance shown when the active map stack cannot host draped imagery. */
 export const NO_IMAGERY_HOST = msg(
@@ -20,8 +21,8 @@ const NONE = Object.freeze({ collection: null, kind: 'none' });
  * imagery while the globe is shown, else the shown base tileset (the map
  * stack's `getImageryHostTileset()`), else none. `collection` names the host
  * (one value per host, so a change of host is a change of it). A renderer
- * that does not say whether its globe is shown (no `globeVisibility`) has it
- * shown whenever no base tileset is.
+ * that does not say whether its globe is shown (no `globeVisibility`) is
+ * answered by the scene's map engine, which shows and hides it.
  * @param {{ viewer?: object, tileset?: object }} scene
  * @returns {{ collection: object | null, kind: 'globe' | 'tileset' | 'none' }}
  */
@@ -29,7 +30,9 @@ export function resolveImageryHost({ viewer, tileset } = {}) {
   const globe = findGlobe(viewer);
   const shownTileset =
     tileset && tileset.isDestroyed?.() !== true ? tileset : null;
-  const globeShown = globe?.isGlobeVisible?.() ?? (globe && !shownTileset);
+  const globeShown =
+    globe &&
+    (globe.isGlobeVisible?.() ?? mapEngineFor(viewer).globeShown(viewer));
   if (globe && globeShown) return { collection: globe.imagery, kind: 'globe' };
   if (shownTileset) return { collection: shownTileset, kind: 'tileset' };
   return NONE;

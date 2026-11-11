@@ -11,6 +11,7 @@ import {
   FAKE_EVENT_TYPES,
 } from '../input/testDoubles.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
 import { createCesiumInput } from '../render/cesium/input.js';
 import { routeSceneDoubleClick, onSceneDoubleClick } from './cockpitInput.js';
 import { inputFor } from '../input/dispatcher.js';
@@ -27,13 +28,21 @@ function harness(t, { stock = null } = {}) {
   const project = () => ({ x: 100, y: 100 });
   // With `stock`, the renderer's own input port takes the viewer's stock
   // double-click follow and runs it as the app's does; else the fake input.
-  const input = stock ? cesiumInput(viewer, stock, project) : fakeInput(viewer);
-  if (!stock) bindRenderer(viewer, { query: { project } });
+  // The camera port follows the aircraft, as the flights layer's follow does.
+  const camera = { followed: null, on: () => () => {} };
+  const input = stock
+    ? cesiumInput(viewer, stock, project, camera)
+    : fakeInput(viewer);
+  if (!stock) bindRenderer(viewer, { query: { project }, camera });
   const entity = {
     id: 'flights:abc',
     position: { getValue: () => ({ x: 1, y: 2, z: 3 }) },
   };
-  viewer.trackedEntity = entity;
+  camera.followed = entityFollowTarget(entity, {
+    position: () => entity.position.getValue(),
+    frame: 'enu',
+    viewFrom: { x: 0, y: -1000, z: 500 },
+  });
   const controller = {
     viewer,
     active: false,
@@ -69,7 +78,7 @@ function harness(t, { stock = null } = {}) {
 
 /** The Cesium renderer's input port over a fake handler, with `follow` as
  * the viewer's stock double-click follow. */
-function cesiumInput(viewer, follow, project) {
+function cesiumInput(viewer, follow, project, camera) {
   const stock = new FakeScreenSpaceEventHandler();
   stock.setInputAction(follow, FAKE_EVENT_TYPES.LEFT_DOUBLE_CLICK);
   viewer.screenSpaceEventHandler = stock;
@@ -87,7 +96,7 @@ function cesiumInput(viewer, follow, project) {
     },
     document: null,
   });
-  bindRenderer(viewer, { input: made.port, query });
+  bindRenderer(viewer, { input: made.port, query, camera });
   const T = FAKE_EVENT_TYPES;
   const fire = (type) => (position) => handler.fire(type, { position });
   return {

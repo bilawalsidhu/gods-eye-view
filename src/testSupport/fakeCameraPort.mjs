@@ -7,6 +7,8 @@ import { toDegrees } from '../geo/index.js';
 import { bindRenderer, rendererOf } from '../render/rendererOf.js';
 import { createCesiumCamera } from '../render/cesium/camera.js';
 import { fakeCesiumCredits } from './fakeCreditsPort.mjs';
+import { entityFollowTarget, followedOf } from '../data/followed.js';
+import * as Cesium from 'cesium';
 
 const DEFAULT_POSE = Object.freeze({
   lon: 0,
@@ -63,6 +65,62 @@ export function fakeCameraPort({ pose = {}, viewRectangle = null } = {}) {
     stepChanged: () => events.stepChanged(),
     listenerCount: (event) => counts[event] ?? 0,
   };
+}
+
+/**
+ * Cesium's entity tracking for a fake viewer without entities of its own:
+ * the follow's helper entity is tracked here, at the fake clock's time.
+ * @param {object} viewer
+ */
+function trackingWidget(viewer) {
+  const entities = new Cesium.EntityCollection();
+  const trackedEntityChanged = new Cesium.Event();
+  let tracked;
+  return {
+    entities,
+    clock: {
+      get currentTime() {
+        return viewer.clock?.currentTime ?? Cesium.JulianDate.now();
+      },
+    },
+    get trackedEntity() {
+      return tracked;
+    },
+    set trackedEntity(entity) {
+      if (entity === tracked) return;
+      tracked = entity;
+      trackedEntityChanged.raiseEvent(entity);
+    },
+    trackedEntityChanged,
+    isDestroyed: () => false,
+  };
+}
+
+/**
+ * Follow `entity` through `viewer`'s camera port as a layer does
+ * (`entityFollowTarget`), at its own position; null stops following.
+ * Returns the target followed.
+ * @param {object} viewer
+ * @param {object|null} entity
+ */
+export function followEntity(viewer, entity) {
+  const camera = rendererOf(viewer).camera;
+  if (!entity) {
+    camera.follow(null);
+    return null;
+  }
+  const target = entityFollowTarget(entity, {
+    position: () => entity.position?.getValue?.() ?? null,
+    frame: 'enu',
+    viewFrom: { x: 0, y: -1000, z: 500 },
+  });
+  camera.follow(target);
+  return target;
+}
+
+/** The entity `viewer`'s camera follows (`followEntity`), if any. */
+export function followedEntity(viewer) {
+  return followedOf(viewer)?.entity;
 }
 
 /**
@@ -140,12 +198,18 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
     },
     requestRender: () => viewer.scene?.requestRender?.(),
   };
-  // A fake with Cesium's entity tracking follows as the renderer does.
+  // A fake with Cesium's entity tracking follows as the renderer does: on
+  // its own entities, or, where it only answers `contains`, on a tracking
+  // widget of its own over the fake's clock.
   const tracks = Boolean(viewer.trackedEntityChanged && viewer.entities);
+  const widget =
+    tracks && typeof viewer.entities.add !== 'function'
+      ? trackingWidget(viewer)
+      : viewer;
   const real = createCesiumCamera({
     scene,
     camera,
-    ...(tracks ? { widget: viewer } : {}),
+    ...(tracks ? { widget } : {}),
     report: (error) => {
       throw error;
     },

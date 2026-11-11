@@ -13,6 +13,7 @@ import {
 } from './followed.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { createCameraEvents } from '../render/camera/events.js';
+import { createStubRenderer } from '../render/stub/index.js';
 
 /** A camera port that follows, for a viewer bound to a renderer. */
 function followingPort() {
@@ -107,4 +108,22 @@ test('followedPosition reads the display cache', () => {
   entityRecord(entity).displayPosition = () => ({ x: 7, y: 8, z: 9 });
   assert.deepEqual(followedPosition({}, view), { x: 7, y: 8, z: 9 });
   assert.equal(followedPosition({}, null), null);
+});
+
+test('followedPosition falls back to the target position at scene time', () => {
+  const renderer = createStubRenderer();
+  const viewer = {};
+  bindRenderer(viewer, renderer);
+  renderer.frame.setTime(1234);
+  const seen = [];
+  const target = {
+    key: 't',
+    frame: 'enu',
+    viewFrom: { x: 0, y: 0, z: 1 },
+    position: (time) => (seen.push(time), { x: 1, y: 2, z: 3 }),
+  };
+  assert.deepEqual(followedPosition(viewer, target), { x: 1, y: 2, z: 3 });
+  assert.deepEqual(seen, [1234]);
+  target.displayPosition = () => ({ x: 4, y: 5, z: 6 });
+  assert.deepEqual(followedPosition(viewer, target), { x: 4, y: 5, z: 6 });
 });

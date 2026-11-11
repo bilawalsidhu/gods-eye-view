@@ -24,7 +24,11 @@ import {
 } from '../cockpitOrbital.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
-import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { fakeInput } from '../input/testDoubles.mjs';
 
@@ -97,7 +101,7 @@ function stockEventHandler(viewer) {
   };
   actions.set(DOUBLE_CLICK, () => {
     handler.stockCalls += 1;
-    viewer.trackedEntity = undefined;
+    followEntity(viewer, null);
   });
   return handler;
 }
@@ -141,7 +145,6 @@ function fixture(
     gevTrackedId: aircraftInfo ? `flights:${aircraftInfo.icao24}` : '',
   };
   const viewer = {
-    trackedEntity: undefined,
     clock: { currentTime: null },
     camera: {
       // Cesium's frustum: `fov` the wider angle, `fovy` the vertical one.
@@ -409,7 +412,7 @@ test('entering takes the camera and shows only the orbital HUD', async (t) => {
   assert.equal(cockpit.subjectKind, 'satellite');
   assert.equal(cockpit.subjectId, ISS.noradId);
   assert.deepEqual(satellites.calls, [['subject', ISS.noradId]]);
-  assert.equal(viewer.trackedEntity, undefined);
+  assert.equal(followedEntity(viewer), undefined);
   assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, false);
   assert.ok(document.body.classList.contains('cockpit-mode'));
   assert.ok(document.body.classList.contains('cockpit-orbit'));
@@ -759,11 +762,11 @@ test('losing the satellite ends the view without refocusing it', async (t) => {
 
 test('tracking an aircraft from orbit ends the view and keeps that tracking', async (t) => {
   const { cockpit, viewer, satellites, aircraft, clock } = await orbitAt(t);
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   clock.advance(16);
   cockpit.update();
   assert.equal(cockpit.active, false);
-  assert.equal(viewer.trackedEntity, aircraft);
+  assert.equal(followedEntity(viewer), aircraft);
   assert.ok(!satellites.calls.some(([call]) => call === 'refocus'));
 });
 
@@ -785,7 +788,7 @@ test('+ and − mean nothing new in an aircraft cockpit or on a bridge', async (
     onGround: false,
   };
   const air = fixture(t, { satellite: null, aircraftInfo });
-  air.viewer.trackedEntity = air.aircraft;
+  followEntity(air.viewer, air.aircraft);
   assert.equal(air.cockpit.enter({ kind: 'aircraft' }), true);
   for (const key of ['+', '=', '-', '_'])
     assert.equal(press(air.cockpit, key).defaultPrevented, false, key);
@@ -934,7 +937,7 @@ test('a double-click on the followed aircraft model enters instead of untracking
   };
   const scene = fixture(t, { aircraftInfo });
   const { viewer, aircraft, store } = scene;
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   // The model is a primitive, not an Entity: Cesium's own double-click
   // would untrack it.
   doubleClickNearSatellite(scene, 0);
@@ -1058,7 +1061,7 @@ test('a tracked aircraft takes entry before a tracked satellite', async (t) => {
     onGround: false,
   };
   const { cockpit, viewer, aircraft, store } = fixture(t, { aircraftInfo });
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   cockpit.syncEntry();
   assert.equal(store.presence.entryKind, 'aircraft');
 });

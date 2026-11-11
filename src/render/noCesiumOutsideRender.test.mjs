@@ -62,8 +62,8 @@ const isAdapter = (file) => file.startsWith('src/render/cesium/');
  * counts as above. Neither is a file still to port, so neither is on the
  * allow-list; this list is never grown.
  * - The application scene is the composition root: it picks the Cesium
- *   renderer as the default and takes the viewer hooks it hands the
- *   application from the adapter's application module.
+ *   renderer as the default, loading the adapter's application module only
+ *   when it is given no renderer (`DYNAMIC_ENTRIES`).
  * - The conformance page runs the suite on the Cesium adapter's harness
  *   and draws the reference scenes on its scene renderer.
  */
@@ -74,6 +74,12 @@ const ADAPTER_ENTRIES = {
     'src/render/cesium/sceneRenderer.js',
   ],
 };
+
+/**
+ * The entries that load their adapter modules on demand: `import()`, its
+ * result awaited and destructured by name, never kept whole or forwarded.
+ */
+const DYNAMIC_ENTRIES = new Set(['src/app/scene.js']);
 
 const git = (...args) =>
   execFileSync('git', args, { cwd: root, encoding: 'utf8' });
@@ -329,11 +335,26 @@ test('the files that name the adapter by design take named exports, never Cesium
       readFileSync(path.join(root, file), 'utf8'),
     );
     // A static import by name only: no namespace or default binding, no
-    // dynamic import, and no forwarding of the module.
-    for (const [node] of nodesOf(parsed.program)) {
+    // dynamic import (but in DYNAMIC_ENTRIES, one destructured by name), and
+    // no forwarding of the module.
+    const parents = new Map(nodesOf(parsed.program));
+    for (const [node, parent] of parents) {
       const source = node.source?.value;
       if (typeof source !== 'string') continue;
       if (!modules.includes(targetOf(file, source))) continue;
+      if (node.type === 'ImportExpression' && DYNAMIC_ENTRIES.has(file)) {
+        const declarator = parents.get(parent);
+        assert.ok(
+          parent?.type === 'AwaitExpression' &&
+            declarator?.type === 'VariableDeclarator' &&
+            declarator.id.type === 'ObjectPattern' &&
+            declarator.id.properties.every(
+              (p) => p.type === 'ObjectProperty' && !p.computed,
+            ),
+          `${file} must destructure import(${source}) by name`,
+        );
+        continue;
+      }
       assert.equal(
         node.type,
         'ImportDeclaration',

@@ -32,15 +32,28 @@ const shownGlobes = new WeakMap();
 
 const credit = (text) => ({ text });
 
-/** Turn a photoreal handle's base on or off, reporting a failure. */
+/**
+ * Turn a photoreal handle's base on or off. Turning it on can fail (the
+ * port answers route `none`, or rejects): the handle is then off again, so
+ * a later switch tries again, and the globe is shown so the base is not
+ * left blank. Only the latest switch of a handle settles it.
+ */
 function applyPhotoreal(handle, shown) {
   if (handle.shown === shown || released.has(handle)) return;
   handle.shown = shown;
-  handle.globe
-    .setPhotoreal(shown ? handle.spec : null)
-    .catch((error) =>
-      console.warn('[MapStack] photoreal switch failed', error),
-    );
+  const switchId = (handle.switches = (handle.switches ?? 0) + 1);
+  const failed = (error) => {
+    if (handle.switches !== switchId || released.has(handle)) return;
+    console.warn('[MapStack] photoreal switch failed', error);
+    if (!shown) return;
+    handle.shown = false;
+    handle.globe.setGlobeVisible(true);
+    shownGlobes.set(handle.globe, true);
+  };
+  handle.globe.setPhotoreal(shown ? handle.spec : null).then((status) => {
+    if (shown && status?.route === 'none')
+      failed(status.error?.message ?? 'photoreal unavailable');
+  }, failed);
 }
 
 /**

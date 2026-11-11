@@ -180,6 +180,13 @@ export function fakeSceneFrame(viewer) {
   return {
     on: (phase, cb) => listen(viewer.scene?.[phase], cb),
     requestRender: () => viewer.scene?.requestRender?.(),
+    /** Scene time: the fake clock's, else now. */
+    time() {
+      const time = viewer.clock?.currentTime;
+      return time instanceof Cesium.JulianDate
+        ? Cesium.JulianDate.toDate(time).getTime()
+        : Date.now();
+    },
   };
 }
 
