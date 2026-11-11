@@ -1,6 +1,6 @@
 {
-  "gzipBytes": 2176199,
-  "allowanceBytes": 21762,
-  "measuredAt": "Keyless production build with dynamically loaded layer displays",
+  "gzipBytes": 2424291,
+  "allowanceBytes": 24243,
+  "measuredAt": "Keyless production build at the merge of main 14db73f20, whose own main chunk measures 2 351 884 bytes (main grew 232 KB since the last baseline: the News layer and the Swedish catalog); this branch adds 72 KB, as before",
   "allowance": "1% of the baseline; growth past it fails npm run check:main-chunk until the baseline is raised on purpose"
 }
