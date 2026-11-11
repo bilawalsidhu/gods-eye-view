@@ -2,6 +2,7 @@
 // Local, not i18n/marker.js: the token-ledger tests run this file in isolation.
 const msg = (text) => text;
 import { normalizeIdSwitches, patchRequestedIdSwitches } from './idSwitches.js';
+import { normalizeSatelliteClassMask } from './satelliteClassMask.js';
 import reservationRows from './layerStateTokenReservations.json' with { type: 'json' };
 
 const VALID_DISPOSITIONS = new Set([
@@ -416,6 +417,16 @@ const OPTION_GROUPS = Object.freeze({
       dense: 'd',
     }),
     integerOption('selectedSatTrackingId', 't', null),
+    // Every class but Starlink shows by default (satellites/classes.js).
+    Object.freeze({
+      key: 'classes',
+      token: 'k',
+      defaultValue: 'sitpd',
+      normalize: normalizeSatelliteClassMask,
+      encode: (value) => value,
+      decode: (value) =>
+        typeof value === 'string' ? normalizeSatelliteClassMask(value) : null,
+    }),
   ]),
   cctv: Object.freeze([
     enumOption('coverageMode', 'c', 'on', ['off', 'on', 'viewshed'], {
@@ -682,6 +693,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'i',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'news', token: '00', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'radio',
     token: 'r',
@@ -711,6 +723,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'satellites',
   }),
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'shipwrecks', token: '01', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',

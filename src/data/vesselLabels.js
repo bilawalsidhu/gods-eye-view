@@ -155,7 +155,7 @@ export function applyVesselOverlayPolicy(
     edgeFade: 'keyhole',
     horizonCull: true,
     terrainOcclusion: false,
-    // Only MMSI-keyed cards can resolve back to one actionable vessel.
+    // Only keyed cards can resolve back to one actionable vessel.
     interactive: card?.actionable === true,
   };
 }

@@ -76,6 +76,7 @@
     "@happy-dom/global-registrator": "^20.14.6",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/test-utils": "^2.5.1",
+    "flag-icons": "7.5.0",
     "happy-dom": "^20.14.6",
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
@@ -90,6 +91,7 @@
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/app/viewer.js",
+    "./time": "./src/time/worldClock.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },
@@ -97,6 +99,7 @@
       "node": "./server/providers/live.js"
     },
     "./sources/adsb-lol": "./src/data/adsbLolFallback.js",
+    "./sources/planespotters": "./src/data/planespottersPhoto.js",
     "./server/providers/places": {
       "node": "./server/providers/places.js"
     },
@@ -134,6 +137,9 @@
     },
     "./server/providers/regional": {
       "node": "./server/providers/regional.js"
+    },
+    "./server/providers/news": {
+      "node": "./server/providers/news.js"
     },
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
@@ -258,6 +264,7 @@
     "./layers/gnss/source": "./src/layers/gnss/source.js",
     "./layers/ghostmaps/source": "./src/layers/ghostMaps/source.js",
     "./layers/drone-airspace/source": "./src/layers/droneAirspace/source.js",
+    "./layers/news/source": "./src/layers/news/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",

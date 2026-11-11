@@ -1,18 +1,41 @@
 import { coordinates, epoch, finite, LiveSourceError } from './contract.js';
 
-/** AIS positions are sea-surface observations; heading and course are distinct. */
-export function normalizeVesselObservation(row, reference = null) {
-  const id = String(row?.mmsi || row?.input_identifier || '').trim();
+/** An MMSI is up to ten digits (AIS carries it in 30 bits); anything else a
+ * row names it is not one. */
+const MMSI_PATTERN = /^\d{1,10}$/;
+
+/** The row's MMSI when it carries one that looks like an MMSI, else ''. */
+function vesselMmsi(row) {
+  const text = String(row?.mmsi ?? '').trim();
+  return MMSI_PATTERN.test(text) ? text : '';
+}
+
+/** A row's stable id when its source names none: its MMSI or identifier. */
+function defaultVesselId(row) {
+  return String(row?.mmsi || row?.input_identifier || '');
+}
+
+/**
+ * AIS positions are sea-surface observations; heading and course are distinct.
+ * `id` is the vessel's key; an MMSI is not one (vessels share numbers and a
+ * number can move to another hull), so `mmsi` is an attribute, '' when the
+ * row has none. A row with no id of its own is keyed by its MMSI.
+ */
+export function normalizeVesselObservation(row, reference = null, id = null) {
+  const key = String(id ?? defaultVesselId(row)).trim();
   const latitude = finite(row?.lat),
     longitude = finite(row?.lon);
-  if (!id || !coordinates(latitude, longitude)) return null;
+  if (!key || !coordinates(latitude, longitude)) return null;
+  const mmsi = vesselMmsi(row);
   const speedKts = finite(row.speed);
   return {
-    id,
-    reference: reference ?? id,
+    id: key,
+    mmsi,
+    reference: reference ?? key,
     latitude,
     longitude,
-    name: String(row.name || row.input_name || id),
+    // A source's own id is not a name: a vessel with none is unnamed.
+    name: String(row.name || row.input_name || mmsi || defaultVesselId(row)),
     imo: String(row.imo || ''),
     type: String(row.type_specific || row.type || ''),
     destination: String(row.destination || ''),
@@ -26,12 +49,21 @@ export function normalizeVesselObservation(row, reference = null) {
   };
 }
 
+/**
+ * A vessel snapshot from a `{ rows }` payload. `idFor(row)` gives a row's
+ * stable id (its MMSI or identifier by default); rows are deduped by that id,
+ * so two vessels sharing an MMSI stay two vessels. A source whose rows carry
+ * an id of their own passes it, such as `idFor: (row) => row.uuid || row.mmsi`.
+ * `referenceFor(row)` gives the reference its track is asked for by; the id
+ * by default.
+ */
 export function vesselSnapshot(
   payload,
   {
     source = 'AISStream',
     coverage = 'received AIS positions',
-    referenceFor = (row) => String(row.mmsi || row.input_identifier || ''),
+    idFor = defaultVesselId,
+    referenceFor = null,
   } = {},
 ) {
   if (!Array.isArray(payload?.rows))
@@ -40,8 +72,13 @@ export function vesselSnapshot(
   const records = [],
     ids = new Set();
   for (const row of rows) {
-    const record = normalizeVesselObservation(row);
-    if (record) record.reference = referenceFor(row);
+    const record = normalizeVesselObservation(
+      row,
+      null,
+      row && typeof row === 'object' ? idFor(row) : null,
+    );
+    // A row's track is asked for by its id unless the source says otherwise.
+    if (record && referenceFor) record.reference = referenceFor(row);
     if (record && !ids.has(record.id)) {
       records.push(record);
       ids.add(record.id);

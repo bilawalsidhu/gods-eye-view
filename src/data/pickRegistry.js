@@ -21,7 +21,7 @@ const _owners = new Map();
  *
  * Layers use heterogeneous pick ids: flights/military/bikeshare/CCTV use
  * strings, satellites use numeric NORAD catalog ids, live AIS vessels attach
- * the vessel record OBJECT (identity = its `mmsi`), and entity picks surface
+ * the vessel record OBJECT (identity = its `id`), and entity picks surface
  * the Cesium Entity (identity = its string `id`). Everything is coerced to a
  * String so predicates match against one canonical form.
  *
@@ -33,9 +33,7 @@ export function resolvePickId(picked) {
   const unwrap = (id) => {
     if (id === null || id === undefined) return undefined;
     if (typeof id === 'object') {
-      // AIS vessel record (id object with .mmsi) or Cesium Entity (.id string)
-      if (typeof id.mmsi === 'string' || typeof id.mmsi === 'number')
-        return id.mmsi;
+      // AIS vessel record or Cesium Entity: both are keyed by their `.id`.
       if (typeof id.id === 'string' || typeof id.id === 'number') return id.id;
       return undefined;
     }
