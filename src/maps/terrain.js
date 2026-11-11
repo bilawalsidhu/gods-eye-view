@@ -1,9 +1,8 @@
 import * as Cesium from 'cesium';
 import { createTerrainRetryPolicy } from './terrainRetry.js';
+import { KEYLESS_TERRAIN_URL } from './sourceSettings.js';
 
-/** Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0. */
-export const KEYLESS_TERRAIN_URL =
-  'https://terrain.reearth.land/cesium-mesh/ellipsoid';
+export { KEYLESS_TERRAIN_URL };
 
 /** These factories are lazy: a hidden globe must not trigger terrain loading. */
 export async function createWorldTerrain(accessToken, { signal } = {}) {
@@ -31,7 +30,8 @@ function logThrottle({ statusCode, delayMs, inWindow }) {
 }
 
 /**
- * The Re:Earth resource with the tile retry policy attached. Cesium copies
+ * The keyless terrain resource (Re:Earth unless GEV_TERRAIN_URL names
+ * another) with the tile retry policy attached. Cesium copies
  * `retryCallback`/`retryAttempts` onto every derived resource, so layer.json
  * and each `{z}/{x}/{y}.terrain` fetch inherit it (see `terrainRetry.js`).
  * @param {ReturnType<typeof createTerrainRetryPolicy>} [policy]
@@ -39,19 +39,25 @@ function logThrottle({ statusCode, delayMs, inWindow }) {
  */
 export function createKeylessTerrainResource(
   policy = createTerrainRetryPolicy({ onThrottle: logThrottle }),
+  url = KEYLESS_TERRAIN_URL,
 ) {
   return new Cesium.Resource({
-    url: KEYLESS_TERRAIN_URL,
+    url,
     retryCallback: policy.retryCallback,
     retryAttempts: policy.retryAttempts,
   });
 }
 
-export async function createKeylessTerrain() {
+/**
+ * @param {string|null} [url] a parsed GEV_TERRAIN_URL: undefined for Re:Earth,
+ *   null for the flat ellipsoid without any request
+ */
+export async function createKeylessTerrain(url) {
+  if (url === null) return { provider: new Cesium.EllipsoidTerrainProvider() };
   try {
     return {
       provider: await Cesium.CesiumTerrainProvider.fromUrl(
-        createKeylessTerrainResource(),
+        createKeylessTerrainResource(undefined, url),
       ),
     };
   } catch (error) {

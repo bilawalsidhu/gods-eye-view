@@ -7546,6 +7546,14 @@ tile-failure fallback, so a failing operator server is never replaced by a
 public host. The server validates the value once (`src/maps/sourceSettings.js`)
 and the build exposes it to the browser only when set; an invalid value stops
 the dev server and the build instead of falling back to Esri.
+`GEV_TERRAIN_URL` replaces Re:Earth for the keyless terrain with an https
+quantized-mesh URL, or `none` selects `EllipsoidTerrainProvider` without any
+terrain request and without the background retry an unreachable terrain gets.
+Once the setting is present the `/api/terrain/heights` proxy answers 503 at
+once without contacting an upstream (point heights are a Re:Earth API, not part
+of quantized mesh), so the page places objects on its bundled geoid, also when
+an ion token selects ion world terrain. Operator tile and terrain servers must
+send `Access-Control-Allow-Origin`, since Cesium fetches them cross-origin.
 Unit-tested in `src/maps/selfHostedSources.test.mjs`.
 
 Map-stack subscribers hear each settled activation once. A subscriber removed

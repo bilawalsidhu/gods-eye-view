@@ -19,6 +19,7 @@ export function createDefaultMapSources({
   googleApiKey = '',
   basemapUrl,
   basemapAttribution = '',
+  terrainUrl,
 } = {}) {
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
@@ -27,7 +28,7 @@ export function createDefaultMapSources({
     id: hasIon ? 'world' : 'keyless',
     create: hasIon
       ? (request) => createWorldTerrain(ionToken, request)
-      : createKeylessTerrain,
+      : () => createKeylessTerrain(terrainUrl),
   };
   return {
     defaultId: googleTileset ? 'photoreal' : 'esri-imagery',

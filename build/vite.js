@@ -5,7 +5,10 @@ import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
-import { basemapUrlSetting } from '../src/maps/sourceSettings.js';
+import {
+  basemapUrlSetting,
+  terrainUrlSetting,
+} from '../src/maps/sourceSettings.js';
 
 /**
  * The repository root (this file lives at `<root>/build/vite.js`), as a
@@ -173,6 +176,7 @@ export function createBrowserViteConfig({
   photonUrl,
   basemapUrl,
   basemapAttribution,
+  terrainUrl,
   mapillaryToken,
   host = 'localhost',
   port = 4173,
@@ -181,6 +185,7 @@ export function createBrowserViteConfig({
 } = {}) {
   const photonSetting = photonEndpointSetting(photonUrl);
   const basemap = basemapUrlSetting(basemapUrl);
+  const terrain = terrainUrlSetting(terrainUrl);
   return {
     plugins: [
       // First, so every API response, including a Host refusal, carries them.
@@ -266,6 +271,10 @@ export function createBrowserViteConfig({
               String(basemapAttribution ?? '').trim(),
             ),
           }),
+      // A terrain URL, or null for the flat ellipsoid; absent keeps Re:Earth.
+      ...(terrain === undefined
+        ? {}
+        : { 'import.meta.env.GEV_TERRAIN_URL': JSON.stringify(terrain) }),
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
         mapillaryToken ?? '',

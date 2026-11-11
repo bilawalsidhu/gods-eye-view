@@ -697,6 +697,8 @@ and restart:
 
 - `GEV_BASEMAP_URL`: an https XYZ tile template for your own basemap, in place
   of Esri World Imagery, with `GEV_BASEMAP_ATTRIBUTION` for its credit.
+- `GEV_TERRAIN_URL`: the https URL of your own quantized-mesh terrain, or
+  `none` for flat terrain with no terrain requests.
 
 Layers you turn on still contact their own providers.
 

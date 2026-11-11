@@ -2,9 +2,14 @@
 // and which hosts the default globe then asks for.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import * as Cesium from 'cesium';
 import { createBrowserViteConfig } from '../../build/vite.js';
+import { terrainHeightsProxy } from '../../server/providers/terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
+import { terrainHeightsUrl, terrainUrlSetting } from './sourceSettings.js';
 
 const TEMPLATE = 'https://tiles.example.test/world/{z}/{x}/{y}.png';
 
@@ -85,4 +90,93 @@ test('without a basemap setting the keyless globe keeps Esri and its OSM fallbac
   assert.equal(slot.descriptor.label, 'Esri Satellite');
   assert.equal(slot.constructionFallback.id, 'osm');
   assert.equal(slot.tileFailureFallback.id, 'osm');
+});
+
+test('GEV_TERRAIN_URL reaches the browser as an https URL, or null for flat terrain', () => {
+  const define = (terrainUrl) =>
+    createBrowserViteConfig({ terrainUrl }).define['import.meta.env.GEV_TERRAIN_URL'];
+  assert.equal(define(undefined), undefined, 'unset keeps Re:Earth');
+  assert.equal(define(''), undefined);
+  assert.equal(define(' None '), 'null');
+  assert.equal(
+    define('https://dem.example.test/mesh/'),
+    '"https://dem.example.test/mesh"',
+  );
+  for (const refused of ['http://dem.example.test/mesh', 'flat', 'off'])
+    assert.throws(
+      () => createBrowserViteConfig({ terrainUrl: refused }),
+      /GEV_TERRAIN_URL must be an https quantized-mesh URL or none/,
+      refused,
+    );
+});
+
+test('the keyless terrain follows GEV_TERRAIN_URL, and none asks nothing', async (t) => {
+  const asked = [];
+  t.mock.method(Cesium.CesiumTerrainProvider, 'fromUrl', async (resource) => {
+    asked.push(resource.url);
+    return { resource };
+  });
+  const create = (terrainUrl) =>
+    esriSlot(createDefaultMapSources({ terrainUrl })).terrain.create();
+
+  const flat = await create(null);
+  assert.ok(flat.provider instanceof Cesium.EllipsoidTerrainProvider);
+  assert.equal(flat.fallback, undefined, 'flat by choice is not retried');
+  assert.deepEqual(asked, []);
+
+  await create('https://dem.example.test/mesh');
+  await create(undefined);
+  assert.deepEqual(asked, [
+    'https://dem.example.test/mesh',
+    'https://terrain.reearth.land/cesium-mesh/ellipsoid',
+  ]);
+});
+
+/** The /api/terrain/heights handler, as the server installs it. */
+async function heightsRoute(t, heightsUrl) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gev-self-hosted-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  let route;
+  terrainHeightsProxy({
+    cachePath: path.join(dir, 'terrain.json'),
+    heightsUrl,
+  }).configureServer({ middlewares: { use: (_path, handler) => (route = handler) } });
+  return (url) =>
+    new Promise((resolve, reject) => {
+      const res = {
+        headersSent: false,
+        setHeader() {},
+        writeHead(status) {
+          this.status = status;
+          this.headersSent = true;
+        },
+        end(body) {
+          resolve({ status: this.status, body: JSON.parse(body) });
+        },
+      };
+      const req = { method: 'GET', url, headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+      Promise.resolve(route(req, res)).catch(reject);
+    });
+}
+
+test('the heights proxy keeps Re:Earth by default and asks no one once terrain is set', async (t) => {
+  const asked = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    asked.push(new URL(String(url)).origin + new URL(String(url)).pathname);
+    return Response.json({ results: [{ ellipsoid: 150 }] });
+  });
+  const setting = (value) => terrainHeightsUrl(terrainUrlSetting(value));
+
+  const off = await (await heightsRoute(t, setting('none')))('/?points=1,2');
+  assert.equal(off.status, 503);
+  assert.deepEqual(asked, [], 'none never reaches an upstream');
+
+  const own = await (
+    await heightsRoute(t, setting('https://dem.example.test/mesh'))
+  )('/?points=1,2');
+  assert.equal(own.status, 503, 'quantized mesh has no point-heights API');
+  assert.deepEqual(asked, []);
+  const keyless = await (await heightsRoute(t, setting(undefined)))('/?points=3,4');
+  assert.equal(keyless.status, 200);
+  assert.deepEqual(asked, ['https://terrain.reearth.land/heights.json']);
 });

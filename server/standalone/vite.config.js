@@ -38,6 +38,7 @@ export function standaloneConfig(
     photonUrl: process.env.PHOTON_URL,
     basemapUrl: process.env.GEV_BASEMAP_URL,
     basemapAttribution: process.env.GEV_BASEMAP_ATTRIBUTION,
+    terrainUrl: process.env.GEV_TERRAIN_URL,
     mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
