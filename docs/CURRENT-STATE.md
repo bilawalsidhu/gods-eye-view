@@ -7559,9 +7559,11 @@ on purpose:
   the elapsed time + 1 s, plus 300 ft. A refused report holds the last
   accepted altitude for the marker height, the card, the model ceiling and
   route plausibility alike, and is counted as `rejectedAltitudes` in the
-  layer stats. Only a newer message is judged, so the layer's repeated
-  re-reads of one record neither count twice nor let a refused value
-  through. Three refusals in a row re-anchor, so a bad first altitude clears
+  layer stats; the held record carries
+  `altitudeQuality: 'held-after-rejection'`. Only a newer altitude is judged
+  (`altitudeAt`, the time of the message the altitude came from), so the
+  layer's repeated re-reads of one record, and the decoder's later
+  non-altitude messages, neither count twice nor let a refused value through. Three refusals in a row re-anchor, so a bad first altitude clears
   itself. A surface report passes unjudged, because a feed's `ground` is 0
   and not a barometric reading. There is no absolute ceiling: balloons really
   do fly above 100,000 ft.
@@ -7586,7 +7588,7 @@ The card's `TRK` label wraps after rounding to whole degrees, so a track of
 Receivers publish one record shape from `src/sources/adsbRecords.js`
 (`icao`, `callsign`, `category`, `onGround`, `lat`, `lon`, `altitudeFt`,
 `groundSpeedKt`, `trackDeg`, `verticalRateFpm`, `lastPositionAt`,
-`lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
+`altitudeAt`, `lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
 `webusb` (browser SDR) or `feed` (decoder feed).
 `normalizeDump1090Aircraft(json, nowMs, { band })` maps a dump1090/readsb/
 skyaware978 `aircraft.json` document into the same records; a row without

@@ -20,6 +20,12 @@
  *   onGround: boolean,            // the receiver reported the aircraft on the
  *                                 // surface (dump1090 `alt_baro: "ground"`)
  *   lastPositionAt: number|null,  // epoch ms of the newest decoded position
+ *   altitudeAt: number|null,      // epoch ms of the message `altitudeFt` came
+ *                                 // from; a feed does not say, so its records
+ *                                 // carry `lastMessageAt`
+ *   altitudeQuality?: 'held-after-rejection', // set only by
+ *                                 // gateLocalAdsbAltitude: `altitudeFt` is the
+ *                                 // last accepted value, not the newest report
  *   lastMessageAt: number,        // epoch ms of the newest CRC-valid message
  *   messageCount: number,
  *   rssiDbfs: number|null,
@@ -241,14 +247,18 @@ export function createLocalAdsbAltitudeGate() {
  *
  * Returns `record` itself, or a copy whose `altitudeFt` is the last accepted
  * altitude, so the marker height, the card, the 3D-model ceiling and route
- * plausibility all read the same value. A refused report is counted in
- * `gate.rejected`. From the third consecutive refusal on, the candidate
- * becomes the new reference, as positions do: a bad first altitude cannot
- * freeze the aircraft at it.
+ * plausibility all read the same value. The copy is marked
+ * `altitudeQuality: 'held-after-rejection'`, so a consumer can tell a held
+ * value from a fresh one. A refused report is counted in `gate.rejected`.
+ * From the third consecutive refusal on, the candidate becomes the new
+ * reference, as positions do: a bad first altitude cannot freeze the aircraft
+ * at it.
  *
- * Only a report with a newer `lastMessageAt` is judged. The layer re-reads the
- * same record several times a second, and a re-read must neither count toward
- * a re-anchor nor slip a refused value through. A surface report passes
+ * Only a report with a newer `altitudeAt` (else `lastMessageAt`) is judged.
+ * The layer re-reads the same record several times a second, and the browser
+ * decoder keeps an altitude while newer non-altitude messages arrive. Neither
+ * a re-read nor a re-sent altitude may count toward a re-anchor or slip a
+ * refused value through. A surface report passes
  * unjudged: a feed reports `alt_baro: "ground"` as 0, which is not a
  * barometric reading, so a landing at a high field is not a 5,000 ft drop.
  * @param {object} record Local ADS-B record.
@@ -258,7 +268,8 @@ export function createLocalAdsbAltitudeGate() {
 export function gateLocalAdsbAltitude(record, gate) {
   if (record?.onGround) return record;
   const altitudeFt = finiteOrNull(record?.altitudeFt);
-  const at = finiteOrNull(record?.lastMessageAt);
+  const at =
+    finiteOrNull(record?.altitudeAt) ?? finiteOrNull(record?.lastMessageAt);
   if (altitudeFt === null || at === null) return record;
   if (gate.judgedAt === null || at > gate.judgedAt) {
     gate.judgedAt = at;
@@ -281,7 +292,7 @@ export function gateLocalAdsbAltitude(record, gate) {
   }
   const held = gate.accepted?.altitudeFt;
   return Number.isFinite(held) && held !== altitudeFt
-    ? { ...record, altitudeFt: held }
+    ? { ...record, altitudeFt: held, altitudeQuality: 'held-after-rejection' }
     : record;
 }
 
@@ -321,6 +332,7 @@ export function recordFromDecoderTrack(track) {
     trackDeg: normalizeTrack(track.headingDeg),
     verticalRateFpm: finiteOrNull(track.verticalRateFpm),
     lastPositionAt: lat === null ? null : finiteOrNull(track.lastPositionAt),
+    altitudeAt: finiteOrNull(track.altitudeAt),
     lastMessageAt: finiteOrNull(track.lastSeen) ?? 0,
     messageCount: Math.max(0, Math.trunc(finiteOrNull(track.messages) ?? 0)),
     rssiDbfs: null,
@@ -372,6 +384,7 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
         : null,
+      altitudeAt: altitude === null ? null : receivedAt - seenS * 1000,
       lastMessageAt: receivedAt - seenS * 1000,
       messageCount: Math.max(0, Math.trunc(finiteOrNull(entry.messages) ?? 0)),
       rssiDbfs: finiteOrNull(entry.rssi),

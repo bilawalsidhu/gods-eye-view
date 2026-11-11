@@ -397,6 +397,7 @@ export function updateAircraftTrack(
     messages: 0,
     lastSeen: 0,
     lastPositionAt: null,
+    altitudeAt: null,
     onGround: false,
     cprEven: null,
     cprOdd: null,
@@ -421,12 +422,16 @@ export function updateAircraftTrack(
     if (message[key] !== undefined && message[key] !== null)
       next[key] = message[key];
   }
+  // When the altitude was heard, so later messages that leave it unchanged
+  // are not taken for a fresh report of it.
+  if (Number.isFinite(message.altitudeFt)) next.altitudeAt = message.receivedAt;
   // A position message says where the aircraft is: on the surface (no
   // altitude, no climb) or airborne again.
   if (typeof message.onGround === 'boolean') {
     next.onGround = message.onGround;
     if (message.onGround) {
       next.altitudeFt = null;
+      next.altitudeAt = null;
       next.verticalRateFpm = null;
     }
   }
