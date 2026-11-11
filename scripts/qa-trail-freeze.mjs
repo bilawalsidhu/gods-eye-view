@@ -20,24 +20,40 @@ try {
   await page.setViewport({ width: 960, height: 640 });
   await blockPaidQaMaps(page);
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await waitForEngine(page);
+  await waitForEngine(
+    page,
+    new URL(url).searchParams.get('engine') ?? 'navara',
+  );
   const result = await evaluateWithGeo(page, async (geo) => {
     const { createTrail, CHUNK_POINTS } =
       await import('/src/data/trailRenderer.js');
     const { engine } = window.__godsEyeView;
     engine.camera.cancelFlight();
     const camera = engine.camera.pose();
+    const offset = (direction, metres) =>
+      geo.cartesian3.multiplyByScalar(
+        direction,
+        metres,
+        geo.cartesian3.create(),
+      );
+    // Halfway down to the ground along the view, so the trail is drawn in
+    // front of the surface on both engines rather than through it.
+    const below = geo.cartographic.fromCartesian(camera.position);
+    const clearance = below.height - (engine.surface.terrainHeight(below) ?? 0);
+    const distance = Math.min(
+      3000,
+      (0.5 * clearance) / Math.max(Math.sin(-camera.pitch), 0.05),
+    );
     const ahead = geo.cartesian3.add(
       camera.position,
-      geo.cartesian3.multiplyByScalar(camera.direction, 3000),
+      offset(camera.direction, distance),
+      geo.cartesian3.create(),
     );
     const points = Array.from({ length: CHUNK_POINTS + 1 }, (_, index) =>
       geo.cartesian3.add(
         ahead,
-        geo.cartesian3.multiplyByScalar(
-          camera.right,
-          -1200 + (2400 * index) / CHUNK_POINTS,
-        ),
+        offset(camera.right, distance * (-0.4 + (0.8 * index) / CHUNK_POINTS)),
+        geo.cartesian3.create(),
       ),
     );
     const gl =

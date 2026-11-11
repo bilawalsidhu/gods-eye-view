@@ -17,7 +17,7 @@ try {
     const url = new URL(base);
     url.search = `?engine=${kind}&welcome=0`;
     await page.goto(url.href, { waitUntil: 'domcontentloaded' });
-    await waitForEngine(page);
+    await waitForEngine(page, kind);
     await evaluateWithGeo(page, (geo) => {
       window.__godsEyeView.engine.camera.setView({
         destination: geo.cartesian3.fromDegrees(-79.38, 43.65, 500000),
