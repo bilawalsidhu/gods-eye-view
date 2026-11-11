@@ -110,8 +110,10 @@ shows only on the Google 3D map, so a `google` source sets `map` to
 photos. Links carry it as `sl=<source>,<lat>,<lon>`: once restored, the app
 runs `show_street_level`, which flies there and opens the nearest photo. A
 plain link with a `google` source only arms the panel for OPEN GOOGLE STREET
-VIEW; a view posted into the embedded app, or the panel page's own opening
-link, opens it, and `?embed=1` on a published link does not. Mapillary,
+VIEW; a view posted into the embedded app opens it, and so does the panel
+page's own opening link, but only for a tool result issued in the last five
+minutes (an older one, such as a host remounting the panel, only arms);
+`?embed=1` on a published link does not. Mapillary,
 KartaView and Panoramax, which do not bill per image, open at once. A link
 that follows an entity ignores `sl`.
 

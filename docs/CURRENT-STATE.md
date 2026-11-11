@@ -5315,9 +5315,10 @@ a point, which defaults to where the camera looks (below 20 km, at a pitch
 steeper than -5° and within 10 km ahead; else the camera's own point, also
 for half a point). A `google` source brings `map: photoreal` and refuses
 another map; `street_level` does not combine with `follow`.
-`show_in_gods_eye_view` measures a view's altitude from the terrain under the
-camera (`services.terrain`) before taking the look-at point, and keeps the
-view's own estimate without a terrain answer. Links carry
+`show_in_gods_eye_view`, and the embedded app for a posted view with no
+point, measure the view's altitude from the terrain under the camera
+(`groundedLookAt` with the terrain heights service) before taking the look-at
+point, and keep the view's own estimate without a terrain answer. Links carry
 `sl=<source>,<lat>,<lon>`; the globe panel applies views through the action,
 and a plain link runs it once restored (one shot: the rewritten hash drops
 `sl`). A link that follows an entity ignores `sl`.

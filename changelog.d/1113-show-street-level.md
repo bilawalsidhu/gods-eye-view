@@ -8,8 +8,11 @@
   View and leaves the load to OPEN GOOGLE STREET VIEW; embedded views open it,
   and so does the God's Eye View panel for a result issued in the last five
   minutes; a link whose source has no working key says so. A request stops
-  when the user navigates or hides the panel before its photo loads; a new
-  photo replaces the open one in place, so EXPAND stays. When nothing is found and a 360°, flat or SINCE filter is on, the
-  answer names the filter. An unavailable map stack now reports the
+  when the user navigates, or enters cockpit, clean view, recording or scene
+  playback, before its photo loads (collapsing the panel does not stop it: the
+  photo reveals it); a new photo replaces the open one in place, so EXPAND
+  stays. When nothing is found and a 360°, flat or SINCE filter is on, the
+  answer names the filter. Failure cards are in the interface language. An
+  unavailable map stack now reports the
   controller's own reason instead of always asking for a Cesium ion token
   (Said Turksever, @asturksever, #1113).
