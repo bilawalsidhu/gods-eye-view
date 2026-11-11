@@ -6,6 +6,8 @@
  * - it starts, with no Cesium module requested at all (no script, no
  *   worker, no asset it would fetch; the one Cesium stylesheet the build's
  *   `vite-plugin-cesium` links into every page is reported, not failed);
+ * - the credits show in the application's own line, and its list opens
+ *   with the data credits;
  * - each data layer named below turns on, and off, without a page error or
  *   a console error (a feed's failed response is reported as the feed's,
  *   not failed: without network access or keys a feed answers with an
@@ -58,8 +60,22 @@ const isPluginStylesheet = (url, type) =>
   type === 'stylesheet' &&
   new URL(url).pathname === '/cesium/Widgets/widgets.css';
 
-/** A browser's line for a response that failed: the feed's, not the page's. */
-const isFailedResponse = (text) => /^Failed to load resource:/.test(text);
+/**
+ * A browser's line for a feed's response that failed: one of the dev
+ * server's providers (`/api/`) or another origin's. The application's own
+ * modules and assets failing are the page's.
+ */
+const isFailedResponse = (text, at, base) => {
+  if (!/^Failed to load resource:/.test(text)) return false;
+  try {
+    const url = new URL(at);
+    return (
+      url.origin !== new URL(base).origin || url.pathname.startsWith('/api/')
+    );
+  } catch {
+    return false;
+  }
+};
 
 /**
  * An error the dev server's own client logs (its socket to the server, which
@@ -157,7 +173,7 @@ async function run(args) {
       const text = message.text();
       const at = message.location()?.url ?? null;
       errors.push({
-        kind: isFailedResponse(text)
+        kind: isFailedResponse(text, at, base)
           ? 'response'
           : isDevClient(at)
             ? 'tooling'
@@ -215,6 +231,26 @@ async function run(args) {
       };
     });
     report.startupErrors = errors.slice();
+    // The credits show in the application's own line, with no Cesium: the
+    // line is on screen and its list opens with the data credits in it.
+    report.credits = await page.evaluate(async () => {
+      const line = document.getElementById('gev-credits');
+      const expand = line?.querySelector('.gev-credits-expand');
+      const panel = document.getElementById('gev-credits-panel');
+      const box = line?.getBoundingClientRect();
+      const visible =
+        Boolean(box && box.width > 0 && box.height > 0) &&
+        getComputedStyle(line).visibility !== 'hidden';
+      expand?.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const listed =
+        panel?.hidden === false ? panel.querySelectorAll('li').length : 0;
+      expand?.click();
+      return { visible, line: line?.textContent ?? null, listed };
+    });
+    console.log(
+      `credits: ${report.credits.visible ? 'shown' : 'NOT shown'}; line "${report.credits.line}"; ${report.credits.listed} listed`,
+    );
     const known = await page.evaluate(() =>
       window.__godsEyeView.dataManager.getAll().map((layer) => layer.id),
     );
@@ -316,6 +352,9 @@ async function run(args) {
       );
     }
     report.ok = true;
+  } catch (error) {
+    // Reported with the rest below, so the report and errors are kept.
+    report.failure = String(error?.stack || error);
   } finally {
     report.cesiumRequests = cesiumRequests;
     report.cesiumStylesheets = cesiumStylesheets;
@@ -327,9 +366,15 @@ async function run(args) {
   const failedResponses = errors.filter((error) => error.kind === 'response');
   const toolingErrors = errors.filter((error) => error.kind === 'tooling');
   const problems = [];
+  if (report.failure) problems.push(`the run stopped: ${report.failure}`);
   if (!report.started?.ok) problems.push('the application did not start');
   if (!report.renderer?.canvasInPage)
     problems.push("the stub's canvas is not in the page");
+  if (
+    report.started?.ok &&
+    (!report.credits?.visible || !report.credits.listed)
+  )
+    problems.push('the credits line is not shown, or its list is empty');
   if (cesiumRequests.length)
     problems.push(`Cesium was requested: ${cesiumRequests.join(', ')}`);
   if (pageErrors.length) problems.push(`${pageErrors.length} page error(s)`);

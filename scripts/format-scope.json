@@ -1451,5 +1451,7 @@
   "src/render/cesium/viewers.js",
   "src/app/scene.test.mjs",
   "dev/stub-app/main.js",
-  "scripts/qa-stub-boot.mjs"
+  "scripts/qa-stub-boot.mjs",
+  "src/ui/creditsView.js",
+  "src/ui/creditsView.test.mjs"
 ]

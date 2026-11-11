@@ -1,5 +1,6 @@
 import { createApplicationOperations } from './operations.js';
 import { registerDataCredits } from '../data/dataCredits.js';
+import { mountCreditsView } from '../ui/creditsView.js';
 import { MapStackController } from '../mapStackController.js';
 import { mapEngineFor } from '../maps/engine.js';
 import { initLogoGaze } from '../logoGaze.js';
@@ -28,15 +29,17 @@ let defaultLoad = null;
  * @returns {Promise<object>} The default `RendererPlugin`.
  */
 export function loadDefaultRenderer() {
-  defaultLoad ??= (async () => {
+  if (defaultLoad) return defaultLoad;
+  const load = (async () => {
     const { cesiumRenderer } = await import('../render/cesium/application.js');
     return cesiumRenderer;
   })();
+  defaultLoad = load;
   // A load that failed is tried again by the next call.
-  defaultLoad.catch(() => {
-    defaultLoad = null;
+  load.catch(() => {
+    if (defaultLoad === load) defaultLoad = null;
   });
-  return defaultLoad;
+  return load;
 }
 
 /**
@@ -130,6 +133,9 @@ export async function createApplicationScene({
     }),
   );
   registerDataCredits(viewer, credits);
+  // The credits, in the application's own line, unless the renderer shows
+  // them in a display of its own.
+  if (!hooks.ownCreditDisplay) defer(mountCreditsView(viewer));
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')

@@ -6888,11 +6888,19 @@ renderer's own objects: the record of files that still did,
   shown.
 - The renderer follows its container's size (`Renderer.resize`, from a
   `ResizeObserver`).
+- The credits: the Cesium renderer's plugin says it shows them in a display
+  its own (`ownCreditDisplay`; Cesium's `#cesium-credits`) keeps it. On any
+  other, the application shows what the credits port lists in its own line
+  at the bottom left (`#gev-credits`, `src/ui/creditsView.js`): the inline
+  credits on the line, the rest (the layers' data credits among them) in
+  the "Data attribution" list it opens, a keyboard button with Escape to
+  close.
 
 `npm run qa:stub-boot` boots the whole application on the stub with only
 the contract's required members (`dev/stub-app/main.js`, served in place of
 `src/main.js` on the application's own page), headless. It fails if
-Cesium's code is requested (the one stylesheet `vite-plugin-cesium` links
+the credits line is not shown or its list is empty, if Cesium's code is
+requested (the one stylesheet `vite-plugin-cesium` links
 into every page is reported), on any page or console error, or if a data
 layer (flights, transit, traffic, CCTV, AIS vessels, weather radar and
 satellite, wind, satellites, FIRMS, wildlife) fails to turn on or off. A

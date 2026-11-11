@@ -169,6 +169,8 @@ export function createCesiumRendererPlugin({
       unbind = bindRenderer(viewer, renderer);
       provideApplicationHooks(renderer, {
         mapEngine: cesiumMapEngine,
+        // Cesium's credit display (#cesium-credits) shows the credits.
+        ownCreditDisplay: true,
         // Drops the draw commands the scene keeps after it stops drawing
         // them; run after a drawn frame (see sceneCommandRelease.js).
         trimStaleCommands: () => trimStaleSceneCommands(viewer.scene),

@@ -18,6 +18,9 @@
  * - `installZoomOutGuard(options)`: keeps outward user zooms bounded and the
  *   Earth framed; returns its disposer.
  * - `qaHandles`: values QA scripts read from `window.__godsEyeView`.
+ * - `ownCreditDisplay`: true when the renderer shows its credits in a
+ *   display of its own; otherwise the application shows what its credits
+ *   port lists (`src/ui/creditsView.js`).
  */
 
 const hooks = new WeakMap();

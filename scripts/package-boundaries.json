@@ -4573,7 +4573,8 @@
       "src/render/cesium/imageryLookAhead.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/ui/creditsView.js"
     ],
     "external": [
       "hls.js",

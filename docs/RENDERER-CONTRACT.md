@@ -217,7 +217,10 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   `provideApplicationHooks(renderer, hooks)` (`src/render/applicationHooks.js`),
   each hook optional and used only where given: a map engine of its own,
   stale command trimming, inline panel rendering, whether an entity is its
-  own, the zoom-out guard, and what QA scripts read from
+  own, the zoom-out guard, whether it shows its credits in a display of
+  its own (`ownCreditDisplay`; otherwise the application's own line,
+  `src/ui/creditsView.js`, shows the credits port's list), and what QA
+  scripts read from
   `window.__godsEyeView` (Cesium's viewer there, for the scripts that drive
   it). None is a contract member, and a renderer without them runs the
   application without that behaviour.
@@ -227,7 +230,8 @@ on (no `renderer.id`, no engine type, no engine object's presence).
 - **The proof.** `npm run qa:stub-boot` (`scripts/qa-stub-boot.mjs`) serves
   the application's page with `dev/stub-app/main.js` as its entry: the whole
   application on the stub with no capability at all. It fails when the page
-  requests any Cesium module or asset, on a page or console error, or when a
+  requests any Cesium module or asset, when the credits line is not shown
+  with its data credits, on a page or console error, or when a
   data layer (flights, transit, traffic, CCTV, vessels, weather, wind,
   satellites, FIRMS, wildlife) fails to turn on or off; `--strict` also fails
   a layer that draws nothing on the stub (it needs the live feeds).

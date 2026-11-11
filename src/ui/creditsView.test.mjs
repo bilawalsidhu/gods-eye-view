@@ -1,0 +1,66 @@
+import '../testSupport/registerDom.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mountCreditsView } from './creditsView.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { createStubRenderer } from '../render/stub/index.js';
+
+function scene() {
+  document.body.replaceChildren();
+  const renderer = createStubRenderer();
+  const viewer = {};
+  bindRenderer(viewer, renderer);
+  return { viewer, renderer };
+}
+
+test("the renderer's credits show on the line, and the rest in the list it opens", () => {
+  const { viewer, renderer } = scene();
+  renderer.credits.addStatic({
+    text: 'Google',
+    href: 'https://maps.google.com',
+    inline: true,
+  });
+  const off = mountCreditsView(viewer);
+  const line = document.querySelector('#gev-credits .gev-credits-line');
+  assert.equal(line.textContent, 'Google');
+  assert.equal(line.querySelector('a').href, 'https://maps.google.com/');
+  const expand = document.querySelector('.gev-credits-expand');
+  assert.equal(expand.hidden, true, 'nothing to list yet');
+
+  const remove = renderer.credits.addStatic({ text: 'Wildlife: iNaturalist' });
+  renderer.credits.addStatic({ text: 'Wildlife: iNaturalist' });
+  renderer.credits.addStatic({ text: 'OSM', href: 'javascript:alert(1)' });
+  assert.equal(expand.hidden, false);
+  assert.equal(expand.textContent, 'Data attribution');
+  const panel = document.getElementById('gev-credits-panel');
+  assert.equal(panel.hidden, true);
+  expand.click();
+  assert.equal(panel.hidden, false);
+  assert.equal(expand.getAttribute('aria-expanded'), 'true');
+  const items = [...panel.querySelectorAll('li')].map((li) => li.textContent);
+  assert.deepEqual(items, ['Wildlife: iNaturalist', 'OSM'], 'once each');
+  assert.equal(panel.querySelector('li:last-child a'), null, 'unsafe link');
+
+  panel.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  assert.equal(panel.hidden, true);
+  assert.equal(document.activeElement, expand, 'focus goes back');
+
+  remove();
+  assert.equal(
+    [...panel.querySelectorAll('li')].length,
+    2,
+    'a duplicate still credits it',
+  );
+  off();
+  assert.equal(document.getElementById('gev-credits'), null);
+  assert.equal(document.getElementById('gev-credits-panel'), null);
+});
+
+test('a viewer with no renderer shows no credits line', () => {
+  document.body.replaceChildren();
+  const off = mountCreditsView({});
+  assert.equal(document.getElementById('gev-credits'), null);
+  off();
+});
