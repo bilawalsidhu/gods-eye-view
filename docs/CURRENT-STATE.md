@@ -6853,14 +6853,52 @@ easier to meet (detection is now on more often), but does not create it.
 `src/render/contract/` types the renderer contract, version `0`: nine ports
 (frame, globe, draw, camera, query, input, effects, credits and quality),
 plus the renderer itself. `PORTS` lists every member at run time, and
-`contract.test.mjs` keeps that list and the types in step. The application
-does not yet draw through the contract: it still drives Cesium directly.
+`contract.test.mjs` keeps that list and the types in step.
 `src/render/stub/` is a renderer that draws nothing, with the default
 camera's exact maths. `src/render/conformance/` is the suite: logic checks
 in Node, plus camera traces recorded from Cesium's own `Camera` into
 `goldens/camera.json`. It also holds the reference scenes, whose views are
 checked against `goldens/visual/` on the `/dev/conformance/` page. See
 [RENDERER-CONTRACT.md](RENDERER-CONTRACT.md).
+
+### The application and its renderer
+
+The application starts on whichever `RendererPlugin` it is given
+(`createStandaloneApplication({ renderer })`), and on Cesium when none is.
+`src/app/scene.js` loads the Cesium adapter (`src/render/cesium/application.js`)
+only then, with `import()`; the standalone page starts that load as it
+starts, beside its own setup. Outside `src/render/` no code reaches a
+renderer's own objects: the record of files that still did,
+`src/render/viewerAccessAllowList.json`, is empty.
+
+- What every layer and tool is handed is the scene object
+  (`createSceneHost`), bound to the renderer: its container, and whether it
+  is destroyed. Everything else goes through the renderer's ports.
+- What a renderer's own plugin adds beside the contract (stale draw-command
+  trims, inline panel drawing, the zoom-out guard, its own map engine, what
+  QA scripts read) it hands through `src/render/applicationHooks.js`; the
+  application uses each where given and does without where not.
+  Renderer-only startup (Cesium's free-look limit, credit keyboard access)
+  runs in that plugin's `create`.
+- The map stacks switch through the plugin's map engine, else the globe
+  port (`src/maps/globeEngine.js`): Esri and OSM as `xyz` imagery, Cesium
+  ion imagery as `world` imagery, terrain as `world` terrain, or the
+  ellipsoid where no keyless terrain is offered, and photoreal as the port's
+  photoreal base. A photoreal base that fails to come back leaves the globe
+  shown.
+- The renderer follows its container's size (`Renderer.resize`, from a
+  `ResizeObserver`).
+
+`npm run qa:stub-boot` boots the whole application on the stub with only
+the contract's required members (`dev/stub-app/main.js`, served in place of
+`src/main.js` on the application's own page), headless. It fails if
+Cesium's code is requested (the one stylesheet `vite-plugin-cesium` links
+into every page is reported), on any page or console error, or if a data
+layer (flights, transit, traffic, CCTV, AIS vessels, weather radar and
+satellite, wind, satellites, FIRMS, wildlife) fails to turn on or off. A
+feed's failed response (no key, no network) is reported, not failed;
+`--strict` also fails a layer that drew nothing, and `--all-capabilities`
+gives the stub every capability. CI runs it in the browser job.
 
 `src/geo/` (export `./geo`) is the Cesium-free maths: WGS84, ECEF and
 geodetic conversions, surface normals and east-north-up frames, as plain

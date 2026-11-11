@@ -49,6 +49,7 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:perf": "node scripts/run-perf-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
+    "qa:stub-boot": "node scripts/qa-stub-boot.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",

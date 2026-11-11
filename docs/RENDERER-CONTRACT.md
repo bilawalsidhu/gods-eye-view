@@ -170,13 +170,15 @@ back to Cesium. Both lists only ever shrink.
   when it no longer drives Cesium at all; nothing is added. The list is
   empty: no file outside the adapter reaches Cesium. Two files name
   the adapter by design and are not on it: the application scene
-  (`src/app/scene.js`), the composition root that picks the Cesium renderer,
-  may import `src/render/cesium/application.js` and nothing else of the
-  adapter; the conformance page (`dev/conformance/main.js`) may import the
+  (`src/app/scene.js`), the composition root that picks the default renderer
+  when it is given none, may import `src/render/cesium/application.js` (only
+  then, so a page on the stub never loads Cesium) and nothing else of
+  the adapter; the conformance page (`dev/conformance/main.js`) may import the
   adapter's harness and scene renderer. The test names both
   (`ADAPTER_ENTRIES`), and that list is never grown.
 - `src/render/viewerAccessAllowList.json` counts, per file off that list,
-  the Cesium-shaped accesses through the viewer it still makes
+  the Cesium-shaped accesses through the viewer it still makes (none: the
+  list is empty, so no file may make one)
   (`src/render/viewerAccess.test.mjs`): the viewer's `entities`,
   `dataSources`, `scene`, `camera`, `clock`, `imageryLayers`,
   `terrainProvider`, `trackedEntity` and `canvas`, and the scene's
@@ -194,10 +196,50 @@ back to Cesium. Both lists only ever shrink.
   `--check` to see what it would change): it lowers counts and drops
   entries, and never adds or raises one.
 
+## The application and its renderer
+
+The application runs on a renderer with only the contract's required
+members (the stub proves it below); nothing outside `src/render/<renderer>/` asks which renderer it runs
+on (no `renderer.id`, no engine type, no engine object's presence).
+
+- **The scene object.** `createApplicationScene` (`src/app/scene.js`) takes a
+  `RendererPlugin`, or a promise of one (default: Cesium, imported only then;
+  `loadDefaultRenderer` starts that import as the standalone page starts),
+  creates the renderer in the page's container, and hands every layer and
+  tool the application's own scene object (`createSceneHost` in
+  `src/render/rendererOf.js`): the container and `isDestroyed()`, bound to
+  the renderer. Code reaches the renderer's
+  ports through it (`findCamera`, `drawOf`, `canvasOf`...).
+- **What only the Cesium renderer needs at startup** is done in its
+  `create`: for Cesium, the free-look height limit and keyboard access to its
+  credits' expand link (`src/render/cesium/appRenderer.js`).
+- **What a plugin may hand the application beside the contract** goes through
+  `provideApplicationHooks(renderer, hooks)` (`src/render/applicationHooks.js`),
+  each hook optional and used only where given: a map engine of its own,
+  stale command trimming, inline panel rendering, whether an entity is its
+  own, the zoom-out guard, and what QA scripts read from
+  `window.__godsEyeView` (Cesium's viewer there, for the scripts that drive
+  it). None is a contract member, and a renderer without them runs the
+  application without that behaviour.
+- **The map stacks** switch through the renderer's own map engine when its
+  plugin hands one, else through its globe port (`src/maps/globeEngine.js`);
+  see `docs/CURRENT-STATE.md` § Map source factories and coordination.
+- **The proof.** `npm run qa:stub-boot` (`scripts/qa-stub-boot.mjs`) serves
+  the application's page with `dev/stub-app/main.js` as its entry: the whole
+  application on the stub with no capability at all. It fails when the page
+  requests any Cesium module or asset, on a page or console error, or when a
+  data layer (flights, transit, traffic, CCTV, vessels, weather, wind,
+  satellites, FIRMS, wildlife) fails to turn on or off; `--strict` also fails
+  a layer that draws nothing on the stub (it needs the live feeds).
+  `src/app/scene.test.mjs` runs the scene itself on the stub in Node.
+
 ## The stub renderer
 
-`createStubRenderer({ capabilities, viewport, time })` implements every port
-in memory and draws nothing. It has:
+`createStubRenderer({ capabilities, viewport, time, container })` implements
+every port in memory and draws nothing. Given a `container` (in a page), its
+canvas is a real canvas filling it, which `resize()` follows; otherwise a
+stand-in that takes event listeners. `createStubRendererPlugin(options,
+onCreate)` is the stub as a `RendererPlugin`. It has:
 
 - the default camera's exact maths: views, `lookAt`, flights with their
   height arc and easing, `changed` thresholds and follows;
