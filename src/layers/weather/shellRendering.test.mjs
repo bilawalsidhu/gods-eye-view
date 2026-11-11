@@ -1502,3 +1502,101 @@ test('global infrared keeps one full-extent image; detail images halve for small
   });
   small.shell.clear();
 });
+
+test('a frame source supplies the full-extent and detail images, the detail through its bbox', async () => {
+  const view = camera(-100, 35, -98, 36);
+  const requests = [];
+  const supplied = [];
+  const h = harness({
+    camera: view,
+    fetchImpl: () => assert.fail('supplied images are not fetched'),
+    decodeImage: () => assert.fail('supplied images are not decoded'),
+    frameSource: {
+      getImage: async (request) => {
+        requests.push(request);
+        const image = {
+          ...request.size,
+          closed: 0,
+          close() {
+            this.closed++;
+          },
+        };
+        supplied.push(image);
+        return image;
+      },
+    },
+  });
+  const pending = h.shell.setFrame(snapshot(), times[0]);
+  await flush();
+  h.render();
+  assert.equal(await pending, true);
+  await flush();
+  assert.deepEqual(
+    requests.map(({ product, time, size, bbox }) => ({
+      product,
+      time,
+      size,
+      bbox,
+    })),
+    [
+      {
+        product: 'radar',
+        time: times[0],
+        size: { width: 4096, height: 2048 },
+        bbox: null,
+      },
+      {
+        product: 'radar',
+        time: times[0],
+        size: { width: 4096, height: 2048 },
+        bbox: box(-102, 34, -96, 37),
+      },
+    ],
+  );
+  assert.ok(supplied.every(({ closed }) => closed === 1));
+  const [shell] = h.primitives();
+  const { uniforms } = shell.appearance.material;
+  assert.equal(uniforms.image.source, supplied[0]);
+  assert.equal(uniforms.detail.source, supplied[1]);
+  h.render();
+  assert.deepEqual(windowOf(shell), windowFor(box(-102, 34, -96, 37)));
+  h.shell.clear();
+});
+
+test('cancelling a supplied frame aborts the frame source request', async () => {
+  const gate = deferred();
+  let signal;
+  const h = harness({
+    frameSource: {
+      getImage: (request) => {
+        signal = request.signal;
+        return gate.promise;
+      },
+    },
+  });
+  const abort = new AbortController();
+  const pending = h.shell.setFrame(snapshot(), times[0], {
+    signal: abort.signal,
+  });
+  await flush();
+  abort.abort();
+  assert.equal(signal.aborted, true);
+  assert.equal(await pending, false);
+  const late = {
+    width: 4096,
+    height: 2048,
+    closed: 0,
+    close() {
+      this.closed++;
+    },
+  };
+  gate.resolve(late);
+  await flush();
+  assert.equal(
+    late.closed,
+    1,
+    'a frame arriving after cancellation is released',
+  );
+  assert.equal(h.primitives().length, 0);
+  h.shell.clear();
+});

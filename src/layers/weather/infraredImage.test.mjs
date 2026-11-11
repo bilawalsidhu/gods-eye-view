@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   acquireInfraredMosaic,
+  acquireWeatherImage,
   decodeInfraredImage,
   processInfraredImage,
   MAX_MOSAIC_BYTES,
@@ -183,3 +184,154 @@ test('bitmap decoding and Image fallback release resources on success, error and
   }
   assert.deepEqual(revoked, ['blob:test', 'blob:test', 'blob:test']);
 });
+
+const pixels = (width, height) => ({
+  width,
+  height,
+  closes: 0,
+  close() {
+    this.closes++;
+  },
+});
+
+test('a frame source supplies the image: nothing is fetched or decoded and the pixels are released', async () => {
+  const controller = new AbortController();
+  const requests = [];
+  const bitmap = pixels(2048, 1024);
+  let clock = 5,
+    fetched = false;
+  const result = await acquireInfraredMosaic('2026-09-15T20:00:00.000Z', {
+    signal: controller.signal,
+    mode: 'filtered',
+    createCanvas: canvas,
+    now: () => clock,
+    onFetched: () => {
+      fetched = true;
+    },
+    fetchImpl: () => assert.fail('a supplied frame is not fetched'),
+    decodeImage: () => assert.fail('a supplied frame is not decoded'),
+    frameSource: {
+      getImage: async (request) => {
+        requests.push(request);
+        clock = 12;
+        return bitmap;
+      },
+    },
+  });
+  assert.deepEqual(requests, [
+    {
+      product: 'clouds',
+      time: '2026-09-15T20:00:00.000Z',
+      size: { width: 2048, height: 1024 },
+      bbox: null,
+      signal: controller.signal,
+    },
+  ]);
+  assert.equal(fetched, true);
+  assert.equal(result.decodeMs, 7);
+  assert.equal(result.texture.width, 2048);
+  assert.equal(result.texture.height, 1024);
+  assert.equal(result.texture.image, bitmap);
+  assert.deepEqual(
+    [...result.texture.pixels],
+    [194, 0, 0, 98],
+    'infrared frames get the display transfer',
+  );
+  assert.equal(bitmap.closes, 1);
+});
+
+test('supplied detail windows carry their bbox; ImageData is put, radar keeps its pixels', async (t) => {
+  const had = Object.hasOwn(globalThis, 'ImageData');
+  const previous = globalThis.ImageData;
+  globalThis.ImageData = class ImageData {
+    width = 4096;
+    height = 2048;
+    data = new Uint8ClampedArray([1, 2, 3, 4]);
+  };
+  t.after(() => {
+    if (had) globalThis.ImageData = previous;
+    else delete globalThis.ImageData;
+  });
+  const data = new globalThis.ImageData();
+  const bbox = { west: -102, south: 34, east: -96, north: 37 };
+  let request;
+  const { texture } = await acquireWeatherImage('radar', 't', {
+    signal: new AbortController().signal,
+    size: { width: 4096, height: 2048 },
+    bbox,
+    createCanvas: canvas,
+    fetchImpl: () => assert.fail('no fetch'),
+    frameSource: {
+      getImage: async (value) => {
+        request = value;
+        return data;
+      },
+    },
+  });
+  assert.equal(request.bbox, bbox);
+  assert.equal(
+    texture.pixels,
+    data.data,
+    'ImageData is put as it is; radar has no transfer',
+  );
+  assert.equal(texture.image, undefined, 'ImageData is not drawn as an image');
+  assert.equal(texture.width, 4096);
+});
+
+test('a supplied frame of the wrong size is refused and still released', async () => {
+  const wrong = pixels(1024, 512);
+  await assert.rejects(
+    acquireInfraredMosaic('t', {
+      signal: new AbortController().signal,
+      mode: 'filtered',
+      createCanvas: canvas,
+      frameSource: { getImage: async () => wrong },
+    }),
+    /Invalid weather image dimensions/,
+  );
+  assert.equal(wrong.closes, 1);
+  await assert.rejects(
+    acquireInfraredMosaic('t', {
+      signal: new AbortController().signal,
+      mode: 'filtered',
+      createCanvas: canvas,
+      frameSource: { getImage: async () => undefined },
+    }),
+    /Invalid weather image dimensions/,
+  );
+});
+
+test('cancellation reaches the frame source, and a frame that arrives after it is released', async () => {
+  const controller = new AbortController();
+  const late = pixels(2048, 1024);
+  let seen;
+  const pending = acquireInfraredMosaic('t', {
+    signal: controller.signal,
+    mode: 'filtered',
+    createCanvas: () => assert.fail('a cancelled frame is not drawn'),
+    frameSource: {
+      getImage: async ({ signal }) => {
+        seen = signal;
+        await flushMicrotasks();
+        return late;
+      },
+    },
+  });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(seen, controller.signal);
+  assert.equal(late.closes, 1);
+  const aborted = new AbortController();
+  aborted.abort();
+  await assert.rejects(
+    acquireInfraredMosaic('t', {
+      signal: aborted.signal,
+      frameSource: { getImage: () => assert.fail('already cancelled') },
+    }),
+    { name: 'AbortError' },
+  );
+});
+
+async function flushMicrotasks() {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+}
