@@ -1265,6 +1265,13 @@ body.ui-clean-view #clean-view-eye[data-idle='true'] {
   }
 }
 
+/* On phones the mobile tab bar owns the bottom edge in normal view. */
+@media (min-height: 521px) {
+  body.mobile-shell:not(.ui-clean-view) #clean-view-eye {
+    bottom: calc(var(--mobile-tab-space) + 8px);
+  }
+}
+
 /* Short landscape phones: the dock and the key-setup chip fill the bottom
    edge, so the eye takes the top-right corner, just below the active-style
    label (#style-indicator: 32-70 px from the top). */
