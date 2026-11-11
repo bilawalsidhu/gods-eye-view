@@ -37,19 +37,19 @@ function store() {
 test('rows at another time stand in for every vessel, selected or not', () => {
   const probe = store();
   probe.reconcile([row('111'), row('222')]);
-  const selectedRecord = probe.records.byMmsi.get('222');
+  const selectedRecord = probe.records.byId.get('222');
   probe.reconcile([row('111', { last_position_epoch: 900 })], {
     complete: false,
     selectedRecord,
     replace: true,
   });
-  assert.deepEqual([...probe.records.byMmsi.keys()], ['111']);
+  assert.deepEqual([...probe.records.byId.keys()], ['111']);
   assert.deepEqual(probe.events.slice(-3), [
     ['update', '111'],
     ['remove', '222', true],
     ['removed', '222'],
   ]);
-  assert.equal(probe.records.byMmsi.get('111').motion, null);
+  assert.equal(probe.records.byId.get('111').motion, null);
 });
 
 test('following the clock, a vessel keeps where its fix moved from', () => {
@@ -58,7 +58,7 @@ test('following the clock, a vessel keeps where its fix moved from', () => {
   probe.reconcile([row('111', { lat: 52, last_position_epoch: 1_010 })], {
     follow: true,
   });
-  const record = probe.records.byMmsi.get('111');
+  const record = probe.records.byId.get('111');
   assert.deepEqual(record.motion, {
     fromLat: 51.93,
     fromLon: 4.05,
@@ -75,7 +75,7 @@ test('following the clock, a vessel keeps where its fix moved from', () => {
   live.reconcile([row('111')]);
   live.reconcile([row('111', { lat: 52, last_position_epoch: 1_010 })]);
   assert.equal(
-    Object.hasOwn(live.records.byMmsi.get('111'), 'motion'),
+    Object.hasOwn(live.records.byId.get('111'), 'motion'),
     false,
     'live records are as before',
   );

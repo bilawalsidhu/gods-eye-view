@@ -44,7 +44,10 @@
     "{direction} {angle}°",
     "{direction} · {elevation}",
     "{source} HTTP {status}",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "de": [
     "1090 MHz",
@@ -238,7 +241,10 @@
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "es": [
     "1 min/s",
@@ -395,7 +401,10 @@
     "Reptiles",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "fr": [
     "1 min/s",
@@ -810,7 +819,10 @@
     "acartia.io ↗",
     "iNaturalist ↗",
     "iNaturalist",
-    "SATELLITE"
+    "SATELLITE",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "ja": [
     "1090 MHz",
@@ -873,7 +885,10 @@
     "ΔE",
     "ΔN",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "pt": [
     "1 min/s",
@@ -1031,7 +1046,10 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "ru": [
     "1900–1945",
@@ -1064,7 +1082,10 @@
     "iNaturalist ↗",
     "{direction} · {elevation}",
     "{direction} {angle}°",
-    "{division}, {country}"
+    "{division}, {country}",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "uk": [
     "1900–1945",
@@ -1092,7 +1113,10 @@
     "iNaturalist ↗",
     "{direction} · {elevation}",
     "{direction} {angle}°",
-    "{division}, {country}"
+    "{division}, {country}",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1331,6 +1355,9 @@
     "TLE",
     "{value} KM",
     "{value} KM/S",
-    "Ironbow"
+    "Ironbow",
+    "ICAO: {id}",
+    "MMSI: {id}",
+    "NORAD: {id}"
   ]
 }

@@ -64,8 +64,8 @@ function contextCarrierRecord(picked, dataManager) {
 function fromRecord(record) {
   const layerId = record.layerId || null;
   const id =
-    layerId === 'ais-live-vessels' && record.properties?.mmsi
-      ? String(record.properties.mmsi)
+    layerId === 'ais-live-vessels' && record.properties?.vesselId
+      ? String(record.properties.vesselId)
       : String(record.id);
   return {
     layerId,

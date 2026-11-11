@@ -279,6 +279,13 @@ export function createSnapshotTimeline({
     } else keepUp(timeMs, state);
   }
 
+  /** Load the time shown afresh. */
+  function reloadShown() {
+    if (!started || clock.isLive()) return;
+    failedUntil = -Infinity;
+    jumpTo(clock.getState().timeMs);
+  }
+
   return {
     /** The source's timeline while the layer follows the clock, else null. */
     get timeline() {
@@ -304,16 +311,17 @@ export function createSnapshotTimeline({
         clock.register({ id, coverage: () => span() }),
         clock.subscribe(follow),
       ];
-      const unsubscribe = timeline.subscribe?.(() => clock.coverageChanged());
+      // A source tells of new coverage, or of a better answer for times it
+      // has answered; paused, a time already shown is loaded again.
+      const unsubscribe = timeline.subscribe?.(() => {
+        clock.coverageChanged();
+        if (!clock.isPlaying() && lead !== null && !inflight) reloadShown();
+      });
       if (typeof unsubscribe === 'function') releases.push(unsubscribe);
       follow(clock.getState());
     },
     /** Load the time shown afresh, as when the area the layer asks for moved. */
-    reload() {
-      if (!started || clock.isLive()) return;
-      failedUntil = -Infinity;
-      jumpTo(clock.getState().timeMs);
-    },
+    reload: () => reloadShown(),
     /** The layer is off: stop following and drop what loads. */
     stop() {
       if (!started) return;

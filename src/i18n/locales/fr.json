@@ -2287,8 +2287,6 @@
   "Shared {subject} follow expired": "Suivi partagé expiré : {subject}",
   "Shared {subject} could not be restored — feed unavailable": "Suivi partagé non restauré : {subject} — flux indisponible",
   "Shared {subject} is unavailable": "Partage indisponible : {subject}",
-  "{id} isn't reporting now — showing where it was last seen": "{id} n'émet pas actuellement — affichage de sa dernière position connue",
-  "{id} isn't reporting now — showing where it was at {time}": "{id} n'émet pas actuellement — affichage de sa position à {time}",
   "This share link can't be opened": "Ce lien de partage ne peut pas être ouvert",
   "Shared vessel is unavailable": "Le navire partagé est indisponible",
   "ACQUIRING": "ACQUISITION",
@@ -3535,5 +3533,17 @@
   "Play speed": "Vitesse de lecture",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Faites défiler ou pincez pour zoomer, glissez pour vous déplacer · double-clic pour tout voir",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Photo © {photographer}"
+  "Photo © {photographer}": "Photo © {photographer}",
+  "The shared flight isn't reporting now — showing where it was last seen": "Le vol partagé n'émet pas actuellement — affichage de sa dernière position connue",
+  "The shared flight isn't reporting now — showing where it was at {time}": "Le vol partagé n'émet pas actuellement — affichage de sa position à {time}",
+  "The shared military flight isn't reporting now — showing where it was last seen": "Le vol militaire partagé n'émet pas actuellement — affichage de sa dernière position connue",
+  "The shared military flight isn't reporting now — showing where it was at {time}": "Le vol militaire partagé n'émet pas actuellement — affichage de sa position à {time}",
+  "The shared vessel isn't reporting now — showing where it was last seen": "Le navire partagé n'émet pas actuellement — affichage de sa dernière position connue",
+  "The shared vessel isn't reporting now — showing where it was at {time}": "Le navire partagé n'émet pas actuellement — affichage de sa position à {time}",
+  "The shared satellite isn't reporting now — showing where it was last seen": "Le satellite partagé n'émet pas actuellement — affichage de sa dernière position connue",
+  "The shared satellite isn't reporting now — showing where it was at {time}": "Le satellite partagé n'émet pas actuellement — affichage de sa position à {time}",
+  "ICAO: {id}": "ICAO : {id}",
+  "NORAD: {id}": "NORAD : {id}",
+  "MMSI: {id}": "MMSI : {id}",
+  "Vessel UUID: {id}": "UUID du navire : {id}"
 }

@@ -2676,8 +2676,6 @@
   "Shared flight is unavailable": "الرحلة المشتركة غير متاحة",
   "Shared military flight is unavailable": "الرحلة العسكرية المشتركة غير متاحة",
   "Shared satellite is unavailable": "القمر الصناعي المشترك غير متاح",
-  "{id} isn't reporting now — showing where it was last seen": "{id}: لا بيانات واردة الآن — يُعرض آخر موضع معروف",
-  "{id} isn't reporting now — showing where it was at {time}": "{id}: لا بيانات واردة الآن — يُعرض الموضع عند {time}",
   "This share link can't be opened": "لا يمكن فتح رابط المشاركة هذا",
   "Shared vessel is unavailable": "السفينة المشتركة غير متاحة",
   "subject": "الهدف",
@@ -3778,5 +3776,17 @@
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
   "1 min/s": "دقيقة/ث",
-  "Photo © {photographer}": "صورة © {photographer}"
+  "Photo © {photographer}": "صورة © {photographer}",
+  "The shared flight isn't reporting now — showing where it was last seen": "الرحلة المشتركة: لا بيانات واردة الآن — يُعرض آخر موضع معروف",
+  "The shared flight isn't reporting now — showing where it was at {time}": "الرحلة المشتركة: لا بيانات واردة الآن — يُعرض موضعها عند {time}",
+  "The shared military flight isn't reporting now — showing where it was last seen": "الرحلة العسكرية المشتركة: لا بيانات واردة الآن — يُعرض آخر موضع معروف",
+  "The shared military flight isn't reporting now — showing where it was at {time}": "الرحلة العسكرية المشتركة: لا بيانات واردة الآن — يُعرض موضعها عند {time}",
+  "The shared vessel isn't reporting now — showing where it was last seen": "السفينة المشتركة: لا بيانات واردة الآن — يُعرض آخر موضع معروف",
+  "The shared vessel isn't reporting now — showing where it was at {time}": "السفينة المشتركة: لا بيانات واردة الآن — يُعرض موضعها عند {time}",
+  "The shared satellite isn't reporting now — showing where it was last seen": "القمر الصناعي المشترك: لا بيانات واردة الآن — يُعرض آخر موضع معروف",
+  "The shared satellite isn't reporting now — showing where it was at {time}": "القمر الصناعي المشترك: لا بيانات واردة الآن — يُعرض موضعها عند {time}",
+  "ICAO: {id}": "ICAO: {id}",
+  "NORAD: {id}": "NORAD: {id}",
+  "MMSI: {id}": "MMSI: {id}",
+  "Vessel UUID: {id}": "معرّف UUID للسفينة: {id}"
 }

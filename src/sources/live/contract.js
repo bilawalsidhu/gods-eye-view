@@ -8,6 +8,11 @@
  * getTrack(reference, { signal }). References are opaque to consumers.
  * Snapshots describe coverage and completeness independently of freshness.
  * Records contain observation data only, with no scene objects or transport data.
+ * Every record has a stable `id` (a non-empty string) that keys it across
+ * snapshots. A vessel record's `id` is whatever its source gives, such as a
+ * provider id; its `mmsi` is an optional attribute ('' or absent when
+ * unknown), never its key, since vessels can share an MMSI. A source that
+ * only has MMSIs uses the MMSI as the id.
  *
  * A source may also declare a timeline (see readSnapshotTimeline): it can
  * answer a snapshot at a given time, so the layer follows the world clock.
@@ -155,8 +160,9 @@ export function httpError(response, source) {
  * malformed: `{ coverage(), stepMs, subscribe? }`. `coverage()` returns the
  * span `{start, end}` (epoch ms) the source can answer a snapshot for, or
  * null while it does not know yet; `stepMs` is the spacing of its snapshots;
- * the optional `subscribe(listener)` tells of a change in coverage and
- * returns the unsubscribe.
+ * the optional `subscribe(listener)` tells of a change in coverage, or of a
+ * better answer for a time already answered (a paused layer then loads the
+ * time shown again), and returns the unsubscribe.
  * @param {object|null|undefined} source
  * @returns {{coverage: () => ({start: number, end: number}|null),
  *   stepMs: number, subscribe: ((listener: () => void) => () => void)|null}|null}

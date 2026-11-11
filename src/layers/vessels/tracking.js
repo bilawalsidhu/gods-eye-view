@@ -86,7 +86,7 @@ export function createTracking({
     state.trailAbort?.abort();
     state.trailAbort = new AbortController();
     state.trailBackfillToken += 1;
-    state.trailMmsi = record.mmsi;
+    state.trailId = record.id;
     state.trailPositions = [];
     const current = vesselTrailPosition(record);
     if (current) state.trailPositions.push(current);
@@ -97,25 +97,21 @@ export function createTracking({
       });
     }
     if (state.trail) state.trail.setPositions(state.trailPositions);
-    backfillVesselTrail(
-      record.mmsi,
-      state.trailBackfillToken,
-      record.reference,
-    );
+    backfillVesselTrail(record.id, state.trailBackfillToken, record.reference);
   }
 
   /**
-   * Fire-and-forget backfill from the server-side per-MMSI ring buffer
+   * Fire-and-forget backfill from the server-side per-vessel ring buffer
    * (PRD F3 — "recent path" since server boot, not voyage history). Older
    * samples are spliced AHEAD of the live accumulation, capped at
    * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/malformed)
    * silently keeps the live-only trail.
-   * @param {string} mmsi - MMSI of the selected vessel.
+   * @param {string} id - Key of the selected vessel.
    * @param {number} token - Backfill token captured at request time.
    * @returns {Promise<void>}
    */
 
-  async function backfillVesselTrail(mmsi, token, reference = mmsi) {
+  async function backfillVesselTrail(id, token, reference = id) {
     const owner = state.trailAbort;
     // Following the world clock, the track ends at the world's time.
     const atMs = followsClock(vesselState) ? vesselState.worldNow() : undefined;
@@ -139,7 +135,7 @@ export function createTracking({
       token !== state.trailBackfillToken
     )
       return;
-    if (state.trailMmsi !== mmsi) return;
+    if (state.trailId !== id) return;
 
     const older = [];
     for (const sample of samples) {
@@ -198,7 +194,7 @@ export function createTracking({
     state.trailAbort?.abort();
     state.trailAbort = null;
     state.trailBackfillToken += 1;
-    state.trailMmsi = null;
+    state.trailId = null;
     state.trailPositions = [];
     if (state.trail) state.trail.clear();
   }

@@ -201,9 +201,11 @@ export function createIngestion({
     return { reconciled: true, ...snapshot };
   }
 
+  /** The layer's row for a source record: keyed by its id, MMSI shown when known. */
   function vesselDisplayRow(record) {
     return {
-      mmsi: record.id,
+      id: record.id,
+      mmsi: String(record.mmsi ?? '').trim(),
       reference: record.reference,
       lat: record.latitude,
       lon: record.longitude,

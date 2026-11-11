@@ -302,3 +302,35 @@ test('a layer never has two loads out: the older is aborted before a newer start
   h.follower.stop();
   assert.equal(live(), 0);
 });
+
+test('a source that tells of a better answer has the paused time loaded again, not a playing one', async () => {
+  const h = harness();
+  h.follower.start();
+  const at = WALL - 600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  const before = loads(h.calls).length;
+  for (const listener of h.coverageListeners) listener();
+  await flush();
+  assert.equal(loads(h.calls).length, before + 1);
+  assert.equal(loads(h.calls).at(-1).atMs, at);
+  await h.answer(h.pending.length - 1);
+  h.clock.play();
+  const playing = loads(h.calls).length;
+  for (const listener of h.coverageListeners) listener();
+  await flush();
+  assert.ok(
+    loads(h.calls)
+      .slice(playing)
+      .every((call) => call.atMs !== at),
+    'playing, the time shown is not loaded again',
+  );
+  h.clock.goLive();
+  await flush();
+  const live = loads(h.calls).length;
+  for (const listener of h.coverageListeners) listener();
+  await flush();
+  assert.equal(loads(h.calls).length, live, 'live, nothing is loaded');
+  h.follower.stop();
+});

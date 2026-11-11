@@ -86,14 +86,14 @@ export function createVesselState({ source, services }) {
     activeFocusCount: 0,
     activeLabelCount: 0,
     selectedRecord: null,
-    /** @type {string|null} MMSI whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
-    cockpitSubjectMmsi: null,
+    /** @type {string|null} Id of the vessel whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
+    cockpitSubjectId: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
     /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */
     trailPositions: [],
-    /** @type {string|null} MMSI that owns the active selected-vessel trail. */
-    trailMmsi: null,
+    /** @type {string|null} Id of the vessel that owns the active selected-vessel trail. */
+    trailId: null,
     /** @type {number} Monotonic token — invalidates in-flight backfill responses */
     trailBackfillToken: 0,
     trailAbort: null,

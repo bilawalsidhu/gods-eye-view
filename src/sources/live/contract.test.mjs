@@ -9,6 +9,7 @@ import {
   openSkySnapshot,
   readsbSnapshot,
   readSnapshotTimeline,
+  vesselSnapshot,
 } from './index.js';
 
 const now = 1800000000000;
@@ -196,6 +197,7 @@ test('vessel identity, opaque reference and heading/course remain distinct, unkn
     'opaque-reference',
   );
   assert.equal(row.id, '123456789');
+  assert.equal(row.mmsi, '123456789');
   assert.equal(row.reference, 'opaque-reference');
   assert.equal(row.headingDeg, 45);
   assert.equal(row.courseDeg, 60);
@@ -524,4 +526,63 @@ test('a source declares a timeline only with a coverage reader and a positive st
   assert.equal(listeners.length, 1);
   stop();
   assert.equal(listeners.length, 0);
+});
+
+test('vessel snapshots key rows by the id idFor gives; the MMSI is an attribute', () => {
+  const at = { lat: 30, lon: -97 };
+  const rows = [
+    { uuid: 'hull-a', mmsi: '123456789', ...at },
+    { uuid: 'hull-b', mmsi: '123456789', ...at },
+    { uuid: 'hull-c', mmsi: 'not-an-mmsi', ...at },
+    { uuid: 'hull-a', mmsi: '123456789', ...at },
+  ];
+  const keyed = vesselSnapshot(
+    { rows },
+    { idFor: (row) => row.uuid || row.mmsi },
+  );
+  assert.deepEqual(
+    keyed.records.map(({ id, mmsi, reference }) => [id, mmsi, reference]),
+    [
+      ['hull-a', '123456789', 'hull-a'],
+      ['hull-b', '123456789', 'hull-b'],
+      ['hull-c', '', 'hull-c'],
+    ],
+  );
+  assert.equal(keyed.rejectedCount, 1, 'a repeated id is one vessel');
+
+  // AISStream rows have only MMSIs: one MMSI is one vessel, as before.
+  const ais = vesselSnapshot({ rows });
+  assert.deepEqual(
+    ais.records.map(({ id, mmsi, reference }) => [id, mmsi, reference]),
+    [
+      ['123456789', '123456789', '123456789'],
+      ['not-an-mmsi', '', 'not-an-mmsi'],
+    ],
+  );
+  const referenced = vesselSnapshot(
+    { rows: rows.slice(0, 1) },
+    { idFor: (row) => row.uuid, referenceFor: (row) => `track:${row.uuid}` },
+  );
+  assert.equal(referenced.records[0].reference, 'track:hull-a');
+});
+
+test('a vessel with no name is not named by its id; a ten-digit MMSI is an MMSI', () => {
+  const at = { lat: 30, lon: -97 };
+  const [unnamed, longMmsi, named] = vesselSnapshot(
+    {
+      rows: [
+        { uuid: 'f00dcafe-0000-0000-0000-000000000001', ...at },
+        { uuid: 'hull-x', mmsi: '1234567890', ...at },
+        { uuid: 'hull-y', mmsi: '244123456', name: 'EVER GIVEN', ...at },
+      ],
+    },
+    { idFor: (row) => row.uuid },
+  ).records;
+  assert.equal(unnamed.name, '');
+  assert.equal(unnamed.mmsi, '');
+  assert.deepEqual(
+    [longMmsi.mmsi, longMmsi.name],
+    ['1234567890', '1234567890'],
+  );
+  assert.equal(named.name, 'EVER GIVEN');
 });

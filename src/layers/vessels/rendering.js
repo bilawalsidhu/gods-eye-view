@@ -307,7 +307,7 @@ export function createRendering({
         if (visual.billboard) {
           // The bridge camera sits on this sprite; showing it would fill the view.
           visual.billboard.show =
-            visible && record.mmsi !== state.cockpitSubjectMmsi;
+            visible && record.id !== state.cockpitSubjectId;
           if (visible && doRotations && scene) {
             const rot = screenProjectedRotation(
               scene,
@@ -445,8 +445,7 @@ export function createRendering({
     const selected = state.selectedRecord;
     // From the bridge, the selected vessel is the viewer; its card would be
     // pinned to the camera position.
-    const selectedCarded =
-      selected && selected.mmsi !== state.cockpitSubjectMmsi;
+    const selectedCarded = selected && selected.id !== state.cockpitSubjectId;
     const entries = selectedCarded
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
@@ -532,17 +531,17 @@ export function createRendering({
           VESSEL_CARD_FADE_DISTANCE_M,
         );
         if (!card.interactive) return card;
-        const mmsi = String(card.id || '').startsWith('vessel:')
+        const id = String(card.id || '').startsWith('vessel:')
           ? card.id.slice('vessel:'.length)
           : '';
+        const mmsi = state.records.byId.get(id)?.mmsi || '';
         return {
           ...card,
-          accessibilityLabel: t('Focus vessel {name}, MMSI {mmsi}', {
-            name: card.title,
-            mmsi,
-          }),
+          accessibilityLabel: mmsi
+            ? t('Focus vessel {name}, MMSI {mmsi}', { name: card.title, mmsi })
+            : t('Focus {label}', { label: card.title }),
           activate: () => {
-            const record = state.records.byMmsi.get(mmsi);
+            const record = state.records.byId.get(id);
             if (!record) return false;
             components.selection.selectAndFocusVessel(record);
             return true;
@@ -574,7 +573,8 @@ export function createRendering({
       text &&
       text !== 'VESSEL' &&
       !/^MMSI\s*\d+$/i.test(text) &&
-      text !== record.mmsi,
+      text !== record.mmsi &&
+      text !== record.id,
     );
   }
 

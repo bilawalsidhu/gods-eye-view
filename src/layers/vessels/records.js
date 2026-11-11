@@ -3,17 +3,25 @@ import {
   SELECTED_PIN_REFRESHES,
 } from './recordPolicy.js';
 
-/** Normalize AIS display fields without allocating scene resources. */
+/**
+ * Normalize AIS display fields without allocating scene resources. `id` is the
+ * vessel's key, the stable id its source gives; a row that names none (an
+ * AIS feed's own rows) is keyed by its MMSI. `mmsi` is only an attribute,
+ * shown when known: vessels can share one. A row with neither is unkeyed.
+ */
 export function normalizeVessel(row) {
   const lat = Number(row.lat);
   const lon = Number(row.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const mmsi = String(row.mmsi || '').trim();
+  const id = String(row.id ?? mmsi).trim();
   return {
     lat,
     lon,
-    name: String(row.name || row.mmsi || 'VESSEL'),
-    mmsi: String(row.mmsi || '').trim(),
-    reference: row.reference ?? String(row.mmsi || '').trim(),
+    name: String(row.name || mmsi || 'VESSEL'),
+    id,
+    mmsi,
+    reference: row.reference ?? id,
     imo: String(row.imo || ''),
     type: String(row.type || ''),
     destination: String(row.destination || ''),
@@ -68,7 +76,7 @@ function motionBetween(record, next) {
 export class VesselRecords {
   constructor({ now = () => Date.now() } = {}) {
     this.now = now;
-    this.byMmsi = new Map();
+    this.byId = new Map();
     this.unkeyed = [];
     this.all = [];
   }
@@ -112,14 +120,14 @@ export class VesselRecords {
       if (!next) continue;
       next.receivedAtMs = receivedAtMs;
       stampFix(next, receivedAtMs, feedLatestEpoch);
-      if (!next.mmsi) {
+      if (!next.id) {
         effects.add(next);
         this.unkeyed.push(next);
         continue;
       }
-      if (seen.has(next.mmsi)) continue;
-      seen.add(next.mmsi);
-      const record = this.byMmsi.get(next.mmsi);
+      if (seen.has(next.id)) continue;
+      seen.add(next.id);
+      const record = this.byId.get(next.id);
       if (record) {
         const before = effects.beforeUpdate(record);
         // A feed re-serving a cached row repeats its fix: the fix keeps the
@@ -131,6 +139,7 @@ export class VesselRecords {
         if (replace) record.motion = null;
         else if (follow) record.motion = motionBetween(record, next);
         record.reference = next.reference;
+        record.mmsi = next.mmsi;
         record.receivedAtMs = next.receivedAtMs;
         record.lat = next.lat;
         record.lon = next.lon;
@@ -148,15 +157,15 @@ export class VesselRecords {
         effects.updated(record, before);
       } else {
         effects.add(next);
-        this.byMmsi.set(next.mmsi, next);
+        this.byId.set(next.id, next);
       }
     }
-    for (const [mmsi, record] of this.byMmsi) {
-      if (seen.has(mmsi)) continue;
+    for (const [id, record] of this.byId) {
+      if (seen.has(id)) continue;
       if (replace) {
         effects.remove(record, record === selectedRecord);
-        this.byMmsi.delete(mmsi);
-        effects.removed(mmsi);
+        this.byId.delete(id);
+        effects.removed(id);
         continue;
       }
       if (
@@ -179,18 +188,18 @@ export class VesselRecords {
       }
       // Selection teardown still sees the record before its store entry is removed.
       effects.remove(record, record === selectedRecord);
-      this.byMmsi.delete(mmsi);
-      effects.removed(mmsi);
+      this.byId.delete(id);
+      effects.removed(id);
     }
-    if (this.byMmsi.size + this.unkeyed.length > cap) {
-      for (const [mmsi, record] of this.byMmsi) {
-        if (this.byMmsi.size + this.unkeyed.length <= cap) break;
-        if (seen.has(mmsi) || record === selectedRecord) continue;
+    if (this.byId.size + this.unkeyed.length > cap) {
+      for (const [id, record] of this.byId) {
+        if (this.byId.size + this.unkeyed.length <= cap) break;
+        if (seen.has(id) || record === selectedRecord) continue;
         effects.remove(record, false);
-        this.byMmsi.delete(mmsi);
-        effects.removed(mmsi);
+        this.byId.delete(id);
+        effects.removed(id);
       }
     }
-    this.all = [...this.byMmsi.values(), ...this.unkeyed];
+    this.all = [...this.byId.values(), ...this.unkeyed];
   }
 }
