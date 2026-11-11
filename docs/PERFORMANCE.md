@@ -152,43 +152,24 @@ configuration, not as a compatibility guarantee.
 
 ## Repeatable memory profiling
 
-Start the application with a supported Node 24 or 26 runtime, then run a fresh
-isolated Chrome journey before editing runtime code:
+The historical profiling captures below used one-off development harnesses. Those
+harnesses are archived in commit `ba3b0c9f`; they are not part of the final PR.
+The permanent scripts added here are limited to two regression tools:
+
+- `qa-aircraft-surface.mjs` checks the new GPU surface, picking, tracking,
+  disable/re-enable and repaint behavior in a browser against a local server.
+- `qa-aircraft-retention.mjs` is the real-Cesium GC fixture used by the two
+  `aircraftSurface.test.mjs` cases. It also supports `--remove-all`.
 
 ```sh
-npm run dev -- --host 127.0.0.1
-# In another terminal:
-npm run qa:memory -- --out qa-artifacts/memory/before --cycles 3
-# After a targeted change:
-npm run qa:memory -- --out qa-artifacts/memory/after --cycles 3 \
-  --baseline qa-artifacts/memory/before/report.json
+node scripts/qa-aircraft-surface.mjs http://127.0.0.1:PORT OUTPUT
+node --expose-gc scripts/qa-aircraft-retention.mjs --check
+node --expose-gc scripts/qa-aircraft-retention.mjs --remove-all --check
 ```
 
-The default journey disables startup layers, selects OSM, and toggles the bundled
-Data Centers and Dams layers three times. Each cycle visits a global view and
-Austin, switches through available Esri/Google/OSM stacks, then disables the
-layers and returns to the initial camera. It checks full analyst-record
-signatures and counts across rebuilds, entity/source cleanup, idle rendering,
-browser errors, and matching baseline map/resolution settings. Screenshots at
-global, city and idle checkpoints support visual review. Layer names, viewport,
-renderer, browser version and settling time must match the baseline.
-
-`report.json` contains heap usage both before and after diagnostic CDP garbage
-collection, backing storage, DOM counts, browser process RSS, layer/scene counts,
-tile-memory estimates and activation timings. Hidden tilesets are included in
-`scene.tilesets` and `scene.allTileBytes`; the active tileset is reported
-separately. Pass `--server-pid PID` to sample a local Node server's RSS as well.
-Use `npm run qa:memory -- --help` for options. Artifacts are gitignored under
-`qa-artifacts/`; they may contain rendered app content and local diagnostics.
-
-Compare retained heap at corresponding checkpoints and review every failed
-check before accepting a saving. Process RSS includes native/GPU-related
-allocations, is affected by OS compression and allocator reuse, and summing
-processes can count shared pages more than once. A heap reduction is not proof
-of a matching RSS reduction. CDP reports the page isolate's heap, not a complete
-sum of worker heaps. Tile bytes are Cesium estimates, not total GPU memory.
-These are settled checkpoints, not a continuous peak-memory trace; garbage
-collection is forced only by the harness, never by production code.
+Existing unit, allocation and tracking gates remain the regression baseline.
+Recorded heap, process-footprint and GPU estimates below are different measures;
+their savings must not be combined into an app-wide reduction.
 
 ### Infrastructure memory iteration — 9 November 2026
 
@@ -244,14 +225,7 @@ These quality reductions are optional; the viewport, path and infrastructure
 optimizations run in Standard as well. No data source is disabled by this
 preference.
 
-Repeat the controlled workload with a supported Node runtime and a local server:
-
-```sh
-npm run qa:aircraft-load -- --counts 10000 --dpr 2 --footprint \
-  --verify-viewport --verify-performance --out qa-artifacts/aircraft-load/standard
-npm run qa:aircraft-load -- --counts 10000 --dpr 2 --footprint \
-  --performance low --out qa-artifacts/aircraft-load/low
-```
+The controlled workload used matched synthetic populations and frozen builds.
 
 The harness injects an identical synthetic OpenSky population, uses the real
 rendering and layer lifecycles, and samples 10 seconds per phase after settling.
@@ -415,18 +389,8 @@ failures when isolated. Allocation probes interrupted during the overnight
 pause were rerun and all 15 passed. These failures remain reported rather than
 changing unrelated feature work to make the suite green.
 
-Reproduce the feature capture against a running local server:
+The feature capture used matched local builds.
 
-```sh
-npm run qa:aircraft-load -- --url http://127.0.0.1:4176 \
-  --counts 10000 --duration-ms 5000 --dpr 2 \
-  --gpu-memory --feature-costs --footprint
-```
-
-Use
-`--raster-ab --cables-steady` for paired vector/cache checks and a longer cable
-warm-up; no other tests/builds should run during performance measurement.
-`node scripts/qa-cable-residency.mjs --url URL` exercises the native interactions.
 Complete results and validation status are in the gitignored
 `qa-artifacts/resource-costs/` directory.
 
@@ -574,16 +538,10 @@ Evidence lives under `qa-artifacts/feature-optimization/`: `measured-before/`,
 Earlier shared-output and intermediate texture-cleanup captures are diagnostic
 only. The measured harness is archived as `measured-harness.mjs.txt`; its generic
 model-like counter also included CCTV geometry, so only dedicated aircraft-phase
-model counts are used. The current harness distinguishes Models via their public
+model counts are used. The archived profiling harness distinguishes Models via their public
 animation collection and additionally records P99/max frame times. These counter
-improvements do not rewrite the saved measurements. Use the same current harness
+improvements do not rewrite the saved measurements. Use the same archived harness
 for both sides of any new comparison.
-
-```sh
-npm run qa:aircraft-load -- --url http://127.0.0.1:PORT \
-  --counts 300 --duration-ms 5000 --dpr 2 \
-  --gpu-memory --heavy-features --footprint --out qa-artifacts/NEW-RUN
-```
 
 ## Native aircraft sharpness (November 10, 2026)
 
@@ -766,13 +724,7 @@ Evidence is under `qa-artifacts/overlay-transit/`: `repeated-before/`,
 runtime snapshots/hashes. `source/` predates the final VEH direct path;
 `release-source/` records the shipped version. Other captures in that directory
 are exploratory/intermediate evidence, not interchangeable saving percentages.
-Reproduce with the same harness on each frozen build:
-
-```sh
-node scripts/qa-aircraft-load.mjs --url http://127.0.0.1:PORT \
-  --counts 10000,10000,10000 --wide-only --duration-ms 5000 --dpr 2 --out OUTPUT
-node scripts/qa-overlay-transit.mjs http://127.0.0.1:PORT OUTPUT
-```
+The historical captures used the same archived harness on each frozen build.
 
 ## Street traffic and satellite work reuse (November 10, 2026)
 
@@ -855,14 +807,7 @@ Evidence is under `qa-artifacts/traffic-satellites/`: `before/`, `after/`,
 `release-source/` archive runtime snapshots/hashes. Intermediate math-only and
 per-contact-cache captures and failed fixture/preparation diagnostics are retained
 separately and are not the shipped results. The per-contact cache was replaced
-with the shared vocabulary cache. Reproduce each long capture with the same
-harness; run the paired check before replacing the baseline server:
-
-```sh
-node scripts/qa-traffic-satellites.mjs http://127.0.0.1:PORT OUTPUT
-node scripts/qa-traffic-satellites-paired.mjs BEFORE_URL AFTER_URL OUTPUT
-node scripts/qa-traffic.mjs --url http://127.0.0.1:PORT --fixtures
-```
+with the shared vocabulary cache. The historical long captures and paired checks used the same archived harness.
 
 ### PR integration allocation check — 10 November 2026
 
@@ -901,8 +846,9 @@ The browser aircraft gate also verifies GC of a previously painted civil fleet
 while military remains visible, repainting only the remaining fleet, then civil
 re-enable, search, picking and tracking.
 
-`node scripts/qa-transit-residency.mjs` measures native marker ownership work
-without WebGL (medians of five runs):
+The archived native marker-ownership benchmark measured these operations
+without WebGL (medians of five runs). The permanent transit residency tests
+check queue cleanup and prevent per-removal compaction:
 
 | Operation | Vehicles | Before | After |
 | --- | ---: | ---: | ---: |

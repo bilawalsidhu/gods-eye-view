@@ -14,7 +14,7 @@ const flatTerrain = Buffer.alloc(65 * 65 * 2 + 2);
 for (let i = 0; i < 65 * 65; i++) flatTerrain.writeUInt16LE(5000, i * 2);
 
 /** Synthetic, geographically aligned motor roads at both source zooms. */
-export function trafficFixtureTile(zoom, flow = false, roadSpacing = 256) {
+export function trafficFixtureTile(zoom, flow = false) {
   const writer = new PbfWriter();
   writer.writeMessage(
     3,
@@ -41,7 +41,7 @@ export function trafficFixtureTile(zoom, flow = false, roadSpacing = 256) {
       }
       // z12 has four times the span of z14. Keep the same world spacing,
       // and cover only alternate roads with flow to exercise hide/sim controls.
-      const step = roadSpacing * 2 ** (zoom - 14);
+      const step = 256 * 2 ** (zoom - 14);
       for (let y = step; y < 4096; y += step) {
         if (flow && (y / step) % 2) continue;
         layer.writeMessage(
@@ -61,7 +61,7 @@ export function trafficFixtureTile(zoom, flow = false, roadSpacing = 256) {
 }
 
 /** Intercept the current vector sources; never fall through to live roads. */
-export function trafficFixtureResponse(request, roadSpacing = 256) {
+export function trafficFixtureResponse(request) {
   const url = new URL(request.url());
   if (url.hostname === 'terrain.reearth.land') {
     if (url.pathname.endsWith('/layer.json'))
@@ -114,7 +114,7 @@ export function trafficFixtureResponse(request, roadSpacing = 256) {
     status: 200,
     contentType: 'application/x-protobuf',
     headers: corsHeaders,
-    body: trafficFixtureTile(Number(road[1]), false, roadSpacing),
+    body: trafficFixtureTile(Number(road[1])),
   };
 }
 
@@ -124,7 +124,6 @@ export async function installTrafficRoutes(
   {
     origin,
     fixtures = false,
-    roadSpacing = 256,
     keyless = false,
     onFlow = () => {},
     onError = () => {},
@@ -148,10 +147,7 @@ export async function installTrafficRoutes(
         onFlow(request.url);
         response = { ...json({ error: 'no_key' }), status: 503 };
       } else if (fixtures) {
-        response = trafficFixtureResponse(
-          { url: () => request.url },
-          roadSpacing,
-        );
+        response = trafficFixtureResponse({ url: () => request.url });
       }
       if (!response) {
         await session.send('Fetch.continueRequest', { requestId });

@@ -1365,9 +1365,8 @@ global feature records are lightweight; the existing LOD materializes detailed
 Cesium entities on demand, preserving polygon footprints, pins, picking and
 analyst metadata. A disable during loading cannot leave a completed build
 hidden in the scene.
-`npm run qa:memory` captures a repeatable layer/map journey, retained JS heap,
-browser-process RSS, optional server RSS, tile estimates and screenshots; see
-[the memory profiling workflow](PERFORMANCE.md#repeatable-memory-profiling).
+Recorded memory measurements and the permanent regression gates are documented
+in [PERFORMANCE.md](PERFORMANCE.md#repeatable-memory-profiling).
 
 Civilian and military aircraft retain their complete contact population for
 search and tracking, but materialize native billboards only within a padded
@@ -1377,9 +1376,7 @@ mode without reducing resolution or changing the normal frame-rate target.
 DISPLAY → Resources also offers an optional Low resource setting: 30 FPS,
 reduced resolution, lighter effects and smaller tile budgets. Returning to
 Standard restores the prior rendering settings. Contact data and layer APIs
-remain available in both modes. `npm run qa:aircraft-load` measures fixed dense
-aircraft populations, frame cadence, heap and browser CPU; `--footprint` adds
-macOS physical-footprint accounting. See [dense-map measurements](PERFORMANCE.md#dense-flat-map-iteration--9-november-2026).
+remain available in both modes. See [dense-map measurements](PERFORMANCE.md#dense-flat-map-iteration--9-november-2026).
 
 CCTV keeps projection pixel buffers only for the active camera; switching away
 disposes still-image and video runtimes, and disabling releases native coverage.
