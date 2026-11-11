@@ -552,6 +552,55 @@ test('the street-level card says "the view centre" in the interface language', (
   }
 });
 
+test('street-level failure cards are in the interface language; speech stays English', () => {
+  setLocale('de');
+  try {
+    const card = (error, extra = {}) =>
+      envelope('show_street_level', {
+        ok: false,
+        action: 'show_street_level',
+        providerName: 'Google Street View',
+        label: 'Paris',
+        error,
+        ...extra,
+      });
+    const lines = (error, extra) => card(error, extra).display.lines;
+    assert.deepEqual(lines('Google Street View needs its key', { stage: 'key' }), [
+      'Google Street View braucht seinen Schlüssel',
+    ]);
+    assert.deepEqual(
+      lines('Google Street View needs the photoreal map, which is not available', { stage: 'map' }),
+      ['Google Street View braucht die Google 3D-Karte, die nicht verfügbar ist'],
+    );
+    assert.deepEqual(lines('Mapillary could not be switched on', { stage: 'provider' }), [
+      'Mapillary konnte nicht eingeschaltet werden',
+    ]);
+    assert.deepEqual(lines('Street Level could not be enabled', { stage: 'layer' }), [
+      'Straßenebene konnte nicht eingeschaltet werden',
+    ]);
+    assert.deepEqual(
+      lines('Latitude must be within ±90° and longitude within ±180°', { stage: 'location' }),
+      ['Der Breitengrad muss innerhalb von ±90° und der Längengrad innerhalb von ±180° liegen'],
+    );
+    assert.deepEqual(lines('Mapillary imagery could not be opened', { stage: 'imagery' }), [
+      'Bilder von Mapillary konnten nicht geöffnet werden',
+    ]);
+    // The filter clause wraps the reason, already in the interface language,
+    // and names the filters as their chips do.
+    const filtered = card('No Mapillary imagery near Paris with the 360° and SINCE filters on', {
+      stage: 'imagery',
+      noImagery: true,
+      filter: { label: '360° and SINCE filters' },
+    });
+    assert.deepEqual(filtered.display.lines, [
+      'Keine Bilder von Mapillary in der Nähe von Paris (aktive Filter: 360°, SEIT)',
+    ]);
+    assert.match(filtered.say, /with the 360° and SINCE filters on/, 'speech stays English');
+  } finally {
+    setLocale('en');
+  }
+});
+
 test('street-level speech names the source and the place, and says which step failed', () => {
   const ok = envelope('show_street_level', {
     ok: true,

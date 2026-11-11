@@ -3638,5 +3638,20 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "UUID судна: {id}"
+  "Vessel UUID: {id}": "UUID судна: {id}",
+  "Latitude must be within ±90° and longitude within ±180°": "Широта має бути в межах ±90°, а довгота — у межах ±180°",
+  "Street Level is unavailable": "Вуличні знімки недоступні",
+  "No street-level imagery source is configured": "Джерело вуличних знімків не налаштовано",
+  "Street Level could not be enabled": "Не вдалося увімкнути вуличні знімки",
+  "Street Level changed while it looked for imagery": "Вуличні знімки змінилися під час пошуку",
+  "Aim the view at a street": "Наведіть вигляд на вулицю",
+  "{source} is not a street-level imagery source here": "{source} тут не є джерелом вуличних знімків",
+  "{source} needs its key": "{source}: потрібен ключ",
+  "{source} needs the {map} map, which is not available": "{source}: потрібна карта {map}, але вона недоступна",
+  "{source} could not be switched on": "Не вдалося увімкнути {source}",
+  "{source} is not available on this map": "{source}: недоступно на цій карті",
+  "{source} imagery could not be opened": "Не вдалося відкрити знімки {source}",
+  "{place} has no position to look for imagery at": "Для місця «{place}» немає координат для пошуку знімків",
+  "No {source} imagery near {place}": "Немає знімків {source} поблизу {place}",
+  "{reason} (filters on: {filters})": "{reason} (увімкнено фільтри: {filters})"
 }

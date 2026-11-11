@@ -3557,5 +3557,20 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "UUID della nave: {id}"
+  "Vessel UUID: {id}": "UUID della nave: {id}",
+  "Latitude must be within ±90° and longitude within ±180°": "La latitudine deve essere entro ±90° e la longitudine entro ±180°",
+  "Street Level is unavailable": "Vista stradale non è disponibile",
+  "No street-level imagery source is configured": "Nessuna fonte di immagini a livello stradale configurata",
+  "Street Level could not be enabled": "Impossibile attivare Vista stradale",
+  "Street Level changed while it looked for imagery": "Vista stradale è cambiata durante la ricerca delle immagini",
+  "Aim the view at a street": "Punta la vista su una strada",
+  "{source} is not a street-level imagery source here": "{source} non è una fonte di immagini a livello stradale qui",
+  "{source} needs its key": "{source} richiede la sua chiave",
+  "{source} needs the {map} map, which is not available": "{source} richiede la mappa {map}, che non è disponibile",
+  "{source} could not be switched on": "Impossibile attivare {source}",
+  "{source} is not available on this map": "{source} non è disponibile su questa mappa",
+  "{source} imagery could not be opened": "Impossibile aprire le immagini di {source}",
+  "{place} has no position to look for imagery at": "{place} non ha una posizione in cui cercare immagini",
+  "No {source} imagery near {place}": "Nessuna immagine di {source} vicino a {place}",
+  "{reason} (filters on: {filters})": "{reason} (filtri attivi: {filters})"
 }

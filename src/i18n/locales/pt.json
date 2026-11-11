@@ -3557,5 +3557,20 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "UUID da embarcação: {id}"
+  "Vessel UUID: {id}": "UUID da embarcação: {id}",
+  "Latitude must be within ±90° and longitude within ±180°": "A latitude deve estar dentro de ±90° e a longitude dentro de ±180°",
+  "Street Level is unavailable": "Nível da rua não está disponível",
+  "No street-level imagery source is configured": "Nenhuma fonte de imagens no nível da rua configurada",
+  "Street Level could not be enabled": "Não foi possível ativar Nível da rua",
+  "Street Level changed while it looked for imagery": "Nível da rua mudou enquanto procurava imagens",
+  "Aim the view at a street": "Aponte a vista para uma rua",
+  "{source} is not a street-level imagery source here": "{source} não é uma fonte de imagens no nível da rua aqui",
+  "{source} needs its key": "{source} precisa da sua chave",
+  "{source} needs the {map} map, which is not available": "{source} requer o mapa {map}, que não está disponível",
+  "{source} could not be switched on": "Não foi possível ativar {source}",
+  "{source} is not available on this map": "{source} não está disponível neste mapa",
+  "{source} imagery could not be opened": "Não foi possível abrir as imagens de {source}",
+  "{place} has no position to look for imagery at": "{place} não tem uma posição para buscar imagens",
+  "No {source} imagery near {place}": "Nenhuma imagem de {source} perto de {place}",
+  "{reason} (filters on: {filters})": "{reason} (filtros ativos: {filters})"
 }

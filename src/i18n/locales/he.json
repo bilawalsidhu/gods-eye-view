@@ -3557,5 +3557,20 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "UUID של כלי השיט: {id}"
+  "Vessel UUID: {id}": "UUID של כלי השיט: {id}",
+  "Latitude must be within ±90° and longitude within ±180°": "קו הרוחב חייב להיות בטווח ±90° וקו האורך בטווח ±180°",
+  "Street Level is unavailable": "Street Level אינו זמין",
+  "No street-level imagery source is configured": "לא הוגדר מקור לצילומי רחוב",
+  "Street Level could not be enabled": "לא ניתן היה להפעיל את Street Level",
+  "Street Level changed while it looked for imagery": "Street Level השתנה בזמן החיפוש אחר צילומים",
+  "Aim the view at a street": "כוון את התצוגה אל רחוב",
+  "{source} is not a street-level imagery source here": "{source} אינו מקור לצילומי רחוב כאן",
+  "{source} needs its key": "{source} דורש את המפתח שלו",
+  "{source} needs the {map} map, which is not available": "{source} דורש את מפת {map}, שאינה זמינה",
+  "{source} could not be switched on": "לא ניתן היה להפעיל את {source}",
+  "{source} is not available on this map": "{source} אינו זמין במפה הזו",
+  "{source} imagery could not be opened": "לא ניתן היה לפתוח את הצילומים של {source}",
+  "{place} has no position to look for imagery at": "ל-{place} אין מיקום לחיפוש צילומים",
+  "No {source} imagery near {place}": "אין צילומים של {source} ליד {place}",
+  "{reason} (filters on: {filters})": "{reason} (מסננים פעילים: {filters})"
 }

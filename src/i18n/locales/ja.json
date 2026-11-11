@@ -3395,5 +3395,20 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "船舶UUID: {id}"
+  "Vessel UUID: {id}": "船舶UUID: {id}",
+  "Latitude must be within ±90° and longitude within ±180°": "緯度は±90°、経度は±180°の範囲内で指定してください",
+  "Street Level is unavailable": "ストリートレベルは利用できません",
+  "No street-level imagery source is configured": "ストリートレベル画像のソースが設定されていません",
+  "Street Level could not be enabled": "ストリートレベルをオンにできませんでした",
+  "Street Level changed while it looked for imagery": "画像の検索中にストリートレベルが変更されました",
+  "Aim the view at a street": "表示を通りに向けてください",
+  "{source} is not a street-level imagery source here": "{source}はここではストリートレベル画像のソースではありません",
+  "{source} needs its key": "{source}にはキーが必要です",
+  "{source} needs the {map} map, which is not available": "{source}には{map}マップが必要ですが、利用できません",
+  "{source} could not be switched on": "{source}をオンにできませんでした",
+  "{source} is not available on this map": "{source}はこのマップでは利用できません",
+  "{source} imagery could not be opened": "{source}の画像を開けませんでした",
+  "{place} has no position to look for imagery at": "{place}には画像を探す位置がありません",
+  "No {source} imagery near {place}": "{place}の近くに{source}の画像はありません",
+  "{reason} (filters on: {filters})": "{reason}（有効なフィルター: {filters}）"
 }

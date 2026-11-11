@@ -3638,5 +3638,20 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "UUID судна: {id}"
+  "Vessel UUID: {id}": "UUID судна: {id}",
+  "Latitude must be within ±90° and longitude within ±180°": "Широта должна быть в пределах ±90°, а долгота — в пределах ±180°",
+  "Street Level is unavailable": "Уличные снимки недоступны",
+  "No street-level imagery source is configured": "Источник уличных снимков не настроен",
+  "Street Level could not be enabled": "Не удалось включить уличные снимки",
+  "Street Level changed while it looked for imagery": "Уличные снимки изменились во время поиска",
+  "Aim the view at a street": "Наведите вид на улицу",
+  "{source} is not a street-level imagery source here": "{source} здесь не является источником уличных снимков",
+  "{source} needs its key": "{source}: нужен ключ",
+  "{source} needs the {map} map, which is not available": "{source}: нужна карта {map}, но она недоступна",
+  "{source} could not be switched on": "Не удалось включить {source}",
+  "{source} is not available on this map": "{source}: недоступно на этой карте",
+  "{source} imagery could not be opened": "Не удалось открыть снимки {source}",
+  "{place} has no position to look for imagery at": "У места «{place}» нет координат для поиска снимков",
+  "No {source} imagery near {place}": "Нет снимков {source} рядом с {place}",
+  "{reason} (filters on: {filters})": "{reason} (включены фильтры: {filters})"
 }

@@ -179,8 +179,26 @@ const KNOWN_ERRORS = new Map(
     ),
     msg('Could not arrive at the requested place'),
     msg('The nearest airborne aircraft could not be selected'),
+    // show_street_level
+    msg('Latitude must be within ±90° and longitude within ±180°'),
+    msg('Street Level is unavailable'),
+    msg('No street-level imagery source is configured'),
+    msg('Street Level could not be enabled'),
+    msg('Street Level changed while it looked for imagery'),
+    msg('Aim the view at a street'),
   ].map((text) => [text, text]),
 );
+
+/** The imagery filters an empty street-level result names, as its chips say them. */
+function shownImageryFilters(label) {
+  return [
+    label.includes('360°') ? '360°' : null,
+    label.includes('flat-photo') ? t('FLAT') : null,
+    label.includes('SINCE') ? t('SINCE') : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
 
 function noneWithinView(target, radius) {
   switch (target) {
@@ -258,6 +276,69 @@ const ERROR_PATTERNS = [
   [
     /^No (\S+) within (\d+(?:\.\d+)?) km of the current view$/,
     ([, target, km]) => noneWithinView(target, shownKm(km)),
+  ],
+  // show_street_level: the filter clause first, around the reason it extends.
+  [
+    /^(.+) with the (.+ filters?) on$/,
+    ([, reason, filters]) =>
+      t('{reason} (filters on: {filters})', {
+        reason: shownError(reason),
+        filters: shownImageryFilters(filters),
+      }),
+  ],
+  [
+    /^(.+) is not a street-level imagery source here$/,
+    ([, source]) =>
+      t('{source} is not a street-level imagery source here', { source }),
+  ],
+  [
+    /^(.+) needs its key$/,
+    ([, source]) =>
+      t('{source} needs its key', { source: translateKnown(source) }),
+  ],
+  [
+    /^(.+) needs the (.+) map, which is not available$/,
+    ([, source, map]) =>
+      t('{source} needs the {map} map, which is not available', {
+        source: translateKnown(source),
+        map: map === 'photoreal' ? 'Google 3D' : map,
+      }),
+  ],
+  [
+    /^(.+) could not be switched on$/,
+    ([, source]) =>
+      t('{source} could not be switched on', {
+        source: translateKnown(source),
+      }),
+  ],
+  [
+    /^(.+) is not available on this map$/,
+    ([, source]) =>
+      t('{source} is not available on this map', {
+        source: translateKnown(source),
+      }),
+  ],
+  [
+    /^(.+) imagery could not be opened$/,
+    ([, source]) =>
+      t('{source} imagery could not be opened', {
+        source: translateKnown(source),
+      }),
+  ],
+  [
+    /^(.+) has no position to look for imagery at$/,
+    ([, place]) =>
+      t('{place} has no position to look for imagery at', {
+        place: localizePlaceName(place),
+      }),
+  ],
+  [
+    /^No (.+) imagery near (.+)$/,
+    ([, source, place]) =>
+      t('No {source} imagery near {place}', {
+        source: translateKnown(source),
+        place: localizePlaceName(place),
+      }),
   ],
 ];
 
