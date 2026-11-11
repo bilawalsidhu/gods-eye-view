@@ -414,8 +414,8 @@ function surfaceReference(track, message) {
  * `lastSeen` advances on every message, so it says nothing about how fresh
  * `altitudeFt` is: a velocity or identification frame leaves the altitude
  * from the last airborne position. Only a frame that carries a decoded
- * altitude (TC 9–18 with Q=1) sets `lastAltitudeAt` to its receive time and
- * increments `altitudeSequence`, an equal value included. The sequence tells
+ * altitude (TC 9–18, 25 ft or Gillham) sets `lastAltitudeAt` to its receive
+ * time and increments `altitudeSequence`, an equal value included. The sequence tells
  * apart frames of one USB block, which share a receive time. A surface frame
  * clears the altitude and `lastAltitudeAt` and keeps the sequence, so the
  * next airborne altitude still counts as new. `firstSeenAt` is when this
