@@ -3692,5 +3692,10 @@
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
-  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
+  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "Water": "מים",
+  "USGS Springs": "מעיינות של USGS",
+  "USGS Rivers & Streams": "נהרות ונחלים של USGS",
+  "USGS Lakes & Reservoirs": "אגמים ומאגרי מים של USGS",
+  "Zoom in to a region to load river gauges": "התקרבו לאזור כדי לטעון מדי מפלס נהרות"
 }
