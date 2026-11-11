@@ -105,10 +105,13 @@ test('painting draws the Sun and the Moon over it, and only night when the Sun i
     distance: 0.82,
   });
   const discs = calls.filter(([name]) => name === 'arc');
-  assert.equal(discs.length, 2, 'the Sun and the Moon');
+  // The Sun, the Sun again as the edge the Moon is cut to (by day only its
+  // bite out of the Sun shows), and the Moon.
+  assert.equal(discs.length, 3, 'the Sun, its edge and the Moon');
+  assert.ok(calls.some(([name]) => name === 'clip'));
   // The Moon is drawn right of centre and above it (canvas y runs down).
-  assert.ok(discs[1][1] > discs[0][1]);
-  assert.ok(discs[1][2] < discs[0][2]);
+  assert.ok(discs[2][1] > discs[0][1]);
+  assert.ok(discs[2][2] < discs[0][2]);
   calls.length = 0;
   paintSky(context, { night: true, phase: 'none' });
   assert.equal(calls.filter(([name]) => name === 'arc').length, 0);

@@ -160,11 +160,22 @@ export function paintSky(context, view, width = SIZE, height = width) {
     // cut out of the Sun, or black against the corona.
     const x = cx + view.moonX * sun;
     const y = cy - view.moonY * sun;
+    context.save();
+    if (view.phase !== 'total') {
+      // By day the Moon is lost in the glare: only its bite out of the Sun
+      // shows, as bright sky.
+      context.beginPath();
+      context.arc(cx, cy, sun + 0.5, 0, 7);
+      context.clip();
+    }
     context.fillStyle =
-      view.phase === 'total' ? '#05060c' : rgb(mix(sky, [0, 0, 0], 0.12));
+      view.phase === 'total'
+        ? '#05060c'
+        : rgb(mix(sky, [255, 252, 240], 0.3 + 0.3 * (1 - view.covered)));
     context.beginPath();
     context.arc(x, y, view.moonRadius * sun, 0, 7);
     context.fill();
+    context.restore();
 
     // The diamond ring: the last bead of sunlight just outside totality.
     const gap = view.distance - (view.moonRadius - 1);
