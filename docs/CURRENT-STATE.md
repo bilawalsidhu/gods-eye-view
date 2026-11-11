@@ -2890,8 +2890,8 @@ image freshness.
 
 Three layers in the Layers panel's **Water** group show the newest USGS gauge
 readings nationwide: **USGS Rivers & Streams** (`local-usgs-water`, share token
-`02`), **USGS Lakes & Reservoirs** (`local-usgs-lakes`, `03`) and **USGS Springs**
-(`local-usgs-springs`, `04`).
+`03`), **USGS Lakes & Reservoirs** (`local-usgs-lakes`, `04`) and **USGS Springs**
+(`local-usgs-springs`, `05`).
 
 - **Server** (`server/providers/usgsWater.js`, `/api/usgs-water/`): once an
   hour, on demand and single flight, it asks the USGS Water Data OGC API
