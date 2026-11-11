@@ -2400,3 +2400,240 @@ test('disabled weather releases its camera listener and re-enabling binds only o
   h.layer.destroy();
   assert.equal(h.moveEnd.size, 0);
 });
+
+const suppliedTile = (size = 256) => ({
+  width: size,
+  height: size,
+  closes: 0,
+  close() {
+    this.closes++;
+  },
+});
+
+test('a frame source supplies regional tiles in place of the tile route, through the readiness wrapper', async () => {
+  let now = 0;
+  const requests = [];
+  const supplied = [];
+  const h = renderingHarness({
+    now: () => now,
+    fetchImpl: () => assert.fail('supplied tiles are not fetched'),
+    frameSource: {
+      getTile: async (request) => {
+        requests.push(request);
+        const tile = suppliedTile();
+        supplied.push(tile);
+        return tile;
+      },
+    },
+  });
+  h.viewer.scene.globe.tilesLoaded = false;
+  const loaded = h.rendering.setFrame(snapshot, times[0]);
+  assert.equal(h.providers.length, 1);
+  const [provider] = h.providers;
+  assert.equal(provider.options, undefined, 'no URL template provider');
+  assert.equal(provider.maximumLevel, 6);
+  const tile = await provider.requestImage(1, 0, 1, {});
+  assert.equal(tile.width, 256);
+  assert.equal(tile.source, supplied[0]);
+  assert.equal(supplied[0].closes, 1);
+  assert.equal(requests[0].product, 'radar');
+  assert.equal(requests[0].time, times[0]);
+  assert.deepEqual(
+    [requests[0].z, requests[0].x, requests[0].y, requests[0].size],
+    [1, 1, 0, 256],
+  );
+  assert.equal(h.rendering.getDiagnostics().loadedTiles, 1);
+  now = 500;
+  h.settle();
+  assert.equal(await loaded, true);
+
+  const gate = deferred();
+  let signal;
+  const next = renderingHarness({
+    frameSource: {
+      getTile: (request) => {
+        signal = request.signal;
+        return gate.promise;
+      },
+    },
+  });
+  const staged = next.rendering.setFrame(snapshot, times[1]);
+  const pending = next.providers[0].requestImage(0, 0, 0, {});
+  next.rendering.clear();
+  assert.equal(signal.aborted, true, 'clearing a frame aborts its tiles');
+  const late = suppliedTile();
+  gate.resolve(late);
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(late.closes, 1);
+  assert.equal(await staged, false);
+  h.rendering.clear();
+});
+
+test('a failed supplied tile fails the staged frame through errorEvent', async () => {
+  const h = renderingHarness({
+    frameSource: {
+      getTile: async () => {
+        throw new Error('frame unavailable');
+      },
+    },
+  });
+  const staged = h.rendering.setFrame(snapshot, times[0]);
+  const [provider] = h.providers;
+  await assert.rejects(provider.requestImage(0, 0, 0, {}));
+  provider.errorEvent.raiseEvent({ x: 0, y: 0, level: 0, error: {} });
+  h.settle();
+  assert.equal(await staged, false);
+  assert.match(h.rendering.getDiagnostics().error, /Weather tiles unavailable/);
+  h.rendering.clear();
+});
+
+test('supplied regional infrared tiles are canvases, so they get the transfer without a flip', async () => {
+  const hadBitmap = Object.hasOwn(globalThis, 'ImageBitmap');
+  const previous = globalThis.ImageBitmap;
+  globalThis.ImageBitmap = class ImageBitmap {
+    width = 256;
+    height = 256;
+    close() {}
+  };
+  try {
+    const h = renderingHarness({
+      frameSource: { getTile: async () => new globalThis.ImageBitmap() },
+    });
+    void h.rendering.setFrame(
+      { ...snapshot, product: 'clouds-regional' },
+      times[0],
+    );
+    const tile = await h.providers[0].requestImage(0, 0, 0, {});
+    assert.equal(tile.drawnWith, null, 'drawn upright, not flipped');
+    assert.ok(tile.pixels, 'the infrared transfer ran');
+    const empty = renderingHarness({
+      frameSource: { getTile: async () => null },
+    });
+    void empty.rendering.setFrame(
+      { ...snapshot, product: 'clouds-regional' },
+      times[0],
+    );
+    const transparent = await empty.providers[0].requestImage(0, 0, 0, {});
+    assert.equal(transparent.width, 256, 'a null tile is still a canvas');
+    h.rendering.clear();
+    empty.rendering.clear();
+  } finally {
+    if (hadBitmap) globalThis.ImageBitmap = previous;
+    else delete globalThis.ImageBitmap;
+  }
+});
+
+test('tiled prefetch asks the frame source for the same level 0/1 tiles and releases them', async (t) => {
+  const requests = [];
+  const supplied = [];
+  const h = renderingHarness({
+    fetchImpl: () => assert.fail('supplied tiles are not fetched'),
+    frameSource: {
+      getTile: async (request) => {
+        requests.push(request);
+        if (request.z === 0) return null;
+        const tile = suppliedTile();
+        supplied.push(tile);
+        return tile;
+      },
+    },
+  });
+  t.after(() => h.rendering.clear());
+  h.viewer.camera = {
+    computeViewRectangle: () =>
+      Cesium.Rectangle.fromDegrees(-120, 25, -100, 50),
+  };
+  assert.equal(await h.rendering.prefetch(snapshot, times[1]), true);
+  assert.deepEqual(
+    requests.map(({ product, time, z, x, y, size }) => [
+      product,
+      time,
+      z,
+      x,
+      y,
+      size,
+    ]),
+    [
+      ['radar', times[1], 0, 0, 0, 256],
+      ['radar', times[1], 1, 0, 0, 256],
+    ],
+  );
+  assert.ok(requests.every(({ signal }) => signal instanceof AbortSignal));
+  assert.equal(supplied[0].closes, 1);
+  assert.equal(
+    await h.rendering.prefetch(snapshot, times[1]),
+    false,
+    'same completed work is not repeated',
+  );
+  assert.equal(requests.length, 2);
+
+  const gate = deferred();
+  let signal;
+  const slow = renderingHarness({
+    frameSource: {
+      getTile: ({ signal: value }) => {
+        signal = value;
+        return gate.promise;
+      },
+    },
+  });
+  t.after(() => slow.rendering.clear());
+  slow.viewer.camera = h.viewer.camera;
+  const warm = slow.rendering.prefetch(snapshot, times[1]);
+  slow.rendering.cancelPrefetch();
+  assert.equal(signal.aborted, true, 'cancelling a prefetch aborts its tiles');
+  gate.resolve(null);
+  assert.equal(await warm, false);
+});
+
+test('the global mosaic comes from the frame source image when present', async (t) => {
+  const requests = [];
+  const h = renderingHarness({
+    fetchImpl: () => assert.fail('a supplied mosaic is not fetched'),
+    decodeImage: () => assert.fail('a supplied mosaic is not decoded'),
+    frameSource: {
+      getImage: async (request) => {
+        requests.push(request);
+        return { width: 2048, height: 1024, close() {} };
+      },
+    },
+  });
+  t.after(() => h.rendering.clear());
+  await showMosaic(h, times[0]);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].product, 'clouds');
+  assert.deepEqual(requests[0].size, { width: 2048, height: 1024 });
+  assert.equal(requests[0].bbox, null);
+  assert.equal(h.rendering.getDiagnostics().mosaic.fetched, true);
+});
+
+test('the layer hands rendering a frame source only when its feed is one', () => {
+  const seen = [];
+  const createRendering = (args) => {
+    seen.push(args.frameSource);
+    return {
+      setAlpha() {},
+      rehome() {},
+      clear() {},
+      getDiagnostics: () => ({}),
+    };
+  };
+  const options = {
+    documentRef: target({ hidden: false }),
+    eventTarget: target(),
+    matchMedia: () => target({ matches: false }),
+    createRendering,
+  };
+  createWeatherLayer({
+    ...options,
+    feed: { getSnapshot: async () => snapshot },
+  }).init({});
+  const getFrameTile = async () => null;
+  createWeatherLayer({
+    ...options,
+    feed: { getSnapshot: async () => snapshot, getFrameTile },
+  }).init({});
+  assert.equal(seen[0], null);
+  assert.equal(typeof seen[1].getTile, 'function');
+  assert.equal(seen[1].getImage, undefined);
+});

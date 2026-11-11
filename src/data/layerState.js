@@ -693,6 +693,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'i',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'news', token: '00', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'radio',
     token: 'r',
@@ -722,6 +723,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'satellites',
   }),
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'shipwrecks', token: '01', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',

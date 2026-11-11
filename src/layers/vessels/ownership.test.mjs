@@ -98,7 +98,7 @@ test('vessel construction is inert and each instance owns its records, icon cach
   const two = createVesselState({ source, services: services() });
   for (const key of ['state', 'shipIconCache', '_scratchFocusScreen'])
     assert.notEqual(one[key], two[key]);
-  assert.notEqual(one.state.records.byMmsi, two.state.records.byMmsi);
+  assert.notEqual(one.state.records.byId, two.state.records.byId);
   assert.notEqual(one.state.feed, two.state.feed);
   assert.notEqual(one.state.records.all, two.state.records.all);
   assert.notEqual(one.state.records.unkeyed, two.state.records.unkeyed);
@@ -272,7 +272,7 @@ test('partial-feed expiry releases a selected vessel and its pending trail', asy
   layer.selectById('222');
   current = snapshot([observation('111')], { complete: false });
   await layer.update();
-  assert.equal(layer.getSelectedInfo().mmsi, '222');
+  assert.equal(layer.getSelectedInfo().id, '222');
   assert.equal(signal.aborted, false);
   advance(5 * 60 * 1000);
   await layer.update();
@@ -420,4 +420,98 @@ test('vessel stats name the provider the last snapshot reported', async () => {
   assert.equal(layer.getStats().source, 'Vessels');
   await layer.update();
   assert.equal(layer.getStats().source, 'Datalastic');
+});
+
+test('two vessels sharing an MMSI under different ids stay two vessels', async () => {
+  const shared = (id, longitude) => ({
+    ...observation(id),
+    mmsi: '123456789',
+    longitude,
+    name: `HULL ${id}`,
+  });
+  const { layer, primitives } = setup({
+    getSnapshot: async () =>
+      snapshot([shared('hull-a', 4.05), shared('hull-b', 4.25)]),
+  });
+  await layer.update();
+  assert.equal(layer.getStats().count, 2);
+  assert.equal(primitives.size, 2);
+  assert.equal(layer.hasContact('hull-a'), true);
+  assert.equal(layer.hasContact('hull-b'), true);
+  // An MMSI is not a key, but a link naming one still finds a vessel with it.
+  assert.equal(layer.hasContact('123456789'), true);
+  assert.equal(layer.hasContact('987654321'), false);
+  assert.deepEqual(
+    layer
+      .getAllPositions()
+      .map(({ id }) => id)
+      .sort(),
+    ['hull-a', 'hull-b'],
+  );
+  assert.equal(layer.selectById('hull-b'), true);
+  assert.deepEqual(
+    [layer.getSelectedInfo().id, layer.getSelectedInfo().mmsi],
+    ['hull-b', '123456789'],
+  );
+  assert.equal(
+    layer.selectById('123456789'),
+    true,
+    'a link naming the MMSI selects a vessel with it',
+  );
+  assert.equal(layer.getSelectedInfo().mmsi, '123456789');
+  assert.equal(layer.selectById('hull-b'), true);
+  // A lookup by the shared MMSI still finds a vessel that has it.
+  assert.equal(layer.findByQuery('123456789').mmsi, '123456789');
+});
+
+test('a vessel with an id and no MMSI renders and can be selected', async () => {
+  const { layer, primitives } = setup({
+    getSnapshot: async () =>
+      snapshot([{ ...observation('7f3c9a10-provider-id'), name: 'NO MMSI' }]),
+  });
+  await layer.update();
+  assert.equal(primitives.size, 1);
+  const [primitive] = primitives;
+  assert.equal(primitive.id.id, '7f3c9a10-provider-id');
+  assert.equal(primitive.id.mmsi, '');
+  assert.equal(layer.selectById('7f3c9a10-provider-id'), true);
+  const info = layer.getSelectedInfo();
+  assert.equal(info.id, '7f3c9a10-provider-id');
+  assert.equal(info.mmsi, '');
+  assert.equal(layer.getCockpitSubject().id, '7f3c9a10-provider-id');
+  assert.equal(layer.testing._getVesselStateForTest().trailId, info.id);
+});
+
+test('a vessel keyed by a UUID is found in any case and names its drawn fix', async () => {
+  const uuid = '0770e3ca-b896-c307-f499-4f9df2b8f86b';
+  const { layer } = setup({
+    getSnapshot: async () =>
+      snapshot([{ ...observation(uuid.toUpperCase()), name: 'UUID HULL' }]),
+  });
+  await layer.update();
+  assert.equal(layer.getSelectedFix(), null, 'nothing selected');
+  // A share link carries the UUID in lowercase.
+  assert.equal(layer.hasContact(uuid), true);
+  assert.equal(layer.selectById(uuid), true);
+  const fix = layer.getSelectedFix();
+  assert.equal(fix.id, uuid.toUpperCase());
+  assert.ok(fix.position, 'where the vessel is drawn');
+  assert.equal(fix.observedAtMs, 500);
+  assert.equal(layer.hasContact('0770e3ca-b896-c307-f499-4f9df2b8f86c'), false);
+});
+
+test('AIS feed rows stay keyed by their MMSI', async () => {
+  const { vesselSnapshot } = await import('../../sources/live/vessels.js');
+  const row = { mmsi: '235000001', lat: 51.93, lon: 4.05, name: 'TERN' };
+  const { layer } = setup({
+    getSnapshot: async () =>
+      vesselSnapshot({ rows: [row, { ...row, lon: 4.2 }], status: 'live' }),
+  });
+  await layer.update();
+  assert.equal(layer.getStats().count, 1, 'one MMSI is one vessel on AIS');
+  assert.equal(layer.selectById('235000001'), true);
+  assert.deepEqual(
+    [layer.getSelectedInfo().id, layer.getSelectedInfo().mmsi],
+    ['235000001', '235000001'],
+  );
 });

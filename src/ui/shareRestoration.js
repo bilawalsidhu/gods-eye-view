@@ -70,34 +70,88 @@ export function shareTrackingRestoreNotice(result) {
       : t('Shared {subject} is unavailable', { subject });
 }
 
+// The not-reporting notice, one ready-made sentence per shared entity kind
+// (SHARE_VIEW_ENTITY_KINDS) for the same reason as SHARE_RESTORE_NOTICES.
+const SHARED_FIX_NOTICES = Object.freeze({
+  aircraft: Object.freeze({
+    lastSeen: msg(
+      "The shared flight isn't reporting now — showing where it was last seen",
+    ),
+    at: msg(
+      "The shared flight isn't reporting now — showing where it was at {time}",
+    ),
+  }),
+  military_aircraft: Object.freeze({
+    lastSeen: msg(
+      "The shared military flight isn't reporting now — showing where it was last seen",
+    ),
+    at: msg(
+      "The shared military flight isn't reporting now — showing where it was at {time}",
+    ),
+  }),
+  vessel: Object.freeze({
+    lastSeen: msg(
+      "The shared vessel isn't reporting now — showing where it was last seen",
+    ),
+    at: msg(
+      "The shared vessel isn't reporting now — showing where it was at {time}",
+    ),
+  }),
+  satellite: Object.freeze({
+    lastSeen: msg(
+      "The shared satellite isn't reporting now — showing where it was last seen",
+    ),
+    at: msg(
+      "The shared satellite isn't reporting now — showing where it was at {time}",
+    ),
+  }),
+});
+
+// The second line names the entity by the id the link carries.
+function sharedFixDetail(entity) {
+  const id = String(entity.id);
+  switch (entity.kind) {
+    case 'aircraft':
+    case 'military_aircraft':
+      // ICAO addresses read as they are written on the aircraft: upper case.
+      return t('ICAO: {id}', { id: id.toUpperCase() });
+    case 'satellite':
+      return t('NORAD: {id}', { id });
+    case 'vessel':
+      return /^\d+$/.test(id)
+        ? t('MMSI: {id}', { id })
+        : t('Vessel UUID: {id}', { id: id.toLowerCase() });
+    default:
+      return id;
+  }
+}
+
 /**
  * The notice for a shared entity that is not reporting: the view shows where
- * it was when the link was made.
+ * it was when the link was made. The sentence is the notice; the entity's id
+ * goes on a second line under it.
  * @param {{kind: string, id: string}} entity
  * @param {number|null} observedAtMs
  * @param {number} [nowMs]
- * @returns {string}
+ * @returns {{message: string, detail: string}}
  */
 export function sharedFixNotice(entity, observedAtMs, nowMs = Date.now()) {
-  // ICAO addresses read as they are written on the aircraft: upper case.
-  const id =
-    ENTITY_BY_KIND.get(entity.kind)?.idForm === 'hex24'
-      ? String(entity.id).toUpperCase()
-      : String(entity.id);
+  const detail = sharedFixDetail(entity);
+  const notices = SHARED_FIX_NOTICES[entity.kind];
+  if (!notices)
+    return {
+      message: t('Shared {subject} is unavailable', { subject: t('entity') }),
+      detail,
+    };
   if (!Number.isFinite(observedAtMs))
-    return t("{id} isn't reporting now — showing where it was last seen", {
-      id,
-    });
+    return { message: t(notices.lastSeen), detail };
   const time = formatDate(
     observedAtMs,
     nowMs - observedAtMs < DAY_MS
       ? { hour: '2-digit', minute: '2-digit' }
       : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
   );
-  return t("{id} isn't reporting now — showing where it was at {time}", {
-    id,
-    time,
-  });
+  return { message: t(notices.at, { time }), detail };
 }
 
 /** Own initial share restoration, durable layer state and restoration notices. */
@@ -181,7 +235,7 @@ export class ShareRestoration {
       this.syncShareState();
       if (this.shareLinkManager?.rejectedShareCode)
         this._presentAfterStartupCover(
-          t("This share link can't be opened"),
+          { message: t("This share link can't be opened") },
           ++this._shareTrackingNoticeGeneration,
         );
     }
@@ -263,7 +317,9 @@ export class ShareRestoration {
       // the shared flight having landed.
       const vessel = this._sharedVessel(state);
       if (vessel) void this._restoreSharedVessel(vessel, current);
-      settle({ status: 'settled', share, layers, tracking });
+      // The token tells listeners whether anyone navigated after the
+      // restore's flight landed (while the layers were still loading).
+      settle({ status: 'settled', share, layers, tracking, navigationToken });
     } catch (error) {
       if (!current()) return;
       this.shareLinkManager.completeInitialRestore(state.restoreToken);
@@ -411,7 +467,7 @@ export class ShareRestoration {
     this._presentAfterStartupCover(
       view.lastKnown
         ? sharedFixNotice(view.entity, view.lastKnown.observedAtMs)
-        : t('Shared vessel is unavailable'),
+        : { message: t('Shared vessel is unavailable') },
       ++this._shareTrackingNoticeGeneration,
     );
     return false;
@@ -505,26 +561,36 @@ export class ShareRestoration {
     // A share link that knows where the entity was says so; the view is
     // already there.
     const fix = this._sharedThingFor(result)?.lastKnown;
-    const message = fix
+    const notice = fix
       ? sharedFixNotice(
           this._initialShareState.shareView.entity,
           fix.observedAtMs,
         )
-      : shareTrackingRestoreNotice(result);
+      : { message: shareTrackingRestoreNotice(result) };
     if (this._resolveInitialShareRestore) {
       void this.initialRestorePromise.then(() =>
-        this._presentAfterStartupCover(message, noticeGeneration),
+        this._presentAfterStartupCover(notice, noticeGeneration),
       );
       return;
     }
-    this._presentAfterStartupCover(message, noticeGeneration);
+    this._presentAfterStartupCover(notice, noticeGeneration);
   }
 
   /**
    * Show a status notice once the start-up cover is gone, unless a newer
-   * notice (generation) has taken its place.
+   * notice (generation) has taken its place. A notice with a detail line is
+   * a last-known one: the sentence over the entity's id.
+   * @param {{message: string, detail?: string}} notice
+   * @param {number} noticeGeneration
    */
-  _presentAfterStartupCover(message, noticeGeneration) {
+  _presentAfterStartupCover(notice, noticeGeneration) {
+    const show = () =>
+      notice.detail
+        ? this.showStatus(notice.message, {
+            state: 'last-known',
+            detail: notice.detail,
+          })
+        : this.showStatus(notice.message);
     const showAfterStartupCover = () => {
       this._lifetime.frame(() => {
         if (
@@ -540,7 +606,7 @@ export class ShareRestoration {
           !startupCover ||
           getComputedStyle(startupCover).visibility === 'hidden'
         ) {
-          this.showStatus(message);
+          show();
           return;
         }
         let fallbackTimer = null;
@@ -555,7 +621,7 @@ export class ShareRestoration {
               this._disposed,
             )
           )
-            this.showStatus(message);
+            show();
         };
         removeStartupListener = this._lifetime.listen(
           startupCover,

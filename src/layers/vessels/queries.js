@@ -24,7 +24,12 @@ import {
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
   VESSEL_LIFT_M,
+  followsClock,
 } from './policy.js';
+import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+
+const UUID_KEY =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createQueries({
   vesselState,
@@ -35,6 +40,28 @@ export function createQueries({
 }) {
   const { state } = vesselState;
   const { formatKnots } = services.labels;
+
+  /**
+   * The vessel keyed `id`, else the first whose MMSI is `id`: a link or a
+   * caller that names a vessel by its MMSI still finds it. A share link
+   * carries a UUID key in lowercase, so a UUID matches in any case.
+   * @param {string} id
+   * @returns {object|null}
+   */
+  function recordFor(id) {
+    const record = state.records.byId?.get(id);
+    if (record) return record;
+    if (UUID_KEY.test(id)) {
+      const wanted = id.toLowerCase();
+      for (const candidate of state.records.byId?.values() ?? [])
+        if (candidate.id.toLowerCase() === wanted) return candidate;
+      return null;
+    }
+    if (!/^\d{1,10}$/.test(id)) return null;
+    for (const candidate of state.records.byId?.values() ?? [])
+      if (candidate.mmsi === id) return candidate;
+    return null;
+  }
 
   /**
    * Seconds until the server's next reconnect attempt, or 0 when none is
@@ -173,8 +200,9 @@ export function createQueries({
    * fields are null, never NaN/undefined. navStatus is always null: the
    * /api/vessels proxy does not surface AIS NavigationalStatus, so it
    * cannot be derived client-side.
-   * @param {Object|null|undefined} record - `state.records.byMmsi`/`state.records.all` entry.
-   * @returns {{id: string|null, mmsi: string|null, name: string|null,
+   * @param {Object|null|undefined} record - `state.records.byId`/`state.records.all` entry.
+   * @returns {{id: string|null, vesselId: string|null, mmsi: string|null,
+   *   name: string|null,
    *   lat: number|null, lon: number|null, speedKts: number|null,
    *   courseDeg: number|null, shipType: string|null, destination: string|null,
    *   navStatus: null}}
@@ -186,10 +214,14 @@ export function createQueries({
       const t = String(v ?? '').trim();
       return t || null;
     };
+    const vesselId = text(record?.id);
     const mmsi = text(record?.mmsi);
     const name = text(record?.name);
     return {
-      id: name || mmsi,
+      // A display label, as every layer's analyst `id` is; `vesselId` is the
+      // key and `mmsi` the vessel's MMSI when known.
+      id: name || mmsi || vesselId,
+      vesselId,
       mmsi,
       name,
       lat: num(record?.lat),
@@ -223,32 +255,32 @@ export function createQueries({
    * trail picks as no-ops. The interaction wire also reserves sibling-owned
    * picks before this reducer so their camera action cannot mutate AIS state.
    *
-   * @param {{selectedMmsi?: string|number|null, pickedMmsi?: string|number|null,
+   * @param {{selectedId?: string|number|null, pickedId?: string|number|null,
    *   gesture?: 'click'|'escape'}} input - Current selection plus owned pick.
    * @returns {{action: 'none'|'select'|'deselect'}}
    */
 
   function reduceVesselSelection(input = {}) {
-    const selectedMmsi = normalizeSelectionMmsi(input.selectedMmsi);
-    const pickedMmsi = normalizeSelectionMmsi(input.pickedMmsi);
+    const selectedId = normalizeSelectionId(input.selectedId);
+    const pickedId = normalizeSelectionId(input.pickedId);
     const gesture = input.gesture || 'click';
 
     if (gesture === 'escape') {
-      return selectedMmsi ? { action: 'deselect' } : { action: 'none' };
+      return selectedId ? { action: 'deselect' } : { action: 'none' };
     }
     if (gesture !== 'click') {
       return { action: 'none' };
     }
-    if (pickedMmsi) {
-      if (pickedMmsi === selectedMmsi) {
+    if (pickedId) {
+      if (pickedId === selectedId) {
         return { action: 'none' };
       }
       return { action: 'select' };
     }
-    return selectedMmsi ? { action: 'deselect' } : { action: 'none' };
+    return selectedId ? { action: 'deselect' } : { action: 'none' };
   }
 
-  function normalizeSelectionMmsi(value) {
+  function normalizeSelectionId(value) {
     if (value === null || value === undefined) return null;
     const text = String(value).trim();
     return text || null;
@@ -273,9 +305,10 @@ export function createQueries({
     statsRefreshInterval: 1000,
 
     /**
-     * Find a vessel by exact MMSI or case-insensitive name substring.
-     * @param {string|number} query MMSI or partial vessel name.
-     * @returns {{ mmsi: string, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
+     * Find a vessel by its exact id, exact MMSI or case-insensitive name
+     * substring. Vessels can share an MMSI; the first that has it is found.
+     * @param {string|number} query Vessel id, MMSI or partial vessel name.
+     * @returns {{ id: string, mmsi: string, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
      */
     findByQuery(query) {
       if (query === null || query === undefined) return null;
@@ -284,9 +317,9 @@ export function createQueries({
       const q = String(query).trim();
       if (!q) return null;
 
-      let record = null;
-      if (/^\d+$/.test(q)) {
-        record = state.records.byMmsi.get(q) || null;
+      let record = state.records.byId.get(q) || null;
+      if (!record && /^\d+$/.test(q)) {
+        record = records.find((r) => r.mmsi === q) || null;
       }
       if (!record) {
         const lower = q.toLowerCase();
@@ -304,6 +337,7 @@ export function createQueries({
         components.rendering.getVisual(record).position;
       if (!position) return null;
       return {
+        id: record.id,
         mmsi: record.mmsi,
         name: record.name,
         position,
@@ -320,7 +354,7 @@ export function createQueries({
      * @param {Cesium.Cartesian3} centerCartesian Center of the search.
      * @param {number} rangeM Max distance in meters (non-finite = unbounded).
      * @param {number} [maxCount=25] Maximum entries to return.
-     * @returns {Array<{ mmsi: string, name: string, position: Cesium.Cartesian3, distanceM: number }>}
+     * @returns {Array<{ id: string, mmsi: string, name: string, position: Cesium.Cartesian3, distanceM: number }>}
      */
     getNearby(centerCartesian, rangeM, maxCount = 25) {
       const records = state.records.all;
@@ -340,6 +374,7 @@ export function createQueries({
         const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         entries.push({
+          id: record.id,
           mmsi: record.mmsi,
           name: record.name,
           position,
@@ -361,7 +396,7 @@ export function createQueries({
      * @returns {Array<{ id: string, name: string, latitude: number,
      *   longitude: number, course: number|null, heading: number|null,
      *   type: string, color: string, stale: boolean }>} Empty while the
-     *   layer is off. A ship with no MMSI has an `unkeyed:` id.
+     *   layer is off. A ship with no id has an `unkeyed:` id.
      */
     getRadarContacts(lat, lon, rangeM, maxCount = 60) {
       const records = state.records.all;
@@ -371,7 +406,7 @@ export function createQueries({
       const cap =
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 60;
       const center = { lat, lon };
-      const subject = state.cockpitSubjectMmsi;
+      const subject = state.cockpitSubjectId;
       const finite = (value) => {
         if (value === null || value === undefined || value === '') return null;
         const number = Number(value);
@@ -380,7 +415,7 @@ export function createQueries({
 
       const entries = [];
       records.forEach((record, index) => {
-        if (subject && String(record.mmsi) === subject) return;
+        if (subject && String(record.id) === subject) return;
         const distanceM = greatCircleMeters(center, {
           lat: record.lat,
           lon: record.lon,
@@ -390,8 +425,8 @@ export function createQueries({
       });
       entries.sort((a, b) => a.distanceM - b.distanceM);
       return entries.slice(0, cap).map(({ record, index }) => ({
-        // A ship with no MMSI still needs a key of its own on the scope.
-        id: record.mmsi ? String(record.mmsi) : `unkeyed:${index}`,
+        // A ship with no id still needs a key of its own on the scope.
+        id: record.id ? String(record.id) : `unkeyed:${index}`,
         name: String(record.name || record.mmsi || ''),
         latitude: record.lat,
         longitude: record.lon,
@@ -412,22 +447,22 @@ export function createQueries({
      * Whether this layer still carries a vessel, in O(1).
      *
      * Mirror of `flights.hasContact`: presence consumers must not infer absence
-     * from the capped `getAllPositions` rows. `vesselMap` is MMSI-keyed.
+     * from the capped `getAllPositions` rows. Records are keyed by id.
      * A disabled layer keeps its records, so it must decline rather than answer
      * from data the user can no longer see.
-     * @param {string} mmsi Vessel identifier.
+     * @param {string} id Vessel id.
      * @returns {boolean|null} Presence, or null when the layer is disabled or
      *   holds no data and therefore cannot answer.
      */
-    hasContact(mmsi) {
+    hasContact(id) {
       if (
         !state.feed.enabled ||
-        !state.records.byMmsi ||
-        state.records.byMmsi.size === 0
+        !state.records.byId ||
+        state.records.byId.size === 0
       )
         return null;
-      if (!mmsi) return false;
-      return state.records.byMmsi.has(String(mmsi).trim());
+      if (!id) return false;
+      return Boolean(recordFor(String(id).trim()));
     },
 
     getAllPositions(maxCount = 800) {
@@ -443,8 +478,8 @@ export function createQueries({
         const position = visual.billboard?.position || visual.position;
         if (!position) continue;
         result.push({
-          id: record.mmsi,
-          label: record.name || record.mmsi,
+          id: record.id,
+          label: record.name || record.mmsi || record.id,
           position,
           latitude: record.lat,
           longitude: record.lon,
@@ -477,16 +512,16 @@ export function createQueries({
     },
 
     /**
-     * Select a vessel by MMSI via the same path as a map click
-     * (highlight + HUD update).
-     * @param {string|number} mmsi Vessel MMSI.
+     * Select a vessel by id via the same path as a map click
+     * (highlight + HUD update). An AIS feed's vessels are keyed by MMSI.
+     * @param {string|number} id Vessel id.
      * @returns {boolean} True if a matching vessel was selected.
      */
-    selectById(mmsi) {
-      if (mmsi === null || mmsi === undefined) return false;
-      const target = String(mmsi).trim();
+    selectById(id) {
+      if (id === null || id === undefined) return false;
+      const target = String(id).trim();
       if (!target) return false;
-      const record = state.records.byMmsi.get(target);
+      const record = recordFor(target);
       if (!record) return false;
       components.selection.selectVessel(record);
       return true;
@@ -503,12 +538,13 @@ export function createQueries({
 
     /**
      * Get info about the currently selected vessel.
-     * @returns {{ mmsi: string, name: string, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
+     * @returns {{ id: string, mmsi: string, name: string, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
      */
     getSelectedInfo() {
       const record = state.selectedRecord;
       if (!record) return null;
       return {
+        id: record.id,
         mmsi: record.mmsi,
         name: record.name,
         latitude: record.lat,
@@ -516,6 +552,33 @@ export function createQueries({
         speedKt: record.speed,
         course: record.course,
         type: record.type,
+      };
+    },
+
+    /**
+     * Where the selected vessel is drawn now, for a share link that names it:
+     * its id, its drawn position and the time that position stands for (the
+     * world time while the layer follows the clock, else its fix's time).
+     * @returns {{ id: string, position: Cesium.Cartesian3, observedAtMs: number|null }|null}
+     *   Null when the layer is off, nothing is selected or it is not drawn.
+     */
+    getSelectedFix() {
+      if (!state.feed.enabled) return null;
+      const record = state.selectedRecord;
+      if (!record?.id) return null;
+      const visual = components.rendering.getVisual(record);
+      const position = visual?.billboard?.position || visual?.position;
+      if (!position) return null;
+      const fixEpoch = record.lastPositionEpoch;
+      const observedAtMs = followsClock(vesselState)
+        ? vesselState.worldNow()
+        : Number.isFinite(fixEpoch)
+          ? fixEpoch * 1000
+          : (record.fixReceivedAtMs ?? null);
+      return {
+        id: record.id,
+        position,
+        observedAtMs: Number.isFinite(observedAtMs) ? observedAtMs : null,
       };
     },
 
@@ -544,16 +607,16 @@ export function createQueries({
     /**
      * Mark the vessel whose bridge the Cockpit camera occupies, or release it.
      * Its sprite, card and detection bracket stay hidden while it is held.
-     * @param {string|number|null} mmsi Subject MMSI, or null to release.
+     * @param {string|number|null} id Subject vessel id, or null to release.
      * @returns {boolean} Always true.
      */
-    setCockpitSubject(mmsi) {
-      const next = normalizeSelectionMmsi(mmsi);
-      if (state.cockpitSubjectMmsi === next) return true;
-      state.cockpitSubjectMmsi = next;
+    setCockpitSubject(id) {
+      const next = normalizeSelectionId(id);
+      if (state.cockpitSubjectId === next) return true;
+      state.cockpitSubjectId = next;
       // The ridden ship's trail runs from under the eye: hidden, its history
       // kept, while the bridge holds the ship it belongs to.
-      state.trail?.setVisible?.(!next || next !== state.trailMmsi);
+      state.trail?.setVisible?.(!next || next !== state.trailId);
       components.rendering.updateVisibility(true);
       return true;
     },
@@ -575,7 +638,7 @@ export function createQueries({
      * @param {Object} [options={}] - Options from the detection system.
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number} [options.seed] - Seed offset for stride sampling.
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
+     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean, cardSourceId: string, cardEntryId: string}>}
      */
     getDetectableObjects(options = {}) {
       if (
@@ -606,10 +669,13 @@ export function createQueries({
         if (!position) continue;
         result.push({
           position,
-          sourceId: record.mmsi,
+          sourceId: record.id,
           id: record.name || record.mmsi || 'VESSEL',
           type: 'SEA',
           skipLabel: record === selected,
+          // Detection hides the callout while this card paints.
+          cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
+          cardEntryId: components.cards.vesselOverlayEntryId(record),
           klass: record.type
             ? String(record.type).toUpperCase().slice(0, 14)
             : undefined,
@@ -656,6 +722,8 @@ export function createQueries({
         retryInSec: aisRetryInSec(),
         // Same field as flights and military, so Contacts names the provider.
         source: layer.source,
+        // Following the world clock, the snapshot's age is told from its time.
+        ...(followsClock(vesselState) && { atMs: vesselState.worldNow() }),
       };
     },
   };
@@ -669,7 +737,7 @@ export function createQueries({
     mapAnalystRecord,
     vesselDatumHeightM,
     reduceVesselSelection,
-    normalizeSelectionMmsi,
+    normalizeSelectionId,
     methods,
   };
 }

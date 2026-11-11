@@ -11,6 +11,7 @@ import { createGevActionRunner } from './gevActions.js';
 import { createPointerTracker } from './pointerContext.js';
 import { createReferentRegistry } from './referents.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { setLocale, t } from '../i18n/index.js';
 
 const PROVIDER_KEY = 'gev.voice.provider';
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -870,4 +871,84 @@ test('a provider switch hands chat Settings to the new mount', async (t) => {
   assert.equal(f.mounts.length, 2);
   assert.deepEqual(f.mounts[1].options.presentation, shown);
   assert.equal(f.facade.provider, next);
+});
+
+test('a missing-key error hides the microphone hint; other errors keep it', async (t) => {
+  const f = compositionFixture(t, {});
+  f.select('gemini');
+  await settle();
+  const instance = f.instances.at(-1);
+  const ui = f.views.at(-1);
+  instance.hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: 'Add a Gemini API key in Provider Settings',
+    missingKey: true,
+  });
+  assert.equal(
+    ui.state.error.text,
+    'Add a Gemini API key in Provider Settings',
+  );
+  assert.equal(ui.state.error.hint, false);
+  instance.hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: 'Socket closed',
+  });
+  assert.equal(ui.state.error.text, 'Socket closed');
+  assert.equal(ui.state.error.hint, true);
+});
+
+test('a provider message is worded again after a language change', async (t2) => {
+  t2.after(() => setLocale('en'));
+  const f = compositionFixture(t2, {});
+  f.select('gemini');
+  await settle();
+  const instance = f.instances.at(-1);
+  const ui = f.views.at(-1);
+  const quota = 'Gemini quota is unavailable. Try again later.';
+  instance.hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: quota,
+    sourceDetail: quota,
+  });
+  assert.equal(ui.state.error.text, quota);
+  setLocale('es');
+  assert.equal(ui.state.error.text, t(quota));
+  assert.notEqual(ui.state.error.text, quota);
+  setLocale('en');
+  instance.hooks.emit({
+    type: 'state',
+    state: 'listening',
+    detail: 'Ask or command',
+    sourceDetail: 'Ask or command',
+  });
+  setLocale('es');
+  assert.equal(ui.state.detail.text, t('Ask or command'));
+  assert.notEqual(ui.state.detail.text, 'Ask or command');
+});
+
+test('a provider message with placeholders is worded again with them', async (t2) => {
+  t2.after(() => setLocale('en'));
+  const f = compositionFixture(t2, {});
+  f.select('gemini');
+  await settle();
+  const ui = f.views.at(-1);
+  const text = 'Gemini token request failed (HTTP {status})';
+  f.instances.at(-1).hooks.emit({
+    type: 'state',
+    state: 'error',
+    detail: t(text, { status: 502 }),
+    sourceDetail: text,
+    sourceParams: { status: 502 },
+  });
+  assert.equal(ui.state.error.text, 'Gemini token request failed (HTTP 502)');
+  setLocale('es');
+  assert.equal(ui.state.error.text, t(text, { status: 502 }));
+  assert.match(ui.state.error.text, /502/);
+  assert.notEqual(
+    ui.state.error.text,
+    'Gemini token request failed (HTTP 502)',
+  );
 });

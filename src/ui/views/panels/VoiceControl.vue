@@ -166,7 +166,7 @@ const frameStyle = (panel) => ({
           <button class="gev-voice-error-dismiss" type="button" @click="controls?.dismissError()">{{ t('DISMISS') }}</button>
         </div>
         <div id="gev-voice-error-detail">{{ view.error.text }}</div>
-        <div class="gev-voice-error-hint" :hidden="view.error.typed">{{ t('Check microphone permission and network access, then try again.') }}</div>
+        <div class="gev-voice-error-hint" :hidden="view.error.typed || view.error.hint === false">{{ t('Check microphone permission and network access, then try again.') }}</div>
       </div>
   </div>
 </template>
