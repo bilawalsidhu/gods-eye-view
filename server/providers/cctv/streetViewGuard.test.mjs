@@ -373,3 +373,103 @@ test('15 concurrent different cameras are bounded by eight pending slots', async
   );
   assert.equal(calls, 8);
 });
+
+test('two mounted CCTV plugins use the same process Street View budget', async (t) => {
+  const names = [
+    'CCTV_SOURCES_JSON',
+    'CCTV_SOURCES_FILE',
+    'CCTV_FORCE_AUSTIN',
+    'GOOGLE_MAPS_SERVER_API_KEY',
+  ];
+  const beforeEnv = Object.fromEntries(
+    names.map((name) => [name, process.env[name]]),
+  );
+  process.env.CCTV_SOURCES_JSON = JSON.stringify(
+    ['shared-a', 'shared-b'].map((id) => ({
+      id,
+      name: id,
+      lat: 30.2672,
+      lon: -97.7431,
+      feedType: 'image',
+    })),
+  );
+  process.env.CCTV_SOURCES_FILE = 'not-a-real-cctv-source.json';
+  process.env.CCTV_FORCE_AUSTIN = '0';
+  process.env.GOOGLE_MAPS_SERVER_API_KEY = 'test-only-street-view-key';
+
+  const originalFetch = globalThis.fetch;
+  let googleCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = new URL(String(url));
+    if (
+      target.hostname === 'maps.googleapis.com' &&
+      target.pathname === '/maps/api/streetview'
+    ) {
+      googleCalls += 1;
+      return new Response(Buffer.from('fake-jpeg'), {
+        headers: { 'content-type': 'image/jpeg' },
+      });
+    }
+    return new Response('not found', { status: 404 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    for (const name of names) {
+      if (beforeEnv[name] === undefined) delete process.env[name];
+      else process.env[name] = beforeEnv[name];
+    }
+  });
+
+  const mount = () => {
+    let handler;
+    cctvProxy().configureServer({
+      middlewares: {
+        use: (_route, middleware) => {
+          handler = middleware;
+        },
+      },
+    });
+    return handler;
+  };
+  const firstPlugin = mount();
+  const secondPlugin = mount();
+  const frame = (handler, cameraId) =>
+    new Promise((resolve, reject) => {
+      let status;
+      let source;
+      const response = {
+        writeHead(code, headers) {
+          status = code;
+          source = headers['X-CCTV-Source'];
+        },
+        end() {
+          resolve({ status, source });
+        },
+      };
+      const request = {
+        url: '/frame/' + cameraId,
+        method: 'GET',
+        headers: {},
+        socket: { remoteAddress: '127.0.0.1' },
+        on() {},
+      };
+      Promise.resolve(handler(request, response)).catch(reject);
+    });
+
+  const shared = processStreetViewAdmission();
+  const attemptsBefore = shared.stats().attempts;
+  assert.deepEqual(await frame(firstPlugin, 'shared-a'), {
+    status: 200,
+    source: 'streetview',
+  });
+  assert.deepEqual(await frame(secondPlugin, 'shared-b'), {
+    status: 200,
+    source: 'streetview',
+  });
+  assert.equal(googleCalls, 2);
+  assert.equal(
+    shared.stats().attempts - attemptsBefore,
+    2,
+    'both plugin routes must charge the process-owned admission service',
+  );
+});
