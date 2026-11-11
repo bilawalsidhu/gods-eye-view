@@ -245,6 +245,31 @@ test('P2-7: duplicate callsigns and names resolve by canonical identity', () => 
   );
 });
 
+test('vessels sharing an MMSI resolve by their vessel id', () => {
+  const referents = createReferentRegistry();
+  referents.recordResult('analyst_query', {
+    ok: true,
+    items: ['hull-a', 'hull-b'].map((vesselId) => ({
+      layerKey: 'ais-live-vessels',
+      id: 'EVER GIVEN',
+      vesselId,
+      mmsi: '353136000',
+      name: 'EVER GIVEN',
+    })),
+  });
+  assert.deepEqual(
+    [1, 2].map(
+      (n) =>
+        resolveDeicticArgs(
+          'track_entity',
+          { query: 'x', referent: n },
+          { referents },
+        ).args.query,
+    ),
+    ['hull-a', 'hull-b'],
+  );
+});
+
 test('P1-1: a result from before the last clear cannot repopulate the registry', () => {
   const referents = createReferentRegistry();
   const since = referents.generation();

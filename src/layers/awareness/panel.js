@@ -117,7 +117,7 @@ export function createPanel({ state: layerState, parts }) {
       .slice(page, page + AWARENESS_PAGE_SIZE)
       .map((item, index) => {
         const label = formatAwarenessLabel(item);
-        const targetId = item.icao24 || item.mmsi || item.id;
+        const targetId = item.icao24 || item.id || item.mmsi;
         const distance = presentAwarenessDistance(item.distanceM);
         if (!targetId)
           return {
@@ -198,9 +198,10 @@ export function createPanel({ state: layerState, parts }) {
       width: photo.width ?? null,
       height: photo.height ?? null,
       link: photo.link,
-      credit: t('Photo © {photographer}', {
-        photographer: photo.photographer,
-      }),
+      // A photo whose answer names no photographer shows no credit line.
+      credit: photo.photographer
+        ? t('Photo © {photographer}', { photographer: photo.photographer })
+        : '',
     };
   }
 

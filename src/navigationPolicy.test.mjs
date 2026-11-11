@@ -136,6 +136,7 @@ test('weather layers name their destination in the Cockpit refusal', () => {
   const expected = {
     weather: 'Exit cockpit to view weather coverage',
     cyclone: 'Exit cockpit to fly to a cyclone',
+    news: 'Exit cockpit to fly to a news report',
   };
   for (const [noun, text] of Object.entries(expected)) {
     const s = spy();

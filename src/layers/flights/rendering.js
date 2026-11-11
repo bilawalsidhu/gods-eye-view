@@ -33,12 +33,13 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
-  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
   HIDDEN_CONTACT_DR_TICKS,
   hiddenContactDrPhase,
+  STALE_ALPHA,
+  displayDelayMs,
 } from './policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
@@ -680,6 +681,19 @@ export function createRendering({
    *  follow-camera's bounding sphere is ALWAYS ready — toggling 3D, or tracking while already zoomed
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode). */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (
+      flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN
+    ).withAlpha(alpha);
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -823,6 +837,7 @@ export function createRendering({
         parts.motion._trackedDisplayCourse(),
         flightState._trackedModel.modelMatrix,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       const spec = _modelSpec(
         flightState.records.data.get(flightState._trackedIcao)?.klass,
@@ -849,6 +864,13 @@ export function createRendering({
   }
 
   function _fleetTick() {
+    // Every frame, shown or not: the tracked trail records where its icon is
+    // drawn and moves its body on (the head callback only reads the result),
+    // and the tracked label's stale cue follows the clock.
+    if (flightState._viewer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (
       !flightState._viewer ||
       !flightState._billboardCollection ||
@@ -873,7 +895,7 @@ export function createRendering({
     // Every contact in this pass shares the same delayed display instant.
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now(), flightState._scratchFleetRenderTime),
-      -RENDER_DELAY_SEC,
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchFleetRenderTime,
     );
 
@@ -1081,7 +1103,9 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,
