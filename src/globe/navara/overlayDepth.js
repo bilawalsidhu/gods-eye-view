@@ -14,9 +14,29 @@ export const OVERLAY_DEPTH_MODES = Object.freeze({
   fail: 2,
 });
 
+// Cesium clears terrain depth before primitives, retaining only the limb
+// plane. The ray-cone test limits that plane to the Earth's silhouette.
+const MOVER_DEPTH_GLSL = /* glsl */ `
+bool gevMoverHorizonHidden(float limbSquared, float towardCenter, float raySquared) {
+  return limbSquared >= 0.0 && towardCenter > limbSquared &&
+    towardCenter * towardCenter > limbSquared * raySquared;
+}
+bool gevMoverSceneHidden(float mine, float scene, float globe) {
+  // Allow the same two depth-copy rounding steps as ground classification.
+  return scene < globe - 2e-7 && packedDepthOccluded(mine, scene, 2e-6);
+}
+`;
+
 /** Fragment declarations: uniforms, the varying and gevOverlayHidden(). */
 export const OVERLAY_DEPTH_FRAGMENT = /* glsl */ `
 ${PACKED_DEPTH_GLSL}
+#ifdef GEV_MOVER_DEPTH
+${MOVER_DEPTH_GLSL}
+uniform sampler2D tGevGlobeDepth;
+uniform vec3 uGevScaledCamera;
+uniform float uGevLimbSquared;
+varying vec3 vGevScaledRay;
+#endif
 uniform sampler2D tGevSceneDepth;
 uniform vec2 uGevResolution;
 uniform float uGevDepthMode;
@@ -30,7 +50,11 @@ bool gevOverlayHidden() {
     return false;
   // three's unpackRGBAToDepth (RGBADepthPacking).
   float scene = dot(
+    #ifdef GEV_MOVER_DEPTH
+    texelFetch(tGevSceneDepth, ivec2(gl_FragCoord.xy), 0),
+    #else
     texture2D(tGevSceneDepth, gl_FragCoord.xy / uGevResolution),
+    #endif
     vec4(255.0 / 256.0, 255.0 / 65536.0, 255.0 / 16777216.0, 1.0 / 16777216.0)
   );
   #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
@@ -39,6 +63,17 @@ bool gevOverlayHidden() {
   float mine = gl_FragCoord.z;
   #endif
   bool occluded = packedDepthOccluded(mine, scene, 2e-6);
+  #ifdef GEV_MOVER_DEPTH
+  float globe = dot(
+    texelFetch(tGevGlobeDepth, ivec2(gl_FragCoord.xy), 0),
+    vec4(255.0 / 256.0, 255.0 / 65536.0, 255.0 / 16777216.0, 1.0 / 16777216.0)
+  );
+  occluded = gevMoverHorizonHidden(
+    uGevLimbSquared,
+    -dot(vGevScaledRay, uGevScaledCamera),
+    dot(vGevScaledRay, vGevScaledRay)
+  ) || gevMoverSceneHidden(mine, scene, globe);
+  #endif
   return uGevDepthMode < 1.5 ? occluded : !occluded;
 }
 `;

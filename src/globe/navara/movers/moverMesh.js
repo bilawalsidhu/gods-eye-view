@@ -56,6 +56,7 @@ varying float vGevPixelDistance;
 varying float vGevTranslucency;
 varying float vGevSonarFactor;
 uniform vec2 uGevResolution;
+varying vec3 vGevScaledRay;
 ${OVERLAY_DEPTH_VERTEX}
 ${SONAR_VERTEX}
 `;
@@ -106,6 +107,9 @@ vec2 gevTurned = vec2(
 vec4 mvPosition = mvCenter;
 mvPosition.xy += gevTurned * gevSizePx * uGevFootprint * max(-mvCenter.z, 0.0);
 gl_Position = projectionMatrix * mvPosition;
+// Rotate the camera-relative quad into Earth axes before scaling: adding
+// its Earth-sized origin in float32 would lose precision near the ground.
+vGevScaledRay = (mvPosition.xyz * mat3(viewMatrix)) / vec3(6378137.0, 6378137.0, 6356752.3142451793);
 // The Cyber sonar (sonar.js): by the anchor's place on screen, never the
 // corner's, so a contact is treated whole; the position stays as it is.
 vGevSonarFactor = gevSonarFactor(projectionMatrix * mvCenter, uGevResolution);
@@ -191,7 +195,7 @@ export function patchMoverShader(
   let fragment = replace(
     shader.fragmentShader,
     'void main() {',
-    `${point ? '#define GEV_POINT\n' : ''}${FRAGMENT_HEAD}\nvoid main() {`,
+    `#define GEV_MOVER_DEPTH\n${point ? '#define GEV_POINT\n' : ''}${FRAGMENT_HEAD}\nvoid main() {`,
   );
   let colorFragment = fragmentColor(point);
   if (alwaysVisible)
@@ -306,6 +310,9 @@ export function createMoverMesh(
     },
     // Shared by every overlay: the scene depth and the target's size.
     tGevSceneDepth: overlayUniforms.tGevSceneDepth,
+    tGevGlobeDepth: { value: null },
+    uGevScaledCamera: { value: [0, 0, 0] },
+    uGevLimbSquared: { value: -1 },
     uGevResolution: overlayUniforms.uGevResolution,
     uGevDisplayBlend:
       overlayUniforms.uGevDisplayBlend ?? DETACHED_OVERLAY.uGevDisplayBlend,
@@ -446,6 +453,15 @@ export function createMoverMesh(
         pixelRatio,
       };
       uniforms.uGevPixelRatio.value = pixelRatio;
+      uniforms.uGevScaledCamera.value[0] = cameraPosition.x / 6378137;
+      uniforms.uGevScaledCamera.value[1] = cameraPosition.y / 6378137;
+      uniforms.uGevScaledCamera.value[2] =
+        cameraPosition.z / 6356752.3142451793;
+      // Subtract in double precision while the camera is near the surface.
+      uniforms.uGevLimbSquared.value = uniforms.uGevScaledCamera.value.reduce(
+        (sum, value) => sum + value * value,
+        -1,
+      );
       uniforms.uGevFootprint.value = footprintPerDepth(
         fovDeg,
         viewportHeightPx,

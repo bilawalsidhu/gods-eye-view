@@ -428,6 +428,8 @@
  * @property {number} [order] Draw order among sets (higher draws later, on
  *   top); 0 by default.
  * @property {'normal'|'always'|{ disableWithinM: number }} [depthTest]
+ *   'normal' ignores terrain surface depth (including points just below it),
+ *   but the Earth's horizon, 3D tiles and models still occlude movers.
  *   'always' draws over the scene; { disableWithinM } skips the depth test for
  *   instances closer to the camera than that (Cesium's
  *   disableDepthTestDistance). 'normal' by default. Sprites and points

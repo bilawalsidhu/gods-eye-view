@@ -204,7 +204,7 @@ test('the contract suite movers and lines checks pass on the Cesium engine (no p
       name,
     ),
   );
-  assert.equal(checks.length, 11);
+  assert.equal(checks.length, 12);
   try {
     for (const { name, run } of checks) await t.test(name, run);
   } finally {

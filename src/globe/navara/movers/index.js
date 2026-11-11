@@ -134,9 +134,11 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
       targetOverlay.registerPickable(key, wrapper);
       pickIndex.add(options.id, wrapper, (index) => store.pickIds[index]);
     }
-    targetOverlay.add(mover.mesh, (time) =>
-      updateMover(readFrameCamera, targetOverlay.ctx, mover, time),
-    );
+    targetOverlay.add(mover.mesh, (time) => {
+      mover.uniforms.tGevGlobeDepth.value =
+        targetOverlay.ctx.getGlobeDepthTexture();
+      updateMover(readFrameCamera, targetOverlay.ctx, mover, time);
+    });
     return {
       ready: mover.ready,
       failed: mover.failed,

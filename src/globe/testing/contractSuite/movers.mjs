@@ -1,5 +1,6 @@
 import {
   cartesian3,
+  cartographic,
   like,
   MAGENTA,
   show,
@@ -7,6 +8,7 @@ import {
   near,
   unit,
 } from './helpers.mjs';
+import { createSurfacePoints } from '../../surfacePlacement.js';
 
 export function spriteChecks(
   engine,
@@ -257,12 +259,12 @@ export function spriteChecks(
   ];
 }
 
-export function moverChecks(
-  engine,
-  { until, nadirView, centre, readRegion, makeCanvas },
-) {
+export function moverChecks(engine, context) {
+  const { until, nadirView, centre, readRegion, makeCanvas } = context;
   const { camera } = engine;
   return [
+    ...surfaceMoverChecks(engine, context),
+    ...tilesMoverChecks(engine, context),
     [
       'movers.createSet: depth tests, rotation, cells, scale, count, points and models',
       async () => {
@@ -430,19 +432,13 @@ export function moverChecks(
             'the shrunk set drawn',
           );
           ensure(look(a, MAGENTA).total > 100, 'instance 0 went with them');
-          // Depth: under the ground only 'always' and a disableWithinM
-          // reaching past the camera draw.
+          // Terrain depth is cleared before movers, including points below it.
           const drawn = (index) =>
             look(deep(19 + index * 0.7), RED).total > 100;
           await until(() => drawn(1), "the 'always' sprite drawn");
           ensure(drawn(2), 'disableWithinM past the camera is hidden');
-          // Cesium's billboards under the app's photoreal tiles (globe
-          // hidden) are not occluded by them, measured; Navara's overlay
-          // tests the scene depth. Occlusion is checked on Navara only.
-          if (engine.kind === 'navara') {
-            ensure(!drawn(0), "a 'normal' sprite under the ground is drawn");
-            ensure(!drawn(3), 'disableWithinM 10 m under the ground is drawn');
-          }
+          ensure(drawn(0), "a 'normal' sprite under terrain is hidden");
+          ensure(drawn(3), 'disableWithinM 10 m under terrain is hidden');
           // Points: a magenta disc with a dark outline.
           await until(() => look(p, MAGENTA, 16).total > 80, 'the point drawn');
           const ring = look(p, [0, 0, 0], 16).total;
@@ -492,6 +488,194 @@ export function moverChecks(
           await until(() => modelPixels() > 150, 'the model drawn');
         } finally {
           for (const set of sets) set.destroy();
+        }
+      },
+    ],
+  ];
+}
+
+export function surfaceMoverChecks(
+  engine,
+  { settle, until, nadirView, readRegion },
+) {
+  return [
+    [
+      'movers.createSet: sampled surface points ignore terrain and retain horizon occlusion',
+      async () => {
+        await nadirView(10000);
+        const groups = ['normal', 'always'].map((depthTest) => {
+          const set = engine.movers.createSet({
+            id: `contract-surface-point-${depthTest}`,
+            kind: 'point',
+            capacity: 1,
+            depthTest,
+            point: { sizePx: 24, outlinePx: 2 },
+          });
+          const point = {
+            cartographic: cartographic.fromDegrees(20, 10),
+            position: cartesian3.fromDegrees(20, 10),
+          };
+          set.set(0, { position: point.position, color: [1, 0, 1, 1] });
+          set.setCount(1);
+          set.commit();
+          return { set, points: [point] };
+        });
+        const placement = createSurfacePoints(engine, {
+          groups: () => groups,
+          prefer: 'terrain',
+          request: () => engine.render.request(),
+        });
+        const select = (selected) => {
+          groups.forEach(({ set }, index) => {
+            set.setCount(index === selected ? 1 : 0);
+            set.commit();
+          });
+        };
+        const pixels = (position) => {
+          const screen = engine.projector.worldToWindow(position);
+          ensure(screen, 'surface point has no projection');
+          const data = readRegion(
+            Math.round(screen.x) - 24,
+            Math.round(screen.y) - 24,
+            48,
+            48,
+          );
+          let count = 0;
+          for (let i = 0; i < data.length; i += 4)
+            if (like([1, 0, 1], data, i)) count++;
+          return count;
+        };
+        try {
+          await until(() => {
+            placement.place({ all: true });
+            return groups.every(({ points }) =>
+              Number.isFinite(points[0].surfaceHeight),
+            );
+          }, 'surface points placed');
+          if (!readRegion) return;
+          const point = groups[0].points[0];
+          // Compare the same pixel footprint, with only the depth mode changed.
+          select(1);
+          await settle();
+          await until(
+            () => pixels(point.position) > 200,
+            'surface control drawn',
+          );
+          const control = pixels(point.position);
+          select(0);
+          await settle();
+          await until(
+            () => pixels(point.position) >= control * 0.8,
+            'normal point visible on its supporting surface',
+          );
+          // The same near-side point stays visible below the terrain as well.
+          placement.destroy();
+          const buried = cartesian3.fromDegrees(
+            20,
+            10,
+            point.surfaceHeight - 1000,
+          );
+          for (const { set } of groups) {
+            set.set(0, { position: buried });
+            set.commit();
+          }
+          select(1);
+          await settle();
+          await until(() => pixels(buried) > 200, 'buried control drawn');
+          select(0);
+          await settle();
+          await until(
+            () => pixels(buried) >= control * 0.8,
+            'normal point visible below terrain',
+          );
+          // Moving a previously visible point to the far side must hide it.
+          const farSide = cartesian3.fromDegrees(-160, -10);
+          groups[0].set.set(0, { position: farSide });
+          groups[0].set.commit();
+          await settle();
+          ensure(
+            pixels(farSide) < 10,
+            'normal point behind the horizon is visible',
+          );
+        } finally {
+          placement.destroy();
+          for (const { set } of groups) set.destroy();
+        }
+      },
+    ],
+  ];
+}
+
+export function tilesMoverChecks(
+  engine,
+  { settle, until, readRegion, fixtures },
+) {
+  const tile = fixtures?.tiles;
+  if (!tile?.position) return [];
+  return [
+    [
+      'movers.createSet: normal points behind a tiles mesh are hidden',
+      async () => {
+        engine.camera.lookAt(tile.position, {
+          heading: 0,
+          pitch: -Math.PI / 2,
+          range: 1000,
+        });
+        const place = cartographic.fromCartesian(tile.position);
+        const position = cartesian3.fromRadians(
+          place.longitude,
+          place.latitude,
+          place.height - 20,
+        );
+        const sets = ['normal', 'always'].map((depthTest) => {
+          const set = engine.movers.createSet({
+            id: `contract-tile-point-${depthTest}`,
+            kind: 'point',
+            capacity: 1,
+            depthTest,
+            point: { sizePx: 24 },
+          });
+          set.set(0, { position, color: [1, 0, 1, 1] });
+          return set;
+        });
+        const select = (index) => {
+          sets.forEach((set, i) => {
+            set.setCount(i === index ? 1 : 0);
+            set.commit();
+          });
+        };
+        const pixels = () => {
+          const screen = engine.projector.worldToWindow(position);
+          ensure(screen, 'tile point has no projection');
+          const data = readRegion(
+            Math.round(screen.x) - 24,
+            Math.round(screen.y) - 24,
+            48,
+            48,
+          );
+          let count = 0;
+          for (let i = 0; i < data.length; i += 4)
+            if (like([1, 0, 1], data, i)) count++;
+          return count;
+        };
+        try {
+          await until(() => {
+            const sample = engine.surface.sampleHeightDetailed(place);
+            return (
+              sample?.source === 'tiles' &&
+              Math.abs(sample.height - place.height) < 2
+            );
+          }, 'tile occluder loaded');
+          if (!readRegion) return;
+          select(1);
+          await settle();
+          await until(() => pixels() > 200, 'tile control drawn');
+          select(0);
+          await settle();
+          ensure(pixels() < 10, 'normal point behind a tiles mesh is visible');
+        } finally {
+          for (const set of sets) set.destroy();
+          engine.camera.release();
         }
       },
     ],

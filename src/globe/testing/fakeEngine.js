@@ -717,6 +717,7 @@ export function createFakeEngine(options = {}) {
 
   // Unscripted picks find the fake's own movers, lines and ground items, as
   // Navara's CPU pick does (src/globe/cpuPicks.js, src/globe/ground.js).
+  // Movers ignore terrain surface depth; the projector retains the horizon.
   const cpuPick = createCpuPicker({
     projector: {
       worldToWindow: (position, result) =>

@@ -4,6 +4,9 @@ import * as geo from '../../geo/index.js';
 import { assertGlobeEngine, engineCapabilities } from '../contract.js';
 import { cesiumFovy, orientationVectors } from '../cameraMath.js';
 import { createNavaraEngine } from './createNavaraEngine.js';
+import { createMoverRegistry } from '../movers.js';
+import { createMoverMesh } from './movers/moverMesh.js';
+import { createContractSuite } from '../testing/contractSuite.mjs';
 
 const { cartesian2, cartesian3, math } = geo;
 
@@ -154,6 +157,41 @@ const setup = () => {
   const engine = createNavaraEngine(view, { ...ports, hooks });
   return { view, engine };
 };
+
+test('the contract suite mover checks pass on Navara without pixels', async (t) => {
+  const view = fakeView();
+  view.sampleTerrainHeight = () => 12;
+  const registry = createMoverRegistry((options, store) => {
+    const mover = createMoverMesh(options, store);
+    return {
+      ready: mover.ready,
+      failed: mover.failed,
+      commit: () => mover.commit(store.dirty()),
+      destroy: () => mover.dispose(),
+    };
+  });
+  const engine = createNavaraEngine(view, {
+    ...ports,
+    hooks,
+    movers: { movers: registry.movers, destroy: registry.destroyAll },
+  });
+  const checks = createContractSuite(engine, {
+    waitFrames: async (count) => {
+      for (let i = 0; i < count; i++) {
+        view.emit('preUpdate', i);
+        view.emit('preRender', i);
+        view.emit('postRender', i);
+      }
+    },
+  }).filter(({ name }) => name.startsWith('movers'));
+  assert.equal(checks.length, 5);
+  try {
+    for (const { name, run } of checks) await t.test(name, run);
+  } finally {
+    engine.destroy();
+  }
+  assert.equal(registry.movers.list().length, 0);
+});
 
 test('the engine has every contract capability and reports kind navara', () => {
   const { engine, view } = setup();
