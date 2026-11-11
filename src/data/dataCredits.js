@@ -574,6 +574,38 @@ export const DATA_CREDITS = [
       'Shown as published; reports are S2 assessments, not verified fact.',
   },
   {
+    key: 'news',
+    html:
+      'News: every report is credited to its own publisher and links to the original article; ' +
+      'pictures are the publishers’ own, shown from their sites with the publisher named. ' +
+      'Places, categories, severity and English headlines are derived automatically, by ' +
+      'bundled rules, the news provider or the configured news server, and can be wrong.',
+  },
+  {
+    // GDELT's terms ask for a citation and a link.
+    key: 'gdelt-news',
+    html:
+      'News, Conflicts without a news server: events and page titles from the ' +
+      '<a href="https://www.gdeltproject.org/" target="_blank" rel="noopener">GDELT Project</a> ' +
+      '(GDELT 2.0 events and GKG; places and categories are machine-coded)',
+  },
+  {
+    // World News API's free plan asks for a visible "World News API" link to
+    // its site; always listed, so a free-plan key is never shown without it.
+    key: 'worldnewsapi',
+    html:
+      'News, Local without a news server: headlines from ' +
+      '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a>',
+  },
+  {
+    key: 'shipwrecks',
+    html:
+      'Shipwrecks (Europe): <a href="https://emodnet.ec.europa.eu/en/human-activities" target="_blank" rel="noopener">EMODnet Human Activities</a> ' +
+      '(data originator AND-International, compiled from SHOM, Ireland&rsquo;s National Monuments Service, Historic England and the Oxford Roman Economy Project), ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
@@ -637,6 +669,15 @@ export const TOMTOM_CREDIT = {
   html:
     'Traffic flow data © ' +
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
+};
+
+/** Registered when the News layer shows a Liveuamap report (only with
+ * LIVEUAMAP_API_KEY set and no news server). */
+export const LIVEUAMAP_CREDIT = {
+  key: 'liveuamap',
+  html:
+    'News, Conflicts: mapped reports from ' +
+    '<a href="https://liveuamap.com/" target="_blank" rel="noopener">Liveuamap</a>',
 };
 
 /** Registered when the first Natural Earth region or state/province outline
