@@ -39,6 +39,9 @@
 # TFL_APP_KEY=
 # ONTARIO_511_API_KEY=
 # OTTAWA_CAMERA_CERTIFICATE=
+# News layer, used only without a news server (see .env.example).
+# LIVEUAMAP_API_KEY=
+# WORLDNEWSAPI_KEY=
 
 # ============================================================================ #
 #                                                                              #

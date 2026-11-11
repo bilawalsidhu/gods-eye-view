@@ -12,7 +12,14 @@ import {
   COCKPIT_BRIEF_PAGES,
   CYCLE_HELP_KEYS,
   createBriefState,
+  newsWindowFooter,
 } from './cockpitBriefPages.js';
+import {
+  recentRegionalArticles,
+  regionalNewsWindowHours,
+} from '../data/regionalNewsWindow.js';
+
+const NEWS_ROWS = 4;
 
 // regionalModel.weatherCodeLabel is shared with node code and returns
 // English; translate it here.
@@ -52,9 +59,13 @@ export function showBriefPage(index, { manual = false } = {}) {
     kicker: t(page.kickerKey),
     subtitle: t(page.subtitleKey),
     position: `${this.briefPageIndex + 1} / ${count}`,
-    source: page.sourceKey
-      ? t(page.sourceKey, { source: page.sourceName })
-      : page.source,
+    // The news footer follows the news state, so it survives page changes.
+    source:
+      page.id === 'news'
+        ? this.brief.news.footer
+        : page.sourceKey
+          ? t(page.sourceKey)
+          : page.source,
   });
   this.publishBriefView();
   if (manual && this.briefAutoRotateEnabled)
@@ -153,7 +164,7 @@ export function maybeRefreshRegionalBrief(info) {
     !Number.isFinite(info.longitude)
   )
     return;
-  const subjectId = `${info.layerId || 'aircraft'}:${info.icao24 || info.mmsi || info.noradId || info.registration || info.callsign || 'unknown'}`;
+  const subjectId = `${info.layerId || 'aircraft'}:${info.icao24 || (info.kind === 'vessel' ? info.id : '') || info.noradId || info.registration || info.callsign || 'unknown'}`;
   if (subjectId !== this.regionalBriefSubjectId) {
     this.regionalBriefAbort?.abort();
     this.regionalBriefAbort = null;
@@ -176,6 +187,13 @@ export function maybeRefreshRegionalBrief(info) {
   )
     return;
 
+  // The brief held stands in after a failed refresh only near where its news
+  // was read; past the refresh distance it is another place's.
+  const previous =
+    this.services.regionalDistanceM(this.regionalBriefPoint, point) <
+    COCKPIT_REGIONAL_REFRESH_DISTANCE_M
+      ? this.regionalBrief
+      : null;
   this.regionalBriefAnchor = point;
   this.regionalBriefFetchedAt = Date.now();
   const controller = new AbortController();
@@ -193,8 +211,9 @@ export function maybeRefreshRegionalBrief(info) {
         subjectId !== this.regionalBriefSubjectId
       )
         return;
-      this.regionalBrief = payload;
-      this.renderRegionalBrief(payload, info);
+      this.regionalBrief = withCachedNews(payload, previous);
+      if (this.regionalBrief === payload) this.regionalBriefPoint = point;
+      this.renderRegionalBrief(this.regionalBrief, info);
     })
     .catch((error) => {
       if (
@@ -203,13 +222,89 @@ export function maybeRefreshRegionalBrief(info) {
         requestToken === this.regionalBriefRequestToken &&
         subjectId === this.regionalBriefSubjectId
       ) {
-        this.renderRegionalBriefStatus('unavailable', info);
+        if (previous) {
+          this.regionalBrief = cachedNews(previous, previous);
+          this.renderRegionalBrief(this.regionalBrief, info);
+        } else {
+          // Another place's brief: not to come back with a language change.
+          this.regionalBrief = null;
+          this.renderRegionalBriefStatus('unavailable', info);
+        }
       }
     })
     .finally(() => {
       if (this.regionalBriefAbort === controller)
         this.regionalBriefAbort = null;
     });
+}
+
+/**
+ * A brief whose news comes from `previous` after a refresh that brought none:
+ * the earlier articles stay, marked `cached` so they are labelled as such.
+ * @param {object} payload The brief to keep everything else from.
+ * @param {object} previous The last brief rendered for this subject.
+ */
+function cachedNews(payload, previous) {
+  return {
+    ...payload,
+    newsStatus: 'cached',
+    newsSource: previous.newsSource,
+    newsWindowHours: previous.newsWindowHours,
+    newsFetchedAt: previous.newsFetchedAt ?? previous.retrievedAt ?? null,
+    articles: previous.articles,
+  };
+}
+
+// A refresh whose news read failed keeps the articles from before it.
+function withCachedNews(payload, previous) {
+  return previous && payload?.newsStatus === 'unavailable'
+    ? cachedNews(payload, previous)
+    : payload;
+}
+
+/**
+ * The Regional News state a brief presents. `ready` and `cached` have rows
+ * inside the window; `cached` is a refresh that failed (a client-side failure,
+ * or the local proxy's `stale` answer). `empty` is a source that answered with
+ * nothing in the window; anything else is `unavailable`.
+ * @returns {{state: string, status: string, footer: string, articles: object[]}}
+ */
+function regionalNewsView(payload) {
+  const hours = regionalNewsWindowHours(payload?.newsWindowHours);
+  // Old caches and the local path are held to the window here too.
+  const articles = recentRegionalArticles(payload?.articles, {
+    windowHours: hours,
+    limit: NEWS_ROWS,
+  });
+  const source = String(
+    payload?.newsSource || t('REGIONAL NEWS'),
+  ).toUpperCase();
+  const refreshFailed =
+    payload?.newsStatus === 'cached' || payload?.status === 'stale';
+  if (articles.length && refreshFailed)
+    return {
+      state: 'cached',
+      status: t('CACHED · REFRESH FAILED'),
+      footer: t('{source} · CACHED {age}', {
+        source,
+        age: formatCockpitBriefAge(
+          payload?.newsFetchedAt ?? payload?.retrievedAt,
+        ),
+      }),
+      articles,
+    };
+  const answered =
+    !refreshFailed && ['ready', 'empty'].includes(payload?.newsStatus);
+  return {
+    state: articles.length ? 'ready' : answered ? 'empty' : 'unavailable',
+    status: articles.length
+      ? ''
+      : answered
+        ? t('NO NEWS IN THE LAST {hours} H', { hours })
+        : t('REGIONAL NEWS UNAVAILABLE'),
+    footer: newsWindowFooter(source, hours),
+    articles,
+  };
 }
 
 export function renderRegionalBriefStatus(status, info) {
@@ -220,7 +315,10 @@ export function renderRegionalBriefStatus(status, info) {
     status === 'loading'
       ? t('ACQUIRING REGIONAL NEWS')
       : t('REGIONAL NEWS UNAVAILABLE');
-  if (status === 'unavailable') news.articles = [];
+  news.footer = newsWindowFooter();
+  // Only called with no brief for this subject: any rows are another's.
+  news.articles = [];
+  if (this.briefPageIndex === 1) this.brief.source = news.footer;
   if (status === 'loading') local.place = t('RESOLVING REGION');
   if (status === 'unavailable') local.place = t('REGION UNAVAILABLE');
   local.coordinates = localCoordinates(info);
@@ -228,7 +326,7 @@ export function renderRegionalBriefStatus(status, info) {
 }
 
 export function renderRegionalBrief(payload, info) {
-  const articles = Array.isArray(payload?.articles) ? payload.articles : [];
+  const { state, status, footer, articles } = regionalNewsView(payload);
   const seen = new Map();
   const storyKey = (url) => {
     const count = seen.get(url) ?? 0;
@@ -241,13 +339,11 @@ export function renderRegionalBrief(payload, info) {
   const placeLabel =
     payload?.place?.label || payload?.place?.country || t('REGION UNAVAILABLE');
   this.brief.news = {
-    statusHidden: articles.length > 0,
-    state: payload?.newsStatus || 'unavailable',
-    status:
-      payload?.newsStatus === 'empty'
-        ? t('NO RECENT LOCATION MATCHES')
-        : t('REGIONAL NEWS UNAVAILABLE'),
-    articles: articles.slice(0, 4).map((article) => ({
+    statusHidden: state === 'ready',
+    state,
+    status,
+    footer,
+    articles: articles.map((article) => ({
       // A row keeps its node, and so its focus, only for the same story.
       key: storyKey(article.url),
       url: article.url,
@@ -281,11 +377,7 @@ export function renderRegionalBrief(payload, info) {
       : '—',
   };
   this.brief.regionalStatus = payload?.status || 'partial';
-  if (this.briefPageIndex === 1) {
-    this.brief.source = t('{source} · LOCATION QUERY', {
-      source: String(payload?.newsSource || t('REGIONAL NEWS')).toUpperCase(),
-    });
-  }
+  if (this.briefPageIndex === 1) this.brief.source = footer;
   this.publishBriefView();
   this.scheduleContextLayout();
 }

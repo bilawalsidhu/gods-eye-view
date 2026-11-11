@@ -33,6 +33,8 @@ const COCKPIT_REFUSALS = Object.freeze({
   // «View coverage» button); the cyclone layer flies to the selected storm.
   weather: msg('Exit cockpit to view weather coverage'),
   cyclone: msg('Exit cockpit to fly to a cyclone'),
+  // The News panel's cards and the news layer's hotspots fly to the event.
+  news: msg('Exit cockpit to fly to a news report'),
   // Voice track_entity (TRACKABLE_FAMILIES kinds in gevActions.js) and
   // frame_overhead, which frames the contacts around the current view.
   aircraft: msg('Exit cockpit to fly to an aircraft'),

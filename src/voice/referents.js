@@ -23,10 +23,17 @@ function finite(value) {
 
 function normalize(entry, index) {
   if (!entry || typeof entry !== 'object') return null;
-  // Identity is the canonical key (transponder hex, MMSI, NORAD id); a
+  // Identity is the canonical key (transponder hex, vessel id, NORAD id); a
   // display `id` such as a callsign is only a label, and two contacts can
-  // share one.
-  const id = entry.icao24 ?? entry.mmsi ?? entry.noradId ?? entry.id ?? null;
+  // share one. Vessels can share an MMSI too, so a vessel's key is its
+  // `vesselId` when the row names one.
+  const id =
+    entry.icao24 ??
+    entry.vesselId ??
+    entry.mmsi ??
+    entry.noradId ??
+    entry.id ??
+    null;
   const label = String(
     entry.label ?? entry.callsign ?? entry.name ?? entry.id ?? id ?? '',
   ).trim();

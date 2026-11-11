@@ -501,7 +501,7 @@ function frameOverhead(result) {
     .filter((entry) => entry?.label || entry?.id)
     .map((entry, index) => ({
       n: index + 1,
-      id: entry.icao24 || entry.mmsi || entry.id || null,
+      id: entry.icao24 || entry.id || entry.mmsi || null,
       label: spokenLabel(entry.label || entry.id),
       layerId: result.layerId,
     }));
