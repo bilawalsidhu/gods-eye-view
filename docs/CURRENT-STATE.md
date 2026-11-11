@@ -6091,6 +6091,27 @@ Retry-After; absent delays back off from 30 seconds to five minutes. Empty
 remain. Malformed capability-probe responses remain unknown and are retried after the existing 30-second backoff; valid configured decisions remain memoized.
 Consumer capability misses never schedule automatic retries.
 
+### Optional OpenFreeMap tile endpoint
+
+Street Traffic, Mapped Installations and voice outlines read OpenFreeMap vector
+tiles through the TileJSON at `https://tiles.openfreemap.org/planet`.
+`OPENFREEMAP_TILEJSON_URL` is an optional build-time setting that replaces that
+address, for an operator who runs an OpenFreeMap-compatible tile server. It is
+read with the other server variables, validated in `build/vite.js` and handed to
+the page as `import.meta.env.OPENFREEMAP_TILEJSON_URL`, the way `PHOTON_URL` is.
+Unset or empty keeps the public address. A value is accepted only as an absolute
+`https` URL or a path on the page's own origin (resolved against the page), with
+no credentials, query or fragment. Any other value stops `npm run dev`,
+`npm run build` and `npm run preview` with an error that names the variable,
+rather than quietly falling back to the public host.
+The origin check is unchanged: the `tiles[0]` template the TileJSON returns must
+be on the same origin as the TileJSON, so a mirror has to serve its own
+TileJSON, not upstream's verbatim. The page's `connect-src` allows `https:` but
+no plain `http:` origin, so a tile host on another origin needs `https`; behind
+the app's own reverse proxy use a same-origin path. `src/tooling/viteBuild.test.mjs`
+loads the traffic, installations, outline and standalone sources through Vite
+with the setting applied and asserts the TileJSON each one requests.
+
 Keyless browser validation also probes the optional Google tiles-token route.
 The token client cancels rejected response bodies before returning unavailable,
 so they do not remain pending in browser network observation. The Overpass gate

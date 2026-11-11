@@ -52,6 +52,44 @@ function photonEndpointSetting(value) {
 }
 
 /**
+ * Browser-safe form of the optional OpenFreeMap TileJSON build input. Unset
+ * or empty keeps the public default. Otherwise the value is an absolute https
+ * URL or a path on the page's own origin; anything else throws, because the
+ * sources would otherwise fall back to the public host without telling the
+ * operator who set the variable. The message never echoes the value, which
+ * might carry credentials.
+ */
+function openFreeMapTileJsonSetting(value) {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  if (!text) return undefined;
+  const refusal = () =>
+    new Error(
+      'OPENFREEMAP_TILEJSON_URL must be an absolute https URL or a path on ' +
+        'this site such as /tiles/planet, without credentials, query or fragment.',
+    );
+  if (text.startsWith('/')) {
+    if (text.startsWith('//') || /[\\?#\s]/.test(text)) throw refusal();
+    return text;
+  }
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    throw refusal();
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    throw refusal();
+  return url.href;
+}
+
+/**
  * Content-Security-Policy for every document the dev/preview server serves.
  * No inline script is permitted, and the only foreign script origins are the
  * three that the Bhote Koshi event's embedded media needs (YouTube, Facebook
@@ -170,6 +208,7 @@ export function createBrowserViteConfig({
   googleApiKey,
   cesiumToken,
   photonUrl,
+  openFreeMapTileJsonUrl,
   mapillaryToken,
   host = 'localhost',
   port = 4173,
@@ -177,6 +216,7 @@ export function createBrowserViteConfig({
   command,
 } = {}) {
   const photonSetting = photonEndpointSetting(photonUrl);
+  const tileJsonSetting = openFreeMapTileJsonSetting(openFreeMapTileJsonUrl);
   return {
     plugins: [
       // First, so every API response, including a Host refusal, carries them.
@@ -252,6 +292,13 @@ export function createBrowserViteConfig({
         ? {}
         : {
             'import.meta.env.PHOTON_URL': JSON.stringify(photonSetting),
+          }),
+      // Only a validated address; unset leaves the public default in place.
+      ...(tileJsonSetting === undefined
+        ? {}
+        : {
+            'import.meta.env.OPENFREEMAP_TILEJSON_URL':
+              JSON.stringify(tileJsonSetting),
           }),
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(

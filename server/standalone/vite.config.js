@@ -36,6 +36,7 @@ export function standaloneConfig(
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     photonUrl: process.env.PHOTON_URL,
+    openFreeMapTileJsonUrl: process.env.OPENFREEMAP_TILEJSON_URL,
     mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
