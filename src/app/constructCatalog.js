@@ -1,6 +1,7 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
 import { worldClock } from '../time/worldClock.js';
+import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
@@ -142,7 +143,12 @@ export function createApplicationCatalog({
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
-        createApplicationNews({ source: sources.news }),
+        // Ages, the window and the counts read the world clock: a host that
+        // follows it for the layer shows the news at the time on the timeline.
+        createApplicationNews({
+          source: sources.news,
+          now: worldClock.timeFor(NEWS_LAYER_ID),
+        }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
