@@ -214,3 +214,65 @@ test('a photoreal stack that fails to come back leaves the stack before it in pl
   assert.equal(controller.getState().activeId, 'osm');
   controller.destroy();
 });
+
+test('a stack kept after a failed switch and a failed recovery still falls back on tile failures', async () => {
+  const { host, renderer } = scene(['photoreal']);
+  let osmTries = 0;
+  const failing = {
+    ...engine,
+    imagery: {
+      ...engine.imagery,
+      osm() {
+        osmTries += 1;
+        throw new Error('osm refused');
+      },
+    },
+  };
+  const loaded = await failing.loadPhotoreal(host, { googleApiKey: 'key' });
+  const controller = new MapSourceController(host, {
+    registry: createDefaultMapSources({
+      googleTileset: loaded.tileset,
+      engine: failing,
+    }),
+    engine: failing,
+    googleTileset: loaded.tileset,
+    onError: () => {},
+  });
+  const tileErrors = new Set();
+  const add = renderer.globe.imagery.add;
+  renderer.globe.imagery.add = (...args) => {
+    const layer = add(...args);
+    const on = layer.on;
+    layer.on = (event, listener) => {
+      const off = on(event, listener);
+      if (event !== 'tileError') return off;
+      tileErrors.add(listener);
+      return () => {
+        tileErrors.delete(listener);
+        off();
+      };
+    };
+    return layer;
+  };
+  await controller.setStack('esri-imagery', { silent: true });
+  renderer.globe.setPhotoreal = async (spec) => ({
+    route: spec ? 'none' : 'google',
+    error: { code: 'refused', message: 'refused' },
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    // OSM fails, and so does its recovery (photoreal): Esri stays.
+    await controller.setStack('osm', { silent: true });
+    assert.equal(controller.getState().activeId, 'esri-imagery');
+    assert.equal(renderer.globe.imagery.list().length, 1, 'its imagery stays');
+    const tries = osmTries;
+    for (const listener of [...tileErrors]) listener({});
+    for (const listener of [...tileErrors]) listener({});
+    for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+    assert.ok(osmTries > tries, 'its tile failures still try its fallback');
+  } finally {
+    console.warn = warn;
+    controller.destroy();
+  }
+});
