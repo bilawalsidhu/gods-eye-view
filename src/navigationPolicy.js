@@ -25,6 +25,7 @@ const COCKPIT_REFUSALS = Object.freeze({
   fire: msg('Exit cockpit to fly to a fire'),
   sighting: msg('Exit cockpit to fly to a sighting'),
   'sighting-area': msg('Exit cockpit to fly to a sighting area'),
+  train: msg('Exit cockpit to fly to a train'),
   route: msg('Exit cockpit to fly to a route'),
   file: msg('Exit cockpit to fly to a file'),
   drawing: msg('Exit cockpit to fly to a drawing'),
