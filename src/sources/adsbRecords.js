@@ -12,6 +12,11 @@
  *   lat: number|null,             // degrees, null until a position decodes
  *   lon: number|null,
  *   altitudeFt: number|null,      // barometric altitude
+ *   altitudeObservedAt: number|null, // browser altitude measurement time; unknown for feeds
+ *   altitudeSequence: number|null, // browser altitude-frame counter
+ *   altitudeSessionAt: number|null, // browser track's first message time
+ *   feedId: string|null,          // opaque configured receiver id, never its URL
+ *   feedSnapshotAt: number|null,  // feed's own clock; never browser-rebased
  *   groundSpeedKt: number|null,
  *   trackDeg: number|null,        // true track over ground, [0, 360)
  *   verticalRateFpm: number|null,
@@ -20,18 +25,12 @@
  *   onGround: boolean,            // the receiver reported the aircraft on the
  *                                 // surface (dump1090 `alt_baro: "ground"`)
  *   lastPositionAt: number|null,  // epoch ms of the newest decoded position
- *   altitudeAt: number|null,      // epoch ms of the message `altitudeFt` came
- *                                 // from; a feed does not say, so its records
- *                                 // carry `lastMessageAt`
- *   altitudeQuality?: 'held-after-rejection'|'unknown-after-rejection',
- *                                 // set only by gateLocalAdsbAltitude:
- *                                 // `altitudeFt` is the last accepted value, or
- *                                 // null in place of an impossible report
  *   lastMessageAt: number,        // epoch ms of the newest CRC-valid message
  *   messageCount: number,
  *   rssiDbfs: number|null,
  *   band: '1090'|'978',           // 1090 MHz Mode S/ES or 978 MHz UAT
  *   source: 'webusb'|'feed',      // browser SDR or decoder feed
+ *   // The layer's altitude gate adds altitudeQuality and altitudeSource.
  * }
  *
  * This module is portable: no Cesium, DOM, network or storage access.
@@ -82,6 +81,12 @@ export const LOCAL_ADSB_VERTICAL_RATE_MARGIN_FPM = 2_000;
  */
 export const LOCAL_ADSB_FIXED_WING_CEILING_FT = 60_000;
 const CEILING_CATEGORIES = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
+/** Minimum coherent feed recovery window; this is an inference, not a measurement. */
+export const LOCAL_ADSB_FEED_RECOVERY_MS = 5_000;
+/** Advancing feed snapshots with aircraft activity required for inferred recovery. */
+export const LOCAL_ADSB_FEED_RECOVERY_SNAPSHOTS = 3;
+/** Bound an unknown feed measurement age without imposing an altitude ceiling. */
+export const LOCAL_ADSB_FEED_ALTITUDE_GAP_MS = 60_000;
 const SLOW_CATEGORIES = new Set(['A1', 'A7', 'B1', 'B4']);
 const KT_TO_MPS = 1852 / 3600;
 const EARTH_RADIUS_M = 6_371_008.8;
@@ -257,85 +262,258 @@ export function localAdsbAltitudeCeilingFt(category) {
 /**
  * State for {@link gateLocalAdsbAltitude}, one per aircraft, owned by the
  * caller and dropped with the aircraft.
- * @returns {{accepted:object|null, judgedAt:number|null, rejectStreak:number,
- *   rejected:number}}
+ * @returns {{accepted:object|null, sources:Map,
+ *   rejectStreak:number, rejected:number}}
  */
 export function createLocalAdsbAltitudeGate() {
-  return { accepted: null, judgedAt: null, rejectStreak: 0, rejected: 0 };
+  return {
+    accepted: null,
+    sources: new Map(),
+    rejectStreak: 0,
+    rejected: 0,
+  };
 }
 
-/**
- * Hold a record's barometric altitude at its last plausible value.
- *
- * Returns `record` itself, or a copy whose `altitudeFt` is the last accepted
- * altitude, so the marker height, the card, the 3D-model ceiling and route
- * plausibility all read the same value. The copy is marked
- * `altitudeQuality: 'held-after-rejection'`, so a consumer can tell a held
- * value from a fresh one. A refused report is counted in `gate.rejected`.
- * From the third consecutive refusal on, the candidate becomes the new
- * reference, as positions do: a bad first altitude cannot freeze the aircraft
- * at it.
- *
- * For categories with a ceiling ({@link localAdsbAltitudeCeilingFt}) a report
- * above it is refused outright and never re-anchors, a reference above it is
- * dropped once the category is known, and with nothing to hold the altitude
- * is returned as null, marked `altitudeQuality: 'unknown-after-rejection'`:
- * unknown, not impossible.
- *
- * Only a report with a newer `altitudeAt` (else `lastMessageAt`) is judged.
- * The layer re-reads the same record several times a second, and the browser
- * decoder keeps an altitude while newer non-altitude messages arrive. Neither
- * a re-read nor a re-sent altitude may count toward a re-anchor or slip a
- * refused value through. A surface report passes
- * unjudged: a feed reports `alt_baro: "ground"` as 0, which is not a
- * barometric reading, so a landing at a high field is not a 5,000 ft drop.
- * @param {object} record Local ADS-B record.
- * @param {ReturnType<typeof createLocalAdsbAltitudeGate>} gate Mutated.
- * @returns {object}
- */
-export function gateLocalAdsbAltitude(record, gate) {
-  if (record?.onGround) return record;
-  const altitudeFt = finiteOrNull(record?.altitudeFt);
-  const at =
-    finiteOrNull(record?.altitudeAt) ?? finiteOrNull(record?.lastMessageAt);
-  if (altitudeFt === null || at === null) return record;
-  const ceilingFt = localAdsbAltitudeCeilingFt(record.category);
-  const aboveCeiling = (value) => ceilingFt !== null && value > ceilingFt;
-  // The category often arrives seconds after the first altitude, so a
-  // reference accepted before it was known is dropped once it is.
-  if (aboveCeiling(gate.accepted?.altitudeFt)) gate.accepted = null;
-  if (gate.judgedAt === null || at > gate.judgedAt) {
-    gate.judgedAt = at;
-    const candidate = {
-      altitudeFt,
-      at,
-      verticalRateFpm: finiteOrNull(record.verticalRateFpm),
-    };
-    if (aboveCeiling(altitudeFt)) {
-      // Refused outright, and never toward a re-anchor: a feed that keeps
-      // relaying the same corrupt value must not make it the reference.
-      gate.rejected += 1;
-    } else if (localAdsbAltitudeIsPlausible(gate.accepted, candidate)) {
-      gate.accepted = candidate;
-      gate.rejectStreak = 0;
-    } else {
-      gate.rejected += 1;
-      gate.rejectStreak += 1;
-      if (gate.rejectStreak >= LOCAL_ADSB_REANCHOR_AFTER) {
-        gate.accepted = candidate;
-        gate.rejectStreak = 0;
+function altitudeResult(record, accepted = null) {
+  const held = accepted && accepted.altitudeFt !== record.altitudeFt;
+  return {
+    ...record,
+    ...(accepted ? { altitudeFt: accepted.altitudeFt } : {}),
+    altitudeQuality: held
+      ? 'held-after-rejection'
+      : (accepted?.quality ?? null),
+    altitudeObservedAt: accepted?.observedAt ?? null,
+    altitudeSource: accepted?.source ?? null,
+  };
+}
+
+function feedAltitudeIsPlausible(previous, next) {
+  // A retained value can outlive its original measurement indefinitely while
+  // positions stay fresh. Do not let that accumulate an unlimited allowance.
+  const bounded = previous
+    ? {
+        ...previous,
+        at: Math.max(previous.at, next.at - LOCAL_ADSB_FEED_ALTITUDE_GAP_MS),
       }
+    : null;
+  return localAdsbAltitudeIsPlausible(bounded, next);
+}
+
+function altitudeSourceState(gate, key, at) {
+  for (const [sourceKey, state] of gate.sources) {
+    if (at - state.lastSeenAt > LOCAL_ADSB_MESSAGE_STALE_MS)
+      gate.sources.delete(sourceKey);
+  }
+  // Each receiver keeps its own votes and watermarks even when the freshest
+  // position alternates between inputs. Votes from different receivers never mix.
+  let state = gate.sources.get(key);
+  if (!state) {
+    state = {
+      value: null,
+      observedAt: null,
+      sequence: null,
+      snapshotAt: null,
+      messageCount: null,
+      rejectStreak: 0,
+      pending: null,
+    };
+    gate.sources.set(key, state);
+  }
+  state.lastSeenAt = at;
+  gate.rejectStreak = state.rejectStreak;
+  return state;
+}
+
+function acceptAltitude(gate, candidate) {
+  gate.accepted = candidate;
+  // Every pending refusal was measured against the previous reference.
+  for (const state of gate.sources.values()) {
+    state.pending = null;
+    state.rejectStreak = 0;
+  }
+  gate.rejectStreak = 0;
+}
+
+function judgeBrowserAltitude(record, gate, state, candidate, aboveCeiling) {
+  const observedAt = finiteOrNull(record.altitudeObservedAt);
+  const sequence = Number.isSafeInteger(record.altitudeSequence)
+    ? record.altitudeSequence
+    : null;
+  if (observedAt === null) {
+    if (!gate.accepted && !aboveCeiling) acceptAltitude(gate, candidate);
+    return;
+  }
+  if (sequence !== null && state.sequence !== null) {
+    if (sequence === state.sequence) return;
+    if (sequence < state.sequence) {
+      if (observedAt <= state.observedAt) return;
+      state.rejectStreak = 0;
+    }
+  } else if (state.observedAt !== null && observedAt <= state.observedAt)
+    return;
+  state.observedAt = observedAt;
+  state.sequence = sequence;
+  candidate.at = observedAt;
+  candidate.observedAt = observedAt;
+  if (aboveCeiling) {
+    // Refused outright, once per frame, and never toward a re-anchor.
+    gate.rejected += 1;
+    gate.rejectStreak = state.rejectStreak;
+    return;
+  }
+  if (localAdsbAltitudeIsPlausible(gate.accepted, candidate)) {
+    acceptAltitude(gate, candidate);
+  } else {
+    gate.rejected += 1;
+    state.rejectStreak += 1;
+    // A sequence gap is still only one observed report, not multiple votes.
+    if (state.rejectStreak >= LOCAL_ADSB_REANCHOR_AFTER) {
+      acceptAltitude(gate, candidate);
     }
   }
-  const held = gate.accepted?.altitudeFt;
-  if (Number.isFinite(held))
-    return held !== altitudeFt
-      ? { ...record, altitudeFt: held, altitudeQuality: 'held-after-rejection' }
-      : record;
+  gate.rejectStreak = state.rejectStreak;
+}
+
+function judgeFeedAltitude(record, gate, state, candidate, aboveCeiling) {
+  const snapshotAt = finiteOrNull(record.feedSnapshotAt);
+  const messageCount = Number.isSafeInteger(record.messageCount)
+    ? record.messageCount
+    : null;
+  const hasProgress =
+    typeof record.feedId === 'string' &&
+    record.feedId.length > 0 &&
+    snapshotAt !== null &&
+    messageCount !== null;
+  if (
+    hasProgress &&
+    ((state.snapshotAt !== null && snapshotAt < state.snapshotAt) ||
+      (state.messageCount !== null && messageCount < state.messageCount))
+  ) {
+    // A decoder restart or wall-clock adjustment begins a new progress window.
+    // Its first value is still checked against the accepted altitude.
+    state.pending = null;
+    state.value = null;
+    state.snapshotAt = null;
+    state.messageCount = null;
+  }
+  const progressed =
+    hasProgress &&
+    (state.snapshotAt === null ||
+      (snapshotAt > state.snapshotAt && messageCount > state.messageCount));
+  if (hasProgress) {
+    state.snapshotAt = Math.max(state.snapshotAt ?? snapshotAt, snapshotAt);
+    state.messageCount = Math.max(
+      state.messageCount ?? messageCount,
+      messageCount,
+    );
+  } else state.pending = null;
+
+  const changed = state.value !== candidate.altitudeFt;
+  state.value = candidate.altitudeFt;
+  if (aboveCeiling) {
+    // Refused once per changed value. A feed that keeps relaying it supports
+    // no inferred recovery, so it can never become the reference.
+    if (changed) gate.rejected += 1;
+    state.pending = null;
+    return;
+  }
+  if (changed) {
+    if (feedAltitudeIsPlausible(gate.accepted, candidate)) {
+      acceptAltitude(gate, candidate);
+      return;
+    }
+    gate.rejected += 1;
+  }
+  if (!gate.accepted || candidate.altitudeFt === gate.accepted.altitudeFt)
+    return;
+  // Feed JSON has no altitude-specific age. Repeated snapshots are not new
+  // refusals. Activity can only support the explicitly inferred recovery below.
+  if (!hasProgress) return;
+  if (
+    !state.pending ||
+    (changed && !feedAltitudeIsPlausible(state.pending.last, candidate))
+  ) {
+    state.pending = { startedAt: candidate.at, snapshots: 0, last: candidate };
+  }
+  if (changed) state.pending.last = candidate;
+  if (progressed) state.pending.snapshots += 1;
+  if (
+    progressed &&
+    state.pending.snapshots >= LOCAL_ADSB_FEED_RECOVERY_SNAPSHOTS &&
+    candidate.at - state.pending.startedAt >= LOCAL_ADSB_FEED_RECOVERY_MS
+  ) {
+    acceptAltitude(gate, { ...candidate, quality: 'inferred-reanchor' });
+  }
+}
+
+/**`n * Hold rejected altitudes and retain the accepted value's provenance.
+ * Browser votes come only from actual altitude frames. Feeds cannot identify
+ * an altitude measurement: changed values are judged once, and coherent source
+ * activity can recover after 5 s / 3 advancing snapshots, explicitly inferred.
+ * A stable corrupt feed can also satisfy that policy. Missing progression
+ * metadata disables automatic feed recovery.
+ *
+ * For categories with a ceiling ({@link localAdsbAltitudeCeilingFt}) a report
+ * above it is refused outright and never re-anchors or recovers, a reference
+ * above it is dropped once the category is known, and with nothing to hold the
+ * altitude is returned as null, marked `altitudeQuality:
+ * 'unknown-after-rejection'`: unknown, not impossible.
+ * @param {object} record Local ADS-B record (never mutated).
+ * @param {ReturnType<typeof createLocalAdsbAltitudeGate>} gate Caller-owned state.
+ * @param {number} [nowMs=record.lastMessageAt] Browser clock, injected by the layer.
+ * @returns {object} Record with altitudeQuality, altitudeObservedAt and altitudeSource.
+ */
+export function gateLocalAdsbAltitude(
+  record,
+  gate,
+  nowMs = record?.lastMessageAt,
+) {
+  if (record?.onGround) {
+    gate.accepted = null;
+    gate.sources.clear();
+    gate.rejectStreak = 0;
+    return altitudeResult(record);
+  }
+  const altitudeFt = finiteOrNull(record?.altitudeFt);
+  const at = finiteOrNull(nowMs);
+  if (altitudeFt === null || at === null) {
+    for (const state of gate.sources.values()) state.pending = null;
+    return altitudeResult(record);
+  }
+  const browser = record.source === 'webusb';
+  const source = browser ? 'webusb' : 'feed';
+  const key = browser
+    ? `webusb:${record.altitudeSessionAt ?? 'unknown'}`
+    : `feed:${record.feedId ?? 'unknown'}:${record.band ?? '1090'}`;
+  const state = altitudeSourceState(gate, key, at);
+  const ceilingFt = localAdsbAltitudeCeilingFt(record.category);
+  const isAboveCeiling = (value) => ceilingFt !== null && value > ceilingFt;
+  // The category often arrives seconds after the first altitude, so a
+  // reference accepted before it was known is dropped once it is.
+  if (isAboveCeiling(gate.accepted?.altitudeFt)) {
+    gate.accepted = null;
+    for (const sourceState of gate.sources.values()) sourceState.pending = null;
+  }
+  const aboveCeiling = isAboveCeiling(altitudeFt);
+  const candidate = {
+    altitudeFt,
+    at,
+    verticalRateFpm: finiteOrNull(record.verticalRateFpm),
+    observedAt: null,
+    source,
+    quality: browser ? 'accepted' : 'feed-estimate',
+  };
+  if (browser)
+    judgeBrowserAltitude(record, gate, state, candidate, aboveCeiling);
+  else judgeFeedAltitude(record, gate, state, candidate, aboveCeiling);
   // Nothing accepted to hold: an impossible altitude is shown as unknown.
-  return aboveCeiling(altitudeFt)
-    ? { ...record, altitudeFt: null, altitudeQuality: 'unknown-after-rejection' }
-    : record;
+  if (!gate.accepted && aboveCeiling)
+    return {
+      ...altitudeResult(record),
+      altitudeFt: null,
+      altitudeQuality: 'unknown-after-rejection',
+    };
+  return altitudeResult(record, gate.accepted);
 }
 
 function normalizePosition(lat, lon) {
@@ -370,11 +548,13 @@ export function recordFromDecoderTrack(track) {
     lat,
     lon,
     altitudeFt: finiteOrNull(track.altitudeFt),
+    altitudeObservedAt: finiteOrNull(track.lastAltitudeAt),
+    altitudeSequence: finiteOrNull(track.altitudeSequence),
+    altitudeSessionAt: finiteOrNull(track.firstSeenAt),
     groundSpeedKt: finiteOrNull(track.speedKt),
     trackDeg: normalizeTrack(track.headingDeg),
     verticalRateFpm: finiteOrNull(track.verticalRateFpm),
     lastPositionAt: lat === null ? null : finiteOrNull(track.lastPositionAt),
-    altitudeAt: finiteOrNull(track.altitudeAt),
     lastMessageAt: finiteOrNull(track.lastSeen) ?? 0,
     messageCount: Math.max(0, Math.trunc(finiteOrNull(track.messages) ?? 0)),
     rssiDbfs: null,
@@ -396,9 +576,14 @@ export function recordFromDecoderTrack(track) {
  * @param {number} nowMs Local epoch ms at which the document was received.
  * @param {object} [options]
  * @param {'1090'|'978'} [options.band='1090'] Band the feed decodes.
+ * @param {string|null} [options.feedId=null] Opaque configured receiver identity.
  * @returns {object[]} Normalized records.
  */
-export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
+export function normalizeDump1090Aircraft(
+  json,
+  nowMs,
+  { band = '1090', feedId = null } = {},
+) {
   const recordBand = band === '978' ? '978' : '1090';
   const receivedAt = finiteOrNull(nowMs);
   if (receivedAt === null || !Array.isArray(json?.aircraft)) return [];
@@ -420,13 +605,16 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       lat: hasPosition ? position.lat : null,
       lon: hasPosition ? position.lon : null,
       altitudeFt: altitude,
+      altitudeObservedAt: null,
+      feedId: typeof feedId === 'string' ? feedId : null,
+      feedSnapshotAt:
+        finiteOrNull(json.now) === null ? null : finiteOrNull(json.now * 1000),
       groundSpeedKt: finiteOrNull(entry.gs),
       trackDeg: normalizeTrack(entry.track),
       verticalRateFpm: readAdsbVerticalRateFpm(entry),
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
         : null,
-      altitudeAt: altitude === null ? null : receivedAt - seenS * 1000,
       lastMessageAt: receivedAt - seenS * 1000,
       messageCount: Math.max(0, Math.trunc(finiteOrNull(entry.messages) ?? 0)),
       rssiDbfs: finiteOrNull(entry.rssi),

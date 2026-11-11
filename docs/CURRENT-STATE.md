@@ -7564,23 +7564,44 @@ on purpose:
   the elapsed time + 1 s, plus 300 ft. A refused report holds the last
   accepted altitude for the marker height, the card, the model ceiling and
   route plausibility alike, and is counted as `rejectedAltitudes` in the
-  layer stats; the held record carries
-  `altitudeQuality: 'held-after-rejection'`. Only a newer altitude is judged
-  (`altitudeAt`, the time of the message the altitude came from), so the
-  layer's repeated re-reads of one record, and the decoder's later
-  non-altitude messages, neither count twice nor let a refused value
-  through. Three refusals in a row re-anchor, so a bad first altitude clears
-  itself. A surface report passes unjudged, because a feed's `ground` is 0
-  and not a barometric reading. The fixed-wing weight categories A1–A5 also
-  have a 60,000 ft ceiling (`localAdsbAltitudeCeilingFt`), since nothing
-  certified in them flies above 51,000 ft. A report above it is refused
-  outright and never counts toward a re-anchor, so a feed that keeps relaying
-  one corrupt value cannot make it the reference. A reference accepted before
-  the category arrived is dropped once the category is known. With nothing to
-  hold, the altitude shows as unknown, and the record carries
-  `altitudeQuality: 'unknown-after-rejection'`. A6, A7 and every B category have no
-  ceiling: gliders have soared to 76,000 ft and balloons fly above
-  100,000 ft.
+  layer stats. Browser tracks carry the altitude frame's own receive time,
+  sequence and track start: identification/velocity messages and renderer
+  re-reads never refresh an accepted altitude or recount a refusal. Equal
+  altitudes in distinct frames are real observations, including frames from
+  one USB block with the same timestamp. Three observed refusals in a row
+  re-anchor; a sequence gap counts as only one observed report.
+  Decoder feeds expose no altitude-specific measurement age. A changed value
+  is judged once and keeps its receipt-time reference through unrelated
+  messages. Feed allowance is capped at a 60 s relative gap, since fresh
+  positions can keep an old altitude alive indefinitely. Recovery from an
+  implausible feed value requires a coherent candidate stream for at least
+  5 s and three advancing source snapshots with increasing aircraft message
+  counts from one receiver. Cached snapshots and transport jitter cannot
+  supply that progress. Each receiver keeps separate recovery progress when
+  the freshest position alternates between inputs; a new accepted altitude
+  resets pending recovery against the old reference. This is
+  an inference: a stable corrupt feed can also satisfy it. Without source
+  clock/count/identity metadata, automatic feed recovery is disabled, so a
+  held altitude can persist while positions remain fresh. A surface report
+  clears the airborne reference, because a feed's `ground` is 0 and not a
+  barometric reading. The next airborne value seeds a new reference, just
+  like the first observation of a new aircraft. The fixed-wing weight
+  categories A1–A5 have a 60,000 ft ceiling (`localAdsbAltitudeCeilingFt`),
+  since nothing certified in them flies above 51,000 ft. A report above it is
+  refused outright and never counts toward a re-anchor or an inferred feed
+  recovery, so a feed that keeps relaying one corrupt value cannot make it the
+  reference. A reference accepted before the category arrived is dropped once
+  the category is known. With nothing to hold, the altitude shows as unknown
+  and the record carries `altitudeQuality: 'unknown-after-rejection'`. A6, A7
+  and every B category have no ceiling: gliders have soared to 76,000 ft and
+  balloons fly above 100,000 ft.
+  Accepted/held records carry `altitudeQuality` (`accepted`,
+  `held-after-rejection`, `feed-estimate` or `inferred-reanchor`),
+  `altitudeObservedAt` (the actual browser measurement time, null for feeds),
+  and `altitudeSource` (the accepted value's source, which can differ from the
+  position source). These accompany altitude through context metadata and
+  final analyst items, including altitude-only queries. Missing/surface
+  altitudes carry no airborne quality claim.
 - **Trail.** A selected aircraft draws a magenta trail of the positions the
   receiver heard (up to 10 minutes / 600 fixes, dropped with the aircraft),
   with the tracked-flight trail look and a live head segment. No network
@@ -7601,10 +7622,12 @@ The card's `TRK` label wraps after rounding to whole degrees, so a track of
 
 Receivers publish one record shape from `src/sources/adsbRecords.js`
 (`icao`, `callsign`, `category`, `onGround`, `lat`, `lon`, `altitudeFt`,
+`altitudeObservedAt`, browser `altitudeSequence`/`altitudeSessionAt`, feed
+`feedId`/`feedSnapshotAt`,
 `groundSpeedKt`, `trackDeg`, `verticalRateFpm`, `lastPositionAt`,
-`altitudeAt`, `lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
+`lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
 `webusb` (browser SDR) or `feed` (decoder feed).
-`normalizeDump1090Aircraft(json, nowMs, { band })` maps a dump1090/readsb/
+`normalizeDump1090Aircraft(json, nowMs, { band, feedId })` maps a dump1090/readsb/
 skyaware978 `aircraft.json` document into the same records; a row without
 `baro_rate` reads its vertical rate from `geom_rate`, where a GNSS-sourced rate
 is sent. Voice
@@ -7631,6 +7654,8 @@ second only while the layer is enabled and only while the route reports
 `configured`; the Local RTL-SDR card makes one probe request at startup to show
 its read-only "Decoder feeds: 1090 live · 978 live" line. Feed records are
 rebased to the browser clock and kept up to 60 s after their last message.
+The opaque configured `feedId` and raw `feedSnapshotAt` source clock are
+preserved without rebasing; neither exposes the receiver URL.
 `mergeLocalAdsbRecords` merges both inputs by ICAO, keeping the newest position
 (tie: newest message) and the bands/sources heard in the last 60 s; the card's
 receiver line names them ("Heard by your receiver · 1090 MHz + 978 MHz UAT ·
