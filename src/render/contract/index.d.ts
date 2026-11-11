@@ -40,10 +40,13 @@ export interface ContractRole {
 /** What a renderer does, by role: every member of {@link PORTS} in one. */
 export declare const ROLES: readonly ContractRole[];
 
-/** The role of `port`'s `member` (dotted), or undefined. */
+/**
+ * The role of `port`'s `member` (dotted), or of the port itself without one;
+ * undefined for a member the port does not have.
+ */
 export declare function roleOf(
   port: string,
-  member: string,
+  member?: string,
 ): ContractRole['id'] | undefined;
 
 /** Every quality setting a renderer may support. */

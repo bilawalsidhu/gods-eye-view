@@ -131,6 +131,9 @@ test('PORTS lists every member of every port, required exactly when the type req
 test('every member of every port has one role, and each role names real members', () => {
   const ids = ROLES.map((r) => r.id);
   assert.equal(new Set(ids).size, ids.length);
+  // No entry is claimed by two roles, so the most specific entry is never a tie.
+  const entries = ROLES.flatMap((r) => r.members);
+  assert.equal(new Set(entries).size, entries.length, 'an entry in two roles');
   for (const [port, members] of Object.entries(PORTS))
     for (const member of Object.keys(members))
       assert.ok(
@@ -156,6 +159,9 @@ test('every member of every port has one role, and each role names real members'
   assert.equal(roleOf('globe', 'sky.set'), 'look');
   assert.equal(roleOf('globe', 'setSurfaceShading'), 'look');
   assert.equal(roleOf('nowhere', 'x'), undefined);
+  assert.equal(roleOf('globe', 'bogus'), undefined);
+  assert.equal(roleOf('globe'), 'surface');
+  assert.equal(roleOf('imageryLayer', 'lit'), 'look');
 });
 
 test('the capability and frame-step lists are the types’ own', () => {

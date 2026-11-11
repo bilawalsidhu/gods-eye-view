@@ -350,7 +350,12 @@ export const ROLES = deepFreeze([
     title: 'Look',
     summary:
       'How the world is lit and finished: sky and atmosphere, surface shading, styles and screen effects.',
-    members: ['effects', 'globe.sky', 'globe.setSurfaceShading'],
+    members: [
+      'effects',
+      'globe.sky',
+      'globe.setSurfaceShading',
+      'imageryLayer.lit',
+    ],
   },
   {
     id: 'host',
@@ -366,11 +371,12 @@ export const ROLES = deepFreeze([
  * The role a member belongs to: the most specific {@link ROLES} entry naming
  * its port or one of its dotted prefixes.
  * @param {string} port
- * @param {string} member dotted, as in {@link PORTS}
- * @returns {string|undefined} the role's id
+ * @param {string} [member] dotted, as in {@link PORTS}; empty for the port's own role
+ * @returns {string|undefined} the role's id; undefined for a member the port does not have
  */
-export function roleOf(port, member) {
-  const parts = member.split('.');
+export function roleOf(port, member = '') {
+  if (member && !(PORTS[port] && member in PORTS[port])) return undefined;
+  const parts = member ? member.split('.') : [];
   for (let n = parts.length; n >= 0; n--) {
     const key = [port, ...parts.slice(0, n)].join('.');
     const role = ROLES.find((r) => r.members.includes(key));
