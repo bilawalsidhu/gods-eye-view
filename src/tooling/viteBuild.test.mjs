@@ -33,7 +33,16 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.equal(config.plugins[1].name, 'host-check');
   assert.equal(config.plugins[1].enforce, 'pre');
   assert.equal(config.plugins[3].name, 'vite:vue');
-  assert.equal(config.plugins[4], plugin);
+  const providerIndex = config.plugins.indexOf(plugin);
+  assert.deepEqual(
+    config.plugins.slice(4, providerIndex).map(({ name }) => name),
+    [
+      '@tailwindcss/vite:scan',
+      '@tailwindcss/vite:generate:serve',
+      '@tailwindcss/vite:generate:build',
+    ],
+  );
+  assert.ok(providerIndex > 4);
   assert.equal(config.server.host, 'localhost');
   assert.equal(config.server.port, 4173);
   assert.deepEqual(config.server.allowedHosts, ['localhost', '127.0.0.1']);
@@ -131,7 +140,10 @@ test('build helper does not discover environment values or construct local provi
       undefined,
     );
     assert.deepEqual(
-      config.plugins.slice(4).map((plugin) => plugin.name),
+      config.plugins
+        .slice(4)
+        .filter(({ name }) => !name.startsWith('@tailwindcss/vite:'))
+        .map((plugin) => plugin.name),
       ['embed-framing', 'panel-build'],
     );
   } finally {
@@ -145,6 +157,7 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' }, { nominatimStorageDir });
   const standaloneProviders = config.plugins
+    .filter(({ name }) => !name.startsWith('@tailwindcss/vite:'))
     .slice(4, -6)
     .map((plugin) => plugin.name);
   assert.equal(

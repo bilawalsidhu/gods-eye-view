@@ -187,7 +187,7 @@ export function createBrowserViteConfig({
       cesium(),
       // Application views are Vue single-file components.
       vue(VUE_PLUGIN_OPTIONS),
-      tailwindcss(),
+      ...tailwindcss(),
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
