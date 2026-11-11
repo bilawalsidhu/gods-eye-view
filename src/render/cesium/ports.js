@@ -64,6 +64,9 @@ const GLOBE_CAPABILITIES = [
 export function cesiumCapabilities(scene, only) {
   const all = [
     'models',
+    // Cesium scatters drawn models through the atmosphere wherever the
+    // scene draws fog (its models' atmosphere stage).
+    'modelAtmosphere',
     'quads',
     'meshes',
     // Raster shells; other field kinds are refused.

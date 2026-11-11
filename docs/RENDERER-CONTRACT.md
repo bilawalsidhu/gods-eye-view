@@ -126,6 +126,10 @@ optional, so a renderer written before it still conforms:
   [The application and its renderer](#the-application-and-its-renderer).
 - `frame.renderNow()` throws when the frame fails to draw.
 
+The Cesium port lists `modelAtmosphere`: Cesium scatters drawn models
+through the atmosphere in the same stage as its distance fog, so models take
+it while `globe.sky`'s `fog` is on.
+
 The Cesium port lists `followAutodetect`: an `autodetect` follow is
 Cesium's own AUTODETECT tracking frame, east-north-up on a still or slow
 target and an orbit frame (x along the inertial motion, z up) on a fast
