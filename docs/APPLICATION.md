@@ -188,6 +188,13 @@ state restoration, and release them after the consumers stop. The catalog
 constructor (`application/layers`) also requires `wind`, `weather` and
 `cyclones` sources with `getSnapshot` for the Weather layers, and owns the
 observed-history clock those layers share for the catalog's lifetime.
+A `weather` source may also supply decoded frames: an optional
+`getFrameImage({ product, time, size, bbox, signal })` returns a whole-extent or
+detail image and an optional `getFrameTile({ product, time, z, x, y, size,
+signal })` returns one tile or null for a transparent tile, each as an
+`ImageBitmap`, `ImageData`, canvas or `VideoFrame` of exactly the requested
+size, which the layer draws once and closes. Without them the layers read the
+image and tile routes (`WeatherFrameFeed` in `src/layers/weather/source.js`).
 
 `application/services` accepts boundary, terrain, regional-context, weather and
 summary services; its weather service supplies cockpit local conditions, not the

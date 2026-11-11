@@ -1822,7 +1822,13 @@ html:not([lang='en']) #cockpit-brief-auto {
   letter-spacing: 0.13em;
   text-align: center;
 }
-.cockpit-brief-status[data-state='unavailable'] {
+/* `display: grid` above would otherwise beat the UA [hidden] rule and keep a
+   stale banner over a populated list. */
+.cockpit-brief-status[hidden] {
+  display: none;
+}
+.cockpit-brief-status[data-state='unavailable'],
+.cockpit-brief-status[data-state='cached'] {
   color: #d5a863;
 }
 .cockpit-local-place {
