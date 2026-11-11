@@ -117,6 +117,88 @@ test('per-frame credits come and go with the frames, with one change each', () =
   assert.equal(lists.length, 2);
 });
 
+test('a frame owing what the last one owed lists nothing; a change in order, placement or the page’s credits does', () => {
+  const t = setup();
+  const lists = [];
+  t.port.on('change', (list) => lists.push(list.map((c) => c.text)));
+  const layer = new Cesium.Credit('Layer data', false);
+  let listed = 0;
+  layer.isIon = () => {
+    listed += 1;
+    return false;
+  };
+  t.display.addStaticCredit(layer);
+  const a = new Cesium.Credit('Tiles A', false);
+  const b = new Cesium.Credit('Tiles B', false);
+  const draw = (counts) => {
+    t.display.draw();
+    for (const [credit, count] of counts)
+      t.display._currentFrameCredits.lightboxCredits.values.push({
+        credit,
+        count,
+      });
+    for (const cb of [...t.listeners]) cb();
+  };
+  draw([
+    [a, 2],
+    [b, 1],
+  ]);
+  assert.deepEqual(lists, [['Layer data', 'Tiles A', 'Tiles B']]);
+  listed = 0;
+  draw([
+    [a, 2],
+    [b, 1],
+  ]);
+  assert.equal(listed, 0, 'the same frame again is not listed');
+  assert.equal(lists.length, 1);
+  // B now owed by more tiles: listed first.
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  assert.deepEqual(lists.at(-1), ['Layer data', 'Tiles B', 'Tiles A']);
+  // A credit moved onto the credit line.
+  b.showOnScreen = true;
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  assert.equal(lists.length, 3);
+  // The page's credit of the same markup as a frame credit: listed as the page's.
+  const off = t.port.addStatic({ text: 'Page data' });
+  assert.equal(lists.length, 4);
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  const settled = lists.length;
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  assert.equal(lists.length, settled, 'unchanged once drawn');
+  off();
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  assert.ok(!lists.at(-1).includes('Page data'));
+  // The logo moved off the credit line.
+  const logo = new Cesium.Credit('<span>Logo</span>', true);
+  t.display._currentCesiumCredit = logo;
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  const withLogo = lists.length;
+  logo.showOnScreen = false;
+  draw([
+    [a, 1],
+    [b, 3],
+  ]);
+  assert.equal(lists.length, withLogo + 1);
+});
+
 test('a static credit added outside the port is listed at once and changes on the next frame', () => {
   const t = setup();
   const lists = [];

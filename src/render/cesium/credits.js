@@ -193,7 +193,53 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
       .map((credit) => `${credit.id}:${credit.showOnScreen ? 1 : 0}`)
       .join(',');
   let lastSignature = signature();
+
+  /**
+   * Everything the last frame's credits were listed from, value for value:
+   * the display's logo, static credits and the frame's own (each with its
+   * count and placement), and which of them are the page's. A frame that owes
+   * the same, as most do, is told without listing them.
+   */
+  const lastInputs = [];
+  /** Counts each change to which credits are the page's. */
+  let coreVersion = 0;
+  function inputsHeld() {
+    const { statics, screen, lightbox, logo } = creditDisplayContents(
+      displayLive() ? display : undefined,
+    );
+    let same = true;
+    let at = 0;
+    const put = (value) => {
+      if (!Object.is(lastInputs[at], value)) {
+        same = false;
+        lastInputs[at] = value;
+      }
+      at += 1;
+    };
+    const putElements = (elements) => {
+      put(elements.length);
+      for (const element of elements) {
+        put(element.credit);
+        put(element.count);
+        put(element.credit?.showOnScreen);
+      }
+    };
+    put(coreVersion);
+    put(logo);
+    put(logo?.showOnScreen);
+    put(statics.length);
+    for (const credit of statics) {
+      put(credit);
+      put(credit.showOnScreen);
+    }
+    putElements(screen);
+    putElements(lightbox);
+    return same;
+  }
+  inputsHeld();
+
   const afterFrame = () => {
+    if (inputsHeld()) return;
     const now = signature();
     if (now === lastSignature) return;
     lastSignature = now;
@@ -210,6 +256,7 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
       entry = { credit: new Cesium.Credit(markup, inline), count: 0 };
       shown.set(key, entry);
       coreCredits.add(entry.credit);
+      coreVersion += 1;
       if (displayLive()) display.addStaticCredit(entry.credit);
     }
     entry.count += 1;
@@ -223,6 +270,7 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
     if (entry.count > 0) return;
     shown.delete(key);
     coreCredits.delete(entry.credit);
+    coreVersion += 1;
     if (displayLive()) display.removeStaticCredit(entry.credit);
   }
 
