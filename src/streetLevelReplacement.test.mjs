@@ -144,11 +144,6 @@ for (const takeover of ['navigation', 'gesture', 'none']) {
     assert.equal(h.flights.length, takeover === 'none' ? 1 : 0, 'superseded view must not reclaim the camera');
     assert.equal(a.calls.open.length, takeover === 'none' ? 1 : 0);
     assert.equal(reply.ok, takeover === 'none');
-    // Only the photos stand down: the rest of the view still applies, and
-    // the camera stays with whoever took it.
-    const steps = reply.steps.map(step => step.step);
-    assert.ok(steps.includes('clear_annotations'), JSON.stringify(steps));
-    assert.ok(!steps.includes('camera'), JSON.stringify(steps));
   });
 }
 

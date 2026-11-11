@@ -5324,8 +5324,7 @@ another map; `street_level` does not combine with `follow`.
 point, measure the view's altitude from the terrain under the camera
 (`groundedLookAt` with the terrain heights service) before taking the look-at
 point, and keep the view's own estimate without a terrain answer (the embedded
-app waits 2 s for one). A camera taken during that wait stays where it is:
-the rest of the view applies and its photos do not open. Links carry
+app waits 2 s for one). Links carry
 `sl=<source>,<lat>,<lon>`; the globe panel applies views through the action,
 and a plain link runs it once restored (one shot: the rewritten hash drops
 `sl`). A link that follows an entity ignores `sl`.
