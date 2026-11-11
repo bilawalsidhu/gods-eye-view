@@ -21,9 +21,28 @@ const template = readFileSync(
 );
 // Names shaped like a credential. A settings name matching this fails the test:
 // either it belongs in SECRET_ENV_NAMES and SECTION 1, or the pattern needs a
-// deliberate exception here.
+// deliberate exception here. TOKEN/SECRET/PASSWORD count anywhere in the name
+// (AWS_BEARER_TOKEN_BEDROCK); a path to one (_FILE, _DIR, _PATH, _URL) is a
+// setting.
 const CREDENTIAL_SHAPED =
-  /(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CERTIFICATE)$|_CLIENT_ID$/;
+  /(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CERTIFICATE)$|_CLIENT_ID$|(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASSWD)_(?!(?:.*_)?(?:FILE|DIR|PATH|URL)$)/;
+const isCredentialShaped = (name) => CREDENTIAL_SHAPED.test(name);
+const ADD_A_KEY =
+  'A new API key goes in .env.example SECTION 1 (with a "# Get one: <url>" ' +
+  'line), in SECRET_ENV_NAMES in src/secretEnv.mjs, and as a commented ' +
+  'placeholder in pinokio/_ENVIRONMENT.';
+
+test('credential-shaped names: keys anywhere in the name, never paths to them', () => {
+  for (const name of [
+    'OPENAI_API_KEY', 'GITHUB_TOKEN', 'OPENSKY_CLIENT_SECRET',
+    'OPENSKY_CLIENT_ID', 'OTTAWA_CAMERA_CERTIFICATE', 'AWS_BEARER_TOKEN_BEDROCK',
+    'SMTP_PASSWORD_PRIMARY',
+  ]) assert.equal(isCredentialShaped(name), true, name);
+  for (const name of [
+    'HTTPS_KEY_FILE', 'WORLD_MONITOR_LOCAL_TOKEN_FILE', 'GEV_CHATGPT_AUTH_DIR',
+    'GEV_KEY_SETUP_TRUSTED_PEERS', 'TOMTOM_DAILY_TILE_BUDGET', 'PORT',
+  ]) assert.equal(isCredentialShaped(name), false, name);
+});
 
 test('the secret list is unique, upper-case env names', () => {
   assert.equal(new Set(SECRET_ENV_NAMES).size, SECRET_ENV_NAMES.length);
@@ -37,6 +56,7 @@ test('.env.example SECTION 1 holds exactly the secret list', () => {
   assert.deepEqual(
     [...envAssignmentNames(secrets.join('\n'))].sort(),
     [...SECRET_ENV_NAMES].sort(),
+    ADD_A_KEY,
   );
 });
 
@@ -45,10 +65,12 @@ test('no secret, and nothing credential-shaped, outside SECTION 1', () => {
   const outside = envAssignmentNames(
     [...header, ...settings, ...trailer].join('\n'),
   );
-  assert.deepEqual(outside.filter(isSecretEnvName), []);
+  assert.deepEqual(outside.filter(isSecretEnvName), [], ADD_A_KEY);
   assert.deepEqual(
-    outside.filter((name) => CREDENTIAL_SHAPED.test(name)),
+    outside.filter(isCredentialShaped),
     [],
+    `Key-looking names outside SECTION 1. ${ADD_A_KEY} A setting that only ` +
+      'looks like a key needs an exception in CREDENTIAL_SHAPED.',
   );
 });
 
