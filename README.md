@@ -689,6 +689,17 @@ access the key-entry panel.
 a separately reviewed authentication proxy if remote access is required.
 [SECURITY.md](SECURITY.md) explains the restrictions and threat model.
 
+### 🏠 Running on your own network
+
+With no keys, the browser fetches the globe from public services. To keep
+those requests on your own servers, set these in `.env` (see `.env.example`)
+and restart:
+
+- `GEV_BASEMAP_URL`: an https XYZ tile template for your own basemap, in place
+  of Esri World Imagery, with `GEV_BASEMAP_ATTRIBUTION` for its credit.
+
+Layers you turn on still contact their own providers.
+
 ---
 
 ## 📋 Responsible & Open

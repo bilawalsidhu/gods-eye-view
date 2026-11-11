@@ -197,7 +197,8 @@
       "build/panel.js",
       "build/vueOptions.js",
       "build/registerVue.js",
-      "build/vueLoader.js"
+      "build/vueLoader.js",
+      "src/maps/sourceSettings.js"
     ],
     "external": ["vite-plugin-cesium", "@vitejs/plugin-vue", "vue"]
   },

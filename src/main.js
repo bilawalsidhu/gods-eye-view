@@ -10,6 +10,11 @@ const application = createStandaloneApplication({
   cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
   geospatial:
     photonSetting === undefined ? {} : { endpoints: { photon: photonSetting } },
+  // Undefined unless the operator set GEV_BASEMAP_URL (validated by Vite).
+  mapOptions: {
+    basemapUrl: import.meta.env.GEV_BASEMAP_URL,
+    basemapAttribution: import.meta.env.GEV_BASEMAP_ATTRIBUTION,
+  },
   allowQaRegistration: import.meta.env.DEV,
 });
 

@@ -7537,6 +7537,17 @@ falls back to OSM on construction failure or two active tile failures, and
 credits follow the source actually displayed. Terrain remains lazy while the
 photoreal globe is hidden.
 
+`GEV_BASEMAP_URL` (an https XYZ template with `{z}`, `{x}` and `{y}` or
+`{reverseY}`) replaces Esri in the `esri-imagery` slot with the operator's own
+tiles (`createTemplateImagery`). The slot keeps its id, so share links and
+presets still resolve, reads "Basemap" in the map tile, shows
+`GEV_BASEMAP_ATTRIBUTION` as escaped plain text, and has no OSM construction or
+tile-failure fallback, so a failing operator server is never replaced by a
+public host. The server validates the value once (`src/maps/sourceSettings.js`)
+and the build exposes it to the browser only when set; an invalid value stops
+the dev server and the build instead of falling back to Esri.
+Unit-tested in `src/maps/selfHostedSources.test.mjs`.
+
 Map-stack subscribers hear each settled activation once. A subscriber removed
 during a delivery, or every subscriber once the controller is destroyed, gets
 no further callback from it, and a destroyed controller accepts no new ones.

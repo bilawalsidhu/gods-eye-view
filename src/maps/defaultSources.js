@@ -6,6 +6,8 @@ import {
   createOsmImagery,
   createEsriImagery,
   createIonImagery,
+  createTemplateImagery,
+  templateCreditHtml,
   ESRI_ATTRIBUTION_HTML,
 } from './imagery.js';
 import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
@@ -15,6 +17,8 @@ export function createDefaultMapSources({
   googleTileset = null,
   cesiumToken = '',
   googleApiKey = '',
+  basemapUrl,
+  basemapAttribution = '',
 } = {}) {
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
@@ -49,6 +53,22 @@ export function createDefaultMapSources({
           unavailableReason: () =>
             photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
+        };
+      if (descriptor.id === 'esri-imagery' && basemapUrl)
+        // The operator's basemap takes Esri's place. It never falls back to
+        // OSM: that would reach the public host the operator chose to avoid.
+        return {
+          ...common,
+          descriptor: {
+            ...descriptor,
+            label: 'Basemap', // i18n-ignore: map source name, as the others
+            shortLabel: 'MAP',
+          },
+          imagery: () => createTemplateImagery(basemapUrl),
+          terrain,
+          credit: basemapAttribution
+            ? templateCreditHtml(basemapAttribution)
+            : null,
         };
       const imagery =
         descriptor.kind === 'ion'

@@ -24,6 +24,7 @@ export function createStandaloneApplication({
   googleApiKey,
   cesiumToken,
   geospatial = {},
+  mapOptions = {},
   voice = {},
   sources = {},
   streetLevelProviders,
@@ -72,6 +73,7 @@ export function createStandaloneApplication({
         // app's server when it offers them.
         googleTokens: googleApiKey ? null : createGoogleTokenSource(),
         cesiumToken,
+        mapOptions,
         loaderStatus,
       });
       catalog = createStandaloneCatalog({

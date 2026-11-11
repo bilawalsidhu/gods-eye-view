@@ -22,6 +22,22 @@ export function createEsriImagery() {
   );
 }
 
+/** The operator's own XYZ basemap (GEV_BASEMAP_URL); its source carries the credit. */
+export function createTemplateImagery(url) {
+  return new Cesium.UrlTemplateImageryProvider({ url });
+}
+
+/** Cesium reads a credit string as HTML; an operator's attribution is text. */
+export function templateCreditHtml(attribution) {
+  return attribution.replace(
+    /[&<>"']/g,
+    (ch) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        ch
+      ],
+  );
+}
+
 export function createIonImagery(style, accessToken) {
   accessToken = String(accessToken || '').trim();
   if (!accessToken) throw new Error('Ion imagery requires an explicit token');
