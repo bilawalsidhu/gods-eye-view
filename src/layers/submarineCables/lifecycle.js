@@ -34,16 +34,30 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       if (!state._preRenderRemover) {
         state._preRenderRemover = viewer.scene.preRender.addEventListener(
           () => {
+            if (!state._enabled || !state._loaded) return;
+            const width = viewer.scene.canvas?.clientWidth;
+            const height = viewer.scene.canvas?.clientHeight;
+            const fov = viewer.camera.frustum?.fov;
+            const aspect = viewer.camera.frustum?.aspectRatio;
+            // Resizing or changing FOV can admit routes without changing the
+            // camera pose. It needs the same sweep as a pan, even while parked.
+            if (
+              width !== state._viewportWidth ||
+              height !== state._viewportHeight ||
+              fov !== state._viewportFov ||
+              aspect !== state._viewportAspect
+            ) {
+              state._viewportWidth = width;
+              state._viewportHeight = height;
+              state._viewportFov = fov;
+              state._viewportAspect = aspect;
+              state._referenceSweepGate.markDirty();
+            }
             // The camera is handed to the gate so tracked/orbit cameras — which
             // never emit moveEnd — reach the motion fallback. No render is
             // requested for a fallback sweep: it only fires while the camera is
             // already moving, so frames are flowing by construction.
-            if (
-              !state._enabled ||
-              !state._loaded ||
-              !state._referenceSweepGate.shouldRun(viewer.camera)
-            )
-              return;
+            if (!state._referenceSweepGate.shouldRun(viewer.camera)) return;
             parts.rendering.updateReferenceVisibility();
           },
         );

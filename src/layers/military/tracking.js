@@ -1088,8 +1088,8 @@ export function createTracking({
     // the entity's bounding sphere, and a 3D model graphic reports a PENDING sphere until its glTF
     // finishes loading. If we hid the billboard outright, tracking a plane while already zoomed in
     // would stall the centering until the model loaded. A shown-but-transparent billboard always
-    // supplies a ready sphere, so framing is instant; we only drop its alpha once the model GLB is
-    // preloaded (_planeModelLoaded), so there's neither a billboard+model double-image nor a gap.
+    // supplies a ready sphere, so framing is instant; its alpha drops only once the standalone
+    // tracked model is ready to render, avoiding a double image or a gap.
     // The tracked entity is a PURE BILLBOARD — no label or model graphic. The tracked plane's 3D
     // model is the standalone primitive driven by _updateTrackedModel(); keeping it off the entity is
     // what makes the follow-camera's bounding sphere always ready (see _trackedModel).

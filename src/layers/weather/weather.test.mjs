@@ -2637,3 +2637,23 @@ test('the layer hands rendering a frame source only when its feed is one', () =>
   assert.equal(typeof seen[1].getTile, 'function');
   assert.equal(seen[1].getImage, undefined);
 });
+
+test('paused globe weather releases decoded history and next frame without disturbing displayed imagery', async (t) => {
+  const h = renderingHarness({
+    fetchImpl: async () => mockResponse(),
+    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
+  });
+  t.after(() => h.rendering.clear());
+  await showMosaic(h, times[0]);
+  await showMosaic(h, times[1]);
+  await h.rendering.prefetch(globalSnapshot, times[2]);
+  assert.equal(h.rendering.getDiagnostics().cache.mosaics, 3);
+  const displayed = h.layers[0];
+  h.rendering.cancelPrefetch();
+  assert.equal(h.rendering.getDiagnostics().cache.mosaics, 1);
+  assert.equal(h.layers[0], displayed);
+  assert.equal(h.rendering.getDiagnostics().time, times[1]);
+  await showMosaic(h, times[2]);
+  assert.equal(h.rendering.getDiagnostics().cache.mosaics, 1);
+  assert.equal(h.rendering.getDiagnostics().time, times[2]);
+});

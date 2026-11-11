@@ -245,7 +245,13 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   function refreshProjectionImage(record, force = false) {
     const runtime = record?.projection;
-    if (!runtime || runtime.mode !== 'image' || !runtime.image) return;
+    if (
+      !runtime ||
+      runtime.disposed ||
+      runtime.mode !== 'image' ||
+      !runtime.image
+    )
+      return;
     // Hidden-state gate (perf wave 2): no new frame fetch/decode for a canvas
     // nobody can see. The refresh interval re-fills naturally on return.
     if (typeof document !== 'undefined' && document.hidden && !force) return;
@@ -267,15 +273,32 @@ export function createFrames({ state: layerState, services, parts, source }) {
     const sinceLastRefresh = now - runtime.lastImageRefreshAt;
     // Forced activation may skip the normal active interval, but it cannot
     // bypass a provider's explicit minimum between image requests.
-    if (sourceRefreshMs > 0 && sinceLastRefresh < sourceRefreshMs) return;
+    if (sourceRefreshMs > 0 && sinceLastRefresh < sourceRefreshMs) {
+      // Runtime eviction discards decoded pixels, not the provider's cadence.
+      // Restore once from the same proxy URL; its server-side frame cache
+      // enforces the upstream floor. Keep the original refresh deadline.
+      if (
+        force &&
+        !runtime.imageReady &&
+        !runtime.restoreRequested &&
+        record.lastProjectionImageUrl
+      ) {
+        runtime.restoreRequested = true;
+        runtime.imageLoading = true;
+        runtime.image.src = record.lastProjectionImageUrl;
+      }
+      return;
+    }
     if (!force && sinceLastRefresh < refreshMs) return;
     runtime.lastImageRefreshAt = now;
+    record.lastProjectionImageRefreshAt = now;
 
     const frameUrl = frameUrlFor(record.camera, refreshMs);
     const sep = frameUrl.includes('?') ? '&' : '?';
     runtime.imageLoading = true;
     runtime.imageReady = false;
-    runtime.image.src = `${frameUrl}${sep}projTs=${Math.floor(now / refreshMs)}`;
+    record.lastProjectionImageUrl = `${frameUrl}${sep}projTs=${Math.floor(now / refreshMs)}`;
+    runtime.image.src = record.lastProjectionImageUrl;
   }
 
   /**

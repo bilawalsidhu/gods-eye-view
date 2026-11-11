@@ -101,7 +101,8 @@ export function createSelection({ state, services, parts }) {
   function selectVehicle(key) {
     clearSelection();
     const entry = state._vehicles.get(key);
-    if (!entry?.marker) return;
+    if (!entry) return;
+    parts.rendering.addMarker(key, entry);
     state._selectedKey = key;
     state._detectRevision += 1;
     parts.rendering.paintSelected(entry, true);

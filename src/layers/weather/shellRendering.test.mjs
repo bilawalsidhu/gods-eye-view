@@ -1600,3 +1600,26 @@ test('cancelling a supplied frame aborts the frame source request', async () => 
   assert.equal(h.primitives().length, 0);
   h.shell.clear();
 });
+
+test('pausing drops decoded history and prefetch, retaining the full-quality displayed frame', async () => {
+  const h = harness({ product: 'clouds' });
+  const sample = snapshot('clouds');
+  await show(h, times[0]);
+  await show(h, times[1]);
+  await h.shell.prefetch(sample, times[2]);
+  assert.equal(h.shell.getDiagnostics().cache.mosaics, 3);
+  const displayed = h.material().uniforms.image;
+  h.shell.cancelPrefetch();
+  assert.equal(h.shell.getDiagnostics().cache.mosaics, 1);
+  assert.equal(h.shell.getDiagnostics().cache.bytes, 8 * 1024 * 1024);
+  assert.equal(h.material().uniforms.image, displayed);
+  assert.equal(displayed.width, 2048);
+  await show(h, times[2]);
+  assert.equal(
+    h.shell.getDiagnostics().cache.mosaics,
+    1,
+    'paused selections do not accumulate history',
+  );
+  assert.equal(h.shell.getDiagnostics().time, times[2]);
+  h.shell.clear();
+});

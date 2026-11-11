@@ -3491,5 +3491,14 @@
   "{source} imagery could not be opened": "Bilder von {source} konnten nicht geöffnet werden",
   "{place} has no position to look for imagery at": "{place} hat keine Position, an der nach Bildern gesucht werden kann",
   "No {source} imagery near {place}": "Keine Bilder von {source} in der Nähe von {place}",
-  "{reason} (filters on: {filters})": "{reason} (aktive Filter: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (aktive Filter: {filters})",
+  "Show": "Anzeigen",
+  "Dim": "Abblenden",
+  "Hide": "Ausblenden",
+  "Standard": "Normalmodus",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "Der ressourcensparende Modus nutzt 30 FPS, eine geringere Auflösung und einfachere Effekte. Kontaktdaten, Suche und Verfolgung bleiben verfügbar.",
+  "Resources": "Ressourcen",
+  "Ground aircraft": "Flugzeuge am Boden",
+  "Low resource": "Ressourcensparend",
+  "Resource usage": "Ressourcennutzung"
 }

@@ -671,3 +671,32 @@ test('retained road density follows the settled view without requiring a toggle'
     'fresh toggle and retained view have the same budget',
   );
 });
+
+test('stopped traffic avoids position writes but still follows height refinement', (t) => {
+  const { state, parts, roads, frame } = setup(t);
+  const road = roads()[0];
+  state._roads = [road];
+  parts.animation.spawnDotsForRoad(road, 500, 1);
+  const dot = state._dots[0];
+  dot.stoppedUntil = Infinity;
+  let writes = 0;
+  const real = dot.point;
+  dot.point = new Proxy(real, {
+    set(target, key, value) {
+      if (key === 'position') writes++;
+      return Reflect.set(target, key, value);
+    },
+  });
+  frame();
+  frame();
+  assert.equal(writes, 0);
+  // The final easing frame can clear the pending flag; it must still place
+  // stationary vehicles on the newly moved surface.
+  state._heightPending = true;
+  parts.retention.easeHeights = () => {
+    state._heightPending = false;
+    road.waypoints[0].z += 20;
+  };
+  frame();
+  assert.equal(writes, 1);
+});

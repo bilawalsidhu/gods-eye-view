@@ -757,6 +757,7 @@ test('real active monitor plane owns one protected host label and no native labe
   _setCctvOverlayHostForTest(overlayHost);
   try {
     const runtime = _createCctvProjectionPlaneForTest(viewer, record);
+    const planeId = runtime.planeEntity.id;
     _setCctvCoverageStateForTest({
       viewer,
       records: [record],
@@ -821,7 +822,13 @@ test('real active monitor plane owns one protected host label and no native labe
       showProjection: false,
     });
     refreshCoverageStyles();
-    assert.equal(runtime.planeEntity.show, false);
+    assert.equal(
+      runtime.planeEntity,
+      null,
+      'inactive monitor releases its native plane',
+    );
+    assert.equal(record.projection, null);
+    assert.equal(viewer.entities.getById(planeId), undefined);
     assert.deepEqual(calls.slice(-2), [
       ['clear', 'cctv-projection'],
       ['visible', 'cctv-projection', false],
@@ -1197,6 +1204,7 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
   });
   try {
     const runtime = _createCctvProjectionPlaneForTest(viewer, record);
+    const planeId = runtime.planeEntity.id;
     _setCctvCoverageStateForTest({
       viewer,
       records: [record],
@@ -1232,7 +1240,13 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     assert.equal(publications.at(-1).activeCameraId, null);
     assert.equal(publications.at(-1).activeCamera, null);
     assert.equal(publications.at(-1).enabled, true);
-    assert.equal(runtime.planeEntity.show, false);
+    assert.equal(
+      runtime.planeEntity,
+      null,
+      'deselection releases the monitor plane',
+    );
+    assert.equal(record.projection, null);
+    assert.equal(viewer.entities.getById(planeId), undefined);
     assert.equal(record.probeClampRangeM, null);
     assert.equal(record.activationDone, false);
     assert.deepEqual(viewer.camera.positionWC, pose.positionWC);

@@ -273,6 +273,7 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
   flights: Object.freeze({
     models3d: true,
     models3dMode: 'proximity',
+    groundMode: 'dim',
     selectedFlightsTrackingId: null,
     selectedMilitaryTrackingId: null,
   }),

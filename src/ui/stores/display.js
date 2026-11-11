@@ -22,6 +22,10 @@ export const useDisplayStore = defineStore('gev-display', () => {
 
   /** The 3D aircraft group; null until AircraftDisplay first renders. */
   const models3d = shallowRef(null);
+  const performance = shallowRef(null);
+  function publishPerformance(next) {
+    performance.value = next && markRaw(next);
+  }
 
   /** @param {object} next A fresh presentation of the 3D aircraft group. */
   function publishModels3d(next) {
@@ -107,6 +111,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     view,
     publish,
     models3d,
+    performance,
+    publishPerformance,
     publishModels3d,
     draw,
     publishDraw,

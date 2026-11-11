@@ -548,6 +548,7 @@ test('unknown and forbidden option fields are ignored while missing options use 
     autoHop: false,
   });
   assert.deepEqual(decoded.options.flights, {
+    groundMode: 'dim',
     models3d: true,
     models3dMode: 'all',
     selectedFlightsTrackingId: null,
@@ -900,10 +901,10 @@ test('a share link that carries 3D OFF still restores OFF at both aircraft layer
     shareCreatedAtMs: 1_000,
   });
   assert.deepEqual(calls.flights, [
-    { models3d: false, models3dMode: 'proximity' },
+    { models3d: false, models3dMode: 'proximity', groundMode: 'dim' },
   ]);
   assert.deepEqual(calls.military, [
-    { models3d: false, models3dMode: 'proximity' },
+    { models3d: false, models3dMode: 'proximity', groundMode: 'dim' },
   ]);
   assert.equal(coordinator.getDurableState().options.flights.models3d, false);
   coordinator.destroy();
@@ -1564,6 +1565,7 @@ test('later explicit params during init replace options without cancelling visib
   const results = await restore;
   assert.equal(manager.isEnabled('flights'), true);
   assert.deepEqual(coordinator.getDurableState().options.flights, {
+    groundMode: 'dim',
     models3d: false,
     models3dMode: 'proximity',
     selectedFlightsTrackingId: null,
@@ -1622,6 +1624,7 @@ test('explicit navigation preserves unrelated visibility and option restoration'
     {
       models3d: true,
       models3dMode: 'all',
+      groundMode: 'dim',
     },
   ]);
   assert.equal(
@@ -1685,6 +1688,7 @@ test('startup gesture clears passive Follow but preserves slow layer and display
   assert.equal(manager.isEnabled('flights'), true);
   assert.equal(manager.isEnabled('radio'), true);
   assert.deepEqual(manager.getLayerParams('flights'), {
+    groundMode: 'dim',
     models3d: true,
     models3dMode: 'all',
     irBoost: true,
@@ -1762,7 +1766,7 @@ test('shared flight selection is deferred until destination refresh and then fol
   });
   await coordinator.start({ shareLayerState: state, shareCreatedAtMs: 1_000 });
   assert.deepEqual(paramsCalls, [
-    { models3d: true, models3dMode: 'proximity' },
+    { models3d: true, models3dMode: 'proximity', groundMode: 'dim' },
   ]);
 
   const result = await coordinator.restoreShareTrackingSelection();

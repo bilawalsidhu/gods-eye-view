@@ -1,7 +1,7 @@
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { decodeSatelliteClassMask } from '../../data/satelliteClassMask.js';
 import * as Cesium from 'cesium';
-import { t } from '../../i18n/index.js';
+import { t, getLocale } from '../../i18n/index.js';
 import {
   DEFAULT_SATELLITE_CLASSES,
   SATELLITE_CLASS_DISPLAY,
@@ -12,6 +12,24 @@ import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
+  // Class text depends only on this small vocabulary, never contact identity.
+  const detectionClassText = new Map();
+  const issDetectionClassText = new Map();
+  let detectionTextLocale = null;
+  function cachedDetectionClassText(satelliteClass, group, isIss) {
+    const cache = isIss ? issDetectionClassText : detectionClassText;
+    let groups = cache.get(satelliteClass);
+    if (!groups) {
+      groups = new Map();
+      cache.set(satelliteClass, groups);
+    }
+    let label = groups.get(group);
+    if (label === undefined) {
+      label = satelliteClassText(satelliteClass, group, { isIss });
+      groups.set(group, label);
+    }
+    return label;
+  }
 
   /**
    * Resolve the canonical point style for a satellite.
@@ -224,9 +242,10 @@ export function createControls({ state: layerState, services, parts, source }) {
         return [];
       // Dense extras are points-only: excluded from the detection overlay.
       const eligibleCount = Math.max(
-        1,
+        0,
         layerState._points.size - layerState._denseIds.length,
       );
+      if (!eligibleCount) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
         : eligibleCount;
@@ -235,8 +254,17 @@ export function createControls({ state: layerState, services, parts, source }) {
       const start = seed % stride;
 
       const result = [];
+      const locale = getLocale();
+      if (locale !== detectionTextLocale) {
+        detectionClassText.clear();
+        issDetectionClassText.clear();
+        detectionTextLocale = locale;
+      }
       let idx = 0;
       for (const [noradId, point] of layerState._points) {
+        // Once every core point has been visited, remaining dense extras
+        // cannot contribute brackets. Avoid scanning them on every paint.
+        if (idx >= eligibleCount) break;
         if (
           layerState._denseIds.length > 0 &&
           layerState._catalog.get(noradId)?.group === 'dense'
@@ -270,10 +298,13 @@ export function createControls({ state: layerState, services, parts, source }) {
         // Human class ("TELECOM · GPS"), not the raw CelesTrak tag
         // ("GPS-OPS"). The detection canvas composites ABOVE the post-FX
         // chain, so this is how class survives NVG/FLIR once the dot colors
-        // are collapsed. Read each time: SATCAT can reclassify a satellite.
-        object.klass = satelliteClassText(cat?.satelliteClass, cat?.group, {
-          isIss: noradId === ISS_NORAD,
-        });
+        // are collapsed. Re-read metadata and language so classification and
+        // locale changes invalidate the text without translating every paint.
+        object.klass = cachedDetectionClassText(
+          cat?.satelliteClass,
+          cat?.group,
+          noradId === ISS_NORAD,
+        );
         object.position = point.position;
         object.skipLabel = isTracked;
         result.push(object);

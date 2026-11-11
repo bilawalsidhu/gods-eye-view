@@ -3410,5 +3410,14 @@
   "{source} imagery could not be opened": "無法打開 {source} 影像",
   "{place} has no position to look for imagery at": "{place} 沒有可查找影像的位置",
   "No {source} imagery near {place}": "{place} 附近沒有 {source} 影像",
-  "{reason} (filters on: {filters})": "{reason}（已開啟篩選：{filters}）"
+  "{reason} (filters on: {filters})": "{reason}（已開啟篩選：{filters}）",
+  "Show": "顯示",
+  "Dim": "淡化",
+  "Hide": "隱藏",
+  "Standard": "標準",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "低資源模式使用30 FPS、較低解析度和簡化效果。目標資料、搜尋和追蹤仍然可用。",
+  "Resources": "資源",
+  "Ground aircraft": "地面飛機",
+  "Low resource": "低資源",
+  "Resource usage": "資源使用"
 }

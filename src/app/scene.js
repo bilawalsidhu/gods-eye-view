@@ -1,4 +1,6 @@
 import { createApplicationOperations } from './operations.js';
+import { readPerformanceMode } from './performancePolicy.js';
+import { setWorldOverlayPixelRatioCap } from '../overlays/worldOverlay.js';
 import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
@@ -47,6 +49,8 @@ export async function createApplicationScene({
     });
   }
   loaderStatus.textContent = t('Configuring viewer...');
+  document.documentElement.dataset.gevPerformance = readPerformanceMode();
+  setWorldOverlayPixelRatioCap(readPerformanceMode() === 'low' ? 1 : Infinity);
   // Provider attribution stays visible, including clean-view and recording.
   const creditContainer = document.createElement('div');
   creditContainer.id = 'cesium-credits';
@@ -55,12 +59,29 @@ export async function createApplicationScene({
   const viewer = createApplicationViewer({
     container: 'cesiumContainer',
     creditContainer,
+    lowResource: readPerformanceMode() === 'low',
   });
   defer(() => {
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
   defer(installTrackpadPinchZoom(viewer));
+  // Sharp contact silhouettes share a small full-display-resolution surface.
+  // Cinematic shaders, optical effects and low mode retain native compositing.
+  viewer.gevAircraftSurfaceEnabled = () => {
+    const stages = viewer.scene.postProcessStages;
+    if (
+      viewer.gevLowResource ||
+      document.documentElement.dataset.gevStyle !== 'normal' ||
+      stages.bloom.enabled
+    )
+      return false;
+    for (let i = 0; i < stages.length; i++) {
+      const stage = stages.get(i);
+      if (stage.enabled && stage.name !== 'godsEyeView_sharpen') return false;
+    }
+    return true;
+  };
   defer(
     followWorldTime(viewer, worldTimeFor('sky'), {
       subscribe: worldClock.subscribe,

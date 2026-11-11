@@ -17,6 +17,7 @@ export class AircraftDisplay {
     // Both aircraft layers default to models enabled in proximity mode.
     this._models3dEnabled = true;
     this._models3dMode = 'proximity';
+    this._groundMode = 'dim';
     // What the button, mode row and mode segments show; null until first
     // synced, so the initial markup stands. Enabling from the button leaves
     // the row to its own sync, so each is held apart.
@@ -37,6 +38,9 @@ export class AircraftDisplay {
     if (!options) return;
     this._models3dEnabled = options.models3d === true;
     this._models3dMode = options.models3dMode === 'all' ? 'all' : 'proximity';
+    this._groundMode = ['show', 'hide'].includes(options.groundMode)
+      ? options.groundMode
+      : 'dim';
     this._models3dPressedShown = this._models3dEnabled;
     this._models3dRowShown = this._models3dEnabled;
     this._models3dModeShown = this._models3dMode;
@@ -56,6 +60,7 @@ export class AircraftDisplay {
       pressed: this._models3dPressedShown,
       rowVisible: this._models3dRowShown,
       mode: this._models3dModeShown,
+      groundMode: this._groundMode,
     });
   }
 
@@ -69,6 +74,12 @@ export class AircraftDisplay {
     this._models3dEnabled = !!enabled;
     this._setModels3dParams({ models3d: this._models3dEnabled });
     this._syncModels3dButtonState();
+  }
+
+  _setGroundAircraftMode(mode) {
+    this._groundMode = ['show', 'hide'].includes(mode) ? mode : 'dim';
+    this._setModels3dParams({ groundMode: this._groundMode });
+    this._publishModels3d();
   }
 
   _setModels3dMode(mode) {

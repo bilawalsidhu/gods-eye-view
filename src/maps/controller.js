@@ -72,6 +72,13 @@ export class MapSourceController {
     this._replacedTerrain = null;
     this._subscribers = new Set();
     this._destroyed = false;
+    this._removeCameraMoveEnd = viewer.camera?.moveEnd?.addEventListener(() => {
+      if (this._destroyed) return;
+      const active = this.getImageryHostTileset();
+      if (!active) return;
+      this._trimTileset(active);
+      this._requestRender('map-cache-trim');
+    });
   }
 
   getStack(id) {
@@ -277,11 +284,27 @@ export class MapSourceController {
     // Terrain is intentionally untouched while the globe is hidden.
   }
 
+  _trimTileset(tileset) {
+    // Cesium protects tiles selected by the current frame. Drop historical
+    // contents, never reduce the active view's screen-space detail budget.
+    try {
+      tileset.trimLoadedTiles?.();
+    } catch {
+      /* cache trimming is best effort */
+    }
+  }
+
   _showTileset(active) {
+    const setVisibility = (tileset) => {
+      const visible = tileset === active;
+      // The next scene frame unloads tiles not selected by this hidden stack.
+      // Keep the source/credentials intact; returning reloads at full detail.
+      if (!visible && tileset.show !== false) this._trimTileset(tileset);
+      tileset.show = visible;
+    };
     for (const source of this._sources.values())
-      if (source.tileset) source.tileset.show = source.tileset === active;
-    for (const tileset of this._ownedTilesets)
-      tileset.show = tileset === active;
+      if (source.tileset) setVisibility(source.tileset);
+    for (const tileset of this._ownedTilesets) setVisibility(tileset);
   }
 
   async _activateGlobeStack(stack, gen) {
@@ -577,6 +600,8 @@ export class MapSourceController {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._removeCameraMoveEnd?.();
+    this._removeCameraMoveEnd = null;
     this._subscribers.clear();
     this._switchGen++;
     this._abort.abort();

@@ -47,6 +47,27 @@ export function createRendering({ state, services, parts }) {
     releaseContinuousRender,
   } = services.render;
 
+  // Cesium's length getter compacts after remove(). Counting ownership here
+  // avoids rescanning the remaining fleet after every migration or eviction.
+  let residentCounts = new WeakMap();
+  function addResident(collection, options) {
+    const marker = collection.add(options);
+    residentCounts.set(collection, (residentCounts.get(collection) || 0) + 1);
+    return marker;
+  }
+  function removeResident(collection, marker) {
+    if (!collection?.remove(marker)) return;
+    const remaining = residentCounts.get(collection) - 1;
+    residentCounts.set(collection, remaining);
+    // remove() alone leaves Cesium's pending-update references behind.
+    if (remaining === 0) collection.removeAll();
+  }
+  function clearMarkers() {
+    state._markers?.removeAll();
+    state._animatedMarkers?.removeAll();
+    residentCounts = new WeakMap();
+  }
+
   /**
    * Cartesian position for a lat/lon at a height. Called on POLL, not per
    * frame: `fromDegrees` runs trigonometry, and doing that for every vehicle on
@@ -86,6 +107,7 @@ export function createRendering({ state, services, parts }) {
     entry.endpointToSeq = entry.sample.toSeq;
   }
   function placeSample(entry, nearGround = parts.height.nearGround()) {
+    if (!entry.marker) return;
     if (
       entry.endpointRevision !== entry.sample.revision ||
       entry.endpointFromSeq !== entry.sample.fromSeq ||
@@ -121,7 +143,7 @@ export function createRendering({ state, services, parts }) {
     const collection = animated ? state._animatedMarkers : state._markers;
     if (!entry.marker || entry.markerCollection === collection) return;
     const old = entry.marker;
-    const marker = collection.add({
+    const marker = addResident(collection, {
       id: entry.key,
       position: old.position,
       image: old.image,
@@ -134,7 +156,7 @@ export function createRendering({ state, services, parts }) {
       show: old.show,
       disableDepthTestDistance: old.disableDepthTestDistance,
     });
-    entry.markerCollection.remove(old);
+    removeResident(entry.markerCollection, old);
     entry.marker = marker;
     entry.markerCollection = collection;
     entry.markerRevision = (entry.markerRevision || 0) + 1;
@@ -263,8 +285,18 @@ export function createRendering({ state, services, parts }) {
       applySpriteStyle(entry);
   }
 
+  function releaseMarker(entry) {
+    cancelWake(entry);
+    state._moving.delete(entry);
+    if (entry.marker) removeResident(entry.markerCollection, entry.marker);
+    entry.marker = null;
+    entry.markerCollection = null;
+    entry.detectContact = null;
+  }
+
   function addMarker(key, entry) {
-    const marker = state._markers.add({
+    if (entry.marker) return entry.marker;
+    const marker = addResident(state._markers, {
       id: key,
       position: entry.toCart,
       image: transitIcon(entry.mode),
@@ -277,6 +309,9 @@ export function createRendering({ state, services, parts }) {
     });
     entry.marker = marker;
     entry.markerCollection = state._markers;
+    entry.markerRevision = (entry.markerRevision || 0) + 1;
+    entry.rotationCourse = null;
+    state._rotationDirty = true;
     marker.show = false;
     applySpriteStyle(entry);
     return marker;
@@ -496,7 +531,6 @@ export function createRendering({ state, services, parts }) {
     const planes = frustum?.planes;
     let changed = false;
     for (const entry of state._vehicles.values()) {
-      if (!entry.marker) continue;
       // Refresh hidden clocks before testing admission, even if no frame has
       // ever sampled them. Do not write the billboard until it is admitted.
       const noSample = !entry.sample || !Number.isFinite(entry.sample.lat);
@@ -505,7 +539,7 @@ export function createRendering({ state, services, parts }) {
         updatePlayback(entry, state.now(), performance.now());
       }
       sphere.center =
-        state._visible.has(entry) || !entry.sample
+        entry.marker && (state._visible.has(entry) || !entry.sample)
           ? entry.marker.position
           : cartesianFor(
               entry.sample.lat,
@@ -538,10 +572,12 @@ export function createRendering({ state, services, parts }) {
       visibility.occluder = horizon;
       visibility.frustum = inFrustum;
       visibility.noSample = noSample;
-      const wasShown = entry.marker.show;
+      const wasShown = entry.marker?.show === true;
       const wasVisible = state._visible.has(entry);
-      if (visible) state._visible.add(entry);
-      else state._visible.delete(entry);
+      if (visible) {
+        state._visible.add(entry);
+        addMarker(entry.key, entry);
+      } else state._visible.delete(entry);
       if (visible && entry.track?.count) {
         if (!wasVisible && !entry.qaFixture) syncPlayback(entry, now);
         // Re-entry can advance into an unprepared corridor; loaded tiles can
@@ -555,12 +591,16 @@ export function createRendering({ state, services, parts }) {
           placeSample(entry);
         }
       }
-      entry.marker.show =
-        visible && !entry.heightPending && entry.surfaceReady !== false;
+      if (entry.marker)
+        entry.marker.show =
+          visible && !entry.heightPending && entry.surfaceReady !== false;
+      // Keep logical records/history; only GPU-facing residents follow the view.
+      if (!visible && entry.key !== state._selectedKey) releaseMarker(entry);
       visibility.heightPending = !!entry.heightPending;
       visibility.surfaceReady = entry.surfaceReady ?? null;
       schedulePlayback(entry);
-      changed ||= visible !== wasVisible || wasShown !== entry.marker.show;
+      changed ||=
+        visible !== wasVisible || wasShown !== (entry.marker?.show === true);
     }
     state._shownCount = state._visible.size;
     if (changed) state._detectRevision++;
@@ -615,6 +655,8 @@ export function createRendering({ state, services, parts }) {
     refreshVisibility,
     vehicleInView,
     addMarker,
+    releaseMarker,
+    clearMarkers,
     paintMode,
     paintSelected,
     applySpriteStyle,

@@ -293,16 +293,20 @@ export function createControls({ state: layerState, services, parts, source }) {
 
       const result = [];
       for (let i = start; i < layerState._dots.length; i += stride) {
-        const pos = layerState._dots[i].point.position;
+        const dot = layerState._dots[i];
+        const pos = dot.point.position;
         if (!pos) continue;
-        const entry = {
-          position: pos,
-          id: `VEH-${String(layerState._dots[i].id).padStart(4, '0')}`,
+        // Match the dot's native depth test while reusing its detection record.
+        const entry = (dot.detectContact ||= {
           type: 'VEH',
-          // The dots are depth-tested, so the overlay hides a contact's
-          // bracket and callout wherever the scene hides its dot.
           depthTested: true,
-        };
+        });
+        entry.position = pos;
+        if (entry._dotId !== dot.id) {
+          entry._dotId = dot.id;
+          entry.id = `VEH-${String(dot.id).padStart(4, '0')}`;
+        }
+        entry.tier = undefined;
         // Live mode: the detection bracket carries the congestion signal —
         // its canvas sits ABOVE the post-FX chain, so tier colors survive
         // every preset (owner round 2: "bounding boxes do the heavy

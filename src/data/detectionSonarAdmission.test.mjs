@@ -8,7 +8,7 @@ import { detectionBracketAlpha } from './detectionPolicy.js';
 // appearance only: it must not reshuffle candidates at the cohort cutoff.
 const source = readFileSync(new URL('./detection.js', import.meta.url), 'utf8');
 const alphaBlock = source.match(
-  /const admissionAlpha = detectionBracketAlpha\([\s\S]*?const bracketAlpha = [^;]+;/,
+  /const admissionAlpha = detectionBracketAlpha\([\s\S]*?const bracketAlpha\s*=\s*[^;]+;/,
 )?.[0];
 const bandAssignment = source.match(/obj\._cohortBand\s*=\s*[^;]+;/)?.[0];
 

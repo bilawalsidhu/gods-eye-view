@@ -1,5 +1,15 @@
 const clean = (value) => String(value || '').trim();
 
+// Retain less historical content between camera moves. Preserve the previous
+// 2.5 GiB total working-set ceiling so a large visible city is not forced to a
+// coarser screen-space error solely by this cache change.
+export const GOOGLE_3D_TILE_OPTIONS = Object.freeze({
+  cacheBytes: 512 * 1024 * 1024,
+  maximumCacheOverflowBytes: 2048 * 1024 * 1024,
+  enableCollision: true,
+  asynchronouslyLoadImagery: true,
+});
+
 /**
  * Decide which map provider can deliver the best startup experience.
  * @param {{googleApiKey?: string, cesiumToken?: string}} credentials
@@ -69,7 +79,7 @@ export function createGoogleDirectTileset(Cesium, key) {
   // Tiles keep drawing their own texture while draped weather loads.
   return Cesium.createGooglePhotorealistic3DTileset(
     { key, onlyUsingWithGoogleGeocoder: true },
-    { asynchronouslyLoadImagery: true },
+    { ...GOOGLE_3D_TILE_OPTIONS },
   );
 }
 
@@ -98,11 +108,7 @@ export async function createGoogleTokenTileset(Cesium, tokens) {
   });
   // The settings Cesium's Google helper applies to the key route.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
-    enableCollision: true,
-    // Tiles keep drawing their own texture while draped weather loads.
-    asynchronouslyLoadImagery: true,
+    ...GOOGLE_3D_TILE_OPTIONS,
   });
 }
 
@@ -119,12 +125,8 @@ export async function createGoogleIonTileset(
     accessToken,
   });
   signal?.throwIfAborted();
-  // Match the installed SDK's Google helper rendering/cache defaults.
+  // Keep every credential route on the same rendering/cache policy.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
-    enableCollision: true,
-    // Tiles keep drawing their own texture while draped weather loads.
-    asynchronouslyLoadImagery: true,
+    ...GOOGLE_3D_TILE_OPTIONS,
   });
 }

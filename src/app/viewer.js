@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { StarrySky } from '../sky/starrySky.js';
+import { configureRenderResolution } from './renderResolution.js';
 import {
   FREE_LOOK_MAX_HEIGHT_METERS,
   globeOutOfFrame,
@@ -376,7 +377,10 @@ export function installGlobeInViewRecovery(
 }
 
 /** Cesium.Viewer options of the standard globe viewer. */
-export function applicationViewerOptions(creditContainer) {
+export function applicationViewerOptions(
+  creditContainer,
+  { lowResource = false } = {},
+) {
   return {
     timeline: false,
     animation: false,
@@ -394,21 +398,29 @@ export function applicationViewerOptions(creditContainer) {
     // which would also stop CesiumWidget from creating the Sun and Moon.
     skyBox: new StarrySky(),
     creditContainer,
-    msaaSamples: 4,
+    msaaSamples: lowResource ? 1 : 4,
+    // Explicit CSS-pixel base; resolutionScale supplies a bounded HiDPI ratio.
+    useBrowserRecommendedResolution: true,
+    // Voice's viewport/crop capture reads a freshly rendered canvas.
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
   };
 }
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
+export function createApplicationViewer({
+  container,
+  creditContainer,
+  lowResource = false,
+}) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
     container,
-    applicationViewerOptions(creditContainer),
+    applicationViewerOptions(creditContainer, { lowResource }),
   );
   try {
-    viewer.targetFrameRate = 60;
+    viewer.targetFrameRate = lowResource ? 30 : 60;
+    configureRenderResolution(viewer, { lowResource });
     // A phone pinch spans fewer screen pixels than desktop zoom gestures.
     // Keep Cesium's distance-aware zoom and collision limits, with less travel
     // required on touch-first screens. Mouse/trackpad sensitivity stays native.

@@ -310,12 +310,22 @@ test('both Google 3D routes keep tiles drawing while draped imagery loads', asyn
   assert.equal(await createGoogleIonTileset(sdk, 'token'), 'ion');
   assert.deepEqual(calls[0], [
     { key: 'key', onlyUsingWithGoogleGeocoder: true },
-    { asynchronouslyLoadImagery: true },
+    {
+      cacheBytes: 512 * 1024 * 1024,
+      maximumCacheOverflowBytes: 2048 * 1024 * 1024,
+      enableCollision: true,
+      asynchronouslyLoadImagery: true,
+    },
   ]);
   assert.equal(calls[1][0].id, 2275207);
   assert.equal(calls[1][0].accessToken, 'token');
   assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
   assert.equal(calls[1][1].enableCollision, true);
+  assert.equal(calls[1][1].cacheBytes, calls[0][1].cacheBytes);
+  assert.equal(
+    calls[1][1].maximumCacheOverflowBytes + calls[1][1].cacheBytes,
+    2560 * 1024 * 1024,
+  );
 });
 
 test('unreachable keyless terrain falls back to flat terrain marked as a fallback', async (t) => {

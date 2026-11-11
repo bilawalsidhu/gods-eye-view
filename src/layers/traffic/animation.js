@@ -245,9 +245,11 @@ export function createAnimation({
       : 0.016;
     layerState._lastAnimTime = now;
 
+    const heightsWereMoving = layerState._heightPending;
     parts.retention.easeHeights(dt);
     for (let i = 0; i < layerState._dots.length; i++) {
       const dot = layerState._dots[i];
+      let positionDirty = Boolean(dot.recycle || heightsWereMoving);
       if (dot.recycle) {
         // A road-end departure is a new simulated vehicle at the entry, never
         // a teleport attributed to the departed vehicle's stable identity.
@@ -296,6 +298,7 @@ export function createAnimation({
       // Carry metres across bends, not a t fraction from a differently sized
       // segment. Short segments cannot turn a slow car into a large jump.
       let travel = dot.mps * burst * dt;
+      positionDirty ||= travel > 0;
       while (travel > 0) {
         const length = Math.max(0.001, dot.segmentDist[dot.segIdx]);
         const available = (dot.direction > 0 ? 1 - dot.t : dot.t) * length;
@@ -324,8 +327,10 @@ export function createAnimation({
       // garbage across 6000 dots. (perf item 5)
       const a = dot.waypoints[dot.segIdx];
       const b = dot.waypoints[dot.segIdx + 1];
-      Cesium.Cartesian3.lerp(a, b, dot.t, layerState._scratchLerp);
-      dot.point.position = layerState._scratchLerp;
+      if (positionDirty) {
+        Cesium.Cartesian3.lerp(a, b, dot.t, layerState._scratchLerp);
+        dot.point.position = layerState._scratchLerp;
+      }
     }
 
     // Jam heat-lines throb (~1.6 s period) — one shared material uniform for

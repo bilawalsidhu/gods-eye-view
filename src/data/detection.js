@@ -1,4 +1,7 @@
 import { paintTransitBracket } from './detectionDraw.js';
+import { DetectionBracketPaths } from './detectionBracketPaths.js';
+import { DetectionBracketRaster } from './detectionBracketRaster.js';
+import { DetectionProjectionCache } from './detectionProjectionCache.js';
 import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
@@ -116,6 +119,9 @@ const LABEL_SOLVE_INTERVAL_MS = 125;
 const CARD_ALPHA_HIDING_CALLOUT = 0.5;
 /** Alpha bands retain bracket batching while approximating a continuous radial fade. */
 const BRACKET_ALPHA_STEPS = 4;
+const _bracketPathCache = new DetectionBracketPaths(BRACKET_ALPHA_STEPS);
+const _bracketRasterCache = new DetectionBracketRaster();
+const _projectionCache = new DetectionProjectionCache();
 /** Finer bands for Global Context echo brackets, whose fade is animated. */
 const ECHO_ALPHA_STEPS = 8;
 /** Stable per-layer candidate safety cap; independent of density and camera bearing. */
@@ -219,6 +225,7 @@ let _hostSurface = null;
 let _ctx = null;
 /** @type {Array} Registered data layers that may expose detectable objects */
 let _layers = [];
+const _detectableObjects = [];
 /** @type {number} Monotonic frame counter for frame-skip gating and scanline animation */
 let _frameCount = 0;
 /** @type {number} Wall-clock ms spent in the last _drawOverlay call (used for adaptive throttling) */
@@ -378,7 +385,7 @@ export function destroyDetection() {
   _hostLane = null;
   _calloutLane?.unregister?.();
   _calloutLane = null;
-  _transitBracketPaths.clear();
+  _clearGeometryCaches();
   _calloutCount = 0;
   _viewer = null;
   _layers = [];
@@ -500,18 +507,23 @@ export function resumeDetection() {
   _setLanesActive(_mode !== MODE_OFF);
 }
 
-/**
- * Detection owns two host lanes that must arm and disarm together: the
- * screen-blended sensor surface and the shared normal-blend callout lane.
- * Letting them diverge would leave callouts painted over a dead sensor field
- * (or brackets with no callsigns).
- * @param {boolean} active
- */
+function _clearGeometryCaches() {
+  _transitBracketPaths.clear();
+  _bracketPathCache.clear();
+  _bracketRasterCache.clear();
+  _projectionCache.clear();
+  _detectableObjects.length = 0;
+}
+
+/** Arm the sensor and callout lanes together; release geometry when inactive. */
 function _setLanesActive(active) {
   const next = active === true;
   _hostLane?.setActive(next);
   _calloutLane?.setActive(next);
-  if (!next) _calloutCount = 0;
+  if (!next) {
+    _calloutCount = 0;
+    _clearGeometryCaches();
+  }
 }
 
 /**
@@ -805,6 +817,13 @@ function _paintDetectionLane(frame) {
   _lastRenderMs = performance.now() - start;
   _lastSolveMs = result.solveMs || 0;
   _lastPaintMs = Math.max(0, _lastRenderMs - _lastSolveMs);
+  if (_lastDiagnostics) {
+    _lastDiagnostics.bracketPathBuilds = _bracketPathCache.buildCount;
+    _lastDiagnostics.bracketPathReuses = _bracketPathCache.reuseCount;
+    _lastDiagnostics.bracketRasterBuilds = _bracketRasterCache.builds;
+    _lastDiagnostics.bracketRasterReuses = _bracketRasterCache.reuses;
+    _lastDiagnostics.bracketRasterBytes = _bracketRasterCache.bytes;
+  }
   const nowMs = Number.isFinite(frame.timestamp) ? frame.timestamp : _nowMs();
   if (isCyberSonarActive() && _lastDiagnostics?.visibleCount > 0) {
     _lastCyberSonarPaintAt = nowMs;
@@ -852,7 +871,10 @@ function _paintDetectionLane(frame) {
  */
 function _collectDetectableObjects() {
   const label = MODE_LABELS[_mode];
-  const objects = [];
+  const objects = _detectableObjects;
+  // Overwrite the existing backing store; resetting length before push would
+  // discard capacity and grow fresh arrays on every dense frame.
+  let objectCount = 0;
 
   for (let i = 0; i < _layers.length; i++) {
     const layer = _layers[i];
@@ -863,13 +885,14 @@ function _collectDetectableObjects() {
         : LAYER_CANDIDATE_CAP;
       const items = layer.getDetectableObjects({
         mode: label,
+        viewportOnly: true,
         maxCount,
         seed: 0,
       });
       if (items && items.length > 0) {
         for (const item of items) {
           item._layerId = layer.id;
-          objects.push(item);
+          objects[objectCount++] = item;
         }
       }
     } catch {
@@ -877,6 +900,7 @@ function _collectDetectableObjects() {
     }
   }
 
+  objects.length = objectCount;
   return objects;
 }
 
@@ -1298,6 +1322,7 @@ function _drawOverlay(frame) {
   const objects = _collectDetectableObjects();
   const sampledCount = objects.length;
   if (objects.length === 0) {
+    _clearGeometryCaches();
     // No detectable objects (e.g. DETECT on with no data layers enabled). Still
     // paint so the overlay reads "armed, nothing in view" instead of a dead blank
     // canvas (H3 silent-failure theme). The scanlines and focus ring carry that
@@ -1369,6 +1394,7 @@ function _drawOverlay(frame) {
   // host's own keyhole alpha comes from, so a bracket and its callout can never
   // disagree about the operator's setting within a frame.
   const keyholeOutsideOpacity = getKeyholeFadeTuning().outsideOpacity;
+  _projectionCache.begin(frame, _mode);
   const viewProjection = frame.viewProjectionMatrix;
   const vp0 = viewProjection[0];
   const vp1 = viewProjection[1];
@@ -1390,7 +1416,7 @@ function _drawOverlay(frame) {
   if (!_charWidth) _charWidth = _ctx.measureText('0000000000').width / 10 || 6;
   const tiers = _theme.tiers || null;
   const colorFor = (key) => (tiers && tiers[key]) || _theme.line;
-  const bracketPaths = new Map();
+  _bracketPathCache.begin();
   // Global Context sonar echoes: a second bracket, banded by strength, around
   // each flight or vessel a pulse front has just crossed.
   // Resting pulses light nothing, so the per-contact echo work is skipped.
@@ -1425,50 +1451,76 @@ function _drawOverlay(frame) {
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
     if (!obj.position) continue;
-    // Skip objects occluded by the ellipsoid (behind the horizon)
-    if (!occluder.isPointVisible(obj.position)) continue;
-
-    // This product renders in Cesium's 3D scene mode. Multiplying by the
-    // once-per-frame view-projection matrix is equivalent to the general
-    // SceneTransforms helper here, without repeating its mode/viewport setup
-    // for every observation.
-    const px = obj.position.x;
-    const py = obj.position.y;
-    const pz = obj.position.z;
-    const clipW = vp3 * px + vp7 * py + vp11 * pz + vp15;
-    if (clipW <= 0) continue;
-    const invW = 1 / clipW;
-    const sx =
-      ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width;
-    const sy =
-      (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height;
-
-    // Tracked objects (skipLabel) get larger boxes. AIR reticles scale with the
-    // plane's on-screen size (same scaleByDistance curve as the billboards) so
-    // they don't look tiny at altitude; other types keep fixed sizes.
-    const isTracked = obj.skipLabel;
-    let halfW;
-    let halfH;
-    if (obj.type === 'AIR') {
-      const bscale = nearFarScale(
-        Cesium.Cartesian3.distance(camPos, obj.position),
-        BILL_NEAR,
-        BILL_NEAR_SCALE,
-        BILL_FAR,
-        BILL_FAR_SCALE,
-      );
-      halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
-      halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
-    } else if (obj.tier?.startsWith('transit_') && obj.bracketHalfWidth > 0) {
-      halfW = obj.bracketHalfWidth;
-      halfH = obj.bracketHalfHeight;
+    // Keep cache misses inline: passing projected scalars through a helper
+    // boxes numbers in the continuously moving, GC-bracketed workload.
+    const geometry = obj.type === 'VEH' ? null : _projectionCache.lookup(obj);
+    let sx, sy, halfW, halfH;
+    if (geometry && !geometry.dirty) {
+      if (!geometry.visible) continue;
+      sx = geometry.x;
+      sy = geometry.y;
+      halfW = geometry.halfW;
+      halfH = geometry.halfH;
     } else {
-      halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
-      halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+      if (geometry) {
+        geometry.dirty = false;
+        geometry.visible = false;
+      }
+      // Skip objects occluded by the ellipsoid (behind the horizon)
+      if (!occluder.isPointVisible(obj.position)) continue;
+
+      // This product renders in Cesium's 3D scene mode. Multiplying by the
+      // once-per-frame view-projection matrix is equivalent to the general
+      // SceneTransforms helper here, without repeating its mode/viewport setup
+      // for every observation.
+      const px = obj.position.x;
+      const py = obj.position.y;
+      const pz = obj.position.z;
+      const clipW = vp3 * px + vp7 * py + vp11 * pz + vp15;
+      if (clipW <= 0) continue;
+      const invW = 1 / clipW;
+      sx = ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width;
+      sy =
+        (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height;
+
+      // Tracked objects (skipLabel) get larger boxes. AIR reticles scale with the
+      // plane's on-screen size (same scaleByDistance curve as the billboards) so
+      // they don't look tiny at altitude; other types keep fixed sizes.
+      const isTracked = obj.skipLabel;
+      if (obj.type === 'AIR') {
+        const bscale = nearFarScale(
+          Cesium.Cartesian3.distance(camPos, obj.position),
+          BILL_NEAR,
+          BILL_NEAR_SCALE,
+          BILL_FAR,
+          BILL_FAR_SCALE,
+        );
+        halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
+        halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+      } else if (obj.tier?.startsWith('transit_') && obj.bracketHalfWidth > 0) {
+        halfW = obj.bracketHalfWidth;
+        halfH = obj.bracketHalfHeight;
+      } else {
+        halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
+        halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+      }
+      // Viewport bounds check with padding
+      if (
+        sx < -halfW ||
+        sx > width + halfW ||
+        sy < -halfH ||
+        sy > height + halfH
+      )
+        continue;
+
+      if (geometry) {
+        geometry.x = sx;
+        geometry.y = sy;
+        geometry.halfW = halfW;
+        geometry.halfH = halfH;
+        geometry.visible = true;
+      }
     }
-    // Viewport bounds check with padding
-    if (sx < -halfW || sx > width + halfW || sy < -halfH || sy > height + halfH)
-      continue;
 
     // Tier color drives the bracket, accent bar, and leader line for this object.
     // The bracket follows the same linear radial keyhole fade as its callout.
@@ -1506,20 +1558,19 @@ function _drawOverlay(frame) {
       keyholeOutsideOpacity,
       cyberMapActive,
     );
-    const bracketAlpha = admissionAlpha * sonarFactor;
+    const bracketAlpha =
+      admissionAlpha * sonarFactor * (obj.presentationAlpha ?? 1);
     if (bracketAlpha > 0) {
       const transit = obj.tier?.startsWith('transit_');
-      (transit ? appendTransitBracket : appendCornerBracket)(
-        pathFor(
-          transit ? _transitBracketPaths : bracketPaths,
-          color,
-          bracketAlpha,
-        ),
-        sx,
-        sy,
-        halfW,
-        halfH,
-      );
+      if (transit)
+        appendTransitBracket(
+          pathFor(_transitBracketPaths, color, bracketAlpha),
+          sx,
+          sy,
+          halfW,
+          halfH,
+        );
+      else _bracketPathCache.add(color, bracketAlpha, sx, sy, halfW, halfH);
       visibleCount++;
       if (echoPaths) {
         // Starts on the contact's bracket and spreads outward as it fades.
@@ -1552,25 +1603,25 @@ function _drawOverlay(frame) {
       continue;
     }
 
-    const primary = String(obj.id || '');
-    const micro = String(obj.metric || '');
-    if (!primary && !micro) continue;
     const layerId = obj._layerId || 'unknown';
     const sourceId = obj.sourceId ?? obj.id ?? i;
     const liveForRender = renderIdentities.get(layerId)?.has(sourceId) || false;
     if (!shouldSolve && !liveForRender) continue;
 
+    const primary = String(obj.id || '');
+    const micro = String(obj.metric || '');
+    if (!primary && !micro) continue;
     obj._cohortSourceId = sourceId;
-    obj._cohortPriority = _semanticPriority(obj);
+    if (shouldSolve) obj._cohortPriority = _semanticPriority(obj);
     obj._cohortBand =
       admissionAlpha >= 0.999 ? 8 : Math.floor(admissionAlpha * 8);
-    obj._cohortHash = stableIdentityHash(layerId, sourceId);
+    if (shouldSolve) obj._cohortHash = stableIdentityHash(layerId, sourceId);
     obj._candidateScreenX = sx;
     obj._candidateScreenY = sy;
     obj._candidateHalfW = halfW;
     obj._candidateHalfH = halfH;
     obj._candidateColor = color;
-    obj._candidateSonarFactor = sonarLabelFactor;
+    obj._candidateSonarFactor = sonarLabelFactor * (obj.presentationAlpha ?? 1);
     obj._candidatePrimary = primary;
     obj._candidateMicro = micro;
 
@@ -1678,13 +1729,24 @@ function _drawOverlay(frame) {
   _transitBracketAlpha = fade * bracketPresentationOpacity;
 
   // Brackets — batched by tier color and linear radial-opacity band.
+  const bracketPaths = _bracketPathCache.finish();
   _ctx.lineWidth = bracketWidth;
-  for (const bands of bracketPaths.values()) {
-    for (const entry of bands) {
-      if (!entry) continue;
-      _ctx.globalAlpha = fade * entry.alpha * bracketPresentationOpacity;
-      _ctx.strokeStyle = entry.color;
-      _ctx.stroke(entry.path);
+  if (
+    !_bracketRasterCache.draw(
+      _ctx,
+      _bracketPathCache,
+      frame,
+      bracketWidth,
+      fade * bracketPresentationOpacity,
+    )
+  ) {
+    for (const bands of bracketPaths.values()) {
+      for (const entry of bands) {
+        if (!entry) continue;
+        _ctx.globalAlpha = fade * entry.alpha * bracketPresentationOpacity;
+        _ctx.strokeStyle = entry.color;
+        _ctx.stroke(entry.path);
+      }
     }
   }
   if (echoPaths) {

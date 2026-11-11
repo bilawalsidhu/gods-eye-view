@@ -3491,5 +3491,14 @@
   "Play speed": "Uppspelningshastighet",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrolla eller nyp för att zooma, dra för att flytta · dubbelklicka för att se allt",
   "Live": "Live",
-  "Back to live": "Tillbaka till live"
+  "Back to live": "Tillbaka till live",
+  "Show": "Visa",
+  "Dim": "Tona ned",
+  "Hide": "Dölj",
+  "Standard": "Standard",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "Resurssnålt läge använder 30 FPS, lägre upplösning och enklare effekter. Kontaktdata, sökning och spårning är fortfarande tillgängliga.",
+  "Resources": "Resurser",
+  "Ground aircraft": "Flygplan på marken",
+  "Low resource": "Resurssnålt",
+  "Resource usage": "Resursanvändning"
 }

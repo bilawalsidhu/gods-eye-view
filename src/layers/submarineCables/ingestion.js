@@ -5,6 +5,7 @@ import {
   normalizeFeatures,
 } from './geometry.js';
 import * as Cesium from 'cesium';
+import { cableViewportPass, cableSegmentRecords } from './residency.js';
 
 const SOURCE_FEATURE_INDEX = '__gevSourceFeatureIndex';
 
@@ -93,6 +94,15 @@ export function createIngestion({ state, parts, source }) {
       const referenceDataSource = new Cesium.CustomDataSource(
         `${source.label} Cable References`,
       );
+      const cableEntities = cableDataSource.entities.values.slice();
+      const landingEntities = landingDataSource.entities.values.slice();
+      // Do this before adding the sources: visualizers must never build the
+      // entire world's ground geometry during the initial activation frame.
+      const viewportEntities = Boolean(cableViewportPass(viewer));
+      if (viewportEntities) {
+        cableDataSource.entities.removeAll();
+        landingDataSource.entities.removeAll();
+      }
       const addedSources = [
         cableDataSource,
         landingDataSource,
@@ -140,8 +150,6 @@ export function createIngestion({ state, parts, source }) {
       state._landingDataSource = landingDataSource;
       state._referenceDataSource = referenceDataSource;
 
-      const cableEntities = state._cableDataSource.entities.values;
-      const landingEntities = state._landingDataSource.entities.values;
       state._pickByEntity = new WeakMap();
       state._referenceRecords = [];
       state._surfaceRecords = [];
@@ -157,15 +165,33 @@ export function createIngestion({ state, parts, source }) {
         if (!reference) return;
 
         parts.rendering.styleCableEntity(entity, feature);
-        parts.interaction.registerPickEntity(entity, {
+        const info = {
           kind: 'cable',
           reference,
           label: featureLabel(feature),
-        });
-        state._surfaceRecords.push({
-          entity,
-          base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
-        });
+        };
+        if (viewportEntities && entity.polyline)
+          state._surfaceRecords.push(
+            ...cableSegmentRecords(
+              entity,
+              feature,
+              cableDataSource,
+              info,
+              state._classificationType,
+            ),
+          );
+        else {
+          parts.interaction.registerPickEntity(entity, info);
+          state._surfaceRecords.push({
+            entity,
+            source: cableDataSource,
+            base: Cesium.Cartesian3.fromDegrees(
+              reference.lon,
+              reference.lat,
+              0,
+            ),
+          });
+        }
         if (cableReferences.has(index)) return;
         cableReferences.add(index);
         parts.rendering.addReferenceStem({
@@ -192,6 +218,7 @@ export function createIngestion({ state, parts, source }) {
         });
         state._surfaceRecords.push({
           entity,
+          source: landingDataSource,
           base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
         });
         if (landingReferences.has(index)) return;
@@ -210,6 +237,7 @@ export function createIngestion({ state, parts, source }) {
       state._lastUpdate = Date.now();
       state._loadingLabel = '';
       parts.rendering.updateVisibility();
+      parts.rendering.updateReferenceVisibility();
       state._referenceSweepGate.markDirty();
       viewer.scene.requestRender?.();
     } catch (error) {

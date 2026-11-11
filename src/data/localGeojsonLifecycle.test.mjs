@@ -173,3 +173,89 @@ test('a toggle-off frees the entities and a toggle-on rebuilds them from the cac
   assert.equal(fetchMock.mock.callCount(), 1, 'no second fetch for a bundled dataset');
   assert.equal(env.layer.getLodDiagnostics().total, 1);
 });
+
+test('shared infrastructure styling preserves appearance and independent geometry across rebuilds', async (t) => {
+  const env = harness(t);
+  const second = JSON.parse(dataset);
+  second.id = 'other-dam';
+  second.geometry.coordinates = [
+    [
+      [1, 1],
+      [1.01, 1],
+      [1, 1.01],
+      [1, 1],
+    ],
+  ];
+  t.mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    text: async () => `${dataset}\n${JSON.stringify(second)}`,
+  }));
+  await env.layer.enable(env.viewer);
+  const [first, other] = [...env.sources][0].entities.values;
+  const time = Cesium.JulianDate.now();
+  assert.equal(first.point.pixelSize.getValue(time), 10);
+  assert.equal(first.point.outlineWidth.getValue(time), 2);
+  assert.deepEqual(
+    first.point.color.getValue(time),
+    Cesium.Color.fromCssColorString('#0088ff'),
+  );
+  assert.deepEqual(first.point.outlineColor.getValue(time), Cesium.Color.BLACK);
+  assert.equal(first.point.disableDepthTestDistance.getValue(time), Infinity);
+  assert.equal(first.polyline.width.getValue(time), 3.5);
+  assert.deepEqual(
+    first.polyline.material.getValue(time).color,
+    first.point.color.getValue(time),
+  );
+  assert.notDeepEqual(
+    first.position.getValue(time),
+    other.position.getValue(time),
+  );
+  const otherPositions = other.polyline.positions
+    .getValue(time)
+    .map((p) => Cesium.Cartesian3.clone(p));
+  first.polyline.positions.setValue([
+    Cesium.Cartesian3.ZERO,
+    Cesium.Cartesian3.UNIT_X,
+  ]);
+  assert.deepEqual(
+    other.polyline.positions.getValue(time),
+    otherPositions,
+    'one stem cannot move another',
+  );
+  const sharedStyle = first.point;
+  env.layer.disable(env.viewer);
+  assert.equal(env.sources.size, 0);
+  await env.layer.enable(env.viewer);
+  const rebuilt = [...env.sources][0].entities.values;
+  assert.notEqual(
+    rebuilt[0].point,
+    sharedStyle,
+    'a rebuilt source does not retain old entity subscribers',
+  );
+  assert.equal(rebuilt[0].point.pixelSize.getValue(time), 10);
+  assert.equal(
+    getContextStore().entities.size,
+    2,
+    'native pick contexts survive the rebuild',
+  );
+});
+
+test('a malformed dataset is retried and only successful text is cached across toggles', async t => {
+  const env = harness(t);
+  t.mock.method(console, 'error', () => {});
+  let reads = 0;
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    text: async () => ++reads === 1 ? '{invalid' : dataset,
+  }));
+  await env.layer.enable(env.viewer);
+  assert.equal(env.layer.getStats().error, 'dataset is malformed');
+  assert.equal(env.sources.size, 0);
+  await env.layer.enable(env.viewer);
+  assert.equal(env.layer.getStats().error, null);
+  assert.equal(env.layer.getStats().count, 1);
+  env.layer.disable(env.viewer);
+  await env.layer.enable(env.viewer);
+  assert.equal(fetchMock.mock.callCount(), 2, 'valid text is reused; invalid text never traps future enables');
+  assert.equal(env.sources.size, 1);
+});

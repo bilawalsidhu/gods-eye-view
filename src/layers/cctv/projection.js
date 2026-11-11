@@ -1,4 +1,5 @@
 import { attachCctvVideo } from './videoPlayback.js';
+import { createProjectionMaterialDisposal } from './materialDisposal.js';
 import * as Cesium from 'cesium';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
@@ -15,6 +16,9 @@ export function createProjection({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const materialDisposal = createProjectionMaterialDisposal(
+    () => layerState._viewer?.scene,
+  );
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -195,7 +199,7 @@ export function createProjection({
       buffers: null,
       bufferIndex: 0,
       lastTextureSwapAt: 0,
-      lastImageRefreshAt: 0,
+      lastImageRefreshAt: record.lastProjectionImageRefreshAt || 0,
       imageReady: false,
       imageLoading: false,
       imageStamp: 0,
@@ -235,6 +239,10 @@ export function createProjection({
       };
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
+      runtime.removeVideoListeners = () => {
+        video.removeEventListener('loadedmetadata', bindVideoTexture);
+        video.removeEventListener('resize', bindVideoTexture);
+      };
       runtime.video = video;
       runtime.playback = attachCctvVideo(
         video,
@@ -248,11 +256,13 @@ export function createProjection({
             runtime.image = new Image();
             runtime.image.decoding = 'async';
             runtime.image.onload = () => {
+              if (runtime.disposed) return;
               runtime.imageLoading = false;
               runtime.imageReady = true;
               runtime.imageStamp = Date.now();
             };
             runtime.image.onerror = () => {
+              if (runtime.disposed) return;
               runtime.imageLoading = false;
               runtime.imageReady = false;
             };
@@ -267,11 +277,13 @@ export function createProjection({
       img.decoding = 'async';
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        if (runtime.disposed) return;
         runtime.imageLoading = false;
         runtime.imageReady = true;
         runtime.imageStamp = Date.now();
       };
       img.onerror = () => {
+        if (runtime.disposed) return;
         runtime.imageLoading = false;
         runtime.imageReady = false;
       };
@@ -297,6 +309,7 @@ export function createProjection({
       color: Cesium.Color.WHITE.withAlpha(0.95),
     });
     createProjectionPlane(record, runtime, geometry, positions);
+    materialDisposal.watch(runtime);
 
     return runtime;
   }
@@ -328,6 +341,9 @@ export function createProjection({
   function destroyProjectionRuntime(runtime) {
     if (!runtime || runtime.disposed) return;
     runtime.disposed = true;
+    materialDisposal.retire(runtime);
+    runtime.removeVideoListeners?.();
+    runtime.removeVideoListeners = null;
     runtime.playback?.dispose();
     runtime.playback = null;
     if (runtime.image) {
@@ -340,6 +356,22 @@ export function createProjection({
       runtime.video.removeAttribute('src');
       runtime.video.load();
     }
+    runtime.image = null;
+    runtime.video = null;
+    // Removed entities can survive until Cesium's next visualizer pass. Release
+    // their pixel backing stores now, even if a callback still holds the runtime.
+    for (const canvas of [
+      runtime.canvas,
+      ...(runtime.buffers || []),
+      runtime.signatureCanvas,
+    ]) {
+      if (canvas) canvas.width = canvas.height = 0;
+    }
+    runtime.canvas = null;
+    runtime.ctx = null;
+    runtime.buffers = null;
+    runtime.signatureCanvas = null;
+    runtime.signatureCtx = null;
     if (runtime.planeEntity && layerState._viewer) {
       layerState._viewer.entities.remove(runtime.planeEntity);
       runtime.planeEntity = null;
@@ -411,9 +443,9 @@ export function createProjection({
 
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
-      if (!record.projection?.video) continue;
+      if (!record.projection) continue;
       if (record.camera.id === activeId && layerState._enabled) {
-        record.projection.video.play().catch(() => {});
+        record.projection.video?.play().catch(() => {});
       } else {
         const runtime = record.projection;
         destroyProjectionRuntime(runtime);
@@ -425,6 +457,7 @@ export function createProjection({
     }
   }
   return {
+    destroyMaterialDisposal: materialDisposal.destroy,
     createCctvProjectionOverlayEntry,
     getActiveVideoElement,
     updatePlanePlacement,

@@ -3410,5 +3410,14 @@
   "{source} imagery could not be opened": "{source}の画像を開けませんでした",
   "{place} has no position to look for imagery at": "{place}には画像を探す位置がありません",
   "No {source} imagery near {place}": "{place}の近くに{source}の画像はありません",
-  "{reason} (filters on: {filters})": "{reason}（有効なフィルター: {filters}）"
+  "{reason} (filters on: {filters})": "{reason}（有効なフィルター: {filters}）",
+  "Show": "表示",
+  "Dim": "薄く表示",
+  "Hide": "非表示",
+  "Standard": "標準",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "省リソースモードでは30 FPS、低い解像度、軽量なエフェクトを使用します。コンタクトデータ、検索、追跡は引き続き利用できます。",
+  "Resources": "リソース",
+  "Ground aircraft": "地上の航空機",
+  "Low resource": "省リソース",
+  "Resource usage": "リソース使用量"
 }

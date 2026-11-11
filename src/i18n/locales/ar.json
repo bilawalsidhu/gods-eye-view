@@ -3815,5 +3815,14 @@
   "{source} imagery could not be opened": "تعذّر فتح صور {source}",
   "{place} has no position to look for imagery at": "لا يوجد لـ{place} موضع للبحث عن الصور فيه",
   "No {source} imagery near {place}": "لا توجد صور {source} قرب {place}",
-  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})",
+  "Show": "إظهار",
+  "Dim": "تعتيم",
+  "Hide": "إخفاء",
+  "Standard": "قياسي",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "يستخدم وضع الموارد المنخفضة 30 إطارًا في الثانية ودقة أقل وتأثيرات أخف. تظل بيانات جهات الاتصال والبحث والتتبع متاحة.",
+  "Resources": "الموارد",
+  "Ground aircraft": "الطائرات على الأرض",
+  "Low resource": "موارد منخفضة",
+  "Resource usage": "استخدام الموارد"
 }

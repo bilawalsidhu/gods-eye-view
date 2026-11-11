@@ -3572,5 +3572,14 @@
   "{source} imagery could not be opened": "לא ניתן היה לפתוח את הצילומים של {source}",
   "{place} has no position to look for imagery at": "ל-{place} אין מיקום לחיפוש צילומים",
   "No {source} imagery near {place}": "אין צילומים של {source} ליד {place}",
-  "{reason} (filters on: {filters})": "{reason} (מסננים פעילים: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (מסננים פעילים: {filters})",
+  "Show": "הצגה",
+  "Dim": "עמעום",
+  "Hide": "הסתרה",
+  "Standard": "רגיל",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "מצב חסכוני במשאבים משתמש ב־30 FPS, ברזולוציה מופחתת ובאפקטים קלים יותר. נתוני אנשי הקשר, החיפוש והמעקב נשארים זמינים.",
+  "Resources": "משאבים",
+  "Ground aircraft": "מטוסים על הקרקע",
+  "Low resource": "חסכוני במשאבים",
+  "Resource usage": "שימוש במשאבים"
 }

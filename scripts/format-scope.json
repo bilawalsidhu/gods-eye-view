@@ -1383,5 +1383,20 @@
   "src/ui/ownerFlagSheet.js",
   "src/data/placePacksLoading.test.mjs",
   "src/ui/placePacksLoading.js",
-  "src/ui/placePacksLoading.test.mjs"
+  "src/ui/placePacksLoading.test.mjs",
+  "scripts/qa-aircraft-surface.mjs",
+  "src/layers/satellites/cartesian.test.mjs",
+  "src/layers/satellites/detectionText.test.mjs",
+  "src/layers/traffic/detectionReuse.test.mjs",
+  "src/data/detectionProjectionCache.js",
+  "src/data/detectionProjectionCache.test.mjs",
+  "src/app/renderResolution.js",
+  "src/app/renderResolution.test.mjs",
+  "src/layers/flights/modelLoading.test.mjs",
+  "src/layers/cctv/materialDisposal.js",
+  "src/layers/cctv/materialDisposal.test.mjs",
+  "src/layers/cctv/projection.test.mjs",
+  "scripts/qa-aircraft-retention.mjs",
+  "src/data/aircraftSurface.test.mjs",
+  "src/layers/transit/residency.test.mjs"
 ]

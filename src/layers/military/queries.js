@@ -1,3 +1,7 @@
+import {
+  groundAircraftAlpha,
+  normalizeGroundAircraftMode,
+} from '../../data/groundAircraft.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import { t } from '../../i18n/index.js';
 import * as Cesium from 'cesium';
@@ -255,9 +259,15 @@ export function createQueries({
      * MODEL_ALT_CEIL_M. The TRACKED contact is NOT gated by this — it takes its 3D model by
      * camera distance regardless (see `_trackedModelRegimeActive` / trackedModelRegime.js).
      * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
-     * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedMilitaryTrackingId?: string|null}} params
+     * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', groundMode?: 'show'|'dim'|'hide', selectedMilitaryTrackingId?: string|null}} params
      */
     setParams(params = {}, { origin = 'programmatic' } = {}) {
+      if (Object.hasOwn(params, 'groundMode')) {
+        flightState._groundMode = normalizeGroundAircraftMode(
+          params.groundMode,
+        );
+        flightState._lastFleetTickMs = 0;
+      }
       if (
         isExplicitLayerStateOrigin(origin) &&
         !Object.hasOwn(params, 'selectedMilitaryTrackingId')
@@ -331,6 +341,7 @@ export function createQueries({
       return {
         models3d: flightState._models3dEnabled,
         models3dMode: flightState._models3dMode,
+        groundMode: flightState._groundMode,
         irBoost: flightState._irBoost,
         selectedMilitaryTrackingId: flightState._trackedIcao,
       };
@@ -431,6 +442,7 @@ export function createQueries({
      * @param {Object} [options={}] - Options
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all)
      * @param {number} [options.seed] - Seed offset for stride sampling (for frame variation)
+     * @param {boolean} [options.viewportOnly=false] - Limit drawing candidates to the padded viewport.
      * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
@@ -466,8 +478,23 @@ export function createQueries({
         // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
         const model = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
+        if (
+          options.viewportOnly &&
+          !isTracked &&
+          bb.viewportVisible === false &&
+          !modelOwnsVisual
+        ) {
+          flightState._detectionObjects.delete(icao24);
+          continue;
+        }
         if (!isTracked && !bb.show && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
+        const groundAlpha = groundAircraftAlpha(
+          flightState._groundMode,
+          info?.onGround,
+          isTracked || icao24 === flightState._cockpitSubjectId,
+        );
+        if (!groundAlpha) continue;
         const callsign = info?.callsign?.trim();
         const registration = info?.registration?.trim();
         let object = flightState._detectionObjects.get(icao24);
@@ -501,6 +528,7 @@ export function createQueries({
             : bb.position;
         if (!pos) continue;
         object.position = pos;
+        object.presentationAlpha = groundAlpha;
         object.skipLabel = isTracked;
         const id = callsign || registration || icao24;
         if (object.id !== id) object.id = id;
@@ -517,15 +545,6 @@ export function createQueries({
         }
         result.push(object);
         if (result.length >= maxCount) break;
-      }
-      if (
-        flightState._detectionObjects.size >
-        flightState._billboards.size + 512
-      ) {
-        for (const icao24 of flightState._detectionObjects.keys()) {
-          if (!flightState._billboards.has(icao24))
-            flightState._detectionObjects.delete(icao24);
-        }
       }
       return result;
     },

@@ -89,7 +89,10 @@
  *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
+ *   --hardware         Use headless Metal on macOS (default headless uses SwiftShader)
+ *   --dpr <number>     Browser device-pixel ratio (default 1)
  *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
+ *   --offline-terrain  Use flat terrain tiles and matching point-height responses
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
@@ -114,7 +117,10 @@ const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
+const HARDWARE = getFlag('--hardware');
+const DPR = Number(getOpt('--dpr', '1'));
 const OFFLINE_IMAGERY = getFlag('--offline-imagery');
+const OFFLINE_TERRAIN = getFlag('--offline-terrain');
 const KEEP_OPEN = getFlag('--keep-open');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -213,6 +219,12 @@ async function main() {
     ? fs.readFileSync(new URL('../node_modules/cesium/Build/Cesium/Assets/Textures/NaturalEarthII/0/0/0.jpg', import.meta.url))
     : null;
   let offlineImageryRequests = 0;
+  let offlineTerrainRequests = 0;
+  // heightmap-1.0 uses 65×65 little-endian heights, scale 0.2 and offset -1000.
+  const flatTerrainTile = Buffer.alloc(65 * 65 * 2 + 2);
+  for (let i = 0; i < 65 * 65; i++) flatTerrainTile.writeUInt16LE(5000, i * 2);
+  flatTerrainTile[65 * 65 * 2] = 15; // all four children exist; final byte = land
+  if (OFFLINE_TERRAIN) console.log('  Terrain : local flat heightmap fixture');
   if (OFFLINE_IMAGERY) console.log('  Imagery : bundled NaturalEarthII fixture (tile images only)');
 
   // Verify the dev server is up before launching a browser.
@@ -245,7 +257,7 @@ async function main() {
       // kills frame production entirely (rAF stops while timers/evals stay
       // alive), wedging any rAF-awaiting evaluation. Same policy as
       // qa-focus-evidence: headful = real GPU.
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
+      ...(HEADFUL ? [] : HARDWARE && process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu'] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -266,7 +278,7 @@ async function main() {
   try {
     const page = await browser.newPage();
   await page.evaluateOnNewDocument((base) => { window.__gevQaSourceBase = base; }, SOURCE_BASE);
-    await page.setViewport({ width: 1280, height: 800 });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: DPR });
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = new URL(request.url());
@@ -286,6 +298,43 @@ async function main() {
           contentType: 'image/jpeg',
           headers: { 'Access-Control-Allow-Origin': '*' },
           body: offlineImageryTile,
+        });
+        return;
+      }
+      // Ground-floor prefetch uses a separate point-height API. Match the
+      // flat tile fixture there too, keeping corridor/cache assertions active.
+      if (
+        OFFLINE_TERRAIN &&
+        request.method() === 'GET' &&
+        url.origin === APP_ORIGIN &&
+        url.pathname === '/api/terrain/heights'
+      ) {
+        const results = (url.searchParams.get('points') || '')
+          .split(';')
+          .filter(Boolean)
+          .map((point) => {
+            const [longitude, latitude] = point.split(',').map(Number);
+            return { longitude, latitude, ellipsoid: 0 };
+          });
+        offlineTerrainRequests++;
+        request.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ results }),
+        });
+        return;
+      }
+      // Opt-in terrain fixture: preserve the provider API and every tracking
+      // assertion without relying on a live terrain host's quota.
+      if (OFFLINE_TERRAIN && request.method() === 'GET'
+        && url.origin === 'https://terrain.reearth.land'
+        && /^\/cesium-mesh\/ellipsoid\/(layer\.json|\d+\/\d+\/\d+\.terrain)$/.test(url.pathname)) {
+        offlineTerrainRequests++;
+        const metadata = url.pathname.endsWith('/layer.json');
+        request.respond({status: 200,
+          contentType: metadata ? 'application/json' : 'application/octet-stream',
+          headers: {'Access-Control-Allow-Origin': '*'},
+          body: metadata ? JSON.stringify({format: 'heightmap-1.0', version: '1.0.0', scheme: 'tms', tiles: ['{z}/{x}/{y}.terrain']}) : flatTerrainTile,
         });
         return;
       }
@@ -2093,12 +2142,15 @@ async function main() {
     // that then VANISHES from the feed still fast-culls after ONE missed
     // poll. Military mirror keys off adsb.lol's alt_baro === "ground".
     // ============================================================
-    console.log('\nChange 3 — ground traffic: full-alpha style, in-place transitions, fast cull');
+    console.log('\nChange 3 — ground traffic: Show mode, in-place transitions, fast cull');
     const ground = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
       const fl = dm.layers.get('flights').module;
       const mil = dm.layers.get('military').module;
+      // Full-alpha legacy ground invariants now explicitly exercise Show.
+      fl.setParams({ groundMode: 'show' });
+      mil.setParams({ groundMode: 'show' });
       const findBB = (id) => {
         let found = null;
         const walk = (coll) => {
@@ -4274,6 +4326,7 @@ async function main() {
     finishAndExit();
   } finally {
     if (OFFLINE_IMAGERY) console.log(`  Bundled imagery tiles served: ${offlineImageryRequests}`);
+    if (OFFLINE_TERRAIN) console.log(`  Local terrain requests served: ${offlineTerrainRequests}`);
     if (!KEEP_OPEN) {
       await browser.close();
     } else {

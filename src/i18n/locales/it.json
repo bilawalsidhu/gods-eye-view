@@ -3572,5 +3572,14 @@
   "{source} imagery could not be opened": "Impossibile aprire le immagini di {source}",
   "{place} has no position to look for imagery at": "{place} non ha una posizione in cui cercare immagini",
   "No {source} imagery near {place}": "Nessuna immagine di {source} vicino a {place}",
-  "{reason} (filters on: {filters})": "{reason} (filtri attivi: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (filtri attivi: {filters})",
+  "Show": "Mostra",
+  "Dim": "Attenua",
+  "Hide": "Nascondi",
+  "Standard": "Normale",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "La modalità a basso consumo usa 30 FPS, una risoluzione ridotta ed effetti più leggeri. I dati dei contatti, la ricerca e il tracciamento restano disponibili.",
+  "Resources": "Risorse",
+  "Ground aircraft": "Aeromobili a terra",
+  "Low resource": "Basso consumo",
+  "Resource usage": "Utilizzo delle risorse"
 }

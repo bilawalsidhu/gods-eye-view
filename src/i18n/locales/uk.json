@@ -3653,5 +3653,14 @@
   "{source} imagery could not be opened": "Не вдалося відкрити знімки {source}",
   "{place} has no position to look for imagery at": "Для місця «{place}» немає координат для пошуку знімків",
   "No {source} imagery near {place}": "Немає знімків {source} поблизу {place}",
-  "{reason} (filters on: {filters})": "{reason} (увімкнено фільтри: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (увімкнено фільтри: {filters})",
+  "Show": "Показати",
+  "Dim": "Приглушити",
+  "Hide": "Приховати",
+  "Standard": "Звичайний",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "Економний режим використовує 30 кадрів/с, знижену роздільність і спрощені ефекти. Дані контактів, пошук і відстеження залишаються доступними.",
+  "Resources": "Ресурси",
+  "Ground aircraft": "Літаки на землі",
+  "Low resource": "Економний",
+  "Resource usage": "Використання ресурсів"
 }

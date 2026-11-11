@@ -1,5 +1,41 @@
 # God's Eye View Current State
 
+Disabled or cleared aircraft fleets release both current and cached native
+collection references from their shared sharp surface. Logical aircraft records
+survive a visibility toggle, and other visible fleets repaint independently.
+Transit adds, migrates and removes markers through one ownership path; native
+resident counts avoid repeated collection compaction during large view changes.
+Model preload flags and instances are no longer maintained: models load on
+demand, with billboard handoff governed by actual model readiness.
+
+Detection reuses projection and bracket work between exact updates. Transit
+retains searchable vehicle records and histories while releasing offscreen
+billboards; selection readmits a vehicle immediately. Street Traffic reuses
+detection contacts and skips position writes for stopped dots once their height
+settles. Satellites share each propagation batch’s Earth-rotation calculation
+and small localized class-label caches; search, tracking, orbit queries and
+update cadence retain their existing contracts. Standard mode continues to
+target 60 FPS. The measured gains and workload-specific limits are documented
+in `docs/PERFORMANCE.md`.
+
+DISPLAY → Ground aircraft offers Show, Dim and Hide for civil and military
+aircraft. Dim is the default, at 35% opacity for grounded silhouettes, 3D models,
+brackets and labels. Hide excludes them from map rendering and 3D model admission
+without deleting records or search results. Tracked aircraft and the cockpit
+subject remain visible. The policy uses the feed's explicit ground flag, updates
+on takeoff/landing, and persists in saved preferences and shared views.
+
+Normal-mode 2D aircraft now share a separate full-display-resolution GPU surface.
+One bounded atlas serves civil/military fleets and tracked 2D aircraft; Cesium
+retains native identity picking, follow-camera state, horizon admission and 3D
+handoff. The globe stays at 1× to avoid enlarging its expensive framebuffers.
+Unchanged aircraft/camera frames reuse the surface; moving-camera frames repaint
+without throttling. Cinematic/optical effects, cockpit, special gradient glyphs
+and low-resource mode retain native compositing. Disabling the sharp surface
+deletes its GPU allocations; context loss falls back to native rendering.
+Low-resource mode retains 0.6×/30 FPS. See `docs/PERFORMANCE.md` for the paired
+memory/CPU/FPS measurements and remaining limits.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
@@ -1319,11 +1355,55 @@ their Cesium identity while their geometry is unchanged; refreshes preserve
 selection without replaying a click event.
 
 Data Centers, Dams and Submarine Cables release their built Cesium data sources
-and record references when disabled. Parsed datasets remain cached for the layer
-lifetime, so re-enable rebuilds entities without downloading or parsing again;
-this can take longer than simply revealing hidden entities. Destruction clears
-the parsed cache as well. A disable during loading cannot leave a completed
-build hidden in the scene.
+and record references when disabled. Data Centers and Dams retain the original
+dataset text and parse it again on re-enable; Submarine Cables retain parsed
+datasets. Neither path downloads again. Rebuilding can take longer than simply
+revealing hidden entities. Destruction clears the dataset cache as well. Data
+Centers and Dams share their constant point styling and stem materials within
+each source build, while positions and stem buffers remain entity-owned. Their
+global feature records are lightweight; the existing LOD materializes detailed
+Cesium entities on demand, preserving polygon footprints, pins, picking and
+analyst metadata. A disable during loading cannot leave a completed build
+hidden in the scene.
+Recorded memory measurements and the permanent regression gates are documented
+in [PERFORMANCE.md](PERFORMANCE.md#repeatable-memory-profiling).
+
+Civilian and military aircraft retain their complete contact population for
+search and tracking, but materialize native billboards only within a padded
+viewport (tracked/cockpit contacts stay pinned). Detection brackets reuse exact
+batched paths between position updates. Both optimizations apply in Standard
+mode without reducing resolution or changing the normal frame-rate target.
+DISPLAY → Resources also offers an optional Low resource setting: 30 FPS,
+reduced resolution, lighter effects and smaller tile budgets. Returning to
+Standard restores the prior rendering settings. Contact data and layer APIs
+remain available in both modes. See [dense-map measurements](PERFORMANCE.md#dense-flat-map-iteration--9-november-2026).
+
+CCTV keeps projection pixel buffers only for the active camera; switching away
+disposes still-image and video runtimes, and disabling releases native coverage.
+Calibration, catalog records, provider refresh limits and sampled frustum
+coordinates survive reconstruction. CCTV-owned image materials are retired only
+after Cesium detaches their native primitives, then their textures are destroyed.
+Coverage outside the existing coverage-visible set is evicted, with active
+coverage retained. Aircraft GLBs load on demand and create GPU resources across
+frames; fleet admission is bounded to four loads per tick and four pending loads
+per layer, while existing visible caps and tracked-model priority remain.
+Paused weather retains displayed/staging images and drops decoded history;
+active playback still prefetches at full image resolution. Google 3D targets a
+512 MiB tile cache with 2048 MiB overflow, preserving the former 2560 MiB
+total working-set ceiling, collision and visible screen-space detail settings.
+
+Submarine Cables keeps the complete source dataset while attaching native
+ground geometry only for padded viewport segments. Segment boundaries follow
+the original rhumb curves and preserve route vertices, picking metadata,
+surface classification and stable IDs. Landings and reference stems also leave
+native sources outside the view; selected details stay attached. Camera travel,
+FOV and parked-window resize refresh residency. The map controller trims unused
+3D tile contents when a camera settles and when its stack is hidden, without
+changing Standard detail settings. Dense detection can reuse a full-resolution
+bitmap between exact position updates, with a 24 MiB pixel-store cap and a
+vector fallback during continuous changes. Smaller populations use no bitmap.
+The feature-cost audit and its limitations are recorded in
+[PERFORMANCE.md](PERFORMANCE.md#remaining-feature-costs-and-cable-residency--9-november-2026).
 
 CCTV exposes a factory through `./layers/cctv`. Catalog and health requests,
 frame/media URLs, camera records, ground placement, geometry queues, playback,

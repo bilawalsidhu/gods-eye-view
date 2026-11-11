@@ -556,6 +556,7 @@ export function createLifecycle({
       // source entries, pacer timer, in-flight handlers, and caches.
       parts.cards.teardownAmbientCards();
       parts.rendering.hideCctvVisuals();
+      parts.geometry.destroyCoverageEntities();
       // Nothing is in view while the layer is off.
       layerState._viewRecords = [];
       layerState._cameraIndexCache = null;
@@ -624,6 +625,7 @@ export function createLifecycle({
         teardownViewer.scene.primitives.remove(layerState._billboards);
         layerState._billboards = null;
       }
+      parts.projection.destroyMaterialDisposal();
       clearRuntimeState();
       layerState._viewer = null;
       layerState._enabled = false;
