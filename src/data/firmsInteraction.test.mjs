@@ -120,9 +120,10 @@ test('fire detection key survives a refetch that renumbers the index', () => {
 });
 
 test('two satellites over the same pixel at the same time stay distinct', () => {
-  // The proxy merges SNPP + NOAA-20 + NOAA-21 without dedup and their orbits
-  // overlap, so position and time alone are NOT unique. Collapsing them let a
-  // restored selection land on the other satellite's record.
+  // The proxy merges NOAA-20 + NOAA-21 without dedup and their orbits overlap,
+  // so position and time alone are NOT unique. Collapsing them let a restored
+  // selection land on the other satellite's record. Archived Suomi NPP (`N`)
+  // rows must stay distinct too.
   const base = makeFire({ satellite: 'N20' });
   const twin = makeFire({ satellite: 'N21' });
   const suomi = makeFire({ satellite: 'N' });
@@ -275,7 +276,7 @@ test('a click on neither sprite nor card clears without moving the camera', () =
 const SIBLING_PICKS = [
   ['flights', 'a1b2c3', { id: 'a1b2c3' }],
   ['flights', 'a1b2c3', { primitive: { id: 'a1b2c3' } }],
-  ['ais-live-vessels', '353136000', { id: { mmsi: '353136000', name: 'EVER GIVEN' } }],
+  ['ais-live-vessels', '353136000', { id: { id: '353136000', mmsi: '353136000', name: 'EVER GIVEN' } }],
   ['cctv', 'atx-cam-3', { id: { id: 'atx-cam-3', name: 'entity-like' } }],
   ['satellites', '25544', { id: 25544 }],
 ];
