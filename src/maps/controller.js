@@ -263,9 +263,15 @@ export class MapSourceController {
           this._onError?.(this._lastError, recovery);
         }
       }
-      // A stack that stays after the failed switch (and a failed recovery)
-      // still falls back on its tile failures, heard for this switch.
-      if (!recovered && this._imageryLayer && this._activeResolution) {
+      // A stack that stays after a failed choice (and a failed recovery)
+      // still falls back on its tile failures, heard for this switch. A
+      // failed fallback is not tried again on the next failures.
+      if (
+        !recovered &&
+        !automatic &&
+        this._imageryLayer &&
+        this._activeResolution
+      ) {
         this._removeImageryErrorListener?.();
         this._removeImageryErrorListener = null;
         this._watchProvider(this._activeResolution, gen);

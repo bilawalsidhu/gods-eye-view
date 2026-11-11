@@ -107,3 +107,28 @@ test('the credits line is placed wherever the renderer’s own display is', asyn
   }
   assert.deepEqual(missing, []);
 });
+
+test('focus in the list stays in it as it redraws, and goes to the line as it empties', () => {
+  const { viewer, renderer } = scene();
+  renderer.credits.addStatic({ text: 'Esri', inline: true });
+  const remove = renderer.credits.addStatic({
+    text: 'OSM',
+    href: 'https://www.openstreetmap.org/copyright',
+  });
+  const off = mountCreditsView(viewer);
+  const panel = document.getElementById('gev-credits-panel');
+  document.querySelector('.gev-credits-expand').click();
+  panel.querySelector('li a').focus();
+  const removeOther = renderer.credits.addStatic({ text: 'NOAA' });
+  assert.equal(panel.hidden, false);
+  assert.ok(panel.contains(document.activeElement), 'still in the list');
+  remove();
+  removeOther();
+  assert.equal(panel.hidden, true);
+  assert.equal(
+    document.activeElement,
+    document.getElementById('gev-credits'),
+    'a line with no link takes it',
+  );
+  off();
+});

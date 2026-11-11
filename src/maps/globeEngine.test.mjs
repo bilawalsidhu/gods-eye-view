@@ -271,6 +271,14 @@ test('a stack kept after a failed switch and a failed recovery still falls back 
     for (const listener of [...tileErrors]) listener({});
     for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
     assert.ok(osmTries > tries, 'its tile failures still try its fallback');
+    // That fallback failed too: the next failures do not try it again.
+    const retried = osmTries;
+    for (let n = 0; n < 3; n++) {
+      for (const listener of [...tileErrors]) listener({});
+      for (const listener of [...tileErrors]) listener({});
+      for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+    }
+    assert.equal(osmTries, retried, 'no retry storm');
   } finally {
     console.warn = warn;
     controller.destroy();

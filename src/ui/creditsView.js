@@ -60,6 +60,8 @@ export function mountCreditsView(viewer, { root = document.body } = {}) {
   const bar = doc.createElement('div');
   bar.id = 'gev-credits';
   bar.className = 'gev-credits';
+  // Takes focus back from an emptied list when the line has no link.
+  bar.tabIndex = -1;
   const line = doc.createElement('span');
   line.className = 'gev-credits-line';
   const expand = doc.createElement('button');
@@ -105,6 +107,7 @@ export function mountCreditsView(viewer, { root = document.body } = {}) {
   };
 
   const render = (all) => {
+    const focused = panel.contains(doc.activeElement);
     const shown = distinct(Array.isArray(all) ? all : []);
     const inline = shown.filter((credit) => credit.inline);
     const listed = shown.filter((credit) => !credit.inline);
@@ -124,9 +127,11 @@ export function mountCreditsView(viewer, { root = document.body } = {}) {
     expand.hidden = listed.length === 0;
     if (expand.hidden && !panel.hidden) {
       // Focus in the list goes back to the line, not to the page.
-      const focused = panel.contains(doc.activeElement);
       setOpen(false);
-      if (focused) line.querySelector('a')?.focus();
+      if (focused) (line.querySelector('a') ?? bar).focus();
+    } else if (focused && !panel.contains(doc.activeElement)) {
+      // A link that focus was on was redrawn: focus stays in the list.
+      close.focus();
     }
   };
 
