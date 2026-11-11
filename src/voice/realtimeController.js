@@ -18,7 +18,7 @@ import {
 } from './pointerContext.js';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
-import { postDebugLog } from './realtimeDiagnostics.js';
+import { missingVoiceKeyText, postDebugLog } from './realtimeDiagnostics.js';
 
 export {
   readStoredVoiceTier,
@@ -407,7 +407,14 @@ export class GevRealtimeController extends RealtimeFacade {
     }
   }
 
-  setStatus(status, detail) {
+  /**
+   * @param {string} status
+   * @param {string} [detail]
+   * @param {{missingKey?: boolean}} [options] True when the error is a
+   *   missing server key: it is worded in the current language and shown
+   *   without the microphone hint.
+   */
+  setStatus(status, detail, { missingKey = false } = {}) {
     this.status = status;
     this.emitSessionEvent({ type: 'state', state: status, detail });
     this.ui.update('root', {
@@ -435,8 +442,12 @@ export class GevRealtimeController extends RealtimeFacade {
     this.ui.update('error', {
       text: () =>
         status === 'error'
-          ? resolvedDetail() || t('Voice session could not be started.')
+          ? (missingKey && missingVoiceKeyText()) ||
+            resolvedDetail() ||
+            t('Voice session could not be started.')
           : '',
+      // "Check microphone permission" is wrong advice for a missing key.
+      hint: () => !(status === 'error' && missingKey),
     });
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');

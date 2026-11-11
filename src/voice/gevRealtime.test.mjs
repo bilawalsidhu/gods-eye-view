@@ -35,6 +35,7 @@ import {
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { setLocale } from '../i18n/index.js';
 
 test('push-to-talk recognizes Space by code or key', () => {
   assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
@@ -3733,4 +3734,33 @@ test('the controller forwards viewport escalation diagnostics to its debug log',
       detail: { contextId: 1, send: false, reason: 'view-scale-not-local', viewScale: 'regional' },
     }],
   );
+});
+
+test('a missing server key says where to add it, without the microphone hint, in every language', () => {
+  const ui = createTestVoiceUi();
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async () => ({ ok: true }),
+    radioLayer: { subscribePlaybackControls: () => () => {}, setVoiceDucked() {} },
+  });
+  try {
+    controller.reportError(
+      'Realtime connection',
+      Object.assign(new Error('OPENAI_API_KEY is not set'), { code: 'API_KEY_MISSING' }),
+    );
+    assert.equal(ui.state.error.text, 'Needs OPENAI_API_KEY — add it in Provider Settings');
+    assert.equal(ui.state.error.hint, false);
+
+    setLocale('es');
+    assert.notEqual(ui.state.error.text, 'Needs OPENAI_API_KEY — add it in Provider Settings');
+    assert.match(ui.state.error.text, /OPENAI_API_KEY/);
+    assert.equal(ui.state.error.hint, false);
+    setLocale('en');
+
+    controller.reportError('Realtime connection', new Error('ICE failed'));
+    assert.match(ui.state.error.text, /ICE failed/);
+    assert.equal(ui.state.error.hint, true);
+  } finally {
+    setLocale('en');
+  }
 });
