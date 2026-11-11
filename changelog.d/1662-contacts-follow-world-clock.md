@@ -6,7 +6,7 @@
   before. A source's `timeline.subscribe` may also tell of a better answer
   for a time it has answered; paused, the layer loads the time shown again.
   A source with no timeline keeps them live, unchanged (Sameh Khamis,
-  @samehkhamis, #PR).
+  @samehkhamis, #1662).
 - AIS Vessels are keyed by the stable id their live source gives (`id` on a
   vessel record), not by MMSI: vessels can share an MMSI, through spoofing,
   reused numbers or defaults such as 0, and a number can move to another
@@ -18,7 +18,7 @@
   `idFor(row)` for a source whose rows carry an id of their own. Tool and voice results carry the vessel's id beside its MMSI
   (`id`, or `vesselId` where `id` is a display label), and `get_vessel_track`
   also takes an `id`. AISStream has only MMSIs, so its vessels are keyed by
-  MMSI and nothing changes there (Sameh Khamis, @samehkhamis, #PR).
+  MMSI and nothing changes there (Sameh Khamis, @samehkhamis, #1662).
 - A share link made while a vessel is selected (and the camera follows
   nothing) now opens that vessel: the link names it, opens with the camera
   where it was, looking at the vessel, and selects the vessel once the feed
@@ -33,4 +33,4 @@
   now says so in a sentence ("The shared vessel isn't reporting now — showing
   where it was at 14:05"), with its id on a second line under it (ICAO,
   NORAD, MMSI or vessel UUID) instead of at the head of the sentence (Sameh
-  Khamis, @samehkhamis, #PR).
+  Khamis, @samehkhamis, #1662).
