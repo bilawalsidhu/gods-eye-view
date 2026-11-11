@@ -473,6 +473,94 @@ export function cameraChecks() {
       },
     },
     {
+      id: 'camera.follow.autodetect',
+      port: 'camera',
+      title:
+        'an autodetect follow keeps its range: north-up on a still target, a frame standing up on a fast one',
+      async run(h) {
+        const r = await fresh(h);
+        if (!r.capabilities.has('followAutodetect')) {
+          r.destroy();
+          return { skip: 'no followAutodetect' };
+        }
+        const viewFrom = { x: 0, y: -800, z: 400 };
+        const range = Math.hypot(viewFrom.x, viewFrom.y, viewFrom.z);
+        const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        const unit = (v) => {
+          const n = Math.hypot(v.x, v.y, v.z);
+          return { x: v.x / n, y: v.y / n, z: v.z / n };
+        };
+        // The frame's axes and origin, where the renderer reads it back.
+        const frame = () => {
+          if (!r.capabilities.has('followFrame')) return null;
+          const m = r.camera.followFrame();
+          return {
+            x: { x: m[0], y: m[1], z: m[2] },
+            z: { x: m[8], y: m[9], z: m[10] },
+            origin: { x: m[12], y: m[13], z: m[14] },
+          };
+        };
+
+        const still = h.toEcef({ lon: -97.74, lat: 30.27, height: 1000 });
+        r.camera.follow({
+          key: 'test:still',
+          position: () => still,
+          frame: 'autodetect',
+          viewFrom,
+        });
+        for (let i = 0; i < 3; i++) await h.frame(r);
+        ok(r.camera.followFramed, 'framed');
+        near(dist(r.camera.pose().position, still), range, 1, 'still range');
+        const enu = frame();
+        if (enu) {
+          nearVec(enu.origin, still, 1e-3, 'still: the frame on the target');
+          const lon = (-97.74 * Math.PI) / 180;
+          const east = { x: -Math.sin(lon), y: Math.cos(lon), z: 0 };
+          ok(dot(enu.x, east) > 0.999, 'still: x is east');
+          ok(dot(enu.z, unit(still)) > 0.99, 'still: z is up');
+        }
+        r.camera.follow(null);
+        await h.frame(r);
+
+        // A satellite's speed, eastward 400 km up over the equator.
+        const radius = 6378137 + 400000;
+        const speed = 7670;
+        const start = r.frame.time();
+        const orbiting = (t) => {
+          const a = ((t - start) / 1000) * (speed / radius);
+          return { x: radius * Math.cos(a), y: radius * Math.sin(a), z: 0 };
+        };
+        r.camera.follow({
+          key: 'test:orbit',
+          position: orbiting,
+          frame: 'autodetect',
+          viewFrom,
+        });
+        for (let i = 0; i < 3; i++) await h.frame(r);
+        ok(r.camera.followFramed, 'framed');
+        const range0 = dist(r.camera.pose().position, orbiting(r.frame.time()));
+        near(range0, range, 1, 'orbit: starting range');
+        for (let i = 0; i < 10; i++) {
+          r.frame.setTime(r.frame.time() + 1000);
+          await h.frame(r);
+          const at = orbiting(r.frame.time());
+          near(
+            dist(r.camera.pose().position, at),
+            range0,
+            1e-3 * range0,
+            `orbit: range at frame ${i}`,
+          );
+          const f = frame();
+          if (f) {
+            nearVec(f.origin, at, 1e-3, `orbit: the frame on the target ${i}`);
+            ok(dot(f.z, unit(at)) > 0.99, `orbit: z is up ${i}`);
+          }
+        }
+        r.camera.follow(null);
+        r.destroy();
+      },
+    },
+    {
       id: 'camera.followFrame',
       port: 'camera',
       title:

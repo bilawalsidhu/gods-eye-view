@@ -69,6 +69,8 @@ export function cesiumCapabilities(scene, only) {
     // Raster shells; other field kinds are refused.
     'fields',
     'followFrame',
+    // Cesium's AUTODETECT tracking frame (`follow.js`).
+    'followAutodetect',
     'cameraChangeThreshold',
     // The zoom-out guard reads the scene's own controller and frame events.
     ...(scene?.screenSpaceCameraController && scene?.preRender

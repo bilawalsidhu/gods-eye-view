@@ -126,6 +126,14 @@ optional, so a renderer written before it still conforms:
   [The application and its renderer](#the-application-and-its-renderer).
 - `frame.renderNow()` throws when the frame fails to draw.
 
+The Cesium port lists `followAutodetect`: an `autodetect` follow is
+Cesium's own AUTODETECT tracking frame, east-north-up on a still or slow
+target and an orbit frame (x along the inertial motion, z up) on a fast
+one. The stub's is a frame along the ground track, so an autodetect
+`viewFrom` reads differently on each; the check `camera.follow.autodetect`
+pins what both share (the range kept, north-up when still, the frame on the
+target standing up).
+
 The Cesium port takes every kind of `ImageRef` wherever an image is drawn
 (icons on billboards and on the GPU, line patterns, shape fills, quads and
 raster shells): a URL, SVG, a blob (by an object URL made once per blob), a
