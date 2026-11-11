@@ -177,6 +177,29 @@ and each capability member present without its capability.
 `contract.test.mjs` type-checks the contract under strict TypeScript, and
 fails when `PORTS` and the types disagree on a single member.
 
+### What a renderer does, by role
+
+A renderer is more than a drawing surface: it is a whole globe engine. The
+application keeps the data (providers, records, layers and their
+behaviour). The renderer owns everything from a source spec or a draw set
+down to the pixels. The ports follow the API's shape; `ROLES` in
+`src/render/contract/index.js` names what the engine behind them does, and
+puts every member of `PORTS` in exactly one role. It changes no member.
+
+| Role      | What it does                                                                                                | Members                                                               |
+| --------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `surface` | Streams, decodes and builds the globe from map sources: imagery, terrain, photoreal 3D tiles, draped layers | `globe`, `imageryLayer`, `credits`                                    |
+| `scene`   | Draws the application's data as keyed, retained sets                                                        | `draw`, `drawSet`                                                     |
+| `view`    | Places and moves the camera, hands pointer input to the application                                         | `camera`, `flight`, `input`, `lease`                                  |
+| `queries` | Picks, surface positions and heights, rays, projection, occlusion                                           | `query`                                                               |
+| `look`    | Sky and atmosphere, surface shading, per-layer lighting, styles and screen effects                          | `effects`, `globe.sky`, `globe.setSurfaceShading`, `imageryLayer.lit` |
+| `host`    | Canvas and life cycle, the frame loop and scene time, quality, capture, settling                            | `renderer`, `frame`, `quality`                                        |
+
+An entry is a port or a `port.member` prefix; the most specific one wins, so
+`roleOf('globe', 'sky.set')` is `'look'` while `roleOf('globe', 'setBase')`
+is `'surface'`. `contract.test.mjs` fails when a member has no role, when
+two roles claim the same entry, or when an entry names no member.
+
 ## Moving code onto the contract
 
 Two ratchet tests keep code that has moved onto the contract from drifting
