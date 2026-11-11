@@ -35,7 +35,7 @@ import {
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
-import { setLocale } from '../i18n/index.js';
+import { setLocale, t } from '../i18n/index.js';
 
 test('push-to-talk recognizes Space by code or key', () => {
   assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
@@ -3760,6 +3760,24 @@ test('a missing server key says where to add it, without the microphone hint, in
     controller.reportError('Realtime connection', new Error('ICE failed'));
     assert.match(ui.state.error.text, /ICE failed/);
     assert.equal(ui.state.error.hint, true);
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('a status from a shared helper is worded again after a language change', () => {
+  const ui = createTestVoiceUi();
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async () => ({ ok: true }),
+    radioLayer: { subscribePlaybackControls: () => () => {}, setVoiceDucked() {} },
+  });
+  try {
+    controller.setStatus('listening', 'Radio did not start');
+    assert.equal(ui.state.detail.text, 'Radio did not start');
+    setLocale('es');
+    assert.equal(ui.state.detail.text, t('Radio did not start'));
+    assert.notEqual(ui.state.detail.text, 'Radio did not start');
   } finally {
     setLocale('en');
   }

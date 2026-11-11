@@ -71,7 +71,9 @@ export function geminiSocketUrl({ token, websocketUrl }) {
   return url.href;
 }
 
-// Known local-server failures are translated; unexpected diagnostics stay intact.
+// The local server's known failures, marked for translation. Each is kept as
+// its English catalog text, which the status words when it is shown, so a
+// language change words it again; unexpected diagnostics stay intact.
 function tokenErrorMessage(error) {
   switch (error) {
     case msg('Gemini voice could not connect. Try again.'):
@@ -85,7 +87,6 @@ function tokenErrorMessage(error) {
     case msg('Token request is too large'):
     case msg('Use an empty JSON token request'):
     case msg('Method not allowed'):
-      return t(error);
     default:
       return error;
   }
@@ -360,19 +361,31 @@ export class GeminiSessionController {
   }
 
   /**
-   * @param {{missingKey?: boolean}} [options] True when the server has no
-   *   Gemini key: the control then drops its microphone hint.
+   * @param {{missingKey?: boolean, params?: object}} [options] `missingKey`
+   *   is true when the server has no Gemini key: the control then drops its
+   *   microphone hint. `params` fill the placeholders of `detail`.
    */
-  setStatus(status, detail, recovery, { missingKey = false } = {}) {
+  setStatus(
+    status,
+    detail,
+    recovery,
+    { missingKey = false, params = null } = {},
+  ) {
     this.status = status;
     if (status === 'listening' && this.input.pushToTalkMode)
       detail = this.input.pushToTalkKeyHeld
         ? msg('Release Space to send')
         : msg('Hold Space to talk');
+    // `detail` is worded in the current language; `sourceDetail` keeps the
+    // message as given (English catalog text, with `sourceParams` for its
+    // placeholders, when it is ours), so a view can word it again after a
+    // language change.
     const event = {
       type: 'state',
       state: status,
-      detail: translateKnown(detail),
+      detail: params ? t(detail, params) : translateKnown(detail),
+      ...(typeof detail === 'string' && { sourceDetail: detail }),
+      ...(params && { sourceParams: params }),
     };
     if (recovery) event.recovery = translateKnown(recovery);
     if (missingKey) event.missingKey = true;
@@ -598,6 +611,15 @@ export class GeminiSessionController {
                 }),
           ),
           typeof data?.code === 'string' ? { code: data.code } : {},
+          // The status words this again in the current language when shown.
+          typeof data?.error === 'string'
+            ? {}
+            : {
+                wording: {
+                  text: msg('Gemini token request failed (HTTP {status})'),
+                  params: { status: response.status },
+                },
+              },
         );
       if (
         typeof data?.model !== 'string' ||
@@ -971,11 +993,14 @@ export class GeminiSessionController {
           )
         : error?.name === 'TimeoutError'
           ? msg('Gemini connection timed out. Try again.')
-          : error?.message || msg('Gemini voice could not start');
-    this.lastError = detail;
+          : error?.wording?.text ||
+            error?.message ||
+            msg('Gemini voice could not start');
+    this.lastError = error?.wording ? error.message : detail;
     this.stop({ preserveStatus: true });
     this.setStatus('error', detail, recovery, {
       missingKey: error?.code === 'API_KEY_MISSING',
+      params: error?.wording?.params,
     });
   }
 
