@@ -634,8 +634,9 @@ source-time fallback and model-owned ground policy. The renderer supplies that
 ownership fact and handles stale-ground lifting, Cesium history and primitives;
 record reconciliation does not import the engine or application.
 
-`layers/vessels/records` owns plain AIS metadata, stable MMSI identity and bounded
-retention. `layers/vessels/ingestion` owns source requests and feed state through
+`layers/vessels/records` owns plain AIS metadata, identity by the stable id the
+source gives (an MMSI only for a feed that has nothing else; the MMSI itself is
+an attribute) and bounded retention. `layers/vessels/ingestion` owns source requests and feed state through
 explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.

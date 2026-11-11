@@ -16,13 +16,22 @@ import {
 
 /** Source-independent aircraft metadata and bounded missing-poll retention. */
 export class FlightRecords {
-  constructor({ geoidHeight, cachedGroundFloor, floorAltitudeM }) {
+  constructor({
+    geoidHeight,
+    cachedGroundFloor,
+    floorAltitudeM,
+    now = () => Date.now(),
+  }) {
     this.services = {
       geoidHeight,
       cachedGroundFloor,
       floorAltitudeM,
     };
+    /** The time records are judged at: the layer's clock. */
+    this.now = now;
     this.data = new Map();
+    // Facts about an airframe, not a moment, kept across a reset.
+    this.airframes = new Map();
     this.missingPolls = new Map();
     // Contacts whose last poll re-sent a fix no newer than the one before.
     this.fixRepeated = new Set();
@@ -90,6 +99,9 @@ export class FlightRecords {
     // regressing to the ICAO hex / a 0° (north) heading. Bounded by the
     // MISSING_POLL_LIMIT eviction below, which deletes the whole entry.
     const prevMeta = this.data.get(icao24);
+    // The airframe's facts: this record's, or those kept across a reset.
+    const airframe = prevMeta ?? this.airframes.get(icao24);
+    this.airframes.delete(icao24);
     // Grounded planes with no baro reading sit at 0 m (a parked plane must
     // never float); airborne ones without baro have no aviation altitude.
     // NOTE (height-datum fix): `alt` stays the AVIATION field — the sticky
@@ -242,16 +254,16 @@ export class FlightRecords {
     // A route (and its airline) belongs to the callsign it was looked up for;
     // a new callsign drops it, so an old flight's route never shows under it.
     const routeHeld =
-      Boolean(prevMeta?.routeCallsign) &&
-      prevMeta.routeCallsign === nextCallsign.toUpperCase();
+      Boolean(airframe?.routeCallsign) &&
+      airframe.routeCallsign === nextCallsign.toUpperCase();
     const fixEpochMs =
       Number.isFinite(observation.positionTimeMs) &&
       observation.positionTimeMs > 0
         ? observation.positionTimeMs
-        : Date.now();
+        : this.now();
     const meta = {
       sourceReference: observation.reference,
-      observedReceiptMs: Date.now(),
+      observedReceiptMs: this.now(),
       newestFixMs: this._noteFix(icao24, prevMeta, fixEpochMs),
       callsign: nextCallsign,
       altitude: alt,
@@ -271,7 +283,7 @@ export class FlightRecords {
       category: cat,
       // An adsbdb-enriched type code outranks the coarse OpenSky category.
       klass: classifyAircraft({
-        typeCode: prevMeta?.typeCode ?? null,
+        typeCode: airframe?.typeCode ?? null,
         category: cat,
       }),
       turnRateDps: prevMeta?.turnRateDps || 0,
@@ -306,14 +318,14 @@ export class FlightRecords {
         null,
       ),
       // adsbdb enrichment — written by the enrichment callbacks, carried across polls:
-      typeCode: prevMeta?.typeCode ?? null,
-      typeName: prevMeta?.typeName ?? null,
-      registration: prevMeta?.registration ?? null,
-      airline: routeHeld ? (prevMeta.airline ?? null) : null,
-      route: routeHeld ? (prevMeta.route ?? null) : null,
-      routeCallsign: routeHeld ? prevMeta.routeCallsign : null,
+      typeCode: airframe?.typeCode ?? null,
+      typeName: airframe?.typeName ?? null,
+      registration: airframe?.registration ?? null,
+      airline: routeHeld ? (airframe.airline ?? null) : null,
+      route: routeHeld ? (airframe.route ?? null) : null,
+      routeCallsign: routeHeld ? airframe.routeCallsign : null,
       // Planespotters photo of the tracked airframe (Core asks it directly).
-      photo: prevMeta?.photo ?? null,
+      photo: airframe?.photo ?? null,
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector
       // coords, pre-dead-reckon) — kept distinct from the continuously
       // dead-reckoned billboard position for any consumer that needs the
@@ -326,7 +338,10 @@ export class FlightRecords {
     return { icao24, prevMeta, meta, groundFlipped, fixEpochMs };
   }
 
-  absence(id, { complete, retainIds, likelyLanded, tracked = false }) {
+  absence(
+    id,
+    { complete, retainIds, likelyLanded, tracked = false, nowMs = this.now() },
+  ) {
     const misses = (this.missingPolls.get(id) || 0) + 1;
     // The tracked contact has missed an update: it is stale from the first
     // one, and kept (so the camera keeps its target) until ten minutes after
@@ -335,7 +350,7 @@ export class FlightRecords {
     const meta = this.data.get(id);
     const fixMs = meta?.newestFixMs ?? meta?.observedReceiptMs;
     if (tracked && Number.isFinite(fixMs)) {
-      if (Date.now() - fixMs < TRACKED_RETENTION_MS) {
+      if (nowMs - fixMs < TRACKED_RETENTION_MS) {
         this.missingPolls.set(id, misses);
         return 'stale';
       }
@@ -347,7 +362,7 @@ export class FlightRecords {
     // still takes the landed limit.
     if (
       (!complete || (retainIds?.has(id) && !likelyLanded)) &&
-      Date.now() - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
+      nowMs - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
     )
       return 'retain';
     const limit = likelyLanded ? LANDED_MISSING_POLL_LIMIT : MISSING_POLL_LIMIT;
@@ -359,8 +374,33 @@ export class FlightRecords {
     return 'remove';
   }
 
+  /**
+   * Forget every observation, as when the world clock jumps to another time:
+   * what an airframe is (its type, registration, route and photo) is kept for
+   * when it is seen again; where it was and when is not.
+   */
+  reset() {
+    for (const [id, meta] of this.data) {
+      this.airframes.set(id, {
+        typeCode: meta.typeCode,
+        typeName: meta.typeName,
+        registration: meta.registration,
+        airline: meta.airline,
+        route: meta.route,
+        routeCallsign: meta.routeCallsign,
+        photo: meta.photo,
+      });
+    }
+    this.data.clear();
+    this.missingPolls.clear();
+    this.fixRepeated.clear();
+    this.lastSnapshotMs = null;
+    this.snapshotAdvanced = true;
+  }
+
   forget(id) {
     this.data.delete(id);
+    this.airframes.delete(id);
     this.missingPolls.delete(id);
     this.fixRepeated.delete(id);
     this.geoidNCache.delete(id);

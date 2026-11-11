@@ -138,6 +138,9 @@
     "./server/providers/regional": {
       "node": "./server/providers/regional.js"
     },
+    "./server/providers/news": {
+      "node": "./server/providers/news.js"
+    },
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
     },
@@ -261,6 +264,7 @@
     "./layers/gnss/source": "./src/layers/gnss/source.js",
     "./layers/ghostmaps/source": "./src/layers/ghostMaps/source.js",
     "./layers/drone-airspace/source": "./src/layers/droneAirspace/source.js",
+    "./layers/news/source": "./src/layers/news/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",

@@ -20,7 +20,8 @@ import {
   modelAnchorWorld,
 } from '../../data/modelVisualAnchor.js';
 import {
-  RENDER_DELAY_SEC,
+  displayDelayMs,
+  followsClock,
   TRACKED_MODEL_MAX_PX,
   TRACKED_MODEL_MIN_PX,
   BILLBOARD_SCALE,
@@ -73,7 +74,7 @@ export function createMotion({
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now()),
-      -RENDER_DELAY_SEC,
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchRenderTime,
     );
 
@@ -211,7 +212,7 @@ export function createMotion({
       ? newest.epochMs
       : Cesium.JulianDate.toDate(newest.time).getTime();
     const elapsedSec =
-      (flightState.now() - RENDER_DELAY_SEC * 1000 - newestMs) / 1000;
+      (flightState.now() - displayDelayMs(flightState) - newestMs) / 1000;
     if (!(elapsedSec > 0)) return null;
     const { coastSec, holds } = _coastPlan(
       newest,
@@ -285,7 +286,7 @@ export function createMotion({
     if (!history || history.length === 0) return true;
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now()),
-      -RENDER_DELAY_SEC,
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchWarmupTime,
     );
     return Cesium.JulianDate.lessThan(renderTime, history[0].time);
@@ -370,9 +371,15 @@ export function createMotion({
     }
 
     const nowMs = Date.now();
+    // How far the contact may move between frames goes by the world's time,
+    // which plays faster than the wall clock when following it at a rate.
+    const worldMs = followsClock(flightState) ? flightState.now() : nowMs;
     const info = flightState.records.data.get(icao24);
     if (sameTrack) {
-      const dtSec = Math.max(0.001, (nowMs - flightState._drPrevMs) / 1000);
+      const dtSec = Math.max(
+        0.001,
+        (worldMs - flightState._drPrevWorldMs) / 1000,
+      );
       const speed = (info && info.speedMps) || 0;
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
@@ -403,6 +410,7 @@ export function createMotion({
     Cesium.Cartesian3.clone(raw, flightState._drPrevRaw);
     Cesium.Cartesian3.clone(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;
+    flightState._drPrevWorldMs = worldMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;
     const focusSizePx = _trackedFocusSizePx(

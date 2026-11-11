@@ -10,10 +10,14 @@ export function createFlightState({ source, services }) {
   flightState.records = new MilitaryFlightRecords({
     ...services.geoid,
     ...services.groundFloor,
+    now: () => flightState.now(),
   });
   flightState._cullPositions = new Map();
   /** The time contacts are drawn behind by the render delay, in epoch ms. */
   flightState.now = worldTimeFor('military');
+  /** Follows the world clock while the source declares a timeline (set by the
+   *  layer); see followsClock and displayDelayMs in policy.js. */
+  flightState.timeline = null;
 
   /** Per-class model spec for THIS layer (2026-08-16, owner playtest ask:
    *  military contacts should read as their WEIGHT CLASS, always in this layer's
@@ -320,6 +324,9 @@ export function createFlightState({ source, services }) {
   flightState._drPrevDisplay = new Cesium.Cartesian3();
 
   flightState._drPrevMs = 0;
+
+  /** World time of that frame: the wall clock live, the cursor following the clock. */
+  flightState._drPrevWorldMs = 0;
 
   flightState._drReconcileValid = false;
 

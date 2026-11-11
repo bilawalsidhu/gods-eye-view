@@ -472,7 +472,12 @@ export class StyleManager extends ShellFacade {
       initialShareCode,
     });
     this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
-      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+      readShareFollowSubject({
+        viewer: this.viewer,
+        nowMs,
+        readSelectedVessel: () =>
+          this.services.aisLiveVesselsLayer?.getSelectedFix?.() ?? null,
+      }),
     );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
