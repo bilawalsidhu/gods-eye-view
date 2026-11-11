@@ -208,6 +208,21 @@ test('street-level photos travel in the link, light their source and bring their
   assert.equal(streetLevelFromParams(new URLSearchParams('sl=bing,1,2')), null);
   assert.equal(streetLevelFromParams(new URLSearchParams('lat=1')), null);
   assert.equal(createView({ camera: { lat: 1, lon: 2 } }).street_level, null);
+  // A point off the globe is refused, like an unknown source.
+  for (const bad of [
+    { lat: 95, lon: 2 },
+    { lat: 48, lon: 200 },
+    { lat: Number.NaN, lon: 2 },
+  ])
+    assert.throws(
+      () =>
+        createView({
+          camera: { lat: 1, lon: 2 },
+          street_level: { provider: 'mapillary', ...bad },
+        }),
+      TypeError,
+      JSON.stringify(bad),
+    );
   // Half a point is not mixed with the camera's other half.
   const half = createView({
     camera: { lat: 1, lon: 2 },

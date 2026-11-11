@@ -73,6 +73,19 @@ export function createViewerHost({ state, parts }) {
       active.unsubscribe();
       active.adapter.unmount();
       active = null;
+      // The photo being replaced belonged to that source: none of its details
+      // (id, place, author, link) describe the one loading now.
+      const { open, loading, error, providerId, providerName, providerLabel } =
+        state.street;
+      Object.assign(state.street, freshStreet(), {
+        open,
+        loading,
+        error,
+        providerId,
+        providerName,
+        providerLabel,
+      });
+      parts.marker.clear();
     }
     const adapter = entry.instance.viewer;
     const promise = (async () => {
@@ -202,5 +215,27 @@ export function createViewerHost({ state, parts }) {
     active = null;
   }
 
-  return { attach, open, close, resize, setRenderMode, stopPlayback, unmount };
+  /**
+   * Destroy `providerId`'s viewer and leave the panel's state alone: what a
+   * request leaves behind once it replaced or closed that source's photo.
+   */
+  function release(providerId) {
+    if (active?.id !== providerId && mounting?.id !== providerId) return;
+    const pending = mounting;
+    mounting = null;
+    active?.unsubscribe();
+    (active?.adapter ?? pending?.adapter)?.unmount();
+    active = null;
+  }
+
+  return {
+    attach,
+    open,
+    close,
+    resize,
+    setRenderMode,
+    stopPlayback,
+    unmount,
+    release,
+  };
 }

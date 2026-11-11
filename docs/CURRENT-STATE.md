@@ -5282,14 +5282,19 @@ app.
   newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
   its own flight lands) or a press or wheel on the globe stops it
   (`superseded: true`). The same checks run before a found photo loads
-  (`proceed`), so nothing billed loads for a request that was given up, and a
-  lookup given up leaves the panel as it was; a photo that opened after either
-  is closed again.
+  (`proceed`), so nothing billed loads for a request that was given up. A
+  lookup given up leaves the panel as it was when the request kept the photo's
+  source; one that had switched the source off closes that source's photo with
+  it. A photo that opened after either is closed again.
 - **Replacing a photo.** An open photo stays up while the new request looks
   (`openNearest` `replace: true`; the viewer is replaced, not closed, so EXPAND
-  stays, also across sources through `holdViewer`) and closes if nothing
-  opens, so a place with no imagery shows its own error; a link that only arms
-  closes it at once. A replacement stops a playing Mapillary sequence.
+  stays, also across sources through `holdViewer`, which holds only the action's
+  own switch-off of the photo's source: a source switched by hand meanwhile
+  still stops the load) and closes if nothing opens, so a place with no imagery
+  shows its own error; a link that only arms closes it at once. A replacement
+  from another source drops the old photo's details, and the request's error or
+  armed OPEN outlives the old viewer. A replacement stops a playing Mapillary
+  sequence.
 - **Outcome.** `noImagery` marks an empty result, `imageryError` a source or
   viewer failure and `aim: 'sky'` a sky centre (from `street.nearestOutcome`);
   an empty result names a narrowing 360°/flat or SINCE filter the source
@@ -5312,8 +5317,8 @@ error.
 
 Views carry the request as `street_level` (`src/view/index.js`): a source and
 a point, which defaults to where the camera looks (below 20 km, at a pitch
-steeper than -5° and within 10 km ahead; else the camera's own point, also
-for half a point). A `google` source brings `map: photoreal` and refuses
+steeper than -5° and within 10 km ahead; else the camera's own point); half a
+point is not mixed with the camera's: both coordinates come from that default. A `google` source brings `map: photoreal` and refuses
 another map; `street_level` does not combine with `follow`.
 `show_in_gods_eye_view`, and the embedded app for a posted view with no
 point, measure the view's altitude from the terrain under the camera
@@ -6411,7 +6416,7 @@ and unreachable upstream (502/504) separately from road geometry.
 
 - **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token. With no OpenAI key the token route answers `503` with code `API_KEY_MISSING`, and the voice control shows `Needs OPENAI_API_KEY — add it in Provider Settings` in the interface language, reworded on a language change, without the microphone-permission hint.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
-- **Thirty-two tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `show_street_level`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_voice_inactivity_timeout`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
+- **Thirty-five tools** (thirty-four in a session without `OVERPASS_UPSTREAMS`, which adds `osm_query`; argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `show_street_level`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_voice_inactivity_timeout`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `resolve_area`, `find_imagery`, `osm_query`, `next_iss_pass`, and `next_satellite_pass`.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`

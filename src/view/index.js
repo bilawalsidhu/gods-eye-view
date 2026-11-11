@@ -131,7 +131,13 @@ export function lookAtPoint(camera) {
  */
 export async function groundedLookAt(camera, terrain, signal) {
   if (typeof terrain?.getHeights !== 'function') return null;
-  if (!Number.isFinite(camera?.altitude_m) || !(camera.pitch_deg > -89))
+  // Looking down or at the horizon the point is the camera's own: the ground
+  // under it changes nothing, so it is not asked for.
+  if (
+    !Number.isFinite(camera?.altitude_m) ||
+    !(camera.pitch_deg > -89) ||
+    camera.pitch_deg > LOOK_AT_MIN_PITCH_DEG
+  )
     return null;
   let heights;
   try {
@@ -381,6 +387,12 @@ export function createView({
     // photos at X, also when the camera sits behind it. It is a pair: half
     // of one is not mixed with the camera's other half.
     const given = [latitude(streetLevel.lat), longitude(streetLevel.lon)];
+    // A coordinate given off the globe is an error, not a reason to guess.
+    for (const [index, key] of ['lat', 'lon'].entries())
+      if (streetLevel[key] != null && given[index] === undefined)
+        throw new TypeError(
+          `Street-level ${key} is not a valid coordinate: ${streetLevel[key]}`,
+        );
     const seen = lookAtPoint(camera);
     const [lat, lon] = given.includes(undefined) ? [seen.lat, seen.lon] : given;
     street = Object.freeze({

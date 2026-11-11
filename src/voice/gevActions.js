@@ -60,6 +60,7 @@ import {
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
+import { watchCameraOwner } from '../navigationPolicy.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
@@ -2984,7 +2985,6 @@ export function activeImageryFilter(ui) {
  * detection so the framed entities are labeled, and reports
  * detectionEnabled so the voice agent can mention labels are on.
  */
-
 async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   const targetRaw = String(args.target || 'flights').toLowerCase();
   const layerId =
@@ -3763,40 +3763,6 @@ function actionIntentOrigin(runOptions) {
   return runOptions?.origin === 'programmatic' ? 'programmatic' : 'voice';
 }
 
-/** Gestures on the globe that take the camera from a pending request. */
-const CAMERA_GESTURES = ['pointerdown', 'wheel'];
-
-/**
- * Whether the camera is still a request's: a navigation the shell stamps (a
- * search, the assistant, a link) or a press or wheel on the globe hands it to
- * someone else. `claim()` makes the camera as it is now the request's (after
- * its own flight); `stop()` removes the gesture listeners.
- */
-function watchCameraOwner(viewer, navigation) {
-  let generation = navigation?._navigationGeneration;
-  const canvas = viewer?.canvas ?? viewer?.scene?.canvas ?? null;
-  let taken = false;
-  const onGesture = () => {
-    taken = true;
-  };
-  for (const type of CAMERA_GESTURES)
-    canvas?.addEventListener?.(type, onGesture, { passive: true });
-  return {
-    claim: () => {
-      generation = navigation?._navigationGeneration;
-      taken = false;
-    },
-    taken: () =>
-      taken ||
-      (Number.isFinite(generation) &&
-        navigation._navigationGeneration !== generation),
-    stop: () => {
-      for (const type of CAMERA_GESTURES)
-        canvas?.removeEventListener?.(type, onGesture);
-    },
-  };
-}
-
 /**
  * Whether cockpit, clean view, recording or scene playback hides the panel a
  * street-level photo opens in. Embed mode uses clean view for its globe but
@@ -4034,7 +4000,8 @@ async function requestStreetLevel(
 
   // Light the source the way a chip click does, so the choice is kept. An
   // open photo of another source stays up until this request replaces it.
-  if (layerModule.getUIState?.()?.street?.open === true)
+  const openPhoto = layerModule.getUIState?.()?.street;
+  if (openPhoto?.open === true && openPhoto.providerId !== provider)
     holdViewer(layerModule);
   const switches = Object.fromEntries(
     providerIds.map((id) => [id, id === provider]),

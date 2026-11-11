@@ -266,11 +266,11 @@ export function createStreetLevelLayer({
     if (providerAvailable(entry)) parts.credits.show(state.viewer, entry.def);
   }
 
-  /** Requests replacing the open photo that switch its source keep it up. */
-  let viewerHolds = 0;
+  /** Sources whose open photo a replacing request keeps up while it switches them off. */
+  const heldViewers = new Map();
 
   function deactivate(entry) {
-    if (!viewerHolds) parts.viewerHost.unmount(entry.def.id);
+    if (!heldViewers.has(entry.def.id)) parts.viewerHost.unmount(entry.def.id);
     entry.instance.deactivate();
     parts.credits.hide(state.viewer, entry.def);
   }
@@ -854,19 +854,29 @@ export function createStreetLevelLayer({
     },
     closeViewer,
     /**
-     * Keep the open photo up while a request that replaces it switches the
-     * source, so EXPAND stays. Release closes it if its source is still off.
+     * Keep the open photo up while a request that replaces it switches its
+     * source off, so EXPAND stays; only that source's own switch-off is held,
+     * a source switched by hand meanwhile still stops a load. Release frees
+     * the old viewer.
      */
     holdViewer() {
-      viewerHolds += 1;
+      const id = state.street.open ? state.street.providerId : null;
+      if (!id) return () => {};
+      heldViewers.set(id, (heldViewers.get(id) || 0) + 1);
       let held = true;
       return () => {
         if (!held) return;
         held = false;
-        viewerHolds -= 1;
-        if (viewerHolds) return;
-        for (const entry of state.providers.values())
-          if (!entry.on) parts.viewerHost.unmount(entry.def.id);
+        const left = heldViewers.get(id) - 1;
+        if (left > 0) return void heldViewers.set(id, left);
+        heldViewers.delete(id);
+        if (state.providers.get(id)?.on !== false) return;
+        // Its photo still up (the request gave up) closes with its source;
+        // otherwise the request replaced or closed it, and the panel keeps
+        // what that request left (an error, an armed OPEN).
+        if (state.street.open && state.street.providerId === id)
+          parts.viewerHost.unmount(id);
+        else parts.viewerHost.release(id);
       };
     },
     /**

@@ -6,7 +6,6 @@ import { fakeStreetLevelProvider, fakeCesiumViewer } from './testSupport/streetL
 import { showStreetLevel } from './voice/gevActions.js';
 import { installViews } from './app/embed.js';
 import { ShareRestoration } from './ui/shareRestoration.js';
-import { createView } from './view/index.js';
 import { StreetLevelControls } from './ui/streetLevelControls.js';
 import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
@@ -22,11 +21,10 @@ function deferred() {
   const promise = new Promise(done => { resolve = done; });
   return { promise, resolve };
 }
-async function harness(t, { nearestImage = async () => 'A', failImage = null, billed = false, extraProviders = [] } = {}) {
+async function harness(t, { nearestImage = async () => 'A', failImage = null, extraProviders = [] } = {}) {
   document.body.className = '';
   document.body.replaceChildren();
   const provider = fakeStreetLevelProvider({ nearestImage });
-  provider.billedPerImage = billed;
   const originalCreate = provider.create;
   const opened = [];
   provider.create = context => {
@@ -50,7 +48,6 @@ async function harness(t, { nearestImage = async () => 'A', failImage = null, bi
   layer.attachViewerHost(host);
   t.after(() => { layer.destroy(); document.body.className = ''; document.body.replaceChildren(); });
   await settle();
-  assert.equal(layer.providerStatus('mapillary').billed, billed);
   const dataManager = {
     layers: new Map([['street-level', { module: layer }]]),
     getAll: () => [{ id: 'street-level', enabled: true }],
@@ -69,14 +66,9 @@ async function harness(t, { nearestImage = async () => 'A', failImage = null, bi
       return { ok: true, latitude: 48, longitude: 2, label: 'fixture point' };
     },
   };
-  let result;
-  const run = async (name, args) => {
-    if (name !== 'show_street_level') return { ok: true };
-    result = await showStreetLevel(args, context);
-    return result;
-  };
-  const view = createView({ camera: { lat: 48, lon: 2 }, layers: ['street-level'], street_level: { provider: 'mapillary', lat: 48, lon: 2 } });
-  return { layer, viewer, dataManager, context, run, view, opened, flights, result: () => result };
+  const run = (name, args) =>
+    name === 'show_street_level' ? showStreetLevel(args, context) : Promise.resolve({ ok: true });
+  return { layer, viewer, dataManager, context, run, opened, flights };
 }
 
 test('a landed link does not reclaim a camera the user moved while its layers load', async t => {

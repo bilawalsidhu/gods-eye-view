@@ -181,3 +181,37 @@ export function reassertNavigationHandoff({
   release?.();
   return true;
 }
+
+/** Gestures on the globe that take the camera from a pending request. */
+const CAMERA_GESTURES = ['pointerdown', 'wheel'];
+
+/**
+ * Whether the camera is still a request's: a navigation the shell stamps (a
+ * search, the assistant, a link) or a press or wheel on the globe hands it to
+ * someone else. `claim()` makes the camera as it is now the request's (after
+ * its own flight); `stop()` removes the gesture listeners.
+ */
+export function watchCameraOwner(viewer, navigation) {
+  let generation = navigation?._navigationGeneration;
+  const canvas = viewer?.canvas ?? viewer?.scene?.canvas ?? null;
+  let taken = false;
+  const onGesture = () => {
+    taken = true;
+  };
+  for (const type of CAMERA_GESTURES)
+    canvas?.addEventListener?.(type, onGesture, { passive: true });
+  return {
+    claim: () => {
+      generation = navigation?._navigationGeneration;
+      taken = false;
+    },
+    taken: () =>
+      taken ||
+      (Number.isFinite(generation) &&
+        navigation._navigationGeneration !== generation),
+    stop: () => {
+      for (const type of CAMERA_GESTURES)
+        canvas?.removeEventListener?.(type, onGesture);
+    },
+  };
+}

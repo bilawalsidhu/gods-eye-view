@@ -76,8 +76,8 @@ export const SEQUENCE_IMAGE_FIELDS =
 
 /**
  * Images asked for in a nearest-image search: the API cuts at the limit
- * before any order, so this is its most, and the distance sort and the
- * imagery filter choose among all of the spot's photos.
+ * before any order, so this is its most; the distance sort and the imagery
+ * filter choose among the photos this one request returns.
  */
 export const NEAREST_LIMIT = 100;
 /**

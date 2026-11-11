@@ -85,6 +85,19 @@ test('a view is applied through the app actions in order', async () => {
   assert.ok(steps.some((step) => step.step === 'camera'));
 });
 
+test("a view's street-level step replays the sender's view: nothing it switches is the visitor's choice", async () => {
+  const { options, run } = recorder();
+  await applyView(
+    createView({
+      camera: { lat: 48.86, lon: 2.29 },
+      street_level: { provider: 'panoramax', lat: 48.8584, lon: 2.2945 },
+    }),
+    { viewer: fakeViewer(), dataManager: fakeLayers(new Set()), run },
+  );
+  const [, runOptions] = options.find(([name]) => name === 'show_street_level');
+  assert.equal(runOptions?.origin, 'programmatic');
+});
+
 test('a followed entity is retried until its layer has it', async () => {
   let tries = 0;
   const { run } = recorder({
@@ -739,8 +752,8 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
   ]);
   assert.deepEqual(
     panels,
-    [['street-level-panel', false, { explicit: true }]],
-    'the panel opens so OPEN is in view',
+    [['street-level-panel', false, { explicit: true, persist: false }]],
+    "the panel opens so OPEN is in view, without saving the layout as the recipient's",
   );
   assert.deepEqual(revealed, ['street-level-panel'], 'its phone sheet too');
   // Adding ?embed=1 to a published link does not lift the gate: the page is

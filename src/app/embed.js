@@ -12,7 +12,10 @@
  */
 
 import * as Cesium from 'cesium';
-import { announceNavigationAuthority } from '../navigationPolicy.js';
+import {
+  announceNavigationAuthority,
+  watchCameraOwner,
+} from '../navigationPolicy.js';
 import { t, translateKnown } from '../i18n/index.js';
 import { GOOGLE_LABEL } from '../layers/streetLevel/providers/google/policy.js';
 import {
@@ -234,10 +237,10 @@ export async function applyView(
   },
 ) {
   const steps = [];
-  const act = async (name, args) => {
+  const act = async (name, args, options) => {
     let result = null;
     try {
-      result = await run(name, args);
+      result = await run(name, args, options);
     } catch (error) {
       result = { ok: false, error: error?.message || String(error) };
     }
@@ -270,9 +273,12 @@ export async function applyView(
   if (view.street_level) {
     // The photos frame the camera; when the action fails before flying, the
     // view's own camera still applies.
+    // A posted view replays someone else's view, as a link does: the source
+    // it lights is not saved as the visitor's own choice.
     const result = await act(
       'show_street_level',
       streetLevelArgs(view.street_level, { autoOpen }),
+      { origin: 'programmatic' },
     );
     if (result?.ok !== true) {
       // Overtaken (a click on the map, a newer request): hands off.
@@ -397,8 +403,10 @@ export function installViews({
     // OPEN must be in view, but embed mode hides the rail that holds it: in
     // a frame a posted view is the way to open a photo.
     if (result?.armed === true && !isEmbedded(location)) {
+      // Opened for this link only: the recipient's saved layout stays theirs.
       shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
         explicit: true,
+        persist: false,
       });
       // On a phone the panel sits in a tab sheet: open it so OPEN shows.
       shell.revealPanel?.(STREET_LEVEL_PANEL_ID);
@@ -490,10 +498,25 @@ export function installViews({
     queue = queue.then(async () => {
       if (signal?.aborted) return;
       if (unplaced && view.street_level) {
-        const point = await groundedLookAt(view.camera, terrain, signal).catch(
-          () => null,
-        );
+        // Whoever takes the camera while the terrain answers (a drag, a
+        // search, the assistant) keeps it: the view stands down.
+        const owner = watchCameraOwner(viewer, shell);
+        const point = await groundedLookAt(view.camera, terrain, signal)
+          .catch(() => null)
+          .finally(() => owner.stop());
         if (signal?.aborted) return;
+        if (owner.taken()) {
+          post(
+            {
+              type: EMBED_APPLIED_MESSAGE,
+              id,
+              ok: false,
+              steps: [{ step: 'street_level', ok: false, superseded: true }],
+            },
+            replyOrigin,
+          );
+          return;
+        }
         if (point)
           view = createView({
             ...event.data.view,
