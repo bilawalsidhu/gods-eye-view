@@ -1,0 +1,807 @@
+{
+    "checkedAt":  "2026-11-10T10:19:40.267Z",
+    "method":  "Public HTTP media bytes and repeated playlist or JPEG changes. Historical transport evidence; not an automated test or a complete browser playback review.",
+    "activeCount":  100,
+    "checks":  [
+                   {
+                       "id":  "moscow-ac839d1be033",
+                       "format":  "mpegts",
+                       "bytes":  348552,
+                       "checkedAt":  "2026-11-10T10:01:12.836Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.309Z"
+                   },
+                   {
+                       "id":  "moscow-aa420b864ba8",
+                       "format":  "mpegts",
+                       "bytes":  237256,
+                       "checkedAt":  "2026-11-10T10:01:12.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.310Z"
+                   },
+                   {
+                       "id":  "moscow-seliger-city",
+                       "format":  "mpegts",
+                       "bytes":  391980,
+                       "checkedAt":  "2026-11-10T10:01:12.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.299Z"
+                   },
+                   {
+                       "id":  "moscow-51f935a3ec3e",
+                       "format":  "mpegts",
+                       "bytes":  1410752,
+                       "checkedAt":  "2026-11-10T10:01:12.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.441Z"
+                   },
+                   {
+                       "id":  "moscow-c13e86292b30",
+                       "format":  "mpegts",
+                       "bytes":  1364128,
+                       "checkedAt":  "2026-11-10T10:01:12.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.441Z"
+                   },
+                   {
+                       "id":  "moscow-ce5792bff132",
+                       "format":  "mpegts",
+                       "bytes":  290084,
+                       "checkedAt":  "2026-11-10T10:01:12.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.320Z"
+                   },
+                   {
+                       "id":  "moscow-861669c80358",
+                       "format":  "mpegts",
+                       "bytes":  125208,
+                       "checkedAt":  "2026-11-10T10:01:12.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.335Z"
+                   },
+                   {
+                       "id":  "moscow-1f51a2f820ea",
+                       "format":  "mpegts",
+                       "bytes":  236692,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.349Z"
+                   },
+                   {
+                       "id":  "moscow-daf71b67c197",
+                       "format":  "mpegts",
+                       "bytes":  260380,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.346Z"
+                   },
+                   {
+                       "id":  "moscow-38744aa6fefb",
+                       "format":  "mpegts",
+                       "bytes":  245152,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.341Z"
+                   },
+                   {
+                       "id":  "moscow-41f34b56b107",
+                       "format":  "mpegts",
+                       "bytes":  526964,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.591Z"
+                   },
+                   {
+                       "id":  "moscow-5a6812688873",
+                       "format":  "mpegts",
+                       "bytes":  237820,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.338Z"
+                   },
+                   {
+                       "id":  "moscow-cd10c8853e0e",
+                       "format":  "mpegts",
+                       "bytes":  1716064,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.689Z"
+                   },
+                   {
+                       "id":  "moscow-9814dd3dc5a0",
+                       "format":  "mpegts",
+                       "bytes":  160176,
+                       "checkedAt":  "2026-11-10T10:01:14.145Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.691Z"
+                   },
+                   {
+                       "id":  "moscow-82e311f6911f",
+                       "format":  "mpegts",
+                       "bytes":  296100,
+                       "checkedAt":  "2026-11-10T10:01:18.412Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.691Z"
+                   },
+                   {
+                       "id":  "moscow-3a48a4748f10",
+                       "format":  "mpegts",
+                       "bytes":  292152,
+                       "checkedAt":  "2026-11-10T10:01:18.412Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.687Z"
+                   },
+                   {
+                       "id":  "moscow-2cdded3bbd2d",
+                       "format":  "mpegts",
+                       "bytes":  1591232,
+                       "checkedAt":  "2026-11-10T10:01:18.412Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.979Z"
+                   },
+                   {
+                       "id":  "moscow-bf5c2a55b1db",
+                       "format":  "mpegts",
+                       "bytes":  1756672,
+                       "checkedAt":  "2026-11-10T10:01:18.412Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.993Z"
+                   },
+                   {
+                       "id":  "moscow-69eef6fe189d",
+                       "format":  "mpegts",
+                       "bytes":  201348,
+                       "checkedAt":  "2026-11-10T10:01:18.412Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.687Z"
+                   },
+                   {
+                       "id":  "moscow-ec5885fa445e",
+                       "format":  "mpegts",
+                       "bytes":  209432,
+                       "checkedAt":  "2026-11-10T10:01:29.036Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.687Z"
+                   },
+                   {
+                       "id":  "moscow-221b3630dd5a",
+                       "format":  "mpegts",
+                       "bytes":  983616,
+                       "checkedAt":  "2026-11-10T10:01:29.036Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:36.997Z"
+                   },
+                   {
+                       "id":  "moscow-38d95caaed4d",
+                       "format":  "mpegts",
+                       "bytes":  4733652,
+                       "checkedAt":  "2026-11-10T10:01:29.036Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:37.005Z"
+                   },
+                   {
+                       "id":  "moscow-804b1746dc33",
+                       "format":  "mpegts",
+                       "bytes":  269404,
+                       "checkedAt":  "2026-11-10T10:01:29.036Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.147Z"
+                   },
+                   {
+                       "id":  "moscow-30c74a4f034c",
+                       "format":  "mpegts",
+                       "bytes":  169012,
+                       "checkedAt":  "2026-11-10T10:01:29.036Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.357Z"
+                   },
+                   {
+                       "id":  "moscow-3bb1ccc16a9c",
+                       "format":  "mpegts",
+                       "bytes":  295348,
+                       "checkedAt":  "2026-11-10T10:01:29.037Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.377Z"
+                   },
+                   {
+                       "id":  "moscow-8fa5a79e99cd",
+                       "format":  "mpegts",
+                       "bytes":  1140596,
+                       "checkedAt":  "2026-11-10T10:01:29.038Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.394Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-fotievoy-2",
+                       "format":  "mpegts",
+                       "bytes":  247220,
+                       "checkedAt":  "2026-11-10T10:01:29.038Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.405Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-fotievoy-1",
+                       "format":  "mpegts",
+                       "bytes":  256244,
+                       "checkedAt":  "2026-11-10T10:01:33.795Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.401Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-lsr-mig-1",
+                       "format":  "mpegts",
+                       "bytes":  289332,
+                       "checkedAt":  "2026-11-10T10:01:33.796Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:43.387Z"
+                   },
+                   {
+                       "id":  "moscow-cd8c55b3d230",
+                       "format":  "mpegts",
+                       "bytes":  1253584,
+                       "checkedAt":  "2026-11-10T10:01:33.798Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:10.946Z"
+                   },
+                   {
+                       "id":  "moscow-015696fcd3ec",
+                       "format":  "mpegts",
+                       "bytes":  1181956,
+                       "checkedAt":  "2026-11-10T10:01:54.979Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:10.509Z"
+                   },
+                   {
+                       "id":  "moscow-ebfefb8250f1",
+                       "format":  "mpegts",
+                       "bytes":  525836,
+                       "checkedAt":  "2026-11-10T10:01:54.980Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:09.617Z"
+                   },
+                   {
+                       "id":  "moscow-129d56fc87ea",
+                       "format":  "fmp4",
+                       "bytes":  71557,
+                       "checkedAt":  "2026-11-10T10:01:54.980Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:45.985Z"
+                   },
+                   {
+                       "id":  "moscow-4cca1fea6133",
+                       "format":  "fmp4",
+                       "bytes":  269826,
+                       "checkedAt":  "2026-11-10T10:01:54.981Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:47.694Z"
+                   },
+                   {
+                       "id":  "moscow-a75f70fa1c6b",
+                       "format":  "fmp4",
+                       "bytes":  114792,
+                       "checkedAt":  "2026-11-10T10:01:54.981Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:52.494Z"
+                   },
+                   {
+                       "id":  "moscow-357aeec30927",
+                       "format":  "mpegts",
+                       "bytes":  9616576,
+                       "checkedAt":  "2026-11-10T10:10:21.197Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:12:25.246Z"
+                   },
+                   {
+                       "id":  "moscow-1f33f2ce344e",
+                       "format":  "mpegts",
+                       "bytes":  970644,
+                       "checkedAt":  "2026-11-10T10:02:01.961Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:13.151Z"
+                   },
+                   {
+                       "id":  "moscow-610550105f21",
+                       "format":  "mpegts",
+                       "bytes":  925336,
+                       "checkedAt":  "2026-11-10T10:02:01.962Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:11.684Z"
+                   },
+                   {
+                       "id":  "moscow-4522235d711a",
+                       "format":  "mpegts",
+                       "bytes":  546704,
+                       "checkedAt":  "2026-11-10T10:02:13.934Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:08.996Z"
+                   },
+                   {
+                       "id":  "moscow-02da1148ba38",
+                       "format":  "mpegts",
+                       "bytes":  553472,
+                       "checkedAt":  "2026-11-10T10:02:13.935Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:23.837Z"
+                   },
+                   {
+                       "id":  "moscow-92e09a6acaff",
+                       "format":  "fmp4",
+                       "bytes":  1292541,
+                       "checkedAt":  "2026-11-10T10:02:13.935Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:50.573Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-34478",
+                       "format":  "mpegts",
+                       "bytes":  1221812,
+                       "checkedAt":  "2026-11-10T10:02:13.936Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:48.317Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-43167",
+                       "format":  "mpegts",
+                       "bytes":  584116,
+                       "checkedAt":  "2026-11-10T10:02:13.936Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:48.333Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-39856",
+                       "format":  "mpegts",
+                       "bytes":  181044,
+                       "checkedAt":  "2026-11-10T10:02:13.937Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:48.336Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-39857",
+                       "format":  "mpegts",
+                       "bytes":  208116,
+                       "checkedAt":  "2026-11-10T10:02:13.937Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:48.339Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-39858",
+                       "format":  "mpegts",
+                       "bytes":  268276,
+                       "checkedAt":  "2026-11-10T10:02:13.937Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:48.338Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-39412",
+                       "format":  "mpegts",
+                       "bytes":  283316,
+                       "checkedAt":  "2026-11-10T10:02:19.090Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:48.388Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-42618",
+                       "format":  "mpegts",
+                       "bytes":  256244,
+                       "checkedAt":  "2026-11-10T10:02:19.091Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.155Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-42619",
+                       "format":  "mpegts",
+                       "bytes":  295348,
+                       "checkedAt":  "2026-11-10T10:02:19.091Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.145Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-43174",
+                       "format":  "mpegts",
+                       "bytes":  481844,
+                       "checkedAt":  "2026-11-10T10:02:19.092Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.114Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-14458",
+                       "format":  "mpegts",
+                       "bytes":  409652,
+                       "checkedAt":  "2026-11-10T10:02:19.092Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.138Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-38315",
+                       "format":  "mpegts",
+                       "bytes":  427700,
+                       "checkedAt":  "2026-11-10T10:02:19.092Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.128Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-43153",
+                       "format":  "mpegts",
+                       "bytes":  190068,
+                       "checkedAt":  "2026-11-10T10:02:19.093Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.148Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-43130",
+                       "format":  "mpegts",
+                       "bytes":  138932,
+                       "checkedAt":  "2026-11-10T10:02:24.039Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.177Z"
+                   },
+                   {
+                       "id":  "moscow-donstroy-33341",
+                       "format":  "mpegts",
+                       "bytes":  821748,
+                       "checkedAt":  "2026-11-10T10:02:24.040Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:06:53.136Z"
+                   },
+                   {
+                       "id":  "moscow-level-southport-1",
+                       "format":  "mpegts",
+                       "bytes":  455524,
+                       "checkedAt":  "2026-11-10T10:02:24.041Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:23.330Z"
+                   },
+                   {
+                       "id":  "moscow-level-southport-2",
+                       "format":  "mpegts",
+                       "bytes":  383896,
+                       "checkedAt":  "2026-11-10T10:02:24.041Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:23.002Z"
+                   },
+                   {
+                       "id":  "moscow-level-southport-3",
+                       "format":  "mpegts",
+                       "bytes":  186684,
+                       "checkedAt":  "2026-11-10T10:02:24.042Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:22.703Z"
+                   },
+                   {
+                       "id":  "moscow-level-zvenigorodskaya-1",
+                       "format":  "mpegts",
+                       "bytes":  838856,
+                       "checkedAt":  "2026-11-10T10:02:24.042Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:24.956Z"
+                   },
+                   {
+                       "id":  "moscow-level-zvenigorodskaya-2",
+                       "format":  "mpegts",
+                       "bytes":  346860,
+                       "checkedAt":  "2026-11-10T10:02:24.043Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:22.597Z"
+                   },
+                   {
+                       "id":  "moscow-level-seligerskaya-1",
+                       "format":  "mpegts",
+                       "bytes":  1372024,
+                       "checkedAt":  "2026-11-10T10:02:24.043Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:37.358Z"
+                   },
+                   {
+                       "id":  "moscow-level-seligerskaya-2",
+                       "format":  "mpegts",
+                       "bytes":  1171052,
+                       "checkedAt":  "2026-11-10T10:02:31.366Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:38.076Z"
+                   },
+                   {
+                       "id":  "moscow-level-seligerskaya-3",
+                       "format":  "mpegts",
+                       "bytes":  303432,
+                       "checkedAt":  "2026-11-10T10:02:31.367Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:35.705Z"
+                   },
+                   {
+                       "id":  "moscow-level-nizhegorodskaya-1",
+                       "format":  "mpegts",
+                       "bytes":  888864,
+                       "checkedAt":  "2026-11-10T10:02:31.368Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:35.517Z"
+                   },
+                   {
+                       "id":  "moscow-level-michurinskij-komfort-2",
+                       "format":  "mpegts",
+                       "bytes":  254928,
+                       "checkedAt":  "2026-11-10T10:02:31.368Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:38.986Z"
+                   },
+                   {
+                       "id":  "moscow-level-michurinskij-komfort-3",
+                       "format":  "mpegts",
+                       "bytes":  1242304,
+                       "checkedAt":  "2026-11-10T10:02:31.368Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:37.200Z"
+                   },
+                   {
+                       "id":  "moscow-level-michurinskij-komfort-4",
+                       "format":  "mpegts",
+                       "bytes":  479964,
+                       "checkedAt":  "2026-11-10T10:02:31.369Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:50.518Z"
+                   },
+                   {
+                       "id":  "moscow-level-paveletskaya-city-1",
+                       "format":  "mpegts",
+                       "bytes":  355884,
+                       "checkedAt":  "2026-11-10T10:02:31.369Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:12:24.257Z"
+                   },
+                   {
+                       "id":  "moscow-level-vojkovskaya-1",
+                       "format":  "mpegts",
+                       "bytes":  393484,
+                       "checkedAt":  "2026-11-10T10:02:31.369Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:48.846Z"
+                   },
+                   {
+                       "id":  "moscow-level-vojkovskaya-2",
+                       "format":  "mpegts",
+                       "bytes":  801632,
+                       "checkedAt":  "2026-11-10T10:02:43.324Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:50.119Z"
+                   },
+                   {
+                       "id":  "moscow-wowza-mod1",
+                       "format":  "mpegts",
+                       "bytes":  590508,
+                       "checkedAt":  "2026-11-10T10:02:43.325Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.016Z"
+                   },
+                   {
+                       "id":  "moscow-wowza-mod3",
+                       "format":  "mpegts",
+                       "bytes":  219584,
+                       "checkedAt":  "2026-11-10T10:02:43.325Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.105Z"
+                   },
+                   {
+                       "id":  "moscow-wowza-citybay5",
+                       "format":  "mpegts",
+                       "bytes":  177472,
+                       "checkedAt":  "2026-11-10T10:02:43.325Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.449Z"
+                   },
+                   {
+                       "id":  "moscow-wowza-citybay6",
+                       "format":  "mpegts",
+                       "bytes":  324676,
+                       "checkedAt":  "2026-11-10T10:02:43.325Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.399Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-zilart-13",
+                       "format":  "mpegts",
+                       "bytes":  105844,
+                       "checkedAt":  "2026-11-10T10:02:43.325Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.725Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-zilart-29",
+                       "format":  "mpegts",
+                       "bytes":  247220,
+                       "checkedAt":  "2026-11-10T10:02:43.326Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.652Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-zilart-31",
+                       "format":  "mpegts",
+                       "bytes":  244212,
+                       "checkedAt":  "2026-11-10T10:02:43.326Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.645Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-ogorodnyj-2",
+                       "format":  "mpegts",
+                       "bytes":  406644,
+                       "checkedAt":  "2026-11-10T10:02:48.025Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.653Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-ogorodnyj-3",
+                       "format":  "mpegts",
+                       "bytes":  295348,
+                       "checkedAt":  "2026-11-10T10:02:48.025Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.658Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-ogorodnyj-4",
+                       "format":  "mpegts",
+                       "bytes":  2629556,
+                       "checkedAt":  "2026-11-10T10:02:48.026Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.680Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-ogorodnyj-5",
+                       "format":  "mpegts",
+                       "bytes":  930036,
+                       "checkedAt":  "2026-11-10T10:02:48.026Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.654Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-ilmenskij-3",
+                       "format":  "mpegts",
+                       "bytes":  156980,
+                       "checkedAt":  "2026-11-10T10:02:48.027Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.691Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-borisovskie-1",
+                       "format":  "mpegts",
+                       "bytes":  268276,
+                       "checkedAt":  "2026-11-10T10:02:48.027Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.663Z"
+                   },
+                   {
+                       "id":  "moscow-exdesign-borisovskie-5",
+                       "format":  "mpegts",
+                       "bytes":  262260,
+                       "checkedAt":  "2026-11-10T10:02:48.027Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:11.863Z"
+                   },
+                   {
+                       "id":  "moscow-kant-1310720",
+                       "format":  "mpegts",
+                       "bytes":  953912,
+                       "checkedAt":  "2026-11-10T10:02:54.835Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:49.899Z"
+                   },
+                   {
+                       "id":  "moscow-kant-1376256",
+                       "format":  "mpegts",
+                       "bytes":  1043212,
+                       "checkedAt":  "2026-11-10T10:02:54.836Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:11:51.086Z"
+                   },
+                   {
+                       "id":  "moscow-kant-1114112",
+                       "format":  "mpegts",
+                       "bytes":  1010500,
+                       "checkedAt":  "2026-11-10T10:02:54.836Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:12:01.228Z"
+                   },
+                   {
+                       "id":  "moscow-kant-1179648",
+                       "format":  "mpegts",
+                       "bytes":  794676,
+                       "checkedAt":  "2026-11-10T10:02:54.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:12:00.392Z"
+                   },
+                   {
+                       "id":  "moscow-rtsp-3ae5F8y3",
+                       "format":  "mpegts",
+                       "bytes":  547268,
+                       "checkedAt":  "2026-11-10T10:02:54.837Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:07:17.134Z"
+                   },
+                   {
+                       "id":  "moscow-rtsp-24E5hSTk",
+                       "format":  "fmp4",
+                       "bytes":  595031,
+                       "checkedAt":  "2026-11-10T10:09:42.278Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:55.590Z"
+                   },
+                   {
+                       "id":  "moscow-rtsp-HeG4b638",
+                       "format":  "fmp4",
+                       "bytes":  940081,
+                       "checkedAt":  "2026-11-10T10:09:42.279Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:57.750Z"
+                   },
+                   {
+                       "id":  "moscow-rtsp-Gzkd9Tyd",
+                       "format":  "fmp4",
+                       "bytes":  921864,
+                       "checkedAt":  "2026-11-10T10:09:42.280Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:56.105Z"
+                   },
+                   {
+                       "id":  "moscow-nix-12",
+                       "format":  "jpeg",
+                       "bytes":  41762,
+                       "checkedAt":  "2026-11-10T10:09:42.280Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:53.324Z"
+                   },
+                   {
+                       "id":  "moscow-nix-13",
+                       "format":  "jpeg",
+                       "bytes":  43510,
+                       "checkedAt":  "2026-11-10T10:09:42.280Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:53.537Z"
+                   },
+                   {
+                       "id":  "moscow-nix-14",
+                       "format":  "jpeg",
+                       "bytes":  22932,
+                       "checkedAt":  "2026-11-10T10:09:42.280Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:53.371Z"
+                   },
+                   {
+                       "id":  "moscow-ivideon-ozernaya",
+                       "format":  "mpegts",
+                       "bytes":  561744,
+                       "checkedAt":  "2026-11-10T10:09:42.280Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:12:00.516Z"
+                   },
+                   {
+                       "id":  "moscow-city-panorama",
+                       "format":  "mpegts",
+                       "bytes":  1422596,
+                       "checkedAt":  "2026-11-10T10:10:08.410Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:13:53.294Z"
+                   },
+                   {
+                       "id":  "moscow-reserve-minskaya",
+                       "format":  "mpegts",
+                       "bytes":  4196724,
+                       "checkedAt":  "2026-11-10T10:10:08.410Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:12:25.586Z"
+                   },
+                   {
+                       "id":  "moscow-polar-1",
+                       "format":  "mpegts",
+                       "bytes":  911424,
+                       "checkedAt":  "2026-11-10T10:18:56.721Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:19:26.759Z"
+                   },
+                   {
+                       "id":  "moscow-polar-2",
+                       "format":  "mpegts",
+                       "bytes":  1025728,
+                       "checkedAt":  "2026-11-10T10:18:56.721Z",
+                       "fresh":  true,
+                       "freshnessCheckedAt":  "2026-11-10T10:19:26.769Z"
+                   }
+               ]
+}

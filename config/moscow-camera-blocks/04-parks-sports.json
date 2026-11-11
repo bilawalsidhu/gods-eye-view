@@ -1,0 +1,61 @@
+{
+  "order": 4,
+  "id": "parks-sports",
+  "title": "Outdoor sports",
+  "active": true,
+  "description": "Public outdoor slopes and sports areas.",
+  "file": "04-parks-sports.json",
+  "count": 5,
+  "cameras": [
+    {
+      "id": "moscow-cd8c55b3d230",
+      "name": "KANT · Slopes 5/7",
+      "provider": "open.ivideon.com",
+      "lat": 55.679219664246,
+      "lon": 37.615595821287,
+      "sourceUrl": "https://www.geocam.ru/online/kant-5-7/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:33.798Z"
+    },
+    {
+      "id": "moscow-kant-1310720",
+      "name": "KANT · Cam 1",
+      "provider": "open.ivideon.com",
+      "lat": 55.679219664246,
+      "lon": 37.615595821287,
+      "sourceUrl": "https://kant-sport.ru/webcam/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:54.835Z"
+    },
+    {
+      "id": "moscow-kant-1376256",
+      "name": "KANT · Cam 2",
+      "provider": "open.ivideon.com",
+      "lat": 55.679219664246,
+      "lon": 37.615595821287,
+      "sourceUrl": "https://kant-sport.ru/webcam/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:54.836Z"
+    },
+    {
+      "id": "moscow-kant-1114112",
+      "name": "KANT · Cam 3",
+      "provider": "open.ivideon.com",
+      "lat": 55.679219664246,
+      "lon": 37.615595821287,
+      "sourceUrl": "https://kant-sport.ru/webcam/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:54.836Z"
+    },
+    {
+      "id": "moscow-kant-1179648",
+      "name": "KANT · Cam 4",
+      "provider": "open.ivideon.com",
+      "lat": 55.679219664246,
+      "lon": 37.615595821287,
+      "sourceUrl": "https://kant-sport.ru/webcam/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:54.837Z"
+    }
+  ]
+}
