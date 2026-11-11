@@ -8,7 +8,8 @@
 // say nothing about whether a destination is framed well.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CITY_POIS, LOCATIONS } from './locations.js';
+import { CITY_POIS } from './cityPois.js';
+import { LOCATIONS } from './locations.js';
 
 const DESTINATIONS = Object.entries(CITY_POIS);
 const REQUIRED_POI_KEYS = ['name', 'lat', 'lon', 'alt', 'pitch', 'heading'];

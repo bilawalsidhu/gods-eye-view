@@ -1,6 +1,7 @@
 import { MAP_STACKS } from './catalog.js';
 import { photorealUnavailableReason } from './availability.js';
-import { keySetupRequirement } from '../keySetupCore.mjs';
+import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
+import { t } from '../i18n/index.js';
 import {
   createOsmImagery,
   createEsriImagery,
@@ -33,15 +34,20 @@ export function createDefaultMapSources({
       const common = {
         descriptor,
         available: !descriptor.requiresIon || hasIon,
+        // Read when shown, so it follows the locale.
         unavailableReason: descriptor.requiresIon
-          ? keySetupRequirement('cesium-ion')
+          ? () =>
+              t('Needs {envVars} — add it in Provider Settings', {
+                envVars: keySetupRequirementEnvVars('cesium-ion'),
+              })
           : null,
       };
       if (descriptor.kind === 'photoreal')
         return {
           ...common,
           available: Boolean(googleTileset),
-          unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
+          unavailableReason: () =>
+            photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
         };
       const imagery =

@@ -20,7 +20,7 @@ test('standalone geocoding falls back after Google connection, JSON and refusal 
   for (const fail of [() => { throw new Error('offline'); }, () => new Response('invalid json'), () => Response.json({ status: 'REQUEST_DENIED' })]) {
     const urls = [];
     const service = createStandalonePlaceSearch({ resolveApiKey: () => 'fixture', fetchImpl: async (url) => {
-      urls.push(url); return url.includes('maps.googleapis.com') ? fail() : hit();
+      urls.push(url); return url.includes('/api/google/geocode') ? fail() : hit();
     } });
     const result = await service.geocode('Hanoi');
     assert.equal(result.place.name, 'Hà Nội');

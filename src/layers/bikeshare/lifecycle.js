@@ -51,7 +51,7 @@ export function createLifecycle({
       layerState._lastUpdate = null;
       layerState._loading = false;
       layerState._loadingOps = 0;
-      layerState._error = null;
+      layerState._failedCityIds.clear();
       layerState._limitWarned = false;
 
       layerState._overlayHost.setVisible(
@@ -75,7 +75,7 @@ export function createLifecycle({
      */
     enable(viewer) {
       layerState._enabled = true;
-      layerState._error = null;
+      layerState._failedCityIds.clear();
       layerState._pointCollection.show = true;
       layerState._overlayHost.setVisible(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
@@ -169,6 +169,7 @@ export function createLifecycle({
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;
       }
+      layerState._dataManager = null;
       layerState._viewer = null;
     },
   };

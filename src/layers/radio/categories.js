@@ -1,4 +1,5 @@
 import { MUSIC_GENRES, CATEGORY_MATCHERS } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createCategories({
   state: layerState,
@@ -69,23 +70,29 @@ export function createCategories({
   function buildRadioCategories(stations) {
     const rows = Array.isArray(stations) ? stations : [];
     const categories = [
-      { id: 'all', label: 'All' },
-      { id: 'news', label: 'News' },
-      { id: 'talk', label: 'Talk' },
-      { id: 'weather', label: 'Weather / Emergency' },
-      { id: 'public-safety', label: 'Public Safety' },
-      { id: 'aviation-marine', label: 'Aviation / Marine' },
-      { id: 'traffic-transit', label: 'Traffic / Transit' },
-      { id: 'music', label: 'Music' },
+      { id: 'all', label: t('All', { context: 'radio tag' }) },
+      { id: 'news', label: t('News') },
+      { id: 'talk', label: t('Talk') },
+      { id: 'weather', label: t('Weather / Emergency') },
+      { id: 'public-safety', label: t('Public Safety') },
+      {
+        id: 'aviation-marine',
+        label: t('Aviation / Marine'),
+      },
+      {
+        id: 'traffic-transit',
+        label: t('Traffic / Transit'),
+      },
+      { id: 'music', label: t('Music') },
     ];
 
     for (const [genre, label] of MUSIC_GENRES) {
       const id = `genre:${genre}`;
       if (rows.some((station) => stationMatchesRadioCategory(station, id))) {
-        categories.push({ id, label });
+        categories.push({ id, label: t(label) });
       }
     }
-    categories.push({ id: 'other', label: 'Other' });
+    categories.push({ id: 'other', label: t('Other') });
     return categories.map((category) => ({
       ...category,
       color: parts.model.radioCategoryColor(category.id),

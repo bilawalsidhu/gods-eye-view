@@ -1,15 +1,18 @@
 /** Compose UI controls with the application's existing engines and layer instances. */
 import { StyleManager as ApplicationShell } from './applicationShell.js';
 import { LocationSearch } from './location.js';
+import { CITY_POIS } from '../cityPois.js';
 import {
-  CITY_POIS,
   GLOBE_VIEW,
   flyToGlobeView,
   flyToPresetLocation,
   flyToPOI,
   searchAndFlyTo,
 } from '../locations.js';
-import { interruptCameraMotion } from '../cameraVerbs.js';
+import {
+  interruptCameraMotion,
+  interruptGlobeRotation,
+} from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
 import { ShareLinkManager } from '../sharelink.js';
 import { OrbitController } from '../orbit.js';
@@ -24,8 +27,10 @@ import {
   initTrackedReadout,
 } from '../data/trackedReadout.js';
 import {
+  activateWorldOverlayAction,
   destroyWorldOverlay,
   initWorldOverlay,
+  subscribeWorldOverlayActions,
 } from '../overlays/worldOverlay.js';
 import {
   destroyDetection,
@@ -73,6 +78,7 @@ export class StyleManager extends ApplicationShell {
         flyToPOI,
         searchAndFlyTo,
         interruptCameraMotion,
+        interruptGlobeRotation,
         IntelHUD,
         ShareLinkManager,
         OrbitController,
@@ -84,6 +90,8 @@ export class StyleManager extends ApplicationShell {
         initTrackedReadout,
         destroyWorldOverlay,
         initWorldOverlay,
+        subscribeWorldOverlayActions,
+        activateWorldOverlayAction,
         destroyDetection,
         initDetection,
         cycleDetectionMode,

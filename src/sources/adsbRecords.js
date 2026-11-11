@@ -20,6 +20,12 @@
  *   onGround: boolean,            // the receiver reported the aircraft on the
  *                                 // surface (dump1090 `alt_baro: "ground"`)
  *   lastPositionAt: number|null,  // epoch ms of the newest decoded position
+ *   altitudeAt: number|null,      // epoch ms of the message `altitudeFt` came
+ *                                 // from; a feed does not say, so its records
+ *                                 // carry `lastMessageAt`
+ *   altitudeQuality?: 'held-after-rejection', // set only by
+ *                                 // gateLocalAdsbAltitude: `altitudeFt` is the
+ *                                 // last accepted value, not the newest report
  *   lastMessageAt: number,        // epoch ms of the newest CRC-valid message
  *   messageCount: number,
  *   rssiDbfs: number|null,
@@ -29,6 +35,8 @@
  *
  * This module is portable: no Cesium, DOM, network or storage access.
  */
+
+import { readAdsbVerticalRateFpm } from './adsbFields.js';
 
 /** A marker is dropped once its newest position is this old. */
 export const LOCAL_ADSB_POSITION_STALE_MS = 60_000;
@@ -41,12 +49,12 @@ const CATEGORY_PATTERN = /^[A-D][0-7]$/;
 /** A previous accepted fix older than this is no reference for a new one. */
 export const LOCAL_ADSB_REFERENCE_MAX_AGE_MS = 10 * 60_000;
 /** Speed limit (kt) for an aircraft that has not reported a ground speed. */
-export const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
+const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
 /** Tighter limit (kt) for light aircraft and rotorcraft without a speed. */
-export const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
+const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
 /** Reported ground speed is multiplied by this, plus the margin below. */
-export const LOCAL_ADSB_SPEED_FACTOR = 1.5;
-export const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
+const LOCAL_ADSB_SPEED_FACTOR = 1.5;
+const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
 /** Distance always allowed between two fixes (CPR and reception error). */
 export const LOCAL_ADSB_POSITION_MARGIN_M = 500;
 /**
@@ -260,19 +268,23 @@ export function createLocalAdsbAltitudeGate() {
  *
  * Returns `record` itself, or a copy whose `altitudeFt` is the last accepted
  * altitude, so the marker height, the card, the 3D-model ceiling and route
- * plausibility all read the same value. A refused report is counted in
- * `gate.rejected`. From the third consecutive refusal on, the candidate
- * becomes the new reference, as positions do: a bad first altitude cannot
- * freeze the aircraft at it.
+ * plausibility all read the same value. The copy is marked
+ * `altitudeQuality: 'held-after-rejection'`, so a consumer can tell a held
+ * value from a fresh one. A refused report is counted in `gate.rejected`.
+ * From the third consecutive refusal on, the candidate becomes the new
+ * reference, as positions do: a bad first altitude cannot freeze the aircraft
+ * at it.
  *
  * For categories with a ceiling ({@link localAdsbAltitudeCeilingFt}) a report
  * above it is refused outright and never re-anchors, a reference above it is
  * dropped once the category is known, and with nothing to hold the altitude
  * is returned as null: unknown, not impossible.
  *
- * Only a report with a newer `lastMessageAt` is judged. The layer re-reads the
- * same record several times a second, and a re-read must neither count toward
- * a re-anchor nor slip a refused value through. A surface report passes
+ * Only a report with a newer `altitudeAt` (else `lastMessageAt`) is judged.
+ * The layer re-reads the same record several times a second, and the browser
+ * decoder keeps an altitude while newer non-altitude messages arrive. Neither
+ * a re-read nor a re-sent altitude may count toward a re-anchor or slip a
+ * refused value through. A surface report passes
  * unjudged: a feed reports `alt_baro: "ground"` as 0, which is not a
  * barometric reading, so a landing at a high field is not a 5,000 ft drop.
  * @param {object} record Local ADS-B record.
@@ -282,7 +294,8 @@ export function createLocalAdsbAltitudeGate() {
 export function gateLocalAdsbAltitude(record, gate) {
   if (record?.onGround) return record;
   const altitudeFt = finiteOrNull(record?.altitudeFt);
-  const at = finiteOrNull(record?.lastMessageAt);
+  const at =
+    finiteOrNull(record?.altitudeAt) ?? finiteOrNull(record?.lastMessageAt);
   if (altitudeFt === null || at === null) return record;
   const ceilingFt = localAdsbAltitudeCeilingFt(record.category);
   const aboveCeiling = (value) => ceilingFt !== null && value > ceilingFt;
@@ -314,9 +327,13 @@ export function gateLocalAdsbAltitude(record, gate) {
   }
   const held = gate.accepted?.altitudeFt;
   if (Number.isFinite(held))
-    return held !== altitudeFt ? { ...record, altitudeFt: held } : record;
+    return held !== altitudeFt
+      ? { ...record, altitudeFt: held, altitudeQuality: 'held-after-rejection' }
+      : record;
   // Nothing accepted to hold: an impossible altitude is shown as unknown.
-  return aboveCeiling(altitudeFt) ? { ...record, altitudeFt: null } : record;
+  return aboveCeiling(altitudeFt)
+    ? { ...record, altitudeFt: null }
+    : record;
 }
 
 function normalizePosition(lat, lon) {
@@ -355,6 +372,7 @@ export function recordFromDecoderTrack(track) {
     trackDeg: normalizeTrack(track.headingDeg),
     verticalRateFpm: finiteOrNull(track.verticalRateFpm),
     lastPositionAt: lat === null ? null : finiteOrNull(track.lastPositionAt),
+    altitudeAt: finiteOrNull(track.altitudeAt),
     lastMessageAt: finiteOrNull(track.lastSeen) ?? 0,
     messageCount: Math.max(0, Math.trunc(finiteOrNull(track.messages) ?? 0)),
     rssiDbfs: null,
@@ -402,10 +420,11 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       altitudeFt: altitude,
       groundSpeedKt: finiteOrNull(entry.gs),
       trackDeg: normalizeTrack(entry.track),
-      verticalRateFpm: finiteOrNull(entry.baro_rate),
+      verticalRateFpm: readAdsbVerticalRateFpm(entry),
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
         : null,
+      altitudeAt: altitude === null ? null : receivedAt - seenS * 1000,
       lastMessageAt: receivedAt - seenS * 1000,
       messageCount: Math.max(0, Math.trunc(finiteOrNull(entry.messages) ?? 0)),
       rssiDbfs: finiteOrNull(entry.rssi),

@@ -205,22 +205,21 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {{ position: Cesium.Cartesian3, id: string, type: string }[]}
      */
     getDetectableObjects(options = {}) {
-      if (!layerState._enabled || layerState._records.length === 0) return [];
+      // The cameras the view pass shows, not icons it has hidden.
+      const records = layerState._viewRecords;
+      if (!layerState._enabled || records.length === 0) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
-        : layerState._records.length;
+        : records.length;
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
-      const stride = Math.max(
-        1,
-        Math.ceil(layerState._records.length / maxCount),
-      );
+      const stride = Math.max(1, Math.ceil(records.length / maxCount));
       const start = seed % stride;
 
       const objects = [];
-      for (let i = start; i < layerState._records.length; i += stride) {
-        const camera = layerState._records[i].camera;
+      for (let i = start; i < records.length; i += stride) {
+        const camera = records[i].camera;
         objects.push({
-          position: layerState._records[i].position,
+          position: records[i].position,
           sourceId: camera.id,
           // Short semantic code where the id is opaque (see cameraDisplayCode).
           id: `CAM-${camera.code || camera.id}`,

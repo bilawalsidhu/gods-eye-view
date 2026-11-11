@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 export const PUSH_TO_TALK_HOLD_DELAY_MS = 500;
 
 // The input meter is intentionally stricter than the assistant-output meter:
@@ -150,8 +152,8 @@ export function resolveVoiceVisualizerSpeaker(
  */
 export function resolveVoiceControlHint(pushToTalkMode, pushToTalkKeyHeld) {
   return pushToTalkMode && pushToTalkKeyHeld
-    ? 'Release Space to send'
-    : 'Hold Space to speak · tap Space to activate focused controls';
+    ? t('Release Space to send')
+    : t('Hold Space to speak · tap Space to activate focused controls');
 }
 
 /**
@@ -169,17 +171,4 @@ export function gateVoiceVisualizerLevel(level, threshold) {
     : 0;
   if (cleanLevel <= cleanThreshold) return 0;
   return (cleanLevel - cleanThreshold) / (1 - cleanThreshold);
-}
-
-/**
- * Restores the CSS-owned standby baseline for every visualizer bar.
- * @param {Iterable<HTMLElement>|null|undefined} bars
- * @returns {void}
- */
-export function resetVoiceVisualizerBars(bars) {
-  if (!bars) return;
-  for (const bar of bars) {
-    bar.style.removeProperty('--audio-level');
-    bar.style.removeProperty('--audio-opacity');
-  }
 }

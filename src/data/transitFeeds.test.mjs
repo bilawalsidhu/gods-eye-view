@@ -13,7 +13,9 @@ import {
   transitFeedsInRange,
   transitModeFor,
   transitModeResolved,
+  transitRouteLabel,
 } from './transitFeeds.js';
+import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
 test('every registered feed is keyless, https, licensed, and uniquely identified', () => {
   const ids = new Set();
@@ -238,4 +240,541 @@ test('published transit history scope agrees with the catalog capability', () =>
     transit,
     /four fixes|0\.95x|guaranteed lower|one poll interval behind/,
   );
+});
+
+test('the TTC feed is registered, routable, and covers Toronto', () => {
+  const ttc = getTransitFeed('ttc-toronto');
+  assert.equal(ttc?.url, 'https://bustime.ttc.ca/gtfsrt/vehicles');
+  assert.equal(ttc.defaultEnabled, true);
+  assert.match(ttc.attribution, /Toronto Transit Commission/);
+  assert.equal(ttc.historyRetention, undefined, 'no proxy retention');
+  assert.ok(
+    transitFeedsInRange(43.6532, -79.3832).some(
+      (feed) => feed.id === 'ttc-toronto',
+    ),
+    'downtown Toronto is inside the load radius',
+  );
+});
+
+test('TTC route numbers tell a streetcar from a bus', () => {
+  // BusTime is the surface feed: 500-series are streetcar routes and the
+  // streetcar-operated Blue Night routes keep their own numbers. Everything
+  // else on this feed is a bus, so the mode is established, not defaulted.
+  const ttc = getTransitFeed('ttc-toronto');
+  assert.equal(transitModeFor(ttc, '501'), 'tram');
+  assert.equal(transitModeFor(ttc, '512'), 'tram');
+  assert.equal(transitModeFor(ttc, '304'), 'tram');
+  assert.equal(transitModeFor(ttc, '36'), 'bus');
+  // 52 Lawrence West is a bus. Only the three-digit 500-series is streetcar,
+  // so the rule must not match on a leading 5 alone.
+  assert.equal(transitModeFor(ttc, '52'), 'bus');
+  assert.equal(transitModeFor(ttc, '59'), 'bus');
+  assert.equal(transitModeFor(ttc, '900'), 'bus');
+  assert.equal(transitModeFor(ttc, '352'), 'bus');
+  assert.equal(transitModeResolved(ttc, '501'), true);
+  assert.equal(transitModeResolved(ttc, null), false);
+  assert.equal(
+    transitModeFor(ttc, null),
+    'bus',
+    'an unrouted vehicle falls back to the feed default, unresolved',
+  );
+});
+
+test('a TTC fleet number outranks the route', () => {
+  // Buses replace streetcars on 5xx routes during track work, and streetcars
+  // out of service report no route; the Flexity fleet is 4400–4699.
+  const ttc = getTransitFeed('ttc-toronto');
+  assert.equal(transitModeFor(ttc, '506', '8515'), 'bus');
+  assert.equal(transitModeFor(ttc, '512', '3101'), 'bus');
+  assert.equal(transitModeFor(ttc, null, '4507'), 'tram');
+  assert.equal(transitModeResolved(ttc, null, '4507'), true);
+  assert.equal(transitModeFor(ttc, '504', '4400'), 'tram');
+  assert.equal(transitModeFor(ttc, '29', '4699'), 'tram');
+  assert.equal(transitModeFor(ttc, '501', '4700'), 'bus');
+  // A vehicle id that is not a fleet number leaves the route to decide.
+  assert.equal(transitModeFor(ttc, '501', 'abc'), 'tram');
+  assert.equal(transitModeFor(ttc, '501'), 'tram');
+});
+
+test('the TTC row records that BusTime carries no subway', () => {
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  const row = sources.split('\n').find((line) => line.startsWith('| **TTC**'));
+  assert.ok(row, 'TTC has a DATA_SOURCES row');
+  assert.match(row, /Toronto/);
+  assert.match(sources, /surface vehicles \(buses and streetcars\) only/);
+  assert.match(sources, /Open Government Licence – Toronto/);
+});
+
+test('the Golden Horseshoe neighbours are registered, keyless and routable', () => {
+  const expected = {
+    'miway-mississauga':
+      'https://www.miapp.ca/GTFS_RT/Vehicle/VehiclePositions.pb',
+    'hsr-hamilton':
+      'https://opendata.hamilton.ca/GTFS-RT/GTFS_VehiclePositions.pb',
+    'durham-region':
+      'https://drtonline.durhamregiontransit.com/gtfsrealtime/VehiclePositions',
+  };
+  for (const [id, url] of Object.entries(expected)) {
+    const feed = getTransitFeed(id);
+    assert.ok(feed, `${id} is routable`);
+    assert.equal(feed.url, url);
+    assert.equal(feed.defaultEnabled, true);
+    assert.equal(feed.defaultMode, 'bus');
+    assert.equal(feed.historyRetention, undefined, `${id} retains nothing`);
+    assert.ok(feed.terms?.quote, `${id} records the terms it ships on`);
+  }
+});
+
+test('each Golden Horseshoe feed covers its own city and not its neighbours', () => {
+  const near = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  // Mississauga City Centre, downtown Hamilton, Oshawa.
+  assert.ok(near(43.589, -79.6441).includes('miway-mississauga'));
+  assert.ok(near(43.2557, -79.8711).includes('hsr-hamilton'));
+  assert.ok(near(43.8971, -78.8658).includes('durham-region'));
+  // Hamilton is 60 km from Toronto: far enough that the TTC feed is not polled
+  // for it, which is the whole point of a per-feed radius.
+  assert.equal(near(43.2557, -79.8711).includes('ttc-toronto'), false);
+});
+
+test('a bus-only feed never claims a mode its route ids cannot establish', () => {
+  for (const id of ['miway-mississauga', 'hsr-hamilton', 'durham-region']) {
+    const feed = getTransitFeed(id);
+    assert.equal(transitModeFor(feed, '1'), 'bus');
+    assert.equal(
+      transitModeResolved(feed, '1'),
+      false,
+      `${id} defaults rather than resolves`,
+    );
+  }
+});
+
+test('every Golden Horseshoe feed is documented with its licence', () => {
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  for (const name of ['MiWay', 'Hamilton HSR', 'Durham Region Transit']) {
+    assert.ok(
+      sources.split('\n').some((line) => line.startsWith(`| **${name}`)),
+      `${name} has a DATA_SOURCES row`,
+    );
+  }
+  assert.match(sources, /Durham Region Transit publishes no bearing/);
+});
+
+test('a feed whose route ids are internal database keys can name its routes', () => {
+  // Guelph's realtime feed emits `2991` where the rider sees route `1`. A feed
+  // that knows the difference translates it; every other feed is unaffected.
+  const guelph = getTransitFeed('guelph-transit');
+  assert.equal(transitRouteLabel(guelph, '2991'), '1');
+  assert.equal(transitRouteLabel(guelph, '3016'), '99');
+  assert.equal(transitRouteLabel(guelph, '3007'), '50 U');
+  assert.equal(transitRouteLabel(guelph, '3017'), '99Lite');
+});
+
+test('an unknown or absent route id survives translation unchanged', () => {
+  const guelph = getTransitFeed('guelph-transit');
+  // A route added after this table was built must still render its raw id
+  // rather than vanish or read as "undefined".
+  assert.equal(transitRouteLabel(guelph, '4242'), '4242');
+  assert.equal(transitRouteLabel(guelph, null), null);
+  assert.equal(transitRouteLabel(guelph, ''), '');
+});
+
+test('a feed with rider-facing route ids is left alone', () => {
+  // TTC and Kingston publish the route a rider would say, so translation is
+  // identity for them and no table is carried.
+  assert.equal(transitRouteLabel(getTransitFeed('ttc-toronto'), '501'), '501');
+  assert.equal(transitRouteLabel(getTransitFeed('mbta'), 'Red'), 'Red');
+  assert.equal(transitRouteLabel(null, '7'), '7');
+});
+
+test('the feeds whose licences are accepted by use are switched on', () => {
+  // Barrie and YRT each ask for acceptance through a form, and each licence
+  // also says that using the data is itself acceptance. That reading was
+  // taken deliberately, so both are routable and both record the reasoning
+  // in their terms note rather than leaving it to be re-derived later.
+  for (const id of ['barrie-transit', 'yrt-york']) {
+    assert.ok(getTransitFeed(id), `${id} is routable`);
+    assert.ok(
+      publicTransitCatalog().some((feed) => feed.id === id),
+      `${id} is offered to the browser`,
+    );
+    assert.match(
+      getRegisteredTransitFeed(id).terms.note,
+      /acceptance is by use|use itself acceptance|took that clause as sufficient/,
+      `${id} records why it ships on`,
+    );
+  }
+});
+
+test('every registered feed now ships on, and the gate still decides that', () => {
+  // The enabled set must stay a filter over the registry, not a copy of it:
+  // flipping one feed off has to make it unreachable.
+  assert.equal(getRegisteredTransitFeed('yrt-york')?.name, 'YRT/Viva');
+  assert.deepEqual(
+    TRANSIT_FEED_REGISTRY.filter((feed) => feed.defaultEnabled !== true),
+    [],
+  );
+});
+
+test('Viva bus rapid transit is named by its colour, not its route number', () => {
+  // YRT publishes `601` where every rider, map and station sign says
+  // "Viva Blue". The numeric local routes already read correctly and are
+  // left alone.
+  const yrt = getTransitFeed('yrt-york');
+  assert.equal(transitRouteLabel(yrt, '601'), 'Viva Blue');
+  assert.equal(transitRouteLabel(yrt, '60301'), 'Viva Purple A');
+  assert.equal(transitRouteLabel(yrt, '607'), 'Viva Yellow');
+  assert.equal(transitRouteLabel(yrt, '105'), '105', 'a local bus is a number');
+  assert.equal(transitRouteLabel(yrt, '9899'), '9899');
+});
+
+test('YRT local branches read as the branch letter, not the padded id', () => {
+  // YRT suffixes a two-digit branch onto the base route, the same scheme the
+  // Viva table already relies on for `60102`. Unsuffixed, that leaks to a rider
+  // as "8301". The letters are York Region's own published GTFS
+  // `routes.txt` short names, unpadded to match the local routes beside them.
+  const yrt = getTransitFeed('yrt-york');
+  assert.equal(transitRouteLabel(yrt, '10702'), '107B');
+  assert.equal(transitRouteLabel(yrt, '8301'), '83A');
+  assert.equal(transitRouteLabel(yrt, '9002'), '90B');
+  // `9101` runs in the realtime feed but is absent from routes.txt, so there is
+  // no published name to give it. Inventing "91A" from the pattern is exactly
+  // the guess the registry refuses to make; it stays opaque until it is
+  // published.
+  assert.equal(transitRouteLabel(yrt, '9101'), '9101');
+});
+
+test('Hamilton route ids are internal keys, read as the number on the bus', () => {
+  // Not one of HSR's 80 route ids equals its published short name, so every
+  // vehicle reads as "Route 5783" until the table translates it. Hamilton also
+  // carries two generations of id for the same route — `5688` and `5780` are
+  // both the 2 BARTON — so both must land on the same answer.
+  const hsr = getTransitFeed('hsr-hamilton');
+  assert.equal(transitRouteLabel(hsr, '5780'), '2');
+  assert.equal(transitRouteLabel(hsr, '5688'), '2', 'the older id agrees');
+  assert.equal(transitRouteLabel(hsr, '5687'), '1');
+  assert.equal(transitRouteLabel(hsr, '5829'), '10', 'the B-Line');
+  assert.equal(transitRouteLabel(hsr, '5793'), '20', 'the A-Line');
+  // Published names that are not numbers are already what a rider would say,
+  // so they survive as published rather than being forced into a number.
+  assert.equal(transitRouteLabel(hsr, '5820'), 'TC230');
+  assert.equal(transitRouteLabel(hsr, '9999'), '9999', 'unknown survives');
+});
+
+test('Burlington route ids are joined, never prefix-stripped', () => {
+  // `351` is route 1 and `3510` is route 10, so no amount of trimming a `35`
+  // prefix works — the table is the only correct answer.
+  const bur = getTransitFeed('burlington-transit');
+  assert.equal(transitRouteLabel(bur, '351'), '1');
+  assert.equal(transitRouteLabel(bur, '3510'), '10');
+  assert.equal(transitRouteLabel(bur, '3512'), '12');
+  assert.equal(transitRouteLabel(bur, '3587'), '87');
+  assert.equal(transitRouteLabel(bur, '9999'), '9999', 'unknown survives');
+});
+
+test('Burlington is live and carries its terms link, which its licence requires', () => {
+  const bur = getTransitFeed('burlington-transit');
+  assert.equal(bur.defaultEnabled, true);
+  assert.match(bur.licenseUrl, /Open%20Data%20Terms%20of%20Use\.pdf$/);
+  assert.match(bur.url, /^https:\/\//, 'port 80 has no listener at all');
+});
+
+test('Rio buses and BRT cover the city from Centro to Santa Cruz, and not São Paulo', () => {
+  const ids = (lat, lon) =>
+    transitFeedsInRange(lat, lon).map((feed) => feed.id);
+  for (const [place, lat, lon] of [
+    ['Centro', -22.9068, -43.1729],
+    ['Barra da Tijuca', -23.0004, -43.3659],
+    ['Santa Cruz', -22.9194, -43.6847],
+  ]) {
+    assert.ok(
+      ids(lat, lon).includes('smtr-rio-onibus'),
+      `buses reach ${place}`,
+    );
+    assert.ok(ids(lat, lon).includes('smtr-rio-brt'), `BRT reaches ${place}`);
+  }
+  assert.deepEqual(
+    ids(-23.5505, -46.6333).filter((id) => id.startsWith('smtr-rio')),
+    [],
+    'São Paulo, 360 km away, never polls Rio',
+  );
+});
+
+test('Rio route keys read as the line on the front of the bus', () => {
+  // Some keys look parseable and are not (`O0014AAA0A` is LECD135).
+  const buses = getTransitFeed('smtr-rio-onibus');
+  assert.equal(transitRouteLabel(buses, 'O0868AAA0A'), '868');
+  assert.equal(transitRouteLabel(buses, 'O0731AAN0A'), 'SN731');
+  assert.equal(transitRouteLabel(buses, 'O0759AAP0A'), 'SP759');
+  assert.equal(transitRouteLabel(buses, 'O0014AAA0A'), 'LECD135');
+  assert.equal(transitRouteLabel(buses, 'E2303AAA0A'), '2303');
+  const brt = getTransitFeed('smtr-rio-brt');
+  assert.equal(transitRouteLabel(brt, '20000501110'), '50');
+  assert.equal(transitRouteLabel(brt, '20000EXEC1110'), 'ESP01');
+  // Unknown ids, prototype names included, keep their raw key.
+  assert.equal(transitRouteLabel(buses, 'O9999AAA0A'), 'O9999AAA0A');
+  assert.equal(transitRouteLabel(buses, 'constructor'), 'constructor');
+  assert.equal(transitRouteLabel(brt, null), null);
+});
+
+test('the Rio route table is a clean join of published keys to names', () => {
+  const entries = Object.entries(RIO_ROUTE_NAMES);
+  assert.ok(entries.length > 400, 'the whole published table is carried');
+  for (const [id, name] of entries) {
+    assert.match(id, /^(?:[OE]\d{4}[A-Z0-9]{5}|2\d{4}[A-Z0-9]{4,8})$/, id);
+    assert.ok(name && name === name.trim(), `${id} has a name`);
+    assert.notEqual(name, id, `${id} is translated`);
+  }
+});
+
+test('Rio feeds are CC BY 4.0 and live', () => {
+  for (const id of ['smtr-rio-onibus', 'smtr-rio-brt']) {
+    const feed = getTransitFeed(id);
+    assert.equal(feed.defaultEnabled, true, `${id} is live`);
+    assert.equal(feed.license, 'CC BY 4.0');
+    assert.match(feed.licenseUrl, /^https:\/\/www\.data\.rio\/documents\//);
+    assert.match(feed.attribution, /Prefeitura da Cidade do Rio de Janeiro/);
+    assert.equal(transitModeFor(feed, null), 'bus');
+  }
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources
+      .split('\n')
+      .some((line) => line.startsWith('| **SMTR Rio de Janeiro')),
+    'Rio has a DATA_SOURCES row',
+  );
+});
+
+test('Szczecin is CC0, live, covers the city and not Berlin', () => {
+  const feed = getTransitFeed('zditm-szczecin');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.license, 'CC0 1.0');
+  assert.equal(
+    feed.licenseUrl,
+    'https://www.zditm.szczecin.pl/en/zditm/for-developers',
+  );
+  assert.match(feed.terms.quote, /CC0 1\.0 licence/);
+  assert.match(feed.attribution, /ZDiTM/);
+  assert.equal(feed.routeLabel, undefined, 'the feed has no route ids');
+  assert.equal(transitModeFor(feed, null), 'bus');
+  const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  assert.ok(ids(53.4285, 14.5528).includes('zditm-szczecin'), 'city centre');
+  assert.ok(ids(53.5, 14.7).includes('zditm-szczecin'), 'north-east edge');
+  assert.ok(!ids(52.52, 13.405).includes('zditm-szczecin'), 'Berlin');
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((l) => l.startsWith('| **ZDiTM Szczecin')),
+    'Szczecin has a DATA_SOURCES row',
+  );
+});
+
+test('Carris Metropolitana covers Lisbon from Mafra to Setúbal, not Porto', () => {
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.url, 'https://api.carrismetropolitana.pt/v2/vehicles.pb');
+  assert.equal(feed.speedUnit, 'km/h');
+  assert.match(feed.terms.note, /no licence for the realtime endpoint/);
+  const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  for (const [place, lat, lon] of [
+    ['Lisbon', 38.7223, -9.1393],
+    ['Mafra', 38.9369, -9.3277],
+    ['Setúbal', 38.5244, -8.8882],
+  ]) {
+    assert.ok(ids(lat, lon).includes(feed.id), place);
+  }
+  assert.ok(!ids(41.1579, -8.6291).includes(feed.id), 'Porto');
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((l) => l.startsWith('| **Carris Metropolitana')),
+    'Lisbon has a DATA_SOURCES row',
+  );
+});
+
+test('Carris Metropolitana route ids read as the line number on the bus', () => {
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  assert.equal(transitRouteLabel(feed, '[LA77N]1708_0'), '1708');
+  assert.equal(transitRouteLabel(feed, '[BNA17]2772_1'), '2772');
+  assert.equal(transitRouteLabel(feed, 'unexpected'), 'unexpected');
+  assert.equal(transitRouteLabel(feed, null), null);
+});
+
+// The 2026-11 batch: one landmark per feed, inside its own radius.
+const NEW_CITY_LANDMARKS = {
+  'pid-praha': [50.0875, 14.4213],
+  'ztm-warszawa': [52.2297, 21.0122],
+  'tbm-bordeaux': [44.8378, -0.5792],
+  'sendai-city-bus': [38.2602, 140.8824],
+  'ztm-poznan': [52.4064, 16.9252],
+  'ztm-gdansk': [54.352, 18.6466],
+  'ets-edmonton': [53.5461, -113.4938],
+  'halifax-transit': [44.6488, -63.5752],
+  'bc-transit-victoria': [48.4284, -123.3656],
+  'tam-montpellier': [43.6108, 3.8767],
+  'ztp-krakow-bus': [50.0614, 19.9366],
+  'ztp-krakow-tram': [50.0614, 19.9366],
+  'vilnius-transport': [54.6872, 25.2797],
+  'tpbi-bucuresti': [44.4268, 26.1025],
+  'roma-mobilita': [41.9028, 12.4964],
+  'gtt-torino': [45.0703, 7.6869],
+  'actv-venezia-bus': [45.4408, 12.3155],
+  'actv-venezia-waterbus': [45.4408, 12.3155],
+  'adelaide-metro': [-34.9285, 138.6007],
+  'marta-atlanta': [33.749, -84.388],
+  'rtd-denver': [39.7392, -104.9903],
+  'ctp-cluj': [46.7712, 23.6236],
+  'ctp-iasi': [47.1585, 27.6014],
+  'mpk-rzeszow': [50.0412, 21.9991],
+  'emt-malaga': [36.7213, -4.4214],
+  'carris-lisboa': [38.7223, -9.1393],
+  'mybas-johor': [1.4927, 103.7414],
+  'mybas-kota-bharu': [6.1254, 102.2381],
+  'astuce-rouen': [49.4432, 1.0999],
+  'mpm-toulon': [43.1242, 5.928],
+  'lia-le-havre': [49.4944, 0.1079],
+  'filbleu-tours': [47.3941, 0.6848],
+};
+
+test('every city in the 2026-11 batch is live, licensed and covers its own centre', () => {
+  for (const [id, [lat, lon]] of Object.entries(NEW_CITY_LANDMARKS)) {
+    const feed = getTransitFeed(id);
+    assert.ok(feed, `${id} is routable`);
+    assert.ok(
+      publicTransitCatalog().some((f) => f.id === id),
+      `${id} is offered to the browser`,
+    );
+    assert.ok(feed.terms?.note, `${id} records the basis it ships on`);
+    assert.ok(
+      transitFeedsInRange(lat, lon).some((f) => f.id === id),
+      `${id} covers its city`,
+    );
+  }
+  // A feed's radius stays local: Warsaw is not polled for Kraków.
+  assert.ok(
+    !transitFeedsInRange(50.0614, 19.9366).some((f) => f.id === 'ztm-warszawa'),
+  );
+});
+
+test('feeds with no stated licence say so and name the basis they ship on', () => {
+  for (const feed of TRANSIT_FEED_REGISTRY.filter((f) =>
+    /^No licence stated/.test(f.license),
+  )) {
+    assert.match(
+      feed.terms.note,
+      /Metro Transit and OVapi|Same .*basis/,
+      `${feed.id} names its basis`,
+    );
+  }
+});
+
+test('route ids in the 2026-11 batch read as the line on the vehicle', () => {
+  const label = (id, routeId) => transitRouteLabel(getTransitFeed(id), routeId);
+  assert.equal(label('pid-praha', 'L135'), '135');
+  assert.equal(label('ets-edmonton', '009'), '9');
+  assert.equal(label('mpm-toulon', '0002'), '2');
+  assert.equal(label('gtt-torino', '10NU'), '10N');
+  assert.equal(label('actv-venezia-waterbus', '5.1_UN'), '5.1');
+  assert.equal(label('actv-venezia-bus', '53E_ES'), '53E');
+  assert.equal(label('bc-transit-victoria', '95-VIC'), '95');
+  assert.equal(label('carris-lisboa', '172_1'), '172');
+  assert.equal(label('astuce-rouen', 'TCAR:93'), '93');
+  assert.equal(label('mybas-johor', 'J33CWLMYJB'), 'J33');
+  // Unmatched and absent ids pass through untouched.
+  assert.equal(label('pid-praha', 'S4'), 'S4');
+  assert.equal(label('gtt-torino', null), null);
+});
+
+test('trams, waterbuses and buses are told apart where the ids allow it', () => {
+  const mode = (id, routeId) => transitModeFor(getTransitFeed(id), routeId);
+  assert.equal(mode('pid-praha', 'L22'), 'tram');
+  assert.equal(mode('pid-praha', 'L135'), 'bus');
+  assert.equal(mode('tbm-bordeaux', '16'), 'bus');
+  assert.equal(mode('lia-le-havre', '8-B'), 'tram');
+  assert.equal(mode('lia-le-havre', '8-C3'), 'bus');
+  assert.equal(mode('ztp-krakow-tram', null), 'tram');
+  assert.equal(mode('actv-venezia-waterbus', '1_UN'), 'ferry');
+});
+
+test('feeds that publish km/h are marked for conversion, and only those', () => {
+  const kmh = TRANSIT_FEED_REGISTRY.filter((f) => f.speedUnit === 'km/h')
+    .map((f) => f.id)
+    .sort();
+  assert.deepEqual(kmh, [
+    'carris-metropolitana-lisboa',
+    'mpm-toulon',
+    'tam-montpellier',
+  ]);
+});
+
+// Route ids as the live feeds and the operators' own GTFS routes.txt carried
+// them on 2026-11-09: the ranges and numbered tram ids are not guessable from
+// the line names riders see.
+test('Prague route-id ranges give metro, trains, ferries and trolleybuses their mode', () => {
+  const feed = getTransitFeed('pid-praha');
+  const read = (routeId) => [
+    transitModeFor(feed, routeId),
+    transitRouteLabel(feed, routeId),
+  ];
+  assert.deepEqual(read('L22'), ['tram', '22']);
+  assert.deepEqual(read('L58'), ['bus', '58'], 'trolleybus');
+  assert.deepEqual(read('L49'), ['rail', 'LD'], 'Petřín funicular');
+  assert.deepEqual(read('L135'), ['bus', '135']);
+  assert.deepEqual(read('L803'), ['bus', 'X3']);
+  assert.deepEqual(read('L991'), ['subway', 'A']);
+  assert.deepEqual(read('L993'), ['subway', 'C']);
+  assert.deepEqual(read('L1004'), ['rail', 'S4']);
+  assert.deepEqual(read('L1109'), ['rail', 'R9']);
+  assert.deepEqual(read('L1204'), ['rail', 'L1204'], 'no label to derive');
+  assert.deepEqual(read('L1801'), ['ferry', 'P1']);
+  assert.deepEqual(read('L1703'), ['bus', 'L1703']);
+  assert.deepEqual(read('L2841'), ['bus', '841']);
+  assert.deepEqual(read('S4'), ['bus', 'S4'], 'unknown ids keep the default');
+});
+
+test('Bordeaux trams ride numbered route ids and keep their letters', () => {
+  const feed = getTransitFeed('tbm-bordeaux');
+  for (const [routeId, line] of [
+    ['59', 'A'],
+    ['62', 'D'],
+    ['163', 'E'],
+  ]) {
+    assert.equal(transitModeFor(feed, routeId), 'tram', routeId);
+    assert.equal(transitRouteLabel(feed, routeId), line);
+  }
+  assert.equal(transitModeFor(feed, '952'), 'ferry');
+  assert.equal(transitModeFor(feed, '01'), 'bus');
+  assert.equal(transitRouteLabel(feed, '01'), '1');
+});
+
+test('Rouen Métro and Calypso are not buses; Le Havre reads its own ids', () => {
+  const feed = getTransitFeed('astuce-rouen');
+  assert.equal(transitModeFor(feed, 'TCAR:90'), 'tram');
+  assert.equal(transitRouteLabel(feed, 'TCAR:90'), 'Métro');
+  assert.equal(transitModeFor(feed, 'TCAR:99'), 'ferry');
+  assert.equal(transitModeFor(feed, 'TCAR:93'), 'bus');
+  assert.equal(transitRouteLabel(feed, 'TAE:F'), 'F');
+  const lia = getTransitFeed('lia-le-havre');
+  assert.equal(transitModeFor(lia, '8-FUNI'), 'rail');
+  assert.equal(transitRouteLabel(lia, '8-C3'), 'C3');
+  assert.equal(transitRouteLabel(lia, '8-09'), '9');
+  assert.equal(transitRouteLabel(lia, '8-A'), 'A');
+});
+
+test('data.gov.my feeds ask the proxy for no more than its 4 a minute', () => {
+  for (const id of ['mybas-johor', 'mybas-kota-bharu']) {
+    assert.ok(getTransitFeed(id).refreshMs >= 30_000, id);
+  }
 });

@@ -15,6 +15,7 @@ export class SceneDocumentError extends Error {
     super(`${path}: ${reason}`);
     this.name = 'SceneDocumentError';
     this.path = path;
+    this.reason = reason;
   }
 }
 export const fail = (path, reason) => {

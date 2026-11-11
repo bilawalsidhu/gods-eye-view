@@ -16,10 +16,77 @@ const tiny = [
   [-107.01, 34.0],
 ];
 
-test('the card anchors at the centroid of the largest polygon', () => {
+test('the card anchors at the vertex mean of the largest polygon', () => {
   const anchor = perimeterAnchorDegrees([[tiny], [square]]);
   assert.ok(Math.abs(anchor.lon - -108.1) < 1e-9);
   assert.ok(Math.abs(anchor.lat - 35.1) < 1e-9);
+});
+
+test('incident cards stay at the dateline for closed, reversed and rotated outlines', () => {
+  const vertices = [
+    [179, 10],
+    [-179, 10],
+    [-179, 12],
+    [179, 12],
+  ];
+  for (let start = 0; start < vertices.length; start++) {
+    const rotated = [...vertices.slice(start), ...vertices.slice(0, start)];
+    for (const points of [rotated, [...rotated].reverse()]) {
+      const anchor = perimeterAnchorDegrees([[points.concat([points[0]])]]);
+      assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
+      assert.ok(Math.abs(anchor.lat - 11) < 1e-9);
+    }
+  }
+});
+
+test('incident card longitude treats vertices at either sign of 180 as the same meridian', () => {
+  for (const boundary of [-180, 180]) {
+    const ring = [
+      [179, 10],
+      [boundary, 10],
+      [-179, 10],
+      [-179, 12],
+      [179, 12],
+      [179, 10],
+    ];
+    const anchor = perimeterAnchorDegrees([[ring]]);
+    assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
+    assert.ok(Math.abs(anchor.lat - 10.8) < 1e-9);
+  }
+});
+
+test('multipart cards compare polygon areas along short dateline edges', () => {
+  const ordinary = [
+    [10, 20],
+    [11, 20],
+    [11, 21],
+    [10, 21],
+    [10, 20],
+  ];
+  for (const width of [0.2, 2]) {
+    const crossing = [
+      [180 - width / 2, 10],
+      [-180 + width / 2, 10],
+      [-180 + width / 2, 10 + width],
+      [180 - width / 2, 10 + width],
+      [180 - width / 2, 10],
+    ];
+    for (const ring of [crossing, [...crossing].reverse()]) {
+      for (const polygons of [
+        [[ring], [ordinary]],
+        [[ordinary], [ring]],
+      ]) {
+        const anchor = perimeterAnchorDegrees(polygons);
+        if (width < 1) {
+          assert.ok(Math.abs(anchor.lon - 10.5) < 1e-9);
+          assert.ok(Math.abs(anchor.lat - 20.5) < 1e-9);
+        } else {
+          assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
+          assert.ok(Math.abs(anchor.lat - 11) < 1e-9);
+        }
+      }
+    }
+  }
 });
 
 test('a full incident row renders name, size, containment, and ages', () => {
@@ -234,4 +301,35 @@ test('partial incident details render only the facts that exist', () => {
     'Human cause',
     'Catron County · $85K to date',
   ]);
+});
+
+test('a fire under one acre keeps its WFIGS size instead of reading 0 ac', () => {
+  const row = {
+    stableId: 'x',
+    name: 'Grey',
+    acres: 0.25,
+    containedPct: null,
+    state: 'US-WA',
+    category: 'WF',
+    discoveredTime: null,
+    updatedTime: null,
+    cause: null,
+    behavior: null,
+    personnel: null,
+    county: null,
+    costToDate: null,
+    complexity: null,
+  };
+  assert.equal(
+    buildIncidentCard(row, 1758000000000).details[0],
+    '0.25 ac · containment unknown · US-WA',
+  );
+  assert.equal(
+    buildIncidentCard({ ...row, acres: 0.01 }, 1758000000000).details[0],
+    '0.01 ac · containment unknown · US-WA',
+  );
+  assert.equal(
+    buildIncidentCard({ ...row, acres: 1.4 }, 1758000000000).details[0],
+    '1 ac · containment unknown · US-WA',
+  );
 });

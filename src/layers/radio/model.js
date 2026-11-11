@@ -1,8 +1,30 @@
 import {
   RADIO_CATEGORY_COLORS,
-  RADIO_CLUSTER_LABELS,
   RADIO_MARKER_CATEGORY_ORDER,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
+
+/** Short uppercase category word on a cluster badge, in the page language. */
+function radioClusterLabel(categoryId) {
+  switch (categoryId) {
+    case 'news':
+      return t('NEWS', { context: 'radio' });
+    case 'talk':
+      return t('TALK', { context: 'radio' });
+    case 'weather':
+      return t('WEATHER', { context: 'radio' });
+    case 'public-safety':
+      return t('SAFETY', { context: 'radio' });
+    case 'aviation-marine':
+      return t('AIR / SEA', { context: 'radio' });
+    case 'traffic-transit':
+      return t('TRANSIT', { context: 'radio' });
+    case 'music':
+      return t('MUSIC', { context: 'radio' });
+    default:
+      return t('OTHER', { context: 'radio' });
+  }
+}
 
 export function createModel({ state: layerState, services, parts, source }) {
   /** Return the shared CSS color for a canonical or detected-genre category. */
@@ -18,7 +40,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   function radioClusterBadgeText(categoryId = 'other', count = 0) {
     const normalized = String(categoryId || 'other');
     const canonical = normalized.startsWith('genre:') ? 'music' : normalized;
-    const label = RADIO_CLUSTER_LABELS[canonical] || RADIO_CLUSTER_LABELS.other;
+    const label = radioClusterLabel(canonical);
     const stationCount = Math.max(0, Math.floor(Number(count) || 0));
     return `${stationCount} ${label}`;
   }

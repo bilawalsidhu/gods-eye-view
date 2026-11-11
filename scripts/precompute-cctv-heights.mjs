@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromeExecutablePath } from './qa-chrome.mjs';
 import {
   planeSupportPoints,
   poseHash,
@@ -325,8 +326,10 @@ async function main() {
       'src/data/local_data/cctv_ground_heights/cctv_ground_heights.json',
   );
   let sidecar = await loadSidecar(output);
+  // A cold catalog waits for its slowest pack (Tarktee gets 30 s), so allow
+  // more than that.
   const response = await fetch(`${base}/api/cctv/sources`, {
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   });
   if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
   const catalog = await response.json();
@@ -389,8 +392,7 @@ async function main() {
       const { default: puppeteer } = await import('puppeteer');
       browser = await puppeteer.launch({
         headless: false,
-        executablePath:
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        executablePath: chromeExecutablePath(),
         protocolTimeout: 600000,
         args: [
           '--no-sandbox',

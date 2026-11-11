@@ -15,11 +15,19 @@ export function createRealtimeBackend({
     );
   return Object.freeze({
     protocol: 'openai-realtime',
-    async requestToken({ tier = DEFAULT_VOICE_TIER, signal } = {}) {
+    async requestToken({
+      tier = DEFAULT_VOICE_TIER,
+      authMode = 'api-key',
+      signal,
+    } = {}) {
       signal = scoped(signal);
       signal.throwIfAborted();
       const separator = tokenEndpoint.includes('?') ? '&' : '?';
-      const url = `${tokenEndpoint}${separator}tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`;
+      const query = new URLSearchParams({
+        tier: resolveVoiceModel(tier).tier,
+      });
+      if (authMode === 'oauth') query.set('auth', 'oauth');
+      const url = `${tokenEndpoint}${separator}${query}`;
       const response = await tokenTransport(url, {
         signal,
         cache: 'no-store',
@@ -31,8 +39,9 @@ export function createRealtimeBackend({
       if (!response.ok) {
         const reason =
           typeof data?.error === 'string' ? data.error : data?.error?.message;
-        throw new Error(
-          reason || `Realtime token failed: HTTP ${response.status}`,
+        throw Object.assign(
+          new Error(reason || `Realtime token failed: HTTP ${response.status}`),
+          typeof data?.code === 'string' ? { code: data.code } : {},
         );
       }
       const token =
@@ -56,6 +65,8 @@ export function createRealtimeBackend({
           data?.session?.model ||
           null,
         tier: response.headers?.get?.('X-GEV-Voice-Tier') || null,
+        transcribeModel:
+          response.headers?.get?.('X-GEV-Voice-Transcribe-Model') || null,
         expiresAt,
       };
     },

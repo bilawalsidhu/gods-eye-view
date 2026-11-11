@@ -11,8 +11,10 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 test('every scroller the rail measuring pass lifts restores its scroll offset', () => {
   const css = read('./styles/layers.css');
   const templates = [
-    read('./templates/context.html'),
-    read('./templates/layer-panels.html'),
+    read('./views/ContextView.vue'),
+    read('./views/LayerPanelsView.vue'),
+    read('./views/panels/CctvPanel.vue'),
+    read('./views/panels/StreetLevelPanel.vue'),
   ].join('\n');
   const lifted = [
     ...css.matchAll(

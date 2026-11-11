@@ -600,6 +600,31 @@ test('a surface even/odd pair decodes to the published position and marks the ai
   assert.equal(departed.altitudeFt, 38_000);
 });
 
+test('a track remembers when its altitude was heard, not just its last message', () => {
+  const tracks = new Map();
+  updateAircraftTrack(tracks, {
+    icao: 'ABC123',
+    receivedAt: 1_000,
+    onGround: false,
+    altitudeFt: 35_000,
+  });
+  const after = updateAircraftTrack(tracks, {
+    icao: 'ABC123',
+    receivedAt: 1_400,
+    speedKt: 450,
+  });
+  assert.equal(after.lastSeen, 1_400);
+  assert.equal(after.altitudeAt, 1_000);
+  assert.equal(recordFromDecoderTrack(after).altitudeAt, 1_000);
+  const landed = updateAircraftTrack(tracks, {
+    icao: 'ABC123',
+    receivedAt: 2_000,
+    onGround: true,
+    altitudeFt: null,
+  });
+  assert.equal(landed.altitudeAt, null);
+});
+
 test('a surface track is seeded by a pair; a single frame then decodes against its own fix', () => {
   // The receiver is not established to be within 45 NM of the aircraft, so a
   // lone surface frame does not decode against it (even though this one is).

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WILDLIFE_BADGE_GLYPHS } from './layers/wildlifeSightings/sprites.js';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = path.resolve(SRC_ROOT, '..');
@@ -11,16 +12,20 @@ const INDEX_HTML = path.join(REPO_ROOT, 'index.html');
 /** The glyph written as element text: `<span class="material-symbols-outlined">radar</span>`. */
 const SPAN_TEXT =
   /class="[^"]*material-symbols-outlined[^"]*"[^>]*>\s*([a-z0-9_]+)\s*</g;
+/** A glyph chosen in a Vue template: `<span class="material-symbols-outlined">{{ a ? 'x' : 'y' }}</span>`. */
+const SPAN_MUSTACHE =
+  /class="[^"]*material-symbols-outlined[^"]*"[^>]*>\s*\{\{([^}]{0,400})\}\}\s*</g;
 /** A whole `textContent =` statement, across lines, so a multi-line ternary is read once. */
 const TEXT_ASSIGNMENT = /(?:textContent|innerText)\s*=\s*([^;]{0,400})/gs;
 const STRING_LITERAL = /['"`]([a-z0-9_]{2,})['"`]/g;
+/** A rail or menu item's glyph: `{ icon: 'layers' }`, rendered by `UiIcon`. */
+const ICON_PROPERTY = /\bicon:\s*['"]([a-z0-9_]+)['"]/g;
 
 /**
  * Files that SHIP markup. Tests assert on markup, they do not render it.
  *
- * The panel markup lives in `src/ui/templates/*.html`, so HTML under `src` is
- * read as well: a glyph named only in a template is still a glyph the font has
- * to carry.
+ * The panel markup lives in Vue views under `src`, so markup there is read as
+ * well: a glyph named only in a view is still a glyph the font has to carry.
  */
 function sourceFiles(directory = SRC_ROOT) {
   const files = [];
@@ -29,7 +34,7 @@ function sourceFiles(directory = SRC_ROOT) {
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&
-      /\.(js|mjs|html)$/.test(entry.name) &&
+      /\.(js|mjs|html|vue)$/.test(entry.name) &&
       !entry.name.endsWith('.test.mjs')
     ) {
       files.push(absolute);
@@ -55,6 +60,8 @@ function sourceFiles(directory = SRC_ROOT) {
  */
 function referencedGlyphs() {
   const found = new Map();
+  for (const glyph of Object.values(WILDLIFE_BADGE_GLYPHS))
+    found.set(glyph, 'src/layers/wildlifeSightings/sprites.js');
   for (const file of sourceFiles()) {
     const source = readFileSync(file, 'utf8');
     const relative = path.relative(REPO_ROOT, file).split(path.sep).join('/');
@@ -62,7 +69,25 @@ function referencedGlyphs() {
       if (!found.has(glyph)) found.set(glyph, relative);
     };
     for (const match of source.matchAll(SPAN_TEXT)) add(match[1]);
-    for (const match of source.matchAll(TEXT_ASSIGNMENT)) {
+    for (const match of source.matchAll(ICON_PROPERTY)) add(match[1]);
+    // A template glyph bound to a computed (`{{ entryIcon }}`) is whatever
+    // that computed returns.
+    for (const [, expression] of source.matchAll(SPAN_MUSTACHE)) {
+      const name = /^\s*([A-Za-z_$][\w$]*)\s*$/.exec(expression)?.[1];
+      if (!name) continue;
+      const body = new RegExp(
+        `\\b${name}\\s*=\\s*computed\\(\\(\\)\\s*=>\\s*\\{([\\s\\S]{0,600}?)\\n\\}\\);`,
+      ).exec(source)?.[1];
+      for (const literal of body?.matchAll(
+        /\breturn\s+['"`]([a-z0-9_]{2,})['"`]/g,
+      ) ?? [])
+        add(literal[1]);
+    }
+    const expressions = [
+      ...source.matchAll(TEXT_ASSIGNMENT),
+      ...source.matchAll(SPAN_MUSTACHE),
+    ];
+    for (const match of expressions) {
       const statement = match[1].replaceAll('?.', '.');
       const assigned = statement.includes('?')
         ? statement.slice(statement.indexOf('?') + 1)

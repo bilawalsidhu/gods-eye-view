@@ -1,4 +1,12 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
+import { formatNumber, getLocale, isolate, t, msg } from '../i18n/index.js';
+import { formatQuantity } from './unitLabels.js';
+import {
+  normalizeHeading,
+  roundHeadingDegrees,
+} from '../data/headingDegrees.js';
+import { kilometreDigits } from '../data/distanceFormat.js';
+
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
 export const COCKPIT_FORWARD_OFFSET_M = 7;
@@ -31,36 +39,9 @@ export const COCKPIT_GROUND_WAIT_TIMEOUT_MS = 5000;
 
 export const COCKPIT_BRIEF_ROTATE_MS = 9000;
 
-export const COCKPIT_BRIEF_CYCLE_OFF_HELP =
-  'Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.';
-
-export const COCKPIT_BRIEF_CYCLE_ON_HELP =
-  'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.';
-
 export const COCKPIT_REGIONAL_REFRESH_MS = 5 * 60_000;
 
 export const COCKPIT_REGIONAL_REFRESH_DISTANCE_M = 25_000;
-
-export const COCKPIT_BRIEF_PAGES = [
-  {
-    id: 'signals',
-    kicker: 'LIVE SIGNALS',
-    subtitle: 'OBSERVED / MAPPED PINGS',
-    source: 'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
-  },
-  {
-    id: 'news',
-    kicker: 'REGIONAL NEWS',
-    subtitle: 'LATEST LOCATION-MATCHED REPORTING',
-    source: 'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
-  },
-  {
-    id: 'local',
-    kicker: 'LOCAL INFO',
-    subtitle: 'PLACE / CONDITIONS / POSITION',
-    source: 'OPENSTREETMAP · OPEN-METEO · UTC',
-  },
-];
 
 export function isRenderedOnScreen(element) {
   if (!element) return false;
@@ -80,109 +61,134 @@ export function isRenderedOnScreen(element) {
 
 export function formatCockpitBriefAge(value) {
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'TIME UNKNOWN';
+  if (!Number.isFinite(timestamp)) return t('TIME UNKNOWN');
   const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
-  if (minutes < 60) return `${minutes}M AGO`;
+  if (minutes < 60) return t('{count}M AGO', { count: minutes });
   const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}H AGO` : `${Math.round(hours / 24)}D AGO`;
+  return hours < 48
+    ? t('{count}H AGO', { count: hours })
+    : t('{count}D AGO', { count: Math.round(hours / 24) });
+}
+
+/** Compass point codes in display order and the label shown for each. */
+const COMPASS_POINT_LABELS = Object.freeze({
+  N: msg('N'),
+  NE: msg('NE'),
+  E: msg('E'),
+  SE: msg('SE'),
+  S: msg('S'),
+  SW: msg('SW'),
+  W: msg('W'),
+  NW: msg('NW'),
+});
+
+/**
+ * The shown label for a compass point code (`N`, `SW`…): С, ЮЗ… in Russian.
+ * Anything else (a degree reading such as `030`) passes through unchanged.
+ */
+export function compassPointLabel(code) {
+  return Object.hasOwn(COMPASS_POINT_LABELS, code)
+    ? t(COMPASS_POINT_LABELS[code])
+    : code;
+}
+
+/** `30.203°N` in the active language: `30,203° с. ш.` in Russian. */
+export function formatCockpitCoordinate(value, positive, negative) {
+  const amount = formatNumber(Math.abs(value), {
+    useGrouping: false,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+  const code = value >= 0 ? positive : negative;
+  // Not «30,203°С»: after a degree sign «С» reads as Celsius. Isolated, so
+  // an Arabic hemisphere letter does not pull the next number into its run.
+  switch (code) {
+    case 'N':
+      return isolate(t('{value}°N', { value: amount }));
+    case 'S':
+      return isolate(t('{value}°S', { value: amount }));
+    case 'E':
+      return isolate(t('{value}°E', { value: amount }));
+    case 'W':
+      return isolate(t('{value}°W', { value: amount }));
+    default:
+      return isolate(`${amount}°${compassPointLabel(code)}`);
+  }
+}
+
+/**
+ * A contact distance such as `4.2 KM` / `44 KM` in the active language
+ * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.
+ */
+export function formatCockpitDistance(distanceM) {
+  const digits = kilometreDigits(distanceM);
+  const distance = formatQuantity(distanceM / 1000, 'km', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  return cockpitUnitCase(distance);
+}
+
+/**
+ * Upper-case a cockpit unit the HUD way (`9.5 KM`), except in Chinese and
+ * Japanese, which have no case and keep units as the catalog writes them.
+ */
+export function cockpitUnitCase(text) {
+  return /^(zh|ja)(-|$)/.test(getLocale()) ? text : text.toUpperCase();
 }
 
 export function formatCockpitWindDirection(value) {
-  if (!Number.isFinite(value)) return 'DIR UNKNOWN';
-  const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  const normalized = ((value % 360) + 360) % 360;
-  return `${labels[Math.round(normalized / 45) % labels.length]} · ${Math.round(normalized)}°`;
+  if (!Number.isFinite(value)) return t('DIR UNKNOWN');
+  const labels = Object.keys(COMPASS_POINT_LABELS);
+  const normalized = normalizeHeading(value);
+  const degrees = roundHeadingDegrees(value);
+  return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${degrees}°`;
 }
 
-export function setCockpitRollingValue(
-  element,
-  text,
-  numericValue,
-  { circularRange = null, immediate = false } = {},
-) {
-  if (!element) return;
-  const nextText = String(text);
-  const previousText = element.dataset.rollingText;
-  const previousValue = Number(element.dataset.rollingValue);
-  const nowMs = performance.now();
-  const lastRollMs = Number(element.dataset.rollingAt);
-  if (
-    !immediate &&
-    previousText !== undefined &&
-    previousText !== nextText &&
-    Number.isFinite(lastRollMs) &&
-    nowMs - lastRollMs < 220
-  ) {
-    return;
-  }
-  element.dataset.rollingText = nextText;
-  element.dataset.rollingAt = String(nowMs);
-  if (Number.isFinite(numericValue))
-    element.dataset.rollingValue = String(numericValue);
-  else delete element.dataset.rollingValue;
-  element.setAttribute('aria-label', nextText);
+/**
+ * A TLE epoch as compact UTC, `2026-11-04 08:12Z`, or '' when unknown.
+ * @param {number|null|undefined} epochMs
+ */
+export function formatTleEpochUtc(epochMs) {
+  // Beyond ±8.64e15 ms a Date is invalid and toISOString throws.
+  if (!Number.isFinite(epochMs) || Math.abs(epochMs) > 8.64e15) return '';
+  const iso = new Date(epochMs).toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}Z`;
+}
 
-  if (immediate || previousText === undefined || previousText === nextText) {
-    if (
-      previousText !== nextText ||
-      !element.querySelector('.cockpit-roll-token')
-    ) {
-      element.replaceChildren(
-        ...Array.from(nextText, (character) => {
-          const token = document.createElement('span');
-          token.className = 'cockpit-roll-token';
-          token.setAttribute('aria-hidden', 'true');
-          token.textContent = character;
-          return token;
-        }),
-      );
-    }
-    return;
-  }
+/**
+ * How old a TLE is, in the identifier line's compact units: under an hour,
+ * whole hours under a day, then whole days. A TLE's propagation error grows
+ * with its age, so the age is shown beside the epoch.
+ * @param {number|null|undefined} ageMs Now minus the TLE epoch.
+ * @returns {{unit: 'under-hour'}|{unit: 'hours'|'days', value: number}|null}
+ *   Null without a usable age.
+ */
+export function tleAgeParts(ageMs) {
+  if (!Number.isFinite(ageMs)) return null;
+  const hours = Math.max(0, ageMs) / 3_600_000;
+  if (hours < 1) return { unit: 'under-hour' };
+  if (hours < 24) return { unit: 'hours', value: Math.floor(hours) };
+  return { unit: 'days', value: Math.floor(hours / 24) };
+}
 
-  let delta =
-    Number.isFinite(numericValue) && Number.isFinite(previousValue)
-      ? numericValue - previousValue
-      : 0;
-  if (Number.isFinite(circularRange) && circularRange > 0) {
-    const halfRange = circularRange / 2;
-    if (delta > halfRange) delta -= circularRange;
-    else if (delta < -halfRange) delta += circularRange;
-  }
-  const direction = delta < 0 ? 'down' : 'up';
-  const width = Math.max(previousText.length, nextText.length);
-  const from = previousText.padStart(width, ' ');
-  const to = nextText.padStart(width, ' ');
-  const fragment = document.createDocumentFragment();
+/**
+ * The Cockpit entry for each subject it can ride: an aircraft's cockpit, a
+ * vessel's bridge or a satellite's orbit. Both entry buttons (Contacts and
+ * the Intel HUD readout) show it.
+ */
+const COCKPIT_ENTRY_FACES = Object.freeze({
+  aircraft: Object.freeze({ icon: 'flight', label: msg('COCKPIT') }),
+  vessel: Object.freeze({ icon: 'directions_boat', label: msg('BRIDGE') }),
+  satellite: Object.freeze({ icon: 'satellite_alt', label: msg('ORBIT') }),
+});
 
-  for (let index = 0; index < width; index += 1) {
-    const previousCharacter = from[index];
-    const nextCharacter = to[index];
-    const token = document.createElement('span');
-    token.className = 'cockpit-roll-token';
-    token.setAttribute('aria-hidden', 'true');
-
-    if (
-      previousCharacter === nextCharacter ||
-      !/\d/.test(previousCharacter) ||
-      !/\d/.test(nextCharacter)
-    ) {
-      token.textContent = nextCharacter === ' ' ? '\u00a0' : nextCharacter;
-      fragment.append(token);
-      continue;
-    }
-
-    token.classList.add('is-rolling', `roll-${direction}`);
-    const track = document.createElement('span');
-    track.className = 'cockpit-roll-track';
-    const first = document.createElement('span');
-    const second = document.createElement('span');
-    first.textContent = direction === 'up' ? previousCharacter : nextCharacter;
-    second.textContent = direction === 'up' ? nextCharacter : previousCharacter;
-    track.append(first, second);
-    token.append(track);
-    fragment.append(token);
-  }
-
-  element.replaceChildren(fragment);
+/**
+ * The entry's glyph and localized label for the subject it would ride.
+ * @param {'aircraft'|'vessel'|'satellite'|null|undefined} kind
+ * @returns {{icon: string, label: string}}
+ */
+export function cockpitEntryFace(kind) {
+  const face = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
+  return { icon: face.icon, label: t(face.label) };
 }

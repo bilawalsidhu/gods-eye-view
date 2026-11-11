@@ -156,13 +156,18 @@ test('self package imports cannot evade portable ownership', (t) => {
   assert.throws(() => checkImportDirections(root), /Source imports rendering/);
 });
 
-test('compatibility exceptions are limited to the two existing composition entries', (t) => {
+test('the compatibility exception is limited to the existing composition entry', (t) => {
   const { root, write } = fixture(t);
-  write('src/ui.js', "import './standalone/catalog.js';");
   write('src/standalone/catalog.js');
   write('server/providers/local.js', "import '../standalone/key-setup.js';");
   write('server/standalone/key-setup.js');
   assert.doesNotThrow(() => checkImportDirections(root));
+  write('src/ui.js', "import './standalone/catalog.js';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /Reusable module imports standalone/,
+  );
+  write('src/ui.js');
   write('src/ui/new.js', "import '../standalone/catalog.js';");
   assert.throws(
     () => checkImportDirections(root),

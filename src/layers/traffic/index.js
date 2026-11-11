@@ -9,6 +9,7 @@ import { createFlow } from './flow.js';
 import { createRendering } from './rendering.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
+import { createRetention } from './retention.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
@@ -23,7 +24,7 @@ export function createTrafficLayer({ services, source }) {
     ].every((key) => typeof source?.[key] === 'function')
   )
     throw new TypeError('A traffic source is required');
-  const state = createState({ services });
+  const state = createState({ services, source });
   const parts = {};
   const context = { state, services, parts, source };
   parts.style = createStyle(context);
@@ -33,6 +34,7 @@ export function createTrafficLayer({ services, source }) {
   parts.animation = createAnimation(context);
   parts.viewport = createViewport(context);
   parts.flow = createFlow(context);
+  parts.retention = createRetention(context);
   parts.rendering = createRendering(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
