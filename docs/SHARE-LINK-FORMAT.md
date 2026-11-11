@@ -68,6 +68,16 @@ cannot name still makes a place view. Opening a vessel thing view with a
 world time waits for the vessel layer's snapshot at that time and selects the
 vessel once it has it.
 
+## Street-level photos (`sl`)
+
+Views built by `show_in_gods_eye_view` or `src/view/index.js` can add
+`sl=<source>,<lat>,<lon>` to the long form. Once the link has restored, the
+app opens the nearest photo there, or, for a source that bills every load,
+arms the panel so OPEN loads it (see `docs/TOOLS.md`). The app's own links do
+not carry it: the address bar's long form drops `sl` when the camera next
+moves, and the short form has no field for it. A reload or the app's Copy
+Link keeps the lit source, the layer and the map, but not the photo request.
+
 ## Payload
 
 The code is unpadded base64url (`A–Z a–z 0–9 - _`). The decoded bytes are:
