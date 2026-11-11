@@ -297,6 +297,88 @@ export const PORTS = deepFreeze({
   lease: Object.fromEntries(required('owner', 'current', 'release')),
 });
 
+/**
+ * What a renderer does, by role rather than by port. A renderer is more than
+ * a drawing surface: it streams and builds the Earth from map sources, draws
+ * the application's data as keyed sets, moves the camera, answers questions
+ * about the world, applies the look, and runs the frame. The application owns the data
+ * (providers, records, layers); the renderer owns everything from a source
+ * spec or a draw set down to the pixels.
+ *
+ * Each role lists the members it covers as `port` (all of a port) or
+ * `port.member` (that member and the members under it); the most specific
+ * entry wins, so every member of {@link PORTS} has exactly one role
+ * ({@link roleOf}). The roles describe the contract; they change no member.
+ * @type {readonly import('./index').ContractRole[]}
+ */
+export const ROLES = deepFreeze([
+  {
+    id: 'surface',
+    // i18n-ignore: developer documentation of the contract, never shown in the app
+    title: 'The Earth',
+    summary:
+      'Streams, decodes and builds the globe from map sources: base imagery, terrain, photoreal 3D tiles and draped imagery layers (frames, split), with their credits and loading state.',
+    members: ['globe', 'imageryLayer', 'credits'],
+  },
+  {
+    id: 'scene',
+    // i18n-ignore: developer documentation of the contract, never shown in the app
+    title: 'Scene contents',
+    summary:
+      "Draws the application's data as keyed, retained sets: icons, points, lines, shapes, models, quads, meshes and fields, clamped to the surface where asked.",
+    members: ['draw', 'drawSet'],
+  },
+  {
+    id: 'view',
+    // i18n-ignore: developer documentation of the contract, never shown in the app
+    title: 'Camera and input',
+    summary:
+      'Places and moves the camera (views, flights, follow, user controls) and hands pointer input to the application.',
+    members: ['camera', 'flight', 'input', 'lease'],
+  },
+  {
+    id: 'queries',
+    // i18n-ignore: developer documentation of the contract, never shown in the app
+    title: 'World queries',
+    summary:
+      'Answers questions about what is drawn: picks, surface positions and heights, rays, projection and occlusion.',
+    members: ['query'],
+  },
+  {
+    id: 'look',
+    // i18n-ignore: developer documentation of the contract, never shown in the app
+    title: 'Look',
+    summary:
+      'How the world is lit and finished: sky and atmosphere, surface shading, styles and screen effects.',
+    members: ['effects', 'globe.sky', 'globe.setSurfaceShading'],
+  },
+  {
+    id: 'host',
+    // i18n-ignore: developer documentation of the contract, never shown in the app
+    title: 'Host and frame',
+    summary:
+      'The renderer itself: its canvas and life cycle, the frame loop and scene time, quality, capture and settling.',
+    members: ['renderer', 'frame', 'quality'],
+  },
+]);
+
+/**
+ * The role a member belongs to: the most specific {@link ROLES} entry naming
+ * its port or one of its dotted prefixes.
+ * @param {string} port
+ * @param {string} member dotted, as in {@link PORTS}
+ * @returns {string|undefined} the role's id
+ */
+export function roleOf(port, member) {
+  const parts = member.split('.');
+  for (let n = parts.length; n >= 0; n--) {
+    const key = [port, ...parts.slice(0, n)].join('.');
+    const role = ROLES.find((r) => r.members.includes(key));
+    if (role) return role.id;
+  }
+  return undefined;
+}
+
 /** The ports a renderer object holds, by the key it holds them under. */
 const RENDERER_PORTS = [
   'frame',

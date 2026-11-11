@@ -28,6 +28,24 @@ export type PortDescriptor = Readonly<
 /** Every port's members, by port name. */
 export declare const PORTS: Readonly<Record<string, PortDescriptor>>;
 
+/** One of the roles a renderer plays, and the members that make it up. */
+export interface ContractRole {
+  readonly id: 'surface' | 'scene' | 'view' | 'queries' | 'look' | 'host';
+  readonly title: string;
+  readonly summary: string;
+  /** `port` or `port.member`; the most specific entry wins. */
+  readonly members: readonly string[];
+}
+
+/** What a renderer does, by role: every member of {@link PORTS} in one. */
+export declare const ROLES: readonly ContractRole[];
+
+/** The role of `port`'s `member` (dotted), or undefined. */
+export declare function roleOf(
+  port: string,
+  member: string,
+): ContractRole['id'] | undefined;
+
 /** Every quality setting a renderer may support. */
 export declare const QUALITY_KEYS: readonly import('./quality').QualityKey[];
 
