@@ -372,6 +372,55 @@ test('delays are polled every 30 s only while a train on the feed is selected', 
   assert.equal(h.timers.size, 0);
 });
 
+test('delays are as old as the server’s read, even when it replays them', async () => {
+  let readAt = null;
+  const h = harness({
+    updates: () =>
+      reply({
+        fetchedAt: readAt ?? h.now,
+        trips: [
+          {
+            tripId: 'T1',
+            delaySec: 240,
+            stops: [{ stopId: 'B', arrival: { delay: 240 }, departure: null }],
+          },
+        ],
+      }),
+  });
+  const train = liveTrain({
+    id: 'v1',
+    tripId: 'T1',
+    routeId: 'R1',
+    lat: LAT,
+    lon: 0.05,
+  });
+  h.provider.onSelect(train);
+  await flush();
+  assert.equal(h.provider.stopsFor(train, h.now).stops[1].arrivalDelaySec, 240);
+
+  // The operator fails: each poll is answered with the server's last copy,
+  // still stamped with the time it was read.
+  readAt = h.now;
+  const poll = [...h.timers.values()][0].fn;
+  for (let i = 0; i < 3; i++) {
+    h.now += RAIL_UPDATES_POLL_MS;
+    poll();
+    await flush();
+  }
+  assert.equal(h.calls.updates, 4);
+  assert.ok(3 * RAIL_UPDATES_POLL_MS > RAIL_UPDATES_MAX_AGE_MS);
+  assert.equal(h.provider.delaysFor(FEED), null);
+  assert.equal(h.provider.stopsFor(train, h.now).stops[1].arrivalDelaySec, 0);
+
+  // A fresh read applies again; a server clock ahead counts as now.
+  readAt = h.now + 5_000;
+  poll();
+  await flush();
+  assert.equal(h.provider.stopsFor(train, h.now).stops[1].arrivalDelaySec, 240);
+  h.now += RAIL_UPDATES_MAX_AGE_MS;
+  assert.notEqual(h.provider.delaysFor(FEED), null);
+});
+
 test('a selected train’s delays are not polled when its feed has no timetable', async () => {
   const h = harness({
     schedule: () => reply({ error: 'No rail schedule' }, 404),

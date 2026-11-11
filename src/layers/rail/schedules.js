@@ -287,8 +287,16 @@ export function createRailSchedules({
       if (!response.ok) throw new Error(`rail updates HTTP ${response.status}`);
       const body = await response.json();
       if (slot.controller !== controller) return;
+      // Delays are as old as the server's read of the operator (`fetchedAt`),
+      // not this answer: a cached copy, or the last good one replayed while
+      // the operator fails, stops applying RAIL_UPDATES_MAX_AGE_MS after it,
+      // as positions do (ingestion.js applySnapshot).
+      const at = now();
       slot.delays = delaysFromUpdates(body);
-      slot.at = now();
+      slot.at = Math.min(
+        Number.isFinite(body?.fetchedAt) ? body.fetchedAt : at,
+        at,
+      );
       onChange(feedId);
     } catch (error) {
       if (error?.name !== 'AbortError')
