@@ -47,6 +47,42 @@ const PROXY_HEIGHT = 14;
 const DEPTH_TEST_DISTANCE = 15;
 
 /**
+ * Floats per row of extras, as `ICON_EXTRA_TEXELS` RGBA texels the renderer
+ * reads by instance: the screen offset, anchor and rotation; the fade by
+ * distance; the aligned axis and display range; the ground mode and the
+ * ground heights under the segment's two ends, and those ends. All zero (the
+ * default) is none of them.
+ */
+export const ICON_EXTRA_TEXELS = 6;
+export const EXTRA_STRIDE = ICON_EXTRA_TEXELS * 4;
+
+const OFFSET_X = 0;
+const OFFSET_Y = 1;
+const ANCHOR = 2;
+const ROTATION = 3;
+const FADE_NEAR = 4;
+const FADE_NEAR_VALUE = 5;
+const FADE_FAR = 6;
+const FADE_FAR_VALUE = 7;
+const AXIS_X = 8;
+const AXIS_Y = 9;
+const AXIS_Z = 10;
+const RANGE_NEAR = 11;
+const RANGE_FAR = 12;
+const GROUND_MODE = 13;
+const GROUND_FROM = 14;
+const GROUND_TO = 15;
+const SPAN_FROM = 16;
+const SPAN_TO = 20;
+
+/** Ground modes of a row's extras. */
+export const ICON_GROUND_NONE = 0;
+/** Drawn on the ground under it. */
+export const ICON_GROUND_CLAMP = 1;
+/** Drawn its height above the ground under it. */
+export const ICON_GROUND_RELATIVE = 2;
+
+/**
  * A depth-test distance at or past this draws over depth at any distance
  * (Infinity, which a float column does not carry through every GPU).
  */
@@ -164,6 +200,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
   let segments = new Float32Array(capacity * SEGMENT_STRIDE);
   let style = new Float32Array(capacity * STYLE_STRIDE);
   let colors = new Uint8Array(capacity * 4);
+  let extras = new Float32Array(capacity * EXTRA_STRIDE);
   // CPU only: until when (seconds since the epoch) the row's segment holds.
   let expires = new Float64Array(capacity);
   let count = 0;
@@ -176,6 +213,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       segments: new DirtyRows(capacity),
       style: new DirtyRows(capacity),
       colors: new DirtyRows(capacity),
+      extras: new DirtyRows(capacity),
     },
     show: true,
     /** Called with a row's renderer handle when the row goes away. */
@@ -195,6 +233,9 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
     },
     get colors() {
       return colors;
+    },
+    get extras() {
+      return extras;
     },
     get epoch() {
       return epochTime;
@@ -270,6 +311,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       style[o + IMAGE_NEAR] = -1;
       style[o + DEPTH_TEST_DISTANCE] = ICON_ALWAYS_OVER_DEPTH;
       colors.fill(255, row * 4, row * 4 + 4);
+      extras.fill(0, row * EXTRA_STRIDE, (row + 1) * EXTRA_STRIDE);
       expires[row] = -Infinity;
       markRow(row);
       return row;
@@ -294,6 +336,11 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
           (last + 1) * STYLE_STRIDE,
         );
         colors.copyWithin(row * 4, last * 4, last * 4 + 4);
+        extras.copyWithin(
+          row * EXTRA_STRIDE,
+          last * EXTRA_STRIDE,
+          (last + 1) * EXTRA_STRIDE,
+        );
         expires[row] = expires[last];
         ids[row] = ids[last];
         metas[row] = metas[last];
@@ -517,6 +564,129 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       return result;
     },
 
+    /**
+     * Shift on screen by `x` right and `y` down, CSS pixels, as a billboard's
+     * `pixelOffset`.
+     */
+    setOffset(row, x, y) {
+      writeExtra(row, OFFSET_X, x);
+      writeExtra(row, OFFSET_Y, y);
+    },
+    offset(row) {
+      const o = row * EXTRA_STRIDE;
+      return { x: extras[o + OFFSET_X], y: extras[o + OFFSET_Y] };
+    },
+
+    /**
+     * Which edge sits on the position: 0 the centre, 1 the bottom, -1 the
+     * top (a billboard's vertical origin).
+     */
+    setAnchor(row, anchor) {
+      writeExtra(row, ANCHOR, anchor);
+    },
+    anchor(row) {
+      return extras[row * EXTRA_STRIDE + ANCHOR];
+    },
+
+    /** Radians counter-clockwise on screen. */
+    setRotation(row, radians) {
+      writeExtra(row, ROTATION, radians);
+    },
+    rotation(row) {
+      return extras[row * EXTRA_STRIDE + ROTATION];
+    },
+
+    /**
+     * Turn the icon's up along an ECEF axis on screen, as a billboard's
+     * `alignedAxis` (zero: upright).
+     */
+    setAxis(row, x, y, z) {
+      writeExtra(row, AXIS_X, x);
+      writeExtra(row, AXIS_Y, y);
+      writeExtra(row, AXIS_Z, z);
+    },
+    axis(row) {
+      const o = row * EXTRA_STRIDE;
+      return {
+        x: extras[o + AXIS_X],
+        y: extras[o + AXIS_Y],
+        z: extras[o + AXIS_Z],
+      };
+    },
+
+    /**
+     * Fade by camera distance, as a `{near, nearValue, far, farValue}`
+     * curve multiplying the alpha (unset: none); faded to nothing, the row
+     * is not drawn.
+     */
+    setFade(row, curve) {
+      writeExtra(row, FADE_NEAR, curve?.near ?? 0);
+      writeExtra(row, FADE_NEAR_VALUE, curve?.nearValue ?? 0);
+      writeExtra(row, FADE_FAR, curve?.far ?? 0);
+      writeExtra(row, FADE_FAR_VALUE, curve?.farValue ?? 0);
+    },
+    fade(row) {
+      const o = row * EXTRA_STRIDE;
+      return {
+        near: extras[o + FADE_NEAR],
+        nearValue: extras[o + FADE_NEAR_VALUE],
+        far: extras[o + FADE_FAR],
+        farValue: extras[o + FADE_FAR_VALUE],
+      };
+    },
+
+    /**
+     * Drawn only at camera distances from `near` to `far`, metres; a `far`
+     * not past `near` is no range.
+     */
+    setDisplayRange(row, near, far) {
+      writeExtra(row, RANGE_NEAR, near);
+      writeExtra(row, RANGE_FAR, Math.min(far, ICON_ALWAYS_OVER_DEPTH));
+    },
+    displayRange(row) {
+      const o = row * EXTRA_STRIDE;
+      return [extras[o + RANGE_NEAR], extras[o + RANGE_FAR]];
+    },
+
+    /**
+     * Draw on the ground (`ICON_GROUND_CLAMP`) or above it
+     * (`ICON_GROUND_RELATIVE`) along the segment from `from` to `to` (ECEF,
+     * its two ends), the ground taken between the heights at those ends
+     * (`setGroundHeights`); `ICON_GROUND_NONE` where it is.
+     */
+    setGround(row, mode, from, to) {
+      writeExtra(row, GROUND_MODE, mode);
+      for (const [at, p] of [
+        [SPAN_FROM, from],
+        [SPAN_TO, to],
+      ]) {
+        writeExtra(row, at, p?.x ?? 0);
+        writeExtra(row, at + 1, p?.y ?? 0);
+        writeExtra(row, at + 2, p?.z ?? 0);
+      }
+    },
+    groundMode(row) {
+      return extras[row * EXTRA_STRIDE + GROUND_MODE];
+    },
+    /** The ground's ellipsoid heights under the segment's ends, metres. */
+    setGroundHeights(row, from, to) {
+      writeExtra(row, GROUND_FROM, from);
+      writeExtra(row, GROUND_TO, to);
+    },
+    /** The segment's ends the ground is taken along, ECEF. */
+    groundSpan(row) {
+      const o = row * EXTRA_STRIDE;
+      return [SPAN_FROM, SPAN_TO].map((at) => ({
+        x: extras[o + at],
+        y: extras[o + at + 1],
+        z: extras[o + at + 2],
+      }));
+    },
+    groundHeights(row) {
+      const o = row * EXTRA_STRIDE;
+      return [extras[o + GROUND_FROM], extras[o + GROUND_TO]];
+    },
+
     /** Where the row is at `tau` (seconds since the epoch). */
     position(row, tau, result) {
       return segmentPosition(segments, row, tau, result);
@@ -554,6 +724,14 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
     set.dirty.segments.mark(row);
     set.dirty.style.mark(row);
     set.dirty.colors.mark(row);
+    set.dirty.extras.mark(row);
+  }
+
+  function writeExtra(row, field, value) {
+    const o = row * EXTRA_STRIDE + field;
+    if (extras[o] === Math.fround(value)) return;
+    extras[o] = value;
+    set.dirty.extras.mark(row);
   }
 
   function writeStyle(row, field, value) {
@@ -579,11 +757,14 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
     st.set(style);
     const c = new Uint8Array(next * 4);
     c.set(colors);
+    const x = new Float32Array(next * EXTRA_STRIDE);
+    x.set(extras);
     const e = new Float64Array(next);
     e.set(expires);
     segments = s;
     style = st;
     colors = c;
+    extras = x;
     expires = e;
     capacity = next;
     set.generation++;

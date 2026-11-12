@@ -12,13 +12,22 @@
  * `{ id, meta, primitive }` (`primitive.show` hides that one row, as drillPick expects).
  * Rows flagged to recede also take the aircraft limb recession, composed with focus.
  *
+ * On WebGL 2 each row also reads its extras ({@link module:iconSet}'s
+ * `extras`) from a float texture by instance: a screen offset and anchor, a
+ * screen rotation or aligned axis (turned as a billboard's), a fade and a
+ * display range by distance, and the ground it is clamped to or stands
+ * above, taken between the heights under its segment's two ends. On WebGL 1
+ * the extras are not drawn (the draw port refuses rows that need them).
+ *
  * This module is the one place the icon sets touch Cesium's renderer internals.
  */
 import * as Cesium from 'cesium';
 import { ICON_SEGMENT_GLSL, SEGMENT_STRIDE } from '../../data/iconSegment.js';
 import {
+  EXTRA_STRIDE,
   ICON_CULL_HEIGHT_M,
   ICON_CULL_LIFT,
+  ICON_EXTRA_TEXELS,
   STYLE_STRIDE,
 } from '../../data/iconSet.js';
 import {
@@ -74,6 +83,9 @@ uniform vec3 u_recessionFloors; // scale, alpha, combined alpha
 uniform vec4 u_slots[ICON_SLOTS]; // ICON_SLOTS: as many as the context addresses
 uniform float u_cull; // 1: hide rows past the ellipsoid's horizon
 uniform float u_pickPass; // 1 while drawing for a pick
+#ifdef ICON_EXTRAS
+uniform highp sampler2D u_extras; // ICON_EXTRA_TEXELS texels a row, ICON_EXTRA_ROWS rows a line
+#endif
 
 out vec2 v_uv;
 out vec4 v_color;
@@ -119,6 +131,32 @@ void main() {
 
   vec3 rte = iconSegmentPosition(seg0, seg1, seg2, seg3, seg4, seg5, u_tau);
   vec3 world = u_cameraPosition + rte;
+#ifdef ICON_EXTRAS
+  ivec2 cell = ivec2(
+    (gl_InstanceID % ICON_EXTRA_ROWS) * ICON_EXTRA_TEXELS,
+    gl_InstanceID / ICON_EXTRA_ROWS
+  );
+  vec4 extra0 = texelFetch(u_extras, cell, 0); // offset x, y (CSS px, y down), anchor, rotation
+  vec4 extra1 = texelFetch(u_extras, cell + ivec2(1, 0), 0); // fade by distance
+  vec4 extra2 = texelFetch(u_extras, cell + ivec2(2, 0), 0); // aligned axis, range near
+  vec4 extra3 = texelFetch(u_extras, cell + ivec2(3, 0), 0); // range far, ground mode, heights
+  if (extra3.y > 0.5) {
+    // The ground under it: between the heights under its segment's ends,
+    // by how far along from one to the other it is.
+    vec3 from = texelFetch(u_extras, cell + ivec2(4, 0), 0).xyz;
+    vec3 span = texelFetch(u_extras, cell + ivec2(5, 0), 0).xyz - from;
+    float spanSq = dot(span, span);
+    float along = spanSq > 0.0 ? clamp(dot(world - from, span) / spanSq, 0.0, 1.0) : 0.0;
+    float ground = mix(extra3.z, extra3.w, along);
+    vec3 up = czm_geodeticSurfaceNormal(world, vec3(0.0), czm_ellipsoidInverseRadii * czm_ellipsoidInverseRadii);
+    float radius = length(world);
+    float height = radius * (1.0 - 1.0 / length(world * czm_ellipsoidInverseRadii));
+    // Clamped: on the ground; relative: its height above it.
+    vec3 lift = up * (extra3.y < 1.5 ? ground - height : ground);
+    rte += lift;
+    world += lift;
+  }
+#endif
   vec3 cullPoint = iconFlag(flags, ${ICON_CULL_LIFT.toFixed(1)}) ? iconCullPoint(world) : world;
   if (u_cull > 0.5 && occludedByEllipsoid(cullPoint)) return;
 
@@ -127,6 +165,13 @@ void main() {
   iconAnchorClip = czm_projection * positionEC;
 
   float distanceSq = dot(positionEC.xyz, positionEC.xyz);
+#ifdef ICON_EXTRAS
+  // Out of its display range, or faded to nothing: not drawn.
+  if (extra3.x > extra2.w &&
+      (distanceSq < extra2.w * extra2.w || distanceSq > extra3.x * extra3.x)) return;
+  float fade = extra1.z > extra1.x ? czm_nearFarScalar(extra1, distanceSq) : 1.0;
+  if (fade <= 0.0) return;
+#endif
   float distanceScale = style2.z > 0.0 ? czm_nearFarScalar(style2, distanceSq) : 1.0;
   float scale = style0.z;
   float alpha = style0.w;
@@ -154,6 +199,13 @@ void main() {
   if (rect.z <= 0.0) return; // image not loaded yet
 
   vec2 halfSize = style0.xy * (scale * distanceScale * 0.5) * corner;
+  vec2 shift = vec2(0.0);
+#ifdef ICON_EXTRAS
+  alpha *= fade;
+  // Its anchor edge on the position, as a billboard's vertical origin, then
+  // its offset: neither turns with it.
+  shift = vec2(0.0, extra0.z) * abs(halfSize) + vec2(extra0.x, -extra0.y);
+#endif
   // A pick proxy: picked over the larger of it and the drawn icon.
   if (u_pickPass > 0.5 && style3.y > 0.0 && style3.z > 0.0) {
     halfSize = max(abs(halfSize), style3.yz * 0.5) * corner;
@@ -178,7 +230,22 @@ void main() {
       halfSize = mat2(c, s, -s, c) * halfSize;
     }
   }
-  positionEC.xy += halfSize * czm_metersPerPixel(positionEC);
+#ifdef ICON_EXTRAS
+  else {
+    // Turned as a billboard is: its rotation, and its up along the axis.
+    float angle = extra0.w;
+    vec4 axis = czm_modelView3D * vec4(extra2.xyz, 0.0);
+    float axisSq = axis.x * axis.x + axis.y * axis.y;
+    if (dot(extra2.xyz, extra2.xyz) > 0.0 && axisSq > 0.0)
+      angle += sign(-axis.x) * acos(sign(axis.y) * axis.y * axis.y / axisSq);
+    if (angle != 0.0) {
+      float c = cos(angle);
+      float s = sin(angle);
+      halfSize = mat2(c, s, -s, c) * halfSize;
+    }
+  }
+#endif
+  positionEC.xy += (halfSize + shift) * czm_metersPerPixel(positionEC);
   gl_Position = czm_projection * positionEC;
 
 #ifdef LOG_DEPTH
@@ -240,6 +307,9 @@ export function contextIconSlots(context) {
   return addressableIconSlots(Cesium.ContextLimits.maximumVertexUniformVectors);
 }
 
+/** Rows a line of the extras texture holds. */
+export const ICON_EXTRA_ROWS = 256;
+
 const SEGMENT_BYTES = SEGMENT_STRIDE * 4;
 const STYLE_BYTES = STYLE_STRIDE * 4;
 const EARTH_BOUNDS = new Cesium.BoundingSphere(
@@ -278,6 +348,9 @@ export class IconSetPrimitive {
     this._programs = null;
     this._commands = null;
     this._texture = null;
+    // The rows' extras, on WebGL 2 (null until allocated, and on WebGL 1).
+    this._extras = null;
+    this._extrasLine = null;
     this._atlasVersion = -1;
     this._slots = Array.from(
       { length: MAX_ICON_SLOTS },
@@ -307,6 +380,7 @@ export class IconSetPrimitive {
       u_recessionFloors: () => primitive._recessionFloors,
       u_slots: () => primitive._slotUniform,
       u_atlas: () => primitive._texture,
+      u_extras: () => primitive._extras,
       u_cull: () => (primitive._cull() ? 1 : 0),
       u_pickPass: () => primitive._pickPass,
     };
@@ -456,6 +530,19 @@ export class IconSetPrimitive {
       indexBuffer: buffers.index,
     });
     this._pickColors = new Uint8Array(capacity * 4);
+    if (context.webgl2) {
+      const lines = Math.ceil(capacity / ICON_EXTRA_ROWS);
+      this._extras = new Cesium.Texture({
+        context,
+        width: ICON_EXTRA_ROWS * ICON_EXTRA_TEXELS,
+        height: lines,
+        pixelFormat: Cesium.PixelFormat.RGBA,
+        pixelDatatype: Cesium.PixelDatatype.FLOAT,
+        flipY: false,
+        sampler: Cesium.Sampler.NEAREST,
+      });
+      this._extrasLine = new Float32Array(ICON_EXTRA_ROWS * EXTRA_STRIDE);
+    }
     this._generation = set.generation;
     for (const rows of Object.values(set.dirty)) rows.markAll();
     if (this._commands)
@@ -489,9 +576,40 @@ export class IconSetPrimitive {
         set.colors.subarray(from * 4, (to + 1) * 4),
         from * 4,
       );
+    if (this._extras) {
+      // Whole lines of the texture: a run's first to its last.
+      const lineFloats = ICON_EXTRA_ROWS * EXTRA_STRIDE;
+      const source = set.extras;
+      let done = -1;
+      for (const [from, to] of set.dirty.extras.runs(count)) {
+        for (
+          let line = Math.max(done + 1, Math.floor(from / ICON_EXTRA_ROWS));
+          line <= Math.floor(to / ICON_EXTRA_ROWS);
+          line++
+        ) {
+          const start = line * lineFloats;
+          let view = source.subarray(start, start + lineFloats);
+          if (view.length < lineFloats) {
+            this._extrasLine.fill(0);
+            this._extrasLine.set(view);
+            view = this._extrasLine;
+          }
+          this._extras.copyFrom({
+            source: {
+              width: ICON_EXTRA_ROWS * ICON_EXTRA_TEXELS,
+              height: 1,
+              arrayBufferView: view,
+            },
+            yOffset: line,
+          });
+          done = line;
+        }
+      }
+    }
     segments.clear();
     style.clear();
     colors.clear();
+    set.dirty.extras.clear();
   }
 
   _writePick(context, row) {
@@ -595,7 +713,16 @@ export class IconSetPrimitive {
       Cesium.ShaderProgram.fromCache({
         context,
         vertexShaderSource: new Cesium.ShaderSource({
-          defines: [`ICON_SLOTS ${this._slotCount}`],
+          defines: [
+            `ICON_SLOTS ${this._slotCount}`,
+            ...(this._extras
+              ? [
+                  'ICON_EXTRAS',
+                  `ICON_EXTRA_ROWS ${ICON_EXTRA_ROWS}`,
+                  `ICON_EXTRA_TEXELS ${ICON_EXTRA_TEXELS}`,
+                ]
+              : []),
+          ],
           sources: [VERTEX_SHADER],
         }),
         fragmentShaderSource: new Cesium.ShaderSource({
@@ -644,6 +771,8 @@ export class IconSetPrimitive {
   _destroyBuffers() {
     this._vertexArray?.destroy(); // destroys its buffers too
     this._vertexArray = null;
+    this._extras?.destroy();
+    this._extras = null;
     this._buffers = null;
   }
 

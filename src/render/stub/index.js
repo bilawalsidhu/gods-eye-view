@@ -754,13 +754,17 @@ export function createStubRenderer(options = {}) {
   function itemPosition(set, item, aheadMs = 0) {
     if (!item.pos) return null;
     const base = toEcef(item.pos);
-    if (
-      set.kind === 'icons' &&
-      item.motion &&
-      capabilities.has('motionSegments')
-    )
-      return motionPosition(item.motion, base, motionTime(set) + aheadMs);
-    return base;
+    const p =
+      set.kind === 'icons' && item.motion && capabilities.has('motionSegments')
+        ? motionPosition(item.motion, base, motionTime(set) + aheadMs)
+        : base;
+    // The stub's ground is the ellipsoid: a clamped icon stands on it, one
+    // relative to it where it is.
+    if (set.kind !== 'icons' || item.height !== 'clampGround' || !p) return p;
+    const c = toCartographicRadians(p);
+    return c
+      ? toEcef({ lon: toDegrees(c.lon), lat: toDegrees(c.lat), height: 0 })
+      : p;
   }
 
   /**
@@ -995,9 +999,43 @@ export function createStubRenderer(options = {}) {
           : 1;
         // Scaled to nothing, it is not drawn.
         if (scale <= 0) continue;
+        // An icon's centre: its anchor edge on the position (as drawn, not
+        // as a proxy), then its pixel offset (y down).
+        let cx = s.x;
+        let cy = s.y;
+        let dx = x - cx;
+        let dy = y - cy;
+        if (set.kind === 'icons') {
+          const lift = { bottom: 1, top: -1 }[item.anchor] ?? 0;
+          cx += item.pixelOffset?.x ?? 0;
+          cy +=
+            (item.pixelOffset?.y ?? 0) -
+            (lift * (item.size?.[1] ?? 0) * scale) / 2;
+          dx = x - cx;
+          dy = y - cy;
+          // Turned counter-clockwise on screen (its up along the axis
+          // as projected there): the pick turned back.
+          let turn = item.rotationMode === 'screen' ? (item.rotation ?? 0) : 0;
+          const axis = item.rotationMode === 'axis' ? item.alignedAxis : null;
+          if (
+            axis &&
+            magnitude(vec(axis.x ?? 0, axis.y ?? 0, axis.z ?? 0)) > 0
+          ) {
+            const tip = project(
+              add(p, normalize(vec(axis.x ?? 0, axis.y ?? 0, axis.z ?? 0))),
+            );
+            if (tip && (tip.x !== s.x || tip.y !== s.y))
+              turn = Math.atan2(-(tip.x - s.x), -(tip.y - s.y));
+          }
+          if (turn !== 0) {
+            const c = Math.cos(turn);
+            const n = Math.sin(turn);
+            [dx, dy] = [dx * c - dy * n, dx * n + dy * c];
+          }
+        }
         if (
-          Math.abs(s.x - x) <= (size[0] * scale) / 2 + halfW &&
-          Math.abs(s.y - y) <= (size[1] * scale) / 2 + halfH
+          Math.abs(dx) <= (size[0] * scale) / 2 + halfW &&
+          Math.abs(dy) <= (size[1] * scale) / 2 + halfH
         )
           hits.push({
             set: setId,

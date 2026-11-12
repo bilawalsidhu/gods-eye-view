@@ -5159,6 +5159,12 @@ export function createCesiumDraw({
     afterRender() {
       watchClamp();
       swapReady();
+      // Clamped GPU icons take the ground under their segments.
+      const budget = gpu.groundBudget();
+      let grounded = false;
+      for (const record of sets.values())
+        if (record.gpu?.ground(budget)) grounded = true;
+      if (grounded) requestRender();
       for (const record of sets.values())
         if (record.kind === 'lines')
           try {

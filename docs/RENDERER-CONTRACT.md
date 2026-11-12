@@ -179,6 +179,18 @@ members' billboards; a set on the GPU (`columns`, or moving, receding,
 proxy-picked or level-of-detail icons) refuses clustering. The check
 `draw.icons.cluster` draws a cluster, picks it, and parts it by moving in.
 
+Icon sets on the Cesium GPU path draw what its billboards draw but
+clustering: pixel offsets, `bottom` and `top` anchors, screen and axis
+rotations (turned as Cesium's billboards turn), `fadeByDistance`,
+`displayRange`, and `clampGround` / `relativeGround` heights. Each row reads
+these from a float texture by instance, so the 16 vertex attributes hold;
+WebGL 1 has no such fetch and refuses them. A clamped row stands on the
+ground taken between the heights under its segment's two ends, sampled after
+a frame draws, 256 ends a frame across the port's sets: loaded terrain first,
+then (but for `clampTo: 'terrain'`) the drawn surface, eight a frame. They are
+sampled again when the globe's tiles finish loading and, clamped to more than
+terrain, every 5 s. The check `draw.motion.look` draws each on a moving icon.
+
 A set's `blend` holds for every kind of set: omitted, opaque parts draw
 opaque with depth writes and translucent ones blend without; `opaque` draws
 every item opaque, its alpha ignored, with depth writes; `translucent` blends

@@ -1923,6 +1923,144 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.motion.look',
+      'moving icons draw offset, anchored, turned, clamped, faded and ranged as icons do',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({
+          id: 'conf:motion-look',
+          motionClock: { kind: 'scene' },
+        });
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const icon = (extra = {}) => ({
+          id: 'one',
+          pos,
+          image: DOT,
+          size: [16, 16],
+          motion: { kind: 'hold' },
+          ...extra,
+        });
+        const mine = (x, y) =>
+          r.query
+            .drillPick(x, y)
+            .some((hit) => hit.set === 'conf:motion-look' && hit.id === 'one');
+        const show = async (extra) => {
+          set.set([icon(extra)]);
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+        };
+        await show();
+        const s = r.query.project(pos);
+        ok(s, 'the icon projects');
+        ok(mine(s.x, s.y), 'drawn where it is');
+        await show({ pixelOffset: { x: 40, y: 0 } });
+        ok(mine(s.x + 40, s.y) && !mine(s.x, s.y), 'offset 40 px right');
+        await show({ anchor: 'bottom', size: [16, 48] });
+        ok(
+          mine(s.x, s.y - 36) && !mine(s.x, s.y + 12),
+          'anchored by its bottom: above its position',
+        );
+        // Long and flat; a quarter turn stands it up.
+        await show({ size: [64, 8] });
+        ok(mine(s.x + 24, s.y) && !mine(s.x, s.y + 24), 'unturned, it is wide');
+        await show({
+          size: [64, 8],
+          rotationMode: 'screen',
+          rotation: Math.PI / 2,
+        });
+        ok(
+          mine(s.x, s.y + 24) && !mine(s.x + 24, s.y),
+          'a quarter turn on screen stands it up',
+        );
+        // Looking north, an up along east turns it a quarter clockwise.
+        const east = h.toEcef({
+          lon: AUSTIN.lon + 0.01,
+          lat: AUSTIN.lat,
+          height: 0,
+        });
+        await show({
+          size: [64, 8],
+          rotationMode: 'axis',
+          alignedAxis: {
+            x: east.x - pos.x,
+            y: east.y - pos.y,
+            z: east.z - pos.z,
+          },
+        });
+        ok(
+          mine(s.x, s.y + 24) && !mine(s.x + 24, s.y),
+          'its up along east stands it up',
+        );
+        // Off to the east and a kilometre up, clamped: on the ground there.
+        const where = { lon: AUSTIN.lon + 0.004, lat: AUSTIN.lat };
+        const ground = r.query.project(h.toEcef({ ...where, height: 0 }));
+        const raised = r.query.project(h.toEcef({ ...where, height: 1000 }));
+        ok(
+          ground && raised && Math.abs(raised.x - ground.x) > 30,
+          'apart on screen',
+        );
+        await show({ pos: h.toEcef({ ...where, height: 1000 }) });
+        ok(
+          mine(raised.x, raised.y) && !mine(ground.x, ground.y),
+          'absolute: up high',
+        );
+        await show({
+          pos: h.toEcef({ ...where, height: 1000 }),
+          height: 'clampGround',
+        });
+        ok(
+          mine(ground.x, ground.y) && !mine(raised.x, raised.y),
+          'clamped: on the ground',
+        );
+        // Moving between two such points, clamped: on the ground between.
+        const lerpAt = (a, b, t) => ({
+          x: a.x + (b.x - a.x) * t,
+          y: a.y + (b.y - a.y) * t,
+          z: a.z + (b.z - a.z) * t,
+        });
+        const west = { lon: AUSTIN.lon - 0.004, lat: AUSTIN.lat };
+        const from = h.toEcef({ ...where, height: 1000 });
+        const to = h.toEcef({ ...west, height: 1000 });
+        const t0 = r.frame.time();
+        r.frame.setTime(t0 + 2500);
+        await show({
+          pos: from,
+          height: 'clampGround',
+          motion: { kind: 'lerp', from, to, t0, t1: t0 + 10000 },
+        });
+        const quarter = r.query.project(
+          lerpAt(
+            h.toEcef({ ...where, height: 0 }),
+            h.toEcef({ ...west, height: 0 }),
+            0.25,
+          ),
+        );
+        const up = r.query.project(lerpAt(from, to, 0.25));
+        ok(
+          mine(quarter.x, quarter.y) && !mine(up.x, up.y),
+          'moving clamped: on the ground under it',
+        );
+        // The eye is 2 km off.
+        const curve = (value) => ({
+          near: 1e4,
+          nearValue: value,
+          far: 1e7,
+          farValue: value,
+        });
+        await show({ fadeByDistance: curve(0) });
+        ok(!mine(s.x, s.y), 'faded out by distance: not drawn');
+        await show({ fadeByDistance: curve(1) });
+        ok(mine(s.x, s.y), 'not faded: drawn');
+        await show({ displayRange: [0, 100] });
+        ok(!mine(s.x, s.y), 'out of its display range: not drawn');
+        await show({ displayRange: [0, 1e6] });
+        ok(mine(s.x, s.y), 'in its display range: drawn');
+        set.dispose();
+      },
+      { capability: 'motionSegments' },
+    ),
+    check(
       'draw.lines.depthFail',
       'a line dashed behind the surface draws, moves in place and changes back to solid',
       async (h, r) => {

@@ -11,9 +11,19 @@
  *
  * What these sets draw as billboards do not: an icon set becomes one when
  * an item first needs it (or it first takes columns), and stays one. They
- * refuse loudly what billboards draw and they do not: clamped heights,
- * `fadeByDistance`, `displayRange`, pixel offsets, anchors other than the
- * centre, axis and screen rotations, and clustering. Their
+ * draw what billboards draw but clustering, which they refuse loudly; on
+ * WebGL 1 they also refuse what each row reads from its extras texture
+ * there is none of: clamped heights, `fadeByDistance`, `displayRange`, pixel
+ * offsets, anchors other than the centre, and axis and screen rotations.
+ *
+ * A clamped row (`clampGround`, `relativeGround`) stands on the ground
+ * taken between the heights under its segment's two ends, sampled after a
+ * frame draws, `GROUND_SAMPLES_PER_FRAME` ends a frame across the port's
+ * sets: the loaded terrain first, then, but for `clampTo: 'terrain'`, the
+ * drawn surface (`SURFACE_SAMPLES_PER_FRAME`, where the scene samples it).
+ * An end with no height yet stands on the ellipsoid. Every end is sampled
+ * again once the globe's tiles finish loading, and, clamped to more than
+ * terrain, every `GROUND_REFRESH_MS`. Their
  * images (URLs, SVG, blobs, keyed canvases and atlas slots of those)
  * are rasterised square into the icon atlas every GPU icon set shares, and
  * refused when it has no room left for them: an SVG at its own size (its
@@ -37,6 +47,9 @@ import * as Cesium from 'cesium';
 import {
   createIconSet,
   ICON_CULL_LIFT,
+  ICON_GROUND_CLAMP,
+  ICON_GROUND_NONE,
+  ICON_GROUND_RELATIVE,
   ICON_RECEDES,
   ICON_ROTATES,
 } from '../../data/iconSet.js';
@@ -54,6 +67,7 @@ import {
   motionEndsAt,
 } from '../motion/iconMotion.js';
 import { blobUrl, toCartesian } from './common.js';
+import { heightsFor } from './heights.js';
 
 /** The capabilities GPU icon sets bring. */
 export const GPU_ICON_CAPABILITIES = Object.freeze([
@@ -67,6 +81,24 @@ const nonZero = (v) =>
 
 /** Whether a curve is one (as the billboards read it). */
 const isCurve = (curve) => Boolean(curve) && curve.far > curve.near;
+
+/** Whether a `displayRange` shows anything: `[near, far)` is not empty. */
+const displayable = (range) => !range || range[1] > range[0];
+
+/** An anchor as the row's vertical origin: the edge on the position. */
+const ANCHORS = { center: 0, bottom: 1, top: -1 };
+
+const GROUND_MODES = {
+  clampGround: ICON_GROUND_CLAMP,
+  relativeGround: ICON_GROUND_RELATIVE,
+};
+
+/** Segment ends sampled for their ground after a frame, across the sets. */
+export const GROUND_SAMPLES_PER_FRAME = 256;
+/** Of those, how many also sample the drawn surface (each draws a view). */
+export const SURFACE_SAMPLES_PER_FRAME = 8;
+/** How often rows clamped to more than terrain are sampled again, ms. */
+export const GROUND_REFRESH_MS = 5000;
 
 /**
  * An image's atlas key: a URL itself, SVG as a data URL, a blob as its
@@ -209,16 +241,19 @@ export function createGpuIcons({
       const refuse = (what) => {
         throw new Error(`the Cesium renderer's GPU icons have no ${what}`);
       };
-      if (item.height !== undefined && item.height !== 'absolute')
-        refuse('clamped heights');
-      if (item.fadeByDistance) refuse('fadeByDistance');
-      if (item.displayRange) refuse('displayRange');
-      if (nonZero(item.pixelOffset)) refuse('pixelOffset');
-      if (item.anchor !== undefined && item.anchor !== 'center')
-        refuse('anchors but the centre');
-      if (item.rotationMode === 'axis') refuse('axis rotation');
-      if (item.rotationMode === 'screen' && (item.rotation ?? 0) !== 0)
-        refuse('screen rotation');
+      // What a row reads from its extras texture, which WebGL 1 has not.
+      if (scene.context?.webgl2 === false) {
+        if (item.height !== undefined && item.height !== 'absolute')
+          refuse('clamped heights on WebGL 1');
+        if (item.fadeByDistance) refuse('fadeByDistance on WebGL 1');
+        if (item.displayRange) refuse('displayRange on WebGL 1');
+        if (nonZero(item.pixelOffset)) refuse('pixelOffset on WebGL 1');
+        if (item.anchor !== undefined && item.anchor !== 'center')
+          refuse('anchors but the centre on WebGL 1');
+        if (item.rotationMode === 'axis') refuse('axis rotation on WebGL 1');
+        if (item.rotationMode === 'screen' && (item.rotation ?? 0) !== 0)
+          refuse('screen rotation on WebGL 1');
+      }
       for (const given of [item.image, item.imageLod?.near]) {
         // An atlas slot as what it holds now (none yet draws once it does).
         const image =
@@ -392,7 +427,47 @@ export function createGpuIcons({
         item.pickProxy?.size?.[1] ?? 0,
       );
       set.setDepthTestDistance(row, item.disableDepthTest ?? 0);
-      set.setShown(row, item.show !== false);
+      // An empty range shows it nowhere.
+      set.setShown(row, item.show !== false && displayable(item.displayRange));
+      writeExtras(row, item);
+      writeSegment(row, item, added, motion);
+      writeGround(row, item);
+    }
+
+    /** A row's offset, anchor, rotation, fade and display range. */
+    function writeExtras(row, item) {
+      set.setOffset(row, item.pixelOffset?.x ?? 0, item.pixelOffset?.y ?? 0);
+      set.setAnchor(row, ANCHORS[item.anchor] ?? 0);
+      set.setRotation(
+        row,
+        item.rotationMode === 'screen' ? (item.rotation ?? 0) : 0,
+      );
+      // Its up along the axis, as a billboard's; one of zero length
+      // stands upright.
+      const {
+        x = 0,
+        y = 0,
+        z = 0,
+      } = (item.rotationMode === 'axis' && item.alignedAxis) || {};
+      const length = Math.hypot(x, y, z);
+      if (length > 0) set.setAxis(row, x / length, y / length, z / length);
+      else set.setAxis(row, 0, 0, 0);
+      set.setFade(
+        row,
+        isCurve(item.fadeByDistance) ? item.fadeByDistance : undefined,
+      );
+      const range =
+        item.displayRange && displayable(item.displayRange)
+          ? item.displayRange
+          : [0, 0];
+      set.setDisplayRange(row, range[0], range[1]);
+    }
+
+    /**
+     * Write a row's segment and course easing, unless `motion` is false
+     * (and the row not new) or its motion is as written.
+     */
+    function writeSegment(row, item, added, motion) {
       if (!motion && !added) return;
       // A write moving it as it already moves (a restyle, a focus change)
       // keeps its segment and course easing as they are.
@@ -426,6 +501,83 @@ export function createGpuIcons({
       }
       set.segmentWritten(row);
       if (end > movingUntil) movingUntil = end;
+    }
+
+    // Clamped rows by id, those whose ground is still to sample, those never
+    // sampled yet, and what each row's ground was last written from.
+    const grounded = new Set();
+    const groundQueue = new Set();
+    const unsampled = new Set();
+    const groundKeys = new Map();
+    let groundRefreshedAt = -Infinity;
+    let tilesWereLoaded = false;
+
+    /** The two ends of a row's segment, ECEF. */
+    function spanOf(row, item) {
+      const motion = can('motionSegments') ? item.motion : undefined;
+      let t0 = 0;
+      let t1 = 0;
+      if (motion?.kind === 'lerp') {
+        t0 = tauOf(motion.t0);
+        t1 = Math.max(tauOf(motion.t1), t0 + LERP_STEP_MS / 1000);
+      } else if (motion?.kind === 'arc') {
+        const t = tauOf(motion.t0);
+        t0 = t + motion.minDtS;
+        t1 = t + motion.maxDtS;
+      }
+      return [
+        set.position(row, t0, { x: 0, y: 0, z: 0 }),
+        set.position(row, t1, { x: 0, y: 0, z: 0 }),
+      ];
+    }
+
+    /** A row's ground mode and segment ends, queued to sample when new. */
+    function writeGround(row, item) {
+      const mode = GROUND_MODES[item.height] ?? ICON_GROUND_NONE;
+      if (mode === ICON_GROUND_NONE) {
+        if (grounded.delete(item.id)) {
+          set.setGround(row, ICON_GROUND_NONE);
+          set.setGroundHeights(row, 0, 0);
+          groundQueue.delete(item.id);
+          unsampled.delete(item.id);
+          groundKeys.delete(item.id);
+        }
+        return;
+      }
+      const [from, to] = spanOf(row, item);
+      const key = `${mode}|${from.x}|${from.y}|${from.z}|${to.x}|${to.y}|${to.z}`;
+      if (!grounded.has(item.id)) {
+        grounded.add(item.id);
+        unsampled.add(item.id);
+      }
+      if (groundKeys.get(item.id) === key) return;
+      groundKeys.set(item.id, key);
+      set.setGround(row, mode, from, to);
+      groundQueue.add(item.id);
+    }
+
+    const groundAt = new Cesium.Cartesian3();
+    const groundCarto = new Cesium.Cartographic();
+    /**
+     * The ground's height under `p`: the drawn surface when `surface`
+     * (else, or where it has none, the loaded terrain, but for `clampTo:
+     * 'tiles'`); null where neither answers.
+     */
+    function groundHeight(p, surface) {
+      Cesium.Cartesian3.fromElements(p.x, p.y, p.z, groundAt);
+      const carto = Cesium.Cartographic.fromCartesian(
+        groundAt,
+        undefined,
+        groundCarto,
+      );
+      if (!carto) return null;
+      const heights = heightsFor(scene);
+      if (surface) {
+        const h = heights.now(carto);
+        if (h !== null) return h;
+      }
+      if (spec.clampTo === 'tiles') return null;
+      return heights.now(carto, { against: 'terrain' });
     }
 
     /** Bring the rows in line with every item. */
@@ -535,6 +687,63 @@ export function createGpuIcons({
         if (fresh) return sync();
         for (const item of drawing) writeRow(item);
       },
+      /**
+       * After a frame: sample the ground under clamped rows' segment ends,
+       * from `budget` (`{ends, surface}`, spent). Whether a row's ground
+       * changed.
+       */
+      ground(budget) {
+        if (grounded.size === 0) return false;
+        const loaded = scene.globe?.tilesLoaded === true;
+        const now = Date.now();
+        const clampTo = spec.clampTo ?? 'both';
+        if (
+          (loaded && !tilesWereLoaded) ||
+          (clampTo !== 'terrain' &&
+            now - groundRefreshedAt >= GROUND_REFRESH_MS)
+        ) {
+          for (const id of grounded) groundQueue.add(id);
+          groundRefreshedAt = now;
+        }
+        tilesWereLoaded = loaded;
+        const surface =
+          clampTo !== 'terrain' && scene.sampleHeightSupported === true;
+        let changed = false;
+        const later = [];
+        for (const id of groundQueue) {
+          if (budget.ends < 1) break;
+          const row = set.row(id);
+          if (row < 0 || set.groundMode(row) === ICON_GROUND_NONE) {
+            groundQueue.delete(id);
+            grounded.delete(id);
+            unsampled.delete(id);
+            groundKeys.delete(id);
+            continue;
+          }
+          const [from, to] = set.groundSpan(row);
+          const same = from.x === to.x && from.y === to.y && from.z === to.z;
+          const ends = same ? 1 : 2;
+          if (budget.ends < ends) continue;
+          const drawn = surface && budget.surface >= ends;
+          // Out of surface samples: a row never sampled takes the terrain
+          // for now and waits; the rest wait as they stand.
+          if (surface && !drawn && !unsampled.has(id)) continue;
+          groundQueue.delete(id);
+          if (surface && !drawn) later.push(id);
+          budget.ends -= ends;
+          if (drawn) budget.surface -= ends;
+          const h0 = groundHeight(from, drawn) ?? 0;
+          const h1 = same ? h0 : (groundHeight(to, drawn) ?? 0);
+          unsampled.delete(id);
+          const [g0, g1] = set.groundHeights(row);
+          if (g0 !== Math.fround(h0) || g1 !== Math.fround(h1)) {
+            set.setGroundHeights(row, h0, h1);
+            changed = true;
+          }
+        }
+        for (const id of later) groundQueue.add(id);
+        return changed;
+      },
       /** Whether a live-clock row is still moving: frames should keep coming. */
       animating() {
         if (spec.motionClock?.kind === 'scene' || spec.show === false)
@@ -557,5 +766,11 @@ export function createGpuIcons({
     };
   }
 
-  return { wants, check, attach };
+  /** A frame's ground samples, shared by the port's GPU icon sets. */
+  const groundBudget = () => ({
+    ends: GROUND_SAMPLES_PER_FRAME,
+    surface: SURFACE_SAMPLES_PER_FRAME,
+  });
+
+  return { wants, check, attach, groundBudget };
 }

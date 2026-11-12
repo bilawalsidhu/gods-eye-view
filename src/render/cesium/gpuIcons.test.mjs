@@ -318,8 +318,9 @@ test('without motionSegments, motion is ignored: billboards at the item’s plac
   assert.equal(set.setColumns, undefined, 'no columns either');
 });
 
-test('GPU icon sets refuse what they cannot draw, changing nothing', () => {
-  const { part, draw } = drawOver();
+test('on WebGL 1, GPU icon sets refuse what their rows read from extras, changing nothing', () => {
+  const { part, draw, scene } = drawOver();
+  scene.context = { webgl2: false };
   const set = draw.icons({ id: 'gpu:refuse' });
   set.set([icon('a', { motion: { kind: 'hold' } })]);
   for (const extra of [
@@ -333,7 +334,7 @@ test('GPU icon sets refuse what they cannot draw, changing nothing', () => {
   ])
     assert.throws(
       () => set.upsert([icon('b', { motion: { kind: 'hold' }, ...extra })]),
-      /GPU icons have no/,
+      /GPU icons have no .* on WebGL 1/,
       JSON.stringify(extra),
     );
   assert.equal(set.size(), 1);
@@ -347,6 +348,148 @@ test('GPU icon sets refuse what they cannot draw, changing nothing', () => {
   );
   assert.equal(part.sets.get('gpu:stay').gpu, undefined);
   assert.equal(billboards.size(), 1);
+});
+
+test('offsets, anchors, rotations, fades and display ranges go into a row’s extras', () => {
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:extras' });
+  // A billboard set holding them moves over whole.
+  set.set([icon('a', { anchor: 'top', pixelOffset: { x: 3, y: -4 } })]);
+  set.upsert([
+    icon('b', {
+      motion: { kind: 'hold' },
+      anchor: 'bottom',
+      rotationMode: 'screen',
+      rotation: 0.5,
+      fadeByDistance: { near: 10, nearValue: 1, far: 1e5, farValue: 0 },
+      displayRange: [5, 2e6],
+    }),
+    icon('c', {
+      motion: { kind: 'hold' },
+      rotationMode: 'axis',
+      alignedAxis: { x: 0, y: 0, z: 4 },
+    }),
+    icon('d', { motion: { kind: 'hold' }, displayRange: [10, 10] }),
+  ]);
+  const { set: s } = rows(part, 'gpu:extras');
+  const a = s.row('a');
+  assert.deepEqual(s.offset(a), { x: 3, y: -4 });
+  assert.equal(s.anchor(a), -1, 'top');
+  const b = s.row('b');
+  assert.equal(s.anchor(b), 1, 'bottom');
+  assert.equal(s.rotation(b), 0.5);
+  assert.deepEqual(s.fade(b), {
+    near: 10,
+    nearValue: 1,
+    far: 1e5,
+    farValue: 0,
+  });
+  assert.deepEqual(s.displayRange(b), [5, 2e6]);
+  assert.equal(s.shown(b), true);
+  const c = s.row('c');
+  assert.deepEqual(s.axis(c), { x: 0, y: 0, z: 1 }, 'normalised');
+  assert.equal(s.rotation(c), 0);
+  assert.equal(s.shown(s.row('d')), false, 'an empty range shows nowhere');
+  // Dropped in place, each goes back to none.
+  set.upsert([icon('b', { motion: { kind: 'hold' } })]);
+  assert.equal(s.anchor(b), 0);
+  assert.equal(s.rotation(b), 0);
+  assert.deepEqual(s.fade(b), { near: 0, nearValue: 0, far: 0, farValue: 0 });
+  assert.deepEqual(s.displayRange(b), [0, 0]);
+  // A row moved by a removal keeps its own.
+  set.remove(['a']);
+  assert.deepEqual(s.axis(s.row('c')), { x: 0, y: 0, z: 1 });
+});
+
+test('clamped rows stand on the ground sampled under their segment ends, after a frame', () => {
+  const { part, draw, scene } = drawOver();
+  // Terrain rising 1 m a hundredth of a degree east.
+  const asked = [];
+  scene.globe = {
+    tilesLoaded: false,
+    getHeight: (carto) => {
+      asked.push(carto);
+      return Cesium.Math.toDegrees(carto.longitude) * 100;
+    },
+  };
+  const set = draw.icons({ id: 'gpu:ground', clampTo: 'terrain' });
+  const from = Cesium.Cartesian3.fromDegrees(4, 52, 900);
+  const to = Cesium.Cartesian3.fromDegrees(5, 52, 900);
+  const t0 = Date.now();
+  set.set([
+    icon('a', {
+      height: 'clampGround',
+      motion: { kind: 'lerp', from, to, t0, t1: t0 + 1000 },
+    }),
+    icon('b', { height: 'relativeGround', motion: { kind: 'hold' } }),
+    icon('c', { motion: { kind: 'hold' } }),
+  ]);
+  const { set: s } = rows(part, 'gpu:ground');
+  const a = s.row('a');
+  assert.deepEqual(s.groundHeights(a), [0, 0], 'none sampled while drawing');
+  assert.equal(asked.length, 0);
+  const renders = scene.renders;
+  part.afterRender();
+  const [g0, g1] = s.groundHeights(a);
+  assert.ok(
+    Math.abs(g0 - 400) < 1e-3 && Math.abs(g1 - 500) < 1e-3,
+    `${g0} ${g1}`,
+  );
+  const [span0, span1] = s.groundSpan(a);
+  assert.ok(distance(span0, from) < 1 && distance(span1, to) < 1, 'its ends');
+  assert.equal(s.groundMode(a), 1, 'clamped');
+  assert.equal(s.groundMode(s.row('b')), 2, 'relative');
+  assert.equal(s.groundMode(s.row('c')), 0, 'absolute');
+  assert.ok(scene.renders > renders, 'a frame for the new ground');
+  // Sampled once: no samples in frames after.
+  const once = asked.length;
+  assert.equal(once, 3, 'two ends, and a held row’s one');
+  part.afterRender();
+  assert.equal(asked.length, once);
+  // Its tiles loaded: sampled again.
+  scene.globe.tilesLoaded = true;
+  part.afterRender();
+  assert.equal(asked.length, once * 2);
+  // Unclamped, it drops its ground.
+  set.upsert([icon('a', { motion: { kind: 'hold' } })]);
+  assert.equal(s.groundMode(a), 0);
+  assert.deepEqual(s.groundHeights(a), [0, 0]);
+});
+
+test('ground samples are budgeted across frames, the drawn surface the fewest', () => {
+  const { part, draw, scene } = drawOver();
+  let terrain = 0;
+  let surface = 0;
+  scene.globe = { getHeight: () => (terrain++, 10) };
+  scene.sampleHeightSupported = true;
+  scene.sampleHeight = () => (surface++, 30);
+  const set = draw.icons({ id: 'gpu:budget' });
+  const n = 300;
+  set.set(
+    Array.from({ length: n }, (_, i) =>
+      icon(`r${i}`, { height: 'clampGround', motion: { kind: 'hold' } }),
+    ),
+  );
+  const { set: s } = rows(part, 'gpu:budget');
+  part.afterRender();
+  assert.ok(
+    terrain + surface <= 256,
+    `at most 256 a frame: ${terrain} ${surface}`,
+  );
+  assert.equal(surface, 8, 'eight on the drawn surface');
+  const heights = () =>
+    [...Array(n).keys()].map((i) => s.groundHeights(s.row(`r${i}`))[0]);
+  assert.equal(heights().filter((h) => h === 30).length, 8);
+  assert.equal(
+    heights().filter((h) => h === 10).length,
+    248,
+    'the rest on terrain for now',
+  );
+  for (let i = 0; i < 60; i++) part.afterRender();
+  assert.ok(
+    heights().every((h) => h === 30),
+    'in time all on the drawn surface',
+  );
 });
 
 test('GPU icon sets refuse clustering, changing nothing', () => {
