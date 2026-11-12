@@ -1,0 +1,168 @@
+#!/usr/bin/env node
+// Bundles the app's web fonts under `public/fonts/`, so a page load asks no
+// font host. Rerun after changing a family or the icon list:
+// `node scripts/vendor-fonts.mjs`. The output is committed; only this script
+// contacts Google Fonts and GitHub, and only when a contributor runs it.
+import { createHash } from 'node:crypto';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const REPO_ROOT = path.resolve(
+  fileURLToPath(new URL('.', import.meta.url)),
+  '..',
+);
+const OUT_DIR = path.join(REPO_ROOT, 'public', 'fonts');
+
+const TEXT_FAMILIES =
+  'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@400;500;600;700&display=swap';
+
+/**
+ * The icon glyphs the app renders. A glyph missing here does not draw a box:
+ * the ligature never forms and the element shows the literal word, so
+ * src/materialSymbolsSubset.test.mjs fails when a source names one this list
+ * (as recorded in the generated stylesheet) lacks.
+ */
+const ICON_NAMES = [
+  'adjust',
+  'arrow_drop_down',
+  'arrow_forward',
+  'arrow_left',
+  'arrow_right',
+  'bolt',
+  'bug_report',
+  'category',
+  'chevron_left',
+  'chevron_right',
+  'close',
+  'close_fullscreen',
+  'dark_mode',
+  'directions_boat',
+  'draw',
+  'east',
+  'eco',
+  'egg_alt',
+  'flare',
+  'flight',
+  'handyman',
+  'layers',
+  'layers_clear',
+  'light_mode',
+  'local_fire_department',
+  'location_on',
+  'more_horiz',
+  'movie',
+  'my_location',
+  'navigation',
+  'normal',
+  'on',
+  'open_in_full',
+  'partly_cloudy_day',
+  'pause',
+  'pentagon',
+  'pest_control',
+  'pets',
+  'play_arrow',
+  'public',
+  'question_mark',
+  'radar',
+  'radio',
+  'raven',
+  'right_panel_close',
+  'right_panel_open',
+  'rocket_launch',
+  'satellite_alt',
+  'search',
+  'set_meal',
+  'settings',
+  'skip_next',
+  'skip_previous',
+  'streetview',
+  'timeline',
+  'traffic',
+  'tune',
+  'umbrella',
+  'upload_file',
+  'videocam',
+  'view_in_ar',
+  'visibility',
+  'visibility_off',
+  'water_drop',
+];
+
+const ICON_FAMILY = `https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&icon_names=${ICON_NAMES.join(',')}`;
+
+const LICENSES = {
+  'Inter-OFL.txt':
+    'https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt',
+  'JetBrainsMono-OFL.txt':
+    'https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/OFL.txt',
+  'NotoSansArabic-OFL.txt':
+    'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/OFL.txt',
+  'NotoSansHebrew-OFL.txt':
+    'https://raw.githubusercontent.com/google/fonts/main/ofl/notosanshebrew/OFL.txt',
+  'MaterialSymbols-LICENSE.txt':
+    'https://raw.githubusercontent.com/google/material-design-icons/master/LICENSE',
+};
+
+// Google Fonts picks the format from the User-Agent; this one gets woff2 split
+// by unicode-range, which every browser the app supports reads.
+const USER_AGENT =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+
+async function get(url, as = 'text') {
+  const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  if (!response.ok) throw new Error(`${response.status} for ${url}`);
+  return as === 'bytes'
+    ? new Uint8Array(await response.arrayBuffer())
+    : response.text();
+}
+
+/**
+ * One local file per remote font file, named by family and a hash of its URL
+ * (`Inter-1a2b3c4d.woff2`). Google's subset comments are dropped: each rule's
+ * unicode-range already says what the file covers.
+ */
+function localise(css, files) {
+  let family = '';
+  return css
+    .replace(/^\/\* [a-z0-9-]+ \*\/\n/gm, '')
+    .replace(
+      /src: url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)|font-family: '([^']+)';/g,
+      (match, url, name) => {
+        if (name) family = name.replace(/ /g, '');
+        if (!url) return match;
+        const hash = createHash('sha256').update(url).digest('hex').slice(0, 8);
+        const file = `${family}-${hash}.woff2`;
+        files.set(file, url);
+        return `src: url(/fonts/${file})`;
+      },
+    );
+}
+
+async function main() {
+  const files = new Map();
+  const text = localise(await get(TEXT_FAMILIES), files);
+  const icons = localise(await get(ICON_FAMILY), files);
+  await mkdir(OUT_DIR, { recursive: true });
+  for (const name of await readdir(OUT_DIR))
+    if (name.endsWith('.woff2') && !files.has(name))
+      await rm(path.join(OUT_DIR, name));
+  for (const [name, url] of files)
+    await writeFile(path.join(OUT_DIR, name), await get(url, 'bytes'));
+  for (const [name, url] of Object.entries(LICENSES))
+    await writeFile(path.join(OUT_DIR, name), await get(url));
+  const header = [
+    '/* Generated by scripts/vendor-fonts.mjs; rerun it instead of editing.',
+    ` * ${TEXT_FAMILIES}`,
+    ` * ${ICON_FAMILY}`,
+    ' * Licences: the *-OFL.txt and MaterialSymbols-LICENSE.txt files beside this one. */',
+  ].join('\n');
+  await writeFile(
+    path.join(OUT_DIR, 'fonts.css'),
+    `${header}\n${text.trim()}\n\n${icons.trim()}\n`,
+  );
+  console.log(`Wrote ${files.size} font files to public/fonts/.`);
+}
+
+await main();

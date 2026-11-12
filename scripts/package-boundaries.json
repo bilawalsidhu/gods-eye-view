@@ -198,7 +198,8 @@
       "build/panel.js",
       "build/vueOptions.js",
       "build/registerVue.js",
-      "build/vueLoader.js"
+      "build/vueLoader.js",
+      "src/maps/sourceSettings.js"
     ],
     "external": ["vite-plugin-cesium", "@vitejs/plugin-vue", "vue"]
   },
@@ -2380,6 +2381,7 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
+      "src/maps/sourceSettings.js",
       "src/maps/terrainRetry.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
@@ -2979,6 +2981,7 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
+      "src/maps/sourceSettings.js",
       "src/maps/terrainRetry.js",
       "src/navigationPolicy.js",
       "src/orbit.js",

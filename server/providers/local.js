@@ -4,6 +4,10 @@ import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
+import {
+  terrainHeightsUrl,
+  terrainUrlSetting,
+} from '../../src/maps/sourceSettings.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
@@ -60,7 +64,11 @@ function localProviderPlugins({
     tomtomProxy(),
     firmsProxy(),
     rocketLaunchesProxy(),
-    terrainHeightsProxy(),
+    terrainHeightsProxy({
+      heightsUrl: terrainHeightsUrl(
+        terrainUrlSetting(process.env.GEV_TERRAIN_URL),
+      ),
+    }),
     adsbdbProxy(),
     overpassProxy(),
     militaryInstallationsProxy(),

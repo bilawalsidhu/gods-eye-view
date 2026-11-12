@@ -38,11 +38,15 @@ export function terrainHeightsProxy(options = {}) {
   // extracts these proxies by slicing to the first closing brace in column
   // zero, so a multi-line parameter list would cut the function in half.
   // Overridable so the ceilings can be exercised as behaviour rather than
-  // asserted as constants; production constructs this with no arguments.
+  // asserted as constants.
+  // `heightsUrl` follows GEV_TERRAIN_URL (see local.js): undefined keeps
+  // Re:Earth, null answers every request without contacting any upstream.
+  // Production passes only that; the other options exercise the ceilings.
   const {
     cacheMaxEntries = 50_000,
     cacheMaxDiskBytes = 24 * 1024 * 1024,
     cachePath,
+    heightsUrl,
   } = options;
   const TTL_MS = 30 * 24 * 3600_000;
   const CACHE_PATH =
@@ -239,7 +243,9 @@ export function terrainHeightsProxy(options = {}) {
       // today requests are capped at one chunk (MAX_POINTS).
       if (Date.now() >= rateLimitedUntil) {
         try {
-          chunkResults = await fetchTerrainChunkWithRetry(chunk);
+          chunkResults = await fetchTerrainChunkWithRetry(chunk, {
+            heightsUrl,
+          });
         } catch (error) {
           firstError = firstError || error;
           // Concurrent 429s extend the pause, never cut it short.
@@ -288,6 +294,11 @@ export function terrainHeightsProxy(options = {}) {
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(bodyObj));
       };
+      if (heightsUrl === null) {
+        // GEV_TERRAIN_URL is set: the page places objects on its bundled geoid.
+        send(503, { error: 'terrain heights are disabled' });
+        return;
+      }
       try {
         if (!allow(clientKey(req))) {
           res.writeHead(429, {

@@ -5,6 +5,10 @@
 /** Decimal precision used by the terrain client when serializing lon/lat. */
 export const TERRAIN_POINT_PRECISION = 5;
 
+/** Re:Earth's point-heights endpoint, used unless GEV_TERRAIN_URL names another host. */
+export const KEYLESS_TERRAIN_HEIGHTS_URL =
+  'https://terrain.reearth.land/heights.json';
+
 /** Maximum time retries may add after the first upstream attempt settles. */
 export const TERRAIN_RETRY_BUDGET_MS = 10_000;
 
@@ -120,6 +124,7 @@ export function terrainRetryAfterMs(value, nowMs = Date.now()) {
 export async function fetchTerrainChunkWithRetry(
   points,
   {
+    heightsUrl = KEYLESS_TERRAIN_HEIGHTS_URL,
     fetchImpl = globalThis.fetch,
     sleep = defaultSleep,
     random = Math.random,
@@ -131,7 +136,7 @@ export async function fetchTerrainChunkWithRetry(
   } = {},
 ) {
   const pointsParam = points.map(terrainPointKey).join(';');
-  const url = `https://terrain.reearth.land/heights.json?points=${encodeURIComponent(pointsParam)}`;
+  const url = `${heightsUrl}?points=${encodeURIComponent(pointsParam)}`;
   let retryStartedAt = null;
   let lastError = null;
 

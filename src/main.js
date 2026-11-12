@@ -10,6 +10,13 @@ const application = createStandaloneApplication({
   cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
   geospatial:
     photonSetting === undefined ? {} : { endpoints: { photon: photonSetting } },
+  // Undefined unless the operator set GEV_BASEMAP_URL or GEV_TERRAIN_URL
+  // (validated by Vite; a null terrain selects the flat ellipsoid).
+  mapOptions: {
+    basemapUrl: import.meta.env.GEV_BASEMAP_URL,
+    basemapAttribution: import.meta.env.GEV_BASEMAP_ATTRIBUTION,
+    terrainUrl: import.meta.env.GEV_TERRAIN_URL,
+  },
   allowQaRegistration: import.meta.env.DEV,
 });
 

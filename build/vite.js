@@ -5,6 +5,10 @@ import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+import {
+  basemapUrlSetting,
+  terrainUrlSetting,
+} from '../src/maps/sourceSettings.js';
 
 /**
  * The repository root (this file lives at `<root>/build/vite.js`), as a
@@ -70,8 +74,8 @@ export const BROWSER_CSP = [
   // Facebook video SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js);
   // and the Maps JavaScript API that Street Level's Google Street View runs on.
   "script-src 'self' 'unsafe-eval' blob: https://www.youtube.com https://connect.facebook.net https://platform.twitter.com https://maps.googleapis.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
   "connect-src 'self' blob: data: https: wss: ws:",
@@ -170,6 +174,9 @@ export function createBrowserViteConfig({
   googleApiKey,
   cesiumToken,
   photonUrl,
+  basemapUrl,
+  basemapAttribution,
+  terrainUrl,
   mapillaryToken,
   host = 'localhost',
   port = 4173,
@@ -177,6 +184,8 @@ export function createBrowserViteConfig({
   command,
 } = {}) {
   const photonSetting = photonEndpointSetting(photonUrl);
+  const basemap = basemapUrlSetting(basemapUrl);
+  const terrain = terrainUrlSetting(terrainUrl);
   return {
     plugins: [
       // First, so every API response, including a Host refusal, carries them.
@@ -253,6 +262,19 @@ export function createBrowserViteConfig({
         : {
             'import.meta.env.PHOTON_URL': JSON.stringify(photonSetting),
           }),
+      // Exposed only when the operator replaced the keyless Esri basemap.
+      ...(basemap === undefined
+        ? {}
+        : {
+            'import.meta.env.GEV_BASEMAP_URL': JSON.stringify(basemap),
+            'import.meta.env.GEV_BASEMAP_ATTRIBUTION': JSON.stringify(
+              String(basemapAttribution ?? '').trim(),
+            ),
+          }),
+      // A terrain URL, or null for the flat ellipsoid; absent keeps Re:Earth.
+      ...(terrain === undefined
+        ? {}
+        : { 'import.meta.env.GEV_TERRAIN_URL': JSON.stringify(terrain) }),
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
         mapillaryToken ?? '',

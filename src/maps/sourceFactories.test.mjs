@@ -22,7 +22,6 @@ test('Esri uses Re:Earth without keys and preserves ion terrain when configured'
     );
     assert.equal(esri.available, true);
     assert.equal(esri.terrain.id, 'keyless');
-    assert.equal(esri.terrain.create, createKeylessTerrain);
     await esri.terrain.create();
     // A Resource, not a bare URL: the retry policy rides on it (terrainRetry.js).
     assert.equal(calls.length, 1);
