@@ -1,16 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  makeRedactor,
-  urlSecrets,
-} from '../../scripts/qa-solunar-redact.mjs';
+import { makeRedactor, urlSecrets } from '../../scripts/qa-solunar-redact.mjs';
 
 test('a failed navigation echoing the QA url prints no userinfo or query value', () => {
-  const url = 'https://qauser:Zx9PassWordQ7@host.example:4393/?token=AbC123SecretTokenXyZ&k=Qq77LongApiKey99';
+  const url =
+    'https://qauser:Zx9PassWordQ7@host.example:4393/?token=AbC123SecretTokenXyZ&k=Qq77LongApiKey99';
   const redact = makeRedactor(urlSecrets(url));
   const out = redact(
     `Error: net::ERR_CONNECTION_REFUSED at ${url}\n  qauser / Zx9PassWordQ7 / AbC123SecretTokenXyZ / Qq77LongApiKey99`,
   );
+  const token = 'AbC123SecretTokenXyZ';
+  for (const representation of [
+    token.slice(0, 8),
+    token.slice(-6),
+    Buffer.from(token).toString('base64'),
+  ]) {
+    assert.ok(
+      !redact(representation).includes(representation),
+      'partial or encoded secret leaked',
+    );
+  }
   for (const secret of [
     'qauser',
     'Zx9PassWordQ7',
