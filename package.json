@@ -311,6 +311,7 @@
     "./render/stub": "./src/render/stub/index.js",
     "./render/occlusion": "./src/render/occlusion/index.js",
     "./render/camera/events": "./src/render/camera/events.js",
+    "./render/cesium/plugin": "./src/render/cesium/plugin.js",
     "./render/cesium/unbound": "./src/render/cesium/unbound.js",
     "./render/conformance": "./src/render/conformance/index.js",
     "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",

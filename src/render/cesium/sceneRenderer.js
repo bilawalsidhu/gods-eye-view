@@ -34,14 +34,20 @@ const feeds = new WeakMap();
 export const pointerFeedOf = (renderer) => feeds.get(renderer) ?? null;
 
 /**
- * @param {{container: HTMLElement, msaa?: number, capabilities?: Iterable<string>}} options
- *   `capabilities` limits the renderer to those it lists.
+ * @param {{container: HTMLElement, msaa?: number, capabilities?: Iterable<string>,
+ *   cameraController?: Function, now?: () => number}} options
+ *   `capabilities` limits the renderer to those it lists; `cameraController`
+ *   puts the camera port on that controller (`controlledCamera.js`); `now`
+ *   is the clock its ticks and pointer events read (`performance.now` by
+ *   default).
  * @returns {Promise<object>} A renderer with the members listed above.
  */
 export async function createCesiumSceneRenderer({
   container,
   msaa = 4,
   capabilities: only,
+  cameraController,
+  now,
 }) {
   const credits = document.createElement('div');
   const widget = new Cesium.CesiumWidget(container, {
@@ -72,11 +78,19 @@ export async function createCesiumSceneRenderer({
 
   const capabilities = new Set(cesiumCapabilities(scene, only));
 
-  const ports = createCesiumPorts(widget, { capabilities });
+  const ports = createCesiumPorts(widget, {
+    capabilities,
+    ...(cameraController ? { cameraController } : {}),
+    ...(now ? { now } : {}),
+  });
   const input = createCesiumInput(widget, {
     query: ports.query,
     report: ports.report,
+    ...(ports.suspendCamera ? { suspendCamera: ports.suspendCamera } : {}),
+    // Its events' times on the ticks' clock.
+    ...(now ? { now } : {}),
   });
+  ports.attachInput?.(input.port);
 
   // --- Renderer --------------------------------------------------------------
 

@@ -14,6 +14,7 @@
  */
 import * as Cesium from 'cesium';
 import { createCesiumCamera } from './camera.js';
+import { createControlledCamera } from './controlledCamera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
@@ -109,12 +110,26 @@ export function cesiumCapabilities(scene, only) {
 
 /**
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
- * @param {{capabilities: ReadonlySet<string>, credentials?: object}} options
+ * @param {{capabilities: ReadonlySet<string>, credentials?: object,
+ *   cameraController?: Function, now?: () => number}} options
  *   The renderer's capabilities, which gate the members that need them, and
  *   the credentials its globe loads photoreal tiles and world data with
- *   (`googleApiKey`, `googleTokens`, `worldDataToken`).
+ *   (`googleApiKey`, `googleTokens`, `worldDataToken`). `now` is the clock
+ *   each tick reads (`performance.now` by default; a test's virtual one).
+ *   With
+ *   `cameraController`, the camera port is that controller's over Cesium's
+ *   camera (`controlledCamera.js`); the ports then have `attachInput` and
+ *   `suspendCamera`, which the renderer's input port is wired with.
  */
-export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
+export function createCesiumPorts(
+  widget,
+  {
+    capabilities,
+    credentials = {},
+    cameraController,
+    now: clockNow = () => performance.now(),
+  },
+) {
   const scene = widget.scene;
   const camera = scene.camera;
 
@@ -143,7 +158,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   let rendered = 0;
   // Every tick raises preUpdate, drawn or not; the phases of a tick share
   // its clock reading. The first tick counts from when the loop was made.
-  let tickNow = performance.now();
+  let tickNow = clockNow();
   let dt = 0;
   // The preUpdate FrameTime of the tick under way: its `rendering` reads
   // live until the tick has drawn or not, then holds that answer.
@@ -163,7 +178,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     // A tick that does not draw settles at its end; one that does, at
     // preRender, before this runs.
     atEndOfTick(scene, () => void settleTick(false));
-    const now = performance.now();
+    const now = clockNow();
     dt = (now - tickNow) / 1000;
     tickNow = now;
     frames += 1;
@@ -211,9 +226,22 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     answering = 0;
   };
   let disposed = false;
+  // The camera controller's steps, around the preUpdate listeners
+  // (`cameraController` only).
+  let controlled = null;
+  const cameraTick = (time) => ({
+    now: tickNow,
+    time: Cesium.JulianDate.toDate(time ?? widget.clock.currentTime).getTime(),
+  });
   const removers = [
     scene.preUpdate.addEventListener(tick),
+    scene.preUpdate.addEventListener(
+      (_scene, time) => void controlled?.before(cameraTick(time)),
+    ),
     scene.preUpdate.addEventListener(onPhase('preUpdate')),
+    scene.preUpdate.addEventListener(
+      (_scene, time) => void controlled?.after(cameraTick(time)),
+    ),
     scene.preRender.addEventListener(drawing),
     scene.preRender.addEventListener(onPhase('preRender')),
     scene.postRender.addEventListener(drew),
@@ -352,13 +380,48 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   });
   const { port: draw, sets, tilesets } = drawPart;
 
-  const cameraPart = createCesiumCamera({
+  // --- Query -----------------------------------------------------------------
+
+  const query = createCesiumQuery({
     scene,
     camera,
-    report,
-    widget,
+    draw: drawPart,
     capabilities,
   });
+
+  if (cameraController)
+    controlled = createControlledCamera({
+      scene,
+      controller: cameraController,
+      query: {
+        ...(capabilities.has('pickPosition')
+          ? { pickPosition: (x, y) => query.pickPosition(x, y) }
+          : {}),
+        ...(typeof query.sampleHeightNow === 'function'
+          ? { sampleHeightNow: (p, o) => query.sampleHeightNow(p, o) }
+          : {}),
+      },
+      // Where the draw port draws an item, at the scene clock's time.
+      ...(capabilities.has('motionSegments')
+        ? {
+            itemPosition: (item, aheadMs) =>
+              drawPart.drawnPosition(item, aheadMs, widget.clock.currentTime),
+          }
+        : {}),
+      requestRender: (reason) => frame.requestRender(reason),
+      report,
+      thresholds: capabilities.has('cameraChangeThreshold'),
+      followFrame: capabilities.has('followFrame'),
+    });
+  const cameraPart = controlled
+    ? { port: controlled.port, dispose: () => controlled.dispose() }
+    : createCesiumCamera({
+        scene,
+        camera,
+        report,
+        widget,
+        capabilities,
+      });
   const cameraPort = cameraPart.port;
   const effectsPart = createCesiumEffects(scene, {
     capabilities,
@@ -386,15 +449,6 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     report,
     credits: creditsPart.port,
     credentials,
-  });
-
-  // --- Query -----------------------------------------------------------------
-
-  const query = createCesiumQuery({
-    scene,
-    camera,
-    draw: drawPart,
-    capabilities,
   });
 
   async function capture({ type = 'png' } = {}) {
@@ -657,6 +711,12 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     globe: globePart.port,
     draw,
     camera: cameraPort,
+    ...(controlled
+      ? {
+          attachInput: (input) => controlled.attachInput(input),
+          suspendCamera: (reason) => controlled.suspendCamera(reason),
+        }
+      : {}),
     credits: creditsPart.port,
     query,
     effects: effectsPart.port,

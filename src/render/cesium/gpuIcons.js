@@ -815,6 +815,18 @@ export function createGpuIcons({
         }
         return out;
       },
+      /**
+       * Where the row of `id` is drawn `aheadMs` after the motion clock's
+       * time in `frameState` (now without one), on its ground when clamped;
+       * null without a row.
+       */
+      drawnAt(id, aheadMs = 0, frameState = undefined) {
+        const row = set.row(id);
+        if (row < 0) return null;
+        const tau = set.seconds(clockTime(frameState)) + aheadMs / 1000;
+        const p = set.position(row, tau, { x: 0, y: 0, z: 0 });
+        return grounded.has(id) ? onGround(row, p) : p;
+      },
       /** Hide the rows of `ids` (in clusters); show the rest again. */
       setClustered(ids) {
         const before = clustered;

@@ -5204,6 +5204,16 @@ export function createCesiumDraw({
     sets,
     version: () => setsVersion,
     tilesets,
+    /**
+     * Where a GPU icon set draws an item it moves itself, `aheadMs` after
+     * `time` (a Julian date; now without one), on its segment; null for any
+     * other item, whose own position stays the answer.
+     */
+    drawnPosition(ref, aheadMs = 0, time = undefined) {
+      const record = sets.get(ref?.set);
+      if (!record || record.kind !== 'icons' || !record.gpu) return null;
+      return record.gpu.drawnAt(ref.id, aheadMs, time ? { time } : undefined);
+    },
     /** Whether a set's ground primitives are still being built. */
     building: () => [...sets.values()].some((record) => record.pending),
     /** Each frame, before it draws: the horizon cull. */

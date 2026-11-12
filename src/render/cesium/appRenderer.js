@@ -63,11 +63,16 @@ export class ReadonlySet extends Set {
 }
 
 /**
- * The Cesium plugin over a viewer factory; tests pass a fake one.
- * @param {{createViewer?: typeof createApplicationViewer}} [options]
+ * The Cesium plugin over a viewer factory; tests pass a fake one. With
+ * `cameraController` (the shared camera controller's factory), its camera
+ * port is that controller's over Cesium's camera, which takes the user's
+ * input in place of Cesium's own controls (`controlledCamera.js`).
+ * @param {{createViewer?: typeof createApplicationViewer,
+ *   cameraController?: Function}} [options]
  */
 export function createCesiumRendererPlugin({
   createViewer = createApplicationViewer,
+  cameraController,
 } = {}) {
   return Object.freeze({
     id: 'cesium',
@@ -101,16 +106,23 @@ export function createCesiumRendererPlugin({
         ports = createCesiumPorts(viewer, {
           capabilities,
           credentials: { googleApiKey, googleTokens, worldDataToken },
+          ...(cameraController ? { cameraController } : {}),
         });
         input = createCesiumInput(viewer, {
           query: ports.query,
           report: ports.report,
+          ...(ports.suspendCamera
+            ? { suspendCamera: ports.suspendCamera }
+            : {}),
         });
-        // Free look is limited to low heights from the start.
-        releaseFreeLook = installFreeLookHeightLimit(
-          viewer,
-          FREE_LOOK_MAX_HEIGHT_METERS,
-        );
+        ports.attachInput?.(input.port);
+        // Free look is limited to low heights from the start, on Cesium's
+        // own controls (the controller keeps its own limits).
+        if (!cameraController)
+          releaseFreeLook = installFreeLookHeightLimit(
+            viewer,
+            FREE_LOOK_MAX_HEIGHT_METERS,
+          );
         configureCreditKeyboardAccess(document);
         offLocale = onLocaleChange(() =>
           configureCreditKeyboardAccess(document),

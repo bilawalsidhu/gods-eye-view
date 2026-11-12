@@ -116,6 +116,9 @@ export const cesiumInputOf = (scene) => inputs.get(scene) ?? null;
  * @param {boolean} [options.takeStock] False leaves the viewer's stock
  *   actions on its own handler, taken off only while suppressed, for a
  *   viewer that is not this renderer's: its owner may still rebind them.
+ * @param {(reason: string) => () => void} [options.suspendCamera] Where the
+ *   router's camera holds go, in place of Cesium's own camera controls: a
+ *   camera controller's (`controlledCamera.js`).
  * @returns {{port: object, feed: Function, listenerCount: () => number, dispose: () => void}}
  *   `feed(type, x, y, extra)` delivers one event as the handler would, for
  *   the conformance harness.
@@ -129,6 +132,7 @@ export function createCesiumInput(
     now = () => performance.now(),
     document: dom = globalThis.document,
     takeStock = true,
+    suspendCamera,
   },
 ) {
   const scene = widget.scene;
@@ -167,10 +171,14 @@ export function createCesiumInput(
     stockHandler.removeInputAction(STOCK[name]);
   }
 
-  const cameraInput = acquireCameraInput(scene);
+  // Camera holds go to the camera that takes the user's input: Cesium's
+  // controller through the scene's shared holds, or the camera port's own
+  // controls when a camera controller drives Cesium's camera
+  // (`controlledCamera.js`).
+  const cameraInput = suspendCamera ? null : acquireCameraInput(scene);
   const router = createInputRouter({
     report,
-    suspendCamera: (reason) => cameraInput.suspend(reason),
+    suspendCamera: suspendCamera ?? ((reason) => cameraInput.suspend(reason)),
     supported: { select: has.select, dblclickFollow: has.dblclickFollow },
     onBehaviour: borrowStock,
   });
@@ -453,7 +461,7 @@ export function createCesiumInput(
       for (const type of DOM_EVENTS)
         dom?.removeEventListener?.(type, record, { capture: true });
       if (!handler.isDestroyed?.()) handler.destroy?.();
-      cameraInput.release();
+      cameraInput?.release();
       for (const name of Object.keys(borrowed)) giveBack(name);
       if (stockHandler && !stockHandler.isDestroyed?.())
         for (const [name, type] of Object.entries(STOCK))

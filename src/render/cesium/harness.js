@@ -145,25 +145,43 @@ function nextFrame() {
 }
 
 /**
- * @param {{name?: string, model?: string, missingModel?: string}} [options]
+ * @param {{name?: string, model?: string, missingModel?: string,
+ *   cameraController?: Function}} [options]
  *   `model`: a glTF URL for the model checks; `missingModel`: one that
- *   fails to load, for the failure check.
+ *   fails to load, for the failure check; `cameraController`: the camera
+ *   port on that controller (`controlledCamera.js`).
  * @returns {import('../conformance/index.js').ConformanceHarness}
  */
 export function createCesiumHarness({
   name = 'cesium',
   model,
   missingModel,
+  cameraController,
 } = {}) {
+  // With a camera controller, each renderer's ticks read a clock of its
+  // own that each frame moves on by 1/60 s: the controller's flights then
+  // step as the reference traces do, frame by frame (Cesium's own flights
+  // keep Cesium's clock, so they are checked in Node instead).
+  const clocks = new WeakMap();
+  const virtual = Boolean(cameraController);
   return {
     name,
+    // A camera controller hears the pointer events sent through `pointer`
+    // (the input port's), so the camera scripts' drags and wheels run.
+    ...(cameraController ? { cameraInput: true } : {}),
     async create({ viewport, capabilities }) {
       const container = document.createElement('div');
       container.style.cssText = `position:fixed;left:0;top:0;width:${viewport.width}px;height:${viewport.height}px`;
       document.body.append(container);
       let renderer;
+      const clock = { ms: performance.now() };
       try {
-        renderer = await createCesiumSceneRenderer({ container, capabilities });
+        renderer = await createCesiumSceneRenderer({
+          container,
+          capabilities,
+          ...(cameraController ? { cameraController } : {}),
+          ...(virtual ? { now: () => clock.ms } : {}),
+        });
       } catch (error) {
         container.remove();
         throw error;
@@ -182,18 +200,27 @@ export function createCesiumHarness({
           container.remove();
         }
       };
+      clocks.set(renderer, clock);
       return renderer;
     },
-    frame: nextFrame,
+    frame: virtual
+      ? (r) => {
+          const clock = clocks.get(r);
+          if (clock) clock.ms += 1000 / 60;
+          return nextFrame();
+        }
+      : nextFrame,
     // Events as the renderer's handler delivers them: the checks send ones
     // no real pointer can (a click with no press), so not DOM events.
     pointer: (r, type, x, y, extra) => pointerFeedOf(r)(type, x, y, extra),
-    now: () => performance.now(),
+    now: virtual
+      ? (r) => clocks.get(r)?.ms ?? performance.now()
+      : () => performance.now(),
     // What a live motion clock reads.
     wallTime: () => Date.now(),
     toEcef,
     tolerance: DEFAULT_TOLERANCE,
-    flightPaths: 'endpoints',
+    flightPaths: virtual ? 'trace' : 'endpoints',
     ...(model ? { assets: { model, missingModel } } : {}),
   };
 }
