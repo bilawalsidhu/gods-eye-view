@@ -35,8 +35,9 @@ export function vectorBaseProvider(style) {
     proxy: undefined,
     getTileCredits: () => undefined,
     pickFeatures: () => undefined,
-    // A tile whose request was cancelled (its layer removed) is not
-    // painted once its source tiles arrive.
+    // A tile whose request was cancelled is not painted once its source
+    // tiles arrive. Cesium cancels none of an imagery layer's requests
+    // itself; the port's layer does as it is removed (`imagery.js`).
     requestImage: (x, y, level, request) =>
       paintVectorTile(style, level, x, y, {
         size: VECTOR_TILE_PX,
