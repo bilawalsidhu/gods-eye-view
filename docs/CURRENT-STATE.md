@@ -1378,6 +1378,17 @@ a fresh winning record. Dense removal clears only its own provenance, and a
 fresh core rebuild or lifecycle reset replaces the corresponding ownership.
 Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
+The ISS (NORAD 25544, by number, not name) is drawn as NASA's 3D model within
+1,500 km of the camera and as its dot beyond; the two split the distance range,
+so exactly one draws (the tracked dot too). The model is at its real 109 m span
+with a 72 px floor, flies the station's usual attitude (modules along the
+velocity, the same side to the Earth) from its own per-frame SGP4 sample, sits
+on the follow camera's sample while tracked, loads only once the ISS is shown,
+and hides with the dot's own rules and under the Cockpit hold. A click on it
+tracks the ISS. While the ISS is selected, a panel beside the tracked card plays
+NASA's official ISS live stream (YouTube, muted to start); closing it holds
+until the next selection, and untracking, the Cockpit or turning the layer off
+removes the player.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
 Launch Library pad coordinates retain unknown values: missing fields use the
 reported location coordinates when available, and launches without a known pad

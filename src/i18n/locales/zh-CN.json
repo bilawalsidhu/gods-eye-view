@@ -3425,5 +3425,10 @@
   "{source} imagery could not be opened": "无法打开 {source} 影像",
   "{place} has no position to look for imagery at": "{place} 没有可查找影像的位置",
   "No {source} imagery near {place}": "{place} 附近没有 {source} 影像",
-  "{reason} (filters on: {filters})": "{reason}（已开启筛选：{filters}）"
+  "{reason} (filters on: {filters})": "{reason}（已开启筛选：{filters}）",
+  "ISS live video": "国际空间站直播视频",
+  "ISS LIVE · NASA": "国际空间站直播 · NASA",
+  "Open on YouTube": "在 YouTube 上打开",
+  "Close ISS live video": "关闭国际空间站直播视频",
+  "Live views from the International Space Station (NASA)": "国际空间站实时画面（NASA）"
 }

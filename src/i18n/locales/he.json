@@ -3587,5 +3587,10 @@
   "{source} imagery could not be opened": "לא ניתן היה לפתוח את הצילומים של {source}",
   "{place} has no position to look for imagery at": "ל-{place} אין מיקום לחיפוש צילומים",
   "No {source} imagery near {place}": "אין צילומים של {source} ליד {place}",
-  "{reason} (filters on: {filters})": "{reason} (מסננים פעילים: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (מסננים פעילים: {filters})",
+  "ISS live video": "שידור חי מתחנת החלל",
+  "ISS LIVE · NASA": "ISS בשידור חי · NASA",
+  "Open on YouTube": "פתיחה ב-YouTube",
+  "Close ISS live video": "סגירת השידור החי מתחנת החלל",
+  "Live views from the International Space Station (NASA)": "צילומים חיים מתחנת החלל הבינלאומית (NASA)"
 }

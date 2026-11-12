@@ -3425,5 +3425,10 @@
   "{source} imagery could not be opened": "{source}の画像を開けませんでした",
   "{place} has no position to look for imagery at": "{place}には画像を探す位置がありません",
   "No {source} imagery near {place}": "{place}の近くに{source}の画像はありません",
-  "{reason} (filters on: {filters})": "{reason}（有効なフィルター: {filters}）"
+  "{reason} (filters on: {filters})": "{reason}（有効なフィルター: {filters}）",
+  "ISS live video": "ISSのライブ映像",
+  "ISS LIVE · NASA": "ISS ライブ · NASA",
+  "Open on YouTube": "YouTubeで開く",
+  "Close ISS live video": "ISSのライブ映像を閉じる",
+  "Live views from the International Space Station (NASA)": "国際宇宙ステーションからのライブ映像（NASA）"
 }

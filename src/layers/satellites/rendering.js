@@ -200,6 +200,11 @@ export function createRendering({
     if (!layerState._enabled) return;
     const now = focusNowMs(Date.now());
 
+    // The ISS as a 3D model up close. First, before the tracked sample below
+    // is refreshed: the follow camera and the tracked dot were placed this
+    // frame from the sample still cached, and the model must sit on it too.
+    parts.issModel?._updateIssModel();
+
     const interval = layerState._trackedNorad ? 200 : POSITION_UPDATE_MS;
     // Space Missions keeps this layer enabled for TLE lookup while deliberately
     // hiding its standalone fleet. Do not rebuild hidden point buffers on the
@@ -228,6 +233,9 @@ export function createRendering({
     // While the Cockpit rides the tracked satellite, keep its marks hidden.
     if (layerState._cockpitSubjectNorad !== null)
       parts.cockpit?._syncCockpitSubjectVisuals();
+
+    // NASA's live video beside the card while the ISS is selected.
+    parts.issLive?._syncIssLive();
 
     _updatePointFocus(now);
 

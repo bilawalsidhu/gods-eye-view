@@ -1,0 +1,84 @@
+/* NASA's ISS live video while the ISS is selected (src/layers/satellites/issLive.js).
+   Bottom right, above the timeline and under the right rail: 300 px wide keeps
+   it clear of the rail's last item at 720 px tall, and the rail (z-index 110)
+   stays on top where a shorter window makes them meet. */
+.iss-live-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  background: rgba(6, 14, 22, 0.92);
+  border: 1px solid rgba(0, 220, 255, 0.35);
+  border-radius: 4px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  color: #d8f6ff;
+  font-family: var(--font-mono);
+  overflow: hidden;
+}
+
+.iss-live-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.iss-live-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  color: #ffd84d;
+}
+
+.iss-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff4444;
+  box-shadow: 0 0 6px #ff4444;
+}
+
+.iss-live-link {
+  color: #7fe3ff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.iss-live-link:hover,
+.iss-live-link:focus-visible {
+  text-decoration: underline;
+}
+
+.iss-live-close {
+  border: 0;
+  background: transparent;
+  color: #d8f6ff;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.iss-live-close:hover,
+.iss-live-close:focus-visible {
+  color: #ffffff;
+}
+
+.iss-live-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.iss-live-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}

@@ -3668,5 +3668,10 @@
   "{source} imagery could not be opened": "Не удалось открыть снимки {source}",
   "{place} has no position to look for imagery at": "У места «{place}» нет координат для поиска снимков",
   "No {source} imagery near {place}": "Нет снимков {source} рядом с {place}",
-  "{reason} (filters on: {filters})": "{reason} (включены фильтры: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (включены фильтры: {filters})",
+  "ISS live video": "Прямая трансляция с МКС",
+  "ISS LIVE · NASA": "МКС В ЭФИРЕ · NASA",
+  "Open on YouTube": "Открыть на YouTube",
+  "Close ISS live video": "Закрыть трансляцию с МКС",
+  "Live views from the International Space Station (NASA)": "Прямая трансляция с Международной космической станции (NASA)"
 }

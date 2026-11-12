@@ -3830,5 +3830,10 @@
   "{source} imagery could not be opened": "تعذّر فتح صور {source}",
   "{place} has no position to look for imagery at": "لا يوجد لـ{place} موضع للبحث عن الصور فيه",
   "No {source} imagery near {place}": "لا توجد صور {source} قرب {place}",
-  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})",
+  "ISS live video": "بث مباشر من محطة الفضاء الدولية",
+  "ISS LIVE · NASA": "محطة الفضاء الدولية مباشر · NASA",
+  "Open on YouTube": "فتح على YouTube",
+  "Close ISS live video": "إغلاق البث المباشر لمحطة الفضاء الدولية",
+  "Live views from the International Space Station (NASA)": "مشاهد مباشرة من محطة الفضاء الدولية (NASA)"
 }

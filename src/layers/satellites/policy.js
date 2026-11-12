@@ -19,6 +19,42 @@ import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
 
 export const ISS_NORAD = 25544;
 
+/**
+ * The ISS drawn as a 3D model up close (issModel.js): NASA's "International
+ * Space Station (ISS) (A)" from NASA 3D Resources, shipped unmodified.
+ */
+export const ISS_MODEL_URL = '/models/iss.glb';
+
+/** The real station across its main truss, end to end, in meters. */
+export const ISS_SPAN_M = 109;
+
+/**
+ * The asset's truss length in its own units: the mesh's X extent (37.772)
+ * times the root node's scale (0.678121), read from the file's accessors.
+ */
+export const ISS_MODEL_NATIVE_SPAN = 25.614;
+
+/**
+ * Within this camera distance the model replaces the dot; farther out the dot
+ * stays. Covers the tracked view (~726 km back for LEO) with room to spare.
+ */
+export const ISS_MODEL_MAX_DISTANCE_M = 1_500_000;
+
+/**
+ * The model is never drawn smaller than this, in pixels. At true size the
+ * station is under a pixel from the tracked view, so the floor is what makes
+ * it readable there; within a few kilometres the true size takes over.
+ */
+export const ISS_MODEL_MIN_PX = 72;
+
+/**
+ * NASA's official live stream from the ISS on YouTube ("Live High-Definition
+ * Views from the International Space Station", channel @NASA), shown in a
+ * panel while the ISS is selected (issLive.js). A YouTube live keeps its id
+ * while the broadcast runs; if NASA restarts it under a new id, change it here.
+ */
+export const ISS_LIVE_VIDEO_ID = 'ROboUHfPUrU';
+
 export const ISS_OVERLAY_SOURCE_ID = 'satellites-iss';
 
 export const ISS_OVERLAY_SOURCE_OPTIONS = Object.freeze({

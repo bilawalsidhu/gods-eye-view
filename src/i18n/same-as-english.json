@@ -244,7 +244,8 @@
     "▲ {frp} MW",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "ISS LIVE · NASA"
   ],
   "es": [
     "1 min/s",
@@ -1245,7 +1246,8 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "ISS LIVE · NASA"
   ],
   "uk": [
     "1900–1945",

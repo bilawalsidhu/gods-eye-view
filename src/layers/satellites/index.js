@@ -7,13 +7,19 @@ import { createRendering } from './rendering.js';
 import { createTracking } from './tracking.js';
 import { createTesting } from './testing.js';
 import { createInteraction } from './interaction.js';
+import { createIssLive } from './issLive.js';
+import { createIssModel } from './issModel.js';
 import { createLifecycle } from './lifecycle.js';
 import { createIngestion } from './ingestion.js';
 import { createRecords } from './records.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
-export function createSatellitesLayer({ services, source }) {
+export function createSatellitesLayer({
+  services,
+  source,
+  resolveAsset = (url) => url,
+}) {
   if (typeof source?.readGroup !== 'function')
     throw new TypeError('A satellites source is required');
   const state = createState({ services });
@@ -25,6 +31,8 @@ export function createSatellitesLayer({ services, source }) {
   parts.orbits = createOrbits(context);
   parts.records = createRecords(context);
   parts.rendering = createRendering(context);
+  parts.issModel = createIssModel({ ...context, resolveAsset });
+  parts.issLive = createIssLive(context);
   parts.tracking = createTracking(context);
   parts.testing = createTesting(context);
   parts.interaction = createInteraction(context);

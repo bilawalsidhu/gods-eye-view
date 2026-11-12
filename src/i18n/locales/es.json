@@ -3587,5 +3587,10 @@
   "{source} imagery could not be opened": "No se pudieron abrir las imágenes de {source}",
   "{place} has no position to look for imagery at": "{place} no tiene una posición donde buscar imágenes",
   "No {source} imagery near {place}": "No hay imágenes de {source} cerca de {place}",
-  "{reason} (filters on: {filters})": "{reason} (filtros activos: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (filtros activos: {filters})",
+  "ISS live video": "Vídeo en directo de la ISS",
+  "ISS LIVE · NASA": "ISS EN DIRECTO · NASA",
+  "Open on YouTube": "Abrir en YouTube",
+  "Close ISS live video": "Cerrar vídeo en directo de la ISS",
+  "Live views from the International Space Station (NASA)": "Imágenes en directo de la Estación Espacial Internacional (NASA)"
 }

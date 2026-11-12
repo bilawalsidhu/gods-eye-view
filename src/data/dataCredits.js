@@ -155,6 +155,18 @@ export const DATA_CREDITS = [
       'Dr. T.S. Kelso',
   },
   {
+    key: 'nasa-iss-model',
+    html:
+      'ISS model: ' +
+      '<a href="https://github.com/nasa/NASA-3D-Resources" target="_blank" rel="noopener">NASA 3D Resources</a>',
+  },
+  {
+    key: 'nasa-iss-live',
+    html:
+      'ISS live video: NASA, via ' +
+      '<a href="https://www.youtube.com/watch?v=ROboUHfPUrU" target="_blank" rel="noopener">YouTube</a>',
+  },
+  {
     key: 'ucs-satellite-database',
     html:
       'Satellite operators and purposes: ' +

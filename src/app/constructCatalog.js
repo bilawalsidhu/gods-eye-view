@@ -116,6 +116,7 @@ export function createApplicationCatalog({
     });
     const satellites = createApplicationSatellites({
       source: sources.satellites,
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const catalog = createLayerCatalog(
       [
