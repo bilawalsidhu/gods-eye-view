@@ -4235,12 +4235,15 @@ test('a held vehicle hides, keeps moving out of view, and lets go when it goes',
 
   assert.equal(app.layer.setCockpitSubject(null), true);
   assert.equal(app.layer.getCockpitSubject(), null);
+  // Let go, it is out of play until a sweep finds it in view.
+  assert.equal(app.state()._visible.has(entry), false, 'out of play');
   app.lookAt({
     west: -71.2,
     south: 42.2,
     east: -70.9,
     north: 42.5,
   });
+  app.advance(250);
   app.settle();
   assert.equal(entry.marker.show, true, 'shown again');
   assert.equal(app.layer.focusVehicle('mbta:nope'), false);

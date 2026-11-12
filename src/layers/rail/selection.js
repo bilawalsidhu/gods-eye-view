@@ -108,6 +108,8 @@ export function createSelection({ state, services, parts }) {
    */
   function selectAndFocusTrain(key) {
     if (!state._trains.has(key)) return;
+    // A selection by the user, even of the selected train (cockpitSubject.js).
+    state._selectedAtMs = Date.now();
     const following = parts.follow.isFollowing(key);
     // Another train's follow lets go first, so this is never taken for a
     // move between two copies of one train.

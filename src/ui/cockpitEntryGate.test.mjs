@@ -56,8 +56,10 @@ function fixture(
     dataManager: suppliedManager = null,
     readContext = null,
     subjects = [],
+    vessel = null,
   } = {},
 ) {
+  let selectedVessel = vessel;
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
@@ -102,7 +104,13 @@ function fixture(
     services: {
       flightsLayer: { getTrackedInfo: trackedFrom('flights') },
       militaryFlightsLayer: { getTrackedInfo: trackedFrom('military') },
-      aisLiveVesselsLayer: { getCockpitSubject: () => null },
+      // Like the layer, no subject while Live AIS Vessels is off.
+      aisLiveVesselsLayer: {
+        getCockpitSubject: () =>
+          selectedVessel && layers.has('ais-live-vessels')
+            ? { ...selectedVessel }
+            : null,
+      },
       // Like the layer, no subject while Satellites is off.
       satellitesLayer: {
         getCockpitSubject: () =>
@@ -174,9 +182,34 @@ function fixture(
     viewer.trackedEntity = entityFor(subject);
     entities.add(viewer.trackedEntity);
   };
+  /** Select a vessel on the map, or none. */
+  const selectVessel = (info) => {
+    selectedVessel = info;
+  };
   const $ = (selector) => document.querySelector(selector);
-  return { $, coordinator, cockpit, store, layers, disable, retrack, pinia };
+  return {
+    $,
+    coordinator,
+    cockpit,
+    store,
+    layers,
+    disable,
+    retrack,
+    selectVessel,
+    pinia,
+  };
 }
+
+/** A selected vessel as the AIS layer gives it to the bridge view. */
+const VESSEL = Object.freeze({
+  id: '211000001',
+  name: 'EXAMPLE',
+  latitude: 54,
+  longitude: 10,
+  headingDeg: 90,
+  courseDeg: 90,
+  speedMps: 5,
+});
 
 test('a civilian aircraft enters with Live Flights alone: no Contacts, no Military', (t) => {
   const { coordinator, cockpit } = fixture(t, {
@@ -570,6 +603,32 @@ test('the readout entry reads BRIDGE for a selected vessel', async (t) => {
   assert.match(readoutEntry.textContent, /BRIDGE/);
 });
 
+test('without providers too, the later selection takes entry: a vessel after an aircraft reads BRIDGE', async (t) => {
+  const { $, cockpit, store, selectVessel } = fixture(t, {
+    enabled: ['flights', 'ais-live-vessels'],
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  cockpit.syncEntry();
+  assert.equal(store.presence.entryKind, 'aircraft');
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  selectVessel(VESSEL);
+  cockpit.syncEntry();
+  await nextTick();
+  assert.equal(store.presence.entryKind, 'vessel');
+  assert.match($('#cockpit-entry-readout').textContent, /BRIDGE/);
+  // And the other way round: an aircraft tracked after the vessel.
+  const later = fixture(t, {
+    enabled: ['flights', 'ais-live-vessels'],
+    vessel: VESSEL,
+  });
+  later.cockpit.syncEntry();
+  assert.equal(later.store.presence.entryKind, 'vessel');
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  later.retrack({ layerId: 'flights', info: CIVIL });
+  later.cockpit.syncEntry();
+  assert.equal(later.store.presence.entryKind, 'aircraft');
+});
+
 test('a tracked satellite needs Satellites on for the ORBIT entry', async (t) => {
   const { $, cockpit } = fixture(t, { satellite: SATELLITE });
   cockpit.syncEntry();
@@ -728,6 +787,60 @@ test("a provider's view reports its subject, refuses voice entry and ends with i
   disable('example-layer');
   assert.equal(cockpit.active, false, 'its own layer going off ends it');
   assert.deepEqual(released, [['a1', false]]);
+});
+
+test("a provider's guards: a throwing candidate, gate or release, and a gate that is not true", async (t) => {
+  const warned = [];
+  t.mock.method(console, 'warn', (message) => warned.push(String(message)));
+  const entered = (provider) => {
+    const { cockpit } = fixture(t, {
+      enabled: ['example-layer'],
+      subjects: [provider],
+    });
+    cockpit.syncEntry();
+    return { cockpit, entered: cockpit.enter() };
+  };
+  const { provider: base } = exampleSubject();
+  // A candidate() that throws offers nothing.
+  const noCandidate = entered({
+    ...base,
+    candidate: () => {
+      throw new Error('candidate failed');
+    },
+  });
+  assert.equal(noCandidate.entered, false);
+  assert.equal(noCandidate.cockpit.resolveEntry(), null);
+  // An isEntryAllowed() that throws, or answers anything but true, shuts
+  // the gate.
+  for (const isEntryAllowed of [
+    () => {
+      throw new Error('gate failed');
+    },
+    () => 1,
+    () => 'yes',
+    () => ({}),
+  ]) {
+    const gated = entered({ ...base, isEntryAllowed });
+    assert.equal(gated.entered, false, String(isEntryAllowed));
+    assert.equal(gated.cockpit.active, false);
+  }
+  // A release() that throws still ends the view.
+  const { provider } = exampleSubject();
+  const releasing = entered({
+    ...provider,
+    release: () => {
+      throw new Error('release failed');
+    },
+  });
+  assert.equal(releasing.entered, true);
+  assert.equal(releasing.cockpit.exit(), true);
+  assert.equal(releasing.cockpit.active, false);
+  assert.equal(document.body.classList.contains('cockpit-subject'), false);
+  for (const method of ['candidate', 'isEntryAllowed', 'release'])
+    assert.ok(
+      warned.some((line) => line.includes(`${method}() failed`)),
+      method,
+    );
 });
 
 test('a malformed provider is left out and the built-in kinds are unchanged', async (t) => {

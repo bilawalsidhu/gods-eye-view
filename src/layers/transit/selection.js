@@ -109,6 +109,7 @@ export function createSelection({ state, services, parts }) {
     const entry = state._vehicles.get(key);
     if (!entry?.marker) return;
     state._selectedKey = key;
+    state._selectedAtMs = Date.now();
     state._detectRevision += 1;
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);

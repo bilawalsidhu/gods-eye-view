@@ -1,5 +1,7 @@
-import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import { transitRouteLabel } from '../../data/transitFeeds.js';
+import {
+  getRegisteredTransitFeed,
+  transitRouteLabel,
+} from '../../data/transitFeeds.js';
 import { displayMotion } from './movement.js';
 
 /**
@@ -14,7 +16,9 @@ import { displayMotion } from './movement.js';
  * camera's view, its feed stays polled, and clicks and Escape no longer
  * change the selection. The hold ends with `setCockpitSubject(null)`, and on
  * its own when the vehicle is removed or the layer is turned off.
- * `focusVehicle(key)` selects a vehicle, as a click does.
+ * `focusVehicle(key)` selects a vehicle, as a click does. A snapshot's
+ * `selectedAtMs` is when the user last selected the selected vehicle, even
+ * again (null for any other).
  *
  * @param {object} context The layer's state, parts and services.
  * @returns {{methods: object}}
@@ -26,9 +30,12 @@ export function createTransitCockpitSubject({ state, parts, services }) {
   const finiteOrNull = (value) =>
     typeof value === 'number' && Number.isFinite(value) ? value : null;
 
-  function feedOf(feedId) {
-    const feed =
-      state._activeFeeds.get(feedId) || getRegisteredTransitFeed(feedId);
+  /** The feed in use, else the registry's entry for it. */
+  function feedEntry(feedId) {
+    return state._activeFeeds.get(feedId) || getRegisteredTransitFeed(feedId);
+  }
+
+  function feedOf(feed) {
     if (!feed) return null;
     return Object.freeze({
       id: feed.id,
@@ -46,9 +53,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     if (!entry?.record) return null;
     const record = entry.record;
     const sample = entry.sample ?? null;
-    const feed =
-      state._activeFeeds.get(entry.feedId) ||
-      getRegisteredTransitFeed(entry.feedId);
+    const feed = feedEntry(entry.feedId);
     const reported = finiteOrNull(record.speedMps);
     const derived = finiteOrNull(sample?.segmentSpeedMps);
     const status = state._feedStatus.get(entry.feedId);
@@ -57,6 +62,8 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     return Object.freeze({
       key: entry.key,
       feedId: entry.feedId,
+      selectedAtMs:
+        state._selectedKey === entry.key ? state._selectedAtMs : null,
       id: String(record.id ?? ''),
       routeId: record.routeId || null,
       routeLabel:
@@ -68,7 +75,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       label: record.label || null,
       mode: entry.mode ?? null,
       modeInferred: entry.modeInferred === true,
-      feed: feedOf(entry.feedId),
+      feed: feedOf(feed),
       position: Object.freeze({
         latitude,
         longitude,
@@ -131,6 +138,12 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       const previous = state._vehicles.get(state._cockpitSubjectKey);
       if (key === null || key === undefined) {
         state._cockpitSubjectKey = null;
+        // The hold kept it in play out of view: it leaves until the next
+        // visibility sweep finds it in view again.
+        if (previous) {
+          state._visible.delete(previous);
+          parts.rendering.requestVisibility();
+        }
         repaint(previous);
         parts.selection.refreshSelectedCard(true);
         return true;

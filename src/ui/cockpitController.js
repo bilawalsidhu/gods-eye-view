@@ -14,6 +14,7 @@ import {
   toggleTrackedTr3b,
   syncTr3bToggle,
   syncEntry,
+  refreshSubjectWords,
   publishPresenceView,
   navigateContext,
   _adoptTrackedEntity,
@@ -185,6 +186,10 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
+    /** The height an application subject's frame last stood at (m). */
+    this.subjectHeightM = null;
+    /** The ground clamp's eased lift under that subject's eye (m). */
+    this.subjectLiftM = null;
     /**
      * Where the bridge view is turned to (`lookTarget`) and where the camera
      * looks on its way there (`lookView`): yaw off the bow, starboard
@@ -581,6 +586,9 @@ export class CockpitViewController {
   syncEntry() {
     return syncEntry.call(this);
   }
+  refreshSubjectWords() {
+    return refreshSubjectWords.call(this);
+  }
   navigateContext(direction, options) {
     return navigateContext.call(this, direction, options);
   }
@@ -783,6 +791,9 @@ export class CockpitViewController {
     this.relocalizeBrief();
     this.publishVision(createVisionState(this.visionMode));
     this.routeSignature = null;
+    // A provider's words, ridden or on the entry, follow the language.
+    this.refreshSubjectWords();
+    if (!this.active) this.syncEntry();
     if (this.active && this.lastSubjectInfo) {
       this.rewordingSignals = true;
       try {

@@ -79,6 +79,8 @@ function createState({ services }) {
     _stopAnchors: new Map(),
     _categories: { ...DEFAULT_RAIL_CATEGORY_VISIBILITY },
     _selectedKey: null,
+    /** When the user last selected a train, even the selected one (ms). */
+    _selectedAtMs: null,
     _selectedCardAt: 0,
     _selectedCardText: null,
     /** The camera's follow of the selected train (follow.js), or null. */

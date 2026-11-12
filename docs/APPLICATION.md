@@ -228,3 +228,81 @@ view name is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component
 loader with `node --import=<core package>/build/register-vue`.
+
+### Cockpit subjects
+
+Core's Cockpit rides a tracked aircraft, the tracked satellite and the
+selected AIS vessel. An application adds kinds of its own with
+`services.cockpitSubjects` on `createApplicationControls`: a list of
+providers, checked once when the controls are built
+(`src/cockpitSubjectProviders.js`). A malformed provider is left out with a
+warning. Entry rides the most recently selected subject of all kinds and needs
+the provider's `layerId` on; the provider then holds its subject, hands the
+camera a frame and the generic HUD a view model on every update, and releases
+it on exit. Provider methods are synchronous; one that throws or returns a
+promise is treated as having failed.
+
+```js
+import { getLocale, onLocaleChange } from '@gods-eye-view/core/i18n/locale';
+import { pointAtS } from '@gods-eye-view/core/layers/rail/paths';
+
+const words = {
+  en: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT RIDE' },
+  de: {
+    view: 'Fahrtansicht',
+    exit: 'Fahrtansicht verlassen',
+    exitText: 'VERLASSEN',
+  },
+};
+
+/** Ride the Rail layer's selected train; `rail` is its layer instance. */
+const ride = {
+  kind: 'example-ride',
+  layerId: 'rail',
+  entryFace: { icon: 'train', label: 'RIDE' },
+  // A function is read again when the page's language changes.
+  labels: () => words[getLocale()] ?? words.en,
+  candidate() {
+    const train = rail.getSelectedTrain();
+    return (
+      train && {
+        id: train.key,
+        name: train.label,
+        selectedAt: train.selectedAtMs,
+      }
+    );
+  },
+  hold: (id) => rail.setCockpitSubject(id),
+  read(nowMs, ctx) {
+    const train = rail.getCockpitSubject();
+    if (!train?.path) return null; // ends the view
+    const point = pointAtS(train.path.line, train.path.s);
+    return {
+      id: train.key,
+      latitude: point.lat,
+      longitude: point.lon,
+      heightM: train.position.railHeightM, // null stands it on the shared floor
+      headingDeg:
+        train.path.direction < 0 ? point.bearingDeg + 180 : point.bearingDeg,
+      eye: { upM: 3.5 },
+    };
+  },
+  hud: (frame) => ({ title: frame.name }),
+  release(id, { restore }) {
+    rail.setCockpitSubject(null);
+    if (restore) rail.focusTrain(id);
+  },
+};
+
+createApplicationControls({ /* ... */ services: { cockpitSubjects: [ride] } });
+```
+
+`@gods-eye-view/core/i18n/locale` gives `getLocale()` and `onLocaleChange()`:
+Core translates only its own strings, so a provider words its labels, entry
+face and HUD for the page's language (labels may be functions, as above; the
+HUD is read again on a change). `@gods-eye-view/core/layers/rail/paths` is the
+Rail layer's pure path module (`createRailPath`, `pointAtS`, `projectOnPath`)
+for a provider placing a train along its line. The frame, HUD view and
+candidate fields are documented in `src/cockpitSubjectProviders.js`; the Rail
+and Transit read APIs in `src/layers/rail/cockpitSubject.js` and
+`src/layers/transit/cockpitSubject.js`.

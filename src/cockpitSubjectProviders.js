@@ -30,6 +30,14 @@ export const COCKPIT_SUBJECT_TONES = Object.freeze([
   'alert',
 ]);
 
+/**
+ * The heights a frame may give (m, ellipsoidal): below the deepest dry
+ * ground, above anything ridden near it; outside, the frame stands on the
+ * floor.
+ */
+export const COCKPIT_SUBJECT_MIN_HEIGHT_M = -1_000;
+export const COCKPIT_SUBJECT_MAX_HEIGHT_M = 50_000;
+
 /** The most readouts, sources and signals a HUD view shows. */
 export const COCKPIT_SUBJECT_MAX_READOUTS = 4;
 export const COCKPIT_SUBJECT_MAX_SOURCES = 4;
@@ -77,6 +85,34 @@ function faceOf(raw) {
   return Object.freeze({ icon: raw.icon, label });
 }
 
+/** The labels a provider gives, normalized, or null without the required. */
+function labelsOf(raw) {
+  if (!isObject(raw)) return null;
+  const labels = {
+    view: cockpitSubjectText(raw.view, 48),
+    exit: cockpitSubjectText(raw.exit, 48),
+    exitText: cockpitSubjectText(raw.exitText, 24),
+    kicker: cockpitSubjectText(raw.kicker, 48),
+  };
+  return labels.view && labels.exit && labels.exitText
+    ? Object.freeze(labels)
+    : null;
+}
+
+/**
+ * A provider's worded member as it reads now: the value, or what the
+ * function it is returns (so it can follow the page's language); undefined
+ * when that throws.
+ */
+function wordedNow(value) {
+  if (typeof value !== 'function') return value;
+  try {
+    return value();
+  } catch {
+    return undefined;
+  }
+}
+
 /** Why `provider` cannot be kept, or null. */
 function refusal(provider, kinds) {
   if (!isObject(provider)) return 'not an object';
@@ -96,19 +132,13 @@ function refusal(provider, kinds) {
     typeof provider.isEntryAllowed !== 'function'
   )
     return 'isEntryAllowed is not a function';
-  if (!faceOf(provider.entryFace)) return 'malformed entry face';
-  const labels = provider.labels;
-  if (
-    !isObject(labels) ||
-    !cockpitSubjectText(labels.view, 48) ||
-    !cockpitSubjectText(labels.exit, 48) ||
-    !cockpitSubjectText(labels.exitText, 24)
-  )
+  if (!faceOf(wordedNow(provider.entryFace))) return 'malformed entry face';
+  if (!labelsOf(wordedNow(provider.labels)))
     return 'labels need view, exit and exitText';
+  const look = wordedNow(provider.look);
   if (
     provider.look != null &&
-    (!isObject(provider.look) ||
-      !cockpitSubjectText(provider.look.aheadLabel, 64))
+    (!isObject(look) || !cockpitSubjectText(look.aheadLabel, 64))
   )
     return 'look needs an aheadLabel';
   return null;
@@ -128,12 +158,20 @@ function refusal(provider, kinds) {
  * - `look` (optional): `{restPitchDeg?, aheadLabel}`, arrow-key look-around as
  *   on a bridge, resting at `restPitchDeg` (default 0, -90..90), its Look
  *   ahead button named `aheadLabel`;
+ *   `entryFace`, `labels` and `look` may each be a function returning the
+ *   object: it is called again whenever they are shown and when the page's
+ *   language changes, so its words can follow it (`./i18n/locale`). A read
+ *   that throws or is malformed keeps the last good one; `look` is on or off
+ *   and `restPitchDeg` fixed as first read;
  * - `cameraIntervalMs` (optional): 0..1000, null for the Cockpit's default; 0
  *   updates the camera every rendered frame;
  * - `headingSlewDps` (optional): how fast the view turns to a new heading,
  *   positive or Infinity, null for the Cockpit's default;
  * - `candidate()`, `isEntryAllowed(candidate)` (optional), `hold(id)`,
- *   `read(nowMs, ctx)`, `hud(frame, ctx)` and `release(id, {restore})`.
+ *   `read(nowMs, ctx)`, `hud(frame, ctx)` and `release(id, {restore})`, all
+ *   synchronous (createCockpitSubjectCaller). `isEntryAllowed` allows entry
+ *   only by returning `true`. A `hold` that throws is followed by
+ *   `release(id, {restore: false})`.
  *
  * A provider that is not so is left out with one warning naming it.
  * @param {unknown} list
@@ -157,28 +195,40 @@ export function cockpitSubjectProviders(
       return;
     }
     kinds.add(provider.kind);
-    const look = isObject(provider.look)
-      ? Object.freeze({
-          restPitchDeg: finite(provider.look.restPitchDeg)
-            ? clamp(provider.look.restPitchDeg, -90, 90)
-            : 0,
-          aheadLabel: cockpitSubjectText(provider.look.aheadLabel, 64),
-        })
-      : null;
+    // Worded members are read again on each use (see above); the last good
+    // read stands in for a bad one.
+    let face = faceOf(wordedNow(provider.entryFace));
+    let labels = labelsOf(wordedNow(provider.labels));
+    const firstLook = wordedNow(provider.look);
+    const lookOf = (raw) =>
+      Object.freeze({
+        restPitchDeg: finite(firstLook.restPitchDeg)
+          ? clamp(firstLook.restPitchDeg, -90, 90)
+          : 0,
+        aheadLabel: cockpitSubjectText(raw.aheadLabel, 64),
+      });
+    let look = isObject(firstLook) ? lookOf(firstLook) : null;
     kept.push(
       Object.freeze({
         kind: provider.kind,
         layerId: provider.layerId,
         priority: finite(provider.priority) ? provider.priority : 0,
         order,
-        entryFace: faceOf(provider.entryFace),
-        labels: Object.freeze({
-          view: cockpitSubjectText(provider.labels.view, 48),
-          exit: cockpitSubjectText(provider.labels.exit, 48),
-          exitText: cockpitSubjectText(provider.labels.exitText, 24),
-          kicker: cockpitSubjectText(provider.labels.kicker, 48),
-        }),
-        look,
+        get entryFace() {
+          face = faceOf(wordedNow(provider.entryFace)) ?? face;
+          return face;
+        },
+        get labels() {
+          labels = labelsOf(wordedNow(provider.labels)) ?? labels;
+          return labels;
+        },
+        get look() {
+          if (!look) return null;
+          const raw = wordedNow(provider.look);
+          if (isObject(raw) && cockpitSubjectText(raw.aheadLabel, 64))
+            look = lookOf(raw);
+          return look;
+        },
         cameraIntervalMs:
           finite(provider.cameraIntervalMs) &&
           provider.cameraIntervalMs >= 0 &&
@@ -204,25 +254,38 @@ export function cockpitSubjectProviders(
 }
 
 /**
- * A provider's candidate: `{id, name, face}`, or null without a usable id.
- * `name` falls back to the id; `face` is null unless well formed.
+ * A provider's candidate: `{id, name, face, selectedAt}`, or null without a
+ * usable id. `name` falls back to the id; `face` is null unless well formed;
+ * `selectedAt` (a number or a short string, else null) is a token the
+ * provider changes each time its subject is selected, even again: entry
+ * takes the most recently selected subject (entryCandidates).
  * @param {unknown} raw What `candidate()` returned.
  */
 export function cockpitSubjectCandidate(raw) {
   if (!isObject(raw) || typeof raw.id !== 'string') return null;
   const id = raw.id.trim();
   if (!id || id.length > 128) return null;
+  const selectedAt =
+    finite(raw.selectedAt) ||
+    (typeof raw.selectedAt === 'string' && raw.selectedAt.length <= 64)
+      ? raw.selectedAt
+      : null;
   return Object.freeze({
     id,
     name: cockpitSubjectText(raw.name, 64) || cockpitSubjectText(id, 64),
     face: faceOf(raw.face),
+    selectedAt,
   });
 }
 
 /**
  * One camera frame from a provider, normalized, or null when it cannot place
  * the camera (the view then ends): not an object, an id other than `heldId`,
- * a position that is not finite, or an eye with no valid `upM`.
+ * a position that is not finite, or an eye with no valid `upM` (0..1000).
+ * A `heightM` that is not finite or lies outside
+ * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null:
+ * the eye then stands on the shared floor, or where it last stood while that
+ * is cold.
  * @param {unknown} raw What `read()` returned.
  * @param {string} heldId The subject the view holds.
  * @returns {object|null} `{id, name, latitude, longitude, heightM, headingDeg,
@@ -245,7 +308,12 @@ export function cockpitSubjectFrame(raw, heldId) {
     name: cockpitSubjectText(raw.name, 64) || cockpitSubjectText(heldId, 64),
     latitude,
     longitude: ((((longitude + 180) % 360) + 360) % 360) - 180,
-    heightM: finite(raw.heightM) ? raw.heightM : null,
+    heightM:
+      finite(raw.heightM) &&
+      raw.heightM >= COCKPIT_SUBJECT_MIN_HEIGHT_M &&
+      raw.heightM <= COCKPIT_SUBJECT_MAX_HEIGHT_M
+        ? raw.heightM
+        : null,
     headingDeg,
     courseDeg: heading(raw.courseDeg) ?? headingDeg,
     speedMps: finite(raw.speedMps) && raw.speedMps >= 0 ? raw.speedMps : null,
@@ -429,25 +497,48 @@ export function cockpitSubjectHudView(raw) {
  * A guarded caller for provider methods: `call(provider, method, args,
  * fallback)` returns what the method returns, or `fallback` when it throws,
  * warning once per provider and method.
+ *
+ * Provider methods are synchronous: the Cockpit calls them on its render
+ * cadence and uses the answer at once. One that returns a promise (an async
+ * function, say) breaks that contract: the promise is refused as a throw
+ * would be (its rejection, if any, is swallowed), with one warning.
  * @param {{warn?: (message: string, error: unknown) => void}} [options]
  */
 export function createCockpitSubjectCaller({
   warn = (message, error) => console.warn(message, error),
 } = {}) {
   const warned = new Set();
+  const warnOnce = (provider, method, message, error) => {
+    const key = `${provider.kind}:${method}`;
+    if (warned.has(key)) return;
+    warned.add(key);
+    warn(
+      `[Cockpit] subject provider ${provider.kind} ${method}() ${message}`,
+      error,
+    );
+  };
   return function call(provider, method, args = [], fallback = null) {
+    let result;
     try {
-      return provider[method](...args);
+      result = provider[method](...args);
     } catch (error) {
-      const key = `${provider.kind}:${method}`;
-      if (!warned.has(key)) {
-        warned.add(key);
-        warn(
-          `[Cockpit] subject provider ${provider.kind} ${method}() failed`,
-          error,
-        );
-      }
+      warnOnce(provider, method, 'failed', error);
       return fallback;
     }
+    if (
+      result !== null &&
+      (typeof result === 'object' || typeof result === 'function') &&
+      typeof result.then === 'function'
+    ) {
+      Promise.resolve(result).catch(() => {});
+      warnOnce(
+        provider,
+        method,
+        'returned a promise; provider methods are synchronous',
+        null,
+      );
+      return fallback;
+    }
+    return result;
   };
 }

@@ -1696,7 +1696,9 @@ and portal cleanup follows that restoration.
 
 ### Ship bridge view
 
-With no aircraft tracked, Cockpit can ride the selected AIS vessel instead.
+Cockpit can also ride the selected AIS vessel; when other subjects are
+selected too, entry takes the most recently selected one (see Application
+subjects below).
 Entry needs only the layer of the vessel it rides, Live AIS Vessels, and a
 selected vessel; Contacts and every other layer may be off, before or during
 the bridge (`bridgeEntryAllowed` in `src/contextModePolicy.js`). A Context mode
@@ -1782,9 +1784,9 @@ satellite instead. Entry needs only the Satellites layer
 layer may be off. A Context mode change in flight blocks entry until it
 settles. Debris (rocket bodies, fragments and dead satellites; see the
 satellite class toggles) can be tracked but never entered: no ORBIT entry is
-offered and double-click refuses it. A tracked aircraft still takes
-entry first, and a tracked satellite
-takes it before a selected vessel. Double-clicking the tracked satellite
+offered and double-click refuses it. When an aircraft or a vessel is also
+tracked or selected, entry takes the most recently selected subject (see
+Application subjects below). Double-clicking the tracked satellite
 enters it, and the entry button reads
 ORBIT with a satellite icon in Contacts (`#cockpit-entry`) and under the Intel
 HUD readout (`#cockpit-entry-readout`). Voice (`control_cockpit`) stays
@@ -2001,13 +2003,15 @@ the reason, while a provider's view is in use.
 
 Entry rides the most recently selected subject of all kinds: a tracked
 aircraft, the tracked satellite, the selected vessel or a provider's
-candidate, by when the Cockpit first saw it; subjects first seen together keep
+candidate, by when the Cockpit first saw it, or saw it selected again (a
+provider candidate's `selectedAt` changing); subjects first seen together keep
 the fixed order (aircraft, satellite, vessel, then providers by priority). The
 newest decides alone: when its gate is shut there is no entry rather than an
 older subject's.
 
 A frame places the eye `eye.upM` above `heightM` (the shared floor where the
-frame gives none), slews toward `headingDeg` at the provider's rate, and may
+frame gives none, or where it last stood while that floor is cold; with
+neither the camera waits where it is), slews toward `headingDeg` at the provider's rate, and may
 turn off the floor clamps (`groundClamp: false`, for a subject inside a
 structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
 layer that already moves it smoothly); `cameraIntervalMs: 0` updates the
@@ -2022,19 +2026,23 @@ motion), arrow-key look-around when the provider asks for it, and a progress
 line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
 labels never overlap). Core translates none of the provider's text: a host
 words it for the page's language (`@gods-eye-view/core/i18n/locale`:
-`getLocale`, `onLocaleChange`).
+`getLocale`, `onLocaleChange`). Its entry face, labels and look may be
+functions, read again when they are shown and on a change of language, as the
+HUD view is.
 
 The Rail layer offers a read API for such a view: `getSelectedTrain()` and
 `getCockpitSubject()` (a snapshot of the train: where it is along its line,
 which way it runs (`pathBinding.js` learns it), its rail height, speed as
-reported or derived, position source, feed credit and stops),
+reported or derived, position source, feed credit and stops, and
+`selectedAtMs`, when the user last selected it, even again),
 `setCockpitSubject(key)` (its marker and card hidden, the selection kept, its
 feed held, clicks and Escape left to the view) and `focusTrain(key)`; its pure
 path module is exported as `@gods-eye-view/core/layers/rail/paths`. Transit
 offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
 out of the camera's view, and its sprite, card, trail and detection box are
-hidden. `src/ui/cockpitSubjectView.test.mjs`,
+hidden; released, it is out of play until a visibility sweep finds it in
+view. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
 `src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
 cover them.

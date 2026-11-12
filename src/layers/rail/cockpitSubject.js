@@ -14,8 +14,11 @@ import { displayMotion } from '../transit/movement.js';
  * selection. The hold ends with `setCockpitSubject(null)`, and on its own
  * when the train is removed or the layer is turned off. A train removed while
  * held leaves its feed polled until the next `setCockpitSubject` call, so a
- * view that waits for it holds it again if the feed lists it again. `focusTrain(key)` selects a train and
- * hands it the camera, as a click does.
+ * view that waits for it holds it again if the feed lists it again.
+ * `focusTrain(key)` selects a train and hands it the camera, as a click does.
+ * A snapshot's `selectedAtMs` is when the user last selected the selected
+ * train, even again (null for any other), for a view's entry to tell a
+ * re-selection.
  *
  * @param {object} context The layer's state, parts, services and timetable.
  * @returns {{methods: object}}
@@ -98,6 +101,8 @@ export function createRailCockpitSubject({
     return Object.freeze({
       key: entry.key,
       feedId: entry.feedId,
+      selectedAtMs:
+        state._selectedKey === entry.key ? state._selectedAtMs : null,
       id: String(record.id ?? ''),
       tripId: record.tripId || null,
       routeId: record.routeId || null,

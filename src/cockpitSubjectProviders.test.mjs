@@ -147,7 +147,22 @@ test('a candidate needs an id; its name and face are read with care', () => {
     id: 'a1',
     name: 'a1',
     face: null,
+    selectedAt: null,
   });
+  // A selection token is a number or a short string.
+  assert.equal(
+    cockpitSubjectCandidate({ id: 'a1', selectedAt: 5 }).selectedAt,
+    5,
+  );
+  assert.equal(
+    cockpitSubjectCandidate({ id: 'a1', selectedAt: 'click-2' }).selectedAt,
+    'click-2',
+  );
+  for (const selectedAt of [Number.NaN, {}, 'x'.repeat(65)])
+    assert.equal(
+      cockpitSubjectCandidate({ id: 'a1', selectedAt }).selectedAt,
+      null,
+    );
   const read = cockpitSubjectCandidate({
     id: 'a1',
     name: '  Example   12 ',
@@ -213,6 +228,13 @@ test('a frame is the held subject at a finite place with an eye height, else nul
   );
   assert.equal(full.longitude, -170);
   assert.equal(full.heightM, 412.5);
+  // A height outside any plausible ground reads as none.
+  for (const heightM of [-6_400_000, 1e9, Infinity])
+    assert.equal(cockpitSubjectFrame(frame({ heightM }), 'a1').heightM, null);
+  assert.equal(
+    cockpitSubjectFrame(frame({ heightM: -400 }), 'a1').heightM,
+    -400,
+  );
   assert.equal(full.headingDeg, 350);
   assert.equal(full.courseDeg, 5);
   assert.equal(full.speedMps, 22);
@@ -384,4 +406,70 @@ test('a provider method that throws returns the fallback and warns once', () => 
   assert.equal(call(failing, 'hud', [21]), 42);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /example-kind read\(\) failed/);
+});
+
+test('a provider method that returns a promise is refused as a throw is, warning once', async () => {
+  const warnings = [];
+  const call = createCockpitSubjectCaller({
+    warn: (message) => warnings.push(message),
+  });
+  const asynchronous = {
+    kind: 'example-kind',
+    hold: async () => true,
+    read: () => Promise.reject(new Error('late')),
+  };
+  assert.equal(call(asynchronous, 'hold', ['a1'], 'refused'), 'refused');
+  assert.equal(call(asynchronous, 'hold', ['a1'], 'refused'), 'refused');
+  assert.equal(call(asynchronous, 'read', [], null), null);
+  assert.equal(warnings.length, 2, 'once per method');
+  assert.match(warnings[0], /hold\(\) returned a promise/);
+  // The rejected promise is not left unhandled.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+
+test('labels, entry face and look given as functions are read again on each use', () => {
+  let lang = 'en';
+  const words = {
+    en: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT RIDE' },
+    de: { view: 'Fahrtansicht', exit: 'Verlassen', exitText: 'VERLASSEN' },
+  };
+  const { kept, warnings } = keep([
+    provider({
+      labels: () => words[lang],
+      entryFace: () => ({
+        icon: 'commute',
+        label: { en: 'RIDE', de: 'FAHRT' }[lang],
+      }),
+      look: () => ({
+        restPitchDeg: lang === 'de' ? 40 : -3,
+        aheadLabel: lang === 'de' ? 'Nach vorn' : 'Look ahead',
+      }),
+    }),
+  ]);
+  assert.deepEqual(warnings, []);
+  const [ride] = kept;
+  assert.equal(ride.labels.exitText, 'EXIT RIDE');
+  assert.equal(ride.entryFace.label, 'RIDE');
+  assert.equal(ride.look.aheadLabel, 'Look ahead');
+  lang = 'de';
+  assert.equal(ride.labels.exitText, 'VERLASSEN');
+  assert.equal(ride.entryFace.label, 'FAHRT');
+  assert.equal(ride.look.aheadLabel, 'Nach vorn');
+  assert.equal(ride.look.restPitchDeg, -3, 'the rest pitch is as first read');
+  // A read that fails or is malformed keeps the last good one.
+  lang = 'xx';
+  assert.equal(ride.labels.exitText, 'VERLASSEN');
+  assert.equal(ride.entryFace.label, 'FAHRT');
+  // Functions that are malformed from the start leave the provider out.
+  const bad = keep([
+    provider({ kind: 'bad-labels', labels: () => null }),
+    provider({
+      kind: 'thrown-face',
+      entryFace: () => {
+        throw new Error('no face');
+      },
+    }),
+  ]);
+  assert.deepEqual(bad.kept, []);
+  assert.equal(bad.warnings.length, 2);
 });

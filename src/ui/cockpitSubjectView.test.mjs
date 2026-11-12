@@ -14,6 +14,7 @@ import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
+import { getLocale, setLocale } from '../i18n/index.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 
 const LAT = 47;
@@ -500,6 +501,115 @@ test('entry fails, releasing nothing it did not hold, when hold or the first fra
   assert.equal(app.cockpit.enter(), false);
   assert.deepEqual(lastRelease(blank.calls), ['release', 'a1', false]);
   assert.equal(app.cockpit.active, false);
+  // A hold that throws may have half happened: it is released.
+  const thrown = subjectProvider({
+    hold: (id) => {
+      thrown.calls.push(['hold', id]);
+      throw new Error('hold failed');
+    },
+  });
+  app = fixture(t, { providers: [thrown] });
+  app.cockpit.syncEntry();
+  assert.equal(app.cockpit.enter(), false);
+  assert.deepEqual(lastRelease(thrown.calls), ['release', 'a1', false]);
+  assert.equal(app.warned.length, 1);
+  // So is one that answers with a promise: provider methods are synchronous.
+  const later = subjectProvider({
+    hold: async () => true,
+  });
+  app = fixture(t, { providers: [later] });
+  app.cockpit.syncEntry();
+  assert.equal(app.cockpit.enter(), false);
+  assert.deepEqual(lastRelease(later.calls), ['release', 'a1', false]);
+  assert.match(app.warned[0], /returned a promise/);
+});
+
+test('a frame with no height and a cold floor never stands the eye on the ellipsoid', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.frame = { ...ride.subject.frame, heightM: null };
+  const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+  // Nothing to stand on from the first frame: the camera waits where it is.
+  setFloor(undefined);
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  const before = shots.length;
+  for (let i = 0; i < 5; i += 1) {
+    clock.advance(16);
+    cockpit.update();
+  }
+  assert.equal(shots.length, before, 'no camera placed');
+  assert.equal(cockpit.active, true, 'the view waits');
+  // The floor arrives: the eye stands on it.
+  setFloor(FLOOR_M);
+  clock.advance(16);
+  cockpit.update();
+  assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
+  // It goes cold again: the eye keeps the height it stood at, never 0 m,
+  // with the ground clamp off too.
+  setFloor(undefined);
+  ride.subject.frame = { ...ride.subject.frame, groundClamp: false };
+  for (let i = 0; i < 5; i += 1) {
+    clock.advance(16);
+    cockpit.update();
+    assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
+  }
+  // A height out of any plausible range reads as none.
+  ride.subject.frame = { ...ride.subject.frame, heightM: -6_400_000 };
+  clock.advance(16);
+  cockpit.update();
+  assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
+});
+
+test('a provider’s labels, entry face and look follow a change of language', async (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('en');
+  const clock = manualClock(t, 10_000);
+  const words = {
+    en: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT RIDE' },
+    de: {
+      view: 'Fahrtansicht',
+      exit: 'Fahrtansicht verlassen',
+      exitText: 'VERLASSEN',
+    },
+  };
+  const german = () => getLocale().startsWith('de');
+  const ride = subjectProvider({
+    labels: () => words[german() ? 'de' : 'en'],
+    entryFace: () => ({ icon: 'commute', label: german() ? 'FAHRT' : 'RIDE' }),
+    look: () => ({
+      restPitchDeg: -3,
+      aheadLabel: german() ? 'Nach vorn sehen' : 'Look ahead',
+    }),
+  });
+  const { $, cockpit } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  await nextTick();
+  assert.match($('#cockpit-entry').textContent, /RIDE/);
+  // On the entry, before the view.
+  setLocale('de');
+  await settle();
+  assert.match($('#cockpit-entry').textContent, /FAHRT/);
+  setLocale('en');
+  await settle();
+  assert.equal(cockpit.enter(), true);
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  assert.match($('#map-view-switch').textContent, /EXIT RIDE/);
+  // While riding.
+  setLocale('de');
+  await settle();
+  assert.match($('#map-view-switch').textContent, /VERLASSEN/);
+  assert.equal(
+    $('#map-view-switch').getAttribute('aria-label'),
+    'Fahrtansicht verlassen',
+  );
+  assert.equal($('#cockpit-hud').getAttribute('aria-label'), 'Fahrtansicht');
+  assert.equal(
+    $('#cockpit-look-ahead').getAttribute('aria-label'),
+    'Nach vorn sehen',
+  );
 });
 
 test('a read that throws ends the view once; a hud that throws keeps the last', async (t) => {
@@ -567,6 +677,21 @@ test('the most recently selected subject wins entry', async (t) => {
   selectVessel({ ...VESSEL, id: '211000099', mmsi: '211000099' });
   cockpit.syncEntry();
   assert.equal(store.presence.entryKind, 'vessel');
+  // The same subject selected again comes back to the front.
+  clock.advance(500);
+  ride.subject.candidate = { id: 'a1', name: 'Example 12', selectedAt: 2 };
+  cockpit.syncEntry();
+  assert.equal(store.presence.entryKind, 'example-kind', 're-selected');
+  clock.advance(500);
+  selectVessel({ ...VESSEL, id: '211000098', mmsi: '211000098' });
+  cockpit.syncEntry();
+  assert.equal(store.presence.entryKind, 'vessel');
+  clock.advance(500);
+  cockpit.syncEntry();
+  assert.equal(store.presence.entryKind, 'vessel', 'an unchanged token');
+  ride.subject.candidate = { id: 'a1', name: 'Example 12', selectedAt: 3 };
+  cockpit.syncEntry();
+  assert.equal(store.presence.entryKind, 'example-kind');
   // The newest decides alone: its shut gate leaves no entry.
   clock.advance(500);
   ride.subject.candidate = { id: 'a3', name: 'Example 3' };

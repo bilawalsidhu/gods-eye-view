@@ -343,8 +343,20 @@ function updateSubject(nowMs) {
       frame.latitude,
       frame.longitude,
     );
-    heightM = Number.isFinite(floorM) ? floorM : 0;
+    // A frame with no height stands on the shared floor; while that is cold
+    // it keeps the height it last stood at.
+    heightM = Number.isFinite(floorM) ? floorM : this.subjectHeightM;
   }
+  if (!Number.isFinite(heightM)) {
+    // Nothing to stand on yet, from the first frame: the camera stays where
+    // it is while the floor is acquired, as the built-in views wait for the
+    // surface, rather than standing on the ellipsoid (kilometres underground
+    // on a plateau).
+    this.surfaceAcquiring = true;
+    return;
+  }
+  this.surfaceAcquiring = false;
+  this.subjectHeightM = heightM;
   const target = Cesium.Cartesian3.fromDegrees(
     frame.longitude,
     frame.latitude,

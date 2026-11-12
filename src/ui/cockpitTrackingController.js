@@ -104,9 +104,11 @@ const BUILT_IN_ENTRY_ORDER = Object.freeze({
  * Every subject entry could ride now, the most recently selected first: a
  * tracked aircraft, the tracked satellite, the selected vessel and each
  * provider's candidate. A candidate's time is when this controller first saw
- * it (it looks on its entry cadence and on tracking changes); candidates
- * first seen together keep the fixed order (aircraft, satellite, vessel, then
- * providers by priority). Each carries `allowed()`, its kind's entry gate.
+ * it (it looks on its entry cadence and on tracking changes), or saw it
+ * selected again: a provider candidate whose `selectedAt` changes, the same
+ * subject clicked again, moves to the front. Candidates first seen together
+ * keep the fixed order (aircraft, satellite, vessel, then providers by
+ * priority). Each carries `allowed()`, its kind's entry gate.
  * @param {number} [nowMs]
  * @returns {Array<{kind: string, id: string, seenAtMs: number, order: number,
  *   allowed: () => boolean, provider?: object, candidate?: object}>}
@@ -114,9 +116,10 @@ const BUILT_IN_ENTRY_ORDER = Object.freeze({
 export function entryCandidates(nowMs = performance.now()) {
   const seen = (this._entrySeen ??= new Map());
   const list = [];
-  const note = (kind, id, entry) => {
+  const note = (kind, id, entry, selectedAt = null) => {
     const last = seen.get(kind);
-    if (!last || last.id !== id) seen.set(kind, { id, atMs: nowMs });
+    if (!last || last.id !== id || last.selectedAt !== selectedAt)
+      seen.set(kind, { id, selectedAt, atMs: nowMs });
     list.push({ kind, id, seenAtMs: seen.get(kind).atMs, ...entry });
   };
   const aircraft = this.readAircraftInfo();
@@ -149,12 +152,17 @@ export function entryCandidates(nowMs = performance.now()) {
   this.subjectProviders.forEach((provider, index) => {
     const candidate = this.readSubjectCandidate(provider);
     if (candidate)
-      note(provider.kind, candidate.id, {
-        order: 3 + index,
-        provider,
-        candidate,
-        allowed: () => this.isSubjectEntryAllowed(provider, candidate),
-      });
+      note(
+        provider.kind,
+        candidate.id,
+        {
+          order: 3 + index,
+          provider,
+          candidate,
+          allowed: () => this.isSubjectEntryAllowed(provider, candidate),
+        },
+        candidate.selectedAt,
+      );
   });
   // A subject gone and back counts as selected again.
   for (const kind of [...seen.keys()])
@@ -268,6 +276,20 @@ export function syncTr3bToggle(info) {
   this.publishPresenceView();
 }
 
+/**
+ * Word the ridden provider subject's labels and Look ahead button again,
+ * after a change of the page's language: a provider may give them as
+ * functions (cockpitSubjectProviders).
+ */
+export function refreshSubjectWords() {
+  const provider = this.subjectProvider;
+  if (!this.active || !provider) return;
+  this.presence.subjectLabels = { ...provider.labels };
+  const look = provider.look;
+  this.presence.subjectLook = look ? { aheadLabel: look.aheadLabel } : null;
+  this.publishPresenceView();
+}
+
 export function syncEntry() {
   if (this.destroyed) return false;
   if (this.active) return;
@@ -376,8 +398,14 @@ function enterSubject(provider) {
   const candidate = this.readSubjectCandidate(provider);
   if (!candidate || !this.isSubjectEntryAllowed(provider, candidate))
     return false;
-  if (this.callSubject(provider, 'hold', [candidate.id], false) !== true)
+  const failed = {};
+  const held = this.callSubject(provider, 'hold', [candidate.id], failed);
+  if (held === failed) {
+    // A hold that threw (or broke the contract) may have half happened.
+    this.callSubject(provider, 'release', [candidate.id, { restore: false }]);
     return false;
+  }
+  if (held !== true) return false;
   const frame = cockpitSubjectFrame(
     this.callSubject(
       provider,
@@ -419,6 +447,7 @@ function enterSubject(provider) {
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
   this.cockpitAnchorValid = false;
+  this.subjectHeightM = null;
   this.lookRestPitchDeg = provider.look?.restPitchDeg ?? null;
   this.resetLook({ immediate: true });
   this.active = true;
