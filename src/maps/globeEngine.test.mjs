@@ -291,3 +291,23 @@ test('a stack kept after a failed switch and a failed recovery still falls back 
     controller.destroy();
   }
 });
+
+test('a released imagery spec with a destroy of its own is told, once', () => {
+  let destroyed = 0;
+  const spec = {
+    kind: 'xyz',
+    url: 'https://example.com/{z}/{x}/{y}.png',
+    destroy() {
+      destroyed++;
+    },
+    isDestroyed: () => destroyed > 0,
+  };
+  engine.release(spec);
+  engine.release(spec);
+  assert.equal(destroyed, 1);
+  assert.equal(engine.isDestroyed(spec), true);
+  // The app's own specs are frozen and have none: released quietly.
+  const own = engine.imagery.esri();
+  engine.release(own);
+  assert.equal(engine.isDestroyed(own), true);
+});

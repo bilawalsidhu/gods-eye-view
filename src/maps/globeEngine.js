@@ -221,10 +221,18 @@ export const globeMapEngine = Object.freeze({
     return layer.on('tileError', () => listener({}));
   },
   isDestroyed: (value) => Boolean(value) && released.has(value),
+  /**
+   * Never use `value` again: a photoreal handle is hidden, and an imagery
+   * spec a source made with a `destroy` of its own (a source that keeps
+   * tokens for its layer, say) is told, as Cesium's engine destroys a
+   * provider.
+   */
   release(value) {
     if (!value || typeof value !== 'object' || released.has(value)) return;
     if (value.globe && value.spec) applyPhotoreal(value, false);
     released.add(value);
+    if (typeof value.destroy === 'function' && !value.isDestroyed?.())
+      value.destroy();
   },
   loadPhotoreal,
 });
