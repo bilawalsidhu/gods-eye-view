@@ -33,6 +33,8 @@ export class FlightRecords {
     // Facts about an airframe, not a moment, kept across a reset.
     this.airframes = new Map();
     this.missingPolls = new Map();
+    // Monotonic for this store, including after callsign reuse or re-admission.
+    this.routeAssociationSerial = 0;
     // Contacts whose last poll re-sent a fix no newer than the one before.
     this.fixRepeated = new Set();
     this.lastSnapshotMs = null;
@@ -253,6 +255,14 @@ export class FlightRecords {
     // Store flight metadata for click-to-track labels
     const cat = stickyNumber(category, prevMeta?.category, null);
     const nextCallsign = stickyText(callsign, prevMeta?.callsign);
+    // A -> B -> A is a fresh association; a reused ICAO after eviction or
+    // reset also must not accept results from an earlier lookup.
+    const routeAssociationVersion =
+      prevMeta &&
+      prevMeta.callsign.trim().toUpperCase() ===
+        nextCallsign.trim().toUpperCase()
+        ? prevMeta.routeAssociationVersion
+        : ++this.routeAssociationSerial;
     // A route (and its airline) belongs to the callsign it was looked up for;
     // a new callsign drops it, so an old flight's route never shows under it.
     const routeHeld =
@@ -268,6 +278,7 @@ export class FlightRecords {
       observedReceiptMs: this.now(),
       newestFixMs: this._noteFix(icao24, prevMeta, fixEpochMs),
       callsign: nextCallsign,
+      routeAssociationVersion,
       altitude: alt,
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
       // untouched aviation `altitude` — never rename/replace it (labels,
