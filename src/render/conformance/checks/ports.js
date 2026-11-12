@@ -2258,7 +2258,7 @@ export function portChecks() {
     ),
     check(
       'draw.shapes.clamped',
-      'clamped shapes of every kind draw: outlined, outline only, extruded and walls, and the filled ones are picked',
+      'clamped shapes of every kind draw and are picked: outlined, outline only (along its rim), extruded and walls',
       async (h, r) => {
         await overAustin(h, r, 3000);
         const shapes = r.draw.shapes({ id: 'conf:clamped-shapes' });
@@ -2322,10 +2322,7 @@ export function portChecks() {
         equal(shapes.size(), 4, 'every kind is taken');
         await settled(r);
         await drawn(h, r);
-        for (const [id, lon, lat, height] of [
-          ['outlined', AUSTIN.lon - 0.004, AUSTIN.lat + 0.002, 0],
-          ['tower', AUSTIN.lon - 0.004, AUSTIN.lat - 0.003, 300],
-        ]) {
+        const picked = (id, lon, lat, height) => {
           const s = r.query.project(h.toEcef({ lon, lat, height }));
           ok(s, `${id} projects`);
           ok(
@@ -2336,7 +2333,24 @@ export function portChecks() {
               ),
             `${id} drawn and picked`,
           );
-        }
+        };
+        picked('outlined', AUSTIN.lon - 0.004, AUSTIN.lat + 0.002, 0);
+        picked('tower', AUSTIN.lon - 0.004, AUSTIN.lat - 0.003, 300);
+        // An outline-only shape is picked on its rim, its west edge here.
+        picked('rim', AUSTIN.lon + 0.004 - 0.0012, AUSTIN.lat + 0.002, 0);
+        // A wall, seen from the south a little above it, on its face.
+        r.camera.setView({
+          destination: {
+            lon: AUSTIN.lon + 0.004,
+            lat: AUSTIN.lat - 0.007,
+            height: 120,
+          },
+          orientation: { heading: 0, pitch: -0.2, roll: 0 },
+        });
+        await h.frame(r);
+        await settled(r);
+        await drawn(h, r);
+        picked('fence', AUSTIN.lon + 0.004, AUSTIN.lat - 0.003, 20);
         shapes.dispose();
       },
     ),
@@ -4035,7 +4049,7 @@ export function portChecks() {
     ),
     check(
       'globe.base.vector',
-      'a vector base draws its style: the fills its filters keep, over its background; a style that fails to load changes nothing',
+      'a vector base draws its style: the fills its filters keep, over its background; legacy string stops; transparent with no background; a style that fails to load changes nothing; a base without it draws none of it',
       async (h, r) => {
         await overAustin(h, r, 20000);
         // One tile for every tile: the whole of it sea, and a road.
@@ -4048,10 +4062,25 @@ export function portChecks() {
             [-64, -64],
           ],
         ];
+        // Roads 256 units (16 px of a 256 px tile) apart: lines 24 px wide
+        // cover the tile.
+        const roads = [];
+        for (let y = -256; y <= 4352; y += 256)
+          roads.push({
+            type: 'LineString',
+            geometry: [
+              [
+                [-64, y],
+                [4160, y],
+              ],
+            ],
+            properties: { class: 'road' },
+          });
         const tile = encodeVectorTile({
           water: [
             { type: 'Polygon', geometry: whole, properties: { class: 'sea' } },
           ],
+          roads,
         });
         let binary = '';
         for (const byte of tile) binary += String.fromCharCode(byte);
@@ -4131,6 +4160,75 @@ export function portChecks() {
           ok(
             blue > 170 && red < 90,
             `the base is as it was (${[red, green, blue].map(Math.round)})`,
+          );
+        }
+        const credited = () =>
+          r.credits.list().some((c) => /Test tiles/.test(c.text ?? ''));
+        const gaveCredit = credited();
+        // A style with no background, whose roads join and cap by legacy
+        // zoom functions of strings (stepped, as the specification says,
+        // not interpolated): the roads are drawn, and where a layer draws
+        // nothing the globe shows through, never black.
+        const lines = (filter) => ({
+          version: 8,
+          sources: style.sources,
+          layers: [
+            {
+              id: 'roads',
+              type: 'line',
+              source: 'base',
+              'source-layer': 'roads',
+              filter,
+              layout: {
+                'line-join': {
+                  stops: [
+                    [0, 'bevel'],
+                    [22, 'round'],
+                  ],
+                },
+                'line-cap': {
+                  stops: [
+                    [0, 'butt'],
+                    [22, 'square'],
+                  ],
+                },
+              },
+              paint: { 'line-color': '#ff00ff', 'line-width': 24 },
+            },
+          ],
+        });
+        const urlOf = (doc) =>
+          `data:application/json,${encodeURIComponent(JSON.stringify(doc))}`;
+        await r.globe.setBase({
+          vector: { styleUrl: urlOf(lines(['==', 'class', 'road'])) },
+        });
+        if (h.pixels !== false) {
+          const [red, green, blue] = await middle();
+          ok(
+            red > 170 && blue > 170 && green < 90,
+            `roads with legacy string stops are drawn (${[red, green, blue].map(Math.round)})`,
+          );
+        }
+        await r.globe.setBase({
+          vector: { styleUrl: urlOf(lines(['==', 'class', 'none'])) },
+        });
+        if (h.pixels !== false) {
+          const mean = await middle();
+          ok(
+            mean.reduce((a, b) => a + b, 0) > 40 &&
+              !(mean[0] > 170 && mean[2] > 170),
+            `no background: the globe shows through, not black (${mean.map(Math.round)})`,
+          );
+        }
+        // Back to a base without it: none of it drawn, its credit gone.
+        await r.globe.setBase({ vector: null, imagery: [] });
+        equal(r.globe.imagery.list().length, 0, 'the base is restored');
+        if (gaveCredit) ok(!credited(), 'its credit goes with it');
+        if (h.pixels !== false) {
+          const [red, green, blue] = await middle();
+          ok(
+            !(blue > 170 && green > 120) && !(red > 170 && blue > 170),
+            `the vector base is no longer drawn (${[red, green, blue].map(Math.round)})`,
           );
         }
       },

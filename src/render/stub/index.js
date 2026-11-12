@@ -875,6 +875,119 @@ export function createStubRenderer(options = {}) {
   }
 
   /**
+   * A draped rectangle's or ellipse's outline as a closed ring of positions
+   * on the ellipsoid (the rectangle turned as `inRectangle` turns it), or
+   * null for other geometries.
+   */
+  function outlineRing(g) {
+    const points = [];
+    if (g?.kind === 'rectangle') {
+      const { rect, rotation = 0 } = g;
+      const span = rect.east - rect.west;
+      const width = span >= 360 ? 360 : ((span % 360) + 360) % 360;
+      const cLon = rect.west + width / 2;
+      const cLat = (rect.south + rect.north) / 2;
+      const hw = width / 2;
+      const hh = (rect.north - rect.south) / 2;
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+      for (const [u, v] of [
+        [-hw, -hh],
+        [hw, -hh],
+        [hw, hh],
+        [-hw, hh],
+        [-hw, -hh],
+      ])
+        points.push({
+          lon: cLon + cos * u - sin * v,
+          lat: cLat + sin * u + cos * v,
+          height: 0,
+        });
+      return points;
+    }
+    if (g?.kind === 'ellipse') {
+      const centre = toCartographicRadians(toEcef(g.center));
+      const metresPerRadian = 6378137;
+      const turn = g.rotation ?? 0;
+      for (let i = 0; i <= 64; i++) {
+        const theta = (i / 64) * Math.PI * 2;
+        const along = g.semiMajor * Math.cos(theta);
+        const across = g.semiMinor * Math.sin(theta);
+        // The inverse of `inEllipse`'s turn.
+        const north = along * Math.cos(turn) + across * Math.sin(turn);
+        const east = -along * Math.sin(turn) + across * Math.cos(turn);
+        points.push({
+          lon: toDegrees(
+            centre.lon + east / (metresPerRadian * Math.cos(centre.lat)),
+          ),
+          lat: toDegrees(centre.lat + north / metresPerRadian),
+          height: 0,
+        });
+      }
+      return points;
+    }
+    return null;
+  }
+
+  /**
+   * Where a wall's face is under the pixel `(x, y)` (within the pick
+   * window, so one seen edge-on is still picked): the middle of the panel
+   * it is on, or null. A clamped wall stands on the stub's surface (height
+   * 0); its tops are its positions' heights (or `maximumHeights`).
+   */
+  function wallHit(item, x, y, halfW, halfH) {
+    const { positions, minimumHeights, maximumHeights } = item.geometry;
+    const corner = (i, top) =>
+      toEcef({
+        lon: positions[i].lon,
+        lat: positions[i].lat,
+        height: top
+          ? (maximumHeights?.[i] ?? positions[i].height ?? 0)
+          : (minimumHeights?.[i] ?? 0),
+      });
+    for (let i = 0; i + 1 < (positions?.length ?? 0); i++) {
+      const quad = [
+        corner(i, false),
+        corner(i + 1, false),
+        corner(i + 1, true),
+        corner(i, true),
+      ];
+      if (quad.every(isOccluded)) continue;
+      const screen = quad.map(project);
+      if (screen.some((p) => !p)) continue;
+      if (!inScreenQuad(screen, x, y, Math.max(halfW, halfH))) continue;
+      return scale(
+        quad.reduce((sum, p) => add(sum, p), vec(0, 0, 0)),
+        1 / 4,
+      );
+    }
+    return null;
+  }
+
+  /** Whether `(x, y)` is in a screen quad, or within `slack` of its edges. */
+  function inScreenQuad(quad, x, y, slack) {
+    let inside = false;
+    for (let i = 0, j = quad.length - 1; i < quad.length; j = i++) {
+      const a = quad[i];
+      const b = quad[j];
+      if (
+        a.y > y !== b.y > y &&
+        x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x
+      )
+        inside = !inside;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const span = dx * dx + dy * dy;
+      const t =
+        span > 0
+          ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / span))
+          : 0;
+      if (Math.hypot(a.x + dx * t - x, a.y + dy * t - y) <= slack) return true;
+    }
+    return inside;
+  }
+
+  /**
    * The pickable items under a pixel, nearest first. With a `depth`, only
    * the nearest `depth` things drawn there are looked through, unpickable
    * ones included (as a bounded `drillPick` does).
@@ -910,31 +1023,53 @@ export function createStubRenderer(options = {}) {
       }
       if (set.kind === 'shapes') {
         // Draped rectangles and ellipses are picked where they cover the
-        // ellipsoid (rectangles turned as the default renderer turns them);
-        // other shapes are not picked.
+        // ellipsoid (rectangles turned as the default renderer turns them)
+        // and along their draped outline; walls where their face is; other
+        // shapes are not picked.
         const ground = rayEllipsoid(pickRay(x, y));
         const at = ground && toCartographicRadians(ground);
-        if (!at) continue;
-        const lon = toDegrees(at.lon);
-        const lat = toDegrees(at.lat);
+        const lon = at && toDegrees(at.lon);
+        const lat = at && toDegrees(at.lat);
         for (const item of set.items.values()) {
           if (item.show === false) continue;
-          if (!item.fill || item.outlineOnly) continue;
           const g = item.geometry;
+          const hit = (position) =>
+            hits.push({
+              set: setId,
+              id: item.id,
+              meta: item.meta,
+              surface: false,
+              position,
+              depth: magnitude(sub(position, eye().position)),
+              blocked: blockedItem(item),
+            });
+          const ring =
+            item.outline && item.height === 'clampGround'
+              ? outlineRing(g)
+              : null;
+          const onRing =
+            ring &&
+            lineHit(
+              { positions: ring, widthPx: item.outlineWidth ?? 1 },
+              x,
+              y,
+              Math.max(halfW, halfH),
+            );
+          if (onRing) {
+            hit(onRing);
+            continue;
+          }
+          if (g?.kind === 'wall') {
+            const onWall = item.fill && wallHit(item, x, y, halfW, halfH);
+            if (onWall) hit(onWall);
+            continue;
+          }
+          if (!at || !item.fill || item.outlineOnly) continue;
           const covers =
             item.height === 'clampGround' &&
             ((g?.kind === 'rectangle' && inRectangle(g, lon, lat)) ||
               (g?.kind === 'ellipse' && inEllipse(g, lon, lat)));
-          if (!covers) continue;
-          hits.push({
-            set: setId,
-            id: item.id,
-            meta: item.meta,
-            surface: false,
-            position: ground,
-            depth: magnitude(sub(ground, eye().position)),
-            blocked: blockedItem(item),
-          });
+          if (covers) hit(ground);
         }
         continue;
       }
