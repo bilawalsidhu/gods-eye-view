@@ -10,8 +10,10 @@ import { readResponseTextCapped } from '../common/http.js';
  * route answers that exact request shape from the server: it calls the real
  * ion API with CESIUM_ION_TOKEN and returns only ion's endpoint document. For
  * terrain that document carries a one-hour JWT limited to the one asset; for
- * Bing and Google 3D it carries Cesium's own provider URL/key. The configured
- * token never leaves the process (a response containing it is refused).
+ * Bing it carries the Bing Maps key ion supplies (CesiumJS hands the
+ * document's options, key included, to its Bing imagery provider) and for
+ * Google 3D the provider's options (its URL). The configured token never
+ * leaves the process (a response containing it is refused).
  */
 
 export const ION_API_ORIGIN = 'https://api.cesium.com';
