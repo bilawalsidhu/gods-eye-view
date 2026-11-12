@@ -306,7 +306,13 @@ Rail layer's pure path module (`createRailPath`, `pointAtS`, `projectOnPath`)
 for a provider placing a train along its line. The frame, HUD view and
 candidate fields are documented in `src/cockpitSubjectProviders.js`; the Rail
 and Transit read APIs in `src/layers/rail/cockpitSubject.js` and
-`src/layers/transit/cockpitSubject.js`.
+`src/layers/transit/cockpitSubject.js`. A snapshot read again while nothing in
+it changed is the one read before, so `read` may take one on every update; a
+train's `path.line` is a frozen copy of its line, for `pointAtS` and
+`projectOnPath`. The `i18n/locale` and `layers/rail/paths` exports and the
+Rail and Transit read APIs (`getSelectedTrain`, `getSelectedVehicle`,
+`getCockpitSubject` and the snapshots they return, `path.line` among them)
+are experimental and may change without notice.
 
 A candidate's `selectedAt` is a token that changes each time the user selects
 the subject, even the same one again, so entry takes it first. The Rail and
