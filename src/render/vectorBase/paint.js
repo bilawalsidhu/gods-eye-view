@@ -114,8 +114,8 @@ const KEYWORDS = {
 
 /**
  * A value of a layer for a feature, or the property's default where it
- * cannot be evaluated. MapLibre then also takes the default for one that is
- * not of the property's type, which {@link numberOf}, {@link colorOf} and
+ * cannot be evaluated or is nothing (null, undefined or NaN). MapLibre then
+ * also takes the default for one that is not of the property's type, which {@link numberOf}, {@link colorOf} and
  * {@link keywordOf} check: a canvas given a value it cannot use ignores it,
  * so the last feature's would be drawn.
  */
@@ -126,7 +126,9 @@ export function valueOf(layer, key, f) {
   } catch {
     v = undefined;
   }
-  return v === null || v === undefined ? layer.defaults?.[key] : v;
+  return v === null || v === undefined || Number.isNaN(v)
+    ? layer.defaults?.[key]
+    : v;
 }
 
 /** A number value: a finite number, else the property's default. */
@@ -138,14 +140,14 @@ export function numberOf(layer, key, f) {
 }
 
 /**
- * A colour value as CSS: one `parseColor` reads, else the default (or
- * `or`).
+ * A colour value as CSS: one `parseColor` reads, written back as
+ * `rgba()` so the canvas reads it the same way, else the default (or `or`).
  */
 export function colorOf(layer, key, f, or = layer.defaults?.[key]) {
   const css = (v) => {
     const parsed = parseColor(v);
     if (!parsed || !parsed.every(Number.isFinite)) return null;
-    return typeof v === 'string' ? v : cssOf(parsed);
+    return cssOf(parsed);
   };
   return css(valueOf(layer, key, f)) ?? css(or);
 }

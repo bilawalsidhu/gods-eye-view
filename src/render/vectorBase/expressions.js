@@ -107,6 +107,22 @@ const NAMED_COLORS = Object.fromEntries([
   ['transparent', [0, 0, 0, 0]],
 ]);
 
+/** Degrees in a turn, by CSS angle unit. */
+const ANGLE_UNITS = { deg: 360, turn: 1, rad: 2 * Math.PI, grad: 400 };
+
+/**
+ * A CSS hue (a number of degrees, or an angle in deg, turn, rad or grad)
+ * as a fraction of a turn in [0, 1); NaN for anything else.
+ * @param {string} text
+ */
+function hueOf(text) {
+  const m =
+    /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(deg|turn|rad|grad)?$/.exec(text);
+  if (!m) return NaN;
+  const turns = Number(m[1]) / ANGLE_UNITS[m[2] ?? 'deg'];
+  return ((turns % 1) + 1) % 1;
+}
+
 /**
  * A CSS colour as `[r, g, b, a]` (0..255, alpha 0..1): hex, `rgb()`,
  * `rgba()`, `hsl()`, `hsla()` and the CSS colour names; null for anything
@@ -152,7 +168,7 @@ export function parseColor(text) {
       ? null
       : [...rgb, alpha];
   }
-  const hue = (((parseFloat(parts[0]) % 360) + 360) % 360) / 360;
+  const hue = hueOf(parts[0]);
   const sat = parseFloat(parts[1]) / 100;
   const light = parseFloat(parts[2]) / 100;
   if (![hue, sat, light, alpha].every(Number.isFinite)) return null;

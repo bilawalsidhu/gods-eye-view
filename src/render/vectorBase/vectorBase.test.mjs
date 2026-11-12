@@ -243,7 +243,7 @@ test('a style loads its TileJSON source, compiles its layers, and lists what it 
   ]);
   assert.equal(style.sources.base.maxzoom, 4);
   assert.deepEqual(style.attribution, ['Example']);
-  assert.deepEqual(style.background, { color: '#123456', opacity: 1 });
+  assert.deepEqual(style.background, { color: 'rgba(18,52,86,1)', opacity: 1 });
   assert.deepEqual(
     style.skipped.map((s) => s.id),
     ['lakes', 'patterned', 'hills'],
@@ -261,8 +261,11 @@ test('a tile paints its background, fills, lines and labels in style order', asy
   await paintVectorTile(style, 2, 1, 1, { size: 256, fetch, canvas });
   const set = (key) =>
     calls.filter(([k]) => k === `=${key}`).map(([, value]) => value);
-  assert.deepEqual(set('fillStyle').slice(0, 2), ['#123456', '#0000ff']);
-  assert.deepEqual(set('strokeStyle'), ['#ff0000']);
+  assert.deepEqual(set('fillStyle').slice(0, 2), [
+    'rgba(18,52,86,1)',
+    'rgba(0,0,255,1)',
+  ]);
+  assert.deepEqual(set('strokeStyle'), ['rgba(255,0,0,1)']);
   assert.deepEqual(set('lineWidth'), [4]);
   const text = calls.filter(([k]) => k === 'fillText');
   assert.equal(text.length, 1);
@@ -462,7 +465,7 @@ test('a colour or width that evaluates to nothing is the property’s default, n
   assert.equal(fills.filter(([k]) => k === 'fill').length, 2);
   assert.deepEqual(
     fills.filter(([k]) => k === '=fillStyle').map(([, v]) => v),
-    ['#00f', '#000000'],
+    ['rgba(0,0,255,1)', 'rgba(0,0,0,1)'],
   );
   const line = [
     [
@@ -488,7 +491,7 @@ test('a colour or width that evaluates to nothing is the property’s default, n
   assert.equal(lines.filter(([k]) => k === 'stroke').length, 3);
   assert.deepEqual(
     lines.filter(([k]) => k === '=strokeStyle').map(([, v]) => v),
-    ['#f00', '#000000', '#0f0'],
+    ['rgba(255,0,0,1)', 'rgba(0,0,0,1)', 'rgba(0,255,0,1)'],
   );
   assert.deepEqual(
     lines.filter(([k]) => k === '=lineWidth').map(([, v]) => v),
@@ -553,7 +556,7 @@ test('a step over a missing value, and a categorical miss with no default, are t
   );
   assert.deepEqual(
     calls.filter(([k]) => k === '=strokeStyle').map(([, v]) => v),
-    ['#f00', '#000000'],
+    ['rgba(255,0,0,1)', 'rgba(0,0,0,1)'],
   );
 });
 
@@ -624,7 +627,7 @@ test('a colour, keyword or number of the wrong kind is the property’s default,
   );
   assert.deepEqual(
     fills.filter(([k]) => k === '=fillStyle').map(([, v]) => v),
-    ['#00f', '#000000', 'orange'],
+    ['rgba(0,0,255,1)', 'rgba(0,0,0,1)', 'rgba(255,165,0,1)'],
   );
   const line = [
     [
@@ -673,7 +676,7 @@ test('a style’s background takes the defaults where its values cannot be used'
     return (await loadVectorStyle('https://example.test/s.json', fetch))
       .background;
   };
-  const black = { color: '#000000', opacity: 1 };
+  const black = { color: 'rgba(0,0,0,1)', opacity: 1 };
   assert.deepEqual(
     await background({ 'background-color': ['get', 'none'] }),
     black,
@@ -682,5 +685,70 @@ test('a style’s background takes the defaults where its values cannot be used'
   assert.deepEqual(
     await background({ 'background-opacity': ['/', 1, ['get', 'x']] }),
     black,
+  );
+});
+
+test('a colour is drawn as the colour it reads as, in any syntax and hue unit', async () => {
+  const colours = [
+    '#00f',
+    'hsl(120, 50, 50)',
+    'rgb(255 0 0 0.5)',
+    'hsl(0.5turn 100% 50%)',
+    'hsl(3.14159rad, 100%, 50%)',
+    'hsl(200grad 100% 50%)',
+    'hsl(-120deg, 100%, 50%)',
+    'hsl(12 apples, 100%, 50%)',
+  ];
+  const fills = await paintOne(
+    {
+      id: 'water',
+      type: 'fill',
+      'source-layer': 'water',
+      paint: { 'fill-color': ['get', 'c'] },
+    },
+    {
+      water: colours.map((c) => ({
+        type: 'Polygon',
+        geometry: FULL,
+        properties: { c },
+      })),
+    },
+  );
+  assert.deepEqual(
+    fills.filter(([k]) => k === '=fillStyle').map(([, v]) => v),
+    [
+      'rgba(0,0,255,1)',
+      'rgba(64,191,64,1)',
+      'rgba(255,0,0,0.5)',
+      'rgba(0,255,255,1)',
+      'rgba(0,255,255,1)',
+      'rgba(0,255,255,1)',
+      'rgba(0,0,255,1)',
+      'rgba(0,0,0,1)',
+    ],
+  );
+});
+
+test('a label whose text evaluates to NaN is the default, not "NaN"', async () => {
+  const calls = await paintOne(
+    {
+      id: 'places',
+      type: 'symbol',
+      'source-layer': 'places',
+      layout: {
+        'text-field': ['/', ['get', 'n'], ['get', 'n']],
+        'text-size': 12,
+      },
+    },
+    {
+      places: [
+        { type: 'Point', geometry: [[[1000, 1000]]], properties: { n: 0 } },
+        { type: 'Point', geometry: [[[3000, 3000]]], properties: { n: 2 } },
+      ],
+    },
+  );
+  assert.deepEqual(
+    calls.filter(([k]) => k === 'fillText').map(([, text]) => text),
+    ['1'],
   );
 });
