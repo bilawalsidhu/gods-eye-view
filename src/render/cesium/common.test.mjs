@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
-import {
-  BLOB_URL_FRAMES,
-  BLOB_URL_IDLE_MS,
-  blobUrl,
-  blobUrlFrameDrawn,
-} from './common.js';
+import { blobUrl, createBlobUrls } from './common.js';
 
-test('a blob’s object URL is kept while it is drawn and revoked once idle', () => {
+test('a blob keeps one object URL, revoked only once the blob is collected', () => {
   const made = [];
   const revoked = [];
   const create = mock.method(URL, 'createObjectURL', () => {
@@ -17,32 +12,53 @@ test('a blob’s object URL is kept while it is drawn and revoked once idle', ()
   const revoke = mock.method(URL, 'revokeObjectURL', (url) =>
     revoked.push(url),
   );
-  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   try {
-    const blob = new Blob(['a']);
+    let collect;
+    const registered = [];
+    class Registry {
+      constructor(cleanup) {
+        collect = cleanup;
+      }
+      register(blob, url) {
+        registered.push([blob, url]);
+      }
+    }
+    const urlOf = createBlobUrls(Registry);
+    const a = new Blob(['a']);
+    const b = new Blob(['b']);
+    const url = urlOf(a);
+    assert.equal(urlOf(a), url);
+    assert.notEqual(urlOf(b), url);
+    assert.equal(made.length, 2, 'one URL a blob');
+    assert.deepEqual(registered, [
+      [a, url],
+      [b, made[1]],
+    ]);
+    assert.deepEqual(revoked, []);
+    // The registry finds `a` collected: its URL goes.
+    collect(url);
+    assert.deepEqual(revoked, [url]);
+  } finally {
+    create.mock.restore();
+    revoke.mock.restore();
+  }
+});
+
+test('a blob’s URL is not revoked by time: one undrawn for an hour still loads', () => {
+  const revoked = [];
+  const revoke = mock.method(URL, 'revokeObjectURL', (url) =>
+    revoked.push(url),
+  );
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
+  try {
+    const blob = new Blob(['icon']);
     const url = blobUrl(blob);
-    assert.equal(blobUrl(blob), url, 'one URL a blob');
-    // Asked for again within the idle time: kept.
-    mock.timers.tick(BLOB_URL_IDLE_MS / 2);
-    assert.equal(blobUrl(blob), url);
-    for (let i = 0; i < BLOB_URL_FRAMES; i++) blobUrlFrameDrawn();
-    mock.timers.tick(BLOB_URL_IDLE_MS / 2 + 1);
-    assert.deepEqual(revoked, [], 'asked for within the idle time');
-    // Asked for, then idle, but no frame drawn since (a material loads in
-    // the next frame): kept.
-    assert.equal(blobUrl(blob), url);
-    mock.timers.tick(3 * BLOB_URL_IDLE_MS);
-    assert.deepEqual(revoked, [], 'no frame drawn since it was asked for');
-    for (let i = 0; i < BLOB_URL_FRAMES; i++) blobUrlFrameDrawn();
-    mock.timers.tick(BLOB_URL_IDLE_MS);
-    assert.deepEqual(revoked, [url], 'idle, frames drawn: revoked');
-    // Drawn again later: a new URL.
-    const again = blobUrl(blob);
-    assert.notEqual(again, url);
-    assert.equal(made.length, 2);
+    mock.timers.tick(3600_000);
+    assert.equal(blobUrl(blob), url, 'the same URL: the same atlas slot');
+    mock.timers.tick(3600_000);
+    assert.deepEqual(revoked, []);
   } finally {
     mock.timers.reset();
-    create.mock.restore();
     revoke.mock.restore();
   }
 });
