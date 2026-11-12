@@ -3073,13 +3073,22 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   its `tiles`) and parameters the app uses, dropping any client-supplied
   `access_token`. Image CDN URLs in the answers carry no token.
 - Both routes sit behind the cross-site gate and a per-IP limit.
-- **`application` is a Promise.** The app learns from `/api/ion/status` whether
-  the server holds an ion token before it creates itself, so `src/main.js` now
-  exports `application` as a Promise of the application, not the application.
-  Code that imports it must `await` it (the QA scripts do). The question never
-  fails and is given up after 15 seconds: a missing route, a refusal, an error
-  or no answer all read as "no ion token" and keep the keyless terrain and
-  imagery.
+- **`application` is a Promise.** The app learns from `/api/ion/status` and
+  `/api/mapillary/status` whether the server holds an ion token and a
+  Mapillary token before it creates itself, so `src/main.js` now exports
+  `application` as a Promise of the application, not the application. Code
+  that imports it must `await` it (the QA scripts do). The two requests go out
+  together, so startup waits for the slower one. Neither question fails, and
+  each is given up after 15 seconds: a missing route, a refusal, an error or
+  no answer all read as "no token" and keep the keyless terrain and imagery.
+- **Street Level's first source.** The Mapillary answer (a boolean, never the
+  token) is handed to the Mapillary source as its starting state, so Street
+  Level, which chooses its first source when it is built, starts on Mapillary
+  when the server holds a token and on the first keyless source (KartaView)
+  when it does not, as it does for an install with no key. The built-in Graph
+  route is always present, so it does not count as a key; a Graph base named
+  by an embedder (`graphEndpoint`) still does. The provider's own status check
+  keeps the value current afterwards.
 - **The MCP Apps panel.** The panel build holds neither token. The panel page
   sends the app's paths, `/api/ion/` and `/api/mapillary/graph/` among them, to
   the server the MCP server is pointed at through `panel_request`
@@ -3092,8 +3101,9 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   endpoint and Graph addresses resolve against `GEV_APP_BASE_URL`, the address
   the panel names for the app, since a host may serve the page from an address
   that cannot be a base. Without an answer the panel runs keyless: no ion
-  terrain or imagery, and Mapillary coverage reports the missing key (the
-  coverage tiles already came through the same path before). The panel's
+  terrain or imagery, and Street Level starts on its first keyless source
+  (Mapillary reports the missing key if it is chosen; the coverage tiles
+  already came through the same path before). The panel's
   security policy still lists `graph.mapillary.com`, which the panel no longer
   calls itself. Tests: `server/mcp/panelKeyRoutes.test.mjs` (the real
   `panel_request` against the key routes) and `src/sources/serverKeys.test.mjs`.
