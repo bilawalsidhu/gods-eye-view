@@ -13,7 +13,7 @@ const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8')
   .replace('export { application };', 'result = application;');
 
 /** Run the entry module with `createStandaloneApplication` behaving as given. */
-function loadEntry(createApplication) {
+function loadEntry(createApplication, { loadingScreen = true } = {}) {
   const loaderStatus = { textContent: 'Initializing', style: {} };
   const logged = [];
   const context = {
@@ -22,7 +22,9 @@ function loadEntry(createApplication) {
     console: { error: (...args) => logged.push(args) },
     document: {
       querySelector: (selector) =>
-        selector === '#loading-screen .loader-status' ? loaderStatus : null,
+        loadingScreen && selector === '#loading-screen .loader-status'
+          ? loaderStatus
+          : null,
     },
     t: (text, { message }) => text.replace('{message}', message),
     describeError: (error) => error.message,
@@ -74,4 +76,37 @@ test('the application gets the server marker and the Mapillary answer, and the l
   assert.equal(options.sources.mapillary.source.configured, true);
   assert.equal(loaderStatus.textContent, 'Initializing');
   assert.deepEqual(logged, []);
+});
+
+test('a page without the loading screen still gets the original error from a failure to build', async () => {
+  const failure = new Error('the page is already owned');
+  const { application, logged } = loadEntry(
+    () => {
+      throw failure;
+    },
+    { loadingScreen: false },
+  );
+  // Not a TypeError from the missing element.
+  await assert.rejects(application, (error) => error === failure);
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0][1], failure);
+});
+
+test('a page without the loading screen does not turn a failure to start into an unhandled rejection', async () => {
+  const unhandled = [];
+  const record = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', record);
+  try {
+    const failure = new Error('Google 3D did not load');
+    const app = { start: () => Promise.reject(failure) };
+    const { application, logged } = loadEntry(() => app, {
+      loadingScreen: false,
+    });
+    assert.equal(await application, app);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(unhandled, []);
+    assert.equal(logged[0][1], failure);
+  } finally {
+    process.off('unhandledRejection', record);
+  }
 });
