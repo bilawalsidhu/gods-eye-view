@@ -177,17 +177,20 @@ export function createWindStreamlines({
   function buildCells() {
     clear();
     const started = performance.now();
-    // The paths are traced round the whole globe, the wind wrapping east and
-    // west: a grid that does not span it is refused, not drawn wrapped.
+    // A grid round the whole globe wraps the wind east and west; one over
+    // part of it seeds inside it, and its paths stop at its edges.
     const grid = windGridOf(current);
-    const { west, east } = current.rectangle;
-    if ((east < west ? east + 360 : east) - west < 360 - 1e-9)
-      throw new RangeError(
-        'the Cesium renderer draws wind streamlines over the whole globe only',
-      );
+    const { west, south, north } = current.rectangle;
+    const east =
+      current.rectangle.east < west
+        ? current.rectangle.east + 360
+        : current.rectangle.east;
+    const bounds =
+      east - west >= 360 - 1e-9 ? null : { west, south, east, north };
     const paths = bakeWindStreamlines(grid, {
       count: current.pathBudget,
       steps: current.steps,
+      bounds,
     });
     // A grid no path runs through is refused, so its caller can draw it
     // some other way.

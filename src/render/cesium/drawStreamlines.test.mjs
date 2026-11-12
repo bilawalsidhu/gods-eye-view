@@ -381,20 +381,43 @@ test('the Cesium fields draw wind streamlines under their id until disposed', ()
   assert.equal(h.members.size, 0);
 });
 
-test('a grid short of the whole globe is refused, not drawn wrapped', () => {
+test('a grid over part of the globe draws inside it, not wrapped', () => {
   const h = harness();
-  for (const rectangle of [
-    { west: -100, south: -90, east: 80, north: 90 },
-    // Four columns over 300°: its samples nearly span the globe; it does not.
-    { west: -150, south: -90, east: 150, north: 90 },
-  ])
-    assert.throws(() => h.make({ rectangle }), /whole globe only/);
-  assert.equal(h.members.size, 0);
+  const part = h.make({
+    rectangle: { west: -100, south: -40, east: 80, north: 60 },
+  });
+  assert.ok(h.members.size > 0, 'drawn');
+  part.dispose();
   const across = h.make({
     rectangle: { west: 0, south: -90, east: -0.000000000001, north: 90 },
   });
   assert.ok(h.members.size > 0, 'a rectangle across the antimeridian wraps');
   across.dispose();
+});
+
+test('paths over part of the globe seed and stay inside it', () => {
+  const bounds = { west: 170, south: -20, east: 230, north: 30 };
+  const field = {
+    nx: 7,
+    ny: 6,
+    lo1: 170,
+    la1: 30,
+    dx: 10,
+    dy: 10,
+    u: new Float32Array(42).fill(40),
+    v: new Float32Array(42).fill(5),
+  };
+  const paths = bakeWindStreamlines(field, { count: 400, bounds });
+  assert.ok(paths.length > 100, `${paths.length} paths`);
+  for (const path of paths)
+    for (const [lon, lat] of path.coordinates) {
+      assert.ok(lat >= bounds.south && lat <= bounds.north, `lat ${lat}`);
+      const east = (((lon - bounds.west) % 360) + 360) % 360;
+      assert.ok(east <= bounds.east - bounds.west, `lon ${lon}`);
+    }
+  // Without bounds, seeds fill the globe as they did.
+  const global = bakeWindStreamlines(grid(), { count: 50 });
+  assert.ok(global.some((p) => Math.abs(p.coordinates[0][1]) > 60));
 });
 
 test('a rebuild that fails draws nothing and is never told drawn', () => {

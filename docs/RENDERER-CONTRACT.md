@@ -74,11 +74,11 @@ optional, so a renderer written before it still conforms:
   says once per spec or `update` that it is drawn, never while hidden. These
   change `fields` itself rather than add to it, so the renderer follows
   `fields` before must follow them. The Cesium adapter lists `fields` and
-  draws `rasterShell` and `windStreamlines`. It draws streamlines only over
-  the whole globe: it reads the grid's samples as points, the first column
-  at `rectangle.west` and the first row at `rectangle.north`, rows running
-  south, and traces paths that wrap east and west, so it refuses a grid
-  short of 360° of longitude.
+  draws `rasterShell` and `windStreamlines`. It reads the grid's samples as
+  points, the first column at `rectangle.west` and the first row at
+  `rectangle.north`, rows running south. Over the whole globe its paths
+  wrap east and west; over part of it they seed inside the rectangle,
+  equal-area, and stop at its edges.
 - `ModulationSector` gains `radius` and `floor` and says what it modulates:
   icons, points and models dimmed toward `floor` outside the band, the map,
   lines and shapes as they are, picks unchanged. Its pass is named
