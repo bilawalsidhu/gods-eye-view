@@ -12,6 +12,7 @@ import {
   isStaleVehicleFix,
   transitVehicleKey,
   vehicleReportTimeMs,
+  TERRAIN_NEED,
 } from './policy.js';
 import {
   transitModeFor,
@@ -272,7 +273,12 @@ export function createIngestion({ state, services, parts, source }) {
         // DEM one, or a change of map regime, moves a parked vehicle too. A
         // cell still cold takes the lowest neighbour as a prior, as before.
         const priorHeightM = entry.heightM;
-        const height = parts.height.requestHeight(record.lat, record.lon);
+        const height = parts.height.requestHeight(
+          record.lat,
+          record.lon,
+          null,
+          TERRAIN_NEED.MARKER,
+        );
         if (height.height !== null) {
           entry.heightCell = height.cell;
           entry.heightM = height.height;
@@ -309,7 +315,12 @@ export function createIngestion({ state, services, parts, source }) {
           }
           continue;
         }
-        const height = parts.height.requestHeight(record.lat, record.lon);
+        const height = parts.height.requestHeight(
+          record.lat,
+          record.lon,
+          null,
+          TERRAIN_NEED.MARKER,
+        );
         // Keep the local prior separate from resolved historical floors.
         // A neighbouring cell is not a guaranteed lower bound.
         const prior = height.height === null ? height.prior : height.height;

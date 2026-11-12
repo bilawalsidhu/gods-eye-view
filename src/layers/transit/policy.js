@@ -77,6 +77,43 @@ export const FLOOR_WARM_PER_POLL = 300;
 export const FLOOR_REREAD_MS = 900;
 /** Re-reads before a poll's cycle gives up and waits for the next poll. */
 export const FLOOR_REREAD_ATTEMPTS = 6;
+/**
+ * Terrain heights read from the globe's loaded surface are kept per point
+ * (1e-5°, about a metre): one read is a ray cast against the mesh of the tile
+ * drawn there, not a table lookup, and a fleet asks for every trail fix on
+ * every reread. While the camera moves or tiles load, a kept height is reused
+ * this long before the point is read again.
+ */
+export const TERRAIN_HEIGHT_FRESH_MS = 2_000;
+/**
+ * A height read once the camera has been still and the globe's tiles loaded
+ * for this long is kept until either changes: the globe draws a point from
+ * another tile only after one of them does.
+ */
+export const TERRAIN_SETTLE_MS = 5_000;
+/** Terrain read budgets are counted over windows of this length. */
+export const TERRAIN_READ_WINDOW_MS = 200;
+/**
+ * Milliseconds of terrain reads in one window. Past it a point never read
+ * takes the last height read in its ~111 m floor cell, or waits for a later
+ * pass; a vehicle's own position is read regardless.
+ */
+export const TERRAIN_READ_BUDGET_MS = 16;
+/**
+ * The share of that budget re-reads of kept points may use, the longest-kept
+ * first, leaving the rest for points never read.
+ */
+export const TERRAIN_REFRESH_BUDGET_MS = 12;
+/**
+ * How much a terrain height matters to what is drawn, lowest first. HISTORY is
+ * a past fix of a vehicle that is not selected (its trail is not drawn) and
+ * may use a quarter of each budget; PATH is the stretch a marker is drawn
+ * along, or any fix of the selected vehicle; MARKER is a vehicle's own
+ * position, read even when the window's budget is spent.
+ */
+export const TERRAIN_NEED = Object.freeze({ HISTORY: 0, PATH: 1, MARKER: 2 });
+/** Points kept; the oldest quarter is dropped past it. */
+export const TERRAIN_HEIGHT_CACHE_MAX = 60_000;
 
 // --- Rendering ---
 /** On-screen glyph size in CSS px at the near end of the distance ramp. */

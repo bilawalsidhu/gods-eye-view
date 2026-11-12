@@ -5578,6 +5578,23 @@ Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.
 
+On a terrain globe Transit reads each vehicle's and trail point's height from
+the loaded surface (`globe.getHeight`, a ray cast against the drawn tile's
+mesh) and keeps the answer per point, about a metre apart
+(`src/layers/transit/height.js`, constants in `policy.js`). While the camera
+moves or tiles load a kept height is read again after 2 s; a height read once
+both have been still for 5 s is kept until either changes. Reads are budgeted
+at 16 ms per 200 ms window, 12 ms of it for re-reads, longest-kept first. A
+vehicle's own position is always read; the path its marker is drawn along
+comes next; the undrawn trail history of unselected vehicles may use a quarter
+of each budget. Past the budget a kept point keeps its last height, a new
+point takes the last height read in its ~111 m floor cell or waits, and the
+reread cycle continues until none waits. Before this, every reread asked the
+terrain for every trail fix of every vehicle in view, which blocked the page
+for up to 19 s at a time over a 650-vehicle fleet while zooming. Verified
+against Boston's MBTA feed on a keyless terrain globe only; no steeper city
+has a keyless feed to check against.
+
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing
 behavior. The selected trail uses a 3 px core over 5 px backing, mode-coloured
