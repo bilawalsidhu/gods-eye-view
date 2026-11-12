@@ -482,8 +482,8 @@ async function main() {
   const errors = [];
   const monitors = [];
   // The layer only warns on listener exceptions, so count those as errors.
-  const open = async (name, fixture) => {
-    const page = await browser.newPage();
+  const open = async (name, fixture, context = browser) => {
+    const page = await context.newPage();
     monitors.push(
       watchPage(page, {
         name,
@@ -1038,19 +1038,40 @@ async function main() {
       );
 
       await fixtureStep(
-        // The server answers "no Mapillary token" for this page, so it opens
-        // on the first keyless source, as the main page does on a keyless
-        // server.
-        'keyless server (second page): opens on KartaView, not KEY REQUIRED',
+        // This page restores the Mapillary choice the main page saved, and the
+        // server answers "no Mapillary token" for it: a chosen source is kept
+        // and gated on its key.
+        'keyless server (second page): KEY REQUIRED gates the controls',
         async () => {
           const keyless = await open(
             'keyless',
             newFixture({ configured: false }),
           );
           await expandPanel(keyless);
-          await assertKeylessDefault(keyless);
+          await assertKeyRequired(keyless);
           await collectRenderErrors(keyless, 'keyless');
           await keyless.close();
+        },
+      );
+
+      await fixtureStep(
+        // Nothing is saved in a new profile, so with no Mapillary token on
+        // the server the layer opens on the first keyless source.
+        'keyless server (new profile): opens on KartaView, not KEY REQUIRED',
+        async () => {
+          const context = await browser.createBrowserContext();
+          try {
+            const fresh = await open(
+              'keyless-new',
+              newFixture({ configured: false }),
+              context,
+            );
+            await expandPanel(fresh);
+            await assertKeylessDefault(fresh);
+            await collectRenderErrors(fresh, 'keyless-new');
+          } finally {
+            await context.close();
+          }
         },
       );
 
