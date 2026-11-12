@@ -6,14 +6,21 @@ import { readResponseTextCapped } from '../common/http.js';
  * Cesium ion without the long-lived token in the browser.
  *
  * CesiumJS asks `{server}v1/assets/{id}/endpoint` for each ion asset and then
- * uses the answer (tile URL + a short-lived, per-asset access token). This
- * route answers that exact request shape from the server: it calls the real
- * ion API with CESIUM_ION_TOKEN and returns only ion's endpoint document. For
- * terrain that document carries a one-hour JWT limited to the one asset; for
- * Bing it carries the Bing Maps key ion supplies (CesiumJS hands the
- * document's options, key included, to its Bing imagery provider) and for
- * Google 3D the provider's options (its URL). The configured token never
- * leaves the process (a response containing it is refused).
+ * uses the answer. This route answers that exact request shape from the
+ * server: it calls the real ion API with CESIUM_ION_TOKEN and returns only
+ * ion's endpoint document. What a document holds depends on the asset:
+ *  - terrain (1): the asset's URL and an access token ion issues for it
+ *    (IonResource sends it as the Bearer for that asset's URLs);
+ *  - Bing imagery (2, 3, 4): an external imagery document whose `options`
+ *    carry the Bing Maps key ion supplies (BingMapsImageryProvider.fromUrl
+ *    requires `options.key` and sends it as the `key` query parameter of its
+ *    metadata request);
+ *  - Google Photorealistic 3D Tiles (2275207): an external 3D Tiles document
+ *    whose `options.url`, the tileset address, points at Google's tile
+ *    service and may carry a provider key in its URL.
+ * The lifetime of those credentials is ion's to set. Whoever can reach the
+ * route obtains them; the configured account token never leaves the process
+ * (a response containing it is refused).
  */
 
 export const ION_API_ORIGIN = 'https://api.cesium.com';
@@ -340,9 +347,9 @@ export function createIonRouteHandler({
  * The route behind the proxy-tolerant gate: ion has to answer for terrain and
  * imagery to render, also when the app is served through a reverse proxy
  * (which adds the forwarding headers the full gate refuses). What it hands
- * out is ion's short-lived, single-asset endpoint document for an allow-listed
- * asset, never the account token; cross-site browser requests are still
- * refused.
+ * out is ion's endpoint document for an allow-listed asset (see the top of
+ * this file for what each holds), never the account token; cross-site browser
+ * requests are still refused.
  */
 export const gatedIonRoute = (options) =>
   sameSiteGatedBehindProxy(createIonRouteHandler(options));
