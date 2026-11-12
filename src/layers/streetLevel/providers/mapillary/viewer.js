@@ -133,7 +133,6 @@ export function createMapillaryViewer({ source, render } = {}) {
     // Unmounted (layer off) while the library loaded: a viewer built now
     // would hold a WebGL context nobody releases.
     if (built !== generation) throw new Error('Mapillary viewer was unmounted');
-    const endpoint = graphEndpointUrl(source);
     viewer = new Viewer({
       // Graph requests go to this app's server, which holds the token; the
       // viewer is given no access token.
