@@ -1,4 +1,5 @@
 import { msg } from '../../../../i18n/marker.js';
+import { appBaseHref } from '../../../../sources/appBaseUrl.js';
 import { NEAREST_RADIUS_M } from '../../policy.js';
 import {
   NEAREST_IMAGE_FIELDS,
@@ -133,12 +134,7 @@ export function createMapillarySource({
       // MapillaryJS resolves paths against this with `new URL`, so it must be
       // absolute and end in a slash. In the MCP Apps panel the app's address
       // is the one the panel names, not the host page's.
-      return new URL(
-        graphBase,
-        globalThis.GEV_APP_BASE_URL ??
-          globalThis.location?.href ??
-          'http://localhost/',
-      ).href;
+      return new URL(graphBase, appBaseHref()).href;
     },
     /**
      * Whether a Graph base was named, as opposed to this app's own route
