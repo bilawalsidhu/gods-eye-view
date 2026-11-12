@@ -14,27 +14,18 @@
  *    route, which adds the token.
  */
 
+import { appBaseHref } from './appBaseUrl.js';
+
 /** Stands in for an ion token in the app's credential plumbing. */
 export const ION_SERVER_MANAGED = 'server-managed';
 
 const ION_API_PATH = '/api/ion/';
 
-/**
- * The address the app's own paths resolve against. In the MCP Apps panel that
- * is the address the panel names (`GEV_APP_BASE_URL`): the host serves the
- * page from its own address, which may not be usable as a base, and the panel
- * answers requests under the named address itself (see src/tools/globePanel.js).
- */
-const baseHref = () =>
-  globalThis.GEV_APP_BASE_URL ??
-  globalThis.location?.href ??
-  'http://localhost/';
-
 /** How long the app waits for the server to say whether it holds an ion token. */
 export const ION_STATUS_TIMEOUT_MS = 15_000;
 
 /** Absolute URL of this app's ion API stand-in (trailing slash required by CesiumJS). */
-export function ionServerUrl(base = baseHref()) {
+export function ionServerUrl(base = appBaseHref()) {
   return new URL(ION_API_PATH, base).href;
 }
 
