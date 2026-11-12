@@ -12,6 +12,7 @@ import {
 } from '../../testSupport/railLayerHarness.mjs';
 import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
+import { pointAtS } from '../../data/railPaths.js';
 
 const M_PER_DEG = 111_320;
 const LAT = 42.36;
@@ -152,6 +153,26 @@ test('a snapshot read again while nothing changed is the one read before', async
     later.stops.map((stop) => stop.name),
     ['Delta', 'Echo'],
   );
+});
+
+test('a snapshot’s line is a frozen copy: writing to it leaves the layer’s line', async (t) => {
+  const app = await onTheLine(t);
+  app.parts().selection.selectTrain(T1);
+  const { line, s } = app.layer.getSelectedTrain().path;
+  const own = app.entry(T1).path.path;
+  assert.notEqual(line, own, 'not the layer’s own');
+  assert.ok(Object.isFrozen(line));
+  for (const name of ['lat', 'lon', 'x', 'y', 's', 'box'])
+    assert.ok(Object.isFrozen(line[name]), name);
+  const lat = own.lat[1];
+  assert.throws(() => {
+    line.lat[1] = 0;
+  }, TypeError);
+  assert.equal(own.lat[1], lat, 'the layer’s line is as it was');
+  assert.deepEqual(pointAtS(line, s), pointAtS(own, s), 'it reads the same');
+  // Copied once per line: T2 runs on the same one.
+  app.parts().selection.selectTrain(T2);
+  assert.equal(app.layer.getSelectedTrain().path.line, line);
 });
 
 test('a held train hides its marker and card and keeps the selection', async (t) => {

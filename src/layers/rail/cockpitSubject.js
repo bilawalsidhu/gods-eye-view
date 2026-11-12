@@ -2,6 +2,29 @@ import { pointAtS } from '../../data/railPaths.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
 import { displayMotion } from '../transit/movement.js';
 
+/** Each line's read-only copy for a snapshot's `path.line` (lineOf). */
+const lines = new WeakMap();
+
+/**
+ * A line as a snapshot hands it out: a frozen copy of the layer's path, its
+ * number arrays frozen arrays, built once per line. `pointAtS` and
+ * `projectOnPath` read it as they read the path, and nothing written to it
+ * reaches the layer.
+ */
+function lineOf(path) {
+  let line = lines.get(path);
+  if (!line) {
+    const copy = {};
+    for (const [name, value] of Object.entries(path))
+      copy[name] = ArrayBuffer.isView(value)
+        ? Object.freeze(Array.from(value))
+        : value;
+    line = Object.freeze(copy);
+    lines.set(path, line);
+  }
+  return line;
+}
+
 const NO_STOPS = Object.freeze([]);
 /** Each stops list's frozen copy for a snapshot's `stops` (stopsOf). */
 const stopLists = new WeakMap();
@@ -44,8 +67,9 @@ function reuse(previous, next) {
  * and the held one as a frozen snapshot, read again on each call: where it is
  * along its line, how fast it moves and how that is known, and its stops. A
  * call while nothing in it changed returns the snapshot it returned before,
- * and a part that did not change (its feed, its stops) is the same object in
- * the next one, so a view can read it on every frame.
+ * and a part that did not change (its feed, its line, its stops) is the same
+ * object in the next one, so a view can read it on every frame. `path.line`
+ * is a frozen copy of the train's line for `pointAtS` and `projectOnPath`.
  * `setCockpitSubject(key)` holds a train: its marker, card and selected line
  * are hidden, it stays selected (so its stops stay fresh and its feed stays
  * polled at any distance) and clicks and Escape no longer change the
@@ -164,7 +188,7 @@ export function createRailCockpitSubject({
       path.lengthM = binding.path.length;
       path.via = binding.via;
       path.builtAt = state._pathPacks.get(entry.feedId)?.pack?.builtAt ?? null;
-      path.line = binding.path;
+      path.line = lineOf(binding.path);
     }
 
     const motion = draft.motion;
