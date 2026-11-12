@@ -1043,14 +1043,14 @@ async function main() {
         // and gated on its key.
         'keyless server (second page): KEY REQUIRED gates the controls',
         async () => {
-          const keyless = await open(
-            'keyless',
-            newFixture({ configured: false }),
-          );
+          const keylessFixture = newFixture({ configured: false });
+          const keyless = await open('keyless', keylessFixture);
           await expandPanel(keyless);
           await assertKeyRequired(keyless);
           await collectRenderErrors(keyless, 'keyless');
           await keyless.close();
+          // A request from this page that no fixture answers fails the step.
+          assert.deepEqual(keylessFixture.unknown, []);
         },
       );
 
@@ -1060,18 +1060,17 @@ async function main() {
         'keyless server (new profile): opens on KartaView, not KEY REQUIRED',
         async () => {
           const context = await browser.createBrowserContext();
+          const freshFixture = newFixture({ configured: false });
           try {
-            const fresh = await open(
-              'keyless-new',
-              newFixture({ configured: false }),
-              context,
-            );
+            const fresh = await open('keyless-new', freshFixture, context);
             await expandPanel(fresh);
             await assertKeylessDefault(fresh);
             await collectRenderErrors(fresh, 'keyless-new');
           } finally {
             await context.close();
           }
+          // A request from this page that no fixture answers fails the step.
+          assert.deepEqual(freshFixture.unknown, []);
         },
       );
 
