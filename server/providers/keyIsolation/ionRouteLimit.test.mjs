@@ -4,6 +4,7 @@
 // peer, so one busy visitor would otherwise lock all the others out.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { makeRateLimiter } from '../common/rate-limit.js';
 import {
   createIonEndpointFetcher,
   createIonRouteHandler,
@@ -108,4 +109,55 @@ test('ion route: requests that would call ion still hit the limit, and ion is no
   assert.equal(upstream, ION_ROUTE_MAX_PER_MIN, 'ion saw no refused request');
   const refused = await call(handler, { url: ENDPOINT });
   assert.equal(refused.headers['retry-after'], '5');
+});
+
+test('ion route: a request that joins a call to ion already under way does not spend the per-client limit', async () => {
+  let upstream = 0;
+  let release;
+  const slow = new Promise((resolve) => {
+    release = resolve;
+  });
+  const env = { CESIUM_ION_TOKEN: TOKEN };
+  // A bucket of two requests for ion, for one client.
+  const handler = createIonRouteHandler({
+    env,
+    allow: makeRateLimiter({ windowMs: 60_000, max: 2, globalMax: 8 }),
+    fetchEndpoint: createIonEndpointFetcher({
+      env,
+      now: () => 1_000_000,
+      fetchImpl: async (url) => {
+        upstream += 1;
+        await slow;
+        return response({
+          type: 'TERRAIN',
+          url,
+          accessToken: jwt(1_000 + 3600),
+        });
+      },
+    }),
+  });
+  const joined = Array.from({ length: 10 }, () =>
+    call(handler, { url: ENDPOINT }),
+  );
+  release();
+  const answers = await Promise.all(joined);
+  assert.deepEqual(
+    answers.map((answer) => answer.status),
+    Array(10).fill(200),
+    'every request that joined the one call is answered',
+  );
+  assert.equal(upstream, 1, 'ion was called once');
+  // The ten requests spent one token. Exhaust the bucket: one more request
+  // that needs ion is answered, the next is refused.
+  assert.equal(
+    (await call(handler, { url: '/v1/assets/3/endpoint' })).status,
+    200,
+    'the second token is still there',
+  );
+  assert.equal(
+    (await call(handler, { url: '/v1/assets/4/endpoint' })).status,
+    429,
+    'and then the bucket is empty',
+  );
+  assert.equal(upstream, 2);
 });
