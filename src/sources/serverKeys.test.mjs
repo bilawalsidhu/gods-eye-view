@@ -7,7 +7,6 @@ import {
   fetchServerKeyStatus,
   ionRequestOptions,
   ionServerUrl,
-  mapillaryGraphEndpoint,
 } from './serverKeys.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 
@@ -55,10 +54,6 @@ test('in the panel the ion and Graph addresses follow the app address the panel 
         ionServerUrl(),
         'https://app.gods-eye-view.invalid/api/ion/',
       );
-      assert.equal(
-        mapillaryGraphEndpoint(),
-        'https://app.gods-eye-view.invalid/api/mapillary/graph/',
-      );
       assert.deepEqual(ionRequestOptions(ION_SERVER_MANAGED), {
         accessToken: '',
         server: 'https://app.gods-eye-view.invalid/api/ion/',
@@ -74,10 +69,6 @@ test('in the panel the ion and Graph addresses follow the app address the panel 
 test('outside the panel the addresses follow the page', async () => {
   await asPage({ href: 'http://localhost:4173/#v=2' }, () => {
     assert.equal(ionServerUrl(), 'http://localhost:4173/api/ion/');
-    assert.equal(
-      mapillaryGraphEndpoint(),
-      'http://localhost:4173/api/mapillary/graph/',
-    );
     assert.equal(
       createMapillarySource().graphEndpoint,
       'http://localhost:4173/api/mapillary/graph/',

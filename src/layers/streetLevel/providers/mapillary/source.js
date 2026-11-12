@@ -67,13 +67,15 @@ export function createMapillarySource({
   graphEndpoint = '',
   configured: knownConfigured = false,
 } = {}) {
-  const graphBase = endpointBase(graphEndpoint);
+  const namedGraphBase = endpointBase(graphEndpoint);
   const urls = {
     status: '/api/mapillary/status',
     tiles: '/api/mapillary/tiles',
     graph: '/api/mapillary/graph',
     ...endpoints,
   };
+  // The Graph base that adds the token: the one named, else this app's own.
+  const graphBase = namedGraphBase || endpointBase(urls.graph);
   let configured = knownConfigured === true;
 
   async function graph(path, params = {}, { signal, timeoutMs = 0 } = {}) {
@@ -117,15 +119,8 @@ export function createMapillarySource({
   }
 
   async function graphOnce(path, params, { signal }) {
-    if (graphBase) {
-      const search = new URLSearchParams(params);
-      const response = await fetchImpl(`${graphBase}${path}?${search}`, {
-        signal,
-      });
-      return readJsonOrThrow(response, 'Mapillary graph');
-    }
     const search = new URLSearchParams(params);
-    const response = await fetchImpl(`${urls.graph}/${path}?${search}`, {
+    const response = await fetchImpl(`${graphBase}${path}?${search}`, {
       signal,
     });
     return readJsonOrThrow(response, 'Mapillary graph');
@@ -134,12 +129,12 @@ export function createMapillarySource({
   return {
     /** Absolute Graph endpoint (with trailing slash) for MapillaryJS. */
     get graphEndpoint() {
-      if (graphBase) return graphBase;
+      if (namedGraphBase) return namedGraphBase;
       // MapillaryJS resolves paths against this with `new URL`, so it must be
       // absolute and end in a slash. In the MCP Apps panel the app's address
       // is the one the panel names, not the host page's.
       return new URL(
-        `${urls.graph.replace(/\/$/, '')}/`,
+        graphBase,
         globalThis.GEV_APP_BASE_URL ??
           globalThis.location?.href ??
           'http://localhost/',
@@ -149,7 +144,7 @@ export function createMapillarySource({
      * Whether a Graph base was named, as opposed to this app's own route
      * (which always exists, token or not).
      */
-    hasGraphProxy: () => Boolean(graphBase),
+    hasGraphProxy: () => Boolean(namedGraphBase),
     /** True once the server has said it holds a token. */
     hasToken: () => configured,
 

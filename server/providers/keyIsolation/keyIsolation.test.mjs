@@ -18,7 +18,6 @@ import {
   fetchIonCredential,
   ionRequestOptions,
   ionServerUrl,
-  mapillaryGraphEndpoint,
 } from '../../../src/sources/serverKeys.js';
 
 const LONG_LIVED_ION = [
@@ -431,14 +430,5 @@ test('browser: ion status resolves to the marker, never a token; failures read a
       throw new Error('offline');
     }),
     '',
-  );
-});
-
-test('browser: Mapillary Graph endpoint is absolute, same-origin and ends with a slash', () => {
-  const endpoint = mapillaryGraphEndpoint('https://gev.example/a/b');
-  assert.equal(endpoint, 'https://gev.example/api/mapillary/graph/');
-  assert.equal(
-    new URL('images', endpoint).pathname,
-    '/api/mapillary/graph/images',
   );
 });
