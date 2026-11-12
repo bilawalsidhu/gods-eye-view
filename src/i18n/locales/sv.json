@@ -3619,5 +3619,6 @@
   "Cable car": "Kabelspårvagn",
   "Monorail": "Enskensbana",
   "Funicular": "Bergbana",
-  "Gondola": "Kabinbana"
+  "Gondola": "Kabinbana",
+  "{name} opacity": "Opacitet för {name}"
 }
