@@ -23,7 +23,18 @@ export function urlSecrets(url) {
   }
   const values = [u.username, u.password, ...u.searchParams.values()];
   return values
-    .flatMap((v) => [v, safeDecode(v), encodeURIComponent(v)])
+    .flatMap((v) => {
+      const decoded = safeDecode(v);
+      return [
+        v,
+        decoded,
+        encodeURIComponent(decoded),
+        Buffer.from(decoded).toString('base64'),
+        ...(decoded.length >= 8
+          ? [decoded.slice(0, 8), decoded.slice(-6)]
+          : []),
+      ];
+    })
     .filter((v, i, all) => v && v.length >= 3 && all.indexOf(v) === i)
     .sort((a, b) => b.length - a.length);
 }
