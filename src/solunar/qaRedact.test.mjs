@@ -14,7 +14,7 @@ test('browser event and navigation errors do not print untrusted secrets', () =>
   const run = spawnSync(
     process.execPath,
     [
-      '--import=./src/solunar/fixtures/qaProbeHook.mjs',
+      '--import=./scripts/fixtures/solunar/qaProbeHook.mjs',
       'scripts/qa-solunar.mjs',
     ],
     {
