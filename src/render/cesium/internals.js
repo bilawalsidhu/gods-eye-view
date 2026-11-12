@@ -211,6 +211,17 @@ export function trimGlobeTiles(globe) {
   globe?._surface?._tileReplacementQueue?.trimTiles(0);
 }
 
+/**
+ * The globe tiles the last frame drew, for timed imagery to tell when a
+ * frame's own imagery is what they draw (`imageryFrames.js`); Cesium says
+ * only whether every tile has loaded, prefetched layers included.
+ * @param {object} globe Cesium Globe.
+ * @returns {object[]} Cesium QuadtreeTiles.
+ */
+export function globeTilesDrawn(globe) {
+  return globe?._surface?._tilesToRender ?? [];
+}
+
 const NO_CREDITS = Object.freeze([]);
 
 /**

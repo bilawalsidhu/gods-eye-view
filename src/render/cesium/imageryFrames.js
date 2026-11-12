@@ -13,6 +13,7 @@
  * segment end is the nearest frame.
  */
 import * as Cesium from 'cesium';
+import { globeTilesDrawn } from './internals.js';
 
 /** How far apart the times a video segment is seen at are, ms. */
 export const VIDEO_STEP_MS = 250;
@@ -294,7 +295,7 @@ const SETTLED = new Set([
  */
 export function layerDrawn(scene, layer) {
   if (!layer || layer.isDestroyed?.() || !layer.ready) return false;
-  const tiles = scene.globe?._surface?._tilesToRender;
+  const tiles = globeTilesDrawn(scene.globe);
   if (!tiles?.length) return false;
   const bounds = layer.imageryProvider?.rectangle ?? layer.rectangle;
   for (const tile of tiles) {

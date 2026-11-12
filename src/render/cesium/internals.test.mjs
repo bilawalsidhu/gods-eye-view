@@ -13,6 +13,7 @@ import {
   commandExtents,
   creditDisplayContents,
   defaultView,
+  globeTilesDrawn,
   lastRenderTime,
   lastSeenCamera,
   materialTexture,
@@ -59,6 +60,7 @@ test('every private field the app reaches is still declared by the installed Ces
     [ENGINE, 'Scene/View.js', '_cameraClone'],
     [ENGINE, 'Scene/Scene.js', '_frameState'],
     [ENGINE, 'Scene/Globe.js', '_surface'],
+    [ENGINE, 'Scene/QuadtreePrimitive.js', '_tilesToRender'],
     [ENGINE, 'Scene/QuadtreePrimitive.js', '_tileReplacementQueue'],
     [ENGINE, 'Scene/CreditDisplay.js', '_staticCredits'],
     [ENGINE, 'Scene/CreditDisplay.js', '_currentFrameCredits'],
@@ -282,4 +284,10 @@ test('trimGlobeTiles empties the globe cache of what the frame did not draw', ()
   });
   trimGlobeTiles(undefined);
   assert.deepEqual(trims, [0]);
+});
+
+test('globeTilesDrawn reads the tiles the globe last drew', () => {
+  const tiles = [{}];
+  assert.equal(globeTilesDrawn({ _surface: { _tilesToRender: tiles } }), tiles);
+  assert.deepEqual(globeTilesDrawn(undefined), []);
 });
