@@ -39,6 +39,10 @@ function sourceOf(source, toImage) {
   throw new Error('a quad takes an image, a video or a canvas');
 }
 
+/** Whether an image may be drawn from a blob: one, or an atlas slot's. */
+const mayHoldBlob = (image) =>
+  Boolean(image && (image.blob || typeof image.atlas === 'string'));
+
 /** An outline as a key; '' for none. */
 const outlineKey = (outline) =>
   outline
@@ -149,11 +153,12 @@ export function createQuadSets({
     const allowPicking = pickableOf(record, item);
     const modelMatrix = matrixOf(item, new Cesium.Matrix4());
     entry.source = sourceOf(item.source, toImage);
-    // A blob it draws stays alive while the quad does: its material loads
-    // the image on its first draw.
-    holdImage(entry, item.source?.image);
     entry.alpha = item.alpha ?? 1;
     entry.material = imageMaterial(entry.source, entry.alpha);
+    // A blob it draws stays alive while its material does: the material
+    // loads the image on its first draw.
+    entry.image = item.source?.image;
+    holdImage(entry.material, entry.image);
     entry.videoSize = null;
     entry.fill = host.add(
       new Cesium.Primitive({
@@ -225,6 +230,8 @@ export function createQuadSets({
   function rebind(entry) {
     const old = entry.material;
     entry.material = imageMaterial(entry.source, entry.alpha);
+    entry.image = entry.item.source?.image;
+    holdImage(entry.material, entry.image);
     entry.fill.appearance.material = entry.material;
     entry.videoSize = null;
     entry.uploadFrames = 2;
@@ -266,14 +273,19 @@ export function createQuadSets({
     if (source !== entry.source) {
       const video = isVideo(source) || isVideo(entry.source);
       entry.source = source;
-      holdImage(entry, item.source?.image);
       if (video) {
         // To or from a video: a material of its own, so the video's frames
         // are not copied into another source's texture, or the other way.
         rebind(entry);
         watchVideo(entry);
+      } else if (mayHoldBlob(entry.image) || mayHoldBlob(item.source?.image)) {
+        // To or from an image a blob may back: a material of its own,
+        // holding the new blob, while the old material (and the old blob it
+        // holds) goes once this frame has drawn.
+        rebind(entry);
       } else {
         // Another canvas or URL: the material reads it anew.
+        entry.image = item.source?.image;
         entry.material.uniforms.image = source;
         entry.uploadFrames = 2;
       }

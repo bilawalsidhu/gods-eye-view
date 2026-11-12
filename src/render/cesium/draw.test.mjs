@@ -8249,3 +8249,60 @@ test('a material drawing a blob from an atlas slot keeps that blob alive after t
     names.forEach((name, i) => (globalThis[name] = real[i]));
   }
 });
+
+test('a quad that moves from a blob to a URL lets the blob go once its old material is freed', async () => {
+  const v8 = await import('node:v8');
+  const vm = await import('node:vm');
+  v8.setFlagsFromString('--expose-gc');
+  const gc = vm.runInNewContext('gc');
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      gc();
+    }
+  };
+  const create = URL.createObjectURL;
+  URL.createObjectURL = () => `blob:test/${Math.random()}`;
+  const names = [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ];
+  const real = names.map((name) => globalThis[name]);
+  for (const name of names) globalThis[name] ??= class {};
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.quads({ id: 'feeds' });
+    const quad = (source) => ({
+      id: 'q',
+      center: { x: 6378137, y: 10, z: 20 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+      size: [40, 20],
+      source,
+    });
+    const refs = {};
+    // Made in a function of its own, so nothing here holds the blob.
+    (() => {
+      const blob = new Blob(['frame']);
+      refs.blob = new WeakRef(blob);
+      set.set([quad({ image: { blob } })]);
+    })();
+    await settle();
+    assert.ok(refs.blob.deref(), 'held while its material draws it');
+    set.set([quad({ image: 'https://example.test/still.png' })]);
+    await settle();
+    assert.ok(refs.blob.deref(), 'held while the old material may draw');
+    part.afterRender();
+    await settle();
+    assert.equal(refs.blob.deref(), undefined, 'let go with the old material');
+    set.dispose();
+  } finally {
+    URL.createObjectURL = create;
+    names.forEach((name, i) => (globalThis[name] = real[i]));
+  }
+});
