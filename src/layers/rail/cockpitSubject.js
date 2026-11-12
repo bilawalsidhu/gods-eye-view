@@ -29,14 +29,39 @@ const NO_STOPS = Object.freeze([]);
 /** Each stops list's frozen copy for a snapshot's `stops` (stopsOf). */
 const stopLists = new WeakMap();
 
+/** Whether `copy` still holds each of `list`'s stops, field by field. */
+function sameStops(copy, list) {
+  if (copy.length !== list.length) return false;
+  for (let i = 0; i < list.length; i++) {
+    const stop = list[i];
+    const kept = copy[i];
+    if (
+      !stop ||
+      typeof stop !== 'object' ||
+      !kept ||
+      typeof kept !== 'object'
+    ) {
+      if (!Object.is(stop, kept)) return false;
+      continue;
+    }
+    const names = Object.keys(stop);
+    if (names.length !== Object.keys(kept).length) return false;
+    for (const name of names)
+      if (!Object.is(stop[name], kept[name])) return false;
+  }
+  return true;
+}
+
 /**
  * A trip's stops as a snapshot hands them out: a frozen array of frozen
- * copies, made once per list the stops provider returns.
+ * copies, kept per list the stops provider returns while that list still
+ * holds the same stops, so a provider that updates its list in place is
+ * copied again.
  */
 function stopsOf(list) {
   if (!Array.isArray(list)) return NO_STOPS;
   let stops = stopLists.get(list);
-  if (!stops) {
+  if (!stops || !sameStops(stops, list)) {
     stops = Object.freeze(
       list.map((stop) =>
         stop && typeof stop === 'object' ? Object.freeze({ ...stop }) : stop,
@@ -258,7 +283,9 @@ export function createRailCockpitSubject({
      * Hold the train `key` for a first-person view, or release the hold with
      * null. A train it holds is selected, if it was not already.
      * @param {string|null} key
-     * @returns {boolean} False for a train the layer does not show.
+     * @returns {boolean} False for a key the layer does not list. A listed
+     *   train is held even when its category is off or another feed's copy
+     *   is drawn: the held copy is then the one drawn. Releasing returns true.
      */
     setCockpitSubject(key) {
       const previous = state._trains.get(state._cockpitSubjectKey);

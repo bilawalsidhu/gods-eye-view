@@ -158,6 +158,13 @@ test('a snapshot read again while nothing changed is the one read before', async
     later.stops.map((stop) => stop.name),
     ['Delta', 'Echo'],
   );
+  // A provider that updates its list in place: the stops are copied again.
+  list[0].state = 'passed';
+  app.run(STOP_REFRESH_MS);
+  const updated = app.layer.getSelectedTrain();
+  assert.notEqual(updated.stops, later.stops);
+  assert.equal(updated.stops[0].state, 'passed');
+  assert.equal(app.layer.getSelectedTrain().stops, updated.stops);
 });
 
 test('a snapshot’s line is a frozen copy: writing to it leaves the layer’s line', async (t) => {

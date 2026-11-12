@@ -317,11 +317,12 @@ Rail and Transit read APIs (`getSelectedTrain`, `getSelectedVehicle`,
 are experimental and may change without notice.
 
 A candidate's `selectedAt` is a token that changes each time the user selects
-the subject, even the same one again, so entry counts it as selected then. The
-Rail and Transit snapshots give one, `selectedAtMs`: when the user last
-selected the train or vehicle by a click or `focusTrain`/`focusVehicle`. It is
-null after a deselection and for one selected only by a hold, since a hold is
-not the user's selection.
+the subject, even the same one again, so entry counts it as selected then; a
+new `id` under the same token is the same selection (a train's selection
+moving to another feed's copy of it). The Rail and Transit snapshots give one,
+`selectedAtMs`: when the user last selected the train or vehicle by a click or
+`focusTrain`/`focusVehicle`. It is null after a deselection and for one
+selected only by a hold, since a hold is not the user's selection.
 
 A frame with `heightM: null` stands on the shared floor, or where it last
 stood while that floor is cold. If no height has been known since entry, the

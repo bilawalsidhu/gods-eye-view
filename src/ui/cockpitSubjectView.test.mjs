@@ -1049,6 +1049,41 @@ test('the built-in kinds keep their order; a subject takes entry only when selec
   assert.equal(cockpit.resolveEntryKind(), 'aircraft');
 });
 
+test('a new id under the same selectedAt is not a new selection', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.candidate = { id: 'a1', name: 'Example 12', selectedAt: 1 };
+  const { cockpit, trackAircraft } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'example-kind');
+  // An aircraft tracked after it takes entry.
+  clock.advance(500);
+  trackAircraft(TRACKED_AIRCRAFT);
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'aircraft');
+  // The selection moves to another copy of the same subject: same token.
+  clock.advance(500);
+  ride.subject.candidate = { id: 'b1', name: 'Example 12', selectedAt: 1 };
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'aircraft');
+  // A new token is a new selection.
+  clock.advance(500);
+  ride.subject.candidate = { id: 'b1', name: 'Example 12', selectedAt: 2 };
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'example-kind');
+  // Without a token, a new id is a new selection.
+  clock.advance(500);
+  trackAircraft(null);
+  cockpit.syncEntry();
+  trackAircraft(TRACKED_AIRCRAFT);
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'aircraft');
+  clock.advance(500);
+  ride.subject.candidate = { id: 'c1', name: 'Example 3' };
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'example-kind');
+});
+
 test('a subject first seen together with a built-in one comes after it', async (t) => {
   manualClock(t, 10_000);
   const ride = subjectProvider();

@@ -110,7 +110,10 @@ const BUILT_IN_ENTRY_ORDER = Object.freeze({
  * takes it back. Providers' candidates are ordered most recently selected
  * first, then by priority. A candidate's time is when this controller first
  * saw it (it looks on its entry cadence and on tracking changes), or saw it
- * selected again (a provider candidate whose `selectedAt` changes). One
+ * selected again: another subject of a built-in kind, a provider candidate
+ * whose `selectedAt` changes, or one without a `selectedAt` whose id changes.
+ * A new id under the same `selectedAt` is the same selection, as when a
+ * train's selection moves to another feed's copy of it. One
  * first seen together with a built-in candidate comes after it. With no
  * provider, entry is the built-in order alone. Each carries `allowed()`, its
  * kind's entry gate.
@@ -123,8 +126,16 @@ export function entryCandidates(nowMs = performance.now()) {
   const list = [];
   const note = (kind, id, entry, selectedAt = null) => {
     const last = seen.get(kind);
-    if (!last || last.id !== id || last.selectedAt !== selectedAt)
+    // A provider's token says when its subject was selected: a new id under
+    // the same token (a train handed to another feed's copy of it) is not a
+    // new selection. Without a token, a new id is.
+    if (
+      !last ||
+      last.selectedAt !== selectedAt ||
+      (selectedAt === null && last.id !== id)
+    )
       seen.set(kind, { id, selectedAt, atMs: nowMs });
+    else if (last.id !== id) seen.set(kind, { ...last, id });
     list.push({ kind, id, seenAtMs: seen.get(kind).atMs, ...entry });
   };
   const aircraft = this.readAircraftInfo();
