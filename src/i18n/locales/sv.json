@@ -4434,8 +4434,8 @@
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Välj en storm på kartan, eller välj en storm i listan för att markera den och flytta kameran. Klicka på en tom plats på kartan för att rensa markeringen. Bulletiner från NOAA NHC/CPHC och varningar från JTWC. NHC:s kon beskriver osäkerheten i centrums prognosbana, inte stormens storlek eller hela riskområdet. JTWC:s riskområde för 34 knop är där vindar på 34 knop kan nå, vidgat med felet i banprognosen; det är ingen kon. Etiketterna på prognospunkterna är källans prognostimmar, inte tider räknade från utgivningen. Geometrin följer ytan; höjden är inte väderhöjd. Läs den officiella bulletinen eller den regionala varningscentralen.",
   "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Varning {number} · utfärdad {time}",
   "Tilt up toward the horizon": "Luta uppåt mot horisonten",
-  "Tilt down toward top-down view": "Luta nedåt mot ovanifrånvy",
-  "Top-down view": "Vy ovanifrån",
+  "Tilt down toward top-down view": "Luta nedåt mot vy rakt ovanifrån",
+  "Top-down view": "Vy rakt ovanifrån",
   "Look left": "Se åt vänster",
   "Look right": "Se åt höger",
   "Look up": "Se uppåt",
@@ -4443,9 +4443,9 @@
   "Map navigation": "Kartnavigering",
   "Tilt": "Lutning",
   "Tilt: top-down (bottom) to near horizon (top)": "Lutning: ovanifrån (nedtill) till nära horisonten (upptill)",
-  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Kartans riktning. Dra för att rotera, använd piltangenterna för att vrida och Home för norr",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Kartans kurs. Dra för att rotera, använd piltangenterna för att vrida och Home för norr",
   "North, 0 degrees": "Norr, 0 grader",
-  "Look around": "Se dig omkring",
+  "Look around": "Titta runt",
   "{heading} degrees from north": "{heading} grader från norr",
-  "{tilt} degrees from top-down": "{tilt} grader från ovanifrånvy"
+  "{tilt} degrees from top-down": "{tilt} grader från vy rakt ovanifrån"
 }
