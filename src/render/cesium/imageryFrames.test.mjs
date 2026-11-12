@@ -8,6 +8,7 @@ import {
   layerDrawn,
   shownAt,
   VIDEO_DURATION_TIMEOUT_MS,
+  VIDEO_RETRY_MS,
   VIDEO_SEEK_TIMEOUT_MS,
   VIDEO_STEP_MS,
   videoProvider,
@@ -246,7 +247,7 @@ const endSeek = (video) => {
   video.dispatchEvent(new Event('seeked'));
 };
 
-test('after a seek that timed out, the next frame seeks again rather than drawing what shows', async () => {
+test('after a seek that timed out, the next frame loads a fresh video rather than drawing what shows', async () => {
   const { made, restore } = fakeVideoPage();
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
@@ -258,12 +259,15 @@ test('after a seek that timed out, the next frame seeks again rather than drawin
     await flush();
     mock.timers.tick(VIDEO_SEEK_TIMEOUT_MS);
     await assert.rejects(first, /did not seek/);
-    // Its time is the target, but it never got there.
+    assert.equal(made[0].src, '', 'the stuck video is let go');
     let drawn = false;
     const second = videos.frame('a.webm', 0.5).then(() => (drawn = true));
+    assert.equal(made.length, 2, 'a fresh video');
+    made[1].duration = 10;
+    made[1].dispatchEvent(new Event('loadeddata'));
     await flush();
     assert.equal(drawn, false, 'waits for its own seek');
-    endSeek(made[0]);
+    endSeek(made[1]);
     await second;
     assert.equal(drawn, true);
   } finally {
@@ -272,9 +276,9 @@ test('after a seek that timed out, the next frame seeks again rather than drawin
   }
 });
 
-test('a video’s length is learnt with a longer wait, and a failed one is not kept', async () => {
+test('a video’s length is learnt with a longer wait, and a failed one is not loaded again for a while', async () => {
   const { made, restore } = fakeVideoPage();
-  mock.timers.enable({ apis: ['setTimeout'] });
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   try {
     const videos = createTileVideos(4);
     let failed = null;
@@ -288,7 +292,11 @@ test('a video’s length is learnt with a longer wait, and a failed one is not k
     mock.timers.tick(VIDEO_DURATION_TIMEOUT_MS);
     await flush();
     assert.match(String(failed), /did not seek/);
-    // Asked again: a fresh video, which loads this time.
+    // Asked again soon: failed at once, not downloaded again.
+    await assert.rejects(videos.frame('a.webm', 0.5), /failed to load lately/);
+    assert.equal(made.length, 1);
+    // Later: a fresh video, which loads this time.
+    mock.timers.tick(VIDEO_RETRY_MS);
     const again = videos.frame('a.webm', 0.5);
     assert.equal(made.length, 2, 'started over');
     made[1].duration = 10;

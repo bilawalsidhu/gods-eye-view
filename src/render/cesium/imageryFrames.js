@@ -28,6 +28,12 @@ export const VIDEO_SEEK_TIMEOUT_MS = 10000;
  * it may read the whole video first.
  */
 export const VIDEO_DURATION_TIMEOUT_MS = 60000;
+/**
+ * How long a video that failed to load (or to say how long it is) fails its
+ * frames at once, ms, before it is loaded again: not downloaded afresh for
+ * every tile that asks.
+ */
+export const VIDEO_RETRY_MS = 180000;
 
 /**
  * The frames of a timed source, in time order: `{time, url}`, and for
@@ -174,6 +180,14 @@ function seekTo(video, time, url, timeoutMs = VIDEO_SEEK_TIMEOUT_MS) {
 export function createTileVideos(limit = VIDEO_CACHE) {
   /** url → {video, ready: Promise, queue: Promise, gone: Promise, release} */
   const videos = new Map();
+  /** url → when a video that failed to load may be loaded again, epoch ms. */
+  const failed = new Map();
+  /** Let go of a url's video, if `entry` is still the one it holds. */
+  function drop(url, entry) {
+    if (videos.get(url) !== entry) return;
+    videos.delete(url);
+    release(entry, url);
+  }
   /** Let go of an entry's video, failing what waits on it. */
   function release(entry, url) {
     entry.released = true;
@@ -230,13 +244,13 @@ export function createTileVideos(limit = VIDEO_CACHE) {
       released: false,
     };
     videos.set(url, entry);
-    // A video that failed to load (or to say how long it is) is not kept:
-    // the next frame asked of it starts over.
+    // A video that failed to load (or to say how long it is) is not kept,
+    // and is loaded again only after `VIDEO_RETRY_MS`.
     const loadedEntry = entry;
     ready.catch(() => {
       if (videos.get(url) !== loadedEntry) return;
-      videos.delete(url);
-      release(loadedEntry, url);
+      failed.set(url, Date.now() + VIDEO_RETRY_MS);
+      drop(url, loadedEntry);
     });
     while (videos.size > limit) {
       const [oldest, old] = videos.entries().next().value;
@@ -247,6 +261,14 @@ export function createTileVideos(limit = VIDEO_CACHE) {
   }
   /** The video at `fraction` of its length, drawn on a canvas. */
   function frame(url, fraction) {
+    const retryAt = failed.get(url);
+    if (retryAt !== undefined) {
+      if (Date.now() < retryAt)
+        return Promise.reject(
+          new Error(`The video tile failed to load lately: ${url}`),
+        );
+      failed.delete(url);
+    }
     const entry = load(url);
     // Whatever it waits on, it fails once its video is let go.
     const until = (promise) => Promise.race([promise, entry.gone]);
@@ -258,7 +280,14 @@ export function createTileVideos(limit = VIDEO_CACHE) {
       // Still seeking (a seek that timed out may have set the time without
       // ever ending): seeked again, never drawn as it stands.
       if (video.seeking || Math.abs(video.currentTime - at) > 1e-4)
-        await until(seekTo(video, at, url));
+        try {
+          await until(seekTo(video, at, url));
+        } catch (error) {
+          // A video whose seek did not end is let go: the next frame asked
+          // of it loads a fresh one rather than waiting on this one again.
+          drop(url, entry);
+          throw error;
+        }
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 1;
       canvas.height = video.videoHeight || 1;
