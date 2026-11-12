@@ -136,6 +136,47 @@ test('a foreign Origin is refused on every key route before anything is fetched'
   assert.deepEqual(upstream, []);
 });
 
+test('an opaque Origin is refused for being opaque, not for failing to parse', async (t) => {
+  // `new URL('null')` throws, so a gate without the explicit branch would
+  // still answer 403, with a different reason. Telling the two apart keeps
+  // the branch's test honest.
+  const { get, upstream } = await appWithKeyRoutes(t);
+  for (const path of ALL_ROUTES) {
+    const opaque = await get(path, { origin: 'null' });
+    assert.equal(opaque.status, 403, path);
+    assert.match(opaque.text, /Opaque origins are not accepted/, path);
+    const garbage = await get(path, { origin: 'not a url' });
+    assert.equal(garbage.status, 403, path);
+    assert.match(garbage.text, /Unrecognized Origin refused/, path);
+  }
+  assert.deepEqual(upstream, []);
+});
+
+test('Sec-Fetch-Site none (a typed address or bookmark) passes on the ion routes, direct and behind a proxy', async (t) => {
+  const { get } = await appWithKeyRoutes(t);
+  const proxied = {
+    host: 'gev.example',
+    'x-forwarded-for': '198.51.100.7',
+  };
+  for (const path of ION_ROUTES) {
+    assert.equal(
+      (await get(path, { 'sec-fetch-site': 'none' })).status,
+      200,
+      `direct ${path}`,
+    );
+    assert.equal(
+      (await get(path, { ...proxied, 'sec-fetch-site': 'none' })).status,
+      200,
+      `proxied ${path}`,
+    );
+    assert.equal(
+      (await get(path, { ...proxied, 'sec-fetch-site': 'same-origin' })).status,
+      200,
+      `proxied same-origin ${path}`,
+    );
+  }
+});
+
 test('a cross-site fetch metadata header is refused on every key route', async (t) => {
   const { get, upstream, origin } = await appWithKeyRoutes(t);
   for (const site of ['cross-site', 'same-site']) {
@@ -203,6 +244,43 @@ test('behind a reverse proxy the ion routes compare Origin with the forwarded sc
       (await get(path, { ...proxied, 'sec-fetch-site': 'cross-site' })).status,
       403,
       `cross-site ${path}`,
+    );
+  }
+});
+
+test('behind a reverse proxy only a single X-Forwarded-Proto is read for the scheme; a chain reads as http', async (t) => {
+  const { get } = await appWithKeyRoutes(t);
+  const proxied = {
+    host: 'gev.example',
+    'x-forwarded-for': '198.51.100.7',
+  };
+  for (const path of ION_ROUTES) {
+    for (const chain of ['https, http', 'http, https', 'https,http']) {
+      const headers = { ...proxied, 'x-forwarded-proto': chain };
+      // The chain is not trusted for `https`: the Origin is compared with
+      // the `http` scheme, so only an http Origin matches.
+      assert.equal(
+        (await get(path, { ...headers, origin: 'https://gev.example' })).status,
+        403,
+        `https Origin, proto "${chain}" ${path}`,
+      );
+      assert.equal(
+        (await get(path, { ...headers, origin: 'http://gev.example' })).status,
+        200,
+        `http Origin, proto "${chain}" ${path}`,
+      );
+    }
+    // The scheme token is read case-insensitively and trimmed.
+    assert.equal(
+      (
+        await get(path, {
+          ...proxied,
+          'x-forwarded-proto': ' HTTPS ',
+          origin: 'https://gev.example',
+        })
+      ).status,
+      200,
+      `single token ${path}`,
     );
   }
 });
