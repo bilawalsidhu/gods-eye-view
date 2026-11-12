@@ -67,6 +67,7 @@ import { useLiveStore } from './stores/live.js';
 import { useStationStore } from './stores/station.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { SpaceMissionsControls } from './spaceMissionsControls.js';
+import { useSolunarStore } from './stores/solunar.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
@@ -1840,7 +1841,9 @@ export class StyleManager extends ShellFacade {
       .then((solunar) => {
         if (this._disposed) return; // shell torn down while the module loaded
         this._solunar?.destroy();
-        this._solunar = solunar.mountSolunarForShell(this);
+        this._solunar = solunar.mountSolunarForShell(this, {
+          store: useSolunarStore(applicationPinia()),
+        });
       })
       .catch((error) => console.warn('[Solunar] card unavailable:', error));
   }

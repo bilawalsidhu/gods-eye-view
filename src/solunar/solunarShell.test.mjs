@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { Window } from 'happy-dom';
+import { createPinia } from 'pinia';
+import { useSolunarStore } from '../ui/stores/solunar.js';
+import { formatLatLon } from './format.js';
 import {
-  SOLUNAR_BODY_ID,
   SOLUNAR_ID,
   SPOT_MARKER_ID,
   mapCenterSpot,
@@ -57,19 +59,19 @@ function fakeViewer({ hit = onGlobe } = {}) {
   return viewer;
 }
 
+// The card owner publishes what the view renders; the test reads the
+// presentation from the store instead of a rendered body.
 function setup({ open = false, viewer = fakeViewer() } = {}) {
   const window = new Window();
   const doc = window.document;
   const root = doc.createElement('div');
   root.id = SOLUNAR_ID;
   root.className = open ? '' : 'collapsed';
-  const body = doc.createElement('div');
-  body.id = SOLUNAR_BODY_ID;
-  root.append(body);
   doc.body.append(root);
+  const store = useSolunarStore(createPinia());
   const mount = mountSolunarForShell(
     { viewer },
-    { document: doc, now: () => Date.UTC(2026, 10, 3, 18) },
+    { document: doc, store, now: () => Date.UTC(2026, 10, 3, 18) },
   );
   const fire = (type, { timeStamp, ...init } = {}) => {
     const event = new window.MouseEvent(type, { button: 0, ...init });
@@ -78,10 +80,16 @@ function setup({ open = false, viewer = fakeViewer() } = {}) {
     return viewer.scene.canvas.dispatchEvent(event);
   };
   const tick = () => new Promise((r) => setTimeout(r, 5));
-  return { window, doc, root, body, viewer, mount, fire, tick };
+  return { window, doc, root, store, viewer, mount, fire, tick };
 }
-const spotText = (body) =>
-  body.querySelector('.gev-sl-spot')?.textContent ?? '';
+
+// The spot as the card shows it: the same text the view renders.
+const spotText = (store) => {
+  const spot = store.panel?.spot;
+  return spot ? formatLatLon(spot.latDeg, spot.lonDeg) : '';
+};
+// The days as the card shows them: one row per local day.
+const dayDates = (store) => (store.panel?.days ?? []).map((day) => day.date);
 
 test('pickSpot converts a pixel pick to degrees, and says null for the sky', () => {
   const v = fakeViewer();
@@ -108,13 +116,14 @@ test('mapCenterSpot picks the middle pixel, else the camera position', () => {
 });
 
 test('a closed card shows nothing until it opens; opening picks the map centre and marks it', async () => {
-  const { root, body, viewer, tick } = setup();
-  assert.equal(body.querySelector('.gev-sl-day'), null);
+  const { root, store, viewer, tick } = setup();
+  assert.equal(store.panel?.spot, null);
+  assert.equal(dayDates(store).length, 0);
   assert.equal(viewer.added.length, 0);
   root.classList.remove('collapsed');
   await tick();
-  assert.equal(body.querySelectorAll('.gev-sl-day').length, 7);
-  assert.match(spotText(body), /^33\.000°N 96\.000°W/);
+  assert.equal(dayDates(store).length, 7);
+  assert.match(spotText(store), /^33\.000°N 96\.000°W/);
   assert.equal(viewer.added.length, 1);
   assert.equal(viewer.added[0].id, SPOT_MARKER_ID);
   root.classList.add('collapsed');
@@ -123,44 +132,40 @@ test('a closed card shows nothing until it opens; opening picks the map centre a
 });
 
 test('a click on the map picks the spot only while the card is open', async () => {
-  const { root, body, fire, tick, viewer } = setup();
+  const { root, store, fire, tick, viewer } = setup();
   fire('pointerdown', { clientX: 110, clientY: 220 });
   fire('pointerup', { clientX: 110, clientY: 220 });
-  assert.equal(
-    body.querySelector('.gev-sl-day'),
-    null,
-    'closed card ignores the map',
-  );
+  assert.equal(store.panel?.spot, null, 'closed card ignores the map');
   root.classList.remove('collapsed');
   await tick();
   fire('pointerdown', { clientX: 110, clientY: 220 });
   fire('pointerup', { clientX: 110, clientY: 220 });
   // client (110, 220) -> canvas (100, 200)
-  assert.match(spotText(body), /^32\.000°N 99\.000°W/);
+  assert.match(spotText(store), /^32\.000°N 99\.000°W/);
   assert.equal(viewer.added.length, 2);
   assert.equal(viewer.removed.length, 1, 'the old dot is replaced');
 });
 
 test('a drag or a long press is not a click', async () => {
-  const { root, body, fire, tick } = setup({ open: true });
+  const { root, store, fire, tick } = setup({ open: true });
   await tick();
-  const before = spotText(body);
+  const before = spotText(store);
   fire('pointerdown', { clientX: 110, clientY: 220 });
   fire('pointerup', { clientX: 150, clientY: 260 });
-  assert.equal(spotText(body), before);
+  assert.equal(spotText(store), before);
   // held for 2 s by the event clock (a busy page can delay the handlers, not the stamps)
   fire('pointerdown', { clientX: 110, clientY: 220, timeStamp: 1000 });
   fire('pointerup', { clientX: 110, clientY: 220, timeStamp: 3000 });
-  assert.equal(spotText(body), before);
+  assert.equal(spotText(store), before);
   // a slow page between the two handlers is still a click
   fire('pointerdown', { clientX: 110, clientY: 220, timeStamp: 5000 });
   await new Promise((r) => setTimeout(r, 700));
   fire('pointerup', { clientX: 110, clientY: 220, timeStamp: 5080 });
-  assert.match(spotText(body), /^32\.000°N 99\.000°W/);
-  body.querySelector('.gev-sl-center').click();
-  assert.equal(spotText(body), before);
+  assert.match(spotText(store), /^32\.000°N 99\.000°W/);
+  store.controls.useCenter(); // the view's "Use map centre" button
+  assert.equal(spotText(store), before);
   fire('pointerup', { clientX: 110, clientY: 220, button: 2 });
-  assert.equal(spotText(body), before, 'a right button never picks');
+  assert.equal(spotText(store), before, 'a right button never picks');
   assert.ok(root);
 });
 
@@ -169,17 +174,17 @@ test('a click on the sky keeps the old spot', async () => {
   const viewer = fakeViewer({
     hit: (x, y) => (sky ? undefined : onGlobe(x, y)),
   });
-  const { body, fire, tick } = setup({ open: true, viewer });
+  const { store, fire, tick } = setup({ open: true, viewer });
   await tick();
-  const before = spotText(body);
+  const before = spotText(store);
   sky = true;
   fire('pointerdown', { clientX: 110, clientY: 220 });
   fire('pointerup', { clientX: 110, clientY: 220 });
-  assert.equal(spotText(body), before);
+  assert.equal(spotText(store), before);
 });
 
 test('a chosen spot survives closing and reopening; "Use map centre" goes back', async () => {
-  const { root, body, fire, tick } = setup({ open: true });
+  const { root, store, fire, tick } = setup({ open: true });
   await tick();
   fire('pointerdown', { clientX: 110, clientY: 220 });
   fire('pointerup', { clientX: 110, clientY: 220 });
@@ -187,31 +192,41 @@ test('a chosen spot survives closing and reopening; "Use map centre" goes back',
   await tick();
   root.classList.remove('collapsed');
   await tick();
-  assert.match(spotText(body), /^32\.000°N 99\.000°W/);
-  body.querySelector('.gev-sl-center').click();
-  assert.match(spotText(body), /^33\.000°N 96\.000°W/);
+  assert.match(spotText(store), /^32\.000°N 99\.000°W/);
+  store.controls.useCenter(); // the view's "Use map centre" button
+  assert.match(spotText(store), /^33\.000°N 96\.000°W/);
 });
 
 test('mounting twice does nothing; destroy removes listeners and the dot', async () => {
-  const { doc, mount, root, viewer, body, fire, tick } = setup({ open: true });
+  const { doc, store, mount, root, viewer, fire, tick } = setup({ open: true });
   await tick();
-  assert.equal(mountSolunarForShell({ viewer }, { document: doc }), null);
+  assert.equal(
+    mountSolunarForShell({ viewer }, { document: doc, store }),
+    null,
+  );
   mount.destroy();
   assert.equal(viewer.removed.length, 1);
-  assert.equal(body.children.length, 0);
+  assert.equal(store.panel, null, 'the card publishes nothing any more');
+  assert.equal(store.controls, null, 'the controls are disconnected');
   fire('pointerdown', { clientX: 1, clientY: 1 });
   fire('pointerup', { clientX: 1, clientY: 1 });
-  assert.equal(body.children.length, 0);
+  assert.equal(store.panel, null);
+  assert.equal(viewer.added.length, 1, 'no dot comes back');
   assert.equal(root.dataset.solunarMounted, undefined);
 });
 
-test('no card or no viewer: nothing mounts', () => {
+test('no card, no viewer or no store: nothing mounts', () => {
   const doc = new Window().document;
+  const store = useSolunarStore(createPinia());
+  assert.equal(
+    mountSolunarForShell({ viewer: fakeViewer() }, { document: doc, store }),
+    null,
+  );
+  assert.equal(mountSolunarForShell({}, { document: doc, store }), null);
   assert.equal(
     mountSolunarForShell({ viewer: fakeViewer() }, { document: doc }),
     null,
   );
-  assert.equal(mountSolunarForShell({}, { document: doc }), null);
 });
 
 // ── rail wiring  ──
@@ -226,7 +241,12 @@ test('the SOLUNAR card is a collapsed rail launcher after RECENT IMAGERY', () =>
   assert.doesNotMatch(tag, /\bhidden\b/, 'the menu item is always on offer');
   assert.match(tag, /sideways/);
   assert.match(tag, /:title="t\('SOLUNAR'\)"/);
-  assert.match(context, /id="gev-solunar-body"/);
+  // the card's body is the view's, mounted inside the rail panel
+  assert.match(context, /<SolunarPanel\s*\/>/);
+  assert.match(
+    read('src/ui/views/panels/SolunarPanel.vue'),
+    /id="gev-solunar-body"/,
+  );
   const at = (id) => context.indexOf(`id="${id}"`);
   assert.ok(
     at('recent-imagery-panel') < at('solunar-panel') &&
@@ -294,14 +314,13 @@ test('reopening the card redraws it, so a card left closed overnight shows the n
   const doc = window.document;
   const root = doc.createElement('div');
   root.id = SOLUNAR_ID;
-  const body = doc.createElement('div');
-  body.id = SOLUNAR_BODY_ID;
-  root.append(body);
   doc.body.append(root);
-  mountSolunarForShell({ viewer }, { document: doc, now: () => nowMs });
-  const first = () => body.querySelector('.gev-sl-day').dataset.date;
+  const store = useSolunarStore(createPinia());
+  mountSolunarForShell({ viewer }, { document: doc, store, now: () => nowMs });
+  const first = () => dayDates(store)[0];
   assert.equal(first(), '2026-11-03');
-  body.querySelector('.gev-sl-center'); // spot came from the centre
+  // the spot came from the centre
+  assert.match(spotText(store), /^33\.000°N 96\.000°W/);
   // the user picks a spot, closes the card, a day passes, it is reopened
   const canvas = viewer.scene.canvas;
   canvas.dispatchEvent(
@@ -324,10 +343,7 @@ test('reopening the card redraws it, so a card left closed overnight shows the n
   root.classList.remove('collapsed');
   await new Promise((r) => setTimeout(r, 5));
   assert.equal(first(), '2026-11-04');
-  assert.match(
-    body.querySelector('.gev-sl-spot').textContent,
-    /^32\.000°N 99\.000°W/,
-  );
+  assert.match(spotText(store), /^32\.000°N 99\.000°W/);
 });
 
 test('showing and clearing the spot marker asks for a frame (the app idles between frames)', () => {
@@ -357,15 +373,14 @@ test("a card left open past the spot's local midnight redraws itself then, and s
   const root = doc.createElement('div');
   root.id = SOLUNAR_ID;
   root.className = 'collapsed';
-  const body = doc.createElement('div');
-  body.id = SOLUNAR_BODY_ID;
-  root.append(body);
   doc.body.append(root);
+  const store = useSolunarStore(createPinia());
   const viewer = fakeViewer();
   mountSolunarForShell(
     { viewer },
     {
       document: doc,
+      store,
       now: () => nowMs,
       setTimer: (fn, ms) => {
         timers.push({ fn, ms });
@@ -374,7 +389,7 @@ test("a card left open past the spot's local midnight redraws itself then, and s
       clearTimer: (id) => cleared.push(id),
     },
   );
-  const first = () => body.querySelector('.gev-sl-day').dataset.date;
+  const first = () => dayDates(store)[0];
   root.classList.remove('collapsed');
   return new Promise((r) => setTimeout(r, 5)).then(() => {
     // pixel (400,300) of the fake globe is 33.0N 96.0W: America/Chicago
