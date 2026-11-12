@@ -114,3 +114,18 @@ test('ion cache: a terrain document, which CesiumJS asks for again after a rejec
   assert.notEqual(await fetchEndpoint('1'), first);
   assert.equal(world.calls, 2);
 });
+
+test('ion cache: a document whose externalType is null is read like one without it and is fetched anew after a minute', async () => {
+  // CesiumJS's defined() treats null as missing, so IonResource retries such a
+  // document after a rejection exactly as it does terrain.
+  const { world, fetchEndpoint } = setup((clock) => ({
+    ...terrain(clock),
+    externalType: null,
+  }));
+  const first = await fetchEndpoint('1');
+  world.clock += 59 * SECOND;
+  assert.equal(await fetchEndpoint('1'), first);
+  world.clock += 2 * SECOND;
+  assert.notEqual(await fetchEndpoint('1'), first);
+  assert.equal(world.calls, 2);
+});

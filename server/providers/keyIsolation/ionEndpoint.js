@@ -186,10 +186,11 @@ export function createIonEndpointFetcher({
       fetchedAt: now(),
       validUntil: expiry ?? now() + NO_EXPIRY_TTL_MS,
       hasExpiry: expiry !== null,
-      // Only a document without `externalType` is read through IonResource,
-      // which asks for the endpoint again after a rejected asset token.
+      // Only a document without `externalType` (missing or null, as
+      // CesiumJS's defined() reads it) is read through IonResource, which asks
+      // for the endpoint again after a rejected asset token.
       refetchAfterMs:
-        document?.externalType === undefined ? REFETCH_AFTER_MS : Infinity,
+        document?.externalType == null ? REFETCH_AFTER_MS : Infinity,
     });
     return text;
   }
