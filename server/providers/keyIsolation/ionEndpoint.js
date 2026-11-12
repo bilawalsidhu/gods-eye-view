@@ -26,15 +26,21 @@ const FETCH_TIMEOUT_MS = 15_000;
 /** Serve a cached endpoint only while its token has at least this long left. */
 const MIN_REMAINING_MS = 10 * 60 * 1000;
 /**
- * ...and for at most this long. After ion rejects an asset token CesiumJS asks
- * for the endpoint again with the very request it made first (once per
- * asset), so a document handed out longer ago than this is fetched anew
- * rather than returned a second time. So while ion answers, that is at most
- * one ion call per allow-listed asset per interval, however many clients ask;
- * while it does not, see TRANSIENT_BACKOFF_S.
+ * ...and for at most this long, for a document without `externalType`
+ * (terrain). After ion rejects an asset token CesiumJS asks for the endpoint
+ * again with the very request it made first (once per asset), but only for
+ * assets it reads through IonResource without `externalType`: the external
+ * Bing imagery and Google 3D Tiles documents are read with no retry. So a
+ * terrain document handed out longer ago than this is fetched anew rather
+ * than returned a second time. While ion answers, that is at most one ion
+ * call per allow-listed asset per interval, however many clients ask; while
+ * it does not, see TRANSIENT_BACKOFF_S.
  */
 const REFETCH_AFTER_MS = 60 * 1000;
-/** Endpoint documents without a token expiry (external assets) are kept this long. */
+/**
+ * An external document is kept until its token nears expiry; one that
+ * carries no token expiry is kept this long.
+ */
 const NO_EXPIRY_TTL_MS = 30 * 60 * 1000;
 /**
  * After ion fails for a passing reason (no answer, a timeout, 429, 5xx) it is
@@ -173,6 +179,10 @@ export function createIonEndpointFetcher({
       fetchedAt: now(),
       validUntil: expiry ?? now() + NO_EXPIRY_TTL_MS,
       hasExpiry: expiry !== null,
+      // Only a document without `externalType` is read through IonResource,
+      // which asks for the endpoint again after a rejected asset token.
+      refetchAfterMs:
+        document?.externalType === undefined ? REFETCH_AFTER_MS : Infinity,
     });
     return text;
   }
@@ -194,7 +204,7 @@ export function createIonEndpointFetcher({
       };
     const at = now();
     const hit = cache.get(assetId);
-    if (hit && usable(hit, at) && at - hit.fetchedAt < REFETCH_AFTER_MS)
+    if (hit && usable(hit, at) && at - hit.fetchedAt < hit.refetchAfterMs)
       return { text: hit.text };
     // Ion failed a moment ago: do not ask again yet. Serve the document
     // while its token is good, else the failure.
