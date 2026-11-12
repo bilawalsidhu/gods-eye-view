@@ -214,7 +214,9 @@ at its share of the way, as a layer's `alpha` blends), with the next
 `prefetch` frames (1 by default) loading unseen at alpha 0. A video source is
 seen every 250 ms of each segment (at most 1,200 times a segment), each tile
 the video its URL names for it (or one video over the layer's rectangle for a
-`single-image` layer), seeked to the time's share of its length. `frameReady`
+`single-image` layer), seeked to the time's share of its length. A layer
+keeps its 48 most recently seen tile videos; a tile waiting on one it lets
+go, or on a seek that takes over 10 s, fails rather than waiting. `frameReady`
 names the nearest frame's time once every globe tile drawn shows that
 frame's own imagery (`src/render/cesium/imageryFrames.js`). The checks
 `globe.imagery.frames` and `globe.imagery.video` cover both.

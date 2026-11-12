@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import {
+  createTileVideos,
   framesOf,
   heldFrames,
   layerDrawn,
   shownAt,
+  VIDEO_SEEK_TIMEOUT_MS,
   VIDEO_STEP_MS,
   videoProvider,
 } from './imageryFrames.js';
@@ -155,4 +157,71 @@ test('a layer is drawn once every tile drawn shows its own imagery', () => {
     layerDrawn(scene([tile(own(READY))]), { ...layer, ready: false }),
     false,
   );
+});
+
+/** A page whose videos load (or never do) as the test says. */
+function fakeVideoPage() {
+  const made = [];
+  const original = globalThis.document;
+  globalThis.document = {
+    createElement(tag) {
+      if (tag === 'canvas') return { getContext: () => ({ drawImage() {} }) };
+      const target = new EventTarget();
+      const video = Object.assign(target, {
+        duration: NaN,
+        currentTime: 0,
+        seeking: false,
+        videoWidth: 2,
+        videoHeight: 2,
+        src: '',
+        removeAttribute(name) {
+          if (name === 'src') video.src = '';
+        },
+        load() {},
+      });
+      made.push(video);
+      return video;
+    },
+  };
+  return { made, restore: () => (globalThis.document = original) };
+}
+
+test('frames waiting on a tile video that is let go fail, never wait forever', async () => {
+  const { made, restore } = fakeVideoPage();
+  try {
+    const videos = createTileVideos(1);
+    // Never loads.
+    const first = videos.frame('a.webm', 0);
+    const queued = videos.frame('a.webm', 0.5);
+    // A second video past the limit lets the first go.
+    const other = videos.frame('b.webm', 0);
+    assert.equal(made[0].src, '', 'the first is emptied');
+    await assert.rejects(first, /let go/);
+    await assert.rejects(queued, /let go/);
+    videos.clear();
+    await assert.rejects(other, /let go/);
+  } finally {
+    restore();
+  }
+});
+
+test('a tile video seek that never ends fails its frame after the seek timeout', async () => {
+  const { made, restore } = fakeVideoPage();
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const videos = createTileVideos(4);
+    const frame = videos.frame('a.webm', 0.5);
+    made[0].duration = 10;
+    made[0].dispatchEvent(new Event('loadeddata'));
+    // Let the load settle and the seek start; it never sends `seeked`.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    let failed = null;
+    frame.catch((error) => (failed = error));
+    mock.timers.tick(VIDEO_SEEK_TIMEOUT_MS);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.match(String(failed), /did not seek/);
+  } finally {
+    mock.timers.reset();
+    restore();
+  }
 });

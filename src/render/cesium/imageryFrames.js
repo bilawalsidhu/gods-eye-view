@@ -21,6 +21,8 @@ export const VIDEO_STEP_MS = 250;
 export const VIDEO_STEPS_MAX = 1200;
 /** Tile videos kept loaded a layer, the least recently seen let go first. */
 export const VIDEO_CACHE = 48;
+/** How long a tile video's seek may take before its frame fails, ms. */
+export const VIDEO_SEEK_TIMEOUT_MS = 10000;
 
 /**
  * The frames of a timed source, in time order: `{time, url}`, and for
@@ -124,18 +126,24 @@ function tileUrlOf(template, tilingScheme, x, y, level) {
 /**
  * Seek a video, resolving once it has: on a `seeked` that leaves it no
  * longer seeking (one a seek before it sends late does not count), and its
- * frame there presented where the browser says so.
+ * frame there presented where the browser says so. Rejects on an error, or
+ * after `VIDEO_SEEK_TIMEOUT_MS` with no seek.
  */
 function seekTo(video, time, url) {
   return new Promise((resolve, reject) => {
-    const failed = () => {
-      video.removeEventListener('seeked', seeked);
-      reject(new Error(`The video tile did not seek: ${url}`));
-    };
-    const seeked = () => {
-      if (video.seeking) return;
+    const stop = () => {
+      clearTimeout(timeout);
       video.removeEventListener('seeked', seeked);
       video.removeEventListener('error', failed);
+    };
+    const failed = () => {
+      stop();
+      reject(new Error(`The video tile did not seek: ${url}`));
+    };
+    const timeout = setTimeout(failed, VIDEO_SEEK_TIMEOUT_MS);
+    const seeked = () => {
+      if (video.seeking) return;
+      stop();
       if (typeof video.requestVideoFrameCallback !== 'function') resolve();
       else {
         // Its frame is drawable once presented; never wait on it for long.
@@ -147,18 +155,27 @@ function seekTo(video, time, url) {
       }
     };
     video.addEventListener('seeked', seeked);
-    video.addEventListener('error', failed, { once: true });
+    video.addEventListener('error', failed);
     video.currentTime = time;
   });
 }
 
 /**
  * A layer's tile videos, loaded once each and seeked for each frame drawn
- * from them, one seek at a time a video.
+ * from them, one seek at a time a video. A video let go (the least recently
+ * seen past `limit`, or all of them on `clear`) fails every frame still
+ * waiting on it: emptied, it would never load or seek again.
  */
 export function createTileVideos(limit = VIDEO_CACHE) {
-  /** url → {video, ready: Promise, queue: Promise} */
+  /** url → {video, ready: Promise, queue: Promise, gone: Promise, release} */
   const videos = new Map();
+  /** Let go of an entry's video, failing what waits on it. */
+  function release(entry, url) {
+    entry.released = true;
+    entry.release(new Error(`The video tile was let go: ${url}`));
+    entry.video.removeAttribute('src');
+    entry.video.load();
+  }
   function load(url) {
     let entry = videos.get(url);
     if (entry) {
@@ -190,24 +207,39 @@ export function createTileVideos(limit = VIDEO_CACHE) {
     });
     ready.catch(() => {});
     video.src = url;
-    entry = { video, ready, queue: Promise.resolve() };
+    let releaseWith;
+    const gone = new Promise((_, reject) => {
+      releaseWith = reject;
+    });
+    gone.catch(() => {});
+    entry = {
+      video,
+      ready,
+      queue: Promise.resolve(),
+      gone,
+      release: releaseWith,
+      released: false,
+    };
     videos.set(url, entry);
     while (videos.size > limit) {
       const [oldest, old] = videos.entries().next().value;
       videos.delete(oldest);
-      old.video.removeAttribute('src');
-      old.video.load();
+      release(old, oldest);
     }
     return entry;
   }
   /** The video at `fraction` of its length, drawn on a canvas. */
   function frame(url, fraction) {
     const entry = load(url);
-    const run = entry.queue.then(async () => {
-      const video = await entry.ready;
+    // Whatever it waits on, it fails once its video is let go.
+    const until = (promise) => Promise.race([promise, entry.gone]);
+    const run = until(entry.queue).then(async () => {
+      if (entry.released) await entry.gone;
+      const video = await until(entry.ready);
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       const at = Math.max(0, Math.min(duration - 1e-3, fraction * duration));
-      if (Math.abs(video.currentTime - at) > 1e-4) await seekTo(video, at, url);
+      if (Math.abs(video.currentTime - at) > 1e-4)
+        await until(seekTo(video, at, url));
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 1;
       canvas.height = video.videoHeight || 1;
@@ -220,10 +252,7 @@ export function createTileVideos(limit = VIDEO_CACHE) {
   return {
     frame,
     clear() {
-      for (const { video } of videos.values()) {
-        video.removeAttribute('src');
-        video.load();
-      }
+      for (const [url, entry] of videos) release(entry, url);
       videos.clear();
     },
   };
