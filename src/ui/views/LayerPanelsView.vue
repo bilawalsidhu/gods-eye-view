@@ -43,6 +43,11 @@ async function importChosen(event) {
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
     <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+    <!-- Data Library: src/ui/libraryBrowser.js owns the dialog; the button
+         shows once the library controller is mounted (src/app/tools.js). -->
+    <div class="data-library-footer">
+      <button id="data-library-browse" type="button" class="data-library-browse" aria-haspopup="dialog" aria-controls="data-library" hidden>{{ t('BROWSE DATA LIBRARY') }}</button>
+    </div>
   </RailPanel>
 
   <!-- Utilities: Directions (LayerPanel renders its row here), Draw, Import -->

@@ -108,6 +108,7 @@ export class ShareLinkManager {
     this._scopeTerminusPct = null;
     this._mapStack = 'photoreal';
     this._layerStateProvider = null;
+    this._libraryParamsEncoder = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
@@ -476,6 +477,20 @@ export class ShareLinkManager {
   }
 
   /**
+   * Install the Data Library's `lib=` writer. Library selections travel in
+   * their own field and never touch the core layer-token ledger.
+   * @param {((params: URLSearchParams) => void) | null} encoder
+   */
+  setLibraryParamsEncoder(encoder) {
+    this._libraryParamsEncoder = typeof encoder === 'function' ? encoder : null;
+  }
+
+  /** Called when the Data Library selection changes. */
+  onLibraryStateChange() {
+    this._scheduleUpdate();
+  }
+
+  /**
    * Install the source of the entity the camera follows, used for share links:
    * `({ nowMs }) => ({ kind, id, offset, lastKnown }) | null`, in the share
    * format's terms (src/share/follow.js), with the fix as of `nowMs`.
@@ -701,6 +716,7 @@ export class ShareLinkManager {
     params.set('map', this._mapStack);
     const layerState = this._layerStateProvider?.();
     if (layerState) encodeLayerStateParams(params, layerState);
+    this._libraryParamsEncoder?.(params);
     this._encodePanelStateParam(params, this._panelStateProvider?.());
     encodeStyleParamState(
       params,
@@ -734,6 +750,7 @@ export class ShareLinkManager {
     this._removeCameraChanged = null;
     this._unwatchNavigation?.();
     this._layerStateProvider = null;
+    this._libraryParamsEncoder = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._followSubjectProvider = null;

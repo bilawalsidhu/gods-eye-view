@@ -11,6 +11,10 @@ import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { createDataLibrary } from '../library/controller.js';
+import { flyToLibraryExtent } from '../library/camera.js';
+import { mountLibraryBrowser } from '../ui/libraryBrowser.js';
+import { localGeoJsonServices } from './localGeojsonServices.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import {
@@ -109,6 +113,41 @@ export function createApplicationTools({
     connect: connectDisplay,
   });
   defer(() => geoFileImport?.destroy());
+  // DATA ▸ Library: entries register their layers only when a viewer adds
+  // them, after the core catalog is sealed. The browser dialog and the
+  // controller share the application lifetime.
+  const dataLibrary = createDataLibrary({
+    dataManager,
+    services: localGeoJsonServices,
+    getTileset: () => tileset,
+    mapStackController,
+    shareLink: styleManager.shareLinkManager,
+    requestRender: governorRequestRender,
+    // Zoom to layer: an immediate navigation, so Cockpit can refuse it and
+    // the current follow owner is released first (as for imported files).
+    zoomTo: (extent) =>
+      styleManager.runImmediateNavigation('layer', () =>
+        flyToLibraryExtent(viewer, extent),
+      ) !== false,
+  });
+  defer(() => dataLibrary.destroy());
+  const libraryTrigger = document.getElementById('data-library-browse');
+  const libraryBrowser = mountLibraryBrowser({
+    library: dataLibrary,
+    trigger: libraryTrigger,
+  });
+  defer(() => libraryBrowser.destroy());
+  if (libraryTrigger) libraryTrigger.hidden = false;
+  dataLibrary.start({ signal }).catch((error) => {
+    if (!signal?.aborted) console.warn('[Library] start failed:', error);
+  });
+  // The live gate's handle (scripts/qa-data-library.mjs).
+  const libraryHandle = { library: dataLibrary, browser: libraryBrowser };
+  window.__gevDataLibrary = libraryHandle;
+  defer(() => {
+    if (window.__gevDataLibrary === libraryHandle)
+      delete window.__gevDataLibrary;
+  });
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
   // panel lives on the right rail, so both belong to the application
   // lifetime. The tileset lets the layer drape while the globe is hidden.
