@@ -1161,21 +1161,11 @@ test('a pulse the Cesium renderer cannot run is refused before anything changes'
   assert.throws(() => set.set([disc(radius)]), /pulses alpha only, forever/);
   assert.equal(scene.added[0], host, 'still drawn as it was');
   assert.doesNotThrow(() => set.upsert([{ ...disc(undefined), id: 'c' }]));
-  // Nor numbers it cannot draw, nor a fill that is not a colour.
+  // Nor numbers it cannot draw.
   assert.throws(
     () =>
       set.upsert([disc({ property: 'alpha', from: 0, to: 1, periodMs: 0 })]),
     /positive period/,
-  );
-  assert.throws(
-    () =>
-      set.upsert([
-        {
-          ...disc({ property: 'alpha', from: 0, to: 1, periodMs: 1000 }),
-          fill: { image: 'x.png' },
-        },
-      ]),
-    /colour fills and outlines only/,
   );
   set.dispose();
 });
@@ -8135,3 +8125,47 @@ test('a draped line in the sky’s frame drapes where the sky is, again as its c
     Date.now = realNow;
   }
 });
+
+test('image fills pulse their alpha through their material, clamped or not', () =>
+  withImageClasses(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'pulsing-images' });
+    const animate = { property: 'alpha', from: 0.3, to: 0.3, periodMs: 1000 };
+    const rect = (west) => ({
+      kind: 'rectangle',
+      rect: { west, south: 0, east: west + 1, north: 1 },
+    });
+    set.set([
+      {
+        id: 'flat',
+        geometry: rect(0),
+        fill: { image: 'pad.png' },
+        height: 'absolute',
+        animate,
+      },
+      {
+        id: 'draped',
+        geometry: rect(4),
+        fill: { image: 'pad.png' },
+        height: 'clampGround',
+        animate,
+      },
+    ]);
+    frame();
+    const materials = [];
+    const walk = (primitive) => {
+      if (primitive instanceof Cesium.PrimitiveCollection)
+        for (let i = 0; i < primitive.length; i++) walk(primitive.get(i));
+      else if (primitive?.appearance?.material?.type === 'Image')
+        materials.push(primitive.appearance.material);
+    };
+    scene.added.forEach(walk);
+    assert.equal(materials.length, 2, 'both drawn');
+    for (const material of materials)
+      assert.equal(
+        Math.round(material.uniforms.color.alpha * 100) / 100,
+        0.3,
+        'pulsed',
+      );
+    set.dispose();
+  }));

@@ -278,12 +278,6 @@ function pulseOf(item) {
     throw new Error(
       'the Cesium renderer pulses between finite alphas, over a positive period',
     );
-  const plain = (value) =>
-    value == null || typeof value === 'string' || Array.isArray(value);
-  if (!plain(item.fill) || !plain(item.outline))
-    throw new Error(
-      'the Cesium renderer pulses colour fills and outlines only',
-    );
   return pulse;
 }
 
@@ -4583,6 +4577,11 @@ export function createCesiumDraw({
       !part.fill.isDestroyed()
     )
       colourOn(part.fill, part.id, tint(look.fill, scratchColour));
+    // An image fill pulses through its material's colour, white at rest.
+    if (part.image)
+      part.image.material.uniforms.color = Cesium.Color.WHITE.withAlpha(
+        alpha ?? 1,
+      );
     if (look.outline) {
       if (part.outline?.ready && !part.outline.isDestroyed())
         colourOn(part.outline, part.id, tint(look.outline, scratchColour));
@@ -4630,7 +4629,16 @@ export function createCesiumDraw({
         for (const part of parts?.values() ?? []) {
           if (!part.pulse || !part.show) continue;
           const ground = part.ground;
-          if (ground && !ground.isDestroyed()) {
+          const imageFill =
+            typeof part.look.fill === 'object' &&
+            !Array.isArray(part.look.fill);
+          if (ground && !ground.isDestroyed() && imageFill) {
+            // An image fill, a ground primitive of its own, pulses through
+            // its material's colour.
+            pulsing = true;
+            ground.appearance.material.uniforms.color =
+              Cesium.Color.WHITE.withAlpha(pulseAlpha(part.pulse, now));
+          } else if (ground && !ground.isDestroyed()) {
             // One still building asks for frames, to pulse once it is ready.
             pulsing = true;
             if (ground.ready)
