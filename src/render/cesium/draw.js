@@ -647,7 +647,18 @@ export function createCesiumDraw({
         requestRender();
       },
     };
-    // A clustered set clusters again in the next frame drawn after a change.
+    // `columns`: column updates of an icon set, on the GPU.
+    if (kind === 'icons' && capabilities.has('columns'))
+      handle.setColumns = (columns) => {
+        onGpu(record, [], false, true);
+        record.gpu.columns(columns);
+        patched();
+      };
+    // Any other set takes columns as the rows they make, replacing its items.
+    else if (capabilities.has('columns'))
+      handle.setColumns = (columns) => handle.set(columnRows(columns, items));
+    // A clustered set clusters again in the next frame drawn after a change
+    // (`setColumns` too: set before this, so it is wrapped with the rest).
     for (const name of [
       'set',
       'upsert',
@@ -722,16 +733,6 @@ export function createCesiumDraw({
         handle.upsert([...record.inertialDraped.values()]);
       };
     }
-    // `columns`: column updates of an icon set, on the GPU.
-    if (kind === 'icons' && capabilities.has('columns'))
-      handle.setColumns = (columns) => {
-        onGpu(record, [], false, true);
-        record.gpu.columns(columns);
-        patched();
-      };
-    // Any other set takes columns as the rows they make, replacing its items.
-    else if (capabilities.has('columns'))
-      handle.setColumns = (columns) => handle.set(columnRows(columns, items));
     sets.set(spec.id, record);
     setsVersion += 1;
     return handle;

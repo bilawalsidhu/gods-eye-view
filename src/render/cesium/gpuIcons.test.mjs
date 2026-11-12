@@ -580,6 +580,57 @@ test('a GPU icon set clusters its rows where their segments put them in the fram
   }
 });
 
+test('a clustered GPU icon set clusters again after static column changes', () => {
+  const transforms = Cesium.SceneTransforms;
+  const project = transforms.worldToWindowCoordinates;
+  transforms.worldToWindowCoordinates = (_, position, result) => {
+    const at = Cesium.Cartographic.fromCartesian(position);
+    result ??= new Cesium.Cartesian2();
+    result.x = 200 + Cesium.Math.toDegrees(at.longitude) * 100;
+    result.y = 150 - Cesium.Math.toDegrees(at.latitude) * 100;
+    return result;
+  };
+  try {
+    const { part, draw, scene } = drawOver({
+      capabilities: new Set(['columns', 'cluster']),
+    });
+    scene.camera.directionWC = new Cesium.Cartesian3(-1, 0, 0);
+    scene.camera.positionCartographic = { height: 1000 };
+    scene.canvas = { clientWidth: 400, clientHeight: 300 };
+    const counts = [];
+    const set = draw.icons({
+      id: 'gpu:cluster-columns',
+      cluster: {
+        pixelRange: 10,
+        minimumSize: 2,
+        icon: (count) => (counts.push(count), 'badge.png'),
+      },
+    });
+    const at = (lon) => ecef(Cesium.Cartesian3.fromDegrees(lon, 0));
+    set.set([
+      icon('a', { pos: at(0), size: [8, 8] }),
+      icon('b', { pos: at(1), size: [8, 8] }),
+    ]);
+    set.setColumns({ ids: ['a', 'b'] });
+    // Apart (100 px a degree): no cluster.
+    part.beforeRender();
+    assert.deepEqual(counts, []);
+    const flat = (...points) =>
+      new Float64Array(points.flatMap((p) => [p.x, p.y, p.z]));
+    // Positions only, nothing moving, the camera still: together now.
+    set.setColumns({ ids: ['a', 'b'], positions: flat(at(0), at(0.01)) });
+    part.beforeRender();
+    assert.deepEqual(counts, [2], 'clustered where the columns put them');
+    // Shown only: one hidden, no cluster left.
+    set.setColumns({ ids: ['a', 'b'], shown: new Uint8Array([1, 0]) });
+    part.beforeRender();
+    assert.equal(part.sets.get('gpu:cluster-columns').clusterHost.length, 0);
+    set.dispose();
+  } finally {
+    transforms.worldToWindowCoordinates = project;
+  }
+});
+
 test('columns update rows by index: positions, courses, shown, scales, tints and meta', () => {
   const { part, draw } = drawOver();
   const set = draw.icons({ id: 'gpu:columns' });
