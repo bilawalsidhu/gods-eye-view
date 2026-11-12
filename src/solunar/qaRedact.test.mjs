@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+
+test('filesystem startup failure does not print a secret-bearing path', () => {
+  const token = 'SyntheticPrivatePathABC123';
+  const run = spawnSync(process.execPath, ['scripts/qa-solunar.mjs'], {
+    cwd: new URL('../../', import.meta.url),
+    env: { ...process.env, QA_OUT_DIR: `/dev/null/${token}` },
+    encoding: 'utf8',
+  });
+  assert.equal(run.status, 1);
+  assert.match(run.stderr, /unable to complete browser checks/);
+  assert.ok(!(run.stdout + run.stderr).includes(token));
+});
 
 test('QA does not print arbitrary browser or exception diagnostics', () => {
   const source = readFileSync(
