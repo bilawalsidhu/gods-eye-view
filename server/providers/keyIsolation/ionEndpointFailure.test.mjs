@@ -61,6 +61,7 @@ const failures = {
   'HTTP 503': () => response({ message: 'down' }, 503),
   'HTTP 500': () => response({ message: 'down' }, 500),
   'HTTP 429': () => response({}, 429),
+  'HTTP 408': () => response({}, 408),
   'a network error': () => {
     throw new TypeError('fetch failed');
   },
@@ -81,6 +82,20 @@ for (const [name, fail] of Object.entries(failures)) {
     assert.equal(world.calls, 2);
   });
 }
+
+test('ion cache: a 408 from ion is a passing failure: ion is left alone for the back-off', async () => {
+  const { world, fetchEndpoint } = setup();
+  world.next = failures['HTTP 408'];
+  const refused = await fetchEndpoint('1').catch((error) => error);
+  assert.equal(refused.status, 502);
+  assert.equal(refused.retryAfter, 10, 'the default back-off, as for a 429');
+  for (let i = 0; i < 20; i += 1)
+    assert.equal((await fetchEndpoint('1').catch((e) => e)).status, 502);
+  assert.equal(world.calls, 1);
+  world.clock += 10 * SECOND;
+  await fetchEndpoint('1').catch(() => {});
+  assert.equal(world.calls, 2);
+});
 
 test('ion cache: a document with less than ten minutes of token left is not served when ion fails', async () => {
   const { world, fetchEndpoint } = setup();
@@ -108,6 +123,43 @@ for (const [status, answered] of [
     world.next = failures['HTTP 503'];
     await assert.rejects(fetchEndpoint('1'), { status: 502 });
     assert.equal(world.calls, 3);
+  });
+}
+
+test('ion cache: an answer that echoes the account token is a passing failure: the held document is served and ion is left alone', async () => {
+  const { world, fetchEndpoint } = setup();
+  const first = await fetchEndpoint('1');
+  world.clock += 61 * SECOND; // a refetch is due
+  world.next = () =>
+    response({ type: 'TERRAIN', accessToken: TOKEN, note: 'echo' });
+  assert.equal(await fetchEndpoint('1'), first, 'the held document is served');
+  assert.equal(world.calls, 2);
+  for (let i = 0; i < 20; i += 1) assert.equal(await fetchEndpoint('1'), first);
+  assert.equal(world.calls, 2, 'ion is not asked again inside the back-off');
+  world.clock += 10 * SECOND;
+  world.next = world.good;
+  const fresh = await fetchEndpoint('1');
+  assert.notEqual(fresh, first);
+  assert.equal(world.calls, 3, 'one call once the back-off is over');
+  assert.equal(fresh.includes(TOKEN), false);
+});
+
+for (const status of [401, 403, 404]) {
+  test(`ion cache: ion answering ${status} for one asset drops only that asset's document`, async () => {
+    const { world, fetchEndpoint } = setup();
+    await fetchEndpoint('1');
+    world.clock += 30 * SECOND;
+    const other = await fetchEndpoint('3');
+    world.clock += 31 * SECOND; // asset 1 is due for a refetch, asset 3 is not
+    world.next = () => response({ message: 'no' }, status);
+    await assert.rejects(fetchEndpoint('1'));
+    assert.equal(world.calls, 3);
+    assert.equal(await fetchEndpoint('3'), other, 'served from memory');
+    assert.equal(
+      world.calls,
+      3,
+      "no call to ion for the other asset's document",
+    );
   });
 }
 
