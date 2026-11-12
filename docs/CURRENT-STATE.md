@@ -609,7 +609,8 @@ open/close and focus moves are imperative.
 
 ## Solunar — November 3, 2026
 
-A SOLUNAR card in the right dock (`#solunar-panel`, in the dock after RECENT IMAGERY; dock icon
+A SOLUNAR card in the right dock (`#solunar-panel`, after RECENT IMAGERY in the panel layout;
+that panel may be hidden, so the visible dock order differs; dock icon
 `dark_mode`) shows the next 7 local days for one map
 spot: the major windows (moon overhead and underfoot, 2 h) and minor windows
 (moonrise and moonset, 1 h), sunrise, sunset, moonrise, moonset, moon overhead
