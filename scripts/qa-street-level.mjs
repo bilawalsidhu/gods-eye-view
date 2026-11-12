@@ -587,7 +587,8 @@ async function main() {
 
     await expandPanel(page);
     if (!configured && litAlone(await getUI(page), 'mapillary')) {
-      // A keyed bundle behind a server without the token keeps Mapillary.
+      // Mapillary stays lit although the server holds no token (the status
+      // answer arrived after the layer was built).
       await step('keyless server: KEY REQUIRED gates the controls', () =>
         assertKeyRequired(page),
       );
@@ -1036,16 +1037,17 @@ async function main() {
       );
 
       await fixtureStep(
-        // The fixture bundle carries a token, so this covers a keyless
-        // server behind a keyed bundle; the keyless default is checked above.
-        'keyless server (second page): KEY REQUIRED gates the controls',
+        // The server answers "no Mapillary token" for this page, so it opens
+        // on the first keyless source, as the main page does on a keyless
+        // server.
+        'keyless server (second page): opens on KartaView, not KEY REQUIRED',
         async () => {
           const keyless = await open(
             'keyless',
             newFixture({ configured: false }),
           );
           await expandPanel(keyless);
-          await assertKeyRequired(keyless);
+          await assertKeylessDefault(keyless);
           await collectRenderErrors(keyless, 'keyless');
           await keyless.close();
         },
