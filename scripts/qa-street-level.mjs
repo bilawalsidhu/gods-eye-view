@@ -587,8 +587,9 @@ async function main() {
 
     await expandPanel(page);
     if (!configured && litAlone(await getUI(page), 'mapillary')) {
-      // Mapillary stays lit although the server holds no token (the status
-      // answer arrived after the layer was built).
+      // The app asks the server before it starts, so Mapillary is lit with no
+      // token only if the server's answer changed since (the token was
+      // removed): the controls are then gated on the key.
       await step('keyless server: KEY REQUIRED gates the controls', () =>
         assertKeyRequired(page),
       );

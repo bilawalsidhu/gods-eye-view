@@ -280,15 +280,22 @@ async function main() {
       }
     });
     page.on('pageerror', (error) => consoleErrors.push(error.message));
+    // The browser asks this app's /api/ion/ for the endpoint, never Cesium
+    // (the ion token stays on the server). With no route to ion, the server
+    // answers that request with a 5xx.
+    const ionEndpointPath = /^\/api\/ion\/v1\/assets\/1\/endpoint$/;
+    const isIonEndpoint = (url) => ionEndpointPath.test(new URL(url).pathname);
     page.on('requestfailed', (request) => {
       const url = request.url();
-      if (/^https:\/\/api\.cesium\.com\/v1\/assets\/1\/endpoint(?:\?|$)/.test(url)) {
+      if (isIonEndpoint(url)) {
         externalCesiumEndpointFailures.push(`${request.failure()?.errorText || 'request failed'} ${url}`);
       }
     });
     page.on('response', (response) => {
       if (response.status() >= 500) {
-        failedResponses.push(`HTTP ${response.status()} ${response.url()}`);
+        const entry = `HTTP ${response.status()} ${response.url()}`;
+        if (isIonEndpoint(response.url())) externalCesiumEndpointFailures.push(entry);
+        else failedResponses.push(entry);
       }
     });
 
@@ -4522,12 +4529,13 @@ async function main() {
       ));
       if (requestEventIndex >= 0) actionableConsoleErrors.splice(requestEventIndex, 1);
       for (let i = actionableConsoleErrors.length - 1; i >= 0; i -= 1) {
-        if (actionableConsoleErrors[i].includes('api.cesium.com/v1/assets/1/endpoint')
-          && actionableConsoleErrors[i].includes('net::ERR_FAILED')) {
+        if (actionableConsoleErrors[i].includes('/api/ion/v1/assets/1/endpoint')
+          && (actionableConsoleErrors[i].includes('net::ERR_FAILED')
+            || /status of 5\d\d/.test(actionableConsoleErrors[i]))) {
           actionableConsoleErrors.splice(i, 1);
         }
       }
-      console.log(`INFO external Cesium ion asset endpoint unavailable (${externalCesiumEndpointFailures.length}); Radio assertions continued against the loaded app`);
+      console.log(`INFO Cesium ion asset endpoint unavailable (${externalCesiumEndpointFailures.length}); Radio assertions continued against the loaded app`);
     }
     check(
       'runtime console remains clean',
