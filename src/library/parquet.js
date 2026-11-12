@@ -88,11 +88,20 @@ export function rangeBuffer(url, byteLength, { fetchImpl, signal }) {
       // else must be exactly the bytes asked for.
       const whole = response.status === 200;
       const expected = whole ? byteLength : end - start;
-      const bytes = await readResponseBytesCapped(
-        response,
-        whole ? Math.min(byteLength, MAX_UNRANGED_BYTES) : expected,
-        signal,
-      );
+      let bytes;
+      try {
+        bytes = await readResponseBytesCapped(
+          response,
+          whole ? Math.min(byteLength, MAX_UNRANGED_BYTES) : expected,
+          signal,
+        );
+      } catch (error) {
+        // A body cut off mid-stream (a reset, the proxy's timeout) is a
+        // fetch failure worth retrying; an oversized one is not.
+        if (signal?.aborted || error?.code === 'RESPONSE_TOO_LARGE')
+          throw error;
+        throw transient(error);
+      }
       if (bytes.byteLength !== expected)
         throw transient(
           new Error(

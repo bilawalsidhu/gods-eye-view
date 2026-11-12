@@ -220,6 +220,50 @@ test('a footer that keeps failing leaves the index incomplete, and a retry recov
   assert.equal(broken.failed, 1);
 });
 
+test('a footer whose body fails mid-stream is retried, not left out', async () => {
+  const { buildPartitionIndex } = await import('./parquet.js');
+  const entry = {
+    ...epc,
+    source: {
+      ...epc.source,
+      partitions: {
+        listUrl: 'https://s3.us-west-2.amazonaws.com/bucket?list-type=2',
+        keyBase: 'https://s3.us-west-2.amazonaws.com/bucket/',
+      },
+    },
+  };
+  const listing = `<ListBucketResult><Contents><Key>a.parquet</Key><Size>100</Size></Contents></ListBucketResult>`;
+  let cutOff = 0;
+  const fetchImpl = async (url) => {
+    if (url.includes('list-type'))
+      return new Response(listing, { status: 200 });
+    if (cutOff > 0) {
+      cutOff -= 1;
+      // Headers arrive, then the connection drops.
+      const body = new ReadableStream({
+        pull(controller) {
+          controller.error(new Error('connection reset'));
+        },
+      });
+      return new Response(body, { status: 206 });
+    }
+    return new Response(new Uint8Array(100), { status: 200 });
+  };
+  cutOff = 100;
+  const broken = await buildPartitionIndex(entry, {
+    fetchImpl,
+    retryDelayMs: 0,
+  });
+  assert.equal(broken.complete, false, 'never reported whole');
+  assert.equal(broken.failed, 1);
+  cutOff = 1;
+  const recovered = await buildPartitionIndex(entry, {
+    fetchImpl,
+    retryDelayMs: 0,
+  });
+  assert.equal(recovered.complete, true);
+});
+
 test('the browser keeps a complete index over an incomplete rebuild and retries later', async () => {
   let clock = 30 * 24 * 3600_000;
   const complete = [{ url: 'https://h/A.parquet', bbox: [-2, 53, -1, 54] }];
