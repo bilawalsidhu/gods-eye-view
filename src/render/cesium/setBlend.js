@@ -129,7 +129,9 @@ export function blendHost(host, blendOf) {
     const start = list.length;
     const result = update.call(this, frameState);
     if (!frameState.passes?.render) return result;
-    const blend = blendOf();
+    // A host that draws this blend itself keeps its commands as made.
+    const asked = blendOf();
+    const blend = this.drawsBlend?.(asked) ? undefined : asked;
     if (blend === undefined && !turnedAny) return result;
     if (blend !== undefined) turnedAny = true;
     blendCommands(list, start, blend);

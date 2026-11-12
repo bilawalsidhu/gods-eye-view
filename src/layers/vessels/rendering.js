@@ -145,6 +145,9 @@ export function createRendering({
     if (!viewer || state.icons) return;
     const set = drawOf(viewer).icons({
       id: `ais-vessels:${++instances}`,
+      // Blended in one pass, in order, each chevron keeping its outline
+      // over the ones under it.
+      blend: 'translucent',
       horizonCull: true,
       drawOrder: spriteDrawOrder?.('ais') ?? 0,
     });

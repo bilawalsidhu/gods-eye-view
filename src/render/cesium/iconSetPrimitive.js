@@ -285,7 +285,7 @@ void main() {
   if (color.a < 0.005) discard;
 #ifdef OPAQUE
   if (color.a < 0.995) discard;
-#else
+#elif defined(TRANSLUCENT)
   if (color.a >= 0.995) discard;
 #endif
   out_FragColor = color;
@@ -320,20 +320,32 @@ const EARTH_BOUNDS = new Cesium.BoundingSphere(
 /**
  * @param {{ set: object, renderTime: (frameState: object) => Cesium.JulianDate,
  *   requestRender?: () => void, cull?: () => boolean,
+ *   translucent?: () => boolean,
  *   pickObject?: (id: string, set: object, primitive: object) => object }} options
  *   `renderTime` gives the instant to draw at (the layer's delayed clock), from
  *   the frame being drawn. `requestRender` asks for a frame when the atlas packs
  *   a newly loaded image, for a layer that does not render continuously.
  *   `cull` says whether rows past the ellipsoid's horizon are hidden (by
- *   default always). `pickObject` builds a row's pick object around the
+ *   default always). `translucent` says whether every row is drawn in one
+ *   alpha-blended pass, in row order, the last on top (Cesium's
+ *   `BlendOption.TRANSLUCENT`), in place of an opaque pass and a translucent
+ *   one (by default never). `pickObject` builds a row's pick object around the
  *   `primitive` drill picks hide it by (by default `{ id, iconSet, meta,
  *   primitive }`).
  */
 export class IconSetPrimitive {
-  constructor({ set, renderTime, requestRender, cull, pickObject }) {
+  constructor({
+    set,
+    renderTime,
+    requestRender,
+    cull,
+    translucent,
+    pickObject,
+  }) {
     this.set = set;
     this.renderTime = renderTime;
     this._cull = cull ?? (() => true);
+    this._translucent = translucent ?? (() => false);
     this._pickObject = pickObject ?? null;
     this._pickPass = 0;
     this._stopAtlasListener = requestRender
@@ -418,10 +430,21 @@ export class IconSetPrimitive {
         `[iconSetPrimitive] This context addresses ${this._slotCount} icon images; the atlas holds ${iconAtlas.size}, and rows drawing the rest draw nothing`,
       );
     }
-    for (const command of this._commands) {
+    const commands = this._translucent()
+      ? [this._singleCommand]
+      : this._commands;
+    for (const command of commands) {
       command.instanceCount = set.count;
       frameState.commandList.push(command);
     }
+  }
+
+  /**
+   * Whether this host draws `blend` itself, so the set's blend leaves its
+   * commands as they are (`setBlend.js`).
+   */
+  drawsBlend(blend) {
+    return blend === 'translucent' && this._translucent();
   }
 
   _syncAtlas(context) {
@@ -546,7 +569,7 @@ export class IconSetPrimitive {
     this._generation = set.generation;
     for (const rows of Object.values(set.dirty)) rows.markAll();
     if (this._commands)
-      for (const command of this._commands)
+      for (const command of [...this._commands, this._singleCommand])
         command.vertexArray = this._vertexArray;
   }
 
@@ -726,7 +749,12 @@ export class IconSetPrimitive {
           sources: [VERTEX_SHADER],
         }),
         fragmentShaderSource: new Cesium.ShaderSource({
-          defines: pass === 'opaque' ? ['OPAQUE'] : ['TRANSLUCENT'],
+          defines:
+            pass === 'opaque'
+              ? ['OPAQUE']
+              : pass === 'translucent'
+                ? ['TRANSLUCENT']
+                : [],
           sources: [FRAGMENT_SHADER],
         }),
         attributeLocations: ATTRIBUTE_LOCATIONS,
@@ -734,6 +762,7 @@ export class IconSetPrimitive {
     this._programs = {
       opaque: programFor('opaque'),
       translucent: programFor('translucent'),
+      single: programFor('single'),
     };
     const depthTest = { enabled: true, func: Cesium.DepthFunction.LESS };
     const command = (pass, program, renderState) =>
@@ -766,6 +795,18 @@ export class IconSetPrimitive {
         }),
       ),
     ];
+    // Every row in one pass, blended in row order: equal depths pass, and
+    // depth is written in place of sorting, as Cesium's translucent
+    // billboards do.
+    this._singleCommand = command(
+      Cesium.Pass.TRANSLUCENT,
+      this._programs.single,
+      Cesium.RenderState.fromCache({
+        depthTest: { enabled: true, func: Cesium.DepthFunction.LEQUAL },
+        depthMask: true,
+        blending: Cesium.BlendingState.ALPHA_BLEND,
+      }),
+    );
   }
 
   _destroyBuffers() {
@@ -785,6 +826,7 @@ export class IconSetPrimitive {
     this._destroyBuffers();
     this._programs?.opaque.destroy();
     this._programs?.translucent.destroy();
+    this._programs?.single.destroy();
     this._texture?.destroy();
     // The set outlives its renderer: release only the pick ids this one made.
     const set = this.set;

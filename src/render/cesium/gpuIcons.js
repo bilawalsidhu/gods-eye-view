@@ -307,6 +307,7 @@ export function createGpuIcons({
         clockTime(frameState, new Cesium.JulianDate()),
       requestRender: () => requestRender(`icons:${spec.id}`),
       cull: () => spec.horizonCull === true,
+      translucent: () => spec.blend === 'translucent',
       // Picked as the draw port's other items are: `{set, id, meta}` as
       // the item now is, hidden row by row for drill picks.
       pickObject: (id, _set, primitive) => ({
