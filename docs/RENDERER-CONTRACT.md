@@ -364,8 +364,10 @@ What it draws of the style specification:
 The Cesium port loads the style before the base changes (a style that fails
 leaves the base as it was; a later `setBase`, or disposal, aborts the load and
 the overtaken call changes nothing, resolving with `imagery: []` and
-`settled: false`; a later call whose style fails leaves the earlier call's
-base drawn, and that call settles), draws it as Web Mercator imagery under the
+`settled: false`; `settled` is whether, when the call resolves, its base is
+still the one drawn and has settled, so an earlier call that resolves while a
+later call's style is still loading, or after that style fails, is settled,
+and one that resolves after a later call changed the base is not), draws it as Web Mercator imagery under the
 base's other imagery (`src/render/cesium/vectorBase.js`, 256 px tiles to
 level 20, transparent where the style paints no opaque background; a tile
 whose request is cancelled, its layer removed, is not painted), and credits each source's attribution as plain text. The stub

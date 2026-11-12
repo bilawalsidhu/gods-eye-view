@@ -275,3 +275,38 @@ test('a later setBase whose style fails leaves the earlier one the base, settled
     globalThis.fetch = original;
   }
 });
+
+test('a setBase that ends while a later one’s style still loads is settled; the later one then replaces it', async () => {
+  const held = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    new Promise((resolve) => {
+      held.push(() =>
+        resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ version: 8, sources: {}, layers: [] }),
+        }),
+      );
+    });
+  try {
+    const r = createStubRenderer();
+    const first = r.globe.setBase({
+      photoreal: null,
+      imagery: [{ kind: 'xyz', url: 'https://a.invalid/{z}/{x}/{y}.png' }],
+    });
+    const second = r.globe.setBase({
+      vector: { styleUrl: 'https://s.invalid/x' },
+    });
+    const status = await first;
+    assert.equal(status.settled, true, 'its base is still the one drawn');
+    assert.deepEqual(r.globe.imagery.list(), status.imagery);
+    held[0]();
+    const later = await second;
+    assert.equal(later.settled, true);
+    assert.deepEqual(r.globe.imagery.list(), later.imagery);
+    r.destroy();
+  } finally {
+    globalThis.fetch = original;
+  }
+});

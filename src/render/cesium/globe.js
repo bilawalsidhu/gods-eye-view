@@ -299,8 +299,9 @@ export function createCesiumGlobe(
     return {
       photoreal: photorealStatus,
       imagery: layers,
-      // A base a later call replaced has not settled; one whose later call
-      // failed is still drawn.
+      // Settled when its base is still the one drawn: a later call changes
+      // the base only once its style loads, and one whose style fails never
+      // does (see the contract's setBase).
       settled: gen === drawnGen && !disposed && isSettled('base'),
     };
   }

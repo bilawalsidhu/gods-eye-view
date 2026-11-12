@@ -1598,7 +1598,9 @@ export function createStubRenderer(options = {}) {
       const layers = (base.imagery ?? []).map((spec) => addImagery(spec));
       if (base.photoreal !== undefined)
         await globe.setPhotoreal(base.photoreal);
-      // A base a later call replaced has not settled.
+      // Settled when its base is still the one drawn: a later call changes
+      // the base only once its style loads, and one whose style fails never
+      // does (see the contract's setBase).
       return {
         photoreal: photorealStatus,
         imagery: layers,

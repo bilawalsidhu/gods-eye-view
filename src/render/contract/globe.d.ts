@@ -242,8 +242,19 @@ export interface GlobePort {
    * The last call wins: one a later `setBase` (or the renderer's disposal)
    * overtakes before its base changes (its vector style still loading)
    * changes nothing and resolves with `imagery: []`, `settled: false` and the
-   * photoreal status as it stands, never rejecting; one overtaken after it
-   * changed the base resolves with `settled: false`.
+   * photoreal status as it stands, never rejecting.
+   *
+   * `settled` describes the moment the call resolves: true when its base is
+   * still the one drawn (no later call has changed the base since) and has
+   * settled. A later call only changes the base once its style has loaded,
+   * so for a call A overtaken by a call B:
+   * - A resolves before B changes the base (B's style still loading): A's
+   *   base is the one drawn, so `settled: true`; B then replaces it and
+   *   answers for itself.
+   * - B changes the base before A resolves: `settled: false`.
+   * - B's style fails (B rejects): the base stays A's, so A resolves with
+   *   `settled: true` whenever it resolves.
+   * Only the latest call's answer says what is drawn once every call is done.
    */
   setBase(base: BaseSpec): Promise<BaseStatus>;
   /** `photoreal`: on, off or a new token route. */
