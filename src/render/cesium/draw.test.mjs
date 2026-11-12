@@ -3294,12 +3294,80 @@ test('a draped line with segment colours and shows draws a ground instance a seg
     // Height queries see through every segment.
     const { pickIds } = unboundDrawPart(draw).sets.get('segments');
     assert.ok(pickIds.includes(first.id) && pickIds.includes(last.id));
-    // Undraped segmented lines are refused, and the set keeps drawing.
-    assert.throws(
-      () => set.upsert([{ ...trail(1, [true, true, true]), mode: '3d' }]),
-      /segments of draped solid lines only/,
+    set.dispose();
+  }));
+
+test('a segmented line of any mode and style draws a primitive a segment, recoloured and shown in place', () =>
+  withImageClasses(() => {
+    const { draw, scene } = drawOver();
+    const set = draw.lines({ id: 'pieces' });
+    const line = (colors, shows, extra = {}) => ({
+      id: 'p',
+      positions: [
+        { lon: 0, lat: 0, height: 100 },
+        { lon: 0.001, lat: 0, height: 100 },
+        { lon: 0.001, lat: 0, height: 100 },
+        { lon: 0.002, lat: 0, height: 100 },
+      ],
+      widthPx: 3,
+      mode: '3d',
+      style: { kind: 'glow', color: '#ffffff', power: 0.2 },
+      segmentColors: colors,
+      segmentShow: shows,
+      ...extra,
+    });
+    const red = [1, 0, 0, 1];
+    const green = [0, 1, 0, 1];
+    set.set([line([red, red, green], [true, true, false])]);
+    const host = scene.added[0];
+    const pieces = [];
+    const walk = (p) => {
+      if (p instanceof Cesium.PrimitiveCollection)
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+      else if (p instanceof Cesium.Primitive) pieces.push(p);
+    };
+    walk(host);
+    assert.equal(pieces.length, 2, 'a primitive a segment of length');
+    const color = (p) => p.appearance.material.uniforms.color;
+    assert.deepEqual(
+      pieces.map((p) => [color(p).red, color(p).green, p.show]),
+      [
+        [1, 0, true],
+        [0, 1, false],
+      ],
     );
-    assert.equal(scene.added[0], host);
+    assert.equal(pieces[0].appearance.material.type, 'PolylineGlow');
+    const ids = pieces.map((p) => p.geometryInstances.id);
+    assert.equal(ids[0].id, 'p', 'a segment picks as its line');
+    assert.notEqual(ids[0], ids[1], 'under a pick id of its own');
+    set.upsert([line([green, green, red], [true, true, true])]);
+    assert.equal(scene.added[0], host, 'not rebuilt');
+    assert.deepEqual(
+      pieces.map((p) => [color(p).red, color(p).green, p.show]),
+      [
+        [0, 1, true],
+        [1, 0, true],
+      ],
+    );
+    // An arrow's head is on its last segment; a revealed line shows only
+    // the pieces it has reached.
+    set.set([
+      line([red, red, green], [true, true, true], {
+        style: { kind: 'arrow', color: '#fff' },
+        revealFraction: 0.25,
+      }),
+    ]);
+    pieces.length = 0;
+    walk(scene.added[0]);
+    const drawn = (p) =>
+      p.appearance.material.materials?.revealed ?? p.appearance.material;
+    assert.deepEqual(
+      pieces.map((p) => [drawn(p).type, p.show]),
+      [
+        ['Color', true],
+        ['PolylineArrow', false],
+      ],
+    );
     set.dispose();
   }));
 
@@ -4671,20 +4739,25 @@ test('flow lines run their dashes toward the end, draped or not, on the frame cl
     asked = 0;
     frame();
     assert.equal(asked, 0, 'an emptied set asks for none');
-    // Patterns are not draped.
-    assert.throws(
-      () =>
-        set.set([
-          {
-            id: 'pattern',
-            positions,
-            widthPx: 1,
-            mode: 'draped',
-            style: { kind: 'pattern', image: 'a.png', repeat: 2 },
-          },
-        ]),
-      /drapes solid, glow, dash, flow and arrow lines only/,
-    );
+    // Patterns drape too, on a ground polyline of their own.
+    set.set([
+      {
+        id: 'pattern',
+        positions,
+        widthPx: 1,
+        mode: 'draped',
+        style: { kind: 'pattern', image: 'a.png', repeat: 2 },
+      },
+    ]);
+    const grounds = [];
+    const walk = (p) => {
+      if (p instanceof Cesium.PrimitiveCollection)
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+      else if (p instanceof Cesium.GroundPolylinePrimitive) grounds.push(p);
+    };
+    walk(scene.added.at(-1));
+    assert.equal(grounds.length, 1);
+    assert.equal(grounds[0].appearance.material.type, 'Image');
     set.dispose();
   }));
 
@@ -6940,6 +7013,47 @@ test('meshes draw their triangles in the frame at their origin', () =>
     assert.equal(host.get(0).appearance.closed, true);
     set.clear();
     assert.equal(host.length, 0);
+    set.dispose();
+  }));
+
+test('an inertial line with a depth-fail style draws behind the surface too, turned with the sky', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'sky-deep' });
+    set.set([
+      {
+        id: 'orbit',
+        positions: [
+          { x: 7e6, y: 0, z: 0 },
+          { x: 0, y: 7e6, z: 0 },
+        ],
+        widthPx: 2,
+        mode: '3d',
+        style: { kind: 'solid', color: '#0ff' },
+        depthFail: { kind: 'solid', color: '#088' },
+        frame: 'inertial',
+      },
+    ]);
+    const found = [];
+    const walk = (p) => {
+      if (p instanceof Cesium.PrimitiveCollection)
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+      else if (p instanceof Cesium.Primitive) found.push(p);
+    };
+    walk(scene.added[0]);
+    assert.equal(found.length, 1);
+    assert.ok(found[0].depthFailAppearance, 'drawn behind the surface');
+    const expected = Cesium.Matrix3.multiplyByVector(
+      Cesium.Transforms.computeTemeToPseudoFixedMatrix(Cesium.JulianDate.now()),
+      Cesium.Cartesian3.UNIT_X,
+      new Cesium.Cartesian3(),
+    );
+    const turned = Cesium.Matrix4.multiplyByPointAsVector(
+      found[0].modelMatrix,
+      Cesium.Cartesian3.UNIT_X,
+      new Cesium.Cartesian3(),
+    );
+    assert.ok(Cesium.Cartesian3.equalsEpsilon(turned, expected, 1e-6));
     set.dispose();
   }));
 

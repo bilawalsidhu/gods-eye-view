@@ -154,9 +154,13 @@ unregistered slot; anything else refuses it). The check `draw.icons.images`
 draws each kind on still and receding icons.
 
 The Cesium port also draws `pattern` line styles (the image repeated
-`repeat` times along the line, in the translucent pass), lines in the
-`inertial` frame (turned each frame by the set's motion clock; never draped
-and never batched), and image fills on clamped ellipses, cut finely so a
+`repeat` times along the line, in the translucent pass; draped too), lines in the
+`inertial` frame (turned each frame by the set's motion clock, a depth-fail
+style included; never draped and never batched), segment colours and shows
+on lines of every mode and style (a draped solid line as ground instances,
+any other as a primitive a segment with a material of its own, recoloured
+and shown in place; an arrow's head on its last segment, a pattern keeping
+its image; the check `draw.lines.segmentStyles`), and image fills on clamped ellipses, cut finely so a
 round image (the launch pad zone's rim) runs round. A clamped colour fill
 whose geometry alone changes (an annotation's target ring, resized as the
 camera climbs) is drawn alone where it now is, in the same frame. A hidden

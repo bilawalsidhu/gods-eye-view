@@ -2354,6 +2354,73 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.segmentStyles',
+      'every line mode and style takes segment colours and shows: a hidden segment is not picked, a shown one picks as its line',
+      async (h, r) => {
+        await overAustin(h, r, 3000);
+        const lines = r.draw.lines({ id: 'conf:segment-styles' });
+        const kinds = [
+          ['3d', { kind: 'glow', color: '#ffffff', power: 0.3 }],
+          ['geodesic', { kind: 'dash', color: '#ffffff', length: 16 }],
+          ['draped', { kind: 'arrow', color: '#ffffff' }],
+          ['3d', { kind: 'pattern', image: PIXEL_PNG, repeat: 4 }],
+          [
+            'draped',
+            {
+              kind: 'solid',
+              color: '#ffffff',
+              outline: { color: '#000000', widthPx: 4 },
+            },
+          ],
+        ];
+        // Off the canvas's centre row: the Cesium port does not pick draped
+        // lines at its exact centre.
+        const lat = (k) =>
+          AUSTIN.lat + 0.0008 + (k - (kinds.length - 1) / 2) * 0.0015;
+        const at = (k, dLon) =>
+          h.toEcef({
+            lon: AUSTIN.lon + dLon,
+            lat: lat(k),
+            height: kinds[k][0] === 'draped' ? 0 : 20,
+          });
+        const ends = [-0.006, -0.002, 0.002, 0.006];
+        const line = (k, shows) => ({
+          id: `l${k}`,
+          positions: ends.map((d) => at(k, d)),
+          widthPx: 12,
+          mode: kinds[k][0],
+          style: kinds[k][1],
+          segmentColors: ['#ff0000', '#00ff00', '#0000ff'],
+          segmentShow: shows,
+        });
+        lines.set(kinds.map((_, k) => line(k, [true, false, true])));
+        await settled(r);
+        await drawn(h, r);
+        const pickAt = (k, dLon) => {
+          const s = r.query.project(at(k, dLon));
+          ok(s, `line ${k} projects`);
+          return r.query
+            .drillPick(s.x, s.y)
+            .filter((hit) => hit.set === 'conf:segment-styles')
+            .map((hit) => hit.id);
+        };
+        kinds.forEach(([mode, style], k) => {
+          const what = `${mode} ${style.kind}`;
+          deepEqual(pickAt(k, -0.004), [`l${k}`], `${what}: shown segment`);
+          deepEqual(pickAt(k, 0), [], `${what}: hidden segment`);
+        });
+        lines.upsert(kinds.map((_, k) => line(k, [false, true, true])));
+        equal(lines.size(), kinds.length, 'changed in place, not added');
+        await drawn(h, r);
+        kinds.forEach(([mode, style], k) => {
+          const what = `${mode} ${style.kind}`;
+          deepEqual(pickAt(k, -0.004), [], `${what}: now hidden`);
+          deepEqual(pickAt(k, 0), [`l${k}`], `${what}: now shown`);
+        });
+        lines.dispose();
+      },
+    ),
+    check(
       'draw.points.update',
       'an upserted point is drawn where it now is once drawn again, and shows only within its display range',
       async (h, r) => {

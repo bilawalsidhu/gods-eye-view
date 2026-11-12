@@ -261,7 +261,14 @@ export function pulseAlpha(pulse, now) {
 }
 
 /** The line styles the port drapes. */
-const DRAPED_STYLES = new Set(['solid', 'glow', 'dash', 'flow', 'arrow']);
+const DRAPED_STYLES = new Set([
+  'solid',
+  'glow',
+  'dash',
+  'flow',
+  'arrow',
+  'pattern',
+]);
 
 // Whether Cesium's approximate terrain heights have been asked for.
 let terrainHeightsAsked = false;
@@ -1957,9 +1964,11 @@ export function createCesiumDraw({
         id,
       }),
       appearance: new Cesium.PolylineMaterialAppearance({ material }),
-      depthFailAppearance: new Cesium.PolylineMaterialAppearance({
-        material: lineMaterial(record, item.depthFail, reveal),
-      }),
+      depthFailAppearance: item.depthFail
+        ? new Cesium.PolylineMaterialAppearance({
+            material: lineMaterial(record, item.depthFail, reveal),
+          })
+        : undefined,
       show: item.show !== false,
       asynchronous: false,
       // A set that never picks keeps these out of the pick pass too.
@@ -2037,7 +2046,8 @@ export function createCesiumDraw({
    */
   function turnInertial(record) {
     const lines = record.inertialLines;
-    if (!lines || lines.isDestroyed()) return;
+    const pieces = record.inertialPieces ?? [];
+    if ((!lines || lines.isDestroyed()) && !pieces.length) return;
     const clock = record.spec.motionClock;
     const ms =
       clock?.kind === 'scene'
@@ -2046,11 +2056,182 @@ export function createCesiumDraw({
           ).getTime()
         : Date.now() - (clock?.delayMs ?? 0);
     const { x, y, z } = temeToPseudoFixed(ms);
-    lines.modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+    const turn = Cesium.Matrix4.fromRotationTranslation(
       new Cesium.Matrix3(x.x, y.x, z.x, x.y, y.y, z.y, x.z, y.z, z.z),
       Cesium.Cartesian3.ZERO,
-      lines.modelMatrix,
     );
+    if (lines && !lines.isDestroyed())
+      lines.modelMatrix = Cesium.Matrix4.clone(turn, lines.modelMatrix);
+    for (const primitive of pieces)
+      if (!primitive.isDestroyed())
+        primitive.modelMatrix = Cesium.Matrix4.clone(
+          turn,
+          primitive.modelMatrix,
+        );
+  }
+
+  /**
+   * Whether a line draws piece by piece, each piece a primitive with a
+   * material of its own (`linePieces`): a segmented line that is not a
+   * draped solid one (those are ground instances a segment), and an
+   * inertial line with a depth-fail style (a primitive turned each frame).
+   */
+  const piecewise = (item) =>
+    (segmented(item) &&
+      !(
+        item.mode === 'draped' &&
+        item.style.kind === 'solid' &&
+        !item.style.outline &&
+        !revealed(item)
+      )) ||
+    (item.frame === 'inertial' && item.mode !== 'draped' && item.depthFail);
+
+  /**
+   * The style a segment of a line draws in: the line's, in the segment's
+   * colour. An arrow's head is on its last segment only, the others solid;
+   * a pattern keeps its image.
+   */
+  function pieceStyle(item, j, last) {
+    const style = item.style;
+    if (style.kind === 'pattern') return style;
+    const color = item.segmentColors?.[j] ?? style.color;
+    if (style.kind === 'arrow' && !last) return { kind: 'solid', color };
+    return { ...style, color };
+  }
+
+  /**
+   * A line drawn piece by piece: a segment a piece for a segmented line
+   * (each its own primitive and material, under a pick id of its own that
+   * reads as the line's, so a segment's colour and show change in place),
+   * else one piece for the whole line. A revealed line reveals each piece
+   * by its share of the line's length. Draped pieces are ground polylines.
+   * Inertial pieces turn with the sky (`turnInertial`).
+   */
+  function linePieces(record, item, host, groundOut) {
+    const id = pickId(record, item);
+    // Its own positions: a geodesic piece is cut along its arc as it is drawn.
+    const points = linePositions({ ...item, mode: '3d' });
+    const part = {
+      look: lineLook(item),
+      id,
+      from: flatPositions(item.positions),
+      reveal: item.revealFraction,
+      pieces: [],
+    };
+    const bySegment = segmented(item);
+    const spans = bySegment
+      ? points.slice(1).map((_, j) => [j, j + 1])
+      : [[0, points.length - 1]];
+    const lengths = spans.map(([a, b]) => {
+      let length = 0;
+      for (let k = a; k < b; k++)
+        length += Cesium.Cartesian3.distance(points[k], points[k + 1]);
+      return length;
+    });
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    let start = 0;
+    spans.forEach(([a, b], j) => {
+      const positions = points.slice(a, b + 1);
+      const begins = start;
+      start += lengths[j];
+      if (!drawable(positions)) {
+        part.pieces.push(null);
+        return;
+      }
+      // Its share of the revealed length, 0..1.
+      const shown = revealed(item)
+        ? Math.min(
+            1,
+            Math.max(
+              0,
+              (item.revealFraction * total - begins) / (lengths[j] || 1),
+            ),
+          )
+        : 1;
+      const pieceId = bySegment ? Object.create(id) : id;
+      if (bySegment) record.pickIds.push(pieceId);
+      const sub = {
+        ...item,
+        positions,
+        style: pieceStyle(item, j, j === spans.length - 1),
+        ...(revealed(item) && shown < 1 ? { revealFraction: shown } : {}),
+      };
+      if (!(revealed(item) && shown < 1)) delete sub.revealFraction;
+      const draped = item.mode === 'draped';
+      const showing = pieceShows(item, j, shown);
+      // A ground piece is built shown, and hidden by its instance's show
+      // once it is ready (before the set's ground shows): one built hidden
+      // would never show. Showing it later needs no build.
+      const primitive = draped
+        ? groundPiece(record, sub, pieceId, true)
+        : depthFailLine(record, sub, pieceId);
+      if (!draped) primitive.show = showing;
+      // Ground pieces swap in with the set's other ground primitives.
+      if (draped) groundOut.push(primitive);
+      else host.add(primitive);
+      if (item.frame === 'inertial' && item.mode !== 'draped')
+        (record.inertialPieces ??= []).push(primitive);
+      part.pieces.push({
+        primitive,
+        j,
+        last: j === spans.length - 1,
+        shown,
+        draped,
+        id: pieceId,
+        pendingShow: draped && !showing ? false : undefined,
+      });
+    });
+    return part;
+  }
+
+  /** Whether a piece shows: its line, its segment and some of it revealed. */
+  const pieceShows = (item, j, shown = 1) =>
+    item.show !== false &&
+    item.segmentShow?.[j] !== false &&
+    !(revealed(item) && shown <= 0);
+
+  /** A draped piece: a ground polyline drawn by its style's material. */
+  function groundPiece(record, item, id, show) {
+    const reveal = revealed(item)
+      ? revealUniform(item.revealFraction)
+      : undefined;
+    return new Cesium.GroundPolylinePrimitive({
+      geometryInstances: [
+        new Cesium.GeometryInstance({
+          geometry: new Cesium.GroundPolylineGeometry({
+            positions: item.positions,
+            width: item.widthPx,
+            arcType: Cesium.ArcType.GEODESIC,
+          }),
+          attributes: { show: new Cesium.ShowGeometryInstanceAttribute(show) },
+          id,
+        }),
+      ],
+      appearance: new Cesium.PolylineMaterialAppearance({
+        material: lineMaterial(record, item.style, reveal),
+      }),
+      classificationType: classificationOf(
+        item.clampTo ?? record.spec.clampTo ?? 'both',
+      ),
+      allowPicking: record.spec.pickable !== false,
+    });
+  }
+
+  /** A pieced line's colours and shows, written in place. */
+  function writePieces(part, item) {
+    for (const piece of part.pieces) {
+      if (!piece || piece.primitive.isDestroyed()) continue;
+      const style = pieceStyle(item, piece.j, piece.last);
+      const material = piece.primitive.appearance.material;
+      if (style.kind !== 'pattern')
+        paintLine(material.materials?.revealed ?? material, style);
+      const show = pieceShows(item, piece.j, piece.shown);
+      if (!piece.draped) piece.primitive.show = show;
+      else if (piece.primitive.ready) {
+        showOn(piece.primitive, piece.id, show);
+        piece.pendingShow = undefined;
+      } else piece.pendingShow = show;
+    }
   }
 
   /** Whether the scene can drape lines (Cesium's ground polylines need
@@ -2175,16 +2356,9 @@ export function createCesiumDraw({
     // Refused before anything changes, so the set keeps drawing as it was.
     for (const item of record.items.values())
       if (item.mode === 'draped' && !DRAPED_STYLES.has(item.style.kind))
-        throw new Error(
-          'the Cesium renderer drapes solid, glow, dash, flow and arrow lines only',
-        );
-      else if (
-        item.frame === 'inertial' &&
-        (item.mode === 'draped' || item.depthFail)
-      )
-        throw new Error(
-          'the Cesium renderer draws inertial lines undraped, without depth-fail colours',
-        );
+        throw new Error(`the Cesium renderer has no ${item.style.kind} lines`);
+      else if (item.frame === 'inertial' && item.mode === 'draped')
+        throw new Error('the Cesium renderer draws inertial lines undraped');
       else if (
         item.mode !== 'draped' &&
         item.depthFail &&
@@ -2194,15 +2368,7 @@ export function createCesiumDraw({
         throw new Error(
           'the Cesium renderer draws solid and dashed lines behind the surface only',
         );
-      else if (
-        segmented(item) &&
-        (item.mode !== 'draped' ||
-          item.style.kind !== 'solid' ||
-          revealed(item))
-      )
-        throw new Error(
-          'the Cesium renderer colours and shows segments of draped solid lines only',
-        );
+
     // Where the scene cannot drape at all, draped lines draw over the
     // surface instead (`overlay`): undraped, in their own colour where the
     // surface hides them, and hidden past the horizon (`cullOverlayLines`).
@@ -2233,7 +2399,16 @@ export function createCesiumDraw({
     // Lines with a depth-fail colour, beside the collection.
     let deep = null;
     const looks = lineLooks();
+    // Lines drawn piece by piece, beside the collection.
+    let pieces = null;
+    const groundPieces = [];
+    record.inertialPieces = [];
     for (const item of items) {
+      if (piecewise(item)) {
+        if (item.mode !== 'draped') pieces ??= new Cesium.PrimitiveCollection();
+        parts.set(item.id, linePieces(record, item, pieces, groundPieces));
+        continue;
+      }
       if (item.mode === 'draped') {
         const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
         const part = {
@@ -2346,21 +2521,22 @@ export function createCesiumDraw({
     // Lines in the collection that can settle into a static batch draw
     // beside it once they do.
     const settling = items.some(settles);
-    if (deep || settling || inertial) {
+    if (deep || settling || inertial || pieces) {
       own = new Cesium.PrimitiveCollection();
       own.add(polylines);
       if (deep) own.add(deep);
       if (inertial) own.add(inertial);
+      if (pieces) own.add(pieces);
     }
     record.deepLines = deep;
     record.inertialLines = inertial;
-    if (inertial) turnInertial(record);
+    if (inertial || record.inertialPieces.length) turnInertial(record);
     record.polylines = polylines;
     record.lineBox = settling ? own : null;
     record.batch = null;
     record.batchPending = null;
     record.settled = 0;
-    if (!draped.size && !glows.size && !alone.length) {
+    if (!draped.size && !glows.size && !alone.length && !groundPieces.length) {
       noteFlows(record);
       return replaceHost(record, own);
     }
@@ -2405,6 +2581,7 @@ export function createCesiumDraw({
       part.ground = drapedPrimitive(record, item, part, false);
       ground.push(part.ground);
     }
+    ground.push(...groundPieces);
     noteFlows(record);
     replaceHost(record, collect(own, ground), ground, own);
   }
@@ -2643,6 +2820,20 @@ export function createCesiumDraw({
     for (const item of list) {
       const was = parts.get(item.id);
       if (!was) return false;
+      // A pieced line takes new colours, shows and meta in place; anything
+      // else about it is built anew.
+      if (was.pieces) {
+        if (
+          !piecewise(item) ||
+          lookOf.look(item) !== was.look ||
+          !flatEquals(item.positions, was.from) ||
+          item.revealFraction !== was.reveal ||
+          was.pieces.some((piece) => piece?.primitive.isDestroyed())
+        )
+          return false;
+        looks.push(was.look);
+        continue;
+      }
       const look = lookOf.look(item);
       // Only its colour may change: its material takes it in place.
       if (
@@ -2680,6 +2871,11 @@ export function createCesiumDraw({
       const item = list[k];
       const was = parts.get(item.id);
       const show = item.show !== false;
+      if (was.pieces) {
+        was.id.meta = item.meta;
+        writePieces(was, item);
+        continue;
+      }
       if (was.polyline || was.parked || was.batched) {
         patchUndraped(record, was, item, looks[k]);
         continue;
@@ -3177,6 +3373,15 @@ export function createCesiumDraw({
       }
     }
     for (const part of record.lineParts?.values() ?? []) {
+      for (const piece of part.pieces ?? [])
+        if (
+          piece?.pendingShow !== undefined &&
+          !piece.primitive.isDestroyed() &&
+          piece.primitive.ready
+        ) {
+          showOn(piece.primitive, piece.id, piece.pendingShow);
+          piece.pendingShow = undefined;
+        }
       if (part.batchHidden && part.batch && !part.batch.isDestroyed())
         showOn(part.batch, part.id, false);
       if (
@@ -4401,7 +4606,8 @@ export function createCesiumDraw({
       cullHorizon();
       runFlows();
       for (const record of sets.values())
-        if (record.inertialLines) turnInertial(record);
+        if (record.inertialLines || record.inertialPieces?.length)
+          turnInertial(record);
       modelSets.beforeRender(sets.values());
       quadSets.beforeRender(sets.values());
     },
