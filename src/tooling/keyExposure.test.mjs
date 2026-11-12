@@ -6,8 +6,7 @@
 // scripts/check-key-exposure.mjs (node scripts/check-key-exposure.mjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'vite';
 import { createBrowserViteConfig } from '../../build/vite.js';
 import { KEY_SETUP_KEYS, keySetupStatus } from '../keySetupCore.mjs';
@@ -47,21 +46,26 @@ test('the scanner itself catches each credential shape', () => {
 });
 
 test('no src module reads a provider key from the build environment', () => {
-  const run = spawnSync(
-    'git',
-    [
-      'grep',
-      '-nE',
-      'import\\.meta\\.env\\??\\.(CESIUM_ION_TOKEN|MAPILLARY_CLIENT_TOKEN)',
-      '--',
-      'src',
-      'build',
-      'server',
-      ':!*.test.*',
-    ],
-    { encoding: 'utf8' },
-  );
-  assert.equal(run.status, 1, `git grep matched:\n${run.stdout}`);
+  // The source text of every non-test module under src, build and server (no
+  // git needed: a tarball or a Docker copy has no .git folder).
+  const root = new URL('../../', import.meta.url);
+  const pattern =
+    /import\.meta\.env\??\.(CESIUM_ION_TOKEN|MAPILLARY_CLIENT_TOKEN)/;
+  const matches = [];
+  let scanned = 0;
+  for (const dir of ['src', 'build', 'server']) {
+    for (const name of readdirSync(new URL(`${dir}/`, root), {
+      recursive: true,
+    })) {
+      if (!/\.(m?js|ts|vue)$/.test(name) || /\.test\./.test(name)) continue;
+      const file = `${dir}/${name}`;
+      scanned += 1;
+      if (pattern.test(readFileSync(new URL(file, root), 'utf8')))
+        matches.push(file);
+    }
+  }
+  assert.ok(scanned > 100, `scanned ${scanned} files`);
+  assert.deepEqual(matches, []);
 });
 
 test('the build config defines no ion or Mapillary token, whatever the caller passes', () => {
