@@ -1329,8 +1329,11 @@ export function portChecks() {
           const s = r.query.project(p);
           return r.query.drillPick(s.x, s.y).some((x) => x.set === 'conf:live');
         };
-        ok(pickAt(along(0.5)), 'drawn delayMs behind wall time');
-        ok(!pickAt(along(0.7)), 'not at wall time');
+        // Measured from the wall time it was drawn at: a first frame may
+        // come a while after the set was made.
+        const late = (h.wallTime(r) - w) / 10000;
+        ok(pickAt(along(0.5 + late)), 'drawn delayMs behind wall time');
+        ok(!pickAt(along(0.7 + late)), 'not at wall time');
         ok(!pickAt(from), 'not held at the start by the scene clock');
         // A second of frames later it has moved on by the wall time passed.
         await drawn(h, r, 60);
