@@ -9,8 +9,9 @@
  * `z + log2(size / 512)` (at least 0), as a 512 px style tile at that zoom shows the
  * same ground; sizes in the style are pixels of the painted tile. A source
  * past its `maxzoom` is drawn from its deepest tile over this one (over-
- * zoomed); below its `minzoom` it draws nothing. A feature whose filter or
- * values cannot be evaluated is left out.
+ * zoomed); below its `minzoom` it draws nothing. A feature whose filter
+ * cannot be evaluated is left out; a value that cannot be is the property's
+ * default.
  *
  * Labels are placed top layer first (a layer's own in their features' order
  * in the tile), each kept clear of those placed
@@ -22,7 +23,7 @@
  */
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
-import { cssOf, fillTokens, Unsupported } from './expressions.js';
+import { cssOf, fillTokens } from './expressions.js';
 
 /** The tile size style zooms are given for, pixels. */
 export const STYLE_TILE_SIZE = 512;
@@ -93,35 +94,49 @@ function sourceTile(style, url, fetchImpl) {
   return tile;
 }
 
-/** A value of a layer for a feature; throws where it cannot be evaluated. */
-const valueOf = (layer, key, f) => layer.values[key]?.(f);
+/** Whether a value is nothing: null, undefined or a number that is not one. */
+const nothing = (v) =>
+  v === null ||
+  v === undefined ||
+  (typeof v === 'number' && !Number.isFinite(v));
 
 /**
- * A number value; throws (the feature is left out) for null, undefined or
- * what is not a finite number, which a canvas would ignore, keeping the
- * last feature's.
+ * A value of a layer for a feature. One that cannot be evaluated, or comes
+ * to nothing, is the property's default, as MapLibre takes it (never the
+ * last feature's, which a canvas given nothing would keep).
  */
+function valueOf(layer, key, f) {
+  let v;
+  try {
+    v = layer.values[key]?.(f);
+  } catch {
+    v = undefined;
+  }
+  return nothing(v) ? layer.defaults?.[key] : v;
+}
+
+/** A number value; the property's default for one that is not a number. */
 function numberOf(layer, key, f) {
   const v = valueOf(layer, key, f);
-  const n = v === null || v === undefined || v === '' ? NaN : Number(v);
-  if (!Number.isFinite(n)) throw new Unsupported(`${key} is ${v}`);
-  return n;
+  const n = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN;
+  return Number.isFinite(n) && v !== '' ? n : Number(layer.defaults?.[key]);
 }
 
-/** A colour value as CSS; throws, as {@link numberOf}, for no colour. */
-function colorOf(layer, key, f) {
-  const v = valueOf(layer, key, f);
-  if (typeof v === 'string' && v.trim()) return v;
-  if (Array.isArray(v) && v.length === 4 && v.every(Number.isFinite))
-    return cssOf(v);
-  throw new Unsupported(`${key} is ${v}`);
+/** A colour as CSS, a string or `[r, g, b, a]`; else the default (or `or`). */
+function colorOf(layer, key, f, or = layer.defaults?.[key]) {
+  const css = (v) => {
+    if (typeof v === 'string' && v.trim()) return v;
+    if (Array.isArray(v) && v.length === 4 && v.every(Number.isFinite))
+      return cssOf(v);
+    return null;
+  };
+  return css(valueOf(layer, key, f)) ?? css(or);
 }
 
-/** A keyword value (`line-cap`, `line-join`); throws for no string. */
+/** A keyword value (`line-cap`, `line-join`); the default for no string. */
 function keywordOf(layer, key, f) {
   const v = valueOf(layer, key, f);
-  if (typeof v !== 'string' || !v) throw new Unsupported(`${key} is ${v}`);
-  return v;
+  return typeof v === 'string' && v ? v : layer.defaults?.[key];
 }
 
 /** Paths a feature's rings or lines in tile pixels. */
@@ -273,7 +288,7 @@ export async function paintVectorTile(
         if (!f.type || !layer.filter(f)) continue;
         drawFeature(ctx, layer, feature, f, at, labels, order);
       } catch {
-        // A filter or value not evaluated: the feature is left out.
+        // A filter not evaluated: the feature is left out.
       }
       ctx.globalAlpha = 1;
       ctx.setLineDash?.([]);
@@ -285,8 +300,8 @@ export async function paintVectorTile(
 
 /**
  * Draw a feature of a fill, line or circle layer; queue a symbol's label.
- * Every value is evaluated before anything is drawn, so a feature with one
- * that cannot be is left out whole.
+ * Every value is evaluated (to the property's default where it cannot be)
+ * before anything is drawn.
  */
 function drawFeature(ctx, layer, feature, f, at, labels, order) {
   const v = (key) => valueOf(layer, key, f);
@@ -297,8 +312,9 @@ function drawFeature(ctx, layer, feature, f, at, labels, order) {
       if (f.type !== 'Polygon') return;
       const opacity = num('fill-opacity');
       const fill = color('fill-color');
+      // An outline that comes to nothing is the fill's colour, as MapLibre's.
       const outline = layer.values['fill-outline-color']
-        ? color('fill-outline-color')
+        ? colorOf(layer, 'fill-outline-color', f, fill)
         : null;
       tracePath(ctx, feature.loadGeometry(), at);
       ctx.globalAlpha = opacity;
@@ -324,12 +340,12 @@ function drawFeature(ctx, layer, feature, f, at, labels, order) {
       const cap = keywordOf(layer, 'line-cap', f);
       const join = keywordOf(layer, 'line-join', f);
       const dashes = layer.values['line-dasharray'] && v('line-dasharray');
-      const dash =
+      let dash =
         Array.isArray(dashes) && gap <= 0
           ? dashes.map((d) => Number(d) * width)
           : null;
-      if (dash && !dash.every(Number.isFinite))
-        throw new Unsupported(`line-dasharray is ${dashes}`);
+      // A dash array that is not numbers: solid, its default.
+      if (dash && !dash.every(Number.isFinite)) dash = null;
       tracePath(ctx, feature.loadGeometry(), at);
       ctx.globalAlpha = opacity;
       ctx.strokeStyle = stroke;
@@ -393,12 +409,12 @@ function drawFeature(ctx, layer, feature, f, at, labels, order) {
       }
       const px = num('text-size');
       const offset = layer.values['text-offset'] ? v('text-offset') : [0, 0];
-      const dx = Number(offset?.[0] ?? 0) * px;
-      const dy = Number(offset?.[1] ?? 0) * px;
+      let dx = Number(offset?.[0] ?? 0) * px;
+      let dy = Number(offset?.[1] ?? 0) * px;
+      // An offset that is not numbers: none, its default.
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) dx = dy = 0;
       const maxWidth =
         (layer.values['text-max-width'] ? num('text-max-width') : 10) * px;
-      if (!Number.isFinite(dx) || !Number.isFinite(dy))
-        throw new Unsupported(`text-offset is ${offset}`);
       const label = {
         text,
         px,

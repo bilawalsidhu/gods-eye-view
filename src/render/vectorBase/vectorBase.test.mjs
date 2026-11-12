@@ -292,11 +292,12 @@ test('past its maxzoom a source is drawn from its deepest tile, overzoomed', asy
   assert.equal(asked.length, before);
 });
 
-test('a feature whose value cannot be evaluated is left out, the rest drawn', async () => {
+test('a value that cannot be evaluated is the property’s default; a filter that cannot leaves the feature out', async () => {
   const tile = encodeVectorTile({
     water: [
       { type: 'Polygon', geometry: FULL, properties: { depth: 'deep' } },
       { type: 'Polygon', geometry: FULL, properties: { depth: 3 } },
+      { type: 'Polygon', geometry: FULL, properties: { depth: 3, rank: 'x' } },
     ],
   });
   const { fetch } = fetchOver({
@@ -309,6 +310,7 @@ test('a feature whose value cannot be evaluated is left out, the rest drawn', as
           type: 'fill',
           source: 'base',
           'source-layer': 'water',
+          filter: ['<', ['+', ['coalesce', ['get', 'rank'], 0], 1], 5],
           paint: {
             'fill-opacity': ['/', ['get', 'depth'], 10],
             'fill-color': '#00f',
@@ -321,14 +323,17 @@ test('a feature whose value cannot be evaluated is left out, the rest drawn', as
   const style = await loadVectorStyle('https://example.test/s.json', fetch);
   const { canvas, calls } = recordingCanvas();
   await paintVectorTile(style, 0, 0, 0, { fetch, canvas });
-  assert.equal(calls.filter(([k]) => k === 'fill').length, 1);
-  assert.deepEqual(
-    calls
-      .filter(([k]) => k === '=globalAlpha')
-      .map(([, v]) => v)
-      .filter((v) => v !== 1),
-    [0.3],
-  );
+  // The third's filter adds to a string: left out. The first's opacity
+  // divides a string: its default, 1.
+  assert.equal(calls.filter(([k]) => k === 'fill').length, 2);
+  // The alpha each fill is drawn at.
+  let alpha;
+  const filled = [];
+  for (const [k, v] of calls) {
+    if (k === '=globalAlpha') alpha = v;
+    if (k === 'fill') filled.push(alpha);
+  }
+  assert.deepEqual(filled, [1, 0.3]);
 });
 
 test('a legacy function without a type steps on a property that cannot interpolate', () => {
@@ -439,7 +444,7 @@ async function paintOne(layer, features) {
   return calls;
 }
 
-test('a feature whose colour or width evaluates to nothing is left out, not drawn in the last one’s', async () => {
+test('a colour or width that evaluates to nothing is the property’s default, never the last feature’s', async () => {
   const fills = await paintOne(
     {
       id: 'water',
@@ -454,10 +459,10 @@ test('a feature whose colour or width evaluates to nothing is left out, not draw
       ],
     },
   );
-  assert.equal(fills.filter(([k]) => k === 'fill').length, 1);
+  assert.equal(fills.filter(([k]) => k === 'fill').length, 2);
   assert.deepEqual(
     fills.filter(([k]) => k === '=fillStyle').map(([, v]) => v),
-    ['#00f'],
+    ['#00f', '#000000'],
   );
   const line = [
     [
@@ -480,10 +485,14 @@ test('a feature whose colour or width evaluates to nothing is left out, not draw
       ],
     },
   );
-  assert.equal(lines.filter(([k]) => k === 'stroke').length, 1);
+  assert.equal(lines.filter(([k]) => k === 'stroke').length, 3);
   assert.deepEqual(
     lines.filter(([k]) => k === '=strokeStyle').map(([, v]) => v),
-    ['#f00'],
+    ['#f00', '#000000', '#0f0'],
+  );
+  assert.deepEqual(
+    lines.filter(([k]) => k === '=lineWidth').map(([, v]) => v),
+    [3, 2, 1],
   );
   const circles = await paintOne(
     {
@@ -499,7 +508,73 @@ test('a feature whose colour or width evaluates to nothing is left out, not draw
       ],
     },
   );
-  assert.equal(circles.filter(([k]) => k === 'arc').length, 1);
+  assert.deepEqual(
+    circles.filter(([k]) => k === 'arc').map((call) => call[3]),
+    [4, 5],
+    'the second at the default radius',
+  );
+});
+
+test('a step over a missing value, and a categorical miss with no default, are the property’s default', async () => {
+  const line = [
+    [
+      [0, 2048],
+      [4096, 2048],
+    ],
+  ];
+  const calls = await paintOne(
+    {
+      id: 'roads',
+      type: 'line',
+      'source-layer': 'roads',
+      paint: {
+        'line-width': ['step', ['get', 'rank'], 2, 5, 8],
+        'line-color': {
+          property: 'kind',
+          type: 'categorical',
+          stops: [['major', '#f00']],
+        },
+      },
+    },
+    {
+      roads: [
+        {
+          type: 'LineString',
+          geometry: line,
+          properties: { rank: 6, kind: 'major' },
+        },
+        { type: 'LineString', geometry: line, properties: { kind: 'minor' } },
+      ],
+    },
+  );
+  assert.deepEqual(
+    calls.filter(([k]) => k === '=lineWidth').map(([, v]) => v),
+    [8, 1],
+  );
+  assert.deepEqual(
+    calls.filter(([k]) => k === '=strokeStyle').map(([, v]) => v),
+    ['#f00', '#000000'],
+  );
+});
+
+test('a background colour given as rgba numbers is the style’s background', async () => {
+  const { fetch } = fetchOver({
+    'https://example.test/s.json': {
+      version: 8,
+      sources: {},
+      layers: [
+        {
+          id: 'bg',
+          type: 'background',
+          paint: {
+            'background-color': ['to-color', ['literal', [0, 0, 255, 1]]],
+          },
+        },
+      ],
+    },
+  });
+  const style = await loadVectorStyle('https://example.test/s.json', fetch);
+  assert.deepEqual(style.background, { color: 'rgba(0,0,255,1)', opacity: 1 });
 });
 
 test('labels of one layer are placed in their features’ order, the first winning', async () => {

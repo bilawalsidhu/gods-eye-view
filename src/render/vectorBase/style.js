@@ -6,7 +6,12 @@
  * and its background. A layer the painter cannot draw is listed in `skipped`
  * with the reason, never drawn wrong.
  */
-import { compileFilter, compileValue, Unsupported } from './expressions.js';
+import {
+  compileFilter,
+  compileValue,
+  cssOf,
+  Unsupported,
+} from './expressions.js';
 
 /** Layer types the painter draws. */
 export const PAINTED_TYPES = Object.freeze([
@@ -112,6 +117,19 @@ const DEFAULTS = {
   },
 };
 
+/**
+ * Defaults a value that cannot be evaluated falls back to, beyond those the
+ * painter always reads (`DEFAULTS`): the specification's.
+ */
+const FALLBACKS = {
+  symbol: {
+    'text-field': '',
+    'text-anchor': 'center',
+    'text-offset': [0, 0],
+    'text-max-width': 10,
+  },
+};
+
 /** `url` resolved against `base`; a data or blob URL as it is. */
 function resolve(url, base) {
   if (/^(data|blob):/i.test(url)) return url;
@@ -171,6 +189,8 @@ function compileLayer(layer, sources) {
         maxzoom: layer.maxzoom ?? 24,
         filter: compileFilter(layer.filter),
         values,
+        // What a value that cannot be evaluated, or comes to nothing, is.
+        defaults: { ...FALLBACKS[type], ...DEFAULTS[type] },
         hasText: type === 'symbol' && layout['text-field'] !== undefined,
         // A text field not an expression fills `{name}` tokens.
         tokens: !Array.isArray(layout['text-field']),
@@ -242,12 +262,19 @@ export async function loadVectorStyle(
     if (layer.type === 'background' && !background)
       try {
         const at = { zoom: 0, properties: {}, type: 'Polygon' };
-        const color = layer.values['background-color'](at);
+        const value = layer.values['background-color'](at);
+        // A colour as a string, or `[r, g, b, a]` (as `to-color` gives one).
+        const color =
+          typeof value === 'string'
+            ? value
+            : Array.isArray(value) &&
+                value.length === 4 &&
+                value.every(Number.isFinite)
+              ? cssOf(value)
+              : null;
         const opacity = layer.values['background-opacity'](at);
         background =
-          typeof color === 'string' && Number.isFinite(opacity)
-            ? { color, opacity }
-            : null;
+          color && Number.isFinite(opacity) ? { color, opacity } : null;
       } catch {
         background = null;
       }

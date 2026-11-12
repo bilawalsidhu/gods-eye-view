@@ -5,8 +5,10 @@
  * value is compiled once into a function of `{zoom, properties, type, id}`
  * (`type` is `'Point'`, `'LineString'` or `'Polygon'`). Compiling throws an
  * {@link Unsupported} for what is not covered, so the caller skips the layer;
- * a compiled function that meets a value it cannot handle throws one too, so
- * the caller skips the feature. Nothing here guesses.
+ * a compiled function that meets a value it cannot handle throws one too: a
+ * filter that throws leaves the feature out, a paint or layout value that
+ * throws is the property's default (as MapLibre takes it). Nothing here
+ * guesses.
  */
 
 /** What the painter does not evaluate: the layer or feature is skipped. */

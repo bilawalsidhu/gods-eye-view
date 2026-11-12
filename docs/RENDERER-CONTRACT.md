@@ -345,10 +345,13 @@ What it draws of the style specification:
   `sky` layers; layers on raster sources; layers setting a pattern
   (`fill-pattern`, `line-pattern`, `background-pattern`), `line-offset`,
   `line-gradient` or a translation; layers whose values use an expression
-  not listed (or are malformed). A feature whose values cannot be evaluated
-  (a type that does not fit, a `step` or `interpolate` over what is not a
-  number, or a value that comes to nothing: null, or not a finite number
-  where one is needed) is left out. Nothing unsupported throws.
+  not listed (or are malformed). As MapLibre does, a paint or layout value
+  that cannot be evaluated for a feature (a type that does not fit, a
+  `step` or `interpolate` over what is not a number) or comes to nothing
+  (null, or not a finite number where one is needed) is the property's
+  default; a legacy function's miss is its `default`, else the property's.
+  A feature whose filter cannot be evaluated is left out. Nothing
+  unsupported throws.
 - Ignored: icons (`icon-image`, sprites: a symbol layer draws its text
   alone), text along lines (drawn level), `glyphs` (system fonts), and any
   other paint or layout property not listed above.
