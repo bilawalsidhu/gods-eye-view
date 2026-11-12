@@ -14,7 +14,9 @@
  * (`/api/terrain/heights`, `/api/overpass`) reuse this core through
  * `admitSameSiteKeyless` with the forwarding-header refusal switched off, as
  * does `/api/ion/*` (through `admitSameSiteBehindProxy`): it is needed to
- * render and hands out only short-lived, single-asset endpoint documents.
+ * render. What it hands out is ion's endpoint document for an allow-listed
+ * asset (see server/providers/keyIsolation/ionEndpoint.js for what each
+ * holds), never the account token.
  *
  * This module is the pure core that refuses those shapes while keeping the
  * documented `HOST=0.0.0.0` LAN opt-in and non-browser loopback tools (the two

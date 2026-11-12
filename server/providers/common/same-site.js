@@ -63,16 +63,20 @@ function forwardedProtocol(req) {
  * same-origin/none, a foreign or opaque `Origin`) but does not refuse
  * reverse-proxy forwarding headers: refusing them would break rendering for
  * an instance served behind a proxy. A single `X-Forwarded-Proto` supplies
- * the scheme an `Origin` is compared against. That header cannot be attached
- * to a cross-site browser request without a CORS preflight this server never
- * answers, and `Sec-Fetch-Site` is still enforced regardless.
+ * the scheme an `Origin` is compared against. It only picks which scheme of
+ * the request's own `Host` that comparison uses; a page on another origin is
+ * refused by `Sec-Fetch-Site` (a cross-site or same-site fetch) and by the
+ * `Origin` comparison (a foreign host matches under neither scheme) whatever
+ * the header says. A client that is not a browser can send any header, and is
+ * not what this gate defends against.
  *
  * Use it for keyless routes (`admitSameSiteKeyless` is the same gate under
  * the name those routes use: they hold no credential and spend nothing, which
  * is what the forwarding-header refusal protects) and for the one keyed
- * exception, `/api/ion/*`: Cesium ion has to answer for the page to render,
- * and what that route hands out is only ion's short-lived, single-asset
- * endpoint document, never the account token.
+ * exception, `/api/ion/*`: Cesium ion has to answer for the page to render.
+ * What that route hands out is ion's endpoint document for an allow-listed
+ * asset (see server/providers/keyIsolation/ionEndpoint.js for what each
+ * holds), never the account token.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @returns {boolean} True when a 403 was sent.
