@@ -8,6 +8,7 @@ import {
   cockpitAnchorCorrectionStep,
   cockpitAltitudeDisplayFt,
   cockpitGroundSafeHeight,
+  cockpitSubjectStepSec,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
   COCKPIT_SUBJECT_LIFT_MPS,
@@ -56,6 +57,28 @@ test('cockpit anchor correction bounds late-fix catch-up and render stalls', () 
   assert.ok(cockpitAnchorCorrectionStep(5000, 250, 2) <= 5.5);
   assert.equal(cockpitAnchorCorrectionStep(0, 250, 0.1), 0);
   assert.equal(cockpitAnchorCorrectionStep(Number.NaN, 250, 0.1), 0);
+});
+
+test('an application subject on a slow cadence is corrected for its whole step', () => {
+  // The built-in views' step stays capped at 0.1 s...
+  const capped = cockpitAnchorCorrectionStep(100, 0, 0.5);
+  assert.equal(capped, cockpitAnchorCorrectionStep(100, 0, 0.1));
+  // ...while a subject updated every 500 ms is corrected for all of it.
+  const whole = cockpitAnchorCorrectionStep(100, 0, 0.5, 0.5);
+  assert.ok(Math.abs(whole / capped - 5) < 1e-9);
+  assert.equal(cockpitAnchorCorrectionStep(100, 0, 0.5, Number.NaN), capped);
+});
+
+test('an application subject steps by its interval, never by a long stall', () => {
+  assert.equal(cockpitSubjectStepSec(16, 0), 0.016);
+  assert.equal(cockpitSubjectStepSec(500, 500), 0.5);
+  assert.equal(cockpitSubjectStepSec(520, 500), 0.52);
+  // A hidden tab's minutes count as one late update.
+  assert.equal(cockpitSubjectStepSec(60_000, 500), 0.6);
+  assert.equal(cockpitSubjectStepSec(60_000, 0), 0.1);
+  assert.equal(cockpitSubjectStepSec(-5, 500), 0);
+  assert.equal(cockpitSubjectStepSec(Number.NaN, 500), 0);
+  assert.equal(cockpitSubjectStepSec(1000, Number.NaN), 0.1);
 });
 
 test('cockpit camera clearance never falls below the rendered ground floor', () => {

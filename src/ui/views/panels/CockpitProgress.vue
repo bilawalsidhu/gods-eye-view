@@ -5,7 +5,9 @@ import { cockpitProgressLayout } from '../../../cockpitProgress.js';
 // A provider subject's progress line (src/cockpitSubjectProviders.js): a thin
 // line along the bottom of the view, its ticks, labels and marker laid out
 // at the line's own width (src/cockpitProgress.js). The part before the
-// marker is dimmed. Everything it shows is worded by the provider.
+// marker is dimmed. Everything it shows is worded by the provider. It is an
+// image named by the provider's summary; with no summary it is decoration,
+// hidden from assistive technology.
 
 const props = defineProps({
   progress: { type: Object, required: true },
@@ -41,7 +43,7 @@ const percent = (x) => `${((x / width.value) * 100).toFixed(3)}%`;
 </script>
 
 <template>
-  <div ref="root" class="cockpit-progress" role="img" :aria-label="progress.summary || undefined">
+  <div ref="root" class="cockpit-progress" :role="progress.summary ? 'img' : undefined" :aria-label="progress.summary || undefined" :aria-hidden="progress.summary ? undefined : 'true'">
     <template v-if="layout">
       <div class="cockpit-progress-line" aria-hidden="true">
         <span class="cockpit-progress-travelled" :style="{ width: percent(layout.travelledX) }"></span>

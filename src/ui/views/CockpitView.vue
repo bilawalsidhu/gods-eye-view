@@ -266,7 +266,8 @@ const tickStyle = (tick) =>
     </div>
     <div v-if="!orbital" class="cockpit-compass" :aria-label="generic ? hudLabel : bridge ? t('Current vessel heading') : t('Current aircraft heading')">
       <div class="cockpit-instrument-row">
-        <div class="cockpit-readout cockpit-speed">
+        <!-- A provider's HUD view without a speed has no speed readout. -->
+        <div v-if="!generic || hud.speed" class="cockpit-readout cockpit-speed">
           <span v-if="!generic" class="cockpit-readout-label">{{ bridge ? t('SPEED OVER GROUND') : t('GROUND SPEED') }}</span>
           <span v-else-if="hud.speedTag" class="cockpit-readout-label cockpit-speed-tag" :data-tone="hud.speedTone">{{ hud.speedTag }}</span>
           <CockpitRollingValue id="cockpit-speed-value" tag="strong" :reading="hud.speed" placeholder="---" />

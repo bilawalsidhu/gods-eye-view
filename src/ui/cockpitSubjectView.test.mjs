@@ -16,6 +16,7 @@ import ContextView from './views/ContextView.vue';
 import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import { getLocale, setLocale } from '../i18n/index.js';
 import { COCKPIT_GROUND_WAIT_TIMEOUT_MS } from './cockpitPresentation.js';
+import { COCKPIT_SUBJECT_LIFT_MPS } from '../cockpitMath.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 
 const LAT = 47;
@@ -408,6 +409,47 @@ test('entry holds the subject, takes the camera and shows the generic HUD', asyn
   assert.ok(shots.length >= 1 || cockpit.lastSubjectFrame);
 });
 
+test('a HUD view with no speed shows no speed readout; one with no value shows it unknown', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.hud = { ...HUD, speed: undefined };
+  const { $, cockpit } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  await settle();
+  assert.ok($('.cockpit-speed') === null, 'no speed readout');
+  assert.ok($('#cockpit-speed-value') === null, 'no speed value');
+  assert.ok($('#cockpit-heading-value') !== null, 'the heading stays');
+  ride.subject.hud = { ...HUD, speed: { value: null, unit: 'km/h' } };
+  clock.advance(1000);
+  cockpit.update();
+  await settle();
+  assert.match($('.cockpit-speed').textContent, /---/);
+  assert.match($('.cockpit-speed').textContent, /km\/h/);
+});
+
+test('a progress line is an image named by its summary, else hidden from assistive technology', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.hud = { ...HUD, progress: { ...HUD.progress, summary: '' } };
+  const { $, cockpit } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  await settle();
+  let progress = $('.cockpit-progress');
+  assert.equal(progress.hasAttribute('role'), false);
+  assert.equal(progress.hasAttribute('aria-label'), false);
+  assert.equal(progress.getAttribute('aria-hidden'), 'true');
+  ride.subject.hud = HUD;
+  clock.advance(1000);
+  cockpit.update();
+  await settle();
+  progress = $('.cockpit-progress');
+  assert.equal(progress.getAttribute('role'), 'img');
+  assert.equal(progress.getAttribute('aria-label'), HUD.progress.summary);
+  assert.equal(progress.hasAttribute('aria-hidden'), false);
+});
+
 test('the eye stands its height above the frame, and the ground clamp can be lifted', async (t) => {
   const clock = manualClock(t, 10_000);
   const ride = subjectProvider();
@@ -424,7 +466,8 @@ test('the eye stands its height above the frame, and the ground clamp can be lif
   assert.equal(shots.length, before + 1);
   // Inside a structure the frame stands below the rendered floor: clamped,
   // the eye is pushed out of the floor at once and its clearance eases in;
-  // with groundClamp false it stays.
+  // a view entered with groundClamp false stays inside (a clamp lifted
+  // mid-ride lets the eye down gradually, below).
   setFloor(FLOOR_M + 200);
   clock.advance(16);
   cockpit.update();
@@ -437,6 +480,9 @@ test('the eye stands its height above the frame, and the ground clamp can be lif
   }
   assert.ok(shotHeight(shots) >= FLOOR_M + 200 + 1.5 - 0.01, 'clamped');
   ride.subject.frame = { ...ride.subject.frame, groundClamp: false };
+  cockpit.exit();
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
   clock.advance(16);
   cockpit.update();
   assert.ok(
@@ -449,6 +495,89 @@ test('the eye stands its height above the frame, and the ground clamp can be lif
   clock.advance(16);
   cockpit.update();
   assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
+});
+
+test('a ground clamp lifted mid-ride lets the eye down at the rate it came up', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  clock.advance(16);
+  cockpit.update();
+  // The floor rises to the eye: its clearance eases in.
+  setFloor(FLOOR_M + 3.5);
+  for (let i = 0; i < 80; i += 1) {
+    clock.advance(16);
+    cockpit.update();
+  }
+  assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 5)) < 0.01, 'clamped');
+  // Into a structure: the lift goes at the same rate, not at once.
+  ride.subject.frame = { ...ride.subject.frame, groundClamp: false };
+  clock.advance(100);
+  cockpit.update();
+  assert.ok(
+    Math.abs(
+      shotHeight(shots) - (FLOOR_M + 5 - COCKPIT_SUBJECT_LIFT_MPS * 0.1),
+    ) < 0.01,
+    'eased out',
+  );
+  for (let i = 0; i < 12; i += 1) {
+    clock.advance(100);
+    cockpit.update();
+  }
+  assert.ok(
+    Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01,
+    'inside the structure',
+  );
+});
+
+test('a subject updated every 500 ms turns, eases and closes on its target at its rates', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider({ cameraIntervalMs: 500, headingSlewDps: 10 });
+  ride.subject.frame = {
+    ...ride.subject.frame,
+    anchor: 'inertial',
+    speedMps: 0,
+  };
+  const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  clock.advance(500);
+  cockpit.update();
+  assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
+  // One 500 ms update: the subject turns, the floor rises to the eye and the
+  // frame moves 100 m east of the anchor. Each rate advances by the 0.5 s,
+  // five times the 0.1 s a frame's step is capped at.
+  ride.subject.frame = {
+    ...ride.subject.frame,
+    headingDeg: 180,
+    longitude: LON + 100 / (111_320 * Math.cos(Cesium.Math.toRadians(LAT))),
+  };
+  setFloor(FLOOR_M + 3.5);
+  clock.advance(500);
+  cockpit.update();
+  assert.ok(Math.abs(cockpit.heading - 95) < 1e-6, 'heading 10°/s × 0.5 s');
+  assert.ok(
+    Math.abs(
+      shotHeight(shots) - (FLOOR_M + 3.5 + COCKPIT_SUBJECT_LIFT_MPS * 0.5),
+    ) < 0.01,
+    'lift 1.5 m/s × 0.5 s',
+  );
+  const ground = (shot) => {
+    const at = Cesium.Cartographic.fromCartesian(shot.destination);
+    return Cesium.Cartesian3.fromRadians(at.longitude, at.latitude, 0);
+  };
+  const closedM = Cesium.Cartesian3.distance(
+    ground(shots.at(-1)),
+    ground(shots.at(-2)),
+  );
+  // A standing subject's anchor closes at the correction's 0.75 m/s.
+  assert.ok(Math.abs(closedM - 0.75 * 0.5) < 0.01, 'anchor 0.75 m/s × 0.5 s');
+  // A long stall (a hidden tab) moves it as one late update would.
+  clock.advance(60_000);
+  cockpit.update();
+  assert.ok(Math.abs(cockpit.heading - 101) < 1e-6, 'at most 0.6 s');
 });
 
 test('an exact anchor sits on the subject, wherever the frame moves it', async (t) => {

@@ -162,6 +162,10 @@
 #cockpit-hud[data-generic] .cockpit-speed-tag {
   font-weight: 700;
 }
+/* With no speed readout the heading still holds the middle of the row. */
+#cockpit-hud[data-generic] .cockpit-heading-value {
+  grid-column: 2;
+}
 #cockpit-hud[data-generic] .cockpit-aircraft-meta[data-tone='warning'],
 #cockpit-hud[data-generic] .cockpit-aircraft-meta[data-tone='alert'] {
   font-weight: 700;

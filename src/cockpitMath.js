@@ -32,8 +32,15 @@ export function slewHeading(current, target, maxStepDeg) {
  * then uses this amount to converge on the layer's delayed display position.
  * Capping correction below forward speed prevents a late feed fix from
  * becoming a first-person surge or reversal while still removing drift.
+ * @param {number} [maxDtSec] The longest step corrected for: 0.1 s, or an
+ *   application subject's own (cockpitSubjectStepSec).
  */
-export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
+export function cockpitAnchorCorrectionStep(
+  distanceM,
+  speedMps,
+  dtSec,
+  maxDtSec = 0.1,
+) {
   if (
     !Number.isFinite(distanceM) ||
     distanceM <= 0 ||
@@ -41,11 +48,34 @@ export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
     dtSec <= 0
   )
     return 0;
-  const dt = Math.min(0.1, dtSec);
+  const dt = Math.min(
+    Number.isFinite(maxDtSec) && maxDtSec > 0 ? maxDtSec : 0.1,
+    dtSec,
+  );
   const speed = Number.isFinite(speedMps) ? Math.max(0, speedMps) : 0;
   const eased = distanceM * (1 - Math.exp(-1.25 * dt));
   const correctionRateMps = Math.max(0.75, speed * 0.22);
   return Math.min(distanceM, eased, correctionRateMps * dt);
+}
+
+/**
+ * The seconds an application subject's camera update advances its heading
+ * slew, ground lift and anchor by: the time since the last update, at most
+ * its update interval plus 0.1 s. A subject updated every 500 ms then turns
+ * and eases at its configured rates, while a long stall (a hidden tab) still
+ * moves it no further than one late update would.
+ * @param {number} elapsedMs Time since the last camera update.
+ * @param {number} intervalMs The subject's update interval (0: every frame).
+ * @returns {number}
+ */
+export function cockpitSubjectStepSec(elapsedMs, intervalMs) {
+  const elapsedSec = Number.isFinite(elapsedMs)
+    ? Math.max(0, elapsedMs) / 1000
+    : 0;
+  const intervalSec = Number.isFinite(intervalMs)
+    ? Math.max(0, intervalMs) / 1000
+    : 0;
+  return Math.min(intervalSec + 0.1, elapsedSec);
 }
 
 /** Return whether a throttled cockpit presentation update is due. */

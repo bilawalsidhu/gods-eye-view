@@ -4,6 +4,7 @@ import {
   cockpitAnchorCorrectionStep,
   cockpitGroundSafeHeight,
   easeCockpitLift,
+  cockpitSubjectStepSec,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
   slewHeading,
@@ -308,7 +309,8 @@ function updateVessel(nowMs) {
  * stand the eye `eye.upM` above `heightM` (the shared floor where the frame
  * gives none) and slew toward its heading. A frame that is null, malformed or
  * for another subject ends the view, as an aircraft tracked meanwhile does.
- * The update runs on the provider's `cameraIntervalMs` (0: every frame).
+ * The update runs on the provider's `cameraIntervalMs` (0: every frame), and
+ * its rates advance by the time that interval spans (cockpitSubjectStepSec).
  */
 function updateSubject(nowMs) {
   const provider = this.subjectProvider;
@@ -316,14 +318,8 @@ function updateSubject(nowMs) {
     this.exit({ restoreTracking: false });
     return;
   }
-  if (
-    !cockpitUiUpdateDue(
-      nowMs,
-      this.lastCameraUpdateMs,
-      provider.cameraIntervalMs ?? COCKPIT_CAMERA_UPDATE_MS,
-    )
-  )
-    return;
+  const intervalMs = provider.cameraIntervalMs ?? COCKPIT_CAMERA_UPDATE_MS;
+  if (!cockpitUiUpdateDue(nowMs, this.lastCameraUpdateMs, intervalMs)) return;
   this.lastCameraUpdateMs = nowMs;
   const frame = cockpitSubjectFrame(
     this.callSubject(provider, 'read', [nowMs, this.subjectContext()], null),
@@ -385,7 +381,7 @@ function updateSubject(nowMs) {
     Cesium.Ellipsoid.WGS84,
     this.scratchTarget,
   );
-  const dtSec = Math.min(0.1, Math.max(0, (nowMs - this.lastFrameMs) / 1000));
+  const dtSec = cockpitSubjectStepSec(nowMs - this.lastFrameMs, intervalMs);
   this.lastFrameMs = nowMs;
   if (frame.headingDeg !== null) {
     const rate = provider.headingSlewDps ?? COCKPIT_HEADING_SLEW_DPS;
@@ -429,7 +425,7 @@ function updateSubject(nowMs) {
  * the eye against the rendered surface, and look along the slewed heading.
  * A subject with `anchor: 'exact'` keeps the anchor on its target (its layer
  * already moves it smoothly), and one with `groundClamp: false` (inside a
- * structure, say) is never pushed up to the floor.
+ * structure, say) is never pushed up to the floor: a lift it had eases out.
  * @param {Cesium.Cartesian3} target Authoritative subject position.
  * @param {object} info Subject info; `motionCourse` (when present) is the
  *   direction the subject moves, otherwise it moves where it faces.
@@ -509,10 +505,13 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     const correctionDistanceM = Cesium.Cartesian3.magnitude(
       this.scratchCorrection,
     );
+    // An application subject's step is already bounded by its own update
+    // interval (cockpitSubjectStepSec); the built-in views keep the 0.1 s.
     const correctionStepM = cockpitAnchorCorrectionStep(
       correctionDistanceM,
       speedMps,
       dtSec,
+      info.generic === true ? dtSec : undefined,
     );
     if (correctionStepM > 0 && correctionDistanceM > 0) {
       Cesium.Cartesian3.multiplyByScalar(
@@ -756,8 +755,16 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
       );
     }
   } else if (info.generic === true) {
-    // Inside a structure there is no clearance to give back.
-    this.subjectLiftM = 0;
+    // Inside a structure the floor holds the eye up no more: the lift it gave
+    // goes at the rate it came (easeCockpitLift), never at once.
+    this.subjectLiftM = easeCockpitLift(this.subjectLiftM, 0, 0, dtSec);
+    if (cameraCartographic && this.subjectLiftM > 0) {
+      cameraCartographic.height += this.subjectLiftM;
+      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
+        cameraCartographic,
+        this.scratchCamera,
+      );
+    }
   }
 
   this.viewer.camera.setView({
