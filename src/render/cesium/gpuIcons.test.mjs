@@ -502,12 +502,10 @@ test('an icon set stays on billboards until an item needs the GPU', () => {
   const stays = draw.icons({ id: 'gpu:stays' });
   stays.set([icon('a', { anchor: 'bottom' })]);
   assert.equal(part.sets.get('gpu:stays').gpu, undefined, 'billboards');
-  // A blend GPU icons do not draw is refused, not ignored.
+  // Every blend moves over: it is turned where the commands are drawn.
   const additive = draw.icons({ id: 'gpu:additive', blend: 'additive' });
-  assert.throws(
-    () => additive.set([icon('a', { motion: { kind: 'hold' } })]),
-    /additive blend/,
-  );
+  additive.set([icon('a', { motion: { kind: 'hold' } })]);
+  assert.ok(part.sets.get('gpu:additive').gpu, 'on the GPU');
   assert.ok(scene.added.length >= 1);
 });
 

@@ -178,6 +178,20 @@ members' billboards; a set on the GPU (`columns`, or moving, receding,
 proxy-picked or level-of-detail icons) refuses clustering. The check
 `draw.icons.cluster` draws a cluster, picks it, and parts it by moving in.
 
+A set's `blend` holds for every kind of set: omitted, opaque parts draw
+opaque with depth writes and translucent ones blend without; `opaque` draws
+every item opaque, its alpha ignored, with depth writes; `translucent` blends
+every item without depth writes, even at alpha 1; `additive` adds each item's
+colour times its alpha, without depth writes and still depth-tested. It
+changes live (`setOptions`, from the next frame; models do not load again).
+The Cesium port builds billboards and points in Cesium's blend options, and
+turns every set's draw commands to its blend each frame before the scene
+sorts them (`src/render/cesium/setBlend.js`): additive ones draw after every
+opaque command and before the translucent pass, which blends
+order-independently and would undo the addition; ground commands keep their
+pass and stencil and only blend differently. The checks `draw.sets.blend`
+(points, icons, lines, shapes) and `draw.models.blend` read the pixels.
+
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass; draped too), lines in the
 `inertial` frame (turned each frame by the set's motion clock, a depth-fail

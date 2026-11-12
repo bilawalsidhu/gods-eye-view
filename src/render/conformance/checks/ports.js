@@ -26,6 +26,11 @@ const DOT = {
   svg: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="8" fill="#fff"/></svg>',
 };
 
+/** A white square, solid to its edges. */
+const SQUARE = {
+  svg: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="#fff"/></svg>',
+};
+
 async function fresh(h) {
   return h.create({ viewport: SCRIPT_VIEWPORT });
 }
@@ -2357,6 +2362,175 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.sets.blend',
+      'a set’s blend draws its items as it says, changed live: none blends translucent items; opaque ignores alpha; translucent blends; additive adds colour, still behind what is nearer',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const rect = (dLon, dLat, d) => ({
+          west: AUSTIN.lon + dLon - d,
+          south: AUSTIN.lat + dLat - d,
+          east: AUSTIN.lon + dLon + d,
+          north: AUSTIN.lat + dLat + d,
+        });
+        // Green under it all; blue nearer the eye over the second spot.
+        const under = r.draw.shapes({ id: 'conf:blend-under' });
+        under.set([
+          {
+            id: 'green',
+            geometry: { kind: 'rectangle', rect: rect(0, 0, 0.003), height: 0 },
+            fill: '#00ff00',
+            height: 'absolute',
+          },
+          {
+            id: 'blue',
+            geometry: {
+              kind: 'rectangle',
+              rect: rect(0.0015, 0, 0.0004),
+              height: 300,
+            },
+            fill: '#0000ff',
+            height: 'absolute',
+          },
+        ]);
+        const spotA = h.toEcef({ ...AUSTIN, height: 50 });
+        const spotB = h.toEcef({
+          lon: AUSTIN.lon + 0.0015,
+          lat: AUSTIN.lat,
+          height: 50,
+        });
+        const pixel = (pos) => {
+          r.frame.renderNow();
+          const s = r.query.project(pos);
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x) - 1,
+              y: Math.round(s.y) - 1,
+              width: 3,
+              height: 3,
+            },
+          });
+          const i = (1 * image.width + 1) * 4;
+          return [...image.data.slice(i, i + 3)];
+        };
+        const kinds = {
+          points: (alpha) => [
+            { id: 'a', pos: spotA, pixelSize: 24, color: [1, 0, 0, alpha] },
+            { id: 'b', pos: spotB, pixelSize: 24, color: [1, 0, 0, alpha] },
+          ],
+          icons: (alpha) => [
+            {
+              id: 'a',
+              pos: spotA,
+              image: SQUARE,
+              size: [24, 24],
+              color: [1, 0, 0, alpha],
+            },
+            {
+              id: 'b',
+              pos: spotB,
+              image: SQUARE,
+              size: [24, 24],
+              color: [1, 0, 0, alpha],
+            },
+          ],
+          lines: (alpha) => [
+            {
+              id: 'l',
+              positions: [
+                h.toEcef({
+                  lon: AUSTIN.lon - 0.001,
+                  lat: AUSTIN.lat,
+                  height: 50,
+                }),
+                h.toEcef({
+                  lon: AUSTIN.lon + 0.0025,
+                  lat: AUSTIN.lat,
+                  height: 50,
+                }),
+              ],
+              widthPx: 24,
+              mode: '3d',
+              style: { kind: 'solid', color: [1, 0, 0, alpha] },
+            },
+          ],
+          shapes: (alpha) =>
+            [
+              ['a', 0],
+              ['b', 0.0015],
+            ].map(([id, dLon]) => ({
+              id,
+              geometry: {
+                kind: 'rectangle',
+                rect: rect(dLon, 0, 0.0002),
+                height: 50,
+              },
+              fill: [1, 0, 0, alpha],
+              height: 'absolute',
+            })),
+        };
+        await drawn(h, r);
+        await settled(r);
+        const [, green] = pixel(spotA);
+        ok(green > 150, `the green under it draws (${green})`);
+        const show = (rgb) => `(${rgb.join(', ')})`;
+        try {
+          for (const [kind, items] of Object.entries(kinds)) {
+            const set = r.draw[kind]({ id: `conf:blend-${kind}` });
+            try {
+              set.set(items(0.5));
+              await drawn(h, r);
+              await settled(r);
+              let a = pixel(spotA);
+              ok(
+                a[0] > 60 && a[1] > 40 && a[1] < green - 30,
+                `${kind}, no blend: half red over green ${show(a)}`,
+              );
+              set.setOptions({ blend: 'opaque' });
+              await drawn(h, r);
+              a = pixel(spotA);
+              ok(
+                a[0] > 150 && a[1] < 60,
+                `${kind}, opaque: red, its alpha ignored ${show(a)}`,
+              );
+              set.setOptions({ blend: 'translucent' });
+              await drawn(h, r);
+              a = pixel(spotA);
+              ok(
+                a[0] > 60 && a[1] > 40 && a[1] < green - 30,
+                `${kind}, translucent: half red over green ${show(a)}`,
+              );
+              set.setOptions({ blend: 'additive' });
+              await drawn(h, r);
+              a = pixel(spotA);
+              ok(
+                a[0] > 60 && a[1] > green - 30,
+                `${kind}, additive: red added to green ${show(a)}`,
+              );
+              const b = pixel(spotB);
+              ok(
+                b[0] < 60 && b[2] > 150,
+                `${kind}, additive: behind the nearer blue ${show(b)}`,
+              );
+              set.set(items(1));
+              set.setOptions({ blend: 'translucent' });
+              await drawn(h, r);
+              a = pixel(spotA);
+              ok(
+                a[0] > 150 && a[1] < 60,
+                `${kind}, translucent at alpha 1: red ${show(a)}`,
+              );
+            } finally {
+              set.dispose();
+            }
+          }
+        } finally {
+          under.dispose();
+        }
+      },
+    ),
+    check(
       'draw.lines.drape',
       'draped glow, dash and arrow lines draw and pick; a revealed line draws only its first part; a draped line and a clamped point that move every frame are drawn where they now are in the next frame',
       async (h, r) => {
@@ -3001,6 +3175,90 @@ export function portChecks() {
         equal(await count(blue), 0, 'mixed in at none, its own colour');
         deepEqual(ready, ['m'], 'restyled without loading again');
         set.dispose();
+      },
+      { capability: 'models' },
+    ),
+    check(
+      'draw.models.blend',
+      'a model set’s blend changes live, without loading again: additive adds the model’s colour to what is under it',
+      async (h, r) => {
+        if (!h.assets?.model) return { skip: 'no model asset in this harness' };
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const d = 0.003;
+        const under = r.draw.shapes({ id: 'conf:models.blend-under' });
+        under.set([
+          {
+            id: 'green',
+            geometry: {
+              kind: 'rectangle',
+              rect: {
+                west: AUSTIN.lon - d,
+                south: AUSTIN.lat - d,
+                east: AUSTIN.lon + d,
+                north: AUSTIN.lat + d,
+              },
+              height: 0,
+            },
+            fill: '#00ff00',
+            height: 'absolute',
+          },
+        ]);
+        const set = r.draw.models({ id: 'conf:models.blend' });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 50 });
+        set.set([
+          {
+            id: 'm',
+            pos,
+            url: h.assets.model,
+            orientation: { heading: 0, pitch: 0, roll: 0 },
+            minPixelSize: 160,
+            environmentMap: false,
+            shading: 'unlit',
+            tint: '#ff0000',
+            colorBlend: { mode: 'replace' },
+          },
+        ]);
+        try {
+          for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+          deepEqual(ready, ['m'], 'ready');
+          const s = r.query.project(pos);
+          const count = async (like) => {
+            await drawn(h, r, 3);
+            await settled(r);
+            r.frame.renderNow();
+            const image = r.readPixels({
+              crop: {
+                x: Math.round(s.x) - 4,
+                y: Math.round(s.y) - 4,
+                width: 9,
+                height: 9,
+              },
+            });
+            let n = 0;
+            for (let i = 0; i < image.data.length; i += 4)
+              if (like(image.data[i], image.data[i + 1], image.data[i + 2]))
+                n++;
+            return n;
+          };
+          const red = (r0, g, b) => r0 > 180 && g < 70 && b < 70;
+          const yellow = (r0, g, b) => r0 > 180 && g > 150 && b < 70;
+          ok((await count(red)) >= 40, 'no blend: red over green');
+          set.setOptions({ blend: 'additive' });
+          ok((await count(yellow)) >= 40, 'additive: red added to green');
+          equal(await count(red), 0, 'additive: none red alone');
+          set.setOptions({ blend: 'translucent' });
+          ok((await count(red)) >= 40, 'translucent at alpha 1: red');
+          set.setOptions({ blend: 'opaque' });
+          ok((await count(red)) >= 40, 'opaque: red');
+          deepEqual(ready, ['m'], 'never loaded again');
+        } finally {
+          set.dispose();
+          under.dispose();
+        }
       },
       { capability: 'models' },
     ),

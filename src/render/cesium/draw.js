@@ -38,6 +38,7 @@ import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
 import { createMeshSets } from './drawMeshes.js';
@@ -127,11 +128,15 @@ const displayConditionOf = (range) =>
     ? new Cesium.DistanceDisplayCondition(range[0], range[1])
     : undefined;
 
-/** Cesium's point blending for a set's `blend`. */
+/**
+ * Cesium's point blending for a set's `blend`: additive ones are built
+ * translucent, a command a set, and added where they draw (`setBlend.js`).
+ */
 const pointBlendOf = (blend) =>
   ({
     opaque: Cesium.BlendOption.OPAQUE,
     translucent: Cesium.BlendOption.TRANSLUCENT,
+    additive: Cesium.BlendOption.TRANSLUCENT,
   })[blend] ?? Cesium.BlendOption.OPAQUE_AND_TRANSLUCENT;
 
 /**
@@ -560,7 +565,8 @@ export function createCesiumDraw({
         Object.assign(spec, options);
         // What clamped items clamp to, how points blend, and whether ground
         // primitives pick, are built into them. Models clamp nothing, only
-        // points and icons build in the blend, and only shapes and lines have ground
+        // points and icons build in the blend (every set's commands are
+        // turned to it each frame, `setBlend.js`), and only shapes and lines have ground
         // primitives: other kinds are not rebuilt for those (models would
         // load again).
         if (
@@ -710,6 +716,8 @@ export function createCesiumDraw({
     // Named for code that finds a set's host among the scene's primitives
     // (`uploadProbe.js`).
     host.drawSetId = record.spec.id;
+    // `blend`: its commands turned to the set's blend each frame drawn.
+    blendSetHost(record, host);
     // Only old ground primitives wait for the new ones: the rest of the old
     // host goes now, as the new host's own parts draw at once.
     if (
@@ -741,6 +749,11 @@ export function createCesiumDraw({
     showHosts(record);
     // A new set's host comes in last; it takes its place by draw order.
     if (!old) orderHosts();
+  }
+
+  /** A set's host drawn in the set's `blend`, as it is each frame. */
+  function blendSetHost(record, host) {
+    blendHost(host, () => record.spec.blend ?? undefined);
   }
 
   /**
@@ -1002,6 +1015,7 @@ export function createCesiumDraw({
         blendOption: pointBlendOf(record.spec.blend),
       });
       record.clusterHost = host;
+      blendSetHost(record, host);
       scene.primitives.add(host);
     }
     host.removeAll();

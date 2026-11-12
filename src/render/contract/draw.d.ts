@@ -66,6 +66,17 @@ export interface SetSpec {
   horizonCull?: boolean;
   /** `cluster`: screen-space clustering (icons only; see `ClusterSpec`). */
   cluster?: ClusterSpec | null;
+  /**
+   * How the set's items blend with what is drawn. Omitted: opaque parts
+   * opaque with depth writes, items with alpha under 1 alpha-blended without
+   * depth writes. `opaque`: every item opaque, its alpha ignored (taken as
+   * 1), with depth writes (icons and points keep every part they draw,
+   * unblended). `translucent`: every item alpha-blended without depth
+   * writes, even at alpha 1. `additive`: each item's colour times its alpha
+   * added to what is drawn, without depth writes and still depth-tested.
+   * For every kind of set; `setOptions({blend})` takes effect from the next
+   * frame, and models do not load again.
+   */
   blend?: 'opaque' | 'translucent' | 'additive';
   /**
    * Among sets that do not depth-test against each other (items drawn with
