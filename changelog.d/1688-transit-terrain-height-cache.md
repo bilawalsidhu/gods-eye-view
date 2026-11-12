@@ -3,4 +3,4 @@
   terrain for the height of every trail fix of every vehicle in view; heights
   are now kept per point, read again only while the camera moves or tiles
   load, and read within a time budget that puts vehicle positions first
-  (mazy1998).
+  (mazy1998, #1688).
