@@ -205,6 +205,24 @@ function setup(options = {}) {
   return { viewer, doc, clock, handle, navigations, frame, settle, button };
 }
 
+test('camera moveEnd does not synchronously pick the scene for tilt', () => {
+  const { viewer, handle, clock } = setup();
+  let reads = 0;
+  viewer.scene.globe.pick = () => {
+    reads++;
+    return GROUND;
+  };
+  viewer.camera.moveEnd.raiseEvent();
+  viewer.camera.moveEnd.raiseEvent();
+  assert.equal(reads, 0, 'moveEnd must not synchronously read the target');
+  assert.equal(clock.pendingCount, 1, 'multiple events coalesce');
+  clock.advance(1);
+  assert.equal(reads, 1, 'target is read after the event returns');
+  viewer.camera.moveEnd.raiseEvent();
+  handle.destroy();
+  assert.equal(clock.pendingCount, 0, 'destroy cancels a pending read');
+});
+
 test('the control mounts once per viewer and removes itself on destroy', () => {
   const { doc, handle, viewer, clock } = setup();
   const roots = () => doc.body.children.filter((n) => n.tagName === 'SECTION');

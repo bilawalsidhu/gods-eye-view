@@ -377,6 +377,7 @@ export function mountNavControl({
   let destroyed = false;
   let applied = null;
   let sliderDragging = false;
+  let deferredTilt = null;
   let hold = null;
   let drag = null;
 
@@ -697,7 +698,15 @@ export function mountNavControl({
     }
   }
   subscribe(viewer.scene.preRender, refreshHeading);
-  subscribe(camera.moveEnd, refreshTilt);
+  // A target pick may synchronously read the depth buffer. Let other moveEnd
+  // observers run first, and coalesce repeated camera events into one read.
+  subscribe(camera.moveEnd, () => {
+    if (deferredTilt !== null) return;
+    deferredTilt = timers.setTimeout(() => {
+      deferredTilt = null;
+      refreshTilt();
+    }, 0);
+  });
   subscribe(viewer.trackedEntityChanged, () => {
     animator.cancel();
     refreshTilt();
@@ -721,6 +730,8 @@ export function mountNavControl({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      if (deferredTilt !== null) timers.clearTimeout(deferredTilt);
+      deferredTilt = null;
       stopHold();
       animator.cancel();
       for (const remove of removers.splice(0)) remove();
