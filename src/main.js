@@ -9,6 +9,8 @@ import { PHOTON_SETTING as photonSetting } from './search/photonSetting.js';
 function showStartupError(error) {
   console.error("God's Eye View initialization failed:", error);
   const loaderStatus = document.querySelector('#loading-screen .loader-status');
+  // A page without the loading screen must still report the original error.
+  if (!loaderStatus) return;
   loaderStatus.textContent = t('Error: {message}', {
     message: describeError(error),
   });
