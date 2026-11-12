@@ -4315,5 +4315,6 @@
   "Bilawal on YouTube": "Bilawal på YouTube",
   "The studio behind GEV": "Studion bakom GEV",
   "Open source. Self-host, fork, add a layer.": "Öppen källkod. Kör själv, skapa en egen variant, lägg till ett lager.",
-  "ENTER GOD MODE": "STARTA GUDLÄGE"
+  "ENTER GOD MODE": "STARTA GUDLÄGE",
+  "{name} opacity": "Opacitet för {name}"
 }
