@@ -1845,7 +1845,7 @@ export class StyleManager extends ShellFacade {
           store: useSolunarStore(applicationPinia()),
         });
       })
-      .catch((error) => console.warn('[Solunar] card unavailable:', error));
+      .catch(() => console.warn('[Solunar] card unavailable'));
   }
 
   // ── Share Button ─────────────────────────────
