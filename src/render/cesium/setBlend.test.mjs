@@ -172,3 +172,31 @@ test('a blended host turns only its own commands, in render passes, each frame',
     'wrapped once',
   );
 });
+
+test('a host that draws the blend itself keeps its commands as made, and others turn back', () => {
+  const [mine] = commands();
+  let blend = 'additive';
+  let drawsIt = false;
+  const host = blendHost(
+    {
+      update: (fs) => fs.commandList.push(mine),
+      drawsBlend: (asked) => drawsIt && asked === 'translucent',
+    },
+    () => blend,
+  );
+  const frame = () => {
+    const frameState = { commandList: [], passes: { render: true } };
+    host.update(frameState);
+    return frameState.commandList[0];
+  };
+  const given = { renderState: mine.renderState, pass: mine.pass };
+  assert.notEqual(frame().renderState, given.renderState, 'turned to additive');
+  blend = 'translucent';
+  drawsIt = true;
+  const drawn = frame();
+  assert.equal(drawn.renderState, given.renderState, 'as made');
+  assert.equal(drawn.pass, given.pass);
+  blend = undefined;
+  drawsIt = false;
+  assert.equal(frame().renderState, given.renderState, 'still as made');
+});

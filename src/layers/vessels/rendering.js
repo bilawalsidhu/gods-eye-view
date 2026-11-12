@@ -145,8 +145,8 @@ export function createRendering({
     if (!viewer || state.icons) return;
     const set = drawOf(viewer).icons({
       id: `ais-vessels:${++instances}`,
-      // Blended in one pass, in order, each chevron keeping its outline
-      // over the ones under it.
+      // Translucent, as its billboards were: overlapping chevrons keep
+      // their outlines rather than the first one's fill.
       blend: 'translucent',
       horizonCull: true,
       drawOrder: spriteDrawOrder?.('ais') ?? 0,

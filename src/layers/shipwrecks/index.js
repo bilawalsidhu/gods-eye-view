@@ -380,8 +380,7 @@ export function createShipwrecksLayer({
       // sprite layers (`SPRITE_LAYER_ORDER`).
       _markers = drawOf(viewer).icons({
         id: 'shipwrecks:markers',
-        // Blended in one pass, in order: the wrecks added last (the
-        // largest) on top.
+        // Translucent, as its billboards were.
         blend: 'translucent',
         drawOrder: spriteDrawOrder(SHIPWRECKS_LAYER_ID),
         show: false,

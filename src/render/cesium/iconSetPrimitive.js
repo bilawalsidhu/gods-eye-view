@@ -327,9 +327,10 @@ const EARTH_BOUNDS = new Cesium.BoundingSphere(
  *   a newly loaded image, for a layer that does not render continuously.
  *   `cull` says whether rows past the ellipsoid's horizon are hidden (by
  *   default always). `translucent` says whether every row is drawn in one
- *   alpha-blended pass, in row order, the last on top (Cesium's
- *   `BlendOption.TRANSLUCENT`), in place of an opaque pass and a translucent
- *   one (by default never). `pickObject` builds a row's pick object around the
+ *   alpha-blended pass, as Cesium's `BlendOption.TRANSLUCENT` billboards
+ *   are, in place of an opaque pass and a translucent one (by default
+ *   never); under order-independent translucency, overlapping rows blend
+ *   together, as those billboards do. `pickObject` builds a row's pick object around the
  *   `primitive` drill picks hide it by (by default `{ id, iconSet, meta,
  *   primitive }`).
  */
@@ -795,9 +796,8 @@ export class IconSetPrimitive {
         }),
       ),
     ];
-    // Every row in one pass, blended in row order: equal depths pass, and
-    // depth is written in place of sorting, as Cesium's translucent
-    // billboards do.
+    // Every row in one blended pass, equal depths passing and depth written
+    // in place of sorting, as Cesium's translucent billboards are drawn.
     this._singleCommand = command(
       Cesium.Pass.TRANSLUCENT,
       this._programs.single,

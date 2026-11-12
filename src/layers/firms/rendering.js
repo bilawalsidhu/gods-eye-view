@@ -466,7 +466,7 @@ export function createRendering({
     if (!layerState._viewer || layerState._icons) return;
     const set = drawOf(layerState._viewer).icons({
       id: `firms:${++iconSets}:icons`,
-      // Blended in one pass, in order, as the detections overlap.
+      // Blended as one translucent pass, as its billboards were.
       blend: 'translucent',
       horizonCull: true,
       show: layerState._enabled && !(layerState._handoffHeat >= 1),
