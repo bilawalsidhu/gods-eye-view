@@ -136,25 +136,41 @@ export function createIonEndpointFetcher({
     return text;
   }
 
-  return async function fetchEndpoint(assetId) {
-    const token = ionToken(env);
-    if (!token)
-      throw new IonEndpointError(503, 'no_key', { keyRequired: true });
+  /**
+   * What can be answered without calling ion: `{text}` for a document held in
+   * memory, `{error}` for an answer already known, `{pending}` for a call to
+   * ion that is already under way (a request joins it), or null when answering
+   * needs a new call to ion.
+   */
+  function peek(assetId) {
+    if (!ionToken(env))
+      return {
+        error: new IonEndpointError(503, 'no_key', { keyRequired: true }),
+      };
     const hit = cache.get(assetId);
     if (
       hit &&
       now() - hit.fetchedAt < REFETCH_AFTER_MS &&
       hit.validUntil - now() > (hit.hasExpiry ? MIN_REMAINING_MS : 0)
     )
-      return hit.text;
-    if (!inflight.has(assetId)) {
-      const pending = load(assetId, token).finally(() =>
-        inflight.delete(assetId),
-      );
-      inflight.set(assetId, pending);
-    }
-    return inflight.get(assetId);
-  };
+      return { text: hit.text };
+    const pending = inflight.get(assetId);
+    return pending ? { pending } : null;
+  }
+
+  async function fetchEndpoint(assetId) {
+    const memory = peek(assetId);
+    if (memory?.error) throw memory.error;
+    if (memory?.text !== undefined) return memory.text;
+    if (memory?.pending) return memory.pending;
+    const pending = load(assetId, ionToken(env)).finally(() =>
+      inflight.delete(assetId),
+    );
+    inflight.set(assetId, pending);
+    return pending;
+  }
+  fetchEndpoint.peek = peek;
+  return fetchEndpoint;
 }
 
 function sendJson(res, status, payload, extraHeaders = {}) {
@@ -188,7 +204,10 @@ export function createIonRouteHandler({
     const match = /^\/v1\/assets\/(\d{1,9})\/endpoint$/.exec(path);
     if (!match || !ION_ALLOWED_ASSETS.has(match[1]))
       return sendJson(res, 404, { error: 'Unknown ion route' });
-    if (!allow(clientKey(req))) {
+    // The limit protects ion. An answer the fetcher already holds costs ion
+    // nothing and does not count; only a request that would call ion does.
+    const memory = fetchEndpoint.peek?.(match[1]);
+    if (!memory && !allow(clientKey(req))) {
       return sendJson(
         res,
         429,
@@ -197,7 +216,12 @@ export function createIonRouteHandler({
       );
     }
     try {
-      return sendJson(res, 200, await fetchEndpoint(match[1]));
+      if (memory?.error) throw memory.error;
+      return sendJson(
+        res,
+        200,
+        memory?.text ?? (await (memory?.pending ?? fetchEndpoint(match[1]))),
+      );
     } catch (error) {
       if (error instanceof IonEndpointError) {
         const headers = error.retryAfter
