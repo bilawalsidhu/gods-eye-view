@@ -61,6 +61,28 @@ test('civil records keep aviation units separate from render height and survive 
   assert.deepEqual(JSON.parse(JSON.stringify(second.meta)), second.meta);
 });
 
+test('route association versions change on A-B-A reuse and aircraft re-admission', () => {
+  const store = records();
+  const first = store.receive(observation({ callsign: 'UAL123' }), view()).meta;
+  assert.equal(Number.isInteger(first.routeAssociationVersion), true);
+
+  const blank = store.receive(observation({ callsign: '' }), view()).meta;
+  assert.equal(blank.routeAssociationVersion, first.routeAssociationVersion);
+  const changed = store.receive(observation({ callsign: 'DAL456' }), view()).meta;
+  assert.notEqual(changed.routeAssociationVersion, first.routeAssociationVersion);
+  const returned = store.receive(observation({ callsign: 'UAL123' }), view()).meta;
+  assert.notEqual(returned.routeAssociationVersion, first.routeAssociationVersion);
+  assert.notEqual(returned.routeAssociationVersion, changed.routeAssociationVersion);
+
+  store.forget('abc123');
+  const readmitted = store.receive(observation({ callsign: 'UAL123' }), view()).meta;
+  assert.notEqual(readmitted.routeAssociationVersion, returned.routeAssociationVersion);
+
+  store.reset();
+  const afterReset = store.receive(observation({ callsign: 'UAL123' }), view()).meta;
+  assert.notEqual(afterReset.routeAssociationVersion, readmitted.routeAssociationVersion);
+});
+
 test('civil record owners isolate state and preserve partial, missing-poll and landed retention', () => {
   const store = records();
   const other = records();
