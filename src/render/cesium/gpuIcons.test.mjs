@@ -492,19 +492,92 @@ test('ground samples are budgeted across frames, the drawn surface the fewest', 
   );
 });
 
-test('GPU icon sets refuse clustering, changing nothing', () => {
-  const { part, draw } = drawOver();
-  const cluster = { pixelRange: 10, minimumSize: 2 };
-  const set = draw.icons({ id: 'gpu:cluster' });
-  set.set([icon('a', { motion: { kind: 'hold' } })]);
-  assert.throws(() => set.setOptions({ cluster }), /no clustering/);
-  assert.equal(part.sets.get('gpu:cluster').spec.cluster, undefined);
-  const clustered = draw.icons({ id: 'gpu:clustered', cluster });
-  assert.throws(
-    () => clustered.set([icon('a', { motion: { kind: 'hold' } })]),
-    /no clustering/,
-  );
-  assert.equal(clustered.size(), 0);
+test('a GPU icon set clusters its rows where their segments put them in the frame', () => {
+  const transforms = Cesium.SceneTransforms;
+  const project = transforms.worldToWindowCoordinates;
+  // Window positions: a degree of longitude is `spread` pixels.
+  let spread = 1;
+  transforms.worldToWindowCoordinates = (_, position, result) => {
+    const at = Cesium.Cartographic.fromCartesian(position);
+    result ??= new Cesium.Cartesian2();
+    result.x = 200 + Cesium.Math.toDegrees(at.longitude) * spread;
+    result.y = 150 - Cesium.Math.toDegrees(at.latitude) * spread;
+    return result;
+  };
+  try {
+    const { part, draw, scene } = drawOver({
+      capabilities: new Set(['motionSegments', 'columns', 'cluster']),
+    });
+    scene.camera.directionWC = new Cesium.Cartesian3(-1, 0, 0);
+    scene.camera.positionCartographic = { height: 1000 };
+    scene.canvas = { clientWidth: 400, clientHeight: 300 };
+    const t0 = Cesium.JulianDate.toDate(scene.frameState.time).getTime();
+    const counts = [];
+    const set = draw.icons({
+      id: 'gpu:cluster',
+      motionClock: { kind: 'scene' },
+      cluster: {
+        pixelRange: 10,
+        minimumSize: 2,
+        icon: (count) => (counts.push(count), 'badge.png'),
+      },
+    });
+    // Each given far apart, each moving to within a few pixels of the rest.
+    const mover = (id, lon) => {
+      const from = ecef(Cesium.Cartesian3.fromDegrees(lon * 40, 30));
+      const to = ecef(Cesium.Cartesian3.fromDegrees(lon, 0));
+      return icon(id, {
+        pos: from,
+        size: [8, 8],
+        meta: { id },
+        motion: { kind: 'lerp', from, to, t0, t1: t0 + 1000 },
+      });
+    };
+    set.set([mover('a', 0), mover('b', 2), mover('c', 4)]);
+    // At the start, apart: no cluster.
+    part.beforeRender();
+    const { set: s } = rows(part, 'gpu:cluster');
+    assert.deepEqual(counts, []);
+    assert.ok(['a', 'b', 'c'].every((id) => s.shown(s.row(id))));
+    // At the end, together.
+    scene.frameState.time = julian(t0 + 5000);
+    part.beforeRender();
+    assert.deepEqual(counts, [3]);
+    assert.ok(
+      ['a', 'b', 'c'].every((id) => !s.shown(s.row(id))),
+      'members are not drawn',
+    );
+    const clusters = part.sets.get('gpu:cluster').clusterHost;
+    assert.equal(clusters.length, 1);
+    const { id, width } = clusters.get(0);
+    assert.equal(width, 8, 'at its seed’s size');
+    assert.deepEqual(id.cluster.ids, ['a', 'b', 'c'], 'seed first');
+    const mean = Cesium.Cartographic.fromCartesian(
+      new Cesium.Cartesian3(
+        id.cluster.position.x,
+        id.cluster.position.y,
+        id.cluster.position.z,
+      ),
+    );
+    assert.ok(Math.abs(Cesium.Math.toDegrees(mean.longitude) - 2) < 1e-3);
+    // Held still, not made again.
+    part.beforeRender();
+    assert.deepEqual(counts, [3]);
+    // The camera moved: apart, each drawn again.
+    spread = 100;
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 1, 0);
+    part.beforeRender();
+    assert.equal(clusters.length, 0);
+    assert.ok(['a', 'b', 'c'].every((id) => s.shown(s.row(id))));
+    // A member hidden by its item stays hidden out of a cluster.
+    set.upsert([{ ...mover('b', 2), show: false }]);
+    part.beforeRender();
+    assert.equal(s.shown(s.row('b')), false);
+    set.dispose();
+    assert.ok(!scene.added.includes(clusters), 'let go with the set');
+  } finally {
+    transforms.worldToWindowCoordinates = project;
+  }
 });
 
 test('columns update rows by index: positions, courses, shown, scales, tints and meta', () => {

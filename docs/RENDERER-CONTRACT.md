@@ -175,12 +175,14 @@ and `meta` and the cluster's position, so `pick` gives the seed and
 `drillPick` every member. Clusters are made again in the frames drawn after
 the camera moves or the set changes, never on a timer. The Cesium port draws
 a set's cluster icons in a billboard collection of their own and hides the
-members' billboards; a set on the GPU (`columns`, or moving, receding,
-proxy-picked or level-of-detail icons) refuses clustering. The check
-`draw.icons.cluster` draws a cluster, picks it, and parts it by moving in.
+members' billboards. A set on the GPU (`columns`, or moving, receding,
+proxy-picked or level-of-detail icons) clusters its rows where their segments
+(and ground) put them at the frame's motion-clock time, hiding the members'
+rows; while rows still move it clusters again every frame. The checks
+`draw.icons.cluster` and `draw.motion.cluster` (members coming to rest on
+their segments) draw a cluster, pick it, and part it by moving in.
 
-Icon sets on the Cesium GPU path draw what its billboards draw but
-clustering: pixel offsets, `bottom` and `top` anchors, screen and axis
+Icon sets on the Cesium GPU path draw what its billboards draw: pixel offsets, `bottom` and `top` anchors, screen and axis
 rotations (turned as Cesium's billboards turn), `fadeByDistance`,
 `displayRange`, and `clampGround` / `relativeGround` heights. Each row reads
 these from a float texture by instance, so the 16 vertex attributes hold;

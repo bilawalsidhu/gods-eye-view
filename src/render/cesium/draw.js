@@ -648,8 +648,16 @@ export function createCesiumDraw({
       },
     };
     // A clustered set clusters again in the next frame drawn after a change.
-    for (const name of ['set', 'upsert', 'remove', 'clear', 'setOptions']) {
+    for (const name of [
+      'set',
+      'upsert',
+      'remove',
+      'clear',
+      'setOptions',
+      'setColumns',
+    ]) {
       const call = handle[name];
+      if (!call) continue;
       handle[name] = (...args) => {
         record.clusterKey = null;
         return call(...args);
@@ -992,8 +1000,7 @@ export function createCesiumDraw({
   const clusters = (record) =>
     record.kind === 'icons' &&
     Boolean(record.spec.cluster) &&
-    capabilities.has('cluster') &&
-    !record.gpu;
+    capabilities.has('cluster');
 
   /** Let go of a set's cluster icons, and show its members again. */
   function dropClusters(record) {
@@ -1003,6 +1010,7 @@ export function createCesiumDraw({
     record.clusterState = null;
     record.clusterKey = null;
     for (const placed of record.placed) placed.clustered = false;
+    record.gpu?.setClustered(new Set());
   }
 
   const clusterScratch = new Cesium.Cartesian2();
@@ -1011,7 +1019,7 @@ export function createCesiumDraw({
    * icons again where the camera moved or the set changed since it last
    * did (`ClusterSpec`), hiding the members and drawing an icon a cluster.
    */
-  function clusterIcons() {
+  function clusterIcons(frameState = scene.frameState) {
     let pose;
     const poseNow = () => {
       const eye = scene.camera?.positionWC;
@@ -1027,30 +1035,59 @@ export function createCesiumDraw({
         }
         continue;
       }
-      if (!record.billboardHost || record.billboardHost.isDestroyed()) continue;
-      // A rebuilt collection starts afresh.
-      if (record.billboardHost !== record.clusteredHost) {
+      // A rebuilt collection (or the GPU's host in its place) starts afresh.
+      const host = record.gpu?.host ?? record.billboardHost;
+      if (!host || host.isDestroyed()) continue;
+      if (host !== record.clusteredHost) {
         record.clusterState = null;
         record.clusterKey = null;
-        record.clusteredHost = record.billboardHost;
+        record.clusteredHost = host;
       }
       pose ??= poseNow();
-      if (record.clusterKey === pose) {
+      // Rows still moving on their segments cluster again every frame.
+      const key = record.gpu?.moving(frameState)
+        ? `${pose}@${frameState?.frameNumber ?? Math.random()}`
+        : pose;
+      if (record.clusterKey === key) {
         if (record.clusterHost)
           record.clusterHost.show = record.spec.show !== false;
         continue;
       }
-      record.clusterKey = pose;
-      reclusterIcons(record);
+      record.clusterKey = key;
+      reclusterIcons(record, frameState);
     }
   }
 
-  function reclusterIcons(record) {
+  /** The points a GPU set clusters: its shown rows where they are drawn. */
+  function gpuClusterPoints(record, frameState, horizon) {
+    const points = [];
+    for (const { id, item, position } of record.gpu.drawnRows(frameState)) {
+      const at = toCartesian(position);
+      if (horizon && !horizon.isPointVisible(at)) continue;
+      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
+        scene,
+        at,
+        clusterScratch,
+      );
+      if (!screen) continue;
+      points.push({
+        id,
+        position: at,
+        screen: { x: screen.x, y: screen.y },
+        pixelSize: Math.max(item.size[0], item.size[1]) * (item.scale ?? 1),
+      });
+    }
+    return points;
+  }
+
+  function reclusterIcons(record, frameState) {
     const spec = record.spec.cluster;
     const horizon = horizonNow();
-    const points = [];
+    const points = record.gpu
+      ? gpuClusterPoints(record, frameState, horizon)
+      : [];
     const entries = new Map();
-    for (const [id, entry] of record.billboards) {
+    for (const [id, entry] of record.gpu ? [] : record.billboards) {
       const item = record.items.get(id);
       const placed = entry.placed;
       if (!item || !placed.shown) continue;
@@ -1089,6 +1126,7 @@ export function createCesiumDraw({
     });
     record.clusterState = result.state;
     const inCluster = new Set(result.clusters.flatMap((c) => c.ids));
+    record.gpu?.setClustered(inCluster);
     for (const placed of record.placed) placed.clustered = false;
     for (const id of inCluster) {
       const entry = entries.get(id);

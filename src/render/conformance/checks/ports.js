@@ -146,8 +146,10 @@ function check(id, title, run, extra = {}) {
     async run(h) {
       const r = await fresh(h);
       try {
-        if (extra.capability && !r.capabilities.has(extra.capability))
-          return { skip: `no ${extra.capability}` };
+        // One capability or several, each needed.
+        for (const capability of [extra.capability ?? []].flat())
+          if (!r.capabilities.has(capability))
+            return { skip: `no ${capability}` };
         return await run(h, r);
       } finally {
         r.destroy();
@@ -219,6 +221,138 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
 }`,
   },
 });
+
+/** `draw.icons.cluster`, and with `moving` its rows on their segments. */
+function clusterCheck(moving) {
+  return check(
+    moving ? 'draw.motion.cluster' : 'draw.icons.cluster',
+    moving
+      ? 'moving icons cluster where their segments put them, picked as their members seed first; apart again, each is its own'
+      : 'icons close on screen draw as one cluster, picked as its members seed first at its position; apart again, each is its own',
+    async (h, r) => {
+      await overAustin(h, r, 2000);
+      const counts = [];
+      const t0 = r.frame.time();
+      if (moving) r.frame.setTime(t0 + 20000);
+      const set = r.draw.icons({
+        id: 'conf:cluster',
+        ...(moving ? { motionClock: { kind: 'scene' } } : {}),
+        cluster: {
+          pixelRange: 20,
+          minimumSize: 3,
+          icon: (count) => {
+            counts.push(count);
+            return DOT;
+          },
+        },
+      });
+      const at = (dx, dy) =>
+        h.toEcef({
+          lon: AUSTIN.lon + 0.0008 + dx * 0.0003,
+          lat: AUSTIN.lat + 0.0006 + dy * 0.0003,
+          height: 0,
+        });
+      const members = [
+        ['a', at(0, 0)],
+        ['b', at(1, 0)],
+        ['c', at(0, 1)],
+        ['d', at(1, 1)],
+      ];
+      const far = h.toEcef({
+        lon: AUSTIN.lon - 0.003,
+        lat: AUSTIN.lat - 0.002,
+        height: 0,
+      });
+      set.set([
+        ...members.map(([id, pos]) => ({
+          id,
+          // Moving: given far off, come to rest where the rest are.
+          pos: moving ? far : pos,
+          image: DOT,
+          size: [16, 16],
+          meta: { m: id },
+          ...(moving
+            ? {
+                motion: {
+                  kind: 'lerp',
+                  from: far,
+                  to: pos,
+                  t0,
+                  t1: t0 + 10000,
+                },
+              }
+            : {}),
+        })),
+        {
+          id: 'far',
+          pos: far,
+          image: DOT,
+          size: [16, 16],
+          ...(moving ? { motion: { kind: 'hold' } } : {}),
+        },
+      ]);
+      await drawn(h, r);
+      await settled(r);
+      await drawn(h, r);
+      ok(counts.includes(4), 'the icon is drawn for its count');
+      const mean = members.reduce(
+        (m, [, p]) => ({
+          x: m.x + p.x / members.length,
+          y: m.y + p.y / members.length,
+          z: m.z + p.z / members.length,
+        }),
+        { x: 0, y: 0, z: 0 },
+      );
+      const s = r.query.project(mean);
+      ok(s, 'the cluster projects');
+      const hit = r.query.pick(s.x, s.y);
+      deepEqual(
+        [hit?.set, hit?.id, hit?.meta],
+        ['conf:cluster', 'a', { m: 'a' }],
+        'pick gives the seed, with its own meta',
+      );
+      ok(hit?.position, 'at a position');
+      nearVec(hit.position, mean, 1, 'the cluster’s position');
+      const drilled = r.query
+        .drillPick(s.x, s.y)
+        .filter((x) => x.set === 'conf:cluster');
+      deepEqual(
+        drilled.map((x) => [x.id, x.meta?.m]),
+        members.map(([id]) => [id, id]),
+        'drillPick gives every member, seed first',
+      );
+      const sf = r.query.project(far);
+      equal(r.query.pick(sf.x, sf.y)?.id, 'far', 'an icon on its own');
+
+      await overAustin(h, r, 300);
+      r.camera.setView({
+        destination: {
+          lon: AUSTIN.lon + 0.00095,
+          lat: AUSTIN.lat + 0.00075,
+          height: 300,
+        },
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      await drawn(h, r);
+      await settled(r);
+      await drawn(h, r);
+      for (const [id, pos] of members) {
+        const m = r.query.project(pos);
+        ok(m, `${id} projects`);
+        deepEqual(
+          r.query
+            .drillPick(m.x, m.y)
+            .filter((x) => x.set === 'conf:cluster')
+            .map((x) => x.id),
+          [id],
+          `${id} on its own once apart`,
+        );
+      }
+      set.dispose();
+    },
+    { capability: moving ? ['cluster', 'motionSegments'] : 'cluster' },
+  );
+}
 
 export function portChecks() {
   return [
@@ -1722,111 +1856,8 @@ export function portChecks() {
         for (const set of sets) set.dispose();
       },
     ),
-    check(
-      'draw.icons.cluster',
-      'icons close on screen draw as one cluster, picked as its members seed first at its position; apart again, each is its own',
-      async (h, r) => {
-        await overAustin(h, r, 2000);
-        const counts = [];
-        const set = r.draw.icons({
-          id: 'conf:cluster',
-          cluster: {
-            pixelRange: 20,
-            minimumSize: 3,
-            icon: (count) => {
-              counts.push(count);
-              return DOT;
-            },
-          },
-        });
-        const at = (dx, dy) =>
-          h.toEcef({
-            lon: AUSTIN.lon + 0.0008 + dx * 0.0003,
-            lat: AUSTIN.lat + 0.0006 + dy * 0.0003,
-            height: 0,
-          });
-        const members = [
-          ['a', at(0, 0)],
-          ['b', at(1, 0)],
-          ['c', at(0, 1)],
-          ['d', at(1, 1)],
-        ];
-        const far = h.toEcef({
-          lon: AUSTIN.lon - 0.003,
-          lat: AUSTIN.lat - 0.002,
-          height: 0,
-        });
-        set.set([
-          ...members.map(([id, pos]) => ({
-            id,
-            pos,
-            image: DOT,
-            size: [16, 16],
-            meta: { m: id },
-          })),
-          { id: 'far', pos: far, image: DOT, size: [16, 16] },
-        ]);
-        await drawn(h, r);
-        await settled(r);
-        await drawn(h, r);
-        ok(counts.includes(4), 'the icon is drawn for its count');
-        const mean = members.reduce(
-          (m, [, p]) => ({
-            x: m.x + p.x / members.length,
-            y: m.y + p.y / members.length,
-            z: m.z + p.z / members.length,
-          }),
-          { x: 0, y: 0, z: 0 },
-        );
-        const s = r.query.project(mean);
-        ok(s, 'the cluster projects');
-        const hit = r.query.pick(s.x, s.y);
-        deepEqual(
-          [hit?.set, hit?.id, hit?.meta],
-          ['conf:cluster', 'a', { m: 'a' }],
-          'pick gives the seed, with its own meta',
-        );
-        ok(hit?.position, 'at a position');
-        nearVec(hit.position, mean, 1, 'the cluster’s position');
-        const drilled = r.query
-          .drillPick(s.x, s.y)
-          .filter((x) => x.set === 'conf:cluster');
-        deepEqual(
-          drilled.map((x) => [x.id, x.meta?.m]),
-          members.map(([id]) => [id, id]),
-          'drillPick gives every member, seed first',
-        );
-        const sf = r.query.project(far);
-        equal(r.query.pick(sf.x, sf.y)?.id, 'far', 'an icon on its own');
-
-        await overAustin(h, r, 300);
-        r.camera.setView({
-          destination: {
-            lon: AUSTIN.lon + 0.00095,
-            lat: AUSTIN.lat + 0.00075,
-            height: 300,
-          },
-          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        });
-        await drawn(h, r);
-        await settled(r);
-        await drawn(h, r);
-        for (const [id, pos] of members) {
-          const m = r.query.project(pos);
-          ok(m, `${id} projects`);
-          deepEqual(
-            r.query
-              .drillPick(m.x, m.y)
-              .filter((x) => x.set === 'conf:cluster')
-              .map((x) => x.id),
-            [id],
-            `${id} on its own once apart`,
-          );
-        }
-        set.dispose();
-      },
-      { capability: 'cluster' },
-    ),
+    clusterCheck(false),
+    clusterCheck(true),
     check(
       'draw.icons.update',
       'an upserted icon keeps drawing, as it now is, from the next frame: picked at its new size with its new meta, even while a new image loads; a removed one is gone',

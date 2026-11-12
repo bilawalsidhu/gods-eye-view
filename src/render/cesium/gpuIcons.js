@@ -11,8 +11,9 @@
  *
  * What these sets draw as billboards do not: an icon set becomes one when
  * an item first needs it (or it first takes columns), and stays one. They
- * draw what billboards draw but clustering, which they refuse loudly; on
- * WebGL 1 they also refuse what each row reads from its extras texture
+ * draw what billboards draw, clustering included (the draw port clusters
+ * the rows where their segments put them in the frame drawn); on WebGL 1
+ * they refuse what each row reads from its extras texture
  * there is none of: clamped heights, `fadeByDistance`, `displayRange`, pixel
  * offsets, anchors other than the centre, and axis and screen rotations.
  *
@@ -233,8 +234,6 @@ export function createGpuIcons({
 
   /** Refuse what a GPU icon set cannot draw, before anything changes. */
   function check(items, spec = {}) {
-    if (spec.cluster)
-      throw new Error("the Cesium renderer's GPU icons have no clustering");
     // Atlas slots these items would take anew: they must all fit.
     const fresh = new Set();
     for (const item of items) {
@@ -325,6 +324,8 @@ export function createGpuIcons({
     // Until when (epoch ms on the motion clock) a row may still move or turn.
     let movingUntil = -Infinity;
     const clockMs = () => Cesium.JulianDate.toDate(clockTime()).getTime();
+    // Rows drawn as part of a cluster, hidden.
+    let clustered = new Set();
     // What each row's segment was last written from, by id.
     const written = new Map();
     // The ids of the last columns, while no other write came after them.
@@ -428,7 +429,12 @@ export function createGpuIcons({
       );
       set.setDepthTestDistance(row, item.disableDepthTest ?? 0);
       // An empty range shows it nowhere.
-      set.setShown(row, item.show !== false && displayable(item.displayRange));
+      set.setShown(
+        row,
+        item.show !== false &&
+          displayable(item.displayRange) &&
+          !clustered.has(item.id),
+      );
       writeExtras(row, item);
       writeSegment(row, item, added, motion);
       writeGround(row, item);
@@ -554,6 +560,49 @@ export function createGpuIcons({
       groundKeys.set(item.id, key);
       set.setGround(row, mode, from, to);
       groundQueue.add(item.id);
+    }
+
+    /**
+     * `p` on a clamped row's ground, as its shader puts it: the ground
+     * between the heights under its segment's ends, by how far along it is.
+     */
+    function onGround(row, p) {
+      const [from, to] = set.groundSpan(row);
+      const [g0, g1] = set.groundHeights(row);
+      const sx = to.x - from.x;
+      const sy = to.y - from.y;
+      const sz = to.z - from.z;
+      const spanSq = sx * sx + sy * sy + sz * sz;
+      const along =
+        spanSq > 0
+          ? Math.min(
+              1,
+              Math.max(
+                0,
+                ((p.x - from.x) * sx +
+                  (p.y - from.y) * sy +
+                  (p.z - from.z) * sz) /
+                  spanSq,
+              ),
+            )
+          : 0;
+      const ground = g0 + (g1 - g0) * along;
+      const carto = Cesium.Cartographic.fromCartesian(
+        Cesium.Cartesian3.fromElements(p.x, p.y, p.z, groundAt),
+        undefined,
+        groundCarto,
+      );
+      if (!carto) return p;
+      const height =
+        set.groundMode(row) === ICON_GROUND_CLAMP
+          ? ground
+          : carto.height + ground;
+      const c = Cesium.Cartesian3.fromRadians(
+        carto.longitude,
+        carto.latitude,
+        height,
+      );
+      return { x: c.x, y: c.y, z: c.z };
     }
 
     const groundAt = new Cesium.Cartesian3();
@@ -743,6 +792,53 @@ export function createGpuIcons({
         }
         for (const id of later) groundQueue.add(id);
         return changed;
+      },
+      /**
+       * The rows a cluster pass sees: each whose item is shown, where it
+       * is drawn at `frameState`'s time (on its segment, on its ground),
+       * with its item.
+       */
+      drawnRows(frameState) {
+        const tau = set.seconds(clockTime(frameState));
+        const out = [];
+        for (let row = 0; row < set.count; row++) {
+          const id = set.idAt(row);
+          const item = record.items.get(id);
+          if (!item || item.show === false || !displayable(item.displayRange))
+            continue;
+          const p = set.position(row, tau, { x: 0, y: 0, z: 0 });
+          out.push({
+            id,
+            item,
+            position: grounded.has(id) ? onGround(row, p) : p,
+          });
+        }
+        return out;
+      },
+      /** Hide the rows of `ids` (in clusters); show the rest again. */
+      setClustered(ids) {
+        const before = clustered;
+        clustered = ids;
+        for (const id of new Set([...before, ...ids])) {
+          if (before.has(id) === ids.has(id)) continue;
+          const row = set.row(id);
+          const item = record.items.get(id);
+          if (row < 0 || !item) continue;
+          set.setShown(
+            row,
+            item.show !== false &&
+              displayable(item.displayRange) &&
+              !ids.has(id),
+          );
+        }
+      },
+      /** Whether rows still move at the motion clock's time in `frameState`. */
+      moving(frameState) {
+        return (
+          set.count > 0 &&
+          Cesium.JulianDate.toDate(clockTime(frameState)).getTime() <
+            movingUntil
+        );
       },
       /** Whether a live-clock row is still moving: frames should keep coming. */
       animating() {
