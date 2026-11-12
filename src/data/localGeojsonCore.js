@@ -1102,6 +1102,15 @@ export function createLocalGeoJsonLayer(
 
     disable: disableLayer,
 
+    /**
+     * Forget the parsed features so the next enable() loads them again: a
+     * caller-owned live loader (the Data Library) uses it once its data is
+     * older than the source allows.
+     */
+    dropCachedFeatures: () => {
+      _cachedFeatures = null;
+    },
+
     destroy: (viewer) => {
       if (_destroyed) return;
       _destroyed = true;

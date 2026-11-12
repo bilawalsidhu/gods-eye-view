@@ -147,13 +147,27 @@ export function libraryCredit(entry) {
  */
 export function createLibraryDatasetLayer(
   entry,
-  { services, source, onZoom = null, onRemove = null },
+  {
+    services,
+    source,
+    onZoom = null,
+    onRemove = null,
+    screenSpaceEventHandlerFactory,
+  },
 ) {
   let truncated = false;
   let loaded = 0;
   let extent = null;
   let rowListener = null;
   let legendCounts = null;
+  // Live data: features older than the source's cacheSeconds are loaded
+  // again, on the next enable and on a timer while the layer is on.
+  const maxAgeMs = entry.source.cacheSeconds * 1000;
+  let loadedAt = 0;
+  let prefetched = null;
+  let refreshController = null;
+  let on = false;
+  const stale = () => Date.now() - loadedAt >= maxAgeMs;
   const colorBy = entry.display.colorBy || null;
   const layer = createLocalGeoJsonLayer(
     {
@@ -164,12 +178,18 @@ export function createLibraryDatasetLayer(
       icon: entry.icon,
       source: entry.provider,
       labels: true,
+      ...(screenSpaceEventHandlerFactory
+        ? { screenSpaceEventHandlerFactory }
+        : {}),
       featureColor: colorBy
         ? (properties) =>
             colorBy.colors[String(properties?.__gevColorKey ?? '')] || null
         : null,
       loadFeatures: async ({ signal }) => {
-        const result = await source.loadDataset(entry, { signal });
+        const result =
+          prefetched ?? (await source.loadDataset(entry, { signal }));
+        prefetched = null;
+        loadedAt = Date.now();
         truncated = result.truncated;
         loaded = result.features.length;
         extent = featureExtent(result.features);
@@ -181,12 +201,54 @@ export function createLibraryDatasetLayer(
     services,
   );
   const enable = layer.enable;
+  const disable = layer.disable;
+  const destroy = layer.destroy;
   const getStats = layer.getStats;
+  const cancelRefresh = () => {
+    refreshController?.abort();
+    refreshController = null;
+    prefetched = null;
+  };
   return Object.assign(layer, {
     libraryEntryId: entry.id,
+    refreshInterval: maxAgeMs,
     async enable(viewer, ...rest) {
+      on = true;
       registerDynamicCredit(viewer, libraryCredit(entry));
+      if (stale()) layer.dropCachedFeatures();
       return enable(viewer, ...rest);
+    },
+    /**
+     * The manager's refresh tick: once the data is stale, load it again and
+     * swap it in only when the new set is ready, so the old features stay
+     * drawn while the request runs and stay if it fails.
+     */
+    async update(viewer) {
+      if (!on || !stale() || refreshController) return;
+      const current = new AbortController();
+      refreshController = current;
+      try {
+        const result = await source.loadDataset(entry, {
+          signal: current.signal,
+        });
+        if (!on || current.signal.aborted) return;
+        prefetched = result;
+        layer.dropCachedFeatures();
+        disable(viewer);
+        await enable(viewer);
+      } finally {
+        if (refreshController === current) refreshController = null;
+      }
+    },
+    disable(viewer, ...rest) {
+      on = false;
+      cancelRefresh();
+      return disable(viewer, ...rest);
+    },
+    destroy(viewer, ...rest) {
+      on = false;
+      cancelRefresh();
+      return destroy(viewer, ...rest);
     },
     getStats() {
       const stats = getStats();
