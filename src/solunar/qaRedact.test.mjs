@@ -3,6 +3,41 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
+test('browser event and navigation errors do not print untrusted secrets', () => {
+  const secrets = [
+    'Bearer FakeBearerSecretABC123',
+    'https://fakeuser:fakepass@host.invalid',
+    'FakeTokenSuffixABC123',
+    'X-Api-Key: FakeApiKeyABC123',
+    'https://host.invalid/?api_key=FakeQueryKeyABC123',
+  ];
+  const run = spawnSync(
+    process.execPath,
+    [
+      '--import=./src/solunar/fixtures/qaProbeHook.mjs',
+      'scripts/qa-solunar.mjs',
+    ],
+    {
+      cwd: new URL('../../', import.meta.url),
+      env: {
+        ...process.env,
+        QA_OUT_DIR: '.',
+        SOLUNAR_TEST_SECRET: secrets.join(' '),
+      },
+      encoding: 'utf8',
+    },
+  );
+  assert.equal(run.status, 1);
+  assert.match(run.stderr, /PROBE_EVENTS_DELIVERED/);
+  assert.match(run.stderr, /unable to complete browser checks/);
+  for (const secret of secrets) {
+    assert.ok(
+      !(run.stdout + run.stderr).includes(secret),
+      'untrusted value leaked',
+    );
+  }
+});
+
 test('filesystem startup failure does not print a secret-bearing path', () => {
   const token = 'SyntheticPrivatePathABC123';
   const run = spawnSync(process.execPath, ['scripts/qa-solunar.mjs'], {
