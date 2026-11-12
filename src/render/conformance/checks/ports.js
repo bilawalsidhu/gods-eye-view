@@ -13,6 +13,7 @@ import {
 import { AUSTIN, SCRIPT_VIEWPORT } from '../cameraScripts.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
 import { iconPosition } from '../../motion/iconMotion.js';
+import { encodeVectorTile } from '../../vectorBase/encode.js';
 
 /** 1 × 1 PNGs (red, green, blue), so imagery checks load nothing from the network. */
 const PIXEL_PNGS = [
@@ -4031,6 +4032,109 @@ export function portChecks() {
         b.remove();
         deepEqual(ours(), [], 'both removed');
       },
+    ),
+    check(
+      'globe.base.vector',
+      'a vector base draws its style: the fills its filters keep, over its background; a style that fails to load changes nothing',
+      async (h, r) => {
+        await overAustin(h, r, 20000);
+        // One tile for every tile: the whole of it sea, and a road.
+        const whole = [
+          [
+            [-64, -64],
+            [4160, -64],
+            [4160, 4160],
+            [-64, 4160],
+            [-64, -64],
+          ],
+        ];
+        const tile = encodeVectorTile({
+          water: [
+            { type: 'Polygon', geometry: whole, properties: { class: 'sea' } },
+          ],
+        });
+        let binary = '';
+        for (const byte of tile) binary += String.fromCharCode(byte);
+        const style = {
+          version: 8,
+          sources: {
+            base: {
+              type: 'vector',
+              tiles: [`data:application/x-protobuf;base64,${btoa(binary)}`],
+              maxzoom: 14,
+              attribution: '<a href="https://example.test">Test tiles</a>',
+            },
+          },
+          layers: [
+            {
+              id: 'bg',
+              type: 'background',
+              paint: { 'background-color': '#ff0000' },
+            },
+            {
+              id: 'sea',
+              type: 'fill',
+              source: 'base',
+              'source-layer': 'water',
+              filter: ['==', ['get', 'class'], 'sea'],
+              paint: { 'fill-color': '#00c8ff' },
+            },
+            {
+              id: 'lake',
+              type: 'fill',
+              source: 'base',
+              'source-layer': 'water',
+              filter: ['==', 'class', 'lake'],
+              paint: { 'fill-color': '#ffff00' },
+            },
+          ],
+        };
+        const styleUrl = `data:application/json,${encodeURIComponent(JSON.stringify(style))}`;
+        const status = await r.globe.setBase({ vector: { styleUrl } });
+        ok(status && Array.isArray(status.imagery), 'the base is set');
+        const below = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+        const middle = async () => {
+          await settled(r);
+          r.frame.renderNow();
+          const { data } = r.readPixels({
+            crop: {
+              x: Math.round(below.x) - 4,
+              y: Math.round(below.y) - 4,
+              width: 9,
+              height: 9,
+            },
+          });
+          const mean = [0, 0, 0];
+          for (let i = 0; i < data.length; i += 4)
+            for (let c = 0; c < 3; c++)
+              mean[c] += data[i + c] / (data.length / 4);
+          return mean;
+        };
+        if (h.pixels !== false) {
+          const [red, green, blue] = await middle();
+          ok(
+            blue > 170 && green > 120 && red < 90,
+            `the sea is drawn, not its background or the filtered lake (${[red, green, blue].map(Math.round)})`,
+          );
+        }
+        let failed = false;
+        try {
+          await r.globe.setBase({
+            vector: { styleUrl: 'data:application/json,%7B%7D' },
+          });
+        } catch {
+          failed = true;
+        }
+        ok(failed, 'a document that is no style is refused');
+        if (h.pixels !== false) {
+          const [red, green, blue] = await middle();
+          ok(
+            blue > 170 && red < 90,
+            `the base is as it was (${[red, green, blue].map(Math.round)})`,
+          );
+        }
+      },
+      { capability: 'vectorBase' },
     ),
     check(
       'globe.imagery.frames',

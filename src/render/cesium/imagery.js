@@ -20,6 +20,7 @@
  * imagery (`imageryFrames.js`).
  */
 import * as Cesium from 'cesium';
+import { vectorBaseProvider } from './vectorBase.js';
 import { creditMarkup } from './credits.js';
 import { listenerList } from './common.js';
 import {
@@ -146,6 +147,9 @@ export function providerFor(spec, { worldDataToken } = {}) {
         { accessToken },
       );
     }
+    // The app's own: the vector base's tiles, painted from its style.
+    case 'vectorStyle':
+      return vectorBaseProvider(spec.style);
     case 'canvas':
       if (typeof spec.drawTile !== 'function')
         throw new TypeError('Canvas imagery needs drawTile');

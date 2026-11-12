@@ -20,6 +20,8 @@ import { provideUnboundGlobe } from '../rendererOf.js';
 import { isBaseTileset, markBaseTileset } from '../baseTilesets.js';
 import { listenerList, uncaught } from './common.js';
 import { createCesiumImagery } from './imagery.js';
+import { attributionText } from './vectorBase.js';
+import { loadVectorStyle } from '../vectorBase/index.js';
 import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
 
 // The base marks live outside the adapter, so code that is not Cesium's can
@@ -134,6 +136,8 @@ export function createCesiumGlobe(
   let photorealGen = 0;
   let terrainGen = 0;
   let baseCredit = null;
+  // The vector base's sources' credits.
+  const vectorCredits = [];
 
   /** Every 3D tileset the scene holds. */
   function tilesets() {
@@ -234,10 +238,24 @@ export function createCesiumGlobe(
   }
 
   async function setBase(base) {
-    if (base.vector) throw new TypeError('This renderer draws no vector base');
+    if (base.vector && !can('vectorBase'))
+      throw new TypeError('This renderer draws no vector base');
+    // The style loads before the base changes: one that fails changes
+    // nothing.
+    const style = base.vector
+      ? await loadVectorStyle(base.vector.styleUrl)
+      : null;
     for (const handle of imagery.list()) handle.remove();
     baseCredit?.();
     baseCredit = base.credit && credits ? credits.addStatic(base.credit) : null;
+    for (const off of vectorCredits.splice(0)) off();
+    if (style) {
+      // Under any imagery the base also gives.
+      imagery.add({ kind: 'vectorStyle', style }, undefined, { base: true });
+      if (credits)
+        for (const text of style.attribution.map(attributionText))
+          if (text) vectorCredits.push(credits.addStatic({ text }));
+    }
     const loads = [];
     if (base.photoreal !== undefined) loads.push(setPhotoreal(base.photoreal));
     if (base.terrain !== undefined) loads.push(setTerrain(base.terrain));
@@ -569,6 +587,7 @@ export function createCesiumGlobe(
       imagery.dispose();
       baseCredit?.();
       baseCredit = null;
+      for (const off of vectorCredits.splice(0)) off();
     },
   };
 }

@@ -30,6 +30,7 @@ test('capabilities follow what the scene supports', () => {
     'imageryFrames',
     'surfaceIdentity',
     'surfaceShading',
+    'vectorBase',
   ];
   const globe = { show: true };
   const draw = ['models', 'modelAtmosphere', 'quads', 'meshes', 'fields'];

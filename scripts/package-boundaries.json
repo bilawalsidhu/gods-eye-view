@@ -1500,9 +1500,21 @@
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
-      "src/maps/keylessTerrain.js"
+      "src/maps/keylessTerrain.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
-    "external": ["cesium", "vue", "pinia", "vue-i18n"]
+    "external": [
+      "cesium",
+      "vue",
+      "pinia",
+      "vue-i18n",
+      "pbf",
+      "@mapbox/vector-tile"
+    ]
   },
   "ui-styles": {
     "exports": ["./ui/styles"],
@@ -2192,9 +2204,14 @@
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
-      "src/maps/keylessTerrain.js"
+      "src/maps/keylessTerrain.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
   "earthquakes": {
     "exports": ["./layers/earthquakes"],
@@ -2851,7 +2868,12 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -3033,9 +3055,14 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
-    "external": ["hls.js", "cesium"]
+    "external": ["hls.js", "cesium", "pbf", "@mapbox/vector-tile"]
   },
   "street-level-layer": {
     "exports": [
@@ -3559,9 +3586,14 @@
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
-      "src/maps/keylessTerrain.js"
+      "src/maps/keylessTerrain.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
   "voice-connection": {
     "exports": [
@@ -4861,7 +4893,12 @@
       "src/render/cesium/viewers.js",
       "src/ui/creditsView.js",
       "src/data/planespottersPhoto.js",
-      "src/maps/keylessTerrain.js"
+      "src/maps/keylessTerrain.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
     "external": [
       "hls.js",
@@ -5639,7 +5676,12 @@
       "src/maps/engine.js",
       "src/data/planespottersPhoto.js",
       "src/render/cesium/zoomOutGuard.js",
-      "src/maps/keylessTerrain.js"
+      "src/maps/keylessTerrain.js",
+      "src/render/cesium/vectorBase.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js"
     ],
     "external": [
       "hls.js",
@@ -7352,9 +7394,14 @@
       "src/render/stub/viewRectangle.js",
       "src/render/input/router.js",
       "src/render/conformance/goldens/camera.json",
-      "src/render/conformance/checks/camera.js"
+      "src/render/conformance/checks/camera.js",
+      "src/render/vectorBase/index.js",
+      "src/render/vectorBase/style.js",
+      "src/render/vectorBase/paint.js",
+      "src/render/vectorBase/expressions.js",
+      "src/render/vectorBase/encode.js"
     ],
-    "external": []
+    "external": ["pbf", "@mapbox/vector-tile"]
   },
   "wildlife-sightings": {
     "exports": ["./layers/wildlife-sightings"],

@@ -18,6 +18,7 @@ import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
 import { computeViewRectangle } from './viewRectangle.js';
+import { loadVectorStyle } from '../vectorBase/index.js';
 import {
   add,
   dot,
@@ -1420,6 +1421,11 @@ export function createStubRenderer(options = {}) {
   const globe = {
     async setBase(base) {
       log('globe', 'setBase', [base]);
+      if (base.vector && !capabilities.has('vectorBase'))
+        throw new TypeError('This renderer draws no vector base');
+      // The style is loaded, as a renderer drawing it loads it, so one that
+      // fails changes nothing; the stub paints none of it.
+      if (base.vector) await loadVectorStyle(base.vector.styleUrl);
       for (const layer of imageryLayers.slice()) layer.remove();
       if (base.photoreal !== undefined)
         await globe.setPhotoreal(base.photoreal);

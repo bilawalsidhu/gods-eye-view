@@ -50,6 +50,8 @@ const GLOBE_CAPABILITIES = [
   'imageryFrames',
   'surfaceIdentity',
   'surfaceShading',
+  // A MapLibre style's vector tiles, painted as imagery (`vectorBase.js`).
+  'vectorBase',
   'globeVisibility',
 ];
 
@@ -83,7 +85,7 @@ export function cesiumCapabilities(scene, only) {
       ? ['keepEarthFramed']
       : []),
     ...GPU_ICON_CAPABILITIES,
-    // Icon sets on billboards cluster on screen (`draw.js`).
+    // Icon sets cluster on screen, on billboards and the GPU (`draw.js`).
     'cluster',
     'styles',
     'bloom',

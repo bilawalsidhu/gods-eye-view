@@ -282,6 +282,71 @@ and each capability member present without its capability.
 `contract.test.mjs` type-checks the contract under strict TypeScript, and
 fails when `PORTS` and the types disagree on a single member.
 
+### The vector base painter
+
+`vectorBase` (`BaseSpec.vector = { styleUrl }`) draws a MapLibre style
+document's vector tiles as the globe's base. They are painted in shared,
+Cesium-free code, `src/render/vectorBase/`, which the renderer draws as
+draws imagery draws the same pixels:
+
+- `loadVectorStyle(styleUrl, fetch)` fetches the style and the TileJSON its
+  vector sources name (a source's `url`; inline `tiles` are used as given,
+  resolved against the style), compiles every layer, and returns the
+  sources (tile templates, `minzoom`, `maxzoom`, `xyz` or `tms`), the layers
+  it draws, the background, the sources' attributions, and `skipped`: each
+  layer it does not draw, with why.
+- `paintVectorTile(style, z, x, y, { size, fetch, signal, canvas })` paints
+  one Web Mercator tile on a canvas at style zoom `z + log2(size / 512)` (at
+  least 0). A source past its `maxzoom` is drawn from its deepest tile,
+  overzoomed; below its `minzoom` it draws nothing. Decoded source tiles
+  (gzipped ones inflated) are kept per style, the last 128.
+
+What it draws of the style specification:
+
+- Layers: `background` (`background-color`, `background-opacity`); `fill`
+  (`fill-color`, `fill-opacity`, `fill-outline-color`); `line`
+  (`line-color`, `line-width`, `line-opacity`, `line-dasharray`,
+  `line-cap`, `line-join`, and `line-gap-width` drawn as one line the full
+  cased width); `circle` (`circle-radius`, `circle-color`,
+  `circle-opacity`, `circle-stroke-width`, `circle-stroke-color`,
+  `circle-stroke-opacity`); `symbol` text only (`text-field` as an
+  expression or with `{name}` tokens, `text-size`, `text-font` as the
+  system's sans-serif or serif in bold or italic as its name says,
+  `text-color`, `text-opacity`, `text-halo-color`, `text-halo-width`,
+  `text-transform`, `text-anchor`, `text-offset`, `text-max-width`).
+  Layer `minzoom`, `maxzoom`, `filter` and `visibility` hold.
+- Labels are painted into the tiles: top layer first, each clear of those
+  placed before it and wholly inside its tile (one across a tile edge is
+  left out). A point labels at itself, a line halfway along it (level, not
+  along the line), a polygon at its outer ring's bounding-box centre.
+- Filters in both syntaxes (legacy, with `$type` and `$id`, and
+  expressions). Legacy `{stops, base, property, type}` functions
+  (exponential, interval, categorical, identity; not zoom-and-property).
+- Expressions: `literal`, `get`, `has`, `id`, `geometry-type`, `zoom`,
+  `properties`, `!`, `all`, `any`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`,
+  `case`, `match`, `coalesce`, `step`, `interpolate` (`linear` and
+  `exponential`; `-hcl` and `-lab` blend in RGB), `to-string`,
+  `to-number`, `to-boolean`, `to-color`, `number`, `string`, `boolean`,
+  `rgb`, `rgba`, `concat`, `format` (its text), `upcase`, `downcase`,
+  `length`, `at`, and arithmetic (`+ - * / % ^`, `min`, `max`, `abs`,
+  `floor`, `ceil`, `round`, `sqrt`, `ln`, `log10`, `log2`).
+- Skipped whole: `fill-extrusion`, `raster`, `hillshade`, `heatmap` and
+  `sky` layers; layers on raster sources; layers setting a pattern
+  (`fill-pattern`, `line-pattern`, `background-pattern`), `line-offset`,
+  `line-gradient` or a translation; layers whose values use an expression
+  not listed (or are malformed). A feature whose values cannot be evaluated
+  (a type that does not fit) is left out. Nothing unsupported throws.
+- Ignored: icons (`icon-image`, sprites: a symbol layer draws its text
+  alone), text along lines (drawn level), `glyphs` (system fonts), and any
+  other paint or layout property not listed above.
+
+The Cesium port loads the style before the base changes (a style that fails
+leaves the base as it was), draws it as Web Mercator imagery under the
+base's other imagery (`src/render/cesium/vectorBase.js`, 256 px tiles to
+level 20), and credits each source's attribution as plain text. The stub
+loads the style and paints nothing. The check `globe.base.vector` serves a
+style and a tile from data URLs and reads the drawn fill.
+
 ### What a renderer does, by role
 
 A renderer is more than a drawing surface: it is a whole globe engine. The
