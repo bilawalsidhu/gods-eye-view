@@ -349,6 +349,21 @@ test('GPU icon sets refuse what they cannot draw, changing nothing', () => {
   assert.equal(billboards.size(), 1);
 });
 
+test('GPU icon sets refuse clustering, changing nothing', () => {
+  const { part, draw } = drawOver();
+  const cluster = { pixelRange: 10, minimumSize: 2 };
+  const set = draw.icons({ id: 'gpu:cluster' });
+  set.set([icon('a', { motion: { kind: 'hold' } })]);
+  assert.throws(() => set.setOptions({ cluster }), /no clustering/);
+  assert.equal(part.sets.get('gpu:cluster').spec.cluster, undefined);
+  const clustered = draw.icons({ id: 'gpu:clustered', cluster });
+  assert.throws(
+    () => clustered.set([icon('a', { motion: { kind: 'hold' } })]),
+    /no clustering/,
+  );
+  assert.equal(clustered.size(), 0);
+});
+
 test('columns update rows by index: positions, courses, shown, scales, tints and meta', () => {
   const { part, draw } = drawOver();
   const set = draw.icons({ id: 'gpu:columns' });

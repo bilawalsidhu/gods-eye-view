@@ -76,6 +76,30 @@ export function createCesiumQuery({
 
   const hitOf = ({ id }) => drawHitOf({ id });
 
+  /**
+   * The hits a picked object stands for: its item's, or for a cluster's
+   * icon, one a member in the cluster's order (seed first), each at the
+   * cluster's position (`ClusterSpec`); unpickable members left out.
+   */
+  function hitsOf(owner) {
+    const cluster = owner.id.cluster;
+    if (!cluster) return pickable(owner) ? [hitOf(owner)] : [];
+    const { record } = owner;
+    const hits = [];
+    for (const id of cluster.ids) {
+      const item = record.items.get(id);
+      if (!item || !pickable({ record, item })) continue;
+      hits.push({
+        set: record.spec.id,
+        id,
+        ...(item.meta === undefined ? {} : { meta: item.meta }),
+        surface: false,
+        position: { ...cluster.position },
+      });
+    }
+    return hits;
+  }
+
   /** A query that throws answers nothing. */
   const quietly = (fn) => {
     try {
@@ -147,11 +171,18 @@ export function createCesiumQuery({
         if (untilForeign) break;
         continue;
       }
-      const key = `${owner.id.set}\u0000${owner.id.id}`;
-      if (!pickable(owner) || seen.has(key)) continue;
-      seen.add(key);
-      hits.push(hitOf(owner));
-      if (limit !== undefined && hits.length >= limit) break;
+      let full = false;
+      for (const hit of hitsOf(owner)) {
+        const key = `${hit.set}\u0000${hit.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        hits.push(hit);
+        if (limit !== undefined && hits.length >= limit) {
+          full = true;
+          break;
+        }
+      }
+      if (full) break;
     }
     return hits;
   }
@@ -313,7 +344,8 @@ export function createCesiumQuery({
       const picked = scene.pick(screen(x, y), width, height);
       rememberPick(scene, x, y, width, height, picked);
       const owner = ownerOf(picked);
-      if (owner && pickable(owner)) return hitOf(owner);
+      const [hit] = owner ? hitsOf(owner) : [];
+      if (hit) return hit;
       // Something unpickable is on top: the first pickable item under it,
       // unless something else hides it.
       if (owner) {

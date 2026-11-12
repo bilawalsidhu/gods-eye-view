@@ -34,6 +34,7 @@
 import * as Cesium from 'cesium';
 import { temeToPseudoFixed } from '../../geo/celestial.js';
 import { alongLength } from '../../geo/polyline.js';
+import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
@@ -549,6 +550,8 @@ export function createCesiumDraw({
         requestRender();
       },
       setOptions(options) {
+        // Refused, changing nothing, where icons on the GPU cannot take it.
+        if (record.gpu) gpu.check([], { ...spec, ...options });
         const culled = spec.horizonCull;
         const clampTo = spec.clampTo;
         const blend = spec.blend;
@@ -604,6 +607,19 @@ export function createCesiumDraw({
         setsVersion += 1;
         requestRender();
       },
+    };
+    // A clustered set clusters again in the next frame drawn after a change.
+    for (const name of ['set', 'upsert', 'remove', 'clear', 'setOptions']) {
+      const call = handle[name];
+      handle[name] = (...args) => {
+        record.clusterKey = null;
+        return call(...args);
+      };
+    }
+    const dispose = handle.dispose;
+    handle.dispose = () => {
+      dropClusters(record);
+      dispose();
     };
     // `columns`: column updates of an icon set, on the GPU.
     if (kind === 'icons' && capabilities.has('columns'))
@@ -833,7 +849,10 @@ export function createCesiumDraw({
       const horizon = horizonNow();
       if (!horizon) return;
       for (const placed of record.placed) {
-        const show = placed.shown && horizon.isPointVisible(placed.position);
+        const show =
+          placed.shown &&
+          !placed.clustered &&
+          horizon.isPointVisible(placed.position);
         if (placed.primitive.show !== show) placed.primitive.show = show;
       }
     }
@@ -856,6 +875,168 @@ export function createCesiumDraw({
         if (line.part.deep && line.part.deep.show !== show)
           line.part.deep.show = show;
       }
+    }
+  }
+
+  // --- Clusters (`cluster`) --------------------------------------------------
+
+  /** The default cluster badge: the count on a disc. */
+  const clusterBadge = (count) => ({
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="22" fill="#1d4f91" stroke="#ffffff" stroke-width="3"/><text x="24" y="31" font-family="sans-serif" font-size="${count > 99 ? 15 : 20}" font-weight="bold" fill="#ffffff" text-anchor="middle">${count}</text></svg>`,
+  });
+
+  /** Whether an icon set clusters now. */
+  const clusters = (record) =>
+    record.kind === 'icons' &&
+    Boolean(record.spec.cluster) &&
+    capabilities.has('cluster') &&
+    !record.gpu;
+
+  /** Let go of a set's cluster icons, and show its members again. */
+  function dropClusters(record) {
+    const host = record.clusterHost;
+    if (host && !host.isDestroyed() && live()) scene.primitives.remove(host);
+    record.clusterHost = null;
+    record.clusterState = null;
+    record.clusterKey = null;
+    for (const placed of record.placed) placed.clustered = false;
+  }
+
+  const clusterScratch = new Cesium.Cartesian2();
+  /**
+   * Each frame, before it draws: every clustered icon set clusters its
+   * icons again where the camera moved or the set changed since it last
+   * did (`ClusterSpec`), hiding the members and drawing an icon a cluster.
+   */
+  function clusterIcons() {
+    let pose;
+    const poseNow = () => {
+      const eye = scene.camera?.positionWC;
+      const dir = scene.camera?.directionWC;
+      return `${eye?.x},${eye?.y},${eye?.z},${dir?.x},${dir?.y},${dir?.z},${scene.canvas?.clientWidth},${scene.canvas?.clientHeight}`;
+    };
+    for (const record of sets.values()) {
+      if (!clusters(record)) {
+        if (record.clusterHost || record.clusterState) {
+          dropClusters(record);
+          for (const placed of record.placed)
+            placed.primitive.show = shownNow(record, placed);
+        }
+        continue;
+      }
+      if (!record.billboardHost || record.billboardHost.isDestroyed()) continue;
+      // A rebuilt collection starts afresh.
+      if (record.billboardHost !== record.clusteredHost) {
+        record.clusterState = null;
+        record.clusterKey = null;
+        record.clusteredHost = record.billboardHost;
+      }
+      pose ??= poseNow();
+      if (record.clusterKey === pose) {
+        if (record.clusterHost)
+          record.clusterHost.show = record.spec.show !== false;
+        continue;
+      }
+      record.clusterKey = pose;
+      reclusterIcons(record);
+    }
+  }
+
+  function reclusterIcons(record) {
+    const spec = record.spec.cluster;
+    const horizon = horizonNow();
+    const points = [];
+    const entries = new Map();
+    for (const [id, entry] of record.billboards) {
+      const item = record.items.get(id);
+      const placed = entry.placed;
+      if (!item || !placed.shown) continue;
+      if (horizon && !horizon.isPointVisible(placed.position)) continue;
+      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
+        scene,
+        placed.position,
+        clusterScratch,
+      );
+      if (!screen) continue;
+      points.push({
+        id,
+        position: placed.position,
+        screen: { x: screen.x, y: screen.y },
+        pixelSize: Math.max(item.size[0], item.size[1]) * (item.scale ?? 1),
+      });
+      entries.set(id, entry);
+    }
+    const result = clusterScreenPoints({
+      points,
+      pixelRange: spec.pixelRange,
+      minimumClusterSize: spec.minimumSize,
+      viewHeight: scene.canvas?.clientHeight ?? 0,
+      eyeHeight: scene.camera.positionCartographic?.height ?? 0,
+      previous: record.clusterState,
+      project: (position) => {
+        const p = Cesium.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          toCartesian(position),
+          new Cesium.Cartesian2(),
+        );
+        return p ? { x: p.x, y: p.y } : null;
+      },
+      isOccluded: (position) =>
+        horizon ? !horizon.isPointVisible(toCartesian(position)) : false,
+    });
+    record.clusterState = result.state;
+    const inCluster = new Set(result.clusters.flatMap((c) => c.ids));
+    for (const placed of record.placed) placed.clustered = false;
+    for (const id of inCluster) {
+      const entry = entries.get(id);
+      if (entry) entry.placed.clustered = true;
+    }
+    for (const placed of record.placed) {
+      const show = shownNow(record, placed);
+      if (placed.primitive.show !== show) placed.primitive.show = show;
+    }
+    let host = record.clusterHost;
+    if (!host || host.isDestroyed()) {
+      host = new Cesium.BillboardCollection({
+        scene,
+        blendOption: pointBlendOf(record.spec.blend),
+      });
+      record.clusterHost = host;
+      scene.primitives.add(host);
+    }
+    host.removeAll();
+    host.show = record.spec.show !== false;
+    for (const cluster of result.clusters) {
+      const seed = record.items.get(cluster.ids[0]);
+      const position = toCartesian(cluster.position);
+      const given = spec.icon?.(cluster.ids.length);
+      const image =
+        given === undefined
+          ? clusterBadge(cluster.ids.length)
+          : typeof given?.atlas === 'string'
+            ? atlases.get(given.atlas)?.[given.slot]
+            : given;
+      if (image === undefined) continue;
+      const scale = seed.scale ?? 1;
+      const billboard = host.add({
+        position,
+        width: seed.size[0] * scale,
+        height: seed.size[1] * scale,
+        disableDepthTestDistance: seed.disableDepthTest ?? 0,
+        id: {
+          set: record.spec.id,
+          id: cluster.ids[0],
+          get meta() {
+            return record.items.get(cluster.ids[0])?.meta;
+          },
+          cluster: {
+            ids: cluster.ids.slice(),
+            position: { x: position.x, y: position.y, z: position.z },
+          },
+        },
+      });
+      if (isKeyed(image)) billboard.setImage(image.key, image.canvas);
+      else billboard.image = toImage(image);
     }
   }
 
@@ -882,7 +1063,8 @@ export function createCesiumDraw({
    * frame's cull (a frame listener that moves its items).
    */
   function shownNow(record, placed) {
-    if (!placed.shown || !record.spec.horizonCull) return placed.shown;
+    if (!placed.shown || placed.clustered) return false;
+    if (!record.spec.horizonCull) return placed.shown;
     return horizonNow()?.isPointVisible(placed.position) ?? true;
   }
 
@@ -4795,6 +4977,7 @@ export function createCesiumDraw({
     beforeRender() {
       pulsing = runPulses();
       cullHorizon();
+      clusterIcons();
       runFlows();
       for (const record of sets.values())
         if (record.inertialLines || record.inertialPieces?.length)

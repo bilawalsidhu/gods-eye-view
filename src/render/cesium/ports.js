@@ -81,6 +81,8 @@ export function cesiumCapabilities(scene, only) {
       ? ['keepEarthFramed']
       : []),
     ...GPU_ICON_CAPABILITIES,
+    // Icon sets on billboards cluster on screen (`draw.js`).
+    'cluster',
     'styles',
     'bloom',
     'sharpen',

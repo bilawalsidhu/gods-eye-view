@@ -13,7 +13,8 @@
  * an item first needs it (or it first takes columns), and stays one. They
  * refuse loudly what billboards draw and they do not: clamped heights,
  * `fadeByDistance`, `displayRange`, pixel offsets, anchors other than the
- * centre, axis and screen rotations, and opaque and additive blends. Their
+ * centre, axis and screen rotations, opaque and additive blends, and
+ * clustering. Their
  * images (URLs, SVG, blobs, keyed canvases and atlas slots of those)
  * are rasterised square into the icon atlas every GPU icon set shares, and
  * refused when it has no room left for them: an SVG at its own size (its
@@ -205,6 +206,8 @@ export function createGpuIcons({
       throw new Error(
         `the Cesium renderer's GPU icons have no ${spec.blend} blend`,
       );
+    if (spec.cluster)
+      throw new Error("the Cesium renderer's GPU icons have no clustering");
     // Atlas slots these items would take anew: they must all fit.
     const fresh = new Set();
     for (const item of items) {

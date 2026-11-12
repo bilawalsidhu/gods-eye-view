@@ -11,6 +11,7 @@
  */
 import { horizonFrom } from '../../geo/horizon.js';
 import { alongLength } from '../../geo/polyline.js';
+import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { createInputRouter } from '../input/router.js';
 import { cssColor } from '../color.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
@@ -288,6 +289,7 @@ export function createStubRenderer(options = {}) {
     step('preRender');
     runPhase('preRender', t);
     step('render');
+    for (const set of sets.values()) clusterPass(set);
     rendered += 1;
     // A frame each timed layer was asked to show is now drawn.
     for (const [layer, flush] of [...frameFlushes])
@@ -510,7 +512,86 @@ export function createStubRenderer(options = {}) {
         record.items = next;
         requestRender('draw');
       };
+    // A clustered set clusters again in the next frame drawn after a change.
+    record.version = 0;
+    for (const name of [
+      'set',
+      'upsert',
+      'remove',
+      'clear',
+      'setOptions',
+      'setColumns',
+    ]) {
+      const call = handle[name];
+      if (!call) continue;
+      handle[name] = (...args) => {
+        record.version += 1;
+        return call(...args);
+      };
+    }
     return handle;
+  }
+
+  /**
+   * `cluster`: a clustered icon set's clusters as the last drawn frame made
+   * them (`ClusterSpec`), made again where the camera moved or the set
+   * changed since; null for a set that does not cluster.
+   */
+  function clusterPass(set) {
+    if (
+      set.kind !== 'icons' ||
+      !set.spec.cluster ||
+      !capabilities.has('cluster')
+    ) {
+      set.clusters = null;
+      return;
+    }
+    const e = eye();
+    const key = [
+      set.version,
+      e.position.x,
+      e.position.y,
+      e.position.z,
+      e.direction.x,
+      e.direction.y,
+      e.direction.z,
+      viewport.width,
+      viewport.height,
+    ].join(',');
+    if (set.clusterKey === key) return;
+    set.clusterKey = key;
+    const points = [];
+    for (const item of set.items.values()) {
+      if (item.show === false) continue;
+      const position = itemPosition(set, item);
+      if (!position || isOccluded(position)) continue;
+      const screen = project(position);
+      if (!screen) continue;
+      const [w = 0, h = 0] = item.size ?? [];
+      points.push({
+        id: item.id,
+        position,
+        screen,
+        pixelSize: Math.max(w, h) * (item.scale ?? 1),
+      });
+    }
+    const result = clusterScreenPoints({
+      points,
+      pixelRange: set.spec.cluster.pixelRange,
+      minimumClusterSize: set.spec.cluster.minimumSize,
+      viewHeight: viewport.height,
+      eyeHeight: toCartographicRadians(e.position).height,
+      previous: set.clusters?.state ?? null,
+      project,
+      isOccluded,
+    });
+    // Each cluster's icon is asked for, as a renderer drawing it would.
+    for (const cluster of result.clusters)
+      set.spec.cluster.icon?.(cluster.ids.length);
+    set.clusters = {
+      ...result,
+      members: new Set(result.clusters.flatMap((c) => c.ids)),
+    };
   }
 
   function simpleHandle(kind, spec) {
@@ -858,8 +939,40 @@ export function createStubRenderer(options = {}) {
         set.kind !== 'models'
       )
         continue;
+      const clustered = set.kind === 'icons' ? set.clusters : null;
+      // A cluster is picked as its members, seed first, at its position.
+      for (const cluster of clustered?.clusters ?? []) {
+        const seed = set.items.get(cluster.ids[0]);
+        const s = project(cluster.position);
+        if (!seed || !s) continue;
+        const [w = 0, h = 0] = seed.size ?? [];
+        const k = seed.scale ?? 1;
+        if (
+          Math.abs(s.x - x) > (w * k) / 2 + halfW ||
+          Math.abs(s.y - y) > (h * k) / 2 + halfH
+        )
+          continue;
+        const depth = magnitude(sub(cluster.position, eye().position));
+        for (const id of cluster.ids) {
+          const item = set.items.get(id);
+          if (!item) continue;
+          hits.push({
+            set: setId,
+            id,
+            meta: item.meta,
+            surface: false,
+            position: { ...cluster.position },
+            depth,
+            blocked: blockedItem(item),
+            over: (seed.disableDepthTest ?? 0) > depth,
+            order: set.spec.drawOrder ?? 0,
+            seq: set.seq,
+          });
+        }
+      }
       for (const item of set.items.values()) {
         if (item.show === false) continue;
+        if (clustered?.members.has(item.id)) continue;
         const p = itemPosition(set, item);
         if (!p || isOccluded(p)) continue;
         const distance = magnitude(sub(p, eye().position));

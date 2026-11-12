@@ -30,8 +30,24 @@ export type HeightMode = 'absolute' | 'clampGround' | 'relativeGround';
 /** What `clampGround` / `relativeGround` clamp to. */
 export type ClampTarget = 'terrain' | 'tiles' | 'both';
 
+/**
+ * `cluster`: screen-space clustering of a set's icons. Which icons cluster
+ * is `clusterScreenPoints` (`src/geo/screenCluster.js`) over the set's shown
+ * icons in front of the eye and above the horizon, in the set's order, each
+ * boxed at its drawn size (its larger side, times its `scale`), with
+ * `pixelRange` and `minimumSize`, and the last pass's clusters kept as it
+ * keeps them: so the renderer forms exactly these clusters. A cluster draws one
+ * icon at the cluster's position (the mean of its members') in place of its
+ * members, which are not drawn: its image is `icon(count)` when given, else
+ * a default badge showing the count, drawn at its seed's size. A pick on a
+ * cluster answers one `Hit` per member, in the cluster's order (seed
+ * first), each with that member's own `set`, `id` and `meta` and the
+ * cluster's `position`: so `pick` gives the seed and `drillPick` every
+ * member. Clusters are recomputed in the frames drawn after the camera
+ * moves or the set changes, never on a timer.
+ */
 export interface ClusterSpec {
-  /** Screen distance under which icons merge. */
+  /** Screen distance under which icons merge, CSS pixels. */
   pixelRange: number;
   /** Fewest icons that form a cluster. */
   minimumSize: number;
@@ -48,7 +64,7 @@ export interface SetSpec {
   id: string;
   /** Hide items beyond the ellipsoid's horizon, for sets drawn without depth test. */
   horizonCull?: boolean;
-  /** `cluster`: screen-space clustering (icons only). */
+  /** `cluster`: screen-space clustering (icons only; see `ClusterSpec`). */
   cluster?: ClusterSpec | null;
   blend?: 'opaque' | 'translucent' | 'additive';
   /**

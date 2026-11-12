@@ -7941,3 +7941,89 @@ test('the transit layer draws its vehicles as two icon sets, moving a marker bet
   assert.equal(hostOf(stillId), undefined);
   assert.equal(hostOf(movingId), undefined);
 });
+
+test('a clustered icon set draws one icon a cluster in place of its members, made again as the camera moves', () => {
+  const scene = fakeScene();
+  scene.camera.directionWC = new Cesium.Cartesian3(-1, 0, 0);
+  scene.camera.positionCartographic = { height: 1000 };
+  scene.canvas = { clientWidth: 400, clientHeight: 300 };
+  // Window positions: a degree of longitude is `spread` pixels.
+  let spread = 1;
+  const transforms = Cesium.SceneTransforms;
+  const project = transforms.worldToWindowCoordinates;
+  transforms.worldToWindowCoordinates = (_, position, result) => {
+    const at = Cesium.Cartographic.fromCartesian(position);
+    result ??= new Cesium.Cartesian2();
+    result.x = 200 + Cesium.Math.toDegrees(at.longitude) * spread;
+    result.y = 150 - Cesium.Math.toDegrees(at.latitude) * spread;
+    return result;
+  };
+  try {
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => {
+        throw error;
+      },
+      capabilities: new Set(['cluster']),
+    });
+    const counts = [];
+    const set = part.port.icons({
+      id: 'clustered',
+      cluster: {
+        pixelRange: 10,
+        minimumSize: 2,
+        icon: (count) => (counts.push(count), undefined),
+      },
+    });
+    const icon = (id, lon) => ({
+      id,
+      pos: { lon, lat: 0 },
+      image: { svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' },
+      size: [8, 8],
+      meta: { id },
+    });
+    set.set([icon('a', 0), icon('b', 2), icon('c', 4)]);
+    part.beforeRender();
+    const members = scene.added[0];
+    const clusters = scene.added.at(-1);
+    assert.notEqual(
+      clusters,
+      members,
+      'cluster icons are a collection of their own',
+    );
+    assert.deepEqual(
+      [0, 1, 2].map((i) => members.get(i).show),
+      [false, false, false],
+      'members are not drawn',
+    );
+    assert.equal(clusters.length, 1);
+    assert.deepEqual(counts, [3]);
+    const { id } = clusters.get(0);
+    assert.deepEqual([id.set, id.id, id.meta], ['clustered', 'a', { id: 'a' }]);
+    assert.deepEqual(id.cluster.ids, ['a', 'b', 'c'], 'seed first');
+    const mean = Cesium.Cartographic.fromCartesian(
+      new Cesium.Cartesian3(
+        id.cluster.position.x,
+        id.cluster.position.y,
+        id.cluster.position.z,
+      ),
+    );
+    assert.ok(Math.abs(Cesium.Math.toDegrees(mean.longitude) - 2) < 1e-6);
+    // Not made again while nothing moved.
+    part.beforeRender();
+    assert.deepEqual(counts, [3]);
+    // The camera moved: apart, each is its own.
+    spread = 100;
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 1, 0);
+    part.beforeRender();
+    assert.equal(clusters.length, 0);
+    assert.deepEqual(
+      [0, 1, 2].map((i) => members.get(i).show),
+      [true, true, true],
+    );
+    set.dispose();
+    assert.ok(!scene.added.includes(clusters), 'let go with the set');
+  } finally {
+    transforms.worldToWindowCoordinates = project;
+  }
+});

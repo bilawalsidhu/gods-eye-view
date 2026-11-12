@@ -163,6 +163,21 @@ keyed canvas, and an atlas slot as the image it holds (an icon waits for an
 unregistered slot; anything else refuses it). The check `draw.icons.images`
 draws each kind on still and receding icons.
 
+Icon sets with `cluster` (`ClusterSpec`) cluster the same way on every
+renderer: `clusterScreenPoints` (`src/geo/screenCluster.js`) over the shown
+icons in front of the eye and above the horizon, in the set's order, boxed at
+their drawn size, the last pass's clusters kept. A cluster draws one icon at
+the mean of its members' positions in place of its members (`icon(count)`,
+else a default badge with the count, at the seed's size). A pick on it
+answers one hit a member, seed first, each with the member's own `set`, `id`
+and `meta` and the cluster's position, so `pick` gives the seed and
+`drillPick` every member. Clusters are made again in the frames drawn after
+the camera moves or the set changes, never on a timer. The Cesium port draws
+a set's cluster icons in a billboard collection of their own and hides the
+members' billboards; a set on the GPU (`columns`, or moving, receding,
+proxy-picked or level-of-detail icons) refuses clustering. The check
+`draw.icons.cluster` draws a cluster, picks it, and parts it by moving in.
+
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass; draped too), lines in the
 `inertial` frame (turned each frame by the set's motion clock, a depth-fail
