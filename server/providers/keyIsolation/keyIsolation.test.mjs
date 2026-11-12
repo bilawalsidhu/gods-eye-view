@@ -119,7 +119,7 @@ test('ion: endpoint is fetched with the server token; client credentials are ign
   assert.equal(res.headers['cache-control'], 'no-store');
 });
 
-test('ion: endpoints are cached until their token nears expiry, then refreshed', async () => {
+test('ion: endpoints are served from memory for a minute and refreshed when their token nears expiry', async () => {
   let clock = 1_000_000;
   let n = 0;
   const fetchEndpoint = createIonEndpointFetcher({
@@ -140,6 +140,40 @@ test('ion: endpoints are cached until their token nears expiry, then refreshed',
   clock += 51 * 60 * 1000; // under 10 minutes of token left
   await fetchEndpoint('1');
   assert.equal(n, 2);
+});
+
+test('ion: a client asking again after a minute gets a new document, with ion called at most once a minute per asset', async () => {
+  // CesiumJS asks for the endpoint again, with the same request, when ion
+  // rejects an asset token (IonResource's retry callback).
+  let clock = 1_000_000;
+  let n = 0;
+  const fetchEndpoint = createIonEndpointFetcher({
+    env: { CESIUM_ION_TOKEN: LONG_LIVED_ION },
+    now: () => clock,
+    fetchImpl: async () => {
+      n += 1;
+      return response({
+        type: 'TERRAIN',
+        accessToken: jwt(clock / 1000 + 3600),
+        n,
+      });
+    },
+  });
+  const first = await fetchEndpoint('1');
+  clock += 30_000;
+  assert.equal(await fetchEndpoint('1'), first, 'inside the minute: same');
+  assert.equal(n, 1);
+  clock += 31_000;
+  const again = await fetchEndpoint('1');
+  assert.notEqual(again, first, 'after the minute: a fresh document');
+  assert.equal(n, 2);
+  // Every client asking, every second, for ten minutes: one call a minute.
+  for (let second = 0; second < 600; second += 1) {
+    clock += 1000;
+    await fetchEndpoint('1');
+  }
+  assert.ok(n <= 12, `ion was called ${n} times in ten minutes`);
+  assert.ok(n >= 10, `ion was called ${n} times in ten minutes`);
 });
 
 test('ion: concurrent requests for one asset share a single upstream call', async () => {

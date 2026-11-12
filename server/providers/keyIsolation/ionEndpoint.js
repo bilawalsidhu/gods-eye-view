@@ -23,6 +23,14 @@ const ENDPOINT_MAX_BYTES = 256 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
 /** Serve a cached endpoint only while its token has at least this long left. */
 const MIN_REMAINING_MS = 10 * 60 * 1000;
+/**
+ * ...and for at most this long. After ion rejects an asset token CesiumJS asks
+ * for the endpoint again with the very request it made first (once per
+ * asset), so a document handed out longer ago than this is fetched anew
+ * rather than returned a second time. That is at most one ion call per
+ * allow-listed asset per interval, however many clients ask.
+ */
+const REFETCH_AFTER_MS = 60 * 1000;
 /** Endpoint documents without a token expiry (external assets) are kept this long. */
 const NO_EXPIRY_TTL_MS = 30 * 60 * 1000;
 export const ION_ROUTE_MAX_PER_MIN = 300;
@@ -119,6 +127,7 @@ export function createIonEndpointFetcher({
     const expiry = jwtExpiryMs(document?.accessToken);
     cache.set(assetId, {
       text,
+      fetchedAt: now(),
       validUntil: expiry ?? now() + NO_EXPIRY_TTL_MS,
       hasExpiry: expiry !== null,
     });
@@ -130,7 +139,11 @@ export function createIonEndpointFetcher({
     if (!token)
       throw new IonEndpointError(503, 'no_key', { keyRequired: true });
     const hit = cache.get(assetId);
-    if (hit && hit.validUntil - now() > (hit.hasExpiry ? MIN_REMAINING_MS : 0))
+    if (
+      hit &&
+      now() - hit.fetchedAt < REFETCH_AFTER_MS &&
+      hit.validUntil - now() > (hit.hasExpiry ? MIN_REMAINING_MS : 0)
+    )
       return hit.text;
     if (!inflight.has(assetId)) {
       const pending = load(assetId, token).finally(() =>
