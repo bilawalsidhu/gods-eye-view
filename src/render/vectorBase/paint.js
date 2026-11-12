@@ -23,7 +23,7 @@
  */
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
-import { cssOf, fillTokens } from './expressions.js';
+import { cssOf, fillTokens, parseColor } from './expressions.js';
 
 /** The tile size style zooms are given for, pixels. */
 export const STYLE_TILE_SIZE = 512;
@@ -94,49 +94,66 @@ function sourceTile(style, url, fetchImpl) {
   return tile;
 }
 
-/** Whether a value is nothing: null, undefined or a number that is not one. */
-const nothing = (v) =>
-  v === null ||
-  v === undefined ||
-  (typeof v === 'number' && !Number.isFinite(v));
+/** The values each keyword property takes, as the specification lists them. */
+const KEYWORDS = {
+  'line-cap': ['butt', 'round', 'square'],
+  'line-join': ['bevel', 'round', 'miter'],
+  'text-transform': ['none', 'uppercase', 'lowercase'],
+  'text-anchor': [
+    'center',
+    'left',
+    'right',
+    'top',
+    'bottom',
+    'top-left',
+    'top-right',
+    'bottom-left',
+    'bottom-right',
+  ],
+};
 
 /**
- * A value of a layer for a feature. One that cannot be evaluated, or comes
- * to nothing, is the property's default, as MapLibre takes it (never the
- * last feature's, which a canvas given nothing would keep).
+ * A value of a layer for a feature, or the property's default where it
+ * cannot be evaluated. MapLibre then also takes the default for one that is
+ * not of the property's type, which {@link numberOf}, {@link colorOf} and
+ * {@link keywordOf} check: a canvas given a value it cannot use ignores it,
+ * so the last feature's would be drawn.
  */
-function valueOf(layer, key, f) {
+export function valueOf(layer, key, f) {
   let v;
   try {
     v = layer.values[key]?.(f);
   } catch {
     v = undefined;
   }
-  return nothing(v) ? layer.defaults?.[key] : v;
+  return v === null || v === undefined ? layer.defaults?.[key] : v;
 }
 
-/** A number value; the property's default for one that is not a number. */
-function numberOf(layer, key, f) {
+/** A number value: a finite number, else the property's default. */
+export function numberOf(layer, key, f) {
   const v = valueOf(layer, key, f);
-  const n = typeof v === 'number' || typeof v === 'string' ? Number(v) : NaN;
-  return Number.isFinite(n) && v !== '' ? n : Number(layer.defaults?.[key]);
+  return typeof v === 'number' && Number.isFinite(v)
+    ? v
+    : Number(layer.defaults?.[key]);
 }
 
-/** A colour as CSS, a string or `[r, g, b, a]`; else the default (or `or`). */
-function colorOf(layer, key, f, or = layer.defaults?.[key]) {
+/**
+ * A colour value as CSS: one `parseColor` reads, else the default (or
+ * `or`).
+ */
+export function colorOf(layer, key, f, or = layer.defaults?.[key]) {
   const css = (v) => {
-    if (typeof v === 'string' && v.trim()) return v;
-    if (Array.isArray(v) && v.length === 4 && v.every(Number.isFinite))
-      return cssOf(v);
-    return null;
+    const parsed = parseColor(v);
+    if (!parsed || !parsed.every(Number.isFinite)) return null;
+    return typeof v === 'string' ? v : cssOf(parsed);
   };
   return css(valueOf(layer, key, f)) ?? css(or);
 }
 
-/** A keyword value (`line-cap`, `line-join`); the default for no string. */
-function keywordOf(layer, key, f) {
+/** A keyword value: one its property takes, else the default. */
+export function keywordOf(layer, key, f) {
   const v = valueOf(layer, key, f);
-  return typeof v === 'string' && v ? v : layer.defaults?.[key];
+  return KEYWORDS[key]?.includes(v) ? v : layer.defaults?.[key];
 }
 
 /** Paths a feature's rings or lines in tile pixels. */
@@ -388,7 +405,7 @@ function drawFeature(ctx, layer, feature, f, at, labels, order) {
       let text = layer.tokens
         ? fillTokens(String(field ?? ''), f.properties)
         : String(field ?? '');
-      const transform = v('text-transform');
+      const transform = keywordOf(layer, 'text-transform', f);
       if (transform === 'uppercase') text = text.toUpperCase();
       if (transform === 'lowercase') text = text.toLowerCase();
       text = text.trim();
@@ -423,9 +440,7 @@ function drawFeature(ctx, layer, feature, f, at, labels, order) {
         opacity: num('text-opacity'),
         halo: color('text-halo-color'),
         haloWidth: num('text-halo-width'),
-        anchor: String(
-          (layer.values['text-anchor'] && v('text-anchor')) ?? 'center',
-        ),
+        anchor: keywordOf(layer, 'text-anchor', f),
         maxWidth,
         order,
       };

@@ -347,8 +347,10 @@ What it draws of the style specification:
   `line-gradient` or a translation; layers whose values use an expression
   not listed (or are malformed). As MapLibre does, a paint or layout value
   that cannot be evaluated for a feature (a type that does not fit, a
-  `step` or `interpolate` over what is not a number) or comes to nothing
-  (null, or not a finite number where one is needed) is the property's
+  `step` or `interpolate` over what is not a number) or is not of the
+  property's kind (null; not a finite number, a string included, where a
+  number is needed; not a colour `parseColor` reads, which takes the CSS
+  colour names; not one of the property's keywords) is the property's
   default; a legacy function's miss is its `default`, else the property's.
   A feature whose filter cannot be evaluated is left out. Nothing
   unsupported throws.

@@ -605,3 +605,82 @@ test('labels of one layer are placed in their features’ order, the first winni
     ['First'],
   );
 });
+
+test('a colour, keyword or number of the wrong kind is the property’s default, never the last feature’s', async () => {
+  const fills = await paintOne(
+    {
+      id: 'water',
+      type: 'fill',
+      'source-layer': 'water',
+      paint: { 'fill-color': ['get', 'c'] },
+    },
+    {
+      water: [
+        { type: 'Polygon', geometry: FULL, properties: { c: '#00f' } },
+        { type: 'Polygon', geometry: FULL, properties: { c: 'bogus' } },
+        { type: 'Polygon', geometry: FULL, properties: { c: 'orange' } },
+      ],
+    },
+  );
+  assert.deepEqual(
+    fills.filter(([k]) => k === '=fillStyle').map(([, v]) => v),
+    ['#00f', '#000000', 'orange'],
+  );
+  const line = [
+    [
+      [0, 2048],
+      [4096, 2048],
+    ],
+  ];
+  const lines = await paintOne(
+    {
+      id: 'roads',
+      type: 'line',
+      'source-layer': 'roads',
+      layout: { 'line-join': ['get', 'j'], 'line-cap': ['get', 'cap'] },
+      paint: { 'line-width': ['get', 'w'] },
+    },
+    {
+      roads: [
+        {
+          type: 'LineString',
+          geometry: line,
+          properties: { j: 'round', cap: 'square', w: 3 },
+        },
+        {
+          type: 'LineString',
+          geometry: line,
+          properties: { j: 'pointy', cap: 7, w: '5' },
+        },
+      ],
+    },
+  );
+  const set = (key) => lines.filter(([k]) => k === `=${key}`).map(([, v]) => v);
+  assert.deepEqual(set('lineJoin'), ['round', 'miter']);
+  assert.deepEqual(set('lineCap'), ['square', 'butt']);
+  assert.deepEqual(set('lineWidth'), [3, 1], 'a string is not a number');
+});
+
+test('a style’s background takes the defaults where its values cannot be used', async () => {
+  const background = async (paint) => {
+    const { fetch } = fetchOver({
+      'https://example.test/s.json': {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'bg', type: 'background', paint }],
+      },
+    });
+    return (await loadVectorStyle('https://example.test/s.json', fetch))
+      .background;
+  };
+  const black = { color: '#000000', opacity: 1 };
+  assert.deepEqual(
+    await background({ 'background-color': ['get', 'none'] }),
+    black,
+  );
+  assert.deepEqual(await background({ 'background-color': 'bogus' }), black);
+  assert.deepEqual(
+    await background({ 'background-opacity': ['/', 1, ['get', 'x']] }),
+    black,
+  );
+});

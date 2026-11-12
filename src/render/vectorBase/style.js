@@ -6,12 +6,8 @@
  * and its background. A layer the painter cannot draw is listed in `skipped`
  * with the reason, never drawn wrong.
  */
-import {
-  compileFilter,
-  compileValue,
-  cssOf,
-  Unsupported,
-} from './expressions.js';
+import { compileFilter, compileValue, Unsupported } from './expressions.js';
+import { colorOf, numberOf } from './paint.js';
 
 /** Layer types the painter draws. */
 export const PAINTED_TYPES = Object.freeze([
@@ -259,25 +255,15 @@ export async function loadVectorStyle(
       continue;
     }
     layers.push(layer);
-    if (layer.type === 'background' && !background)
-      try {
-        const at = { zoom: 0, properties: {}, type: 'Polygon' };
-        const value = layer.values['background-color'](at);
-        // A colour as a string, or `[r, g, b, a]` (as `to-color` gives one).
-        const color =
-          typeof value === 'string'
-            ? value
-            : Array.isArray(value) &&
-                value.length === 4 &&
-                value.every(Number.isFinite)
-              ? cssOf(value)
-              : null;
-        const opacity = layer.values['background-opacity'](at);
-        background =
-          color && Number.isFinite(opacity) ? { color, opacity } : null;
-      } catch {
-        background = null;
-      }
+    if (layer.type === 'background' && !background) {
+      // As it paints: a value that cannot be evaluated, or is not a
+      // colour or number, is the property's default.
+      const at = { zoom: 0, properties: {}, type: 'Polygon' };
+      background = {
+        color: colorOf(layer, 'background-color', at),
+        opacity: numberOf(layer, 'background-opacity', at),
+      };
+    }
   }
   return {
     url: styleUrl,
