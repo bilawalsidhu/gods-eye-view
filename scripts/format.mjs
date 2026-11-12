@@ -120,6 +120,13 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  // Temporary CI diagnostic: emit canonical Prettier output for two PR fixtures.
+  for (const { name, formatted } of changed)
+    if (
+      name === 'src/layers/flights/records.test.mjs' ||
+      name === 'src/layers/flights/enrichment.route.test.mjs'
+    )
+      console.error('GEV_PR1586_FORMAT_PAYLOAD:' + JSON.stringify({ name, formatted }));
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
