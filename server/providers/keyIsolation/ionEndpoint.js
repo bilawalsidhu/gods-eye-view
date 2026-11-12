@@ -30,7 +30,7 @@ export const ION_ALLOWED_ASSETS = Object.freeze(
 );
 const ENDPOINT_MAX_BYTES = 256 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
-/** Serve a cached endpoint only while its token has at least this long left. */
+/** Serve a cached endpoint only while its token has more than this long left. */
 const MIN_REMAINING_MS = 10 * 60 * 1000;
 /**
  * ...and for at most this long, for a document without `externalType`
@@ -39,19 +39,21 @@ const MIN_REMAINING_MS = 10 * 60 * 1000;
  * assets it reads through IonResource without `externalType`: the external
  * Bing imagery and Google 3D Tiles documents are read with no retry. So a
  * terrain document handed out longer ago than this is fetched anew rather
- * than returned a second time. While ion answers, that is at most one ion
- * call per allow-listed asset per interval, however many clients ask; while
- * it does not, see TRANSIENT_BACKOFF_S.
+ * than returned a second time. While ion returns documents, that is at most
+ * one ion call per allow-listed asset per interval, however many clients ask;
+ * while it fails, see TRANSIENT_BACKOFF_S; a refusal is not cached and has no
+ * back-off (see refresh), so it reaches ion at the route's per-client limit.
  */
 const REFETCH_AFTER_MS = 60 * 1000;
 /**
- * An external document is kept until its token nears expiry; one that
- * carries no token expiry is kept this long.
+ * An external document is kept until its token has MIN_REMAINING_MS or less
+ * left; one that carries no token expiry is kept this long.
  */
 const NO_EXPIRY_TTL_MS = 30 * 60 * 1000;
 /**
- * After ion fails for a passing reason (no answer, a timeout, 429, 5xx) it is
- * left alone this long, or for the Retry-After it names, at most a minute.
+ * After ion fails for a passing reason (no answer, a timeout, 408, 429, 5xx,
+ * or an answer this server cannot use) it is left alone this long, or for the
+ * Retry-After it names (in seconds), at most a minute.
  */
 const TRANSIENT_BACKOFF_S = 10;
 const MAX_BACKOFF_S = 60;
@@ -195,7 +197,11 @@ export function createIonEndpointFetcher({
     return text;
   }
 
-  /** Whether a held document may be handed out now (its token has life left). */
+  /**
+   * Whether a held document may be handed out now: its token has more than
+   * MIN_REMAINING_MS left, or it carries no expiry and its thirty minutes are
+   * not over.
+   */
   const usable = (hit, at) =>
     hit.validUntil - at > (hit.hasExpiry ? MIN_REMAINING_MS : 0);
 
@@ -232,7 +238,8 @@ export function createIonEndpointFetcher({
   /**
    * Call ion for a new document. When ion has a passing failure and a held
    * document still has a good token, that document is the answer; a refusal
-   * (token rejected, asset not available) removes the held document.
+   * (token rejected, asset not available, any other 4xx) removes the held
+   * document and is neither cached nor followed by a back-off.
    */
   async function refresh(assetId, token) {
     try {
