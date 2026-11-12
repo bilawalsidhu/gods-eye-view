@@ -7,6 +7,7 @@ import {
   heldFrames,
   layerDrawn,
   shownAt,
+  VIDEO_DURATION_TIMEOUT_MS,
   VIDEO_SEEK_TIMEOUT_MS,
   VIDEO_STEP_MS,
   videoProvider,
@@ -167,9 +168,17 @@ function fakeVideoPage() {
     createElement(tag) {
       if (tag === 'canvas') return { getContext: () => ({ drawImage() {} }) };
       const target = new EventTarget();
+      let time = 0;
+      // Setting the time starts a seek, which the test ends (`seeked`).
+      Object.defineProperty(target, 'currentTime', {
+        get: () => time,
+        set: (t) => {
+          time = t;
+          target.seeking = true;
+        },
+      });
       const video = Object.assign(target, {
         duration: NaN,
-        currentTime: 0,
         seeking: false,
         videoWidth: 2,
         videoHeight: 2,
@@ -220,6 +229,73 @@ test('a tile video seek that never ends fails its frame after the seek timeout',
     mock.timers.tick(VIDEO_SEEK_TIMEOUT_MS);
     for (let i = 0; i < 5; i++) await Promise.resolve();
     assert.match(String(failed), /did not seek/);
+  } finally {
+    mock.timers.reset();
+    restore();
+  }
+});
+
+/** Let promise callbacks run. */
+const flush = async () => {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
+
+/** End a fake video's seek. */
+const endSeek = (video) => {
+  video.seeking = false;
+  video.dispatchEvent(new Event('seeked'));
+};
+
+test('after a seek that timed out, the next frame seeks again rather than drawing what shows', async () => {
+  const { made, restore } = fakeVideoPage();
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const videos = createTileVideos(4);
+    const first = videos.frame('a.webm', 0.5);
+    first.catch(() => {});
+    made[0].duration = 10;
+    made[0].dispatchEvent(new Event('loadeddata'));
+    await flush();
+    mock.timers.tick(VIDEO_SEEK_TIMEOUT_MS);
+    await assert.rejects(first, /did not seek/);
+    // Its time is the target, but it never got there.
+    let drawn = false;
+    const second = videos.frame('a.webm', 0.5).then(() => (drawn = true));
+    await flush();
+    assert.equal(drawn, false, 'waits for its own seek');
+    endSeek(made[0]);
+    await second;
+    assert.equal(drawn, true);
+  } finally {
+    mock.timers.reset();
+    restore();
+  }
+});
+
+test('a video’s length is learnt with a longer wait, and a failed one is not kept', async () => {
+  const { made, restore } = fakeVideoPage();
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const videos = createTileVideos(4);
+    let failed = null;
+    videos.frame('a.webm', 0.5).catch((error) => (failed = error));
+    // No duration: it seeks past its end to learn it.
+    made[0].dispatchEvent(new Event('loadeddata'));
+    await flush();
+    mock.timers.tick(VIDEO_SEEK_TIMEOUT_MS);
+    await flush();
+    assert.equal(failed, null, 'not on the short seek wait');
+    mock.timers.tick(VIDEO_DURATION_TIMEOUT_MS);
+    await flush();
+    assert.match(String(failed), /did not seek/);
+    // Asked again: a fresh video, which loads this time.
+    const again = videos.frame('a.webm', 0.5);
+    assert.equal(made.length, 2, 'started over');
+    made[1].duration = 10;
+    made[1].dispatchEvent(new Event('loadeddata'));
+    await flush();
+    endSeek(made[1]);
+    assert.ok(await again);
   } finally {
     mock.timers.reset();
     restore();

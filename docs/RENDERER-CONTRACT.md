@@ -217,7 +217,10 @@ seen every 250 ms of each segment (at most 1,200 times a segment), each tile
 the video its URL names for it (or one video over the layer's rectangle for a
 `single-image` layer), seeked to the time's share of its length. A layer
 keeps its 48 most recently seen tile videos; a tile waiting on one it lets
-go, or on a seek that takes over 10 s, fails rather than waiting. `frameReady`
+go, or on a seek that takes over 10 s (60 s for the seek past its end that
+learns the length of a video that does not state it), fails rather than
+waiting; a video that failed to load is asked for afresh by the next tile, and
+one still seeking is seeked again rather than drawn as it stands. `frameReady`
 names the nearest frame's time once every globe tile drawn shows that
 frame's own imagery (`src/render/cesium/imageryFrames.js`). The checks
 `globe.imagery.frames` and `globe.imagery.video` cover both.

@@ -23,6 +23,11 @@ export const VIDEO_STEPS_MAX = 1200;
 export const VIDEO_CACHE = 48;
 /** How long a tile video's seek may take before its frame fails, ms. */
 export const VIDEO_SEEK_TIMEOUT_MS = 10000;
+/**
+ * How long the seek past its end that learns a video's length may take, ms:
+ * it may read the whole video first.
+ */
+export const VIDEO_DURATION_TIMEOUT_MS = 60000;
 
 /**
  * The frames of a timed source, in time order: `{time, url}`, and for
@@ -127,9 +132,9 @@ function tileUrlOf(template, tilingScheme, x, y, level) {
  * Seek a video, resolving once it has: on a `seeked` that leaves it no
  * longer seeking (one a seek before it sends late does not count), and its
  * frame there presented where the browser says so. Rejects on an error, or
- * after `VIDEO_SEEK_TIMEOUT_MS` with no seek.
+ * after `timeoutMs` with no seek.
  */
-function seekTo(video, time, url) {
+function seekTo(video, time, url, timeoutMs = VIDEO_SEEK_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const stop = () => {
       clearTimeout(timeout);
@@ -140,7 +145,7 @@ function seekTo(video, time, url) {
       stop();
       reject(new Error(`The video tile did not seek: ${url}`));
     };
-    const timeout = setTimeout(failed, VIDEO_SEEK_TIMEOUT_MS);
+    const timeout = setTimeout(failed, timeoutMs);
     const seeked = () => {
       if (video.seeking) return;
       stop();
@@ -202,10 +207,14 @@ export function createTileVideos(limit = VIDEO_CACHE) {
     // seeked past its end once to learn it.
     const ready = loaded.then(async () => {
       if (!Number.isFinite(video.duration))
-        await seekTo(video, Number.MAX_SAFE_INTEGER, url);
+        await seekTo(
+          video,
+          Number.MAX_SAFE_INTEGER,
+          url,
+          VIDEO_DURATION_TIMEOUT_MS,
+        );
       return video;
     });
-    ready.catch(() => {});
     video.src = url;
     let releaseWith;
     const gone = new Promise((_, reject) => {
@@ -221,6 +230,14 @@ export function createTileVideos(limit = VIDEO_CACHE) {
       released: false,
     };
     videos.set(url, entry);
+    // A video that failed to load (or to say how long it is) is not kept:
+    // the next frame asked of it starts over.
+    const loadedEntry = entry;
+    ready.catch(() => {
+      if (videos.get(url) !== loadedEntry) return;
+      videos.delete(url);
+      release(loadedEntry, url);
+    });
     while (videos.size > limit) {
       const [oldest, old] = videos.entries().next().value;
       videos.delete(oldest);
@@ -238,7 +255,9 @@ export function createTileVideos(limit = VIDEO_CACHE) {
       const video = await until(entry.ready);
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       const at = Math.max(0, Math.min(duration - 1e-3, fraction * duration));
-      if (Math.abs(video.currentTime - at) > 1e-4)
+      // Still seeking (a seek that timed out may have set the time without
+      // ever ending): seeked again, never drawn as it stands.
+      if (video.seeking || Math.abs(video.currentTime - at) > 1e-4)
         await until(seekTo(video, at, url));
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 1;
