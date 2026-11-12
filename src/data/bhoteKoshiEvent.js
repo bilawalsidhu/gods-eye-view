@@ -1052,7 +1052,7 @@ export function createBhoteKoshiEventLayer({
   // surge front. Null while the layer is off.
   let _floodSets = null;
   let _floodSurfaceMode = null;
-  // What the flood shows, set as the story moves, and what was last drawn
+  // What the flood shows, set as the event plays, and what was last drawn
   // of it (`drawFlood`).
   let _floodShow = false;
   let _surgeShow = false;
@@ -2573,7 +2573,7 @@ export function createBhoteKoshiEventLayer({
     updateProgress(_progress);
   }
 
-  /** The flood's draw sets, drawing nothing until the story shows it. */
+  /** The flood's draw sets, drawing nothing until the event shows it. */
   function createFloodSets() {
     _floodSurfaceMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
     const draw = drawOf(_viewer);
@@ -2695,7 +2695,7 @@ export function createBhoteKoshiEventLayer({
   function syncFloodSurfaceMode() {
     const nextMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
     if (!_viewer || !_floodSets || _floodSurfaceMode === nextMode) return;
-    // Drawn anew on the other surface as the story next moves.
+    // Drawn anew on the other surface as the event next moves on.
     removeFloodSets();
     _corridorPositionCache = { visibleCount: -1, positions: [] };
     createFloodSets();

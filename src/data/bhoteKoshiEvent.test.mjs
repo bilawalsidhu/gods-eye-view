@@ -1576,7 +1576,7 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === false));
     assert.equal(comparisonCalls.at(-1), null);
 
-    assert.equal(viewer._test.flood('bhote-koshi-flood-core'), undefined, 'drawn anew on the tiles as the story moves');
+    assert.equal(viewer._test.flood('bhote-koshi-flood-core'), undefined, 'drawn anew on the tiles as the event plays');
     layer.setParams({ progress: 0.6 }, { origin: 'scene' });
     const tileFlood = viewer._test.flood('bhote-koshi-flood-core');
     assert.equal(tileFlood.mode, 'draped');
