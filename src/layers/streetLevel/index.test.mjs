@@ -7,6 +7,7 @@ import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
+import { createMapillarySource } from './providers/mapillary/source.js';
 import { createKartaViewProvider } from './providers/kartaview/index.js';
 import {
   fakeCesiumViewer,
@@ -2213,4 +2214,50 @@ test('subscribePhotoViewer hands on the photo viewer a provider presents, the la
   unsubscribe();
   a.present(viewA);
   assert.equal(shown.length, 4, 'unsubscribed');
+});
+
+/** The real Mapillary source over a fetch that no test lets answer. */
+const realMapillarySource = (options = {}) =>
+  createMapillarySource({
+    fetchImpl: async () => new Response('{}'),
+    ...options,
+  });
+
+function layerOver(t, source) {
+  const layer = createStreetLevelLayer({
+    providers: [
+      createMapillaryProvider({ source, photoViewer: fakePhotoViewer() }),
+      createKartaViewProvider(),
+    ],
+  });
+  t.after(() => layer.destroy());
+  return layer;
+}
+
+test('a server without a Mapillary token starts Street Level on the first keyless source', (t) => {
+  // Not told, or told "not configured": either way no token is known.
+  for (const source of [
+    realMapillarySource(),
+    realMapillarySource({ configured: false }),
+  ])
+    assert.deepEqual(litProviders(layerOver(t, source)), ['kartaview']);
+  // A restored "Mapillary on" keeps a keyless source too.
+  const layer = layerOver(t, realMapillarySource({ configured: false }));
+  layer.setParams({ mapillary: true, providerSwitches: '' });
+  assert.deepEqual(litProviders(layer), ['kartaview']);
+});
+
+test('a server that holds a Mapillary token starts Street Level on Mapillary', (t) => {
+  const layer = layerOver(t, realMapillarySource({ configured: true }));
+  assert.deepEqual(litProviders(layer), ['mapillary']);
+  layer.setParams({ mapillary: true, providerSwitches: '' });
+  assert.deepEqual(litProviders(layer), ['mapillary']);
+});
+
+test('a Graph proxy the embedder configured counts as a key without a status answer', (t) => {
+  const layer = layerOver(
+    t,
+    realMapillarySource({ graphEndpoint: 'https://graph.example/proxy' }),
+  );
+  assert.deepEqual(litProviders(layer), ['mapillary']);
 });
