@@ -334,3 +334,8 @@ warning. A refused hold, and one that throws or returns a promise, is followed
 by `release(id, { restore: false })`, again once a returned promise settles,
 so `release` must be harmless for a subject it does not hold and when called
 more than once.
+
+Leaving the view does not track again an aircraft that was tracked before
+entry, as with the bridge and orbital views: when the user leaves by the exit
+control, the map goes back to the ridden subject through
+`release(id, { restore: true })`.

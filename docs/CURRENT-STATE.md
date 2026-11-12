@@ -2040,8 +2040,14 @@ reported or derived, position source, feed credit and stops, and
 `selectedAtMs`, when the user last selected it by a click or `focusTrain`,
 even again; null after a deselection and for a train only a hold selected),
 `setCockpitSubject(key)` (its marker and card hidden, the selection kept, its
-feed held, clicks and Escape left to the view) and `focusTrain(key)`; its pure
-path module is exported as `@gods-eye-view/core/layers/rail/paths`. Transit
+feed held, clicks and Escape left to the view; the held copy stays the one
+drawn of its train while held, another feed's copy hidden, and it keeps
+moving, still selected, when its category is turned off) and
+`focusTrain(key)` (false for a train the layer does not draw); its pure path
+module is exported as `@gods-eye-view/core/layers/rail/paths`. That export,
+`@gods-eye-view/core/i18n/locale` and these read APIs are experimental and may
+change without notice. A snapshot read again while nothing in it changed is
+the one read before, and its `path.line` is a frozen copy. Transit
 offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
 out of the camera's view, and its sprite, card, trail and detection box are
