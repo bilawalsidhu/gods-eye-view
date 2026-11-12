@@ -4,7 +4,11 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
-import { initMobileShell } from './mobileShell.js';
+import {
+  initMobileShell,
+  MOBILE_SHELL_MEDIA_QUERY,
+  sheetForPanelId,
+} from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -1143,6 +1147,7 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
+        revealPanel: () => this.revealPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1259,6 +1264,20 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
+   * Bring a panel into view on a phone, where the rails show only as tab
+   * sheets: opens the sheet that holds it. Does nothing above 720px.
+   * @param {string} panelId - DOM id of the panel.
+   * @returns {void}
+   */
+  revealPanel(panelId) {
+    const sheet = sheetForPanelId(panelId);
+    if (!globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches) return;
+    if (sheet) this._mobileShell?.setSheet(sheet);
+    // The sheet opens at its top; a panel lower in the rail is scrolled to.
+    document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  /**
    * Toggles "clean view" mode which hides all UI panels via a CSS body class.
    * @param {boolean} [forceEnabled] - Explicit on/off. Omit to toggle.
    * @returns {void}
@@ -1364,9 +1383,12 @@ export class StyleManager extends ShellFacade {
       };
     }
     if (!target.available) {
+      // The controller knows why (Google 3D: no Maps key; others: no ion token).
       return {
         ok: false,
-        error: `${target.label} requires a Cesium ion token`,
+        error:
+          target.unavailableReason ||
+          `${target.label} requires a Cesium ion token`,
         activeStack: this.mapStackController.getActiveId(),
       };
     }

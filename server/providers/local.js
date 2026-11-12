@@ -16,6 +16,7 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import { railProxy } from './rail.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
@@ -71,6 +72,7 @@ function localProviderPlugins({
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
+    railProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),
