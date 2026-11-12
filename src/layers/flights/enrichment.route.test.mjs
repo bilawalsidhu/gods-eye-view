@@ -166,7 +166,10 @@ test('a callsign A-B-A cycle drops the old route and permits a fresh lookup', as
     null,
     'the first UAL123 response belongs to an obsolete association',
   );
-  assert.notEqual(returned.routeAssociationVersion, first.routeAssociationVersion);
+  assert.notEqual(
+    returned.routeAssociationVersion,
+    first.routeAssociationVersion,
+  );
 
   // A new request for the same callsign is not blocked by the old dedup key.
   flightState._enrichLastDispatchMs = 0;
