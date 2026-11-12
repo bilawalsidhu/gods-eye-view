@@ -10,10 +10,26 @@
  * is shown, else on the base tileset. Port layers keep their order among
  * themselves in every collection; layers others added to a collection stay
  * where they are.
+ *
+ * With `imageryFrames`, a handle given a timed source (`setFrames`) hides
+ * its own layer and draws the frames its clock shows instead, each a Cesium
+ * layer of its own just above it: the nearest frame (in `blend` mode the
+ * later frame over the earlier one, at its share of the way), and the next
+ * `prefetch` frames loading unseen at alpha 0. A frame is ready
+ * (`frameReady`) once the globe's tiles drawn are drawn from its own
+ * imagery (`imageryFrames.js`).
  */
 import * as Cesium from 'cesium';
 import { creditMarkup } from './credits.js';
 import { listenerList } from './common.js';
+import {
+  createTileVideos,
+  framesOf,
+  heldFrames,
+  layerDrawn,
+  shownAt,
+  videoProvider,
+} from './imageryFrames.js';
 import { withTileRequestHook } from './tileRequests.js';
 
 const SPLITS = { none: 'NONE', left: 'LEFT', right: 'RIGHT' };
@@ -422,7 +438,8 @@ export function createCesiumImagery(
         ? new Cesium.ImageryLayer(record.provider)
         : Cesium.ImageryLayer.fromProviderAsync(record.providerPromise);
     layer.alpha = record.alpha;
-    layer.show = record.show;
+    // A layer showing timed frames hides its own imagery.
+    layer.show = record.show && !record.timed;
     layer.splitDirection = Cesium.SplitDirection[SPLITS[record.split]];
     return layer;
   }
@@ -505,8 +522,8 @@ export function createCesiumImagery(
       signals,
       offError: null,
     };
-    const watchErrors = (provider) => {
-      record.offError = provider.errorEvent?.addEventListener?.((error) => {
+    const watchErrors = (provider) =>
+      provider.errorEvent?.addEventListener?.((error) => {
         if (error?.error instanceof MissingTile) return;
         if (listeners.tileError.size === 0) return;
         const status = error?.error?.statusCode;
@@ -515,12 +532,14 @@ export function createCesiumImagery(
           ...(Number.isFinite(status) ? { status } : {}),
         });
       });
-    };
+    record.listeners = listeners;
+    record.ctx = ctx;
+    record.watchErrors = watchErrors;
     const made = providerFor(spec, { worldDataToken: worldDataToken() });
     if (typeof made?.then === 'function') {
       record.providerPromise = Promise.resolve(made).then((provider) => {
         const hooked = hookProvider(provider, spec, ctx);
-        if (!record.removed) watchErrors(provider);
+        if (!record.removed) record.offError = watchErrors(provider);
         record.provider = hooked;
         return hooked;
       });
@@ -536,7 +555,7 @@ export function createCesiumImagery(
       });
     } else {
       record.provider = hookProvider(made, spec, ctx);
-      watchErrors(made);
+      record.offError = watchErrors(made);
     }
     record.cesium = build(record);
 
@@ -554,7 +573,7 @@ export function createCesiumImagery(
       },
       set show(value) {
         record.show = Boolean(value);
-        record.cesium.show = record.show;
+        record.cesium.show = record.show && !record.timed;
         requestRender('imagery');
       },
       get split() {
@@ -607,6 +626,7 @@ export function createCesiumImagery(
         const i = layers.indexOf(record);
         if (i >= 0) layers.splice(i, 1);
         record.offError?.();
+        dropFrames(record);
         for (const controller of signals) controller.abort();
         // Cesium leaves a removed layer's requests running: cancelled, they
         // are aborted and free their per-server slots on the next frame.
@@ -621,6 +641,33 @@ export function createCesiumImagery(
         requestRender('imagery');
       },
     };
+    if (capabilities.has('imageryFrames')) {
+      handle.setFrames = (source, options = {}) => {
+        const frames = framesOf(source);
+        if (record.removed) return;
+        dropFrames(record);
+        record.timed = {
+          video: source.kind === 'video',
+          frames,
+          mode: options.mode === 'blend' ? 'blend' : 'nearest',
+          prefetch: Math.max(0, Math.floor(options.prefetch ?? 1)),
+          clock: options.clock === 'own' ? 'own' : 'scene',
+          own: null,
+          at: null,
+          announced: null,
+          layers: new Map(),
+          videos: source.kind === 'video' ? createTileVideos() : null,
+        };
+        record.cesium.show = false;
+        requestRender('imagery');
+      };
+      handle.setFrameTime = (ms) => {
+        // On the scene clock the frame port's time decides.
+        if (record.timed?.clock !== 'own') return;
+        record.timed.own = Number(ms);
+        requestRender('imagery');
+      };
+    }
     record.handle = handle;
 
     let at = index;
@@ -636,6 +683,143 @@ export function createCesiumImagery(
     requestRender('imagery');
     return handle;
   }
+
+  // --- Timed frames (`imageryFrames`) ---------------------------------------
+
+  /** A Cesium layer drawing one frame of a record's timed source. */
+  function frameLayer(record, frame) {
+    const timed = record.timed;
+    const spec = { ...record.spec, url: frame.url };
+    const entry = { layer: null, host: null, offError: null };
+    let made;
+    try {
+      made = timed.video
+        ? videoProvider(record.spec, frame, timed.videos)
+        : providerFor(spec, { worldDataToken: worldDataToken() });
+    } catch (error) {
+      report(error);
+      made = Promise.reject(error);
+    }
+    if (typeof made?.then === 'function') {
+      const provider = Promise.resolve(made).then((provider) => {
+        if (!entry.removed) entry.offError = record.watchErrors(provider);
+        return hookProvider(provider, spec, record.ctx);
+      });
+      provider.catch(() => {});
+      entry.layer = Cesium.ImageryLayer.fromProviderAsync(provider);
+    } else {
+      entry.offError = record.watchErrors(made);
+      entry.layer = new Cesium.ImageryLayer(
+        timed.video ? made : hookProvider(made, spec, record.ctx),
+      );
+    }
+    entry.layer.alpha = 0;
+    return entry;
+  }
+
+  function dropFrameLayer(entry) {
+    entry.removed = true;
+    entry.offError?.();
+    if (usable(entry.host) && entry.host.contains(entry.layer))
+      entry.host.remove(entry.layer, true);
+    else if (!entry.layer.isDestroyed()) entry.layer.destroy();
+    entry.host = null;
+  }
+
+  /** Let go of a record's timed source and its frames' layers. */
+  function dropFrames(record) {
+    const timed = record.timed;
+    if (!timed) return;
+    for (const entry of timed.layers.values()) dropFrameLayer(entry);
+    timed.layers.clear();
+    timed.videos?.clear();
+    record.timed = null;
+    if (!record.cesium.isDestroyed()) record.cesium.show = record.show;
+  }
+
+  /**
+   * Before each frame: the frames each timed layer's clock shows now, and
+   * those it prefetches, as layers just above its own, in time order.
+   */
+  function stepFrames(time) {
+    if (disposed) return;
+    const sceneMs = time ? Cesium.JulianDate.toDate(time).getTime() : NaN;
+    for (const record of layers) {
+      const timed = record.timed;
+      if (!timed || record.removed) continue;
+      const ms = timed.clock === 'own' ? (timed.own ?? NaN) : sceneMs;
+      const at = shownAt(timed.frames, ms, timed.mode);
+      timed.at = at;
+      const held = at ? heldFrames(timed.frames, at, timed.prefetch) : [];
+      for (const [index, entry] of timed.layers)
+        if (!held.includes(index) || entry.layer.isDestroyed()) {
+          dropFrameLayer(entry);
+          timed.layers.delete(index);
+        }
+      const host =
+        usable(record.host) && record.host.contains(record.cesium)
+          ? record.host
+          : null;
+      const weights = new Map(at?.shown.map((s) => [s.index, s.weight]));
+      let place = host ? host.indexOf(record.cesium) + 1 : -1;
+      for (const index of held.sort((a, b) => a - b)) {
+        let entry = timed.layers.get(index);
+        if (!entry) {
+          entry = frameLayer(record, timed.frames[index]);
+          timed.layers.set(index, entry);
+        }
+        const layer = entry.layer;
+        const weight = weights.get(index);
+        // Prefetched frames load unseen: shown, at alpha 0.
+        layer.show = record.show;
+        layer.alpha = weight === undefined ? 0 : record.alpha * weight;
+        layer.splitDirection = Cesium.SplitDirection[SPLITS[record.split]];
+        if (entry.host !== host) {
+          if (usable(entry.host) && entry.host.contains(layer))
+            entry.host.remove(layer, false);
+          entry.host = null;
+          if (host) {
+            host.add(layer, Math.min(place, host.length));
+            entry.host = host;
+          }
+        } else if (host && host.indexOf(layer) !== place) {
+          host.remove(layer, false);
+          host.add(layer, Math.min(place, host.length));
+        }
+        if (host) place = host.indexOf(layer) + 1;
+      }
+    }
+  }
+
+  /** Whether a frame's layer is drawn where it drapes. */
+  function frameDrawn(entry) {
+    if (!entry?.host || !entry.layer.ready) return false;
+    if (entry.host === globeCollection()) return layerDrawn(scene, entry.layer);
+    return objects()?.tilesLoaded === true;
+  }
+
+  /** After each frame: each timed layer's shown frame, once it is drawn. */
+  function announceFrames() {
+    if (disposed) return;
+    for (const record of layers.slice()) {
+      const timed = record.timed;
+      // A layer removed by another's listener says nothing.
+      if (record.removed || !timed?.at || !record.show) continue;
+      const time = timed.frames[timed.at.nearest].time;
+      if (time === timed.announced) continue;
+      if (!timed.at.shown.every((s) => frameDrawn(timed.layers.get(s.index))))
+        continue;
+      timed.announced = time;
+      record.listeners.frameReady.fire(time);
+    }
+  }
+
+  const frameOffs = capabilities.has('imageryFrames')
+    ? [
+        scene.preRender?.addEventListener?.((_, time) => stepFrames(time)),
+        scene.postRender?.addEventListener?.(() => announceFrames()),
+      ]
+    : [];
 
   return {
     add,
@@ -656,6 +840,7 @@ export function createCesiumImagery(
      */
     dispose() {
       disposed = true;
+      for (const off of frameOffs.splice(0)) off?.();
       clearTimeout(retryTimer);
       retryTimer = null;
       for (const resolve of waiters.splice(0)) resolve();

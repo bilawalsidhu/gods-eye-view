@@ -27,6 +27,7 @@ test('capabilities follow what the scene supports', () => {
     'imageryOnTiles',
     'splitSwipe',
     'imageHooks',
+    'imageryFrames',
     'surfaceIdentity',
     'surfaceShading',
   ];

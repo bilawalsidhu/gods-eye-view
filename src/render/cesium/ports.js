@@ -46,6 +46,8 @@ const GLOBE_CAPABILITIES = [
   'imageryOnTiles',
   'splitSwipe',
   'imageHooks',
+  // Timed imagery: a layer a frame, prefetched unseen (`imagery.js`).
+  'imageryFrames',
   'surfaceIdentity',
   'surfaceShading',
   'globeVisibility',

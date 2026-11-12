@@ -3965,6 +3965,95 @@ export function portChecks() {
       { capability: 'imageryFrames' },
     ),
     check(
+      'globe.imagery.video',
+      'video tiles show the time within their segment, nearest segment end outside it',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        if (typeof MediaRecorder !== 'function')
+          return { skip: 'no MediaRecorder to make a video with' };
+        await overAustin(h, r, 200000);
+        // Two seconds of video: red, then blue.
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 32;
+        const g = canvas.getContext('2d');
+        const recorder = new MediaRecorder(canvas.captureStream(30), {
+          mimeType: 'video/webm',
+        });
+        const chunks = [];
+        recorder.ondataavailable = (e) => chunks.push(e.data);
+        let colour = '#ff0000';
+        const paint = setInterval(() => {
+          g.fillStyle = colour;
+          g.fillRect(0, 0, 32, 32);
+        }, 20);
+        const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+        recorder.start();
+        await wait(1000);
+        colour = '#0000ff';
+        await wait(1000);
+        await new Promise((done) => {
+          recorder.onstop = done;
+          recorder.stop();
+        });
+        clearInterval(paint);
+        const url = URL.createObjectURL(
+          new Blob(chunks, { type: 'video/webm' }),
+        );
+        const t0 = r.frame.time();
+        const layer = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+          rectangle: {
+            west: AUSTIN.lon - 2,
+            south: AUSTIN.lat - 2,
+            east: AUSTIN.lon + 2,
+            north: AUSTIN.lat + 2,
+          },
+        });
+        const ready = [];
+        layer.on('frameReady', (time) => ready.push(time));
+        const shows = async (ms, like, what) => {
+          const before = ready.length;
+          layer.setFrameTime(ms);
+          for (let i = 0; i < 500 && ready.length === before; i++) {
+            await drawn(h, r, 1);
+            await wait(10);
+          }
+          ok(ready.length > before, `${what}: ready`);
+          r.frame.renderNow();
+          const s = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, , blue] = image.data;
+          ok(like(red, blue), `${what}: (${red}, ${blue})`);
+        };
+        try {
+          layer.setFrames(
+            { kind: 'video', segments: [{ url, start: t0, end: t0 + 2000 }] },
+            { clock: 'own' },
+          );
+          const red = (rr, b) => rr > 180 && b < 70;
+          const blue = (rr, b) => b > 180 && rr < 70;
+          await shows(t0 + 300, red, 'early in the segment');
+          await shows(t0 + 1700, blue, 'late in the segment');
+          await shows(t0 - 60000, red, 'before it: its start');
+          await shows(t0 + 60000, blue, 'after it: its end');
+        } finally {
+          layer.remove();
+          URL.revokeObjectURL(url);
+        }
+      },
+      { capability: 'imageryFrames' },
+    ),
+    check(
       'globe.withoutImageHooks',
       'without imageHooks, a spec with main-thread tile hooks throws',
       async (h) => {
