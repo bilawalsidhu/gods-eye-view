@@ -69,6 +69,42 @@ export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
 }
 
 /**
+ * How fast the clearance a ground clamp adds under an application subject's
+ * eye comes and goes (m/s).
+ */
+export const COCKPIT_SUBJECT_LIFT_MPS = 1.5;
+
+/**
+ * The lift the ground clamp gives an application subject's eye this update.
+ * The floor is read from coarse cells that refine as tiles load, so the lift
+ * it asks for jumps; a ridden eye takes the clearance part of it at
+ * `rateMps`, while what it needs to stay out of the floor itself (`hardM`)
+ * applies at once.
+ * @param {number|null} previousM The lift given last update; null on entry.
+ * @param {number} targetM The lift the floor and clearance ask for (m).
+ * @param {number} hardM The lift that keeps the eye out of the floor (m).
+ * @param {number} dtSec Seconds since the last update.
+ * @param {number} [rateMps]
+ * @returns {number} At least 0, at least `hardM`.
+ */
+export function easeCockpitLift(
+  previousM,
+  targetM,
+  hardM,
+  dtSec,
+  rateMps = COCKPIT_SUBJECT_LIFT_MPS,
+) {
+  const target = Number.isFinite(targetM) ? Math.max(0, targetM) : 0;
+  const hard = Number.isFinite(hardM) ? Math.max(0, hardM) : 0;
+  if (!Number.isFinite(previousM)) return Math.max(target, hard);
+  const step =
+    Math.max(0, Number.isFinite(rateMps) ? rateMps : 0) *
+    Math.max(0, Number.isFinite(dtSec) ? dtSec : 0);
+  const eased = previousM + Math.max(-step, Math.min(step, target - previousM));
+  return Math.max(0, hard, eased);
+}
+
+/**
  * Keep the cockpit camera above the shared rendered-surface floor.
  * Unknown floors preserve the proposed camera height.
  */

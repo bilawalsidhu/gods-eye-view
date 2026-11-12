@@ -406,10 +406,18 @@ test('the eye stands its height above the frame, and the ground clamp can be lif
   cockpit.update();
   assert.equal(shots.length, before + 1);
   // Inside a structure the frame stands below the rendered floor: clamped,
-  // the eye is pushed up to the floor; with groundClamp false it stays.
+  // the eye is pushed out of the floor at once and its clearance eases in;
+  // with groundClamp false it stays.
   setFloor(FLOOR_M + 200);
   clock.advance(16);
   cockpit.update();
+  const lifted = shotHeight(shots);
+  assert.ok(lifted >= FLOOR_M + 200 - 0.01, 'out of the floor at once');
+  assert.ok(lifted < FLOOR_M + 200 + 1.5 - 0.01, 'the clearance eases in');
+  for (let i = 0; i < 80; i += 1) {
+    clock.advance(16);
+    cockpit.update();
+  }
   assert.ok(shotHeight(shots) >= FLOOR_M + 200 + 1.5 - 0.01, 'clamped');
   ride.subject.frame = { ...ride.subject.frame, groundClamp: false };
   clock.advance(16);

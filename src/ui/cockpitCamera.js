@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import {
   cockpitAnchorCorrectionStep,
   cockpitGroundSafeHeight,
+  easeCockpitLift,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
   slewHeading,
@@ -412,6 +413,7 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
   if (!this.cockpitAnchorValid) {
     Cesium.Cartesian3.clone(target, this.cockpitAnchor);
     this.cockpitAnchorValid = true;
+    this.subjectLiftM = null;
   }
 
   // First-person motion cannot use the delayed feed correction as a raw
@@ -595,7 +597,14 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     cockpitFloorM =
       targetCartographic.height - this.services.GROUND_FLOOR_LIFT_M;
   }
-  if (groundClamp && anchorCartographic && Number.isFinite(cockpitFloorM)) {
+  // An application subject's anchor is where its provider puts it; only its
+  // eye is kept out of the floor, below.
+  if (
+    groundClamp &&
+    info.generic !== true &&
+    anchorCartographic &&
+    Number.isFinite(cockpitFloorM)
+  ) {
     const minimumAnchorHeightM = cockpitGroundSafeHeight(
       anchorCartographic.height,
       cockpitFloorM,
@@ -686,11 +695,26 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
         cameraFloorM,
       );
     }
-    const safeHeightM = cockpitGroundSafeHeight(
+    let safeHeightM = cockpitGroundSafeHeight(
       cameraCartographic.height,
       cockpitFloorM,
       profile.minClearanceM,
     );
+    // An application subject's eye rides its provider's smoothed height:
+    // the clearance over the coarse, refining floor eases in and out
+    // rather than jumping at each cell (easeCockpitLift).
+    if (info.generic === true) {
+      const hardM =
+        cockpitGroundSafeHeight(cameraCartographic.height, cockpitFloorM, 0) -
+        cameraCartographic.height;
+      this.subjectLiftM = easeCockpitLift(
+        this.subjectLiftM,
+        safeHeightM - cameraCartographic.height,
+        hardM,
+        dtSec,
+      );
+      safeHeightM = cameraCartographic.height + this.subjectLiftM;
+    }
     if (safeHeightM !== cameraCartographic.height) {
       cameraCartographic.height = safeHeightM;
       Cesium.Ellipsoid.WGS84.cartographicToCartesian(
@@ -698,6 +722,9 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
         this.scratchCamera,
       );
     }
+  } else if (info.generic === true) {
+    // Inside a structure there is no clearance to give back.
+    this.subjectLiftM = 0;
   }
 
   this.viewer.camera.setView({
