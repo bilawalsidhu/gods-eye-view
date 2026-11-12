@@ -16,7 +16,16 @@ export const ION_SERVER_MANAGED = 'server-managed';
 const ION_API_PATH = '/api/ion/';
 const MAPILLARY_GRAPH_PATH = '/api/mapillary/graph/';
 
-const baseHref = () => globalThis.location?.href ?? 'http://localhost/';
+/**
+ * The address the app's own paths resolve against. In the MCP Apps panel that
+ * is the address the panel names (`GEV_APP_BASE_URL`): the host serves the
+ * page from its own address, which may not be usable as a base, and the panel
+ * answers requests under the named address itself (see src/tools/globePanel.js).
+ */
+const baseHref = () =>
+  globalThis.GEV_APP_BASE_URL ??
+  globalThis.location?.href ??
+  'http://localhost/';
 
 /** Absolute URL of this app's ion API stand-in (trailing slash required by CesiumJS). */
 export function ionServerUrl(base = baseHref()) {
