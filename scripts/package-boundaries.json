@@ -105,6 +105,11 @@
       "src/ui/views/panels/DrawSwatches.vue",
       "src/annotations/drawMarks.js",
       "src/ui/stores/display.js",
+      "src/ui/stores/dataLibrary.js",
+      "src/ui/views/panels/DataLibraryCard.vue",
+      "src/ui/views/panels/DataLibraryDialog.vue",
+      "src/ui/views/panels/DataLibraryBrowse.vue",
+      "src/ui/libraryBrowser.js",
       "src/ui/localSdrPresentation.js",
       "src/ui/unitLabels.js",
       "src/layers/localAdsb/feedNames.js",
@@ -3750,7 +3755,8 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/ui/stores/dataLibrary.js"
     ],
     "external": [
       "hls.js",

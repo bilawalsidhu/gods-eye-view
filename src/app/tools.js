@@ -13,7 +13,8 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { createDataLibrary } from '../library/controller.js';
 import { flyToLibraryExtent } from '../library/camera.js';
-import { mountLibraryBrowser } from '../ui/libraryBrowser.js';
+import { createLibraryBrowser } from '../ui/libraryBrowser.js';
+import { useDataLibraryStore } from '../ui/stores/dataLibrary.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
@@ -131,13 +132,18 @@ export function createApplicationTools({
       ) !== false,
   });
   defer(() => dataLibrary.destroy());
-  const libraryTrigger = document.getElementById('data-library-browse');
-  const libraryBrowser = mountLibraryBrowser({
+  // Browse: the owner presents the dialog through the store; LayerPanelsView
+  // draws the Browse button and the dialog from it.
+  const libraryStore = useDataLibraryStore(applicationPinia());
+  const libraryBrowser = createLibraryBrowser({
     library: dataLibrary,
-    trigger: libraryTrigger,
+    publish: (view) => libraryStore.publish(view),
   });
-  defer(() => libraryBrowser.destroy());
-  if (libraryTrigger) libraryTrigger.hidden = false;
+  libraryStore.connect(libraryBrowser.controls);
+  defer(() => {
+    libraryBrowser.destroy();
+    libraryStore.connect(null);
+  });
   dataLibrary.start({ signal }).catch((error) => {
     if (!signal?.aborted) console.warn('[Library] start failed:', error);
   });

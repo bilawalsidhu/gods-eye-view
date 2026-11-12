@@ -1,13 +1,20 @@
 /**
- * DATA LAYERS ▸ Browse data library: the dialog that lists every Data Library
- * entry this build knows, with its licence, coverage and what this instance
- * needs to serve it, and adds or removes it from the panel.
+ * DATA LAYERS ▸ Browse data library: the owner of the dialog that lists every
+ * Data Library entry this build knows, with its licence, coverage and what
+ * this instance needs to serve it, and adds or removes it from the panel.
  *
- * A `dialog[data-panel-surface]` per docs/panel-surfaces.md: this module owns
- * width, height, labels, initial and return focus, Escape and dismissal, and
- * closes itself when clean view, recording or Cockpit hides the panels.
+ * Framework-free: `createLibraryBrowser` presents the dialog's state (open,
+ * filters, the rows they show, the stat summary, Remove all) through
+ * `publish`, and its `controls` answer the view
+ * (src/ui/views/panels/DataLibraryDialog.vue, placed by LayerPanelsView). The
+ * text helpers below are what the view renders; they call `t()`, so text
+ * rendered through them follows the locale.
+ *
+ * A `dialog[data-panel-surface]` per docs/panel-surfaces.md: the view owns
+ * width, height, labels and focus; this owner closes the dialog when clean
+ * view, recording or Cockpit hides the panels.
  */
-import { formatNumber, msg, onLocaleChange, t, tn } from '../i18n/index.js';
+import { formatNumber, msg, t, tn } from '../i18n/index.js';
 
 const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
 /** How long Remove all stays armed after its first press. */
@@ -40,20 +47,43 @@ const STATUS_LABELS = Object.freeze({
   archived: msg('ARCHIVED'),
 });
 
-function element(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
+/** The Theme filter's choices, translated: all themes first. */
+export function libraryThemeOptions() {
+  return [
+    { value: '', label: t('All themes') },
+    ...Object.entries(FAMILY_LABELS).map(([value, label]) => ({
+      value,
+      label: t(label),
+    })),
+  ];
 }
 
-function badge(text, tone = '') {
-  const node = element(
-    'span',
-    `data-library-badge${tone ? ` data-library-badge--${tone}` : ''}`,
-    text,
-  );
-  return node;
+/**
+ * An entry card's badges: kind, status, then how it is served (operator
+ * opt-in, a provider key, or keyless). `tone` is '', 'good' or 'warn'.
+ * @param {object} entry
+ * @returns {Array<{ label: string, tone: string }>}
+ */
+export function libraryBadges(entry) {
+  const badges = [
+    { label: t(KIND_LABELS[entry.kind]), tone: '' },
+    {
+      label: t(STATUS_LABELS[entry.status]),
+      tone:
+        entry.status === 'verified'
+          ? 'good'
+          : entry.status === 'stale'
+            ? 'warn'
+            : '',
+    },
+  ];
+  if (entry.licence.operatorOptIn)
+    badges.push({ label: t('OPT-IN'), tone: 'warn' });
+  else if (entry.kind !== 'pack' && entry.source.key)
+    badges.push({ label: t('KEY'), tone: 'warn' });
+  else if (entry.kind !== 'pack')
+    badges.push({ label: t('KEYLESS'), tone: '' });
+  return badges;
 }
 
 const compact = (value) =>
@@ -129,7 +159,8 @@ export function libraryReasonText({ entry, available, reason }) {
   return t('Checking what this instance serves…');
 }
 
-function coverageText(entry) {
+/** Where an entry covers, for its card line. */
+export function coverageText(entry) {
   const { coverage } = entry;
   if (coverage.global) return t('Global');
   if (coverage.countries?.length) return coverage.countries.join(' · ');
@@ -210,32 +241,27 @@ export function sortLibraryRows(rows) {
 }
 
 /**
- * @param {{ library: ReturnType<import('../library/controller.js').createDataLibrary>, trigger: HTMLElement|null }} options
- * @returns {{ open: () => void, close: () => void, destroy: () => void }}
+ * The Browse dialog's owner. Presents its state through `publish` and answers
+ * the view through `controls`; never touches the dialog's markup.
+ * @param {{ library: ReturnType<import('../library/controller.js').createDataLibrary>, publish?: (view: object|null) => void, body?: HTMLElement|null }} options
+ * @returns {{ controls: object, open: () => void, close: () => void, destroy: () => void }}
  */
-export function mountLibraryBrowser({ library, trigger }) {
-  const removers = [];
-  const listen = (node, type, listener) => {
-    node.addEventListener(type, listener);
-    removers.push(() => node.removeEventListener(type, listener));
-  };
-  // Listeners on the dialog's own nodes, released when it is rebuilt.
-  const dialogRemovers = [];
-  const listenDialog = (node, type, listener) => {
-    node.addEventListener(type, listener);
-    dialogRemovers.push(() => node.removeEventListener(type, listener));
-  };
+export function createLibraryBrowser({
+  library,
+  publish = () => {},
+  body = globalThis.document?.body ?? null,
+}) {
   const filter = { query: '', family: '', availableOnly: false };
-  let dialog = null;
-  let list = null;
-  let status = null;
-  let stats = null;
+  let open = false;
+  let destroyed = false;
+  let rows = [];
   let statsTimer = null;
-  let resetButton = null;
   // Remove all asks twice: the first press arms it for a few seconds.
   let resetArmed = false;
   let resetTimer = null;
   let resetting = false;
+  // Bumped when focus should go back to the search field (after Remove all).
+  let focusSearch = 0;
 
   function disarmReset() {
     clearTimeout(resetTimer);
@@ -243,396 +269,134 @@ export function mountLibraryBrowser({ library, trigger }) {
     resetArmed = false;
   }
 
-  function build() {
-    dialog = element('dialog', 'data-library-dialog');
-    dialog.id = 'data-library';
-    dialog.setAttribute('data-panel-surface', '');
-    dialog.setAttribute('aria-labelledby', 'data-library-title');
-    dialog.setAttribute('aria-describedby', 'data-library-intro');
-
-    const header = element('header', 'data-library-header');
-    header.setAttribute('data-panel-header', '');
-    const title = element(
-      'h2',
-      'panel-title panel-surface-title',
-      t('DATA LIBRARY'),
-    );
-    title.id = 'data-library-title';
-    const close = element(
-      'button',
-      'panel-surface-control data-library-close',
-      '×',
-    );
-    close.type = 'button';
-    close.setAttribute('aria-label', t('Close data library'));
-    listenDialog(close, 'click', () => api.close());
-    header.append(title, close);
-
-    const body = element('div', 'data-library-body');
-    body.setAttribute('data-panel-body', '');
-    stats = element('dl', 'data-library-stats');
-    stats.setAttribute('aria-label', t('Data Library at a glance'));
-    const intro = element(
-      'p',
-      'data-library-intro',
-      t(
-        'Live sources beyond the core layers. Each one is fetched from its provider while it is on; nothing is stored in this app. Add one and it appears in Data Layers under Library.',
-      ),
-    );
-    intro.id = 'data-library-intro';
-
-    const filters = element('div', 'data-library-filters');
-    const searchLabel = element('label', 'data-library-field');
-    searchLabel.append(element('span', '', t('Search')));
-    const search = element('input', 'panel-surface-control');
-    search.type = 'search';
-    search.autocomplete = 'off';
-    search.placeholder = t('Name, provider or country');
-    search.value = filter.query;
-    listenDialog(search, 'input', () => {
-      filter.query = search.value;
-      render();
+  /**
+   * Publish the dialog. Rows are reread from the library unless only the
+   * stat tiles changed, so an unchanged row list keeps its identity and its
+   * cards do not re-render.
+   */
+  function present({ rowsChanged = true } = {}) {
+    if (destroyed) return;
+    if (rowsChanged || !rows.length) rows = library.list();
+    const added = rows.filter((row) => row.added).length;
+    if (!added && !resetting && resetArmed) disarmReset();
+    publish({
+      open,
+      ready: library.ready,
+      filter: { ...filter },
+      shown: open
+        ? sortLibraryRows(rows.filter((row) => libraryRowMatches(row, filter)))
+        : [],
+      total: rows.length,
+      added,
+      summary: library.summary(),
+      reset: {
+        visible: added > 0 || resetting,
+        armed: resetArmed,
+        busy: resetting,
+      },
+      focusSearch,
     });
-    searchLabel.append(search);
+  }
 
-    const familyLabel = element('label', 'data-library-field');
-    familyLabel.append(element('span', '', t('Theme')));
-    const family = element('select', 'panel-surface-control');
-    const option = (text, value) => {
-      const node = element('option', '', text);
-      node.value = value;
-      return node;
-    };
-    family.append(option(t('All themes'), ''));
-    for (const [value, label] of Object.entries(FAMILY_LABELS))
-      family.append(option(t(label), value));
-    family.value = filter.family;
-    listenDialog(family, 'change', () => {
-      filter.family = family.value;
-      render();
-    });
-    familyLabel.append(family);
+  function close() {
+    disarmReset();
+    clearInterval(statsTimer);
+    statsTimer = null;
+    if (!open) return;
+    open = false;
+    present();
+  }
 
-    const availableLabel = element('label', 'data-library-check');
-    const available = element('input');
-    available.type = 'checkbox';
-    available.checked = filter.availableOnly;
-    listenDialog(available, 'change', () => {
-      filter.availableOnly = available.checked;
-      render();
-    });
-    availableLabel.append(
-      available,
-      element('span', '', t('Only what this instance serves')),
-    );
-    filters.append(searchLabel, familyLabel, availableLabel);
-
-    const toolbar = element('div', 'data-library-toolbar');
-    status = element('p', 'data-library-status');
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    resetButton = element('button', 'panel-surface-control data-library-reset');
-    resetButton.type = 'button';
-    listenDialog(resetButton, 'click', () => {
+  const controls = {
+    open() {
+      if (destroyed || open) return;
+      open = true;
+      present();
+      // Feature counts arrive as datasets finish loading, outside the
+      // library's own notifications; refresh the tiles while open.
+      clearInterval(statsTimer);
+      statsTimer = setInterval(
+        () => present({ rowsChanged: false }),
+        STATS_REFRESH_MS,
+      );
+    },
+    close,
+    setQuery(value) {
+      filter.query = String(value ?? '');
+      present({ rowsChanged: false });
+    },
+    setFamily(value) {
+      filter.family = String(value ?? '');
+      present({ rowsChanged: false });
+    },
+    setAvailableOnly(value) {
+      filter.availableOnly = Boolean(value);
+      present({ rowsChanged: false });
+    },
+    add(id) {
+      Promise.resolve(library.add(id)).catch((error) =>
+        console.warn(`[Library] ${id} failed:`, error),
+      );
+    },
+    remove(id) {
+      Promise.resolve(library.remove(id)).catch((error) =>
+        console.warn(`[Library] ${id} failed:`, error),
+      );
+    },
+    zoom(id) {
+      // Close first so the flight is visible; focus returns to Browse. An
+      // entry that is off is switched on first.
+      close();
+      Promise.resolve(library.zoom(id)).catch((error) =>
+        console.warn(`[Library] ${id} zoom failed:`, error),
+      );
+    },
+    reset() {
       if (resetting) return;
       if (!resetArmed) {
         resetArmed = true;
         resetTimer = setTimeout(() => {
           disarmReset();
-          render();
+          present({ rowsChanged: false });
         }, RESET_CONFIRM_MS);
-        render();
+        present({ rowsChanged: false });
         return;
       }
       disarmReset();
       resetting = true;
-      render();
+      present({ rowsChanged: false });
       Promise.resolve(library.reset())
         .catch((error) => console.warn('[Library] reset failed:', error))
         .finally(() => {
           resetting = false;
-          render();
-          dialog?.querySelector('input[type="search"]')?.focus();
+          focusSearch += 1;
+          present();
         });
-    });
-    toolbar.append(status, resetButton);
-
-    list = element('ul', 'data-library-list');
-    listenDialog(list, 'click', (event) => {
-      const button = event.target?.closest?.('button[data-library-action]');
-      if (!button || button.disabled) return;
-      const id = button.dataset.libraryId;
-      const kind = button.dataset.libraryAction;
-      if (kind === 'zoom') {
-        // Close first so the flight is visible; focus returns to Browse.
-        // An entry that is off is switched on first.
-        api.close();
-        Promise.resolve(library.zoom(id)).catch((error) =>
-          console.warn(`[Library] ${id} zoom failed:`, error),
-        );
-        return;
-      }
-      const action = kind === 'add' ? library.add(id) : library.remove(id);
-      Promise.resolve(action).catch((error) =>
-        console.warn(`[Library] ${id} failed:`, error),
-      );
-    });
-
-    body.append(stats, intro, filters, toolbar, list);
-    dialog.append(header, body);
-    listenDialog(dialog, 'cancel', (event) => {
-      event.preventDefault();
-      api.close();
-    });
-    // A click on the backdrop (the dialog box itself, outside its content)
-    // dismisses, like Escape.
-    listenDialog(dialog, 'click', (event) => {
-      if (event.target === dialog) api.close();
-    });
-    document.body.append(dialog);
-    return search;
-  }
-
-  function renderRow({ entry, available, reason, added, on, busy, canZoom }) {
-    const item = element('li', 'data-library-item');
-    item.dataset.libraryId = entry.id;
-    item.classList.toggle('is-unavailable', !available);
-
-    const head = element('div', 'data-library-item-head');
-    const icon = element('span', 'data-library-icon', entry.icon);
-    icon.setAttribute('aria-hidden', 'true');
-    const name = element('span', 'data-library-name', entry.title);
-    const badges = element('span', 'data-library-badges');
-    badges.append(badge(t(KIND_LABELS[entry.kind])));
-    badges.append(
-      badge(
-        t(STATUS_LABELS[entry.status]),
-        entry.status === 'verified'
-          ? 'good'
-          : entry.status === 'stale'
-            ? 'warn'
-            : '',
-      ),
-    );
-    if (entry.licence.operatorOptIn) badges.append(badge(t('OPT-IN'), 'warn'));
-    else if (entry.kind !== 'pack' && entry.source.key)
-      badges.append(badge(t('KEY'), 'warn'));
-    else if (entry.kind !== 'pack') badges.append(badge(t('KEYLESS')));
-    head.append(icon, name, badges);
-
-    const description = element('p', 'data-library-description');
-    description.textContent = entry.description;
-
-    const meta = element('p', 'data-library-meta');
-    const provider = element('span', '', entry.provider);
-    provider.setAttribute('translate', 'no');
-    const licence = element('a', '', entry.licence.name);
-    licence.href = entry.licence.url;
-    licence.target = '_blank';
-    licence.rel = 'noopener noreferrer';
-    meta.append(
-      provider,
-      document.createTextNode(' · '),
-      element('span', '', coverageText(entry)),
-      document.createTextNode(' · '),
-      licence,
-    );
-
-    item.append(head, description);
-    const specs = imagerySpecs(entry);
-    if (specs.length) {
-      const list = element('dl', 'data-library-specs');
-      for (const { label, value } of specs) {
-        const row = element('div', 'data-library-spec');
-        row.append(element('dt', '', label), element('dd', '', value));
-        list.append(row);
-      }
-      item.append(list);
-    }
-    item.append(meta);
-    const note = libraryReasonText({ entry, available, reason });
-    if (note) item.append(element('p', 'data-library-reason', note));
-
-    if (entry.kind !== 'pack') {
-      const actions = element('div', 'data-library-actions');
-      if (added && canZoom) {
-        const zoom = element(
-          'button',
-          'panel-surface-control data-library-action',
-          t('ZOOM'),
-        );
-        zoom.type = 'button';
-        zoom.dataset.libraryId = entry.id;
-        zoom.dataset.libraryAction = 'zoom';
-        zoom.disabled = busy;
-        zoom.setAttribute(
-          'aria-label',
-          t('Zoom to {name}', { name: entry.title }),
-        );
-        actions.append(zoom);
-      }
-      const action = element(
-        'button',
-        'panel-surface-control data-library-action',
-      );
-      action.type = 'button';
-      action.dataset.libraryId = entry.id;
-      action.dataset.libraryAction = added ? 'remove' : 'add';
-      action.textContent = busy
-        ? t('WORKING…')
-        : added
-          ? t('REMOVE')
-          : t('ADD');
-      action.disabled = busy || (!added && !available);
-      action.setAttribute(
-        'aria-label',
-        added
-          ? t('Remove {name} from Data Layers', { name: entry.title })
-          : t('Add {name} to Data Layers', { name: entry.title }),
-      );
-      if (added && on) item.classList.add('is-on');
-      actions.append(action);
-      item.append(actions);
-    }
-    return item;
-  }
-
-  /** Rewrite the stat tiles in place; unchanged text is not touched. */
-  function renderStats() {
-    if (!dialog?.open || !stats) return;
-    for (const tile of libraryStatTiles(library.summary())) {
-      let node = stats.querySelector(`[data-stat="${tile.id}"]`);
-      if (!node) {
-        node = element('div', 'data-library-stat');
-        node.dataset.stat = tile.id;
-        node.append(
-          element('dt', 'data-library-stat-label'),
-          element('dd', 'data-library-stat-value'),
-          element('dd', 'data-library-stat-detail'),
-        );
-        stats.append(node);
-      }
-      const [label, value, detail] = node.children;
-      if (label.textContent !== tile.label) label.textContent = tile.label;
-      if (value.textContent !== tile.value) value.textContent = tile.value;
-      if (detail.textContent !== tile.detail) detail.textContent = tile.detail;
-      detail.hidden = !tile.detail;
-    }
-  }
-
-  function render() {
-    if (!dialog?.open) return;
-    renderStats();
-    const rows = library.list();
-    const shown = sortLibraryRows(
-      rows.filter((row) => libraryRowMatches(row, filter)),
-    );
-    const focusedId = document.activeElement?.dataset?.libraryId;
-    const focusedAction = document.activeElement?.dataset?.libraryAction;
-    list.replaceChildren(...shown.map(renderRow));
-    if (focusedId) {
-      const row = `button[data-library-id="${CSS.escape(focusedId)}"]`;
-      // The same control when it survived the render (Add becomes Remove).
-      (
-        list.querySelector(
-          `${row}[data-library-action="${CSS.escape(focusedAction || '')}"]`,
-        ) ||
-        list.querySelector(`${row}:not([data-library-action="zoom"])`) ||
-        list.querySelector(row)
-      )?.focus();
-    }
-    const added = rows.filter((row) => row.added).length;
-    if (!added && !resetting) disarmReset();
-    resetButton.hidden = added === 0 && !resetting;
-    resetButton.disabled = resetting;
-    resetButton.classList.toggle('is-armed', resetArmed);
-    resetButton.textContent = resetting
-      ? t('WORKING…')
-      : resetArmed
-        ? tn(added, 'CONFIRM · REMOVE {count}', 'CONFIRM · REMOVE ALL {count}')
-        : t('REMOVE ALL');
-    resetButton.setAttribute(
-      'aria-label',
-      resetArmed
-        ? t('Confirm: remove every added entry from Data Layers')
-        : t('Remove every added entry from Data Layers'),
-    );
-    // The stat tiles carry the totals; this line answers the filter.
-    status.textContent = !library.ready
-      ? t('Checking what this instance serves…')
-      : t('Showing {shown} of {total}', {
-          shown: shown.length,
-          total: rows.length,
-        });
-  }
-
-  const api = {
-    open() {
-      const search = dialog ? null : build();
-      if (dialog.open) return;
-      render();
-      dialog.showModal();
-      render();
-      // Feature counts arrive as datasets finish loading, outside the
-      // library's own notifications; refresh the tiles while open.
-      clearInterval(statsTimer);
-      statsTimer = setInterval(renderStats, STATS_REFRESH_MS);
-      (search || dialog.querySelector('input[type="search"]'))?.focus();
-    },
-    close() {
-      disarmReset();
-      clearInterval(statsTimer);
-      statsTimer = null;
-      if (!dialog?.open) return;
-      dialog.close();
-      trigger?.focus?.();
-    },
-    destroy() {
-      api.close();
-      unsubscribe();
-      offLocale();
-      observer?.disconnect();
-      for (const remove of removers.splice(0)) remove();
-      for (const remove of dialogRemovers.splice(0)) remove();
-      dialog?.remove();
-      dialog = null;
     },
   };
 
-  /**
-   * Every label is translated when the dialog is built, so a language switch
-   * rebuilds it, keeping its filters and, if it was open, opening it again.
-   */
-  function relabel() {
-    if (!dialog) return;
-    const wasOpen = dialog.open;
-    disarmReset();
-    clearInterval(statsTimer);
-    statsTimer = null;
-    if (wasOpen) dialog.close();
-    for (const remove of dialogRemovers.splice(0)) remove();
-    dialog.remove();
-    dialog = null;
-    if (wasOpen) api.open();
-  }
-  const offLocale = onLocaleChange(relabel);
-
-  const unsubscribe = library.subscribe(render);
-  if (trigger) listen(trigger, 'click', () => api.open());
+  const unsubscribe = library.subscribe(() => present());
   const observer =
-    typeof MutationObserver === 'function'
+    typeof MutationObserver === 'function' && body
       ? new MutationObserver(() => {
-          if (
-            PANEL_HIDING_MODES.some((mode) =>
-              document.body.classList.contains(mode),
-            )
-          )
-            api.close();
+          if (PANEL_HIDING_MODES.some((mode) => body.classList.contains(mode)))
+            close();
         })
       : null;
-  observer?.observe(document.body, {
-    attributes: true,
-    attributeFilter: ['class'],
-  });
-  return api;
+  observer?.observe(body, { attributes: true, attributeFilter: ['class'] });
+  present();
+
+  return {
+    controls,
+    open: controls.open,
+    close,
+    destroy() {
+      if (destroyed) return;
+      close();
+      destroyed = true;
+      unsubscribe();
+      observer?.disconnect();
+      publish(null);
+    },
+  };
 }

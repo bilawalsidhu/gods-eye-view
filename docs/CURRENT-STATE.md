@@ -600,8 +600,12 @@ partition index whose footers keep failing after two retries is
 `complete: false`: neither the server nor the browser keeps it as whole, a
 complete earlier index is served instead, and it is rebuilt after five
 minutes. A view that leaves partitions touching it unread is PARTIAL. Listing
-pages and footer reads are size-capped and ranges are validated. The Browse
-dialog rebuilds on a language switch, keeping its filters.
+pages and footer reads are size-capped and ranges are validated. The Browse dialog is a Vue view (src/ui/views/panels/DataLibraryDialog.vue
+and DataLibraryCard.vue, teleported to the body from LayerPanelsView) over the
+`gev-data-library` Pinia store; src/ui/libraryBrowser.js is its framework-free
+owner (open state, filters, the rows they show, Remove all) and the text
+helpers the view renders, so every label follows the locale. Only the modal
+open/close and focus moves are imperative.
 
 ## Utilities panel — October 29, 2026
 
