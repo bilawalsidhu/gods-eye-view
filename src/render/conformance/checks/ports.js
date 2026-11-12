@@ -2422,7 +2422,9 @@ export function portChecks() {
           `its top and its wall shade differently (${Math.round(top)}, ${Math.round(wall)})`,
         );
         shapes.dispose();
+        r.globe.setGlobeVisible(true);
       },
+      { capability: 'globeVisibility' },
     ),
     check(
       'draw.shapes.resize',
