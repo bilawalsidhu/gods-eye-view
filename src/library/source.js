@@ -236,7 +236,7 @@ export function createLibrarySource({
           current.retryAt = result.complete
             ? null
             : now() + PARTIAL_INDEX_RETRY_MS;
-        return result.partitions;
+        return result;
       },
       (error) => {
         if (indexes.get(entry.id)?.promise === promise)
@@ -283,7 +283,7 @@ export function createLibrarySource({
    * batches until one batch finds features in view.
    */
   async function loadPartitioned(entry, box, { signal }) {
-    const [{ partitionsForBox, featureInBox }, index] = await Promise.all([
+    const [{ partitionsForBox, featureInBox }, built] = await Promise.all([
       loadParquet(),
       partitionIndex(entry, { signal }),
     ]);
@@ -294,7 +294,12 @@ export function createLibrarySource({
     }
     const learned =
       storedJson(storage, `${EXTENT_STORAGE_PREFIX}${entry.id}`) || {};
-    const ranked = rankPartitions(index, box, learned, partitionsForBox);
+    const ranked = rankPartitions(
+      built.partitions,
+      box,
+      learned,
+      partitionsForBox,
+    );
     const candidates = ranked.slice(0, MAX_PARTITION_READS_PER_VIEW);
     // Every partition the box touches but this view leaves unread (the read
     // budget, or the early stop below) makes the result partial.
@@ -327,7 +332,8 @@ export function createLibrarySource({
     });
     return {
       features: bounded.features,
-      truncated: bounded.truncated || unread > 0,
+      // An incomplete index may be missing partitions this box needs.
+      truncated: bounded.truncated || unread > 0 || !built.complete,
     };
   }
 

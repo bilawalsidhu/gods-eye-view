@@ -181,6 +181,36 @@ test('a revisit still finds homes at the edge of a partition', async () => {
   assert.equal(outside.features.length, 0);
 });
 
+test('a view over an incomplete index reads PARTIAL', async () => {
+  const home = {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [-1.2, 53.3] },
+    properties: { CURRENT_ENERGY_RATING: 'C', UPRN: '1' },
+  };
+  const visit = (complete) =>
+    createLibrarySource({
+      entries: [epc],
+      fetchImpl: async () => ({ ok: false, status: 404 }),
+      storage: null,
+      loadParquet: async () => ({
+        ...(await import('./parquet.js')),
+        buildPartitionIndex: async () => ({
+          partitions: [
+            { url: 'https://h/A.parquet', bbox: [-1.5, 53.2, -1.1, 53.5] },
+          ],
+          complete,
+        }),
+        readGeoParquetFeatures: async () => [home],
+      }),
+    });
+  const box = [-1.21, 53.29, -1.19, 53.31];
+  const whole = await visit(true).loadDataset(epc, { bbox: box });
+  assert.equal(whole.truncated, false);
+  const partial = await visit(false).loadDataset(epc, { bbox: box });
+  assert.equal(partial.features.length, 1);
+  assert.equal(partial.truncated, true);
+});
+
 test('a footer that keeps failing leaves the index incomplete, and a retry recovers', async () => {
   const { buildPartitionIndex } = await import('./parquet.js');
   const entry = {
