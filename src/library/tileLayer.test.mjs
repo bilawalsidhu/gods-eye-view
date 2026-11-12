@@ -35,7 +35,7 @@ test('aerial imagery drapes above every other imagery layer', async () => {
     tileProvider('https://base.example.org/{z}/{x}/{y}.png'),
   );
   const photos = createLibraryTileLayer(
-    entryWithoutOutline('pdok-aerial-netherlands'),
+    entryWithoutOutline('ign-orthophotos-france'),
     { source, cesium: Cesium },
   );
   await photos.init(viewer);
@@ -43,27 +43,27 @@ test('aerial imagery drapes above every other imagery layer', async () => {
   const top = () => collection.get(collection.length - 1);
   assert.equal(collection.length, 2);
   assert.notEqual(top(), base);
-  const pdok = top();
+  const ign = top();
 
   // A drape added later (weather, another library basemap) goes under it.
   const weather = collection.addImageryProvider(
     tileProvider('https://weather.example.org/{z}/{x}/{y}.png'),
   );
-  assert.equal(top(), pdok);
+  assert.equal(top(), ign);
   assert.equal(collection.indexOf(weather), 1);
 
-  // PDOK's white "no imagery here" fill is drawn transparent, and its tiles
-  // are requested only inside the Netherlands bbox.
-  assert.ok(pdok.colorToAlpha.equals(Cesium.Color.WHITE));
+  // IGN's dark blue "no imagery here" fill is drawn transparent, and its
+  // tiles are requested only inside the France bbox.
   assert.ok(
-    pdok.colorToAlphaThreshold > 0 && pdok.colorToAlphaThreshold < 0.05,
+    ign.colorToAlpha.equals(Cesium.Color.fromCssColorString('#0a3b59')),
   );
-  const west = Cesium.Math.toDegrees(pdok.imageryProvider.rectangle.west);
-  assert.ok(Math.abs(west - 3.2) < 1e-9);
+  assert.ok(ign.colorToAlphaThreshold > 0 && ign.colorToAlphaThreshold < 0.05);
+  const west = Cesium.Math.toDegrees(ign.imageryProvider.rectangle.west);
+  assert.ok(Math.abs(west - -5.5) < 1e-9);
 
   // Off: the drape and its listener are gone, so later layers stay put.
   await photos.disable();
-  assert.equal(collection.contains(pdok), false);
+  assert.equal(collection.contains(ign), false);
   const later = collection.addImageryProvider(
     tileProvider('https://later.example.org/{z}/{x}/{y}.png'),
   );

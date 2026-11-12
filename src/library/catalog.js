@@ -13,8 +13,6 @@ import akStatewideImagery from './entries/ak-statewide-imagery.json' with { type
 import arStatewideImagery from './entries/ar-statewide-imagery.json' with { type: 'json' };
 import azStatewideImagery from './entries/az-statewide-imagery.json' with { type: 'json' };
 import amsterdamTrafficCameras from './entries/amsterdam-traffic-cameras.json' with { type: 'json' };
-import bangorMe from './entries/bangor-me.json' with { type: 'json' };
-import basemapAtOrthofoto from './entries/basemap-at-orthofoto.json' with { type: 'json' };
 import bayernDop40 from './entries/bayern-dop40.json' with { type: 'json' };
 import bismarckMandanNd from './entries/bismarck-mandan-nd.json' with { type: 'json' };
 import bkgTopplusOpen from './entries/bkg-topplus-open.json' with { type: 'json' };
@@ -27,21 +25,17 @@ import dcStatewideImagery from './entries/dc-statewide-imagery.json' with { type
 import deStatewideImagery from './entries/de-statewide-imagery.json' with { type: 'json' };
 import eeMaaAmetOrtofoto from './entries/ee-maa-amet-ortofoto.json' with { type: 'json' };
 import eiaPowerPlants from './entries/eia-power-plants.json' with { type: 'json' };
-import emodnetBathymetry from './entries/emodnet-bathymetry.json' with { type: 'json' };
 import epaSuperfundSites from './entries/epa-superfund-sites.json' with { type: 'json' };
 import epaToxicReleaseFacilities from './entries/epa-toxic-release-facilities.json' with { type: 'json' };
 import epcEnglandWales from './entries/epc-england-wales.json' with { type: 'json' };
 import femaUsaStructures from './entries/fema-usa-structures.json' with { type: 'json' };
 import gbifOccurrenceDensity from './entries/gbif-occurrence-density.json' with { type: 'json' };
 import gdacsDisasterAlerts from './entries/gdacs-disaster-alerts.json' with { type: 'json' };
-import genevaSitgOrtho from './entries/geneva-sitg-ortho.json' with { type: 'json' };
-import gpwPopulationDensity from './entries/gpw-population-density.json' with { type: 'json' };
 import grandForksNd from './entries/grand-forks-nd.json' with { type: 'json' };
 import gsiJapanMap from './entries/gsi-japan-map.json' with { type: 'json' };
 import gsiJapanPhoto from './entries/gsi-japan-photo.json' with { type: 'json' };
 import gvpHoloceneVolcanoes from './entries/gvp-holocene-volcanoes.json' with { type: 'json' };
 import iaStatewideImagery from './entries/ia-statewide-imagery.json' with { type: 'json' };
-import icgcOrtoCatalunya from './entries/icgc-orto-catalunya.json' with { type: 'json' };
 import idStatewideImagery from './entries/id-statewide-imagery.json' with { type: 'json' };
 import ignOrthophotosFrance from './entries/ign-orthophotos-france.json' with { type: 'json' };
 import ilStatewideImagery from './entries/il-statewide-imagery.json' with { type: 'json' };
@@ -65,7 +59,6 @@ import lawrenceKs from './entries/lawrence-ks.json' with { type: 'json' };
 import leeCountyFl from './entries/lee-county-fl.json' with { type: 'json' };
 import loudounCountyVa from './entries/loudoun-county-va.json' with { type: 'json' };
 import louisvilleLojicKy from './entries/louisville-lojic-ky.json' with { type: 'json' };
-import luOrthoLatest from './entries/lu-ortho-latest.json' with { type: 'json' };
 import maStatewideImagery from './entries/ma-statewide-imagery.json' with { type: 'json' };
 import macrostratGeology from './entries/macrostrat-geology.json' with { type: 'json' };
 import mapterhornTerrain from './entries/mapterhorn-terrain.json' with { type: 'json' };
@@ -73,7 +66,6 @@ import marisMs from './entries/maris-ms.json' with { type: 'json' };
 import mdStatewideImagery from './entries/md-statewide-imagery.json' with { type: 'json' };
 import meStatewideImagery from './entries/me-statewide-imagery.json' with { type: 'json' };
 import miStatewideImagery from './entries/mi-statewide-imagery.json' with { type: 'json' };
-import mnStatewideImagery from './entries/mn-statewide-imagery.json' with { type: 'json' };
 import mountainVillageCo from './entries/mountain-village-co.json' with { type: 'json' };
 import msStatewideImagery from './entries/ms-statewide-imagery.json' with { type: 'json' };
 import mtStatewideImagery from './entries/mt-statewide-imagery.json' with { type: 'json' };
@@ -95,10 +87,8 @@ import nwsActiveAlerts from './entries/nws-active-alerts.json' with { type: 'jso
 import nyStatewideImagery from './entries/ny-statewide-imagery.json' with { type: 'json' };
 import oaklandCountyMi from './entries/oakland-county-mi.json' with { type: 'json' };
 import ohStatewideImagery from './entries/oh-statewide-imagery.json' with { type: 'json' };
-import openseamapSeamarks from './entries/openseamap-seamarks.json' with { type: 'json' };
 import orStatewideImagery from './entries/or-statewide-imagery.json' with { type: 'json' };
 import paStatewideImagery from './entries/pa-statewide-imagery.json' with { type: 'json' };
-import pdokAerialNetherlands from './entries/pdok-aerial-netherlands.json' with { type: 'json' };
 import plOrtofotomapa from './entries/pl-ortofotomapa.json' with { type: 'json' };
 import pnoaMa from './entries/pnoa-ma.json' with { type: 'json' };
 import portlandMetroOr from './entries/portland-metro-or.json' with { type: 'json' };
@@ -110,7 +100,6 @@ import unionCountyOh from './entries/union-county-oh.json' with { type: 'json' }
 import usgsHydrography from './entries/usgs-hydrography.json' with { type: 'json' };
 import usgsTopo from './entries/usgs-topo.json' with { type: 'json' };
 import vaStatewideImagery from './entries/va-statewide-imagery.json' with { type: 'json' };
-import vlaanderenOmw from './entries/vlaanderen-omw.json' with { type: 'json' };
 import vtStatewideImagery from './entries/vt-statewide-imagery.json' with { type: 'json' };
 import wallonieOrtho from './entries/wallonie-ortho.json' with { type: 'json' };
 import wiStatewideImagery from './entries/wi-statewide-imagery.json' with { type: 'json' };
@@ -123,8 +112,6 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   amsterdamTrafficCameras,
   arStatewideImagery,
   azStatewideImagery,
-  bangorMe,
-  basemapAtOrthofoto,
   bayernDop40,
   bismarckMandanNd,
   bkgTopplusOpen,
@@ -137,21 +124,17 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   deStatewideImagery,
   eeMaaAmetOrtofoto,
   eiaPowerPlants,
-  emodnetBathymetry,
   epaSuperfundSites,
   epaToxicReleaseFacilities,
   epcEnglandWales,
   femaUsaStructures,
   gbifOccurrenceDensity,
   gdacsDisasterAlerts,
-  genevaSitgOrtho,
-  gpwPopulationDensity,
   grandForksNd,
   gsiJapanMap,
   gsiJapanPhoto,
   gvpHoloceneVolcanoes,
   iaStatewideImagery,
-  icgcOrtoCatalunya,
   idStatewideImagery,
   ignOrthophotosFrance,
   ilStatewideImagery,
@@ -175,7 +158,6 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   leeCountyFl,
   loudounCountyVa,
   louisvilleLojicKy,
-  luOrthoLatest,
   maStatewideImagery,
   macrostratGeology,
   mapterhornTerrain,
@@ -183,7 +165,6 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   mdStatewideImagery,
   meStatewideImagery,
   miStatewideImagery,
-  mnStatewideImagery,
   mountainVillageCo,
   msStatewideImagery,
   mtStatewideImagery,
@@ -205,10 +186,8 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   nyStatewideImagery,
   oaklandCountyMi,
   ohStatewideImagery,
-  openseamapSeamarks,
   orStatewideImagery,
   paStatewideImagery,
-  pdokAerialNetherlands,
   plOrtofotomapa,
   pnoaMa,
   portlandMetroOr,
@@ -220,7 +199,6 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   usgsHydrography,
   usgsTopo,
   vaStatewideImagery,
-  vlaanderenOmw,
   vtStatewideImagery,
   wallonieOrtho,
   wiStatewideImagery,

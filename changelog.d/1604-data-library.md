@@ -7,15 +7,15 @@
   and travel in share links as `lib=`, separate from the layer tokens; one
   generic `/api/library` proxy serves entries without CORS. Seeded with NASA
   EONET events, EIA and WRI power plants, NWS alerts, NOAA tide stations,
-  Smithsonian volcanoes, NASA Black Marble, OpenSeaMap seamarks, and the
+  Smithsonian volcanoes, NASA Black Marble, and the
   opt-in IMF PortWatch and CCTV packs, plus the City of Amsterdam's
   traffic and ANPR camera positions (opt-in; contributed by @Maher-Reven in
   #251). FEMA USA Structures and the
   National Bridge Inventory load what is in view once you zoom in, and
   Addresscloud's EPC ratings stream from Source Cooperative's GeoParquet on
   S3, coloured A–G with live legend counts. Open tile overlays (geology,
-  biodiversity, population, surface water, national aerial photos and maps)
-  join GDACS alerts and EPA Superfund and TRI facilities. 64 aerial photo
+  biodiversity, surface water, national aerial photos and maps)
+  join GDACS alerts and EPA Superfund and TRI facilities. 57 aerial photo
   layers from the Open Imagery Register (national programmes across Europe,
   NSW, NAIP and US state, county and city services, WMS and ArcGIS export
   included) show their resolution, true-ortho flag, years flown and refresh

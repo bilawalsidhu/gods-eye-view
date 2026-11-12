@@ -26,7 +26,11 @@ const features = [
 ];
 
 test('coverage outlines keep only the parts inside the declared area', () => {
-  const rings = outlineRings(features, libraryEntry('pdok-aerial-netherlands'));
+  const netherlands = {
+    coverage: { countries: ['NL'], bbox: [3.2, 50.7, 7.3, 53.6] },
+    display: { outline: 'coverage' },
+  };
+  const rings = outlineRings(features, netherlands);
   assert.equal(rings.length, 1);
   assert.equal(rings[0][0][0], 4);
 });

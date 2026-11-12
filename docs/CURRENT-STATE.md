@@ -441,29 +441,28 @@ critical #d03b3b); categorical ones (fuel, EONET category, building
 occupancy) use at most four hues that pass all-pairs colour-vision checks on
 the dark globe, plus a neutral Other. Tile layers carry a static
 `display.legend` copied from the provider's own scale (GBIF classic.poly,
-JRC occurrence, GIBS GPW, Macrostrat's ICS period colours); EMODnet publishes
-no machine-readable scale and has none. Aerial photo layers (PDOK, IGN, GSI
+JRC occurrence, Macrostrat's ICS period colours). Aerial photo layers (IGN, GSI
 photos, swisstopo SWISSIMAGE) set `display.outline`: their covered countries'
 borders draw as a thin white ground-clamped line, so the imagery's edge is
 plain, with a "Coverage outline" legend item. Borders come from Natural
 Earth's 1:50m admin-0 countries (public domain, fetched live once per page and
 credited); `countries` draws every part (Japan's islands, Liechtenstein beside
-Switzerland), `coverage` only the parts inside `coverage.bbox` (the European
-Netherlands, metropolitan France). A failed border fetch costs only the
+Switzerland), `coverage` only the parts inside `coverage.bbox` (metropolitan
+France). A failed border fetch costs only the
 outline. The same layers set `display.aerial`: they drape above every other
 imagery layer and raise themselves again whenever another drape is added, so a
 basemap or weather overlay switched on later goes underneath. Each is
 `source.bounded` (tiles requested inside `coverage.bbox` only) and names its
 provider's no-imagery fill in `display.noDataColor`, drawn transparent through
-Cesium's colour-to-alpha (max channel distance 0.02): measured fills are PDOK
-and swisstopo white, IGN's flat ocean blue (#0a3b59) and GSI's ocean grey
-(#343434). Without both, PDOK's white fill covered the whole globe. A 4xx tile
+Cesium's colour-to-alpha (max channel distance 0.02): measured fills are
+swisstopo white, IGN's flat ocean blue (#0a3b59) and GSI's ocean grey
+(#343434). Without both, a white fill covered the whole globe. A 4xx tile
 answer counts as "no imagery here", never as a tile error. IGN's overseas
-departments are outside its single bbox and are not shown. The aerial set now holds 68
-entries: 64 imported from the Open Imagery Register (national programmes in
-Austria, Belgium, Germany, Estonia, Spain, Luxembourg, Poland, Portugal,
-Geneva, Australia's NSW, and 51 US services: NAIP plus state, county and
-city programmes) plus PDOK, IGN, GSI and SWISSIMAGE, each with an `imagery`
+departments are outside its single bbox and are not shown. The aerial set now holds 60
+entries: 57 imported from the Open Imagery Register (national programmes in
+Belgium (Wallonia), Germany, Estonia, Spain, Poland, Portugal, Australia's
+NSW, and 49 US services: NAIP plus state, county and city programmes) plus
+IGN, GSI and SWISSIMAGE, each with an `imagery`
 block (type, published resolution, true ortho, years flown, refresh) that
 Browse shows as a spec list. Tiles take `xyz` (with `{reverseY}` for TMS) or
 `bbox` templates (`{bbox-epsg-3857}`: WMS GetMap and ArcGIS export, filled
@@ -558,7 +557,7 @@ registered in the Data attribution popover while it is in use.
 Seeds: NASA EONET open events (GeoJSON, browser-direct), EIA US power plants
 ≥ 100 MW (ArcGIS, browser-direct, ranked by capacity), Smithsonian GVP Holocene
 volcanoes (WFS GeoJSON, proxied — the upstream sends no CORS headers), NASA
-Black Marble 2016 night lights and OpenSeaMap seamarks (tiles), and the NYC,
+Black Marble 2016 night lights (tiles), and the NYC,
 Lithuania and FL511 CCTV packs. Added from the Ask dataset registry (its live,
 mappable sources that are not core layers): the WRI Global Power Plant Database
 (provider-hosted CSV, the 10,000 largest of ~35,000 by capacity, so it reads
@@ -576,10 +575,12 @@ open/freemium registry review (commercial sources excluded): GDACS disaster
 alerts; the National Bridge Inventory (view-bounded, coloured Good/Fair/Poor);
 EPA Superfund sites and Toxics Release Inventory facilities (view-bounded); and
 tile overlays for Macrostrat geology, GBIF biodiversity density, USGS
-topographic and hydrography maps, PDOK (Netherlands) and IGN (France) aerial
-photos, BKG TopPlusOpen, GSI Japan map and photos, EMODnet bathymetry, SEDAC
-GPW 2020 population density (legend from the GIBS colour map) and JRC surface
-water occurrence. `npm run library:check` validates manifests,
+topographic and hydrography maps, IGN (France) aerial photos, BKG
+TopPlusOpen, GSI Japan map and photos and JRC surface water occurrence.
+Entries whose licence or provider pages no longer resolve (404 or unreachable
+host, checked 2026-11-12) were removed: OpenSeaMap seamarks, EMODnet
+bathymetry, SEDAC GPW population density, PDOK, basemap.at, Geneva SITG,
+ICGC Catalunya, Luxembourg, Vlaanderen, Minnesota and Bangor aerial photos. `npm run library:check` validates manifests,
 the ledger (append-only with `--base-ref`, run in CI on pull requests) and the
 generated DATA_SOURCES.md section; `npm run library:probe` hits every upstream
 once; `npm run qa:data-library` is the browser gate (fixture-backed).

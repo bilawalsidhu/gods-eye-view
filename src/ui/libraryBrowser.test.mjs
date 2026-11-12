@@ -135,12 +135,24 @@ test('the stat tiles summarise the library in words and compact numbers', () => 
 
 test('an imagery card lists type, resolution, years flown and refresh', async () => {
   const { imagerySpecs } = await import('./libraryBrowser.js');
-  const specs = imagerySpecs(libraryEntry('geneva-sitg-ortho'));
+  const specs = imagerySpecs({
+    imagery: {
+      type: 'ortho',
+      trueOrtho: true,
+      resolution: '5 cm',
+      vintage: '2024',
+      updateCycle: 'Annual',
+    },
+  });
   assert.deepEqual(
     specs.map(({ label }) => label),
     ['Type', 'Resolution', 'Flown', 'Updates'],
   );
   assert.equal(specs[0].value, 'True orthophoto');
   assert.equal(specs[1].value, '5 cm');
+  assert.equal(
+    imagerySpecs(libraryEntry('ign-orthophotos-france'))[0].value,
+    'Orthophoto',
+  );
   assert.deepEqual(imagerySpecs(libraryEntry('eia-power-plants')), []);
 });

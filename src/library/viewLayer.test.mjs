@@ -132,7 +132,7 @@ test('the row legend labels each colour and counts what is in view', async () =>
   );
   // A tile layer's static scale.
   assert.equal(
-    colorByLegend(libraryEntry('gpw-population-density').display).length,
+    colorByLegend(libraryEntry('gbif-occurrence-density').display).length,
     6,
   );
   assert.deepEqual(
