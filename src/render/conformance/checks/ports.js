@@ -2360,69 +2360,73 @@ export function portChecks() {
       async (h, r) => {
         if (h.pixels === false) return { skip: 'reads pixels' };
         r.globe.setGlobeVisible(false);
-        const dLat = 150 / 111320;
-        const dLon = dLat / Math.cos((AUSTIN.lat * Math.PI) / 180);
-        const shapes = r.draw.shapes({ id: 'conf:lit' });
-        shapes.set([
-          {
-            id: 'block',
-            geometry: {
-              kind: 'polygon',
-              rings: [
-                [
-                  { lon: AUSTIN.lon - dLon, lat: AUSTIN.lat - dLat },
-                  { lon: AUSTIN.lon + dLon, lat: AUSTIN.lat - dLat },
-                  { lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat },
-                  { lon: AUSTIN.lon - dLon, lat: AUSTIN.lat + dLat },
+        // Shown again however the check ends.
+        try {
+          const dLat = 150 / 111320;
+          const dLon = dLat / Math.cos((AUSTIN.lat * Math.PI) / 180);
+          const shapes = r.draw.shapes({ id: 'conf:lit' });
+          shapes.set([
+            {
+              id: 'block',
+              geometry: {
+                kind: 'polygon',
+                rings: [
+                  [
+                    { lon: AUSTIN.lon - dLon, lat: AUSTIN.lat - dLat },
+                    { lon: AUSTIN.lon + dLon, lat: AUSTIN.lat - dLat },
+                    { lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat },
+                    { lon: AUSTIN.lon - dLon, lat: AUSTIN.lat + dLat },
+                  ],
                 ],
-              ],
+              },
+              fill: '#808080',
+              extrudeHeight: 300,
+              height: 'absolute',
             },
-            fill: '#808080',
-            extrudeHeight: 300,
-            height: 'absolute',
-          },
-        ]);
-        // 3.3 km south, 1.5 km up, looking north and down.
-        r.camera.setView({
-          destination: {
-            lon: AUSTIN.lon,
-            lat: AUSTIN.lat - 3300 / 111320,
-            height: 1500,
-          },
-          orientation: { heading: 0, pitch: (-35 * Math.PI) / 180, roll: 0 },
-        });
-        await h.frame(r);
-        await settled(r);
-        await drawn(h, r);
-        const grey = (lon, lat, height) => {
-          const s = r.query.project(h.toEcef({ lon, lat, height }));
-          ok(s, 'projects');
-          const { data } = r.readPixels({
-            crop: {
-              x: Math.round(s.x) - 2,
-              y: Math.round(s.y) - 2,
-              width: 5,
-              height: 5,
+          ]);
+          // 3.3 km south, 1.5 km up, looking north and down.
+          r.camera.setView({
+            destination: {
+              lon: AUSTIN.lon,
+              lat: AUSTIN.lat - 3300 / 111320,
+              height: 1500,
             },
+            orientation: { heading: 0, pitch: (-35 * Math.PI) / 180, roll: 0 },
           });
-          let sum = 0;
-          for (let i = 0; i < data.length; i += 4)
-            sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
-          return sum / (data.length / 4);
-        };
-        // A little in from the south face's middle, and the top's middle.
-        const wall = grey(AUSTIN.lon, AUSTIN.lat - dLat * 0.98, 150);
-        const top = grey(AUSTIN.lon, AUSTIN.lat, 300);
-        ok(
-          wall > 85,
-          `the wall facing the eye is lit, brighter than half its colour (${Math.round(wall)})`,
-        );
-        ok(
-          Math.abs(top - wall) > 10,
-          `its top and its wall shade differently (${Math.round(top)}, ${Math.round(wall)})`,
-        );
-        shapes.dispose();
-        r.globe.setGlobeVisible(true);
+          await h.frame(r);
+          await settled(r);
+          await drawn(h, r);
+          const grey = (lon, lat, height) => {
+            const s = r.query.project(h.toEcef({ lon, lat, height }));
+            ok(s, 'projects');
+            const { data } = r.readPixels({
+              crop: {
+                x: Math.round(s.x) - 2,
+                y: Math.round(s.y) - 2,
+                width: 5,
+                height: 5,
+              },
+            });
+            let sum = 0;
+            for (let i = 0; i < data.length; i += 4)
+              sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+            return sum / (data.length / 4);
+          };
+          // A little in from the south face's middle, and the top's middle.
+          const wall = grey(AUSTIN.lon, AUSTIN.lat - dLat * 0.98, 150);
+          const top = grey(AUSTIN.lon, AUSTIN.lat, 300);
+          ok(
+            wall > 85,
+            `the wall facing the eye is lit, brighter than half its colour (${Math.round(wall)})`,
+          );
+          ok(
+            Math.abs(top - wall) > 10,
+            `its top and its wall shade differently (${Math.round(top)}, ${Math.round(wall)})`,
+          );
+          shapes.dispose();
+        } finally {
+          r.globe.setGlobeVisible(true);
+        }
       },
       { capability: 'globeVisibility' },
     ),

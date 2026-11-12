@@ -310,3 +310,27 @@ test('a setBase that ends while a later one’s style still loads is settled; th
     globalThis.fetch = original;
   }
 });
+
+test('a lit-shape check that fails still shows the globe again', async () => {
+  const shown = [];
+  const harness = {
+    ...createStubHarness(),
+    // As a renderer reading pixels would; the stub draws no shapes, so the
+    // check fails its reads.
+    pixels: true,
+    create: async (options) => {
+      const r = await createStubHarness().create(options);
+      const destroy = r.destroy.bind(r);
+      r.destroy = () => {
+        shown.push(r.globe.isGlobeVisible());
+        destroy();
+      };
+      return r;
+    },
+  };
+  const report = await runConformance(harness, {
+    only: (id) => id === 'draw.shapes.lit',
+  });
+  assert.equal(report.results[0].status, 'fail');
+  assert.deepEqual(shown, [true]);
+});
