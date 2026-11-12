@@ -315,13 +315,18 @@ What it draws of the style specification:
   `text-color`, `text-opacity`, `text-halo-color`, `text-halo-width`,
   `text-transform`, `text-anchor`, `text-offset`, `text-max-width`).
   Layer `minzoom`, `maxzoom`, `filter` and `visibility` hold.
-- Labels are painted into the tiles: top layer first, each clear of those
-  placed before it and wholly inside its tile (one across a tile edge is
+- Labels are painted into the tiles: top layer first (within a layer, its
+  features in their order in the tile), each clear of those placed before
+  it and wholly inside its tile (one across a tile edge is
   left out). A point labels at itself, a line halfway along it (level, not
   along the line), a polygon at its outer ring's bounding-box centre.
 - Filters in both syntaxes (legacy, with `$type` and `$id`, and
   expressions). Legacy `{stops, base, property, type}` functions
-  (exponential, interval, categorical, identity; not zoom-and-property).
+  (exponential, interval, categorical, identity; not zoom-and-property);
+  one without a `type` is exponential on a property that interpolates (a
+  number or colour) and interval on any other (`line-cap`, `line-join`,
+  `text-font`, `text-transform`, `text-anchor`, ...), as the specification
+  says. `has`, `get` and legacy filters see a feature's own properties only.
 - Expressions: `literal`, `get`, `has`, `id`, `geometry-type`, `zoom`,
   `properties`, `!`, `all`, `any`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`,
   `case`, `match`, `coalesce`, `step`, `interpolate` (`linear` and
@@ -335,7 +340,9 @@ What it draws of the style specification:
   (`fill-pattern`, `line-pattern`, `background-pattern`), `line-offset`,
   `line-gradient` or a translation; layers whose values use an expression
   not listed (or are malformed). A feature whose values cannot be evaluated
-  (a type that does not fit) is left out. Nothing unsupported throws.
+  (a type that does not fit, a `step` or `interpolate` over what is not a
+  number, or a value that comes to nothing: null, or not a finite number
+  where one is needed) is left out. Nothing unsupported throws.
 - Ignored: icons (`icon-image`, sprites: a symbol layer draws its text
   alone), text along lines (drawn level), `glyphs` (system fonts), and any
   other paint or layout property not listed above.

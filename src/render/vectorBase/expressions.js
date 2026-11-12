@@ -19,6 +19,10 @@ const unsupported = (what) => {
 /** A feature with no properties, at a zoom: what a zoom-only value sees. */
 const constant = (value) => () => value;
 
+/** A feature's own property `key` (never an inherited name), or undefined. */
+const propertyOf = (properties, key) =>
+  properties && Object.hasOwn(properties, key) ? properties[key] : undefined;
+
 const COMPARE = {
   '==': (a, b) => a === b,
   '!=': (a, b) => a !== b,
@@ -211,7 +215,7 @@ export function isExpressionFilter(filter) {
 const legacyKey = (key) => {
   if (key === '$type') return (f) => f.type;
   if (key === '$id') return (f) => f.id;
-  return (f) => f.properties[key];
+  return (f) => propertyOf(f.properties, key);
 };
 
 /** A legacy filter, compiled. */
@@ -232,7 +236,7 @@ function compileLegacyFilter(filter) {
       const has = (f) =>
         args[0] === '$type' || args[0] === '$id'
           ? legacyKey(args[0])(f) !== undefined
-          : args[0] in f.properties;
+          : propertyOf(f.properties, args[0]) !== undefined;
       return op === 'has' ? has : (f) => !has(f);
     }
     case 'in':
@@ -271,18 +275,18 @@ export function compileFilter(filter) {
   return (f) => fn(f) === true;
 }
 
-/** A legacy `{stops, base, property, type, default}` function, compiled. */
-function compileFunction(fn) {
+/**
+ * A legacy `{stops, base, property, type, default}` function, compiled.
+ * Without a `type` it is `exponential` for a property that interpolates and
+ * `interval` for one that does not, as the style specification says.
+ */
+function compileFunction(fn, interpolated) {
   const stops = fn.stops;
   const base = fn.base ?? 1;
-  const type =
-    fn.type ??
-    (fn.property !== undefined && typeof stops?.[0]?.[1] === 'string'
-      ? 'categorical'
-      : 'exponential');
+  const type = fn.type ?? (interpolated ? 'exponential' : 'interval');
   if (type === 'identity') {
     if (fn.property === undefined) return unsupported('identity of zoom');
-    return (f) => f.properties[fn.property] ?? fn.default;
+    return (f) => propertyOf(f.properties, fn.property) ?? fn.default;
   }
   if (!Array.isArray(stops) || stops.length === 0)
     return unsupported('a function without stops');
@@ -291,7 +295,7 @@ function compileFunction(fn) {
   const input =
     fn.property === undefined
       ? (f) => f.zoom
-      : (f) => f.properties[fn.property];
+      : (f) => propertyOf(f.properties, fn.property);
   if (type === 'categorical') {
     const map = new Map(stops.map(([k, v]) => [k, v]));
     return (f) => {
@@ -310,11 +314,17 @@ function compileFunction(fn) {
 
 /**
  * A layout or paint value, compiled: a constant, a legacy function, or an
- * expression.
+ * expression. `interpolated`: whether the property interpolates (a number
+ * or colour), which a legacy function without a `type` steps between its
+ * stops (`interval`) where it does not.
  * @param {unknown} value
+ * @param {{array?: boolean, interpolated?: boolean}} [options]
  * @returns {(feature: object) => unknown}
  */
-export function compileValue(value, { array = false } = {}) {
+export function compileValue(
+  value,
+  { array = false, interpolated = true } = {},
+) {
   // An array property's own value (`text-font`, `line-dasharray`): a
   // literal unless it names an operator.
   if (
@@ -326,7 +336,7 @@ export function compileValue(value, { array = false } = {}) {
     return constant(value);
   if (isExpression(value)) return compileExpression(value);
   if (value && typeof value === 'object' && !Array.isArray(value))
-    return compileFunction(value);
+    return compileFunction(value, interpolated);
   return constant(value);
 }
 
@@ -398,12 +408,12 @@ export function compileExpression(expr) {
     case 'get': {
       if (raw.length !== 1) return unsupported('get from an object');
       const [key] = args();
-      return (f) => f.properties[key(f)] ?? null;
+      return (f) => propertyOf(f.properties, key(f)) ?? null;
     }
     case 'has': {
       if (raw.length !== 1) return unsupported('has in an object');
       const [key] = args();
-      return (f) => key(f) in f.properties;
+      return (f) => propertyOf(f.properties, key(f)) !== undefined;
     }
     case '!': {
       const [a] = args();
@@ -483,6 +493,8 @@ export function compileExpression(expr) {
         steps.push([raw[i], compileExpression(raw[i + 1])]);
       return (f) => {
         const x = input(f);
+        // A step over what is not a number fails, as interpolate does.
+        if (typeof x !== 'number') return unsupported('step a non-number');
         let out = first;
         for (const [at, value] of steps) if (x >= at) out = value;
         return out(f);
@@ -614,5 +626,7 @@ function textOf(v) {
  * feature.
  */
 export function fillTokens(text, properties) {
-  return text.replace(/{([^{}]+)}/g, (_, key) => textOf(properties[key]));
+  return text.replace(/{([^{}]+)}/g, (_, key) =>
+    textOf(propertyOf(properties, key)),
+  );
 }

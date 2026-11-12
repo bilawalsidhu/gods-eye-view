@@ -40,6 +40,46 @@ const ARRAY_VALUES = new Set([
   'circle-translate',
 ]);
 
+/**
+ * Properties that interpolate (numbers, colours, number arrays the
+ * specification marks interpolated): a legacy function without a `type` is
+ * `exponential` on these and `interval` on every other (`line-cap`,
+ * `line-join`, `line-dasharray`, `text-field`, `text-font`,
+ * `text-transform`, `text-anchor`, ...).
+ */
+const INTERPOLATED = new Set([
+  'background-color',
+  'background-opacity',
+  'fill-color',
+  'fill-opacity',
+  'fill-outline-color',
+  'line-color',
+  'line-opacity',
+  'line-width',
+  'line-gap-width',
+  'line-blur',
+  'circle-radius',
+  'circle-color',
+  'circle-opacity',
+  'circle-blur',
+  'circle-stroke-width',
+  'circle-stroke-color',
+  'circle-stroke-opacity',
+  'text-size',
+  'text-color',
+  'text-opacity',
+  'text-halo-color',
+  'text-halo-width',
+  'text-halo-blur',
+  'text-offset',
+  'text-max-width',
+  'text-letter-spacing',
+  'text-line-height',
+  'text-rotate',
+  'text-padding',
+  'text-radial-offset',
+]);
+
 /** Defaults the painter reads for each layer type, as the specification's. */
 const DEFAULTS = {
   background: { 'background-color': '#000000', 'background-opacity': 1 },
@@ -117,7 +157,10 @@ function compileLayer(layer, sources) {
       ...paint,
     }))
       if (key !== 'visibility')
-        values[key] = compileValue(value, { array: ARRAY_VALUES.has(key) });
+        values[key] = compileValue(value, {
+          array: ARRAY_VALUES.has(key),
+          interpolated: INTERPOLATED.has(key),
+        });
     return {
       layer: {
         id: layer.id,
@@ -199,10 +242,12 @@ export async function loadVectorStyle(
     if (layer.type === 'background' && !background)
       try {
         const at = { zoom: 0, properties: {}, type: 'Polygon' };
-        background = {
-          color: String(layer.values['background-color'](at)),
-          opacity: Number(layer.values['background-opacity'](at)),
-        };
+        const color = layer.values['background-color'](at);
+        const opacity = layer.values['background-opacity'](at);
+        background =
+          typeof color === 'string' && Number.isFinite(opacity)
+            ? { color, opacity }
+            : null;
       } catch {
         background = null;
       }

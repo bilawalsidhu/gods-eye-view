@@ -330,3 +330,203 @@ test('a feature whose value cannot be evaluated is left out, the rest drawn', as
     [0.3],
   );
 });
+
+test('a legacy function without a type steps on a property that cannot interpolate', () => {
+  const zoomStops = {
+    stops: [
+      [10, 'butt'],
+      [14, 'round'],
+    ],
+  };
+  const join = compileValue(zoomStops, { interpolated: false });
+  assert.deepEqual(
+    [9, 12, 14].map((zoom) => join(feature({}, { zoom }))),
+    ['butt', 'butt', 'round'],
+  );
+  // A number property interpolates, exponentially by default.
+  const width = compileValue(
+    {
+      stops: [
+        [10, 1],
+        [12, 5],
+      ],
+    },
+    { interpolated: true },
+  );
+  assert.equal(width(feature({}, { zoom: 11 })), 3);
+  // A property function with string outputs is not categorical by default:
+  // interval over a number input, the default over any other.
+  const byRank = compileValue(
+    {
+      property: 'rank',
+      default: 'Sans',
+      stops: [
+        [1, 'Bold'],
+        [5, 'Regular'],
+      ],
+    },
+    { interpolated: false },
+  );
+  assert.deepEqual(
+    [1, 3, 7, 'x'].map((rank) => byRank(feature({ rank }))),
+    ['Bold', 'Bold', 'Regular', 'Sans'],
+  );
+});
+
+test('a style’s legacy string stops are stepped where the property does not interpolate', async () => {
+  const { fetch } = fetchOver({
+    'https://example.test/s.json': {
+      version: 8,
+      sources: { base: { type: 'vector', tiles: ['/{z}/{x}/{y}'] } },
+      layers: [
+        {
+          id: 'roads',
+          type: 'line',
+          source: 'base',
+          'source-layer': 'roads',
+          layout: {
+            'line-join': {
+              stops: [
+                [0, 'bevel'],
+                [20, 'round'],
+              ],
+            },
+            'text-transform': {
+              stops: [
+                [0, 'none'],
+                [20, 'uppercase'],
+              ],
+            },
+          },
+        },
+      ],
+    },
+  });
+  const style = await loadVectorStyle('https://example.test/s.json', fetch);
+  assert.deepEqual(style.skipped, []);
+  const [roads] = style.layers;
+  const at = feature({}, { zoom: 10, type: 'LineString' });
+  assert.equal(roads.values['line-join'](at), 'bevel');
+  assert.equal(roads.values['text-transform'](at), 'none');
+});
+
+test('step and has follow the specification on missing and inherited names', () => {
+  const step = compileExpression(['step', ['get', 'rank'], 'low', 0, 'high']);
+  assert.equal(step(feature({ rank: 2 })), 'high');
+  assert.throws(() => step(feature({})), Unsupported, 'a missing input fails');
+  for (const name of ['toString', 'constructor', '__proto__']) {
+    assert.equal(compileExpression(['has', name])(feature({})), false, name);
+    assert.equal(compileExpression(['get', name])(feature({})), null, name);
+    assert.equal(compileFilter(['has', name])(feature({})), false, name);
+    assert.equal(compileFilter(['==', name, 'x'])(feature({})), false, name);
+  }
+});
+
+/** A one-layer style over one tile, painted on a recording canvas. */
+async function paintOne(layer, features) {
+  const tile = encodeVectorTile(features);
+  const { fetch } = fetchOver({
+    'https://example.test/s.json': {
+      version: 8,
+      sources: { base: { type: 'vector', tiles: ['/{z}/{x}/{y}'] } },
+      layers: [{ source: 'base', ...layer }],
+    },
+    'https://example.test/0/0/0': tile,
+  });
+  const style = await loadVectorStyle('https://example.test/s.json', fetch);
+  const { canvas, calls } = recordingCanvas();
+  await paintVectorTile(style, 0, 0, 0, { fetch, canvas });
+  return calls;
+}
+
+test('a feature whose colour or width evaluates to nothing is left out, not drawn in the last one’s', async () => {
+  const fills = await paintOne(
+    {
+      id: 'water',
+      type: 'fill',
+      'source-layer': 'water',
+      paint: { 'fill-color': ['get', 'colour'] },
+    },
+    {
+      water: [
+        { type: 'Polygon', geometry: FULL, properties: { colour: '#00f' } },
+        { type: 'Polygon', geometry: FULL, properties: {} },
+      ],
+    },
+  );
+  assert.equal(fills.filter(([k]) => k === 'fill').length, 1);
+  assert.deepEqual(
+    fills.filter(([k]) => k === '=fillStyle').map(([, v]) => v),
+    ['#00f'],
+  );
+  const line = [
+    [
+      [0, 2048],
+      [4096, 2048],
+    ],
+  ];
+  const lines = await paintOne(
+    {
+      id: 'roads',
+      type: 'line',
+      'source-layer': 'roads',
+      paint: { 'line-width': ['get', 'w'], 'line-color': ['get', 'c'] },
+    },
+    {
+      roads: [
+        { type: 'LineString', geometry: line, properties: { w: 3, c: '#f00' } },
+        { type: 'LineString', geometry: line, properties: { w: 2 } },
+        { type: 'LineString', geometry: line, properties: { c: '#0f0' } },
+      ],
+    },
+  );
+  assert.equal(lines.filter(([k]) => k === 'stroke').length, 1);
+  assert.deepEqual(
+    lines.filter(([k]) => k === '=strokeStyle').map(([, v]) => v),
+    ['#f00'],
+  );
+  const circles = await paintOne(
+    {
+      id: 'dots',
+      type: 'circle',
+      'source-layer': 'dots',
+      paint: { 'circle-radius': ['get', 'r'], 'circle-color': '#fff' },
+    },
+    {
+      dots: [
+        { type: 'Point', geometry: [[[100, 100]]], properties: { r: 4 } },
+        { type: 'Point', geometry: [[[200, 200]]], properties: {} },
+      ],
+    },
+  );
+  assert.equal(circles.filter(([k]) => k === 'arc').length, 1);
+});
+
+test('labels of one layer are placed in their features’ order, the first winning', async () => {
+  const calls = await paintOne(
+    {
+      id: 'places',
+      type: 'symbol',
+      'source-layer': 'places',
+      layout: { 'text-field': '{name}', 'text-size': 12 },
+    },
+    {
+      places: [
+        {
+          type: 'Point',
+          geometry: [[[2048, 2048]]],
+          properties: { name: 'First' },
+        },
+        {
+          type: 'Point',
+          geometry: [[[2048, 2048]]],
+          properties: { name: 'Second' },
+        },
+      ],
+    },
+  );
+  assert.deepEqual(
+    calls.filter(([k]) => k === 'fillText').map(([, text]) => text),
+    ['First'],
+  );
+});

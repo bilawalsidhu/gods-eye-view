@@ -12,7 +12,8 @@
  * zoomed); below its `minzoom` it draws nothing. A feature whose filter or
  * values cannot be evaluated is left out.
  *
- * Labels are placed top layer first, each kept clear of those placed
+ * Labels are placed top layer first (a layer's own in their features' order
+ * in the tile), each kept clear of those placed
  * before it and wholly inside its tile (a label across a tile edge is left
  * out, never cut); a point labels at itself, a line at the point halfway
  * along it, a polygon at its outer ring's bounding-box centre. Text wraps at
@@ -21,7 +22,7 @@
  */
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
-import { fillTokens } from './expressions.js';
+import { cssOf, fillTokens, Unsupported } from './expressions.js';
 
 /** The tile size style zooms are given for, pixels. */
 export const STYLE_TILE_SIZE = 512;
@@ -94,6 +95,34 @@ function sourceTile(style, url, fetchImpl) {
 
 /** A value of a layer for a feature; throws where it cannot be evaluated. */
 const valueOf = (layer, key, f) => layer.values[key]?.(f);
+
+/**
+ * A number value; throws (the feature is left out) for null, undefined or
+ * what is not a finite number, which a canvas would ignore, keeping the
+ * last feature's.
+ */
+function numberOf(layer, key, f) {
+  const v = valueOf(layer, key, f);
+  const n = v === null || v === undefined || v === '' ? NaN : Number(v);
+  if (!Number.isFinite(n)) throw new Unsupported(`${key} is ${v}`);
+  return n;
+}
+
+/** A colour value as CSS; throws, as {@link numberOf}, for no colour. */
+function colorOf(layer, key, f) {
+  const v = valueOf(layer, key, f);
+  if (typeof v === 'string' && v.trim()) return v;
+  if (Array.isArray(v) && v.length === 4 && v.every(Number.isFinite))
+    return cssOf(v);
+  throw new Unsupported(`${key} is ${v}`);
+}
+
+/** A keyword value (`line-cap`, `line-join`); throws for no string. */
+function keywordOf(layer, key, f) {
+  const v = valueOf(layer, key, f);
+  if (typeof v !== 'string' || !v) throw new Unsupported(`${key} is ${v}`);
+  return v;
+}
 
 /** Paths a feature's rings or lines in tile pixels. */
 function tracePath(ctx, rings, at) {
@@ -212,12 +241,14 @@ export async function paintVectorTile(
   ctx.clearRect(0, 0, size, size);
   const labels = [];
 
-  for (const layer of shown) {
+  for (const [order, layer] of shown.entries()) {
     if (layer.type === 'background') {
       const f = { zoom, properties: {}, type: 'Polygon' };
       try {
-        ctx.globalAlpha = Number(valueOf(layer, 'background-opacity', f));
-        ctx.fillStyle = String(valueOf(layer, 'background-color', f));
+        const opacity = numberOf(layer, 'background-opacity', f);
+        const color = colorOf(layer, 'background-color', f);
+        ctx.globalAlpha = opacity;
+        ctx.fillStyle = color;
         ctx.fillRect(0, 0, size, size);
       } catch {
         // Not evaluated: no background from this layer.
@@ -240,7 +271,7 @@ export async function paintVectorTile(
       };
       try {
         if (!f.type || !layer.filter(f)) continue;
-        drawFeature(ctx, layer, feature, f, at, labels);
+        drawFeature(ctx, layer, feature, f, at, labels, order);
       } catch {
         // A filter or value not evaluated: the feature is left out.
       }
@@ -252,19 +283,29 @@ export async function paintVectorTile(
   return out;
 }
 
-/** Draw a feature of a fill, line or circle layer; queue a symbol's label. */
-function drawFeature(ctx, layer, feature, f, at, labels) {
+/**
+ * Draw a feature of a fill, line or circle layer; queue a symbol's label.
+ * Every value is evaluated before anything is drawn, so a feature with one
+ * that cannot be is left out whole.
+ */
+function drawFeature(ctx, layer, feature, f, at, labels, order) {
   const v = (key) => valueOf(layer, key, f);
+  const num = (key) => numberOf(layer, key, f);
+  const color = (key) => colorOf(layer, key, f);
   switch (layer.type) {
     case 'fill': {
       if (f.type !== 'Polygon') return;
-      const rings = feature.loadGeometry();
-      tracePath(ctx, rings, at);
-      ctx.globalAlpha = Number(v('fill-opacity'));
-      ctx.fillStyle = String(v('fill-color'));
+      const opacity = num('fill-opacity');
+      const fill = color('fill-color');
+      const outline = layer.values['fill-outline-color']
+        ? color('fill-outline-color')
+        : null;
+      tracePath(ctx, feature.loadGeometry(), at);
+      ctx.globalAlpha = opacity;
+      ctx.fillStyle = fill;
       ctx.fill('evenodd');
-      if (layer.values['fill-outline-color']) {
-        ctx.strokeStyle = String(v('fill-outline-color'));
+      if (outline) {
+        ctx.strokeStyle = outline;
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -272,39 +313,52 @@ function drawFeature(ctx, layer, feature, f, at, labels) {
     }
     case 'line': {
       if (f.type === 'Point') return;
-      const width = Number(v('line-width'));
-      const gap = Number(v('line-gap-width'));
+      const width = num('line-width');
+      const gap = num('line-gap-width');
       // A cased line (a gap between two lines) as one line its full width,
       // under what fills the gap.
       const drawn = gap > 0 ? gap + 2 * width : width;
       if (!(drawn > 0)) return;
-      tracePath(ctx, feature.loadGeometry(), at);
-      ctx.globalAlpha = Number(v('line-opacity'));
-      ctx.strokeStyle = String(v('line-color'));
-      ctx.lineWidth = drawn;
-      ctx.lineCap = String(v('line-cap'));
-      ctx.lineJoin = String(v('line-join'));
+      const opacity = num('line-opacity');
+      const stroke = color('line-color');
+      const cap = keywordOf(layer, 'line-cap', f);
+      const join = keywordOf(layer, 'line-join', f);
       const dashes = layer.values['line-dasharray'] && v('line-dasharray');
-      if (Array.isArray(dashes) && gap <= 0)
-        ctx.setLineDash(dashes.map((d) => Number(d) * width));
+      const dash =
+        Array.isArray(dashes) && gap <= 0
+          ? dashes.map((d) => Number(d) * width)
+          : null;
+      if (dash && !dash.every(Number.isFinite))
+        throw new Unsupported(`line-dasharray is ${dashes}`);
+      tracePath(ctx, feature.loadGeometry(), at);
+      ctx.globalAlpha = opacity;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = drawn;
+      ctx.lineCap = cap;
+      ctx.lineJoin = join;
+      if (dash) ctx.setLineDash(dash);
       ctx.stroke();
       return;
     }
     case 'circle': {
       if (f.type !== 'Point') return;
-      const radius = Number(v('circle-radius'));
-      const stroke = Number(v('circle-stroke-width'));
+      const radius = num('circle-radius');
+      const stroke = num('circle-stroke-width');
+      const opacity = num('circle-opacity');
+      const fill = color('circle-color');
+      const strokeOpacity = stroke > 0 ? num('circle-stroke-opacity') : 0;
+      const strokeColor = stroke > 0 ? color('circle-stroke-color') : null;
       for (const part of feature.loadGeometry())
         for (const p of part) {
           const [px, py] = at(p);
           ctx.beginPath();
           ctx.arc(px, py, radius, 0, Math.PI * 2);
-          ctx.globalAlpha = Number(v('circle-opacity'));
-          ctx.fillStyle = String(v('circle-color'));
+          ctx.globalAlpha = opacity;
+          ctx.fillStyle = fill;
           ctx.fill();
           if (stroke > 0) {
-            ctx.globalAlpha = Number(v('circle-stroke-opacity'));
-            ctx.strokeStyle = String(v('circle-stroke-color'));
+            ctx.globalAlpha = strokeOpacity;
+            ctx.strokeStyle = strokeColor;
             ctx.lineWidth = stroke;
             ctx.stroke();
           }
@@ -337,27 +391,30 @@ function drawFeature(ctx, layer, feature, f, at, labels) {
           (Math.min(...ys) + Math.max(...ys)) / 2,
         ]);
       }
-      const px = Number(v('text-size'));
+      const px = num('text-size');
       const offset = layer.values['text-offset'] ? v('text-offset') : [0, 0];
+      const dx = Number(offset?.[0] ?? 0) * px;
+      const dy = Number(offset?.[1] ?? 0) * px;
+      const maxWidth =
+        (layer.values['text-max-width'] ? num('text-max-width') : 10) * px;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy))
+        throw new Unsupported(`text-offset is ${offset}`);
+      const label = {
+        text,
+        px,
+        font: fontOf(v('text-font'), px),
+        color: color('text-color'),
+        opacity: num('text-opacity'),
+        halo: color('text-halo-color'),
+        haloWidth: num('text-halo-width'),
+        anchor: String(
+          (layer.values['text-anchor'] && v('text-anchor')) ?? 'center',
+        ),
+        maxWidth,
+        order,
+      };
       for (const anchor of anchors)
-        labels.push({
-          text,
-          x: anchor[0] + Number(offset?.[0] ?? 0) * px,
-          y: anchor[1] + Number(offset?.[1] ?? 0) * px,
-          px,
-          font: fontOf(v('text-font'), px),
-          color: String(v('text-color')),
-          opacity: Number(v('text-opacity')),
-          halo: String(v('text-halo-color')),
-          haloWidth: Number(v('text-halo-width')),
-          anchor: String(
-            (layer.values['text-anchor'] && v('text-anchor')) ?? 'center',
-          ),
-          maxWidth:
-            Number(
-              (layer.values['text-max-width'] && v('text-max-width')) ?? 10,
-            ) * px,
-        });
+        labels.push({ ...label, x: anchor[0] + dx, y: anchor[1] + dy });
       return;
     }
   }
@@ -366,11 +423,12 @@ function drawFeature(ctx, layer, feature, f, at, labels) {
 /** Place the labels top layer first, clear of each other, and draw them. */
 function placeLabels(ctx, labels, size) {
   const placed = [];
-  // Later in the style is on top, and placed first.
-  const order = labels.map((label, i) => [label, i]).reverse();
+  // Later in the style is on top, and placed first; within a layer, its
+  // features in their order in the tile, as MapLibre places them.
+  const order = labels.slice().sort((a, b) => b.order - a.order);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  for (const [label] of order) {
+  for (const label of order) {
     ctx.font = label.font;
     const lines = wrap(ctx, label.text, label.maxWidth);
     if (!lines.length) continue;
