@@ -2,9 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createHeight } from './height.js';
+import { FLOOR_REREAD_ATTEMPTS, FLOOR_REREAD_MS } from './policy.js';
 import {
-  FLOOR_REREAD_ATTEMPTS,
-  FLOOR_REREAD_MS,
   TERRAIN_HEIGHT_CACHE_MAX,
   TERRAIN_HEIGHT_FRESH_MS,
   TERRAIN_NEED,
@@ -12,7 +11,7 @@ import {
   TERRAIN_READ_WINDOW_MS,
   TERRAIN_REFRESH_BUDGET_MS,
   TERRAIN_SETTLE_MS,
-} from './policy.js';
+} from '../../services/terrainSurface.js';
 
 const LIFT = 1.5;
 
@@ -179,12 +178,12 @@ test('undrawn trail history leaves most of the budget to the paths markers are d
   // New points, one per floor cell: history first, as a pass offers them.
   let lon = -71;
   const ask = (need) => height.requestHeight(42, (lon -= 0.001), null, need).height;
-  const history = Array.from({ length: 30 }, () => ask(TERRAIN_NEED.HISTORY));
+  const history = Array.from({ length: 30 }, () => ask(TERRAIN_NEED.BACKGROUND));
   const read = history.filter((h) => h !== null).length;
   assert.equal(read, TERRAIN_READ_BUDGET_MS / 4, 'history stops at a quarter of the budget');
   const path = Array.from({ length: 30 }, () => ask(TERRAIN_NEED.PATH));
   assert.equal(path.filter((h) => h !== null).length, TERRAIN_READ_BUDGET_MS - read, 'the path takes the rest');
-  assert.equal(ask(TERRAIN_NEED.HISTORY), null);
+  assert.equal(ask(TERRAIN_NEED.BACKGROUND), null);
   assert.equal(ask(TERRAIN_NEED.MARKER), 100 + LIFT, 'a marker is still read');
   assert.equal(reads.length, TERRAIN_READ_BUDGET_MS + 1);
 });

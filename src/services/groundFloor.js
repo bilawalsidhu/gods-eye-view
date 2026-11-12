@@ -1,3 +1,4 @@
+import { createTerrainSurface } from './terrainSurface.js';
 /** Construct an instance-owned groundFloor service with explicit dependencies. */
 export function createGroundFloor({ terrain, signal }) {
   const { cachedRealEllipsoidalGround, resolveEllipsoidalGround } = terrain;
@@ -698,6 +699,8 @@ export function createGroundFloor({ terrain, signal }) {
     { once: true },
   );
   return {
+    // The terrain globe's loaded surface, read once per point for every layer.
+    terrainSurface: createTerrainSurface(),
     GROUND_FLOOR_LIFT_M,
     MESH_FLOOR_BELOW_PRIOR_M,
     MESH_FLOOR_ABOVE_PRIOR_M,

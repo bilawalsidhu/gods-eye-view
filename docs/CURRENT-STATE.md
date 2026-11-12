@@ -5578,22 +5578,38 @@ Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.
 
-On a terrain globe Transit reads each vehicle's and trail point's height from
-the loaded surface (`globe.getHeight`, a ray cast against the drawn tile's
-mesh) and keeps the answer per point, about a metre apart
-(`src/layers/transit/height.js`, constants in `policy.js`). While the camera
-moves or tiles load a kept height is read again after 2 s; a height read once
-both have been still for 5 s is kept until either changes. Reads are budgeted
-at 16 ms per 200 ms window, 12 ms of it for re-reads, longest-kept first. A
-vehicle's own position is always read; the path its marker is drawn along
-comes next; the undrawn trail history of unselected vehicles may use a quarter
-of each budget. Past the budget a kept point keeps its last height, a new
-point takes the last height read in its ~111 m floor cell or waits, and the
-reread cycle continues until none waits. Before this, every reread asked the
-terrain for every trail fix of every vehicle in view, which blocked the page
-for up to 19 s at a time over a 650-vehicle fleet while zooming. Verified
-against Boston's MBTA feed on a keyless terrain globe only; no steeper city
-has a keyless feed to check against.
+Heights of the terrain globe's loaded surface come from one shared reader,
+`src/services/terrainSurface.js`, which the ground service hands to every layer
+(`groundFloor.terrainSurface`). `globe.getHeight` is a ray cast against the
+drawn tile's mesh, so the reader keeps each answer per point, about a metre
+apart. While the camera moves or tiles load a kept height is read again after
+2 s; a height read once both have been still for 5 s is kept until either
+changes. Reads are budgeted at 16 ms per 200 ms window across all layers, 12 ms
+of it for re-reads, longest-kept first. A request ranks as a marker (always
+read), drawn geometry, or background (a quarter of each budget). Past the
+budget a kept point keeps its last height and a new point takes the last
+height read in its ~111 m floor cell or waits.
+
+- Transit asks for every vehicle and trail fix: vehicle positions as markers,
+  the path a marker is drawn along next, the undrawn trail history of
+  unselected vehicles as background, and its reread cycle continues until no
+  point waits. Before this, every reread cast a ray for every trail fix of
+  every vehicle in view, which blocked the page for up to 19 s at a time over
+  a 650-vehicle fleet while zooming.
+- Rail asks for each train every frame on a grid about 4 m apart, as a marker,
+  so a moving train reads a few times a second and a standing one not at all.
+- Local data layers (Data Centers, Dams) read terrain floors through it, and
+  their depth samples (`scene.sampleHeight`, a GPU render) stop at 8 ms a
+  frame per layer and continue on the next frames.
+- Bike Share draws a city's stations at once at the fallback height and finds
+  their ground heights afterwards in 4 ms steps, from the terrain reader on a
+  terrain globe and from depth samples where the globe is hidden.
+
+Verified in the browser on a keyless terrain globe only: Boston for Transit,
+Rail and Bike Share, northern Virginia for Data Centers. Not checked there:
+photorealistic 3D Tiles, a terrain globe with a building tileset on top, Dams,
+and any city steeper than Boston. Street Traffic keeps its own height cache
+and ALPR cameras their own sample budget.
 
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing

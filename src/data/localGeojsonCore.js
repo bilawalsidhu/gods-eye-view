@@ -11,6 +11,10 @@ import {
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
 } from './localGeojsonLod.js';
+import {
+  createTerrainSurface,
+  TERRAIN_NEED,
+} from '../services/terrainSurface.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -38,6 +42,15 @@ const GROUND_SAMPLE_MAX_ABS_HEIGHT_M = 9000;
  * 30 × 2 s ≈ 60 s, far longer than a tile stream-in.
  */
 export const GROUND_SAMPLE_MAX_ARMED_RETRIES = 30;
+/**
+ * Milliseconds of scene.sampleHeight one frame may spend. Each call is an
+ * offscreen depth render (about 15 ms measured), and a first walk near a dense
+ * cluster wants one per site in view: 168 of them held the main thread for
+ * 2.6 s. Past the budget the remaining sites queue, and each following frame
+ * takes as many as fit, so the sites reach the same heights a frame or a few
+ * apart instead of all inside one blocked frame.
+ */
+export const GROUND_SAMPLE_FRAME_BUDGET_MS = 8;
 /** Ignore sub-metre camera-derived stem-tip noise at camera settle. */
 export const LOCAL_STEM_TIP_EPSILON_M = 0.5;
 const LOCAL_STEM_TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
@@ -324,8 +337,20 @@ export function createLocalGeoJsonLayer(
     governorRequestRender,
     showOsmCredit,
     hideOsmCredit,
+    terrainSurface,
   },
 ) {
+  /**
+   * What ground sampling shares across a layer's records: the terrain
+   * surface (the application's, so every layer reads a point once and spends
+   * one budget, or this layer's own), the sample time spent this frame, and
+   * the records the frame budget left for a later frame.
+   */
+  const _ground = {
+    terrain: terrainSurface || createTerrainSurface(),
+    sampleMs: 0,
+    queued: [],
+  };
   let _dataSource = null;
   let _enabled = false;
   let _clickHandler = null;
@@ -426,6 +451,42 @@ export function createLocalGeoJsonLayer(
     clearTimeout(_groundRetryTimer);
     _groundRetryTimer = null;
   }
+
+  /**
+   * Sample the sites an earlier frame's budget left over, within this
+   * frame's. They were never attempted, so the 2 s retry spacing does not
+   * apply to them.
+   * @param {Cesium.Viewer} viewer
+   * @param {number} now
+   * @returns {void}
+   */
+  function sampleQueuedGround(viewer, now) {
+    const queued = _ground.queued;
+    if (queued.length === 0) return;
+    _ground.queued = [];
+    for (const record of queued) {
+      record.groundSampleQueued = false;
+      // The camera may have left the site since it queued.
+      if (_lodComputed && !_activeLodIds.has(record.id)) continue;
+      const distance = Cesium.Cartesian3.distance(
+        viewer.camera.positionWC,
+        record.base,
+      );
+      if (distance >= GROUND_SAMPLE_MAX_DISTANCE_M) continue;
+      // Past the budget this puts the record back in the queue.
+      if (sampleLocalGroundHeight(viewer, record, now, _ground)) {
+        updateLocalStemGeometry(viewer, record, now, _ground, distance);
+        _groundRetryArms = 0;
+      }
+    }
+  }
+
+  /** Ask for the frame that samples what this one's budget left over. */
+  function requestQueuedGroundFrame() {
+    if (_ground.queued.length > 0)
+      governorRequestRender(`local-ground-sample:${id}`);
+  }
+
   const _overlayPublisher = createLocalInfrastructureOverlayPublisher({
     sourceId: id,
     host: overlayHost,
@@ -442,6 +503,7 @@ export function createLocalGeoJsonLayer(
     const source = _dataSource;
     _dataSource = null;
     _stemRecords = [];
+    _ground.queued = [];
     _stemGeometryDirty = true;
     _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
     removeEntityContextsForLayer(id);
@@ -689,6 +751,8 @@ export function createLocalGeoJsonLayer(
                 // Store references for bounded stem scaling and native picking.
                 feature.__localBaseCarto = carto;
                 feature.__localBaseCartesian = base;
+                const latDeg = Cesium.Math.toDegrees(carto.latitude);
+                const lonDeg = Cesium.Math.toDegrees(carto.longitude);
                 registerEntityContext(feature, {
                   id: `${id}:${recordId}`,
                   layerId: id,
@@ -739,7 +803,11 @@ export function createLocalGeoJsonLayer(
                   stemPositionBuffers,
                   stemPositionBufferIndex: 0,
                   groundHeight,
+                  // Degrees, as the terrain surface takes them.
+                  latDeg,
+                  lonDeg,
                   groundSampled: false,
+                  groundSampleQueued: false,
                   lastGroundSampleMs: 0,
                   priority,
                   entry: labels
@@ -860,7 +928,13 @@ export function createLocalGeoJsonLayer(
         _preRenderRemover = viewer.scene.preRender.addEventListener(() => {
           if (!_enabled || !_dataSource) return;
           const now = performance.now();
-          if (now - _lastVisibilityUpdate < VISIBILITY_UPDATE_MS) return;
+          // One sample budget per frame, shared by the queue and the walk.
+          _ground.sampleMs = 0;
+          sampleQueuedGround(viewer, now);
+          if (now - _lastVisibilityUpdate < VISIBILITY_UPDATE_MS) {
+            requestQueuedGroundFrame();
+            return;
+          }
           _lastVisibilityUpdate = now;
 
           const cameraPos = viewer.camera.positionWC;
@@ -911,6 +985,9 @@ export function createLocalGeoJsonLayer(
           _lastGroundSampleCapability = canSampleGround;
           let groundRetryPending = false;
           let groundSampleProgress = false;
+          // This walk asks for no height while tiles load, so it shows the
+          // surface the load itself; see terrainSurface.js observe().
+          _ground.terrain.observe?.(viewer);
 
           // --- Globe-LOD: recompute the active-stem set on camera moves. ---
           // `_stemGeometryDirty` is set by moveEnd, the first enable, and the
@@ -972,9 +1049,10 @@ export function createLocalGeoJsonLayer(
             const terrainFloorChanged = refreshLocalTerrainFloor(
               viewer,
               record,
+              _ground,
             );
             if (refreshStemGeometry || terrainFloorChanged) {
-              updateLocalStemGeometry(viewer, record, now);
+              updateLocalStemGeometry(viewer, record, now, _ground);
             } else if (
               canSampleGround &&
               !record.groundSampled &&
@@ -988,9 +1066,9 @@ export function createLocalGeoJsonLayer(
               );
               if (
                 distance < GROUND_SAMPLE_MAX_DISTANCE_M &&
-                sampleLocalGroundHeight(viewer, record, now)
+                sampleLocalGroundHeight(viewer, record, now, _ground)
               ) {
-                updateLocalStemGeometry(viewer, record, now, distance);
+                updateLocalStemGeometry(viewer, record, now, _ground, distance);
               }
             }
             if (!wasGroundSampled && record.groundSampled)
@@ -1002,16 +1080,19 @@ export function createLocalGeoJsonLayer(
             // the user happens to move. Schedule the frame the retry needs.
             // Gated on a sampleable scene and in-range, in-view records only,
             // so a far camera (or a keyless scene) stays fully idle; the
-            // distance is only computed for still-unsampled stems.
+            // distance is only computed for still-unsampled stems. A record
+            // the frame budget queued is sampled by the frame the queue asks
+            // for, with no timer.
             if (
               canSampleGround &&
               !record.groundSampled &&
+              !record.groundSampleQueued &&
               !groundRetryPending &&
               Cesium.Cartesian3.distance(
                 viewer.camera.positionWC,
                 record.base,
               ) < GROUND_SAMPLE_MAX_DISTANCE_M &&
-              groundSampleInView(viewer, record)
+              groundSampleInView(viewer, record, _ground)
             ) {
               groundRetryPending = true;
             }
@@ -1022,6 +1103,7 @@ export function createLocalGeoJsonLayer(
           // so the records still waiting get their own bounded run of retries.
           if (groundSampleProgress) _groundRetryArms = 0;
           if (groundRetryPending) scheduleGroundRetryRender(viewer);
+          requestQueuedGroundFrame();
 
           const canvas = viewer.scene.canvas;
           const cohort = selectLocalInfrastructureOverlayCohort(
@@ -1108,7 +1190,7 @@ function insertLocalCellContender(contenders, record) {
     contenders.length = LOCAL_OVERLAY_CELL_SURPLUS;
 }
 
-function refreshLocalTerrainFloor(viewer, record) {
+function refreshLocalTerrainFloor(viewer, record, ground) {
   const globe = viewer.scene.globe;
   if (!record.groundSampled || !globe?.show || globe.tilesLoaded === false)
     return false;
@@ -1120,7 +1202,15 @@ function refreshLocalTerrainFloor(viewer, record) {
   // Camera motion can refine terrain after the first successful depth sample.
   // Reuse the loaded mesh on existing bounded walks; never arm a timer or do
   // another GPU readback just to maintain this floor. Keep roof elevations.
-  const height = globe.getHeight?.(record.carto);
+  // The surface keeps the height per point and casts the ray again only after
+  // the camera moves or tiles load. MARKER: the answer is this point's own
+  // height, never a neighbour's, since a height taken here is kept for good.
+  const height = ground.terrain.height(
+    viewer,
+    record.latDeg,
+    record.lonDeg,
+    TERRAIN_NEED.MARKER,
+  );
   if (
     !Number.isFinite(height) ||
     Math.abs(height) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M ||
@@ -1163,11 +1253,20 @@ function groundSamplePoint(record, height, result) {
  * sample can accept, so high or below-ellipsoid ground in view is never
  * mistaken for an unseen base. Unseen ground is sampled on the first walk that
  * sees it.
+ *
+ * The terrain height comes from the shared surface, which keeps it per point:
+ * this runs for every unsampled site in range on every walk, and a ray cast
+ * each time was 17,733 casts and 1.3 s over one zoom. The view test needs the
+ * height only roughly, so a height the surface has not read yet, or tiles
+ * still loading, count as unknown ground.
  */
-function groundSampleInView(viewer, record) {
+function groundSampleInView(viewer, record, ground) {
   const camera = viewer.camera;
   const globe = viewer.scene.globe;
-  const terrain = globe?.show ? globe.getHeight?.(record.carto) : undefined;
+  const terrain =
+    globe?.show && globe.tilesLoaded !== false
+      ? ground.terrain.height(viewer, record.latDeg, record.lonDeg)
+      : undefined;
   const known =
     Number.isFinite(terrain) &&
     Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
@@ -1208,18 +1307,30 @@ function groundSampleInView(viewer, record) {
   );
 }
 
-function sampleLocalGroundHeight(viewer, record, now) {
+function sampleLocalGroundHeight(viewer, record, now, ground) {
   if (record.groundSampled || !viewer.scene.sampleHeightSupported) return false;
   if (now - record.lastGroundSampleMs < GROUND_SAMPLE_RETRY_MS) return false;
-  if (!groundSampleInView(viewer, record)) return false;
+  // This frame's samples have used its budget: leave the record for the next
+  // frame, unattempted, so the retry spacing does not hold it back.
+  if (ground.sampleMs >= GROUND_SAMPLE_FRAME_BUDGET_MS) {
+    if (!record.groundSampleQueued) {
+      record.groundSampleQueued = true;
+      ground.queued.push(record);
+    }
+    return false;
+  }
+  if (!groundSampleInView(viewer, record, ground)) return false;
   record.lastGroundSampleMs = now;
   const globe = viewer.scene.globe;
   if (globe?.show && globe.tilesLoaded === false) return false;
   let sampled;
+  const startedAt = performance.now();
   try {
     sampled = viewer.scene.sampleHeight(record.carto, [record.entity]);
   } catch {
     return false; // tiles not ready; retry on a later bounded update
+  } finally {
+    ground.sampleMs += performance.now() - startedAt;
   }
   if (
     !Number.isFinite(sampled) ||
@@ -1229,7 +1340,9 @@ function sampleLocalGroundHeight(viewer, record, now) {
   // A coarse scene-depth sample can lie below the terrain already loaded by
   // the visible globe. Keep that terrain as a floor while allowing roofs and
   // valid below-sea-level elevations. Photoreal scenes hide the globe, so its
-  // inactive terrain must not constrain their geometry.
+  // inactive terrain must not constrain their geometry. Read from the globe
+  // itself, once per site: the floor under a sample must be the mesh that is
+  // loaded now, not a height kept from a moment before.
   const terrainHeight = globe?.show
     ? globe.getHeight?.(record.carto)
     : undefined;
@@ -1256,12 +1369,18 @@ function setLocalGroundHeight(record, height) {
   record.entity.__localBaseCartesian = record.base;
 }
 
-function updateLocalStemGeometry(viewer, record, now, knownDistance = null) {
+function updateLocalStemGeometry(
+  viewer,
+  record,
+  now,
+  ground,
+  knownDistance = null,
+) {
   const distance = Number.isFinite(knownDistance)
     ? knownDistance
     : Cesium.Cartesian3.distance(viewer.camera.positionWC, record.base);
   if (distance < GROUND_SAMPLE_MAX_DISTANCE_M)
-    sampleLocalGroundHeight(viewer, record, now);
+    sampleLocalGroundHeight(viewer, record, now, ground);
   // Keep the intended screen-size scaling in close-up views too. A 5 km
   // minimum made a marker hundreds of metres tall beside a nearby building.
   const effectiveDistance = Math.max(distance, 1);

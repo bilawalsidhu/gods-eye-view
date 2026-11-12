@@ -50,6 +50,17 @@ export const DEFAULT_CAPACITY = 15;
 
 export const POINT_HEIGHT_OFFSET_M = 2.0;
 
+/**
+ * Milliseconds one step may spend finding station ground heights. A height
+ * the terrain globe cannot give is a depth render of a millisecond or more.
+ */
+
+export const HEIGHT_REFINE_BUDGET_MS = 4;
+
+/** Milliseconds between those steps, about a frame. */
+
+export const HEIGHT_REFINE_INTERVAL_MS = 16;
+
 /** Hard cap on total rendered station points across all cities. */
 
 export const MAX_TOTAL_POINTS = 8000;

@@ -8,7 +8,7 @@ import {
 } from '../../data/contactPlayback.js';
 import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
-import { TERRAIN_NEED } from './policy.js';
+import { TERRAIN_NEED } from '../../services/terrainSurface.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
 const MODE_COLOR = {
@@ -119,7 +119,7 @@ export function createTrails({ state, services, parts, source }) {
         a,
         entry === selected || i >= activeIndex
           ? TERRAIN_NEED.PATH
-          : TERRAIN_NEED.HISTORY,
+          : TERRAIN_NEED.BACKGROUND,
       );
       if (h !== null) correctHeight(entry.track, a.seq, h);
     }

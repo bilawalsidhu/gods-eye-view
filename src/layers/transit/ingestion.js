@@ -12,8 +12,8 @@ import {
   isStaleVehicleFix,
   transitVehicleKey,
   vehicleReportTimeMs,
-  TERRAIN_NEED,
 } from './policy.js';
+import { TERRAIN_NEED } from '../../services/terrainSurface.js';
 import {
   transitModeFor,
   transitModeResolved,

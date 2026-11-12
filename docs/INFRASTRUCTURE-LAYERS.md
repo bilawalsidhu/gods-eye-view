@@ -34,6 +34,7 @@ const layers = createInfrastructureLayers({
 | `clearSelectedEntityContextForLayer` | `(layerId)`; clear selection only if owned by this layer |
 | `removeEntityContextsForLayer` | `(layerId)`; remove records owned by the layer on destruction or failed setup |
 | `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
+| `terrainSurface` | Optional. The application's shared terrain surface (`groundFloor.terrainSurface`), so its layers read each terrain height once; without it each layer keeps its own |
 
 Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
 `update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()` and

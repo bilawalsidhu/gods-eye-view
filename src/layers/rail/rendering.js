@@ -2,6 +2,10 @@ import * as Cesium from 'cesium';
 import { applyDisplayCourse, updatePlayback } from '../transit/movement.js';
 import { HEIGHT_SAMPLE_MAX_ALTITUDE_M } from '../transit/policy.js';
 import {
+  TERRAIN_NEED,
+  createTerrainSurface,
+} from '../../services/terrainSurface.js';
+import {
   COLD_CELL_FLUSH_MS,
   COLD_CELL_RETRY_MS,
   TRACK_MAX_GRADE,
@@ -28,6 +32,11 @@ import {
 import { placeOnPath } from './pathBinding.js';
 
 const SPRITE_PX = 64;
+/**
+ * Terrain reads per degree for a train's height: about 3.7 m apart. At 11 m
+ * a train on fine tiles stood up to a couple of metres off the surface.
+ */
+const TERRAIN_GRID = 3e4;
 /** Billboard tints; the setter copies, so sharing one instance is safe. */
 const FULL_TINT = Cesium.Color.WHITE;
 const DIM_TINT = new Cesium.Color(1, 1, 1, UNSELECTED_TRAIN_ALPHA);
@@ -101,8 +110,11 @@ export function createRendering({ state, services, parts }) {
     neighborFloorM = null,
     coarseFloorCoord = null,
   } = services.ground;
+  // The terrain globe's loaded surface: the application's shared reader, or
+  // the layer's own when it is built without one.
+  const terrainSurface =
+    services.ground.terrainSurface || createTerrainSurface();
   const sprites = new Map();
-  const terrainPoint = new Cesium.Cartographic();
   const scratchPosition = new Cesium.Cartesian3();
   /** Scratch for the on-line position; place() runs every frame. */
   const pathPoint = { lat: NaN, lon: NaN, bearingDeg: NaN };
@@ -379,8 +391,18 @@ export function createRendering({ state, services, parts }) {
   function floorHeight(lat, lon, entry = null, stop = false) {
     const globe = state._viewer?.scene?.globe;
     if (globe?.show === true) {
-      Cesium.Cartographic.fromDegrees(lon, lat, 0, terrainPoint);
-      const rendered = globe.getHeight?.(terrainPoint);
+      // A moving train is asked about every frame, at a new point each
+      // time. On a ~4 m grid it asks the terrain a few times a second
+      // instead, and a standing train not at all; the drawn height is
+      // smoothed along the track anyway (displayHeightFor). Read as a
+      // marker, never rationed: a train that starts on a fallback floor only
+      // creeps to the terrain at a railway's grade.
+      const rendered = terrainSurface.height(
+        state._viewer,
+        Math.round(lat * TERRAIN_GRID) / TERRAIN_GRID,
+        Math.round(lon * TERRAIN_GRID) / TERRAIN_GRID,
+        TERRAIN_NEED.MARKER,
+      );
       if (Number.isFinite(rendered))
         return answer(rendered + GROUND_FLOOR_LIFT_M, 3);
     }
