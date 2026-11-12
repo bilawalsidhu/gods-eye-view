@@ -2919,7 +2919,19 @@ readings nationwide: **USGS Rivers & Streams** (`local-usgs-water`, share token
   intersect the view and reload when the camera settles; wider than 24 degrees
   (or more than 40 tiles) the layer loads nothing and asks to zoom in. Lakes and
   springs load whole and re-fetch on every enable. Cards show up to two
-  readings and the newest observation time.
+  readings and the newest observation time. The card words, numbers and time
+  follow the active language: the five parameter names the server sends (a
+  fixed English list) and the "as of" and "No current reading" text are
+  translated, values and times use the language's formats, and site names stay
+  as sent. Unit symbols are not translated; `ft^3/s` is shown as `ft³/s`.
+  When the language changes, the cards of an enabled water layer are worded
+  again from the gauges already loaded (no request); a disabled layer words
+  them when it loads. The standalone infrastructure package holds the
+  English text and bundles no translator or catalogs: the application hands
+  its `t`, `formatNumber`, `formatDate`, `isolate` and `onLocaleChange` to the
+  layers as `services.i18n` (`src/app/localGeojsonServices.js`). A consumer
+  that passes none gets English cards with en-US numbers and times, and its
+  cards are not worded again.
 
 ## CCTV missing numeric fields
 
