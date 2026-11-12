@@ -201,10 +201,46 @@ test('a link decides what is on and adds its entries to the library', async (t) 
   await manager.waitForLayerSettled?.('lib-sea-marks');
   assert.equal(manager.isEnabled('lib-sea-marks'), true);
   assert.equal(manager.isEnabled('lib-night-lights'), false);
+  // The link's entry joins the library; what is remembered as on stays
+  // the viewer's own.
   assert.deepEqual(JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)), {
     added: ['night-lights', 'sea-marks'],
-    on: ['sea-marks'],
+    on: ['night-lights'],
   });
+});
+
+test('a share never rewrites what this browser remembers as on', async (t) => {
+  const saved = JSON.stringify({
+    added: ['night-lights', 'sea-marks'],
+    on: ['night-lights'],
+  });
+  const storage = memoryStorage(saved);
+  const manager = sealedManager(t);
+  const shareLink = fakeShareLink([]);
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage,
+    shareLink,
+    source: source({}),
+  });
+  await library.start();
+  assert.equal(manager.isEnabled('lib-night-lights'), false);
+  shareLink.listener(['01']);
+  await manager.waitForLayerSettled?.('lib-sea-marks');
+  assert.equal(manager.isEnabled('lib-sea-marks'), true);
+  assert.deepEqual(JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)), {
+    added: ['night-lights', 'sea-marks'],
+    on: ['night-lights'],
+  });
+  // An explicit choice is remembered, and only that one.
+  await manager.setEnabled('lib-sea-marks', false, { origin: 'user' });
+  await manager.setEnabled('lib-night-lights', true, { origin: 'user' });
+  await manager.setEnabled('lib-night-lights', false, { origin: 'user' });
+  assert.deepEqual(JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).on, []);
+  library.destroy();
 });
 
 /** A ShareLinkManager stand-in: the opening share and in-tab navigation. */

@@ -69,6 +69,10 @@ export function createDataLibrary({
   let availability = new Map();
   let serverPresent = false;
   let selection = { added: [], on: [] };
+  // What this browser remembers as on. Like core layer state, a share
+  // decides what is on for the session but never rewrites it: only the
+  // viewer's explicit choices and a local restore do.
+  let savedOn = [];
   let started = false;
   // Set once availability is known; a share navigated to before then waits.
   let loaded = false;
@@ -89,7 +93,11 @@ export function createDataLibrary({
 
   const persist = () => {
     selection = normalizeLibrarySelection(selection, switchable);
-    writeStoredLibrarySelection(storage, selection);
+    savedOn = savedOn.filter((id) => selection.added.includes(id));
+    writeStoredLibrarySelection(storage, {
+      added: selection.added,
+      on: savedOn,
+    });
     shareLink?.onLibraryStateChange?.();
     notify();
   };
@@ -163,9 +171,16 @@ export function createDataLibrary({
       return;
     }
     const on = new Set(selection.on);
-    if (change.enabled) on.add(id);
-    else on.delete(id);
+    const saved = new Set(savedOn);
+    if (change.enabled) {
+      on.add(id);
+      saved.add(id);
+    } else {
+      on.delete(id);
+      saved.delete(id);
+    }
     selection = { ...selection, on: [...on] };
+    savedOn = [...saved];
     persist();
   });
 
@@ -217,9 +232,10 @@ export function createDataLibrary({
           console.warn(`[Library] ${id} restore failed:`, error),
         );
     }
-    writeStoredLibrarySelection(storage, selection);
-    shareLink?.onLibraryStateChange?.();
-    notify();
+    // A share's entries join the library; only a local restore sets what
+    // is remembered as on.
+    if (origin !== 'share-restore') savedOn = selection.on;
+    persist();
   }
 
   /**
@@ -262,6 +278,7 @@ export function createDataLibrary({
     availability = answer.availability;
     serverPresent = answer.server;
     const stored = readStoredLibrarySelection(storage, switchable);
+    savedOn = stored.on;
     // A share opened in this tab while availability loaded wins over the
     // opening one.
     const linked = queuedShare ? idsForTokens(queuedShare) : openingShare();
