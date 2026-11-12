@@ -29,13 +29,34 @@ const MIN_REMAINING_MS = 10 * 60 * 1000;
  * ...and for at most this long. After ion rejects an asset token CesiumJS asks
  * for the endpoint again with the very request it made first (once per
  * asset), so a document handed out longer ago than this is fetched anew
- * rather than returned a second time. That is at most one ion call per
- * allow-listed asset per interval, however many clients ask.
+ * rather than returned a second time. So while ion answers, that is at most
+ * one ion call per allow-listed asset per interval, however many clients ask;
+ * while it does not, see TRANSIENT_BACKOFF_S.
  */
 const REFETCH_AFTER_MS = 60 * 1000;
 /** Endpoint documents without a token expiry (external assets) are kept this long. */
 const NO_EXPIRY_TTL_MS = 30 * 60 * 1000;
+/**
+ * After ion fails for a passing reason (no answer, a timeout, 429, 5xx) it is
+ * left alone this long, or for the Retry-After it names, at most a minute.
+ */
+const TRANSIENT_BACKOFF_S = 10;
+const MAX_BACKOFF_S = 60;
 export const ION_ROUTE_MAX_PER_MIN = 300;
+
+/** Seconds to leave ion alone: its Retry-After when it is a number of seconds, else the default. */
+function retryAfterSeconds(response) {
+  const seconds = Number(response.headers.get('retry-after'));
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.min(Math.ceil(seconds), MAX_BACKOFF_S)
+    : TRANSIENT_BACKOFF_S;
+}
+
+/** Marks an error as ion's passing trouble, with the seconds to wait. */
+const transient = (retryAfter = TRANSIENT_BACKOFF_S) => ({
+  transient: true,
+  retryAfter,
+});
 
 export function ionToken(env = process.env) {
   return String(env.CESIUM_ION_TOKEN || '').trim();
@@ -77,6 +98,8 @@ export function createIonEndpointFetcher({
   const cache = new Map();
   /** @type {Map<string, Promise<string>>} */
   const inflight = new Map();
+  /** @type {Map<string, {until: number, status: number, message: string}>} */
+  const backoff = new Map();
 
   async function load(assetId, token) {
     const response = await fetchImpl(
@@ -99,9 +122,11 @@ export function createIonEndpointFetcher({
     }
     if (response.status === 429) {
       await response.body?.cancel?.().catch(() => {});
-      throw new IonEndpointError(429, 'Cesium ion is rate-limiting requests', {
-        retryAfter: Number(response.headers.get('retry-after')) || 60,
-      });
+      throw new IonEndpointError(
+        429,
+        'Cesium ion is rate-limiting requests',
+        transient(retryAfterSeconds(response)),
+      );
     }
     if (response.status === 404) {
       await response.body?.cancel?.().catch(() => {});
@@ -109,23 +134,39 @@ export function createIonEndpointFetcher({
     }
     if (!response.ok) {
       await response.body?.cancel?.().catch(() => {});
-      throw new IonEndpointError(502, `Cesium ion HTTP ${response.status}`);
+      // A server error or a timeout is ion's trouble and passes; any other
+      // refusal is about this request and does not.
+      throw new IonEndpointError(
+        502,
+        `Cesium ion HTTP ${response.status}`,
+        response.status >= 500 || response.status === 408
+          ? transient(retryAfterSeconds(response))
+          : {},
+      );
     }
     let text;
     try {
       text = await readResponseTextCapped(response, ENDPOINT_MAX_BYTES);
     } catch {
-      throw new IonEndpointError(502, 'Cesium ion answer was too large');
+      throw new IonEndpointError(
+        502,
+        'Cesium ion answer was too large',
+        transient(),
+      );
     }
     let document;
     try {
       document = JSON.parse(text);
     } catch {
-      throw new IonEndpointError(502, 'Cesium ion answer was not JSON');
+      throw new IonEndpointError(
+        502,
+        'Cesium ion answer was not JSON',
+        transient(),
+      );
     }
     // The long-lived token must never be echoed to a browser.
     if (text.includes(token))
-      throw new IonEndpointError(502, 'Cesium ion answer refused');
+      throw new IonEndpointError(502, 'Cesium ion answer refused', transient());
     const expiry = jwtExpiryMs(document?.accessToken);
     cache.set(assetId, {
       text,
@@ -135,6 +176,10 @@ export function createIonEndpointFetcher({
     });
     return text;
   }
+
+  /** Whether a held document may be handed out now (its token has life left). */
+  const usable = (hit, at) =>
+    hit.validUntil - at > (hit.hasExpiry ? MIN_REMAINING_MS : 0);
 
   /**
    * What can be answered without calling ion: `{text}` for a document held in
@@ -147,15 +192,53 @@ export function createIonEndpointFetcher({
       return {
         error: new IonEndpointError(503, 'no_key', { keyRequired: true }),
       };
+    const at = now();
     const hit = cache.get(assetId);
-    if (
-      hit &&
-      now() - hit.fetchedAt < REFETCH_AFTER_MS &&
-      hit.validUntil - now() > (hit.hasExpiry ? MIN_REMAINING_MS : 0)
-    )
+    if (hit && usable(hit, at) && at - hit.fetchedAt < REFETCH_AFTER_MS)
       return { text: hit.text };
+    // Ion failed a moment ago: do not ask again yet. Serve the document
+    // while its token is good, else the failure.
+    const failed = backoff.get(assetId);
+    if (failed && at < failed.until) {
+      if (hit && usable(hit, at)) return { text: hit.text };
+      return {
+        error: new IonEndpointError(failed.status, failed.message, {
+          retryAfter: Math.max(1, Math.ceil((failed.until - at) / 1000)),
+        }),
+      };
+    }
     const pending = inflight.get(assetId);
     return pending ? { pending } : null;
+  }
+
+  /**
+   * Call ion for a new document. When ion has a passing failure and a held
+   * document still has a good token, that document is the answer; a refusal
+   * (token rejected, asset not available) removes the held document.
+   */
+  async function refresh(assetId, token) {
+    try {
+      const text = await load(assetId, token);
+      backoff.delete(assetId);
+      return text;
+    } catch (cause) {
+      const error =
+        cause instanceof IonEndpointError
+          ? cause
+          : new IonEndpointError(502, 'Cesium ion request failed', transient());
+      if (!error.transient) {
+        cache.delete(assetId);
+        throw error;
+      }
+      backoff.set(assetId, {
+        until: now() + error.retryAfter * 1000,
+        status: error.status,
+        message: error.message,
+      });
+      const hit = cache.get(assetId);
+      if (hit && usable(hit, now())) return hit.text;
+      throw error;
+    }
   }
 
   async function fetchEndpoint(assetId) {
@@ -163,7 +246,7 @@ export function createIonEndpointFetcher({
     if (memory?.error) throw memory.error;
     if (memory?.text !== undefined) return memory.text;
     if (memory?.pending) return memory.pending;
-    const pending = load(assetId, ionToken(env)).finally(() =>
+    const pending = refresh(assetId, ionToken(env)).finally(() =>
       inflight.delete(assetId),
     );
     inflight.set(assetId, pending);
