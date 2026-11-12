@@ -236,12 +236,14 @@ selected AIS vessel. An application adds kinds of its own with
 `services.cockpitSubjects` on `createApplicationControls`: a list of
 providers, checked once when the controls are built
 (`src/cockpitSubjectProviders.js`). A malformed provider is left out with a
-warning. Entry rides the most recently selected subject of all kinds and needs
-the provider's `layerId` on; the provider then holds its subject, hands the
-camera a frame and the generic HUD a view model on every update, and releases
-it on exit. Provider methods are synchronous and are called on the provider,
-so a class instance's methods keep their `this`; one that throws or returns a
-promise is treated as having failed.
+warning. A provider's subject takes entry when it was selected after every
+built-in subject present (a tracked aircraft or satellite, a selected vessel),
+whose own fixed order is unchanged, and needs the provider's `layerId` on; the
+provider then holds its subject, hands the camera a frame and the generic HUD
+a view model on every update, and releases it on exit. Provider methods are
+synchronous and are called on the provider, so a class instance's methods keep
+their `this`; one that throws or returns a promise is treated as having
+failed.
 
 ```js
 import { getLocale, onLocaleChange } from '@gods-eye-view/core/i18n/locale';
@@ -315,11 +317,11 @@ Rail and Transit read APIs (`getSelectedTrain`, `getSelectedVehicle`,
 are experimental and may change without notice.
 
 A candidate's `selectedAt` is a token that changes each time the user selects
-the subject, even the same one again, so entry takes it first. The Rail and
-Transit snapshots give one, `selectedAtMs`: when the user last selected the
-train or vehicle by a click or `focusTrain`/`focusVehicle`. It is null after
-a deselection and for one selected only by a hold, since a hold is not the
-user's selection.
+the subject, even the same one again, so entry counts it as selected then. The
+Rail and Transit snapshots give one, `selectedAtMs`: when the user last
+selected the train or vehicle by a click or `focusTrain`/`focusVehicle`. It is
+null after a deselection and for one selected only by a hold, since a hold is
+not the user's selection.
 
 A frame with `heightM: null` stands on the shared floor, or where it last
 stood while that floor is cold. If no height has been known since entry, the
