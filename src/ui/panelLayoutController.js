@@ -99,6 +99,7 @@ export class PanelLayoutController {
     this._weatherPanel = document.getElementById('weather-panel');
     this._newsPanel = document.getElementById('news-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
+    this._replayPanel = document.getElementById('replay-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
   }
   _scheduleAdaptivePanelLayout({ settle = false } = {}) {
@@ -196,6 +197,7 @@ export class PanelLayoutController {
       this._weatherPanel,
       this._newsPanel,
       this._recentImageryPanel,
+      this._replayPanel,
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
@@ -212,6 +214,7 @@ export class PanelLayoutController {
         this._weatherPanel,
         this._newsPanel,
         this._recentImageryPanel,
+        this._replayPanel,
         this._streetLevelPanel,
         globalContextPanel,
         document.getElementById('radio-panel'),

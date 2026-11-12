@@ -1349,7 +1349,8 @@
       "src/ui/styles/provider-settings.css",
       "src/ui/styles/weather.css",
       "src/ui/styles/news.css",
-      "src/ui/styles/recent-imagery.css"
+      "src/ui/styles/recent-imagery.css",
+      "src/ui/styles/replay.css"
     ],
     "external": []
   },
@@ -3388,6 +3389,11 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
+      "src/ui/replayPanel.js",
+      "src/ui/replayAlerts.js",
+      "src/replay/model.js",
+      "src/replay/analysis.js",
+      "src/replay/controller.js",
       "src/ui/imageryBoxTool.js",
       "src/voice/pointerContext.js",
       "src/voice/pointerReticle.js",
