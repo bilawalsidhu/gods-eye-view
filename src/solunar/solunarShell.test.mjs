@@ -266,6 +266,10 @@ test('panel chrome, rail layout, dock catalog and the shell know the card', () =
   );
   const shell = read('src/ui/applicationShell.js');
   assert.match(shell, /import\('\.\.\/solunar\/solunarShell\.js'\)/);
+  assert.match(
+    shell,
+    /\.catch\(\(\) => console\.warn\('\[Solunar\] card unavailable'\)\)/,
+  );
   assert.equal(count(shell, 'this._solunar?.destroy()'), 2);
   assert.match(read('style.css'), /styles\/solunar\.css/);
   assert.match(read('index.html'), /icon_names=[^"&]*\bdark_mode\b/);
