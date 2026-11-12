@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createLibraryTileLayer } from './layers.js';
+import { createLibraryTileLayer, minimumTerrainLevelFor } from './layers.js';
 import { LIBRARY_ENTRIES, libraryEntry } from './catalog.js';
 import { libraryTileUrl } from './manifest.js';
 import { createLibrarySource } from './source.js';
@@ -132,4 +132,36 @@ test('bbox and TMS templates become the URLs Cesium and the proxy request', () =
     libraryTileUrl('https://t.example.org/{z}/{x}/{reverseY}.png', 3, 2, 1),
     'https://t.example.org/3/2/6.png',
   );
+});
+
+test('an entry too dense to draw zoomed out is hidden below its scale', async () => {
+  const cadastre = entryWithoutOutline('kartverket-cadastre');
+  assert.equal(cadastre.source.minZoom, 14);
+  assert.equal(minimumTerrainLevelFor(cadastre), 13);
+  // Small coverage, or a low minimum zoom, draws at every scale.
+  assert.equal(
+    minimumTerrainLevelFor(libraryEntry('lee-county-fl')),
+    undefined,
+  );
+  assert.equal(
+    minimumTerrainLevelFor(libraryEntry('ign-orthophotos-france')),
+    undefined,
+  );
+
+  // Switched on zoomed out, then zoomed further out: no globe tile coarser
+  // than level 13 takes imagery from it, so no z14 tile is ever requested.
+  const viewer = globeViewer();
+  const layer = createLibraryTileLayer(cadastre, { source, cesium: Cesium });
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  const imagery = viewer.imageryLayers.get(viewer.imageryLayers.length - 1);
+  const terrain = new Cesium.EllipsoidTerrainProvider();
+  for (const level of [0, 4, 12])
+    assert.equal(
+      imagery._createTileImagerySkeletons({ level, data: {} }, terrain),
+      false,
+      `globe level ${level} takes no cadastre imagery`,
+    );
+  await layer.disable();
+  assert.equal(viewer.imageryLayers.length, 0);
 });

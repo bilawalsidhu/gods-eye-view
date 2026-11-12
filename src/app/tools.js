@@ -142,7 +142,12 @@ export function createApplicationTools({
     if (!signal?.aborted) console.warn('[Library] start failed:', error);
   });
   // The live gate's handle (scripts/qa-data-library.mjs).
-  const libraryHandle = { library: dataLibrary, browser: libraryBrowser };
+  const libraryHandle = {
+    library: dataLibrary,
+    browser: libraryBrowser,
+    // What Copy Link would copy.
+    buildShareLink: () => styleManager.shareLinkManager?.buildLink?.() ?? null,
+  };
   window.__gevDataLibrary = libraryHandle;
   defer(() => {
     if (window.__gevDataLibrary === libraryHandle)

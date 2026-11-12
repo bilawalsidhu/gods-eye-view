@@ -6,6 +6,7 @@ import {
   parseLibraryTilePath,
 } from './library.js';
 import { validateLibraryCatalog } from '../../src/library/manifest.js';
+import { libraryEntry } from '../../src/library/catalog.js';
 
 const base = {
   family: 'events',
@@ -100,8 +101,8 @@ const point = (title) => ({
   properties: { title },
 });
 
-function install({ env = {}, fetchImpl, now } = {}) {
-  const plugin = libraryProxy({ entries, env, fetchImpl, now });
+function install({ env = {}, fetchImpl, now, catalog = entries } = {}) {
+  const plugin = libraryProxy({ entries: catalog, env, fetchImpl, now });
   let handler;
   plugin.configurePreviewServer({
     middlewares: {
@@ -329,4 +330,52 @@ test('only GET is served', async () => {
   };
   await plugin.handler({ url: '/catalog', method: 'POST', headers: {} }, res);
   assert.equal(res.status, 405);
+});
+
+test('a partition index is cached only when complete; a complete one outlives failed rebuilds', async () => {
+  const epc = libraryEntry('epc-england-wales');
+  let clock = 0;
+  let footers = 'ok';
+  let listings = 0;
+  const listing = `<ListBucketResult><Contents><Key>a.parquet</Key><Size>100</Size></Contents></ListBucketResult>`;
+  const fetchImpl = async (url) => {
+    if (url.includes('list-type')) {
+      listings += 1;
+      return new Response(listing);
+    }
+    return footers === 'ok'
+      ? new Response(new Uint8Array(100))
+      : new Response('', { status: 503 });
+  };
+  const request = install({ catalog: [epc], now: () => clock, fetchImpl });
+  const first = await request('/index/epc-england-wales');
+  assert.equal(first.status, 200);
+  assert.equal(first.body.complete, true);
+  const builtAt = first.body.builtAt;
+
+  // Past cacheSeconds the rebuild fails: the complete index is still served,
+  // and no rebuild runs again until the partial pause has passed.
+  clock += (epc.source.cacheSeconds + 1) * 1000;
+  footers = 'fail';
+  const kept = await request('/index/epc-england-wales');
+  assert.equal(kept.body.complete, true);
+  assert.equal(kept.body.builtAt, builtAt);
+  const listed = listings;
+  await request('/index/epc-england-wales');
+  assert.equal(listings, listed);
+
+  // A server that never had a complete index serves the partial one as such,
+  // and rebuilds after the pause.
+  const fresh = install({ catalog: [epc], now: () => clock, fetchImpl });
+  const partial = await fresh('/index/epc-england-wales');
+  assert.equal(partial.status, 200);
+  assert.equal(partial.body.complete, false);
+  const before = listings;
+  await fresh('/index/epc-england-wales');
+  assert.equal(listings, before);
+  clock += 6 * 60_000;
+  footers = 'ok';
+  const rebuilt = await fresh('/index/epc-england-wales');
+  assert.equal(rebuilt.body.complete, true);
+  assert.equal(listings, before + 1);
 });

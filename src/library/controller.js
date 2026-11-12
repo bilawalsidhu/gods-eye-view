@@ -69,6 +69,9 @@ export function createDataLibrary({
   let serverPresent = false;
   let selection = { added: [], on: [] };
   let started = false;
+  // Set once availability is known; a share navigated to before then waits.
+  let loaded = false;
+  let queuedShare = null;
   let destroyed = false;
   const listeners = new Set();
   const pending = new Map();
@@ -165,6 +168,73 @@ export function createDataLibrary({
     persist();
   });
 
+  /** Entry ids for share tokens; unknown tokens are skipped. */
+  const idsForTokens = (list) =>
+    (list || []).map((token) => tokens.idByToken.get(token)).filter(Boolean);
+
+  /**
+   * The share this page opened with: null without one, else the entry ids it
+   * switches on ([] for a share that switches none on).
+   */
+  function openingShare() {
+    if (shareLink && shareLink.initialLibraryTokens !== undefined) {
+      const linked = shareLink.initialLibraryTokens;
+      return linked === null ? null : idsForTokens(linked);
+    }
+    const hash = String(initialHash || '').replace(/^#/, '');
+    if (!hash) return null;
+    const params = new URLSearchParams(hash);
+    const linked = decodeLibraryParam(params, tokens.idByToken);
+    // Any share (a camera position) decides what is on; no `lib`, nothing.
+    if (linked === null && params.has('lat') && params.has('lon')) return [];
+    return linked;
+  }
+
+  /**
+   * Apply a selection: register and switch on what `on` names, switch off
+   * every other added entry that is on. `origin` marks it as a restore so it
+   * is never remembered as the viewer's own choice.
+   */
+  function applySelection(next, origin) {
+    selection = normalizeLibrarySelection(next, switchable);
+    for (const id of selection.added) {
+      const entry = byId.get(id);
+      if (!entry || !addable(id)) continue;
+      const wanted = selection.on.includes(id);
+      if (wanted && !register(entry)) continue;
+      if (!isRegistered(id)) continue;
+      const layerId = libraryLayerId(id);
+      if (wanted === (dataManager.isEnabled?.(layerId) === true)) continue;
+      dataManager
+        .setEnabled(layerId, wanted, { origin })
+        .catch((error) =>
+          console.warn(`[Library] ${id} restore failed:`, error),
+        );
+    }
+    writeStoredLibrarySelection(storage, selection);
+    shareLink?.onLibraryStateChange?.();
+    notify();
+  }
+
+  /**
+   * A share opened in this tab after start-up: its entries join the library
+   * and it alone decides which are on.
+   * @param {string[]} shareTokens
+   */
+  function applyShare(shareTokens) {
+    if (destroyed) return;
+    if (!loaded) {
+      queuedShare = [...(shareTokens || [])];
+      return;
+    }
+    const linked = idsForTokens(shareTokens);
+    applySelection(
+      { added: [...selection.added, ...linked], on: linked },
+      'share-restore',
+    );
+  }
+  shareLink?.setLibraryShareListener?.(applyShare);
+
   shareLink?.setLibraryParamsEncoder?.((params) =>
     encodeLibraryParam(
       params,
@@ -186,29 +256,23 @@ export function createDataLibrary({
     availability = answer.availability;
     serverPresent = answer.server;
     const stored = readStoredLibrarySelection(storage, switchable);
-    const hash = String(initialHash || '').replace(/^#/, '');
-    const linked = hash
-      ? decodeLibraryParam(new URLSearchParams(hash), tokens.idByToken)
-      : null;
+    // A share opened in this tab while availability loaded wins over the
+    // opening one.
+    const linked = queuedShare ? idsForTokens(queuedShare) : openingShare();
+    queuedShare = null;
+    loaded = true;
     // A link's entries join the viewer's library and open switched on; with a
-    // link, it alone decides what is on, as it does for core layers.
-    const added = [...stored.added, ...(linked || [])];
-    const on = linked ?? stored.on;
-    selection = normalizeLibrarySelection({ added, on }, switchable);
-    const restoreOrigin = linked ? 'share-restore' : 'local-restore';
-    for (const id of selection.added) {
+    // link, it alone decides what is on, as it does for core layers, so a
+    // share with every library entry off switches the stored ones off.
+    // Added entries register even while off, so their rows show.
+    for (const id of [...stored.added, ...(linked || [])]) {
       const entry = byId.get(id);
-      if (!entry || !addable(id) || !register(entry)) continue;
-      if (selection.on.includes(id))
-        dataManager
-          .setEnabled(libraryLayerId(id), true, { origin: restoreOrigin })
-          .catch((error) =>
-            console.warn(`[Library] ${id} restore failed:`, error),
-          );
+      if (entry && addable(id)) register(entry);
     }
-    writeStoredLibrarySelection(storage, selection);
-    shareLink?.onLibraryStateChange?.();
-    notify();
+    applySelection(
+      { added: [...stored.added, ...(linked || [])], on: linked ?? stored.on },
+      linked ? 'share-restore' : 'local-restore',
+    );
   }
 
   /**
@@ -388,6 +452,7 @@ export function createDataLibrary({
       destroyed = true;
       unsubscribeManager?.();
       shareLink?.setLibraryParamsEncoder?.(null);
+      shareLink?.setLibraryShareListener?.(null);
       listeners.clear();
     },
   };

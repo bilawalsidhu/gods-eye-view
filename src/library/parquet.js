@@ -10,7 +10,10 @@
 import { parquetMetadataAsync, parquetReadObjects } from 'hyparquet';
 import { decompress as zstdDecompress } from 'fzstd';
 import { libraryUpstreamUrl } from './manifest.js';
-import { readResponseBytesCapped } from '../sources/httpBody.js';
+import {
+  readResponseBytesCapped,
+  readResponseTextCapped,
+} from '../sources/httpBody.js';
 
 /** Footer bytes read first; small files' metadata fits in one request. */
 const FOOTER_FETCH_BYTES = 16 * 1024;
@@ -19,6 +22,13 @@ export const MAX_PARTITIONS_PER_VIEW = 4;
 const MAX_LISTED_KEYS = 5000;
 const MAX_LIST_PAGES = 20;
 const INDEX_CONCURRENCY = 8;
+/** One listing page: 1,000 keys of XML is well under a megabyte. */
+const MAX_LIST_PAGE_BYTES = 4 * 1024 * 1024;
+/** A whole file sent in answer to a range request is read only up to this. */
+const MAX_UNRANGED_BYTES = 64 * 1024 * 1024;
+/** Extra passes over footers that failed, before the index is incomplete. */
+const FOOTER_RETRIES = 2;
+const FOOTER_RETRY_DELAY_MS = 500;
 
 /** Decompressors hyparquet does not carry itself (it has Snappy built in). */
 export const PARQUET_COMPRESSORS = Object.freeze({
@@ -33,30 +43,67 @@ function onSourceHost(entry, url) {
   return target.href;
 }
 
+/** Mark a failure worth retrying: network, 429, 5xx or a short read. */
+const transient = (error) => Object.assign(error, { transient: true });
+
 /**
  * A hyparquet AsyncBuffer over HTTP range requests, redirects refused,
  * credentials and referrer withheld.
  */
 export function rangeBuffer(url, byteLength, { fetchImpl, signal }) {
+  if (!Number.isSafeInteger(byteLength) || byteLength <= 0)
+    throw new RangeError(`invalid object size ${byteLength}`);
   return {
     byteLength,
     async slice(start, end = byteLength) {
-      const response = await fetchImpl(url, {
-        signal,
-        redirect: 'error',
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer',
-        headers: { Range: `bytes=${start}-${end - 1}` },
-      });
+      if (
+        !Number.isSafeInteger(start) ||
+        !Number.isSafeInteger(end) ||
+        start < 0 ||
+        end > byteLength ||
+        end <= start
+      )
+        throw new RangeError(`invalid range ${start}-${end} of ${byteLength}`);
+      let response;
+      try {
+        response = await fetchImpl(url, {
+          signal,
+          redirect: 'error',
+          credentials: 'omit',
+          referrerPolicy: 'no-referrer',
+          headers: { Range: `bytes=${start}-${end - 1}` },
+        });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        throw transient(error);
+      }
       if (response.status !== 206 && response.status !== 200) {
         await response.body?.cancel?.().catch?.(() => {});
-        throw new Error(`HTTP ${response.status}`);
+        const error = new Error(`HTTP ${response.status}`);
+        throw response.status === 429 || response.status >= 500
+          ? transient(error)
+          : error;
       }
-      const buffer = await response.arrayBuffer();
-      // A server that ignores Range answers with the whole file.
-      return response.status === 200 && buffer.byteLength === byteLength
-        ? buffer.slice(start, end)
-        : buffer;
+      // A server that ignores Range answers with the whole file; anything
+      // else must be exactly the bytes asked for.
+      const whole = response.status === 200;
+      const expected = whole ? byteLength : end - start;
+      const bytes = await readResponseBytesCapped(
+        response,
+        whole ? Math.min(byteLength, MAX_UNRANGED_BYTES) : expected,
+        signal,
+      );
+      if (bytes.byteLength !== expected)
+        throw transient(
+          new Error(
+            `short read: ${bytes.byteLength} of ${expected} bytes from ${start}`,
+          ),
+        );
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      );
+      return whole ? buffer.slice(start, end) : buffer;
     },
   };
 }
@@ -79,12 +126,19 @@ export async function listPartitions(entry, { fetchImpl, signal }) {
       credentials: 'omit',
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const xml = await response.text();
+    const xml = await readResponseTextCapped(
+      response,
+      MAX_LIST_PAGE_BYTES,
+      signal,
+    );
     for (const match of xml.matchAll(
       /<Contents>[\s\S]*?<Key>([^<]+)<\/Key>[\s\S]*?<Size>(\d+)<\/Size>[\s\S]*?<\/Contents>/g,
     )) {
-      if (!match[1].endsWith('.parquet')) continue;
-      objects.push({ key: match[1], size: Number(match[2]) });
+      const size = Number(match[2]);
+      if (!match[1].endsWith('.parquet') || !Number.isSafeInteger(size))
+        continue;
+      if (size <= 0) continue;
+      objects.push({ key: match[1], size });
       if (objects.length >= MAX_LISTED_KEYS) return objects;
     }
     token = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(
@@ -119,39 +173,71 @@ export function geoParquetInfo(metadata) {
   }
 }
 
+const pause = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener?.(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+
 /**
  * Where each partition is: list the bucket, then read each file's footer
- * (one small range request) for its GeoParquet bbox. Built once and cached
- * by the caller; a partition without a bbox is left out.
- * @returns {Promise<Array<{ url: string, bbox: number[], size: number }>>}
+ * (one small range request) for its GeoParquet bbox. A partition whose
+ * metadata is unreadable or has no bbox is left out; a footer that fails to
+ * load (network, 429, 5xx, short read) is retried
+ * (FOOTER_RETRIES more passes) and, if it still fails, the index is
+ * `complete: false` so callers never keep it as if it were whole.
+ * @returns {Promise<{ partitions: Array<{ url: string, bbox: number[], size: number }>, complete: boolean, failed: number }>}
  */
-export async function buildPartitionIndex(entry, { fetchImpl, signal }) {
+export async function buildPartitionIndex(
+  entry,
+  { fetchImpl, signal, retryDelayMs = FOOTER_RETRY_DELAY_MS },
+) {
   const { keyBase } = entry.source.partitions;
   const objects = await listPartitions(entry, { fetchImpl, signal });
-  const index = [];
-  let next = 0;
-  async function worker() {
-    while (next < objects.length) {
-      const { key, size } = objects[next++];
-      signal?.throwIfAborted?.();
-      const url = onSourceHost(entry, new URL(key, keyBase).href);
-      try {
-        const metadata = await parquetMetadataAsync(
-          rangeBuffer(url, size, { fetchImpl, signal }),
-          { initialFetchSize: FOOTER_FETCH_BYTES },
-        );
-        const { bbox } = geoParquetInfo(metadata);
-        if (bbox) index.push({ url, bbox, size });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        // One unreadable partition does not sink the index.
+  const partitions = [];
+  let pending = objects;
+  for (let pass = 0; pass <= FOOTER_RETRIES && pending.length; pass++) {
+    if (pass) await pause(retryDelayMs * pass, signal);
+    const failed = [];
+    let next = 0;
+    const queue = pending;
+    async function worker() {
+      while (next < queue.length) {
+        const object = queue[next++];
+        signal?.throwIfAborted?.();
+        const url = onSourceHost(entry, new URL(object.key, keyBase).href);
+        try {
+          const metadata = await parquetMetadataAsync(
+            rangeBuffer(url, object.size, { fetchImpl, signal }),
+            { initialFetchSize: FOOTER_FETCH_BYTES },
+          );
+          const { bbox } = geoParquetInfo(metadata);
+          if (bbox) partitions.push({ url, bbox, size: object.size });
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          // A footer that arrived but does not parse will not parse next
+          // time either: that file is left out. Only fetch failures retry.
+          if (error?.transient) failed.push(object);
+        }
       }
     }
+    await Promise.all(
+      Array.from({ length: Math.min(INDEX_CONCURRENCY, queue.length) }, worker),
+    );
+    pending = failed;
   }
-  await Promise.all(
-    Array.from({ length: Math.min(INDEX_CONCURRENCY, objects.length) }, worker),
-  );
-  return index.sort((a, b) => a.url.localeCompare(b.url));
+  return {
+    partitions: partitions.sort((a, b) => a.url.localeCompare(b.url)),
+    complete: pending.length === 0,
+    failed: pending.length,
+  };
 }
 
 const overlapArea = (a, b) =>

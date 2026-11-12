@@ -629,6 +629,107 @@ try {
     assert.deepEqual(stored, { added: [], on: [] });
   });
 
+  const onIds = (target) =>
+    target.evaluate(() =>
+      window.__gevDataLibrary.library
+        .list()
+        .filter((row) => row.on)
+        .map((row) => row.entry.id)
+        .sort(),
+    );
+
+  await step(
+    'a copied /share link opens the same library layers in a clean browser',
+    async () => {
+      await page.evaluate(async () => {
+        const { library } = window.__gevDataLibrary;
+        await library.add('nasa-eonet-events');
+        await library.add('nasa-black-marble');
+      });
+      await page.waitForFunction(
+        () => /(?:^|&)lib=00\.03(?:&|$)/.test(location.hash.slice(1)),
+        { timeout: 15_000 },
+      );
+      const href = await page.evaluate(() =>
+        window.__gevDataLibrary.buildShareLink(),
+      );
+      assert.match(new URL(href).pathname, /\/share\//);
+      // A separate profile: nothing stored, nothing added.
+      const context = await browser.createBrowserContext();
+      try {
+        const recipient = await context.newPage();
+        await recipient.setRequestInterception(true);
+        recipient.on('request', (request) => {
+          const fixture = fixtureFor(new URL(request.url()));
+          if (fixture) request.respond(fixture);
+          else request.continue();
+        });
+        await recipient.evaluateOnNewDocument(() => {
+          try {
+            localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+          } catch {
+            /* the gate still runs */
+          }
+        });
+        await recipient.goto(href, { waitUntil: 'domcontentloaded' });
+        await recipient.waitForFunction(
+          () => window.__gevDataLibrary?.library.ready,
+          { timeout: 180_000 },
+        );
+        await recipient.waitForFunction(
+          () =>
+            window.__gevDataLibrary.library.list().filter((row) => row.on)
+              .length === 2,
+          { timeout: 60_000 },
+        );
+        assert.deepEqual(await onIds(recipient), [
+          'nasa-black-marble',
+          'nasa-eonet-events',
+        ]);
+      } finally {
+        await context.close();
+      }
+    },
+  );
+
+  await step(
+    'a share opened in the same tab switches library layers on and off',
+    async () => {
+      const navigate = (lib) =>
+        page.evaluate((value) => {
+          const params = new URLSearchParams(location.hash.slice(1));
+          params.set('lat', String(Number(params.get('lat')) + 1));
+          if (value === null) params.delete('lib');
+          else params.set('lib', value);
+          location.hash = params.toString();
+        }, lib);
+      await navigate('00');
+      await page.waitForFunction(
+        () => {
+          const on = window.__gevDataLibrary.library
+            .list()
+            .filter((row) => row.on)
+            .map((row) => row.entry.id);
+          return on.length === 1 && on[0] === 'nasa-eonet-events';
+        },
+        { timeout: 30_000 },
+      );
+      // A share with every library layer off: the added ones stay listed, off.
+      await navigate(null);
+      await page.waitForFunction(
+        () => window.__gevDataLibrary.library.list().every((row) => !row.on),
+        { timeout: 30_000 },
+      );
+      assert.deepEqual(
+        (await libraryRows(page)).map(({ id, on }) => [id, on]).sort(),
+        [
+          ['nasa-black-marble', false],
+          ['nasa-eonet-events', false],
+        ],
+      );
+    },
+  );
+
   assert.deepEqual(errors, [], 'no library errors on the page');
   console.log(`# ${count} passed`);
 } finally {

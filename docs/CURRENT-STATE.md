@@ -585,6 +585,24 @@ the ledger (append-only with `--base-ref`, run in CI on pull requests) and the
 generated DATA_SOURCES.md section; `npm run library:probe` hits every upstream
 once; `npm run qa:data-library` is the browser gate (fixture-backed).
 
+Shares: the compact `/share/<code>` link carries the switched-on entries in
+field 29 (docs/SHARE-LINK-FORMAT.md), so Copy Link keeps them, and a share
+opened later in the same tab (pasted address, Back/Forward) restores them too.
+Any share decides what is on, as for core layers: one with no library entry
+on switches the recipient's stored ones off and leaves them listed. A tile
+entry whose coverage needs more than 256 tiles at its minimum zoom (Norway's
+cadastre from z14, sea depths from z11) is hidden below that scale through
+Cesium's `minimumTerrainLevel`, so zoomed out it requests nothing. EPC
+partitions learn two extents (`gev:library:extent:v2:`): every point's box
+rules a partition out, the 98 % box only ranks it, so homes at a partition's
+edge are found on later visits; the v1 trimmed-only key is dropped. A
+partition index whose footers keep failing after two retries is
+`complete: false`: neither the server nor the browser keeps it as whole, a
+complete earlier index is served instead, and it is rebuilt after five
+minutes. A view that leaves partitions touching it unread is PARTIAL. Listing
+pages and footer reads are size-capped and ranges are validated. The Browse
+dialog rebuilds on a language switch, keeping its filters.
+
 ## Utilities panel — October 29, 2026
 
 UTILITIES is its own left-side panel, between Data Layers and Scenes, with

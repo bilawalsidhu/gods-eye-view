@@ -7,7 +7,7 @@
  * width, height, labels, initial and return focus, Escape and dismissal, and
  * closes itself when clean view, recording or Cockpit hides the panels.
  */
-import { formatNumber, msg, t, tn } from '../i18n/index.js';
+import { formatNumber, msg, onLocaleChange, t, tn } from '../i18n/index.js';
 
 const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
 /** How long Remove all stays armed after its first press. */
@@ -219,6 +219,12 @@ export function mountLibraryBrowser({ library, trigger }) {
     node.addEventListener(type, listener);
     removers.push(() => node.removeEventListener(type, listener));
   };
+  // Listeners on the dialog's own nodes, released when it is rebuilt.
+  const dialogRemovers = [];
+  const listenDialog = (node, type, listener) => {
+    node.addEventListener(type, listener);
+    dialogRemovers.push(() => node.removeEventListener(type, listener));
+  };
   const filter = { query: '', family: '', availableOnly: false };
   let dialog = null;
   let list = null;
@@ -259,7 +265,7 @@ export function mountLibraryBrowser({ library, trigger }) {
     );
     close.type = 'button';
     close.setAttribute('aria-label', t('Close data library'));
-    listen(close, 'click', () => api.close());
+    listenDialog(close, 'click', () => api.close());
     header.append(title, close);
 
     const body = element('div', 'data-library-body');
@@ -282,7 +288,8 @@ export function mountLibraryBrowser({ library, trigger }) {
     search.type = 'search';
     search.autocomplete = 'off';
     search.placeholder = t('Name, provider or country');
-    listen(search, 'input', () => {
+    search.value = filter.query;
+    listenDialog(search, 'input', () => {
       filter.query = search.value;
       render();
     });
@@ -291,10 +298,16 @@ export function mountLibraryBrowser({ library, trigger }) {
     const familyLabel = element('label', 'data-library-field');
     familyLabel.append(element('span', '', t('Theme')));
     const family = element('select', 'panel-surface-control');
-    family.append(new Option(t('All themes'), ''));
+    const option = (text, value) => {
+      const node = element('option', '', text);
+      node.value = value;
+      return node;
+    };
+    family.append(option(t('All themes'), ''));
     for (const [value, label] of Object.entries(FAMILY_LABELS))
-      family.append(new Option(t(label), value));
-    listen(family, 'change', () => {
+      family.append(option(t(label), value));
+    family.value = filter.family;
+    listenDialog(family, 'change', () => {
       filter.family = family.value;
       render();
     });
@@ -303,7 +316,8 @@ export function mountLibraryBrowser({ library, trigger }) {
     const availableLabel = element('label', 'data-library-check');
     const available = element('input');
     available.type = 'checkbox';
-    listen(available, 'change', () => {
+    available.checked = filter.availableOnly;
+    listenDialog(available, 'change', () => {
       filter.availableOnly = available.checked;
       render();
     });
@@ -319,7 +333,7 @@ export function mountLibraryBrowser({ library, trigger }) {
     status.setAttribute('aria-live', 'polite');
     resetButton = element('button', 'panel-surface-control data-library-reset');
     resetButton.type = 'button';
-    listen(resetButton, 'click', () => {
+    listenDialog(resetButton, 'click', () => {
       if (resetting) return;
       if (!resetArmed) {
         resetArmed = true;
@@ -344,7 +358,7 @@ export function mountLibraryBrowser({ library, trigger }) {
     toolbar.append(status, resetButton);
 
     list = element('ul', 'data-library-list');
-    listen(list, 'click', (event) => {
+    listenDialog(list, 'click', (event) => {
       const button = event.target?.closest?.('button[data-library-action]');
       if (!button || button.disabled) return;
       const id = button.dataset.libraryId;
@@ -366,13 +380,13 @@ export function mountLibraryBrowser({ library, trigger }) {
 
     body.append(stats, intro, filters, toolbar, list);
     dialog.append(header, body);
-    listen(dialog, 'cancel', (event) => {
+    listenDialog(dialog, 'cancel', (event) => {
       event.preventDefault();
       api.close();
     });
     // A click on the backdrop (the dialog box itself, outside its content)
     // dismisses, like Escape.
-    listen(dialog, 'click', (event) => {
+    listenDialog(dialog, 'click', (event) => {
       if (event.target === dialog) api.close();
     });
     document.body.append(dialog);
@@ -576,12 +590,32 @@ export function mountLibraryBrowser({ library, trigger }) {
     destroy() {
       api.close();
       unsubscribe();
+      offLocale();
       observer?.disconnect();
       for (const remove of removers.splice(0)) remove();
+      for (const remove of dialogRemovers.splice(0)) remove();
       dialog?.remove();
       dialog = null;
     },
   };
+
+  /**
+   * Every label is translated when the dialog is built, so a language switch
+   * rebuilds it, keeping its filters and, if it was open, opening it again.
+   */
+  function relabel() {
+    if (!dialog) return;
+    const wasOpen = dialog.open;
+    disarmReset();
+    clearInterval(statsTimer);
+    statsTimer = null;
+    if (wasOpen) dialog.close();
+    for (const remove of dialogRemovers.splice(0)) remove();
+    dialog.remove();
+    dialog = null;
+    if (wasOpen) api.open();
+  }
+  const offLocale = onLocaleChange(relabel);
 
   const unsubscribe = library.subscribe(render);
   if (trigger) listen(trigger, 'click', () => api.open());

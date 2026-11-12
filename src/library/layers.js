@@ -258,6 +258,44 @@ const reliefLegend = () =>
 /** colorToAlpha threshold (max channel distance, 0–1) for `noDataColor`. */
 const NO_DATA_THRESHOLD = 0.02;
 
+/** The most tiles an entry's coverage may need at its minimum zoom. */
+const COARSE_TILE_BUDGET = 256;
+
+function webMercatorTileSpan(bbox, zoom) {
+  const n = 2 ** zoom;
+  const clampLat = (lat) => Math.max(-85.0511, Math.min(85.0511, lat));
+  const tileX = (lon) =>
+    Math.min(n - 1, Math.max(0, Math.floor(((lon + 180) / 360) * n)));
+  const tileY = (lat) => {
+    const rad = (clampLat(lat) * Math.PI) / 180;
+    const y = (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2;
+    return Math.min(n - 1, Math.max(0, Math.floor(y * n)));
+  };
+  const [west, south, east, north] = bbox;
+  return (tileX(east) - tileX(west) + 1) * (tileY(south) - tileY(north) + 1);
+}
+
+/**
+ * The globe level below which a tile entry is hidden, or undefined when it
+ * draws at every scale. Cesium fetches an imagery layer's minimum level for
+ * every globe tile it covers, however far out the camera is: an entry whose
+ * coverage needs more than COARSE_TILE_BUDGET tiles at its minimum zoom
+ * (Norway's cadastre from z14 is about two million) would allocate them all
+ * when zoomed out. Such an entry is shown only from the globe level that
+ * matches its minimum zoom (a geographic level spans two Web Mercator ones,
+ * so level z − 1).
+ * @param {object} entry
+ * @returns {number|undefined}
+ */
+export function minimumTerrainLevelFor(entry) {
+  const minZoom = entry?.source?.minZoom ?? 0;
+  if (minZoom <= 0) return undefined;
+  const bbox = entry.coverage?.bbox ?? [-180, -85.0511, 180, 85.0511];
+  return webMercatorTileSpan(bbox, minZoom) > COARSE_TILE_BUDGET
+    ? minZoom - 1
+    : undefined;
+}
+
 /**
  * A tiles entry as a manager layer.
  * @param {object} entry Validated tiles entry.
@@ -406,7 +444,13 @@ export function createLibraryTileLayer(
     provider.errorEvent?.addEventListener?.(onError);
     removeErrorListener = () =>
       provider.errorEvent?.removeEventListener?.(onError);
-    imagery = host.collection.addImageryProvider(provider);
+    const minimumTerrainLevel = minimumTerrainLevelFor(entry);
+    imagery =
+      minimumTerrainLevel !== undefined && cesium.ImageryLayer
+        ? new cesium.ImageryLayer(provider, { minimumTerrainLevel })
+        : null;
+    if (imagery) host.collection.add(imagery);
+    else imagery = host.collection.addImageryProvider(provider);
     imagery.alpha = entry.display.opacity ?? 1;
     if (entry.display.noDataColor && cesium.Color) {
       // The provider's "no imagery here" fill, drawn transparent (JPEG

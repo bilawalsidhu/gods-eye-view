@@ -19,6 +19,8 @@ const DATASET_TIMEOUT_MS = 30_000;
 const TILE_TIMEOUT_MS = 10_000;
 /** Each listing page or footer read while building a partition index. */
 const INDEX_TIMEOUT_MS = 20_000;
+/** How long an incomplete partition index is served before a rebuild. */
+const PARTIAL_INDEX_MS = 5 * 60_000;
 const TILE_MAX_BYTES = 2 * 1024 * 1024;
 const TILE_CACHE_LIMIT = 512;
 const IN_FLIGHT_LIMIT = 64;
@@ -107,6 +109,7 @@ export function libraryProxy({
   const datasets = new Map();
   const tiles = new Map();
   const indexes = new Map();
+  const partialIndexes = new Map();
   const inFlight = new Map();
   const allowData = makeRateLimiter({
     windowMs: 60_000,
@@ -231,25 +234,51 @@ export function libraryProxy({
       if (!available) return json(res, 403, { error: reason });
       if (!allowData(clientKey(req)))
         return json(res, 429, { error: 'rate_limited' });
+      // Only a complete index is cached for cacheSeconds. An incomplete one
+      // (footers that kept failing) is served as `complete: false` and kept
+      // for PARTIAL_INDEX_MS only, so the next request soon rebuilds it; a
+      // complete index from before keeps being served while rebuilds fail.
+      const key = `index:${id}`;
+      const partial = partialIndexes.get(key);
+      if (partial && now() - partial.savedAt < PARTIAL_INDEX_MS) {
+        const previous = indexes.get(key);
+        return json(res, 200, previous?.value ?? partial.value);
+      }
       try {
         const { value } = await cached(
           indexes,
-          `index:${id}`,
+          key,
           entry.source.cacheSeconds * 1000,
-          async () => ({
-            partitions: await buildPartitionIndex(entry, {
+          async () => {
+            const built = await buildPartitionIndex(entry, {
               fetchImpl: (url, options = {}) =>
                 fetchImpl(url, {
                   ...options,
                   signal:
                     options.signal ?? AbortSignal.timeout(INDEX_TIMEOUT_MS),
                 }),
-            }),
-            builtAt: now(),
-          }),
+            });
+            const value = {
+              partitions: built.partitions,
+              complete: built.complete,
+              builtAt: now(),
+            };
+            if (!built.complete) {
+              // Recorded here too: with an earlier complete index, cached()
+              // serves that one and swallows this error, and the rebuild
+              // still waits PARTIAL_INDEX_MS.
+              partialIndexes.set(key, { value, savedAt: now() });
+              throw Object.assign(new Error('index_incomplete'), {
+                partialIndex: value,
+              });
+            }
+            partialIndexes.delete(key);
+            return value;
+          },
         );
         return json(res, 200, value);
       } catch (error) {
+        if (error?.partialIndex) return json(res, 200, error.partialIndex);
         const status = error?.status === 429 ? 429 : 502;
         return json(res, status, { error: 'library_upstream_unavailable' });
       }

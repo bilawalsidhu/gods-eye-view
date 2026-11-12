@@ -17,7 +17,13 @@ const PARTITION_BATCH = 4;
 /** Decoded partitions kept in memory, most recent first. */
 const PARTITION_CACHE_LIMIT = 4;
 const INDEX_STORAGE_PREFIX = 'gev:library:index:';
-const EXTENT_STORAGE_PREFIX = 'gev:library:extent:';
+/** How long an incomplete partition index is used before a rebuild. */
+const PARTIAL_INDEX_RETRY_MS = 5 * 60_000;
+// v2 stores `{ full, trimmed }` per partition. The v1 key held only the
+// trimmed box, which wrongly excluded real points at a partition's edge; it
+// is no longer read and is removed on first use.
+const EXTENT_STORAGE_PREFIX = 'gev:library:extent:v2:';
+const RETIRED_EXTENT_STORAGE_PREFIX = 'gev:library:extent:';
 
 const overlaps = (a, b) =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
@@ -45,6 +51,58 @@ export function robustExtent(features) {
     ];
   };
   return [at(lons, 0.01), at(lats, 0.01), at(lons, 0.99), at(lats, 0.99)];
+}
+
+/** The box holding every point of a partition, or null. */
+export function fullExtent(features) {
+  let extent = null;
+  for (const feature of features) {
+    let position = feature?.geometry?.coordinates;
+    while (Array.isArray(position?.[0])) position = position[0];
+    if (!Array.isArray(position)) continue;
+    const [lon, lat] = position;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    if (!extent) extent = [lon, lat, lon, lat];
+    else {
+      extent[0] = Math.min(extent[0], lon);
+      extent[1] = Math.min(extent[1], lat);
+      extent[2] = Math.max(extent[2], lon);
+      extent[3] = Math.max(extent[3], lat);
+    }
+  }
+  return extent;
+}
+
+const isBox = (value) =>
+  Array.isArray(value) && value.length === 4 && value.every(Number.isFinite);
+
+/**
+ * Candidate partitions for a box. A learned full extent that misses the box
+ * rules a partition out (no point of it can be in view); the learned 98 %
+ * extent only ranks, so stray geocodes neither stretch the ranking nor hide
+ * the real points at a partition's edge.
+ */
+export function rankPartitions(index, box, learned, partitionsForBox) {
+  const known = (url) => {
+    const value = learned?.[url];
+    return value && isBox(value.full) && isBox(value.trimmed) ? value : null;
+  };
+  const ranked = partitionsForBox(
+    index
+      .filter(({ url }) => !known(url) || overlaps(known(url).full, box))
+      .map((partition) => {
+        const extent = known(partition.url);
+        // Rank by where most points are, unless that misses the view while
+        // the full extent does not: then the partition's own box ranks it.
+        return extent && overlaps(extent.trimmed, box)
+          ? { ...partition, bbox: extent.trimmed }
+          : partition;
+      }),
+    box,
+    Infinity,
+  );
+  const byUrl = new Map(index.map((partition) => [partition.url, partition]));
+  return ranked.map(({ url }) => byUrl.get(url));
 }
 
 function storedJson(storage, key) {
@@ -118,43 +176,76 @@ export function createLibrarySource({
    * shared), else built here and kept in this browser for `cacheSeconds`.
    */
   function partitionIndex(entry, { signal } = {}) {
-    if (!indexes.has(entry.id))
-      indexes.set(
-        entry.id,
-        (async () => {
-          try {
-            const response = await fetchImpl(
-              `${base}/index/${encodeURIComponent(entry.id)}`,
-              { signal, headers: { Accept: 'application/json' } },
-            );
-            if (response.ok) {
-              const body = await response.json();
-              if (Array.isArray(body?.partitions)) return body.partitions;
-            }
-          } catch (error) {
-            if (signal?.aborted) throw error;
+    const memo = indexes.get(entry.id);
+    if (memo && (memo.retryAt === null || now() < memo.retryAt))
+      return memo.promise;
+    const promise = (async () => {
+      const key = `${INDEX_STORAGE_PREFIX}${entry.id}`;
+      const stored = storedJson(storage, key);
+      const storedComplete =
+        stored && Array.isArray(stored.partitions) && stored.complete !== false
+          ? stored
+          : null;
+      let partial = null;
+      try {
+        const response = await fetchImpl(
+          `${base}/index/${encodeURIComponent(entry.id)}`,
+          { signal, headers: { Accept: 'application/json' } },
+        );
+        if (response.ok) {
+          const body = await response.json();
+          if (Array.isArray(body?.partitions)) {
+            if (body.complete !== false)
+              return { partitions: body.partitions, complete: true };
+            partial = body.partitions;
           }
-          const key = `${INDEX_STORAGE_PREFIX}${entry.id}`;
-          const stored = storedJson(storage, key);
-          if (
-            stored &&
-            Array.isArray(stored.partitions) &&
-            now() - stored.savedAt < entry.source.cacheSeconds * 1000
-          )
-            return stored.partitions;
-          const { buildPartitionIndex } = await loadParquet();
-          const partitions = await buildPartitionIndex(entry, {
-            fetchImpl,
-            signal,
-          });
-          storeJson(storage, key, { savedAt: now(), partitions });
-          return partitions;
-        })().catch((error) => {
+        }
+      } catch (error) {
+        if (signal?.aborted) throw error;
+      }
+      if (
+        storedComplete &&
+        now() - storedComplete.savedAt < entry.source.cacheSeconds * 1000
+      )
+        return { partitions: storedComplete.partitions, complete: true };
+      // The server's index is incomplete, or there is no server: build here.
+      const { buildPartitionIndex } = await loadParquet();
+      const built = await buildPartitionIndex(entry, { fetchImpl, signal });
+      if (built.complete) {
+        storeJson(storage, key, {
+          savedAt: now(),
+          complete: true,
+          partitions: built.partitions,
+        });
+        return { partitions: built.partitions, complete: true };
+      }
+      // Still incomplete: an older complete index beats a partial one, even
+      // past its age; otherwise use the larger partial set for now.
+      if (storedComplete)
+        return { partitions: storedComplete.partitions, complete: false };
+      const partitions =
+        partial && partial.length > built.partitions.length
+          ? partial
+          : built.partitions;
+      return { partitions, complete: false };
+    })().then(
+      (result) => {
+        // An incomplete index is used for now and rebuilt after a pause.
+        const current = indexes.get(entry.id);
+        if (current?.promise === promise)
+          current.retryAt = result.complete
+            ? null
+            : now() + PARTIAL_INDEX_RETRY_MS;
+        return result.partitions;
+      },
+      (error) => {
+        if (indexes.get(entry.id)?.promise === promise)
           indexes.delete(entry.id);
-          throw error;
-        }),
-      );
-    return indexes.get(entry.id);
+        throw error;
+      },
+    );
+    indexes.set(entry.id, { promise, retryAt: null });
+    return promise;
   }
 
   /** One partition's features, decoded once and kept for a few views. */
@@ -174,11 +265,12 @@ export function createLibrarySource({
     while (partitionCache.size > PARTITION_CACHE_LIMIT)
       partitionCache.delete(partitionCache.keys().next().value);
     // Learn where this partition really is, for every later view.
-    const extent = robustExtent(features);
-    if (extent) {
+    const full = fullExtent(features);
+    const trimmed = robustExtent(features);
+    if (full && trimmed) {
       const key = `${EXTENT_STORAGE_PREFIX}${entry.id}`;
       const learned = storedJson(storage, key) || {};
-      learned[partition.url] = extent;
+      learned[partition.url] = { full, trimmed };
       storeJson(storage, key, learned);
     }
     return features;
@@ -195,11 +287,18 @@ export function createLibrarySource({
       loadParquet(),
       partitionIndex(entry, { signal }),
     ]);
+    try {
+      storage?.removeItem?.(`${RETIRED_EXTENT_STORAGE_PREFIX}${entry.id}`);
+    } catch {
+      /* a blocked store keeps a key nobody reads */
+    }
     const learned =
       storedJson(storage, `${EXTENT_STORAGE_PREFIX}${entry.id}`) || {};
-    const candidates = partitionsForBox(index, box, Infinity)
-      .filter(({ url }) => !learned[url] || overlaps(learned[url], box))
-      .slice(0, MAX_PARTITION_READS_PER_VIEW);
+    const ranked = rankPartitions(index, box, learned, partitionsForBox);
+    const candidates = ranked.slice(0, MAX_PARTITION_READS_PER_VIEW);
+    // Every partition the box touches but this view leaves unread (the read
+    // budget, or the early stop below) makes the result partial.
+    let unread = ranked.length - candidates.length;
     const inView = [];
     for (let start = 0; start < candidates.length; start += PARTITION_BATCH) {
       const batch = candidates.slice(start, start + PARTITION_BATCH);
@@ -217,13 +316,19 @@ export function createLibrarySource({
           inView.push(...hits);
         }
       }
-      if (found) break;
+      if (found) {
+        unread += candidates.length - (start + batch.length);
+        break;
+      }
     }
     const bounded = boundLibraryFeatures(inView, {
       maxFeatures: entry.source.maxFeatures,
       display: entry.display,
     });
-    return { features: bounded.features, truncated: bounded.truncated };
+    return {
+      features: bounded.features,
+      truncated: bounded.truncated || unread > 0,
+    };
   }
 
   /**

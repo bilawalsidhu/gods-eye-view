@@ -207,6 +207,115 @@ test('a link decides what is on and adds its entries to the library', async (t) 
   });
 });
 
+/** A ShareLinkManager stand-in: the opening share and in-tab navigation. */
+function fakeShareLink(initialLibraryTokens) {
+  const link = {
+    initialLibraryTokens,
+    listener: null,
+    setLibraryShareListener(listener) {
+      link.listener = listener;
+    },
+    setLibraryParamsEncoder() {},
+    onLibraryStateChange() {},
+  };
+  return link;
+}
+
+test('a share with every library entry off keeps the stored ones off', async (t) => {
+  const manager = sealedManager(t);
+  const storage = memoryStorage(
+    JSON.stringify({
+      added: ['night-lights', 'sea-marks'],
+      on: ['night-lights', 'sea-marks'],
+    }),
+  );
+  // A compact /share/<code> link with no library field, and a long-form link
+  // with no lib=: both are shares that switch no library entry on.
+  for (const options of [
+    { shareLink: fakeShareLink([]) },
+    { initialHash: '#lat=1&lon=2&l=' },
+  ]) {
+    const library = createDataLibrary({
+      entries,
+      ledger,
+      dataManager: manager,
+      services: {},
+      storage,
+      source: source({}),
+      ...options,
+    });
+    await library.start();
+    assert.equal(manager.isEnabled('lib-night-lights'), false);
+    assert.equal(manager.isEnabled('lib-sea-marks'), false);
+    // The recipient's entries stay in their panel, off.
+    assert.deepEqual(
+      library
+        .list()
+        .filter((row) => row.added)
+        .map((row) => row.entry.id),
+      ['night-lights', 'sea-marks'],
+    );
+    library.destroy();
+  }
+});
+
+test('the opening share link restores its library tokens', async (t) => {
+  const manager = sealedManager(t);
+  const storage = memoryStorage(
+    JSON.stringify({ added: ['night-lights'], on: ['night-lights'] }),
+  );
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage,
+    shareLink: fakeShareLink(['01']),
+    source: source({}),
+  });
+  await library.start();
+  await manager.waitForLayerSettled?.('lib-sea-marks');
+  assert.equal(manager.isEnabled('lib-sea-marks'), true);
+  assert.equal(manager.isEnabled('lib-night-lights'), false);
+});
+
+test('navigating between shares switches library entries on and off', async (t) => {
+  const manager = sealedManager(t);
+  const shareLink = fakeShareLink(['00']);
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(),
+    shareLink,
+    source: source({}),
+  });
+  // A share navigated to before availability loads waits for it and wins.
+  const started = library.start();
+  shareLink.listener(['01']);
+  await started;
+  const settle = () =>
+    Promise.all(
+      ['lib-night-lights', 'lib-sea-marks'].map((id) =>
+        manager.waitForLayerSettled?.(id),
+      ),
+    );
+  await settle();
+  assert.equal(manager.isEnabled('lib-sea-marks'), true);
+  assert.equal(manager.isEnabled('lib-night-lights'), false);
+  shareLink.listener(['00']);
+  await settle();
+  assert.equal(manager.isEnabled('lib-night-lights'), true);
+  assert.equal(manager.isEnabled('lib-sea-marks'), false);
+  shareLink.listener([]);
+  await settle();
+  assert.equal(manager.isEnabled('lib-night-lights'), false);
+  assert.equal(manager.isEnabled('lib-sea-marks'), false);
+  library.destroy();
+  assert.equal(shareLink.listener, null);
+});
+
 test('zoom flies to an added layer through the caller, reset removes everything', async (t) => {
   const manager = sealedManager(t);
   const storage = memoryStorage();

@@ -17,6 +17,7 @@ import {
   SHARE_VIEW_STYLE_PARAMS,
   decodeShareView,
   encodeShareView,
+  normalizeLibraryTokens,
 } from './share/viewCodec.js';
 import {
   fromLegacyShareState,
@@ -109,6 +110,10 @@ export class ShareLinkManager {
     this._mapStack = 'photoreal';
     this._layerStateProvider = null;
     this._libraryParamsEncoder = null;
+    this._libraryShareListener = null;
+    // The opening share's Data Library tokens: null when the page opened
+    // without a share, [] for a share that switches no library entry on.
+    this._initialLibraryTokens = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
@@ -161,8 +166,30 @@ export class ShareLinkManager {
     const state =
       code === null ? this._parseShareHash(hash) : this._parseShareCode(code);
     if (!state) return null;
+    // A share decides which library entries are on, as it does for core
+    // layers: one without `lib` switches none on.
+    this._initialLibraryTokens = state.library ?? [];
     this._beginIncomingRestore(state);
     return state;
+  }
+
+  /**
+   * The Data Library tokens of the share this page opened with, or null when
+   * it opened without one. Read by the library once it knows its entries.
+   * @returns {string[]|null}
+   */
+  get initialLibraryTokens() {
+    return this._initialLibraryTokens ? [...this._initialLibraryTokens] : null;
+  }
+
+  /**
+   * Install the Data Library's listener for shares opened in this tab after
+   * start-up. It receives the share's tokens ([] when it switches none on).
+   * @param {((tokens: string[]) => void) | null} listener
+   */
+  setLibraryShareListener(listener) {
+    this._libraryShareListener =
+      typeof listener === 'function' ? listener : null;
   }
 
   /**
@@ -273,6 +300,7 @@ export class ShareLinkManager {
         params.has('l') &&
         decodedLayerState === null,
       panelState: decodePanelStateParams(params),
+      library: normalizeLibraryTokens(params.get('lib')),
       sharedAtMs: decodeShareCreatedAtMs(params),
     };
     return state;
@@ -324,6 +352,11 @@ export class ShareLinkManager {
     if (!state) return;
     this._beginIncomingRestore(state);
     onNavigate(state);
+    try {
+      this._libraryShareListener?.(state.library ?? []);
+    } catch (error) {
+      console.warn('[ShareLink] library restore failed:', error);
+    }
   }
 
   /**
@@ -751,6 +784,7 @@ export class ShareLinkManager {
     this._unwatchNavigation?.();
     this._layerStateProvider = null;
     this._libraryParamsEncoder = null;
+    this._libraryShareListener = null;
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._followSubjectProvider = null;
