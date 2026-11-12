@@ -27,6 +27,9 @@ const baseHref = () =>
   globalThis.location?.href ??
   'http://localhost/';
 
+/** How long the app waits for the server to say whether it holds an ion token. */
+export const ION_STATUS_TIMEOUT_MS = 15_000;
+
 /** Absolute URL of this app's ion API stand-in (trailing slash required by CesiumJS). */
 export function ionServerUrl(base = baseHref()) {
   return new URL(ION_API_PATH, base).href;
@@ -53,22 +56,41 @@ export function ionRequestOptions(credential, base) {
 }
 
 /**
- * Whether the server holds an ion token. Never throws: any failure reads as
- * "not configured", which keeps the keyless map stacks.
+ * Whether the server holds an ion token. Never throws and never waits longer
+ * than `timeoutMs`: a missing route, a refusal, an unreachable server or no
+ * answer at all read as "not configured", which keeps the keyless map stacks.
  * @param {Function} [fetchImpl]
+ * @param {{timeoutMs?: number}} [options]
  */
 export async function fetchIonCredential(
   fetchImpl = (...args) => globalThis.fetch(...args),
+  { timeoutMs = ION_STATUS_TIMEOUT_MS } = {},
 ) {
+  const controller = new AbortController();
+  let timer;
+  const gaveUp = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve('');
+    }, timeoutMs);
+  });
+  const asked = (async () => {
+    try {
+      const response = await fetchImpl(`${ION_API_PATH}status`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!response.ok) return '';
+      const status = await response.json();
+      return status?.configured === true ? ION_SERVER_MANAGED : '';
+    } catch {
+      return '';
+    }
+  })();
   try {
-    const response = await fetchImpl(`${ION_API_PATH}status`, {
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
-    if (!response.ok) return '';
-    const status = await response.json();
-    return status?.configured === true ? ION_SERVER_MANAGED : '';
-  } catch {
-    return '';
+    return await Promise.race([asked, gaveUp]);
+  } finally {
+    clearTimeout(timer);
   }
 }
