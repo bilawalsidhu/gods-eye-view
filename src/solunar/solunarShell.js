@@ -3,6 +3,9 @@
  * src/ui/views/ContextView.vue). While the card is open, a click on the map
  * picks the spot; the default spot is the middle of the map. A gold dot marks
  * the spot while the card is open. Fork module (DESIGN.md 4.1).
+ *
+ * The card owner (src/solunar/panel.js) publishes the week to the store the
+ * view renders; the shell only owns the map interaction and the marker.
  */
 import * as Cesium from 'cesium';
 import { pickGroundPosition } from '../data/scenePick.js';
@@ -10,7 +13,6 @@ import { createSolunarPanel } from './panel.js';
 import { addDays, localDateOf, localDayStartMs } from './zone.js';
 
 export const SOLUNAR_ID = 'solunar-panel';
-export const SOLUNAR_BODY_ID = 'gev-solunar-body';
 export const SPOT_MARKER_ID = 'gev-solunar-spot';
 /** A press that moves farther than this, or lasts longer, is a drag. */
 const CLICK_SLOP_PX = 5;
@@ -46,10 +48,18 @@ export function mapCenterSpot(viewer) {
     : null;
 }
 
+/**
+ * @param {object} shell The application shell.
+ * @param {{document?: object, store: object, now?: () => number,
+ *   setTimer?: Function, clearTimer?: Function}} options
+ *   `store` is the card store (src/ui/stores/solunar.js); the card owner
+ *   publishes the week to it and answers the view's controls.
+ */
 export function mountSolunarForShell(
   shell,
   {
     document: doc = globalThis.document,
+    store,
     now,
     setTimer = (fn, ms) => {
       const id = globalThis.setTimeout(fn, ms);
@@ -60,9 +70,8 @@ export function mountSolunarForShell(
   } = {},
 ) {
   const root = doc?.getElementById?.(SOLUNAR_ID);
-  const body = doc?.getElementById?.(SOLUNAR_BODY_ID);
   const viewer = shell?.viewer;
-  if (!root || !body || !viewer) return null;
+  if (!root || !store || !viewer) return null;
   if (root.dataset?.solunarMounted === '1') return null;
   root.dataset.solunarMounted = '1';
 
@@ -99,8 +108,7 @@ export function mountSolunarForShell(
   };
   const useCenter = () => useSpot(mapCenterSpot(viewer), 'center');
   const panel = createSolunarPanel({
-    container: body,
-    doc,
+    store,
     ...(now ? { now } : {}),
     onUseCenter: useCenter,
   });

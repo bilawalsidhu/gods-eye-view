@@ -57,6 +57,7 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useSolunarStore } from './stores/solunar.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
@@ -1740,7 +1741,9 @@ export class StyleManager extends ShellFacade {
       .then((solunar) => {
         if (this._disposed) return; // shell torn down while the module loaded
         this._solunar?.destroy();
-        this._solunar = solunar.mountSolunarForShell(this);
+        this._solunar = solunar.mountSolunarForShell(this, {
+          store: useSolunarStore(applicationPinia()),
+        });
       })
       .catch((error) => console.warn('[Solunar] card unavailable:', error));
   }

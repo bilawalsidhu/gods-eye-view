@@ -1278,7 +1278,11 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "12 h",
+    "24 h",
+    "SOLUNAR",
+    "Solunar"
   ],
   "uk": [
     "1900–1945",

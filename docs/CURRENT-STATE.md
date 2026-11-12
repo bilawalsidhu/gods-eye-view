@@ -634,7 +634,10 @@ spot's own time zone, with a 12 h / 24 h switch that is remembered.
   33.05,-95.1 (2026-11-02, with no moonrise, and 2026-11-03), Anchorage and
   Sydney, and the clock-change days 2026-03-08, 2026-11-01 and 2026-10-04, to
   within 2 minutes (`src/solunar/solunarDay.test.mjs`, fixtures in
-  `src/solunar/fixtures/`).
+  `src/solunar/fixtures/`). That fixture is a snapshot of USNO's own data and
+  is credited in `DATA_SOURCES.md`.
+- The card's strings ship in every locale, Swedish included
+  (`src/i18n/locales/sv.json`; `src/i18n/sv-solunar.test.mjs`).
 - Feature gate: `npm run qa:solunar` (`scripts/qa-solunar.mjs`, needs a dev server and
   Chrome; set `QA_BASE_URL`) opens the card in a real browser on desktop and phone sizes
   and checks the seven days, the "none" rule, the rule text, the map dot and the console.
