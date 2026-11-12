@@ -787,7 +787,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     assert.deepEqual(entity.gevLabelModel, {
       title: 'N12345 · FL350 · 486 kts',
-      details: ['TEST AIR · A320', 'AUS → LAX'],
+      details: ['TEST AIR · A320', 'AUS → LAX · REFERENCE (UNVERIFIED)'],
       accent: '#39d0ff',
     });
     viewer.scene.preUpdate.raiseEvent();
