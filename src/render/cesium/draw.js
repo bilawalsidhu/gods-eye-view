@@ -1253,6 +1253,8 @@ export function createCesiumDraw({
   // when its icon is drawn, and registering an atlas again swaps the images
   // of the icons that drew from it.
   const atlases = new Map();
+  /** The blob each material or quad draws, held while it lives (`holdImage`). */
+  const heldBlobs = new WeakMap();
 
   /**
    * An icon's image: an atlas slot read through its atlas, or undefined
@@ -1270,11 +1272,27 @@ export function createCesiumDraw({
    * registered is refused, as an image it cannot read).
    */
   function imageAt(image) {
-    return toImage(
-      typeof image?.atlas === 'string'
-        ? (atlases.get(image.atlas)?.[image.slot] ?? image)
-        : image,
-    );
+    return toImage(slotImage(image));
+  }
+
+  /** An atlas slot as the image it holds now; any other image as it is. */
+  function slotImage(image) {
+    return typeof image?.atlas === 'string'
+      ? (atlases.get(image.atlas)?.[image.slot] ?? image)
+      : image;
+  }
+
+  /**
+   * Keep the blob behind `image` (itself, or the atlas slot's now) alive
+   * while `holder` (a material, a quad) lives. A material loads its image
+   * from the blob's URL on its first draw, which may come long after it was
+   * built (hidden till then), and a blob's URL is revoked once the blob is
+   * collected: an atlas slot given a new image no longer holds the old one.
+   */
+  function holdImage(holder, image) {
+    const blob = slotImage(image)?.blob;
+    if (holder && blob) heldBlobs.set(holder, blob);
+    return holder;
   }
 
   function buildIcons(record) {
@@ -2117,6 +2135,7 @@ export function createCesiumDraw({
     Object.assign(drawn.uniforms, fabric.uniforms);
     const flow = flowOf(material, style);
     if (flow) record.flowMaterials.push(flow);
+    if (style.kind === 'pattern') holdImage(material, style.image);
     return material;
   }
 
@@ -4244,7 +4263,10 @@ export function createCesiumDraw({
       : UnpickableGroundPrimitive;
     const grounds = batches.map((batch) => {
       const material = batch.imageFill
-        ? imageMaterial(batch.image, batch.imageFill.repeat)
+        ? holdImage(
+            imageMaterial(batch.image, batch.imageFill.repeat),
+            batch.imageFill.image,
+          )
         : null;
       const ground = new Ground({
         geometryInstances: batch.instances,
@@ -4948,8 +4970,11 @@ export function createCesiumDraw({
       // `lit`: shaded by Cesium's light, or flat; by default solids are lit.
       const lit = item.lit ?? solid;
       if (imageFill && !item.outlineOnly) {
-        const material = ownMaterial(
-          imageMaterial(imageAt(imageFill.image), imageFill.repeat),
+        const material = holdImage(
+          ownMaterial(
+            imageMaterial(imageAt(imageFill.image), imageFill.repeat),
+          ),
+          imageFill.image,
         );
         // Its image is changed in place (`writeImage`); it never recolours.
         part.image = { material, texture: null };
@@ -5073,6 +5098,7 @@ export function createCesiumDraw({
   const quadSets = createQuadSets({
     toColor,
     toImage: imageAt,
+    holdImage,
     pickId,
     replaceHost,
     lineWidth,

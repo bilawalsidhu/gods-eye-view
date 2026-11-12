@@ -47,13 +47,14 @@ const outlineKey = (outline) =>
 
 /**
  * The quads part of a Cesium draw port.
- * @param {{toColor: Function, toImage: Function,
+ * @param {{toColor: Function, toImage: Function, holdImage?: Function,
  *   pickId: Function, replaceHost: Function, lineWidth: (px: number) => number,
  *   requestRender: () => void}} options From the draw port.
  */
 export function createQuadSets({
   toColor,
   toImage,
+  holdImage = () => {},
   pickId,
   replaceHost,
   lineWidth,
@@ -148,6 +149,9 @@ export function createQuadSets({
     const allowPicking = pickableOf(record, item);
     const modelMatrix = matrixOf(item, new Cesium.Matrix4());
     entry.source = sourceOf(item.source, toImage);
+    // A blob it draws stays alive while the quad does: its material loads
+    // the image on its first draw.
+    holdImage(entry, item.source?.image);
     entry.alpha = item.alpha ?? 1;
     entry.material = imageMaterial(entry.source, entry.alpha);
     entry.videoSize = null;
@@ -262,6 +266,7 @@ export function createQuadSets({
     if (source !== entry.source) {
       const video = isVideo(source) || isVideo(entry.source);
       entry.source = source;
+      holdImage(entry, item.source?.image);
       if (video) {
         // To or from a video: a material of its own, so the video's frames
         // are not copied into another source's texture, or the other way.

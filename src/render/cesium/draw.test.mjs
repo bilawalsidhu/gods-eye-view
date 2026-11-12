@@ -8169,3 +8169,83 @@ test('image fills pulse their alpha through their material, clamped or not', () 
       );
     set.dispose();
   }));
+
+test('a material drawing a blob from an atlas slot keeps that blob alive after the slot changes', async () => {
+  const v8 = await import('node:v8');
+  const vm = await import('node:vm');
+  v8.setFlagsFromString('--expose-gc');
+  const gc = vm.runInNewContext('gc');
+  const create = URL.createObjectURL;
+  URL.createObjectURL = () => `blob:test/${Math.random()}`;
+  const names = [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ];
+  const real = names.map((name) => globalThis[name]);
+  for (const name of names) globalThis[name] ??= class {};
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const refs = {};
+    // Made in a function of their own, so nothing here holds the blobs.
+    (() => {
+      const fillBlob = new Blob(['fill']);
+      const lineBlob = new Blob(['line']);
+      refs.fill = new WeakRef(fillBlob);
+      refs.line = new WeakRef(lineBlob);
+      part.port.atlas('pics', {
+        fill: { blob: fillBlob },
+        line: { blob: lineBlob },
+      });
+    })();
+    const shapes = part.port.shapes({ id: 'blob-fills' });
+    shapes.set([
+      {
+        id: 'image',
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 2, south: 1, east: 2.1, north: 1.1 },
+          height: 200,
+        },
+        fill: { image: { atlas: 'pics', slot: 'fill' } },
+      },
+    ]);
+    const lines = part.port.lines({ id: 'blob-lines' });
+    lines.set([
+      {
+        id: 'pattern',
+        positions: [
+          { lon: 0, lat: 0, height: 10 },
+          { lon: 1, lat: 1, height: 10 },
+        ],
+        widthPx: 2,
+        style: {
+          kind: 'pattern',
+          image: { atlas: 'pics', slot: 'line' },
+          repeat: 2,
+        },
+      },
+    ]);
+    // The slots move on: nothing in the atlas holds the first blobs now.
+    part.port.atlas('pics', {
+      fill: { blob: new Blob(['b']) },
+      line: { blob: new Blob(['c']) },
+    });
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      gc();
+    }
+    assert.ok(refs.fill.deref(), 'the fill’s material still has its blob');
+    assert.ok(refs.line.deref(), 'the pattern’s material still has its blob');
+    shapes.dispose();
+    lines.dispose();
+  } finally {
+    URL.createObjectURL = create;
+    names.forEach((name, i) => (globalThis[name] = real[i]));
+  }
+});
