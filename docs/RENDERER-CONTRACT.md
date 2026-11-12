@@ -214,7 +214,9 @@ item of that id with the columns' fields over it, replacing every item as
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass; draped too), lines in the
 `inertial` frame (turned each frame by the set's motion clock, a depth-fail
-style included; never draped and never batched), segment colours and shows
+style included; never batched; a draped one is draped where the sky is,
+turned into the fixed frame, and draped again each second of its clock),
+segment colours and shows
 on lines of every mode and style (a draped solid line as ground instances,
 any other as a primitive a segment with a material of its own, recoloured
 and shown in place; an arrow's head on its last segment, a pattern keeping

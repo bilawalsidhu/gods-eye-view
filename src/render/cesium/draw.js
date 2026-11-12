@@ -298,6 +298,13 @@ export function pulseAlpha(pulse, now) {
   return pulse.from + (pulse.to - pulse.from) * (0.5 + 0.5 * Math.sin(turn));
 }
 
+/**
+ * How much of a set's motion clock passes before its draped lines in the
+ * sky's frame are draped again where the sky has turned to (the Earth turns
+ * about 465 m at the equator in a second).
+ */
+export const DRAPED_INERTIAL_STEP_MS = 1000;
+
 /** The line styles the port drapes. */
 const DRAPED_STYLES = new Set([
   'solid',
@@ -659,6 +666,60 @@ export function createCesiumDraw({
       dropClusters(record);
       dispose();
     };
+    // Draped lines in the sky's frame are draped where the sky is: held as
+    // given, drawn turned into the fixed frame, and draped again each
+    // `DRAPED_INERTIAL_STEP_MS` of their motion clock (`beforeRender`).
+    if (kind === 'lines') {
+      const { set, upsert, remove, clear } = handle;
+      record.inertialDraped = new Map();
+      const fixedNow = (list) => {
+        const ms = motionMs(record);
+        let axes = null;
+        const given = new Map();
+        const drawn = list.map((item) => {
+          if (item.frame !== 'inertial' || item.mode !== 'draped') return item;
+          given.set(item.id, item);
+          axes ??= temeToPseudoFixed(ms);
+          return fixedLine(item, axes);
+        });
+        return { drawn, given, ms };
+      };
+      const keep = (list, given, ms) => {
+        for (const item of list) record.inertialDraped.delete(item.id);
+        for (const [id, item] of given) record.inertialDraped.set(id, item);
+        if (given.size) record.inertialTurnMs = ms;
+      };
+      handle.set = (list) => {
+        const { drawn, given, ms } = fixedNow(list);
+        const result = set(drawn);
+        record.inertialDraped.clear();
+        keep(list, given, ms);
+        return result;
+      };
+      handle.upsert = (list) => {
+        const { drawn, given, ms } = fixedNow(list);
+        const result = upsert(drawn);
+        keep(list, given, ms);
+        return result;
+      };
+      handle.remove = (ids) => {
+        const result = remove(ids);
+        for (const id of ids) record.inertialDraped.delete(id);
+        return result;
+      };
+      handle.clear = () => {
+        const result = clear();
+        record.inertialDraped.clear();
+        return result;
+      };
+      record.drapeInertial = () => {
+        if (!record.inertialDraped.size) return;
+        const ms = motionMs(record);
+        if (Math.abs(ms - record.inertialTurnMs) < DRAPED_INERTIAL_STEP_MS)
+          return;
+        handle.upsert([...record.inertialDraped.values()]);
+      };
+    }
     // `columns`: column updates of an icon set, on the GPU.
     if (kind === 'icons' && capabilities.has('columns'))
       handle.setColumns = (columns) => {
@@ -2275,18 +2336,46 @@ export function createCesiumDraw({
    * Turn a line set's inertial lines to the sky at its motion clock's time
    * now: the frame rotated by sidereal time from the Earth-fixed one.
    */
+  /** The time a set's motion clock reads now, epoch ms. */
+  function motionMs(record) {
+    const clock = record.spec.motionClock;
+    return clock?.kind === 'scene'
+      ? Cesium.JulianDate.toDate(
+          scene.frameState?.time ?? Cesium.JulianDate.now(),
+        ).getTime()
+      : Date.now() - (clock?.delayMs ?? 0);
+  }
+
+  /**
+   * A draped line in the sky's frame as a fixed one where the sky is at
+   * `axes` (`temeToPseudoFixed`): its positions turned into the fixed frame.
+   */
+  function fixedLine(item, axes) {
+    const { x, y, z } = axes;
+    const flat =
+      item.positions instanceof Float64Array
+        ? item.positions
+        : item.positions.flatMap((p) => {
+            const c = toCartesian(p);
+            return [c.x, c.y, c.z];
+          });
+    const turned = new Float64Array(flat.length);
+    for (let i = 0; i < flat.length; i += 3) {
+      const a = flat[i];
+      const b = flat[i + 1];
+      const c = flat[i + 2];
+      turned[i] = x.x * a + y.x * b + z.x * c;
+      turned[i + 1] = x.y * a + y.y * b + z.y * c;
+      turned[i + 2] = x.z * a + y.z * b + z.z * c;
+    }
+    return { ...item, frame: 'fixed', positions: turned };
+  }
+
   function turnInertial(record) {
     const lines = record.inertialLines;
     const pieces = record.inertialPieces ?? [];
     if ((!lines || lines.isDestroyed()) && !pieces.length) return;
-    const clock = record.spec.motionClock;
-    const ms =
-      clock?.kind === 'scene'
-        ? Cesium.JulianDate.toDate(
-            scene.frameState?.time ?? Cesium.JulianDate.now(),
-          ).getTime()
-        : Date.now() - (clock?.delayMs ?? 0);
-    const { x, y, z } = temeToPseudoFixed(ms);
+    const { x, y, z } = temeToPseudoFixed(motionMs(record));
     const turn = Cesium.Matrix4.fromRotationTranslation(
       new Cesium.Matrix3(x.x, y.x, z.x, x.y, y.y, z.y, x.z, y.z, z.z),
       Cesium.Cartesian3.ZERO,
@@ -2588,8 +2677,6 @@ export function createCesiumDraw({
     for (const item of record.items.values())
       if (item.mode === 'draped' && !DRAPED_STYLES.has(item.style.kind))
         throw new Error(`the Cesium renderer has no ${item.style.kind} lines`);
-      else if (item.frame === 'inertial' && item.mode === 'draped')
-        throw new Error('the Cesium renderer draws inertial lines undraped');
       else if (
         item.mode !== 'draped' &&
         item.depthFail &&
@@ -5052,9 +5139,11 @@ export function createCesiumDraw({
       cullHorizon();
       clusterIcons();
       runFlows();
-      for (const record of sets.values())
+      for (const record of sets.values()) {
         if (record.inertialLines || record.inertialPieces?.length)
           turnInertial(record);
+        record.drapeInertial?.();
+      }
       modelSets.beforeRender(sets.values());
       quadSets.beforeRender(sets.values());
     },

@@ -7326,20 +7326,6 @@ test('a pattern line draws its image along it, repeated, and an inertial line tu
     later.upsert([{ ...sky(true), id: 'parked' }]);
     assert.equal(scene.added.at(-1).get(1).length, 1);
     later.dispose();
-    assert.throws(
-      () =>
-        set.upsert([
-          {
-            id: 'draped',
-            positions: ring,
-            widthPx: 3,
-            mode: 'draped',
-            style: { kind: 'solid', color: '#fff' },
-            frame: 'inertial',
-          },
-        ]),
-      /inertial lines undraped/,
-    );
     set.dispose();
     assert.equal(scene.added.length, 0);
   }));
@@ -8085,4 +8071,67 @@ test('a points set takes columns as rows, over the items it holds', () => {
   assert.equal(point.pixelSize, 4, 'kept from the item');
   assert.deepEqual(drawHitOf({ id: point.id })?.meta, { m: 1 });
   set.dispose();
+});
+
+test('a draped line in the sky’s frame drapes where the sky is, again as its clock moves on', () => {
+  const { scene, draw, frame } = drawOver();
+  const realNow = Date.now;
+  let now = Date.UTC(2026, 0, 1);
+  Date.now = () => now;
+  try {
+    const set = draw.lines({ id: 'sky-track' });
+    const given = [
+      Cesium.Cartesian3.fromDegrees(0, 0),
+      Cesium.Cartesian3.fromDegrees(1, 0),
+    ];
+    set.set([
+      {
+        id: 'track',
+        positions: given,
+        widthPx: 3,
+        mode: 'draped',
+        style: { kind: 'solid', color: '#fff' },
+        frame: 'inertial',
+        meta: { m: 1 },
+      },
+    ]);
+    const grounds = () => {
+      const found = [];
+      for (const host of scene.added)
+        for (let i = 0; i < (host.length ?? 0); i++)
+          if (host.get(i) instanceof Cesium.GroundPolylinePrimitive)
+            found.push(host.get(i));
+      return found;
+    };
+    const start = (ground) =>
+      Cesium.Math.toDegrees(
+        Cesium.Cartographic.fromCartesian(
+          ground.geometryInstances[0].geometry._positions[0],
+        ).longitude,
+      );
+    const [first] = grounds();
+    assert.ok(first, 'draped');
+    assert.equal(first.geometryInstances[0].id.id, 'track');
+    assert.deepEqual(first.geometryInstances[0].id.meta, { m: 1 });
+    const turned = start(first);
+    assert.ok(
+      Math.abs(turned) > 1,
+      `turned off where it was given (${turned})`,
+    );
+    // Within a step, nothing is draped again.
+    now += 500;
+    frame();
+    assert.equal(grounds().at(-1), first);
+    // A minute later the sky has turned a quarter of a degree west.
+    now += 60_000;
+    frame();
+    const again = grounds().at(-1);
+    assert.notEqual(again, first, 'draped again');
+    const moved = start(again) - turned;
+    assert.ok(Math.abs(moved + 0.2507) < 0.01, `moved ${moved}°`);
+    assert.equal(set.size(), 1);
+    set.dispose();
+  } finally {
+    Date.now = realNow;
+  }
 });
