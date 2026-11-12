@@ -4196,6 +4196,27 @@ test('the selected vehicle reads as a snapshot of its place, motion and source',
   assert.ok(Number.isFinite(view.position.latitude));
 });
 
+test('a vehicle read again while nothing changed is the snapshot read before', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  app.layer._transitPartsForTest().selection.selectVehicle(key);
+  const first = app.layer.getSelectedVehicle();
+  assert.equal(app.layer.getSelectedVehicle(), first, 'the same snapshot');
+  // It moves on: a new snapshot at its new place, what did not change kept.
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  const moved = app.layer.getSelectedVehicle();
+  assert.notEqual(moved, first, 'a new snapshot');
+  assert.ok(Object.isFrozen(moved) && Object.isFrozen(moved.position));
+  assert.ok(moved.position.latitude > first.position.latitude, 'moved');
+  assert.equal(moved.feed, first.feed);
+  assert.equal(moved.stop, first.stop);
+  assert.equal(moved.provenance, first.provenance);
+  assert.equal(app.layer.getSelectedVehicle(), moved);
+});
+
 test('selectedAtMs is the user’s selection time; a hold and a deselection leave none', async (t) => {
   const app = harness(t);
   const key = await busRunningNorth(app);

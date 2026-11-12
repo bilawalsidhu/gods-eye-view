@@ -2,12 +2,50 @@ import { pointAtS } from '../../data/railPaths.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
 import { displayMotion } from '../transit/movement.js';
 
+const NO_STOPS = Object.freeze([]);
+/** Each stops list's frozen copy for a snapshot's `stops` (stopsOf). */
+const stopLists = new WeakMap();
+
+/**
+ * A trip's stops as a snapshot hands them out: a frozen array of frozen
+ * copies, made once per list the stops provider returns.
+ */
+function stopsOf(list) {
+  if (!Array.isArray(list)) return NO_STOPS;
+  let stops = stopLists.get(list);
+  if (!stops) {
+    stops = Object.freeze(
+      list.map((stop) =>
+        stop && typeof stop === 'object' ? Object.freeze({ ...stop }) : stop,
+      ),
+    );
+    stopLists.set(list, stops);
+  }
+  return stops;
+}
+
+/**
+ * `previous` when it holds each of `next`'s values, else a frozen copy of
+ * `next`: a part of a snapshot that did not change is the one read before.
+ * `next` is a draft, filled again on every read.
+ */
+function reuse(previous, next) {
+  if (!previous) return Object.freeze({ ...next });
+  for (const name in next)
+    if (!Object.is(previous[name], next[name]))
+      return Object.freeze({ ...next });
+  return previous;
+}
+
 /**
  * Read access to one train, and a hold on it for a first-person view.
  *
  * `getSelectedTrain()` and `getCockpitSubject()` describe the selected train
  * and the held one as a frozen snapshot, read again on each call: where it is
- * along its line, how fast it moves and how that is known, and its stops.
+ * along its line, how fast it moves and how that is known, and its stops. A
+ * call while nothing in it changed returns the snapshot it returned before,
+ * and a part that did not change (its feed, its stops) is the same object in
+ * the next one, so a view can read it on every frame.
  * `setCockpitSubject(key)` holds a train: its marker, card and selected line
  * are hidden, it stays selected (so its stops stay fresh and its feed stays
  * polled at any distance) and clicks and Escape no longer change the
@@ -36,26 +74,37 @@ export function createRailCockpitSubject({
   const finiteOrNull = (value) =>
     typeof value === 'number' && Number.isFinite(value) ? value : null;
   const scratch = {};
+  /** Each train's last snapshot, returned again while nothing in it changed. */
+  const views = new WeakMap();
+  /** The drafts trainView fills on every read (reuse). */
+  const draft = {
+    view: {},
+    feed: {},
+    position: {},
+    path: {},
+    motion: {},
+    provenance: {},
+  };
 
   /** The catalog's public entry for a feed, else the registry's. */
-  function feedOf(feedId) {
+  function feedOf(feedId, previous) {
     const listed = state._catalog?.find((feed) => feed.id === feedId);
     const feed = listed ?? getRegisteredRailFeed(feedId);
     if (!feed) return null;
-    return Object.freeze({
-      id: feed.id,
-      name: feed.name ?? null,
-      operator: feed.operator ?? null,
-      region: feed.region ?? null,
-      positions: listed?.positions ?? feed.positions ?? 'gps',
-      tripUpdates:
-        typeof listed?.tripUpdates === 'boolean'
-          ? listed.tripUpdates
-          : typeof feed.tripUpdatesUrl === 'string',
-      attribution: feed.attribution ?? null,
-      license: feed.license ?? null,
-      licenseUrl: feed.licenseUrl ?? null,
-    });
+    const next = draft.feed;
+    next.id = feed.id;
+    next.name = feed.name ?? null;
+    next.operator = feed.operator ?? null;
+    next.region = feed.region ?? null;
+    next.positions = listed?.positions ?? feed.positions ?? 'gps';
+    next.tripUpdates =
+      typeof listed?.tripUpdates === 'boolean'
+        ? listed.tripUpdates
+        : typeof feed.tripUpdatesUrl === 'string';
+    next.attribution = feed.attribution ?? null;
+    next.license = feed.license ?? null;
+    next.licenseUrl = feed.licenseUrl ?? null;
+    return reuse(previous, next);
   }
 
   /** The route's short (else long) name in the feed's timetable, or null. */
@@ -87,6 +136,7 @@ export function createRailCockpitSubject({
   /** The train as a frozen snapshot (see the module comment), or null. */
   function trainView(entry) {
     if (!entry?.record) return null;
+    const previous = views.get(entry);
     const record = entry.record;
     const sample = entry.sample ?? null;
     const drawn = entry.drawnHeight ?? null;
@@ -95,64 +145,68 @@ export function createRailCockpitSubject({
     const derived = finiteOrNull(sample?.segmentSpeedMps);
     const trip = state._selectedKey === entry.key ? state._trip : null;
     const status = state._feedStatus.get(entry.feedId);
-    const latitude =
+
+    const position = draft.position;
+    position.latitude =
       finiteOrNull(drawn?.lat) ?? finiteOrNull(sample?.lat) ?? record.lat;
-    const longitude =
+    position.longitude =
       finiteOrNull(drawn?.lon) ?? finiteOrNull(sample?.lon) ?? record.lon;
-    return Object.freeze({
-      key: entry.key,
-      feedId: entry.feedId,
-      selectedAtMs:
-        state._selectedKey === entry.key ? state._selectedAtMs : null,
-      id: String(record.id ?? ''),
-      tripId: record.tripId || null,
-      routeId: record.routeId || null,
-      routeName: routeNameOf(entry),
-      label: record.label || null,
-      trainNumber: record.trainNumber || null,
-      headsign: trip?.headsign || null,
-      category: entry.category ?? null,
-      mode: entry.railMode ?? null,
-      feed: feedOf(entry.feedId),
-      position: Object.freeze({
-        latitude,
-        longitude,
-        railHeightM: Number.isFinite(drawn?.h) ? drawn.h - liftM : null,
-        heightQuality: Number.isFinite(drawn?.q) ? drawn.q : 0,
-        atMs: finiteOrNull(drawn?.at),
-      }),
-      path:
-        binding && binding.path
-          ? Object.freeze({
-              shapeIndex: binding.shapeIndex,
-              s: binding.drawS,
-              direction: directionOf(entry),
-              lengthM: binding.path.length,
-              via: binding.via,
-              builtAt:
-                state._pathPacks.get(entry.feedId)?.pack?.builtAt ?? null,
-              line: binding.path,
-            })
-          : null,
-      motion: Object.freeze({
-        reportedSpeedMps: reported,
-        derivedSpeedMps: derived,
-        speedSource:
-          reported !== null ? 'reported' : derived !== null ? 'derived' : null,
-        courseDeg: finiteOrNull(entry.courseDeg),
-        phase: sample?.phase ?? null,
-        word: displayMotion(entry, Date.now()).word,
-        reportAgeMs: finiteOrNull(sample?.latestReportAgeMs),
-        shownBehindMs: finiteOrNull(sample?.actualDelayMs),
-        feedStale: status?.stale === true,
-      }),
-      provenance: Object.freeze({
-        positionSource: record.positionSource ?? 'gps',
-        timestampSource: record.timestampSource ?? null,
-      }),
-      stops: Object.freeze(Array.isArray(trip?.stops) ? [...trip.stops] : []),
-      match: trip?.match ?? null,
-    });
+    position.railHeightM = Number.isFinite(drawn?.h) ? drawn.h - liftM : null;
+    position.heightQuality = Number.isFinite(drawn?.q) ? drawn.q : 0;
+    position.atMs = finiteOrNull(drawn?.at);
+
+    let path = null;
+    if (binding && binding.path) {
+      path = draft.path;
+      path.shapeIndex = binding.shapeIndex;
+      path.s = binding.drawS;
+      path.direction = directionOf(entry);
+      path.lengthM = binding.path.length;
+      path.via = binding.via;
+      path.builtAt = state._pathPacks.get(entry.feedId)?.pack?.builtAt ?? null;
+      path.line = binding.path;
+    }
+
+    const motion = draft.motion;
+    motion.reportedSpeedMps = reported;
+    motion.derivedSpeedMps = derived;
+    motion.speedSource =
+      reported !== null ? 'reported' : derived !== null ? 'derived' : null;
+    motion.courseDeg = finiteOrNull(entry.courseDeg);
+    motion.phase = sample?.phase ?? null;
+    motion.word = displayMotion(entry, Date.now()).word;
+    motion.reportAgeMs = finiteOrNull(sample?.latestReportAgeMs);
+    motion.shownBehindMs = finiteOrNull(sample?.actualDelayMs);
+    motion.feedStale = status?.stale === true;
+
+    const provenance = draft.provenance;
+    provenance.positionSource = record.positionSource ?? 'gps';
+    provenance.timestampSource = record.timestampSource ?? null;
+
+    const view = draft.view;
+    view.key = entry.key;
+    view.feedId = entry.feedId;
+    view.selectedAtMs =
+      state._selectedKey === entry.key ? state._selectedAtMs : null;
+    view.id = String(record.id ?? '');
+    view.tripId = record.tripId || null;
+    view.routeId = record.routeId || null;
+    view.routeName = routeNameOf(entry);
+    view.label = record.label || null;
+    view.trainNumber = record.trainNumber || null;
+    view.headsign = trip?.headsign || null;
+    view.category = entry.category ?? null;
+    view.mode = entry.railMode ?? null;
+    view.feed = feedOf(entry.feedId, previous?.feed);
+    view.position = reuse(previous?.position, position);
+    view.path = path && reuse(previous?.path, path);
+    view.motion = reuse(previous?.motion, motion);
+    view.provenance = reuse(previous?.provenance, provenance);
+    view.stops = stopsOf(trip?.stops);
+    view.match = trip?.match ?? null;
+    const snapshot = reuse(previous, view);
+    views.set(entry, snapshot);
+    return snapshot;
   }
 
   const methods = {

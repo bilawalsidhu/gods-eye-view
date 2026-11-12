@@ -4,7 +4,7 @@
 // hides its marker and card, keeps it selected and ends when it goes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RAIL_POLL_MS, railTrainKey } from './policy.js';
+import { RAIL_POLL_MS, STOP_REFRESH_MS, railTrainKey } from './policy.js';
 import {
   BOSTON,
   railLayerHarness as harness,
@@ -37,8 +37,12 @@ const PACK = Object.freeze({
 });
 
 /** Two trains on the line, T1 running east and T2 west, a step a poll. */
-async function onTheLine(t) {
-  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+async function onTheLine(t, options = {}) {
+  const app = harness(t, {
+    paths: { 'mbta-rail': PACK },
+    at: BOSTON,
+    ...options,
+  });
   let step = 0;
   app.feeds.set('mbta-rail', () => [
     train('T1', LAT, LON0 + (1000 + step * 150) / KX, { speedMps: 15 }),
@@ -97,6 +101,56 @@ test('the selected train reads as a snapshot of its place, motion and sources', 
   assert.equal(
     west.motion.speedSource,
     west.motion.derivedSpeedMps === null ? null : 'derived',
+  );
+});
+
+/** A trip's stops as a stops provider lists them. */
+const stopList = (...names) =>
+  names.map((name, i) => ({
+    stopId: name,
+    name,
+    lat: LAT,
+    lon: LON0 + (i * 2000) / KX,
+    state: 'upcoming',
+  }));
+
+test('a snapshot read again while nothing changed is the one read before', async (t) => {
+  let list = stopList('Alpha', 'Bravo', 'Charlie');
+  const app = await onTheLine(t, {
+    stops: { stopsFor: () => ({ stops: list, headsign: 'Charlie' }) },
+  });
+  app.parts().selection.selectTrain(T1);
+  const first = app.layer.getSelectedTrain();
+  assert.equal(app.layer.getSelectedTrain(), first, 'the same snapshot');
+  // Its stops are frozen copies of the provider's.
+  assert.equal(first.stops.length, 3);
+  assert.ok(Object.isFrozen(first.stops));
+  assert.ok(Object.isFrozen(first.stops[0]));
+  assert.notEqual(first.stops[0], list[0]);
+  assert.equal(first.stops[0].name, 'Alpha');
+
+  // It moves on: a new snapshot at its new place, what did not change kept.
+  app.run(RAIL_POLL_MS);
+  await app.poll();
+  app.run(RAIL_POLL_MS);
+  const moved = app.layer.getSelectedTrain();
+  assert.notEqual(moved, first, 'a new snapshot');
+  assert.ok(Object.isFrozen(moved) && Object.isFrozen(moved.path));
+  assert.ok(moved.path.s > first.path.s, 'at its new place');
+  assert.equal(moved.stops, first.stops, 'the same stops');
+  assert.equal(moved.feed, first.feed);
+  assert.equal(moved.provenance, first.provenance);
+  assert.equal(moved.path.line, first.path.line);
+  assert.equal(app.layer.getSelectedTrain(), moved);
+
+  // The provider lists other stops: new ones.
+  list = stopList('Delta', 'Echo');
+  app.run(STOP_REFRESH_MS);
+  const later = app.layer.getSelectedTrain();
+  assert.notEqual(later.stops, first.stops);
+  assert.deepEqual(
+    later.stops.map((stop) => stop.name),
+    ['Delta', 'Echo'],
   );
 });
 
