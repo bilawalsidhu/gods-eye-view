@@ -200,3 +200,18 @@ test('a host that draws the blend itself keeps its commands as made, and others 
   drawsIt = false;
   assert.equal(frame().renderState, given.renderState, 'still as made');
 });
+
+test('a collection built translucent keeps its commands where it draws them', () => {
+  const [mine] = commands();
+  const host = blendHost(
+    {
+      blendOption: Cesium.BlendOption.TRANSLUCENT,
+      update: (fs) => fs.commandList.push(mine),
+    },
+    () => 'translucent',
+  );
+  const frameState = { commandList: [], passes: { render: true } };
+  host.update(frameState);
+  assert.equal(frameState.commandList[0].pass, Pass.OPAQUE, 'blended in order');
+  assert.equal(frameState.commandList[0].renderState, opaqueState);
+});

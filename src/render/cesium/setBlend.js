@@ -129,9 +129,16 @@ export function blendHost(host, blendOf) {
     const start = list.length;
     const result = update.call(this, frameState);
     if (!frameState.passes?.render) return result;
-    // A host that draws this blend itself keeps its commands as made.
+    // A host that draws this blend itself keeps its commands as made: a
+    // collection built translucent draws in the opaque pass, blended in its
+    // order, which the translucent pass's order-independent blend would
+    // average away.
     const asked = blendOf();
-    const blend = this.drawsBlend?.(asked) ? undefined : asked;
+    const ownBlend =
+      this.drawsBlend?.(asked) ||
+      (asked === 'translucent' &&
+        this.blendOption === Cesium.BlendOption.TRANSLUCENT);
+    const blend = ownBlend ? undefined : asked;
     if (blend === undefined && !turnedAny) return result;
     if (blend !== undefined) turnedAny = true;
     blendCommands(list, start, blend);
