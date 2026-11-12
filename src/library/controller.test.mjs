@@ -403,6 +403,47 @@ test('a full library refuses another entry before its layer exists', async (t) =
   opened.destroy();
 });
 
+test('a layer that fails to tear down stays in the library', async (t) => {
+  const manager = sealedManager(t);
+  const storage = memoryStorage();
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage,
+    shareLink: fakeShareLink(null),
+    source: source({}),
+  });
+  await library.start();
+  await library.add('night-lights');
+  const { module } = manager.layers.get('lib-night-lights');
+  const disable = module.disable;
+  module.disable = async () => {
+    throw new Error('stuck');
+  };
+  t.mock.method(console, 'warn', () => {});
+  try {
+    assert.equal(await library.remove('night-lights'), false);
+    assert.equal(await library.reset(), 0);
+    assert.equal(manager.layers.has('lib-night-lights'), true);
+    assert.deepEqual(
+      JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).added,
+      ['night-lights'],
+    );
+    assert.equal(
+      library.list().find((row) => row.entry.id === 'night-lights').added,
+      true,
+    );
+  } finally {
+    // Once it tears down, Remove works (and the manager can shut down).
+    module.disable = disable;
+  }
+  assert.equal(await library.remove('night-lights'), true);
+  assert.equal(manager.layers.has('lib-night-lights'), false);
+  library.destroy();
+});
+
 test('zoom flies to an added layer through the caller, reset removes everything', async (t) => {
   const manager = sealedManager(t);
   const storage = memoryStorage();

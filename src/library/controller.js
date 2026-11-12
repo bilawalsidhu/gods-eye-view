@@ -325,8 +325,13 @@ export function createDataLibrary({
   async function remove(id) {
     if (destroyed || pending.has(id)) return false;
     const work = (async () => {
-      if (isRegistered(id))
-        await dataManager.unregisterLibraryLayer(libraryLayerId(id));
+      // A layer that would not tear down is still there: keep it in the
+      // library so its row, Remove and Remove all still reach it.
+      if (
+        isRegistered(id) &&
+        !(await dataManager.unregisterLibraryLayer(libraryLayerId(id)))
+      )
+        return false;
       selection = {
         added: selection.added.filter((other) => other !== id),
         on: selection.on.filter((other) => other !== id),
