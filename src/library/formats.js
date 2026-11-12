@@ -429,8 +429,15 @@ export async function loadLibraryDataset(
       const parsed = parseLibraryBody('arcgis', await readPage(url, budget));
       candidates.push(...parsed.candidates);
       if (!parsed.exceededTransferLimit || !parsed.candidates.length) break;
-      if (candidates.length >= source.maxFeatures) break;
-      if (page === source.maxPages - 1) truncated = true;
+      // The upstream holds more than was read: stopping here, at the
+      // feature cap or the last page, leaves the dataset partial.
+      if (
+        candidates.length >= source.maxFeatures ||
+        page === source.maxPages - 1
+      ) {
+        truncated = true;
+        break;
+      }
     }
   } else {
     const parsed = parseLibraryBody(

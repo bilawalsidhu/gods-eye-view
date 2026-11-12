@@ -182,6 +182,27 @@ test('ArcGIS paging follows exceededTransferLimit up to maxPages', async () => {
   assert.equal(collection.truncated, true);
 });
 
+test('ArcGIS stopping at maxFeatures with more upstream reads as truncated', async () => {
+  const value = entry({
+    format: 'arcgis',
+    url: 'https://s.example.org/FeatureServer/0',
+    maxFeatures: 3,
+    maxPages: 5,
+  });
+  let pages = 0;
+  const collection = await loadLibraryDataset(value, async () => {
+    pages += 1;
+    return JSON.stringify({
+      type: 'FeatureCollection',
+      properties: { exceededTransferLimit: true },
+      features: [point(1, 0), point(2, 0), point(3, 0)],
+    });
+  });
+  assert.equal(pages, 1);
+  assert.equal(collection.features.length, 3);
+  assert.equal(collection.truncated, true);
+});
+
 test('a plain dataset request carries the manifest query once', async () => {
   const value = entry({
     format: 'geojson',
