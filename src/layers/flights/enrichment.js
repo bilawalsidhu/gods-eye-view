@@ -177,27 +177,41 @@ export function createEnrichment({
   }
 
   function _requestRouteEnrichment(icao24) {
-    const cs = String(flightState.records.data.get(icao24)?.callsign || '')
+    const requested = flightState.records.data.get(icao24);
+    const association = requested?.routeAssociationVersion ?? null;
+    const cs = String(requested?.callsign || '')
       .trim()
       .toUpperCase();
     if (!/^[A-Z]{3}\d/.test(cs)) return; // airline-style callsigns only (LLL + digit); GA tails won't resolve
     _enqueueEnrich(
-      `r:${cs}`,
+      `r:${icao24}:${cs}:${association}`,
       { kind: 'route', id: cs },
       (data) => {
         const meta = flightState.records.data.get(icao24);
-        if (!meta) return;
-        // A late answer for a callsign the plane no longer flies is dropped.
+        // Callsigns can cycle A -> B -> A before the original A request settles.
+        // A record re-admitted under the same ICAO must reject old results.
+        const currentCallsign = String(meta?.callsign || '')
+          .trim()
+          .toUpperCase();
         if (
-          String(meta.callsign || '')
-            .trim()
-            .toUpperCase() !== cs
+          currentCallsign !== cs ||
+          (meta?.routeAssociationVersion ?? null) !== association
         )
           return;
         meta.routeCallsign = cs;
         meta.airline = data.airline || meta.airline;
-        if (data.origin && data.destination)
-          meta.route = { origin: data.origin, destination: data.destination };
+        if (data.origin && data.destination) {
+          meta.route = {
+            origin: data.origin,
+            destination: data.destination,
+            source: data.source || 'adsbdb',
+            retrievedAtMs: Number.isFinite(data.retrievedAtMs)
+              ? data.retrievedAtMs
+              : null,
+            operatingDate: null,
+            verification: 'unverified-reference',
+          };
+        }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);
       },
