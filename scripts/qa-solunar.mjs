@@ -4,8 +4,8 @@
  * QA_BASE_URL (default http://127.0.0.1:4392) must serve the app. Drives a real
  * browser at desktop (1600x900) and phone (390x844) size: opens the SOLUNAR
  * dock card, points the camera at Lake Bob Sandlin (33.05, -95.1), clicks the
- * map, and checks the 7-day list, the "none" rule, the 12/24 h switch, the
- * rating rule text and that the console stayed clean. Screenshots go to
+ * map, and checks the 7-day list, moon-event rows, the 12/24 h switch, the
+ * rating rule text and filtered console errors. Screenshots go to
  * QA_OUT_DIR (default ./qa-artifacts-solunar).
  */
 import fs from 'node:fs';
