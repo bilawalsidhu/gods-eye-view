@@ -1,4 +1,4 @@
-import { sameSiteGated } from '../common/same-site.js';
+import { sameSiteGatedBehindProxy } from '../common/same-site.js';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { readResponseTextCapped } from '../common/http.js';
 
@@ -204,5 +204,13 @@ export function createIonRouteHandler({
   };
 }
 
+/**
+ * The route behind the proxy-tolerant gate: ion has to answer for terrain and
+ * imagery to render, also when the app is served through a reverse proxy
+ * (which adds the forwarding headers the full gate refuses). What it hands
+ * out is ion's short-lived, single-asset endpoint document for an allow-listed
+ * asset, never the account token; cross-site browser requests are still
+ * refused.
+ */
 export const gatedIonRoute = (options) =>
-  sameSiteGated(createIonRouteHandler(options));
+  sameSiteGatedBehindProxy(createIonRouteHandler(options));

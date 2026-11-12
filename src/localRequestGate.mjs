@@ -12,7 +12,9 @@
  * carries a foreign `Origin`, and an `<img>`/navigation carries NO `Origin`
  * at all but does carry `Sec-Fetch-Site: cross-site`. The keyless map routes
  * (`/api/terrain/heights`, `/api/overpass`) reuse this core through
- * `admitSameSiteKeyless` with the forwarding-header refusal switched off.
+ * `admitSameSiteKeyless` with the forwarding-header refusal switched off, as
+ * does `/api/ion/*` (through `admitSameSiteBehindProxy`): it is needed to
+ * render and hands out only short-lived, single-asset endpoint documents.
  *
  * This module is the pure core that refuses those shapes while keeping the
  * documented `HOST=0.0.0.0` LAN opt-in and non-browser loopback tools (the two
