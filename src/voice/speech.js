@@ -24,6 +24,7 @@
 
 import { voiceLayer } from './layerManifest.js';
 import {
+  formatDate,
   formatNumber,
   getLocale,
   msg,
@@ -178,8 +179,26 @@ const KNOWN_ERRORS = new Map(
     ),
     msg('Could not arrive at the requested place'),
     msg('The nearest airborne aircraft could not be selected'),
+    // show_street_level
+    msg('Latitude must be within ±90° and longitude within ±180°'),
+    msg('Street Level is unavailable'),
+    msg('No street-level imagery source is configured'),
+    msg('Street Level could not be enabled'),
+    msg('Street Level changed while it looked for imagery'),
+    msg('Aim the view at a street'),
   ].map((text) => [text, text]),
 );
+
+/** The imagery filters an empty street-level result names, as its chips say them. */
+function shownImageryFilters(label) {
+  return [
+    label.includes('360°') ? '360°' : null,
+    label.includes('flat-photo') ? t('FLAT') : null,
+    label.includes('SINCE') ? t('SINCE') : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
 
 function noneWithinView(target, radius) {
   switch (target) {
@@ -257,6 +276,69 @@ const ERROR_PATTERNS = [
   [
     /^No (\S+) within (\d+(?:\.\d+)?) km of the current view$/,
     ([, target, km]) => noneWithinView(target, shownKm(km)),
+  ],
+  // show_street_level: the filter clause first, around the reason it extends.
+  [
+    /^(.+) with the (.+ filters?) on$/,
+    ([, reason, filters]) =>
+      t('{reason} (filters on: {filters})', {
+        reason: shownError(reason),
+        filters: shownImageryFilters(filters),
+      }),
+  ],
+  [
+    /^(.+) is not a street-level imagery source here$/,
+    ([, source]) =>
+      t('{source} is not a street-level imagery source here', { source }),
+  ],
+  [
+    /^(.+) needs its key$/,
+    ([, source]) =>
+      t('{source} needs its key', { source: translateKnown(source) }),
+  ],
+  [
+    /^(.+) needs the (.+) map, which is not available$/,
+    ([, source, map]) =>
+      t('{source} needs the {map} map, which is not available', {
+        source: translateKnown(source),
+        map: map === 'photoreal' ? 'Google 3D' : map,
+      }),
+  ],
+  [
+    /^(.+) could not be switched on$/,
+    ([, source]) =>
+      t('{source} could not be switched on', {
+        source: translateKnown(source),
+      }),
+  ],
+  [
+    /^(.+) is not available on this map$/,
+    ([, source]) =>
+      t('{source} is not available on this map', {
+        source: translateKnown(source),
+      }),
+  ],
+  [
+    /^(.+) imagery could not be opened$/,
+    ([, source]) =>
+      t('{source} imagery could not be opened', {
+        source: translateKnown(source),
+      }),
+  ],
+  [
+    /^(.+) has no position to look for imagery at$/,
+    ([, place]) =>
+      t('{place} has no position to look for imagery at', {
+        place: localizePlaceName(place),
+      }),
+  ],
+  [
+    /^No (.+) imagery near (.+)$/,
+    ([, source, place]) =>
+      t('No {source} imagery near {place}', {
+        source: translateKnown(source),
+        place: localizePlaceName(place),
+      }),
   ],
 ];
 
@@ -594,6 +676,98 @@ function selectNearestAircraft(result) {
   };
 }
 
+/** Month and year an image was captured, or ''. */
+function capturedMonth(capturedAt) {
+  const ms = Number(capturedAt);
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  try {
+    // Dates are UTC months (Google: the first of the month).
+    return formatDate(new Date(ms), {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function showStreetLevel(result) {
+  // `location` is the flight's own result on a failed flight; its label is
+  // the place, never the object.
+  const place = spokenLabel(
+    result?.label ||
+      (typeof result?.location === 'string'
+        ? result.location
+        : result?.location?.label) ||
+      'there',
+  );
+  const source = spokenLabel(result?.providerName || 'Street Level');
+  // The card in the interface language; the spoken line stays English.
+  const shownSource = result?.providerName
+    ? spokenLabel(result.providerName)
+    : t('Street Level');
+  // The view centre is a phrase, not a place name: the card says it in the
+  // interface language.
+  const shown = result?.atViewCentre
+    ? t('the view centre')
+    : spokenLabel(localizePlaceName(result?.label || '')) || place;
+  if (result?.cancelled) return null;
+  if (!result?.ok) {
+    let say;
+    if (result?.stage === 'location') say = `Couldn't find ${place}.`;
+    else if (result?.stage === 'map')
+      say = `${source} needs the Google 3D map, which isn't available.`;
+    else if (result?.stage === 'key')
+      say = result?.keyRejected
+        ? `${source} refused its key.`
+        : `${source} needs its key.`;
+    else if (result?.stage === 'layer') say = "Couldn't turn on Street Level.";
+    else if (result?.stage === 'view')
+      say = 'Street-level photos are hidden in this view. Leave it first.';
+    else if (result?.stage === 'imagery' && result?.aim === 'sky')
+      say = 'Aim the middle of the view at a street first.';
+    else if (result?.stage === 'imagery' && result?.filter?.label)
+      say = `No ${source} imagery near ${place} with the ${result.filter.label} on.`;
+    else if (result?.stage === 'imagery' && result?.noImagery === true)
+      say = `No ${source} imagery near ${place}.`;
+    // A service or viewer failure is not missing coverage.
+    else if (result?.stage === 'imagery')
+      say = `${source} could not open imagery near ${place}.`;
+    else say = `Couldn't open ${source}.`;
+    return {
+      say,
+      display: {
+        title: shownSource,
+        lines: errorLines(result),
+        sources: [],
+      },
+    };
+  }
+  if (result.armed === true)
+    return {
+      say: sentence(`${source} is ready at ${place}: press OPEN to load it`),
+      display: {
+        title: shownSource,
+        lines: [shown, t('Press OPEN to load the photo')],
+        sources: [{ label: shownSource }],
+      },
+    };
+  const title = spokenLabel(result.title || '', 60);
+  const month = capturedMonth(result.capturedAt);
+  return {
+    say: sentence(`${source} at ${title || place}`),
+    display: {
+      title: shownSource,
+      lines: [
+        title || shown,
+        month ? t('Captured {month}', { month }) : null,
+      ].filter(Boolean),
+      sources: [{ label: shownSource }],
+    },
+  };
+}
+
 const SPOKEN_ROUTE = Object.freeze({
   between: (origin, destination) => `${origin} to ${destination}`,
   from: (origin) => `from ${origin}`,
@@ -801,6 +975,7 @@ export const SPEECH_BUILDERS = Object.freeze({
   fly_to_location: flyToLocation,
   frame_overhead: frameOverhead,
   select_nearest_aircraft: selectNearestAircraft,
+  show_street_level: showStreetLevel,
   get_entity_context: getEntityContext,
   get_current_view_state: getCurrentViewState,
   annotate_map: annotateMap,
@@ -855,6 +1030,14 @@ function annotationTargets(args) {
     )
     .filter(Boolean);
 }
+
+/** Street-level sources as a plan step names them. */
+const STREET_LEVEL_SOURCE_NAMES = Object.freeze({
+  google: 'Street View',
+  mapillary: 'Mapillary',
+  kartaview: 'KartaView',
+  panoramax: 'Panoramax',
+});
 
 // frame_overhead targets as the schema names them.
 function frameStepLabel(target) {
@@ -927,6 +1110,17 @@ export function planStepLabel(name, args = {}) {
         ? t('Nearest aircraft to {place}', { place: shownPlace(place, 32) })
         : t('Nearest aircraft to Here');
     }
+    case 'show_street_level': {
+      const source = STREET_LEVEL_SOURCE_NAMES[args.provider];
+      const place = args.query
+        ? shownPlace(args.query, 32)
+        : args.latitude != null
+          ? t('this spot')
+          : t('the view centre');
+      return source
+        ? t('{source} at {place}', { source, place })
+        : t('Street level at {place}', { place });
+    }
     case 'set_layer_visibility': {
       const on = args.enabled !== false;
       const label =
@@ -988,6 +1182,8 @@ export function narrationLabel(name, args = {}) {
         presetPlaceName(args.locationQuery || args.locationId || ''),
         32,
       );
+    case 'show_street_level':
+      return shownPlace(args.query || '', 32);
     case 'resolve_area':
       return displayName(args.query || '', 32);
     case 'find_imagery':
@@ -1008,6 +1204,8 @@ const STEP_LABELS = Object.freeze({
   layer: msg('Turning on layer'),
   refresh: msg('Loading aircraft'),
   nearest: msg('Picking nearest'),
+  map: msg('Switching map'),
+  imagery: msg('Opening imagery'),
   draw: msg('Drawing outline'),
   catalog: msg('Searching imagery catalog'),
   drape: msg('Loading imagery'),
@@ -1056,6 +1254,12 @@ export function progressLine(step, label) {
       return 'Loading aircraft there.';
     case 'nearest':
       return 'Picking the nearest aircraft.';
+    case 'map':
+      return place === 'photoreal'
+        ? 'Switching to Google 3D.'
+        : 'Switching the map.';
+    case 'imagery':
+      return place ? `Looking for imagery at ${place}.` : null;
     case 'still':
       return place ? `Still working on ${place}.` : 'Still working on it.';
     default:

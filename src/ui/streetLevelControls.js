@@ -11,6 +11,11 @@ const RENDER_MODE_KEY = 'gev:street-level:render-mode';
 /** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
 const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
 
+/** True on an embedded page (`?embed=1` or the inline panel). */
+function isEmbedPage() {
+  return globalThis.document?.body?.classList?.contains('ui-embed') === true;
+}
+
 /**
  * Drives the Street Level panel body: provider chips, filters and viewer.
  * The panel view renders what this presents (`gev-street-level` store); the
@@ -137,6 +142,15 @@ export class StreetLevelControls {
       });
     }
     this.store.setExpandAvailable(Boolean(this._expandMode));
+    // Embed mode: Esc closes an open photo, since the rail it would go back to
+    // is hidden. Full screen keeps its own Esc (above), which leaves it first.
+    this.listen(document, 'keydown', (event) => {
+      if (event.key !== 'Escape' || !this._embedHome || this.isViewerExpanded())
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.layer.closeViewer?.();
+    });
     try {
       const stored = localStorage.getItem(RENDER_MODE_KEY);
       if (stored === 'fill' || stored === 'letterbox')
@@ -271,8 +285,16 @@ export class StreetLevelControls {
       this._modesObserver = null;
       return;
     }
+    // Embed mode keeps Clean View on for its globe while the photo is lifted
+    // over it: there only recording and the cockpit end EXPAND.
     const leaveIfHiding = () => {
-      if (PANEL_HIDING_MODES.some((mode) => body.classList.contains(mode)))
+      if (
+        PANEL_HIDING_MODES.some(
+          (mode) =>
+            body.classList.contains(mode) &&
+            !(mode === 'ui-clean-view' && isEmbedPage()),
+        )
+      )
         this._exitExpanded();
     };
     if (!this._modesObserver && typeof MutationObserver === 'function') {
@@ -291,6 +313,31 @@ export class StreetLevelControls {
     this._watchPanelHidingModes(on);
     this.store.setExpanded(on);
     this._requestResize();
+  }
+
+  /**
+   * Embed mode hides the right rail: an open photo moves to <body> as an
+   * overlay on the globe (`sl-viewer-wrap-embed`, embed.css) and goes back
+   * when it closes. Vue keeps patching the wrap there: its siblings are static.
+   */
+  _syncEmbedOverlay(open) {
+    const wrap = this._elements.viewerWrap;
+    if (!wrap || !document.body) return;
+    const lift = open === true && isEmbedPage();
+    this.store.setEmbedOverlay(lift);
+    if (lift && !this._embedHome) {
+      this._embedHome = { parent: wrap.parentNode, next: wrap.nextSibling };
+      document.body.appendChild(wrap);
+      wrap.classList.add('sl-viewer-wrap-embed');
+      this._requestResize();
+    } else if (!lift && this._embedHome) {
+      wrap.classList.remove('sl-viewer-wrap-embed');
+      const { parent, next } = this._embedHome;
+      this._embedHome = null;
+      if (parent?.isConnected)
+        parent.insertBefore(wrap, next?.parentNode === parent ? next : null);
+      this._requestResize();
+    }
   }
 
   connect() {
@@ -348,8 +395,14 @@ export class StreetLevelControls {
     // Other size changes reach the viewer through the ResizeObserver; opening
     // asks for one resize because the element may not have a size yet.
     const open = view.viewer.open;
-    if (open && !this._wasOpen) this.setCollapsed(false, { persist: false });
+    if (open && !this._wasOpen) {
+      this.setCollapsed(false, { persist: false });
+      // A phone shows the rail only as a tab sheet: open it, or the photo
+      // loads where nobody sees it. Embed mode lifts the photo instead.
+      if (!isEmbedPage()) this.actions.revealPanel?.();
+    }
     this._wasOpen = open;
+    this._syncEmbedOverlay(open);
   }
 
   destroy() {
@@ -362,6 +415,7 @@ export class StreetLevelControls {
     if (this._expandMode === 'popover')
       this._elements.viewerWrap?.removeAttribute('popover');
     this._watchPanelHidingModes(false);
+    this._syncEmbedOverlay(false);
     this.listeners.abort();
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;

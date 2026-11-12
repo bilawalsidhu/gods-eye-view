@@ -244,3 +244,12 @@ test('Warsaw and Poznań credits carry the data date their licences ask for', ()
   assert.equal(mbta.key, 'transit-mbta');
   assert.doesNotMatch(mbta.html, /data of/);
 });
+
+test('the always-on rail credit names live feeds only, never timetables', () => {
+  // Every train shown is where its operator reported it; none is placed
+  // from a timetable.
+  const rail = DATA_CREDITS.find((entry) => entry.key === 'rail-gtfs-rt');
+  assert.ok(rail);
+  assert.match(rail.html, /realtime feeds/);
+  assert.doesNotMatch(rail.html, /timetable|placed from/i);
+});

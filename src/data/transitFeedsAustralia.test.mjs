@@ -113,8 +113,14 @@ test('DATA_SOURCES documents the TransLink feeds in the transit row style', () =
     /published for developer use and not against their use/,
   );
   assert.doesNotMatch(translink, /licen[cs]e|CC BY|terms/i);
-  const adelaide = rows.filter((line) =>
-    line.startsWith('| **Adelaide Metro**'),
+  // The Rail layer documents Adelaide Metro in a row of its own.
+  const adelaide = rows.filter(
+    (line) =>
+      line.startsWith('| **Adelaide Metro**') && /Transit layer/.test(line),
   );
-  assert.equal(adelaide.length, 1, 'exactly one Adelaide Metro row (main’s)');
+  assert.equal(
+    adelaide.length,
+    1,
+    'exactly one Adelaide Metro transit row (main’s)',
+  );
 });

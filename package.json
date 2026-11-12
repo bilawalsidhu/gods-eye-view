@@ -285,6 +285,11 @@
     "./layers/transit/standalone": "./src/data/transit.js",
     "./layers/transit/source": "./src/layers/transit/source.js",
     "./sources/transit-service": "./src/sources/transitService.js",
+    "./server/providers/rail": {
+      "node": "./server/providers/rail.js"
+    },
+    "./sources/rail-service": "./src/sources/railService.js",
+    "./layers/rail/source": "./src/layers/rail/source.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js",
     "./server/providers/mapillary": {
       "node": "./server/providers/mapillary.js"
