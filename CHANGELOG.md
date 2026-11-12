@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Add a Border Wait Times layer: every U.S. land-border crossing on the Canada
+  and Mexico borders, coloured by the passenger-vehicle wait to enter the U.S.
+  that CBP reports, with waits into Canada from CBSA where an office faces the
+  crossing. Keyless; share-link token `03` (jeffblakely, #1107).
+
 - An application's own tool can take the pointer as Draw does, and its click
   handlers can yield while a tool holds it, as the layers' do (`pointer` from
   `createApplicationTools`) (samehkhamis, #1641).
