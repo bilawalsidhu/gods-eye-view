@@ -3073,6 +3073,30 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   its `tiles`) and parameters the app uses, dropping any client-supplied
   `access_token`. Image CDN URLs in the answers carry no token.
 - Both routes sit behind the cross-site gate and a per-IP limit.
+- **`application` is a Promise.** The app learns from `/api/ion/status` whether
+  the server holds an ion token before it creates itself, so `src/main.js` now
+  exports `application` as a Promise of the application, not the application.
+  Code that imports it must `await` it (the QA scripts do). The question never
+  fails and is given up after 15 seconds: a missing route, a refusal, an error
+  or no answer all read as "no ion token" and keep the keyless terrain and
+  imagery.
+- **The MCP Apps panel.** The panel build holds neither token. The panel page
+  sends the app's paths, `/api/ion/` and `/api/mapillary/graph/` among them, to
+  the server the MCP server is pointed at through `panel_request`
+  (`src/tools/queries/panelRequest.js`), and every server the repository starts
+  mounts those routes (`server/providers/keyIsolation/plugin.js` covers the
+  development and the preview server; Docker and Pinokio run the same
+  configuration). `panel_request` sends neither `Origin` nor `Sec-Fetch-Site`,
+  so the cross-site gate lets it through, while a server the MCP server reaches
+  through a reverse proxy that adds forwarding headers refuses it. The ion
+  endpoint and Graph addresses resolve against `GEV_APP_BASE_URL`, the address
+  the panel names for the app, since a host may serve the page from an address
+  that cannot be a base. Without an answer the panel runs keyless: no ion
+  terrain or imagery, and Mapillary coverage reports the missing key (the
+  coverage tiles already came through the same path before). The panel's
+  security policy still lists `graph.mapillary.com`, which the panel no longer
+  calls itself. Tests: `server/mcp/panelKeyRoutes.test.mjs` (the real
+  `panel_request` against the key routes) and `src/sources/serverKeys.test.mjs`.
 - `src/tooling/keyExposure.test.mjs` starts the real Vite config with fake
   tokens and fails if either reaches served client code;
   `node scripts/check-key-exposure.mjs` scans a running app or a production
