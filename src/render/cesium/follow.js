@@ -189,11 +189,26 @@ function startOffset(target, viewFrom, result) {
 
 /**
  * @param {{widget: object, scene: object, camera: object,
- *   onChanged: () => void}} options `widget` is the Viewer or CesiumWidget
- *   whose `trackedEntity` this follows with; `onChanged` runs on every
- *   change of what it tracks.
+ *   onChanged: () => void,
+ *   itemPosition?: (item: {set: string, id: string|number},
+ *     time: Cesium.JulianDate) => object|null}} options `widget` is the
+ *   Viewer or CesiumWidget whose `trackedEntity` this follows with;
+ *   `onChanged` runs on every change of what it tracks; `itemPosition`,
+ *   where the draw port draws an item at a scene time (null when it does
+ *   not), which a target naming a drawn `item` is followed at.
  */
-export function createCesiumFollow({ widget, scene, camera, onChanged }) {
+export function createCesiumFollow({
+  widget,
+  scene,
+  camera,
+  onChanged,
+  itemPosition,
+}) {
+  /** Where a target is at a scene time: its drawn item, else `position`. */
+  const positionOf = (target, time) =>
+    (target.item && itemPosition?.(target.item, time)) ??
+    target.position(msOf(time));
+
   /** @type {null | {target: object, helper: object, framed: boolean,
    *   attempts: number, previous: Cesium.Cartesian3, releaseZoom: () => void}} */
   let current = null;
@@ -238,7 +253,7 @@ export function createCesiumFollow({ widget, scene, camera, onChanged }) {
   function helperFor(target) {
     const helper = widget.entities.add({
       position: new Cesium.CallbackProperty((time, result) => {
-        const p = target.position(msOf(time));
+        const p = positionOf(target, time);
         return p ? Cesium.Cartesian3.fromElements(p.x, p.y, p.z, result) : p;
       }, false),
       // EntityView tracks an entity only once its bounding sphere is
@@ -289,7 +304,7 @@ export function createCesiumFollow({ widget, scene, camera, onChanged }) {
     const { target } = entry;
     entry.attempts += 1;
     const time = widget.clock.currentTime;
-    const at = target.position(msOf(time));
+    const at = positionOf(target, time);
     if (target.frame !== 'enu') {
       // Framed once Cesium's EntityView has taken the helper on: until
       // then the camera may still ride the previous tracking's frame.

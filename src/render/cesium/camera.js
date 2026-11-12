@@ -7,7 +7,14 @@
  */
 import * as Cesium from 'cesium';
 import { createCameraEvents } from '../camera/events.js';
-import { listenerList, toCartesian, uncaught } from './common.js';
+import {
+  listenerList,
+  pickEllipsoidAt,
+  sameEye,
+  toCartesian,
+  uncaught,
+} from './common.js';
+import { computeViewRectangle } from '../stub/viewRectangle.js';
 import { cameraFlightActive } from './internals.js';
 import { createCesiumFollow } from './follow.js';
 import { createCesiumControls } from './cameraControls.js';
@@ -73,13 +80,18 @@ function matrixArray(matrix) {
 
 /**
  * @param {{scene: object, camera: object, report: (error: unknown) => void,
- *   widget?: object, capabilities?: ReadonlySet<string>}} options `scene`
+ *   widget?: object, capabilities?: ReadonlySet<string>,
+ *   now?: () => number, itemPosition?: Function}} options `scene`
  *   gives `requestRender` and the `postUpdate` tick `changed` is measured
  *   on; `widget`, the Viewer or CesiumWidget, gives the entity tracking
  *   `follow` runs on (without it the camera cannot follow);
  *   `capabilities`, the renderer's, gates the optional members (a camera
- *   with none given has them all).
- * @returns {{port: import('../contract/camera').CameraPort, dispose: () => void}}
+ *   with none given has them all); `now`, the clock moveEnd waits by,
+ *   ms (`performance.now` by default); `itemPosition`, where the draw port
+ *   draws an item at a scene time, which a follow of a drawn item tracks.
+ * @returns {{port: import('../contract/camera').CameraPort,
+ *   emit: (event: string) => void, dispose: () => void}} `emit` raises
+ *   one of the port's events (a test's fake camera that raises its own).
  */
 export function createCesiumCamera({
   scene,
@@ -87,15 +99,40 @@ export function createCesiumCamera({
   report,
   widget,
   capabilities,
+  now = () => performance.now(),
+  itemPosition,
 }) {
   const removers = [];
-  // Camera events: Cesium's own moveStart and moveEnd (500 ms after the
-  // last change, never while following), and `changed` measured per
-  // listener on every tick, where Cesium measures its single threshold
-  // (`camera.percentageChanged`, which this leaves as it is for everyone
-  // else listening to Cesium's own event).
+  let lastWorld = null;
+  // Camera events, measured on every tick: moveStart and moveEnd (500 ms
+  // after the last change of the eye or its field of view, by `now`, never
+  // while following), and `changed` per listener, where Cesium measures its
+  // single threshold (`camera.percentageChanged`, which this leaves as it
+  // is for everyone else listening to Cesium's own event). Cesium's own
+  // moveStart and moveEnd are left out: it times them by the system clock.
   const cameraEvents = createCameraEvents({
     pose: () => cameraPort.pose(),
+    world: () => {
+      // Copies (Cesium updates its own vectors in place), and the last one
+      // again while Cesium's stand within rounding of it.
+      const f = camera.frustum;
+      const current = {
+        position: Cesium.Cartesian3.clone(camera.positionWC),
+        direction: Cesium.Cartesian3.clone(camera.directionWC),
+        up: Cesium.Cartesian3.clone(camera.upWC),
+        // A new field of view or aspect (a resize) is a move too, as
+        // Cesium's own camera events count it.
+        lens: `${f.fovy} ${f.aspectRatio}`,
+      };
+      if (
+        !lastWorld ||
+        current.lens !== lastWorld.lens ||
+        !sameEye(current, lastWorld)
+      )
+        lastWorld = current;
+      return lastWorld;
+    },
+    following: () => Boolean(following?.followed),
     report,
     thresholds: capabilities?.has('cameraChangeThreshold') ?? true,
   });
@@ -103,9 +140,8 @@ export function createCesiumCamera({
     scene.postUpdate.addEventListener(() => {
       applyFov();
       cameraEvents.stepChanged();
+      cameraEvents.stepMoveDetection(now());
     }),
-    camera.moveStart.addEventListener(() => cameraEvents.emit('moveStart')),
-    camera.moveEnd.addEventListener(() => cameraEvents.emit('moveEnd')),
   );
 
   const following = widget?.trackedEntityChanged
@@ -114,6 +150,7 @@ export function createCesiumCamera({
         scene,
         camera,
         onChanged: () => cameraEvents.emit('followChanged'),
+        itemPosition,
       })
     : null;
 
@@ -366,16 +403,28 @@ export function createCesiumCamera({
         projection: matrixArray(camera.frustum.projectionMatrix),
       };
     },
+    // Cesium's own corner picks (`computeViewRectangle`), on rays that
+    // keep their precision (`pickRayAt`).
     viewRectangle() {
-      const rect = camera.computeViewRectangle(Cesium.Ellipsoid.WGS84);
-      if (!rect) return null;
-      const deg = Cesium.Math.toDegrees;
-      return {
-        west: deg(rect.west),
-        south: deg(rect.south),
-        east: deg(rect.east),
-        north: deg(rect.north),
-      };
+      if (scene.mode !== Cesium.SceneMode.SCENE3D) {
+        const rect = camera.computeViewRectangle(Cesium.Ellipsoid.WGS84);
+        if (!rect) return null;
+        const deg = Cesium.Math.toDegrees;
+        return {
+          west: deg(rect.west),
+          south: deg(rect.south),
+          east: deg(rect.east),
+          north: deg(rect.north),
+        };
+      }
+      return computeViewRectangle(
+        cameraPort.pose(),
+        {
+          width: scene.canvas.clientWidth,
+          height: scene.canvas.clientHeight,
+        },
+        (x, y) => pickEllipsoidAt(scene, camera, x, y) ?? null,
+      );
     },
     pose() {
       // An unmoved camera answers from the pose last read: a frame reads
@@ -531,6 +580,7 @@ export function createCesiumCamera({
 
   return {
     port: cameraPort,
+    emit: (event) => cameraEvents.emit(event),
     dispose() {
       following?.dispose();
       controlsPart.dispose();

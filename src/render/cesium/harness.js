@@ -6,9 +6,10 @@
  * `CESIUM_CHECKS` lists the checks of the ports the Cesium renderer has.
  * Each migration adds the checks of the members it brings, so the suite
  * shows how far the renderer is through the contract; every other check is
- * left out of the run rather than failed. Camera flights are checked in
- * Node instead (`cameraPort.test.mjs`): a page's frames come on the real
- * clock at the display's rate, where the reference traces step 1/60 s.
+ * left out of the run rather than failed. Each renderer's clock moves on
+ * 1/60 s a frame, as the reference traces step, whatever the display's
+ * rate. The pointer traces need a camera controller: without one, they are
+ * checked in Node (`cameraGoldens.js` records them from Cesium's own).
  */
 import { DEFAULT_TOLERANCE } from '../conformance/index.js';
 import { toEcef } from '../stub/math.js';
@@ -32,6 +33,16 @@ export const CESIUM_CHECKS = new Set([
   'camera.flight.callbacks',
   'camera.onCommand',
   'camera.rect',
+  'camera.trace.flyTo from orbit, default orientation and duration',
+  'camera.trace.flyTo with duration and orientation',
+  'camera.trace.flyTo with a height cap, pitch adjustment and named easings',
+  'camera.trace.rectangle destinations',
+  'camera.trace.flyToBounds default offset and explicit offset',
+  'camera.trace.flyToBounds easing',
+  'camera.trace.flyTo sineInOut',
+  'camera.trace.view rectangles',
+  'camera.trace.projection, picks and the horizon',
+  'camera.followItem',
   'camera.trace.flyTo with a duration of 0 completes inside the call',
   'camera.trace.flyTo where the camera already is completes inside the call',
   'camera.setView.exact',
@@ -116,10 +127,12 @@ export const CESIUM_CHECKS = new Set([
   'query.projectMany',
   'query.rays',
   'query.withoutCapability',
+  'query.occlusionTest',
   'quality',
   'quality.signals',
   'quality.signals.gpuTiming',
   'renderer.listeners',
+  'renderer.listenerRules',
   'renderer.shape',
   'renderer.readPixels',
   'renderer.releaseUnused',
@@ -163,12 +176,10 @@ export function createCesiumHarness({
   missingModel,
   cameraController,
 } = {}) {
-  // With a camera controller, each renderer's ticks read a clock of its
-  // own that each frame moves on by 1/60 s: the controller's flights then
-  // step as the reference traces do, frame by frame (Cesium's own flights
-  // keep Cesium's clock, so they are checked in Node instead).
+  // Each renderer's ticks, tweens and camera events read a clock of its
+  // own that each frame moves on by 1/60 s: flights then step as the
+  // reference traces do, frame by frame.
   const clocks = new WeakMap();
-  const virtual = Boolean(cameraController);
   return {
     name,
     // A camera controller hears the pointer events sent through `pointer`
@@ -185,7 +196,7 @@ export function createCesiumHarness({
           container,
           capabilities,
           ...(cameraController ? { cameraController } : {}),
-          ...(virtual ? { now: () => clock.ms } : {}),
+          now: () => clock.ms,
         });
       } catch (error) {
         container.remove();
@@ -208,24 +219,20 @@ export function createCesiumHarness({
       clocks.set(renderer, clock);
       return renderer;
     },
-    frame: virtual
-      ? (r) => {
-          const clock = clocks.get(r);
-          if (clock) clock.ms += 1000 / 60;
-          return nextFrame();
-        }
-      : nextFrame,
+    frame: (r) => {
+      const clock = clocks.get(r);
+      if (clock) clock.ms += 1000 / 60;
+      return nextFrame();
+    },
     // Events as the renderer's handler delivers them: the checks send ones
     // no real pointer can (a click with no press), so not DOM events.
     pointer: (r, type, x, y, extra) => pointerFeedOf(r)(type, x, y, extra),
-    now: virtual
-      ? (r) => clocks.get(r)?.ms ?? performance.now()
-      : () => performance.now(),
+    now: (r) => clocks.get(r)?.ms ?? performance.now(),
     // What a live motion clock reads.
     wallTime: () => Date.now(),
     toEcef,
     tolerance: DEFAULT_TOLERANCE,
-    flightPaths: virtual ? 'trace' : 'endpoints',
+    flightPaths: 'trace',
     ...(model ? { assets: { model, missingModel } } : {}),
   };
 }

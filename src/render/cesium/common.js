@@ -93,3 +93,94 @@ export function createBlobUrls(Registry = globalThis.FinalizationRegistry) {
 
 /** A blob's object URL: the same one every time it is drawn. */
 export const blobUrl = createBlobUrls();
+
+/**
+ * How far Cesium's camera may stand from an eye and still be that eye: its
+ * world vectors are derived again in floating point (a unit vector's
+ * component off by 2e-16 now and then), and a camera that counts any
+ * difference as a move would put off `moveEnd` with nothing moving. Metres
+ * per metre of distance from the Earth's centre, and the cosine's shortfall
+ * from 1 for the unit vectors.
+ */
+export const ROUNDING = 1e-12;
+
+/** Whether Cesium's `world` vectors are the `written` eye, up to rounding. */
+export function sameEye(world, written) {
+  const p = world.position;
+  const q = written.position;
+  const scale = Math.max(1, Math.hypot(q.x, q.y, q.z));
+  if (Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) > ROUNDING * scale)
+    return false;
+  for (const key of ['direction', 'up']) {
+    const a = world[key];
+    const b = written[key];
+    if (a.x * b.x + a.y * b.y + a.z * b.z < 1 - ROUNDING) return false;
+  }
+  return true;
+}
+
+/**
+ * The pick ray through a canvas point (CSS pixels), as Cesium's
+ * `camera.getPickRay` gives it in 3D, without its loss of precision: Cesium
+ * adds the near-plane offset to the eye's position (some 6e6 m from the
+ * Earth's centre) and takes the position off again, which leaves the
+ * direction off by about 1e-9 at a near plane of 0.1 m. Other frustums go
+ * to Cesium's own.
+ * @param {object} scene
+ * @param {object} camera
+ * @param {number} x
+ * @param {number} y
+ * @returns {Cesium.Ray|undefined} Undefined on a canvas with no size.
+ */
+export function pickRayAt(scene, camera, x, y) {
+  const frustum = camera.frustum;
+  if (
+    scene.mode !== Cesium.SceneMode.SCENE3D ||
+    !(frustum instanceof Cesium.PerspectiveFrustum) ||
+    frustum.xOffset ||
+    frustum.yOffset
+  )
+    return camera.getPickRay(new Cesium.Cartesian2(x, y));
+  const width = scene.canvas.clientWidth;
+  const height = scene.canvas.clientHeight;
+  // A canvas with no size (hidden, not laid out yet) has no rays, as in
+  // Cesium.
+  if (!(width > 0 && height > 0)) return undefined;
+  const tanPhi = Math.tan(frustum.fovy * 0.5);
+  const tanTheta = frustum.aspectRatio * tanPhi;
+  const nx = (2 / width) * x - 1;
+  const ny = (2 / height) * (height - y) - 1;
+  const d = camera.directionWC;
+  const r = camera.rightWC;
+  const u = camera.upWC;
+  const a = nx * tanTheta;
+  const b = ny * tanPhi;
+  const direction = Cesium.Cartesian3.normalize(
+    new Cesium.Cartesian3(
+      d.x + r.x * a + u.x * b,
+      d.y + r.y * a + u.y * b,
+      d.z + r.z * a + u.z * b,
+    ),
+    new Cesium.Cartesian3(),
+  );
+  return new Cesium.Ray(Cesium.Cartesian3.clone(camera.positionWC), direction);
+}
+
+/**
+ * Where the pick ray through a canvas point meets the WGS84 ellipsoid, as
+ * Cesium's `camera.pickEllipsoid` finds it in 3D, on `pickRayAt`'s ray.
+ * @returns {Cesium.Cartesian3|undefined}
+ */
+export function pickEllipsoidAt(scene, camera, x, y) {
+  if (scene.mode !== Cesium.SceneMode.SCENE3D)
+    return camera.pickEllipsoid(new Cesium.Cartesian2(x, y));
+  const ray = pickRayAt(scene, camera, x, y);
+  if (!ray) return undefined;
+  const hit = Cesium.IntersectionTests.rayEllipsoid(
+    ray,
+    Cesium.Ellipsoid.WGS84,
+  );
+  if (!hit) return undefined;
+  const t = hit.start > 0 ? hit.start : hit.stop;
+  return Cesium.Ray.getPoint(ray, t, new Cesium.Cartesian3());
+}

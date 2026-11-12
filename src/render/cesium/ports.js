@@ -132,6 +132,13 @@ export function createCesiumPorts(
 ) {
   const scene = widget.scene;
   const camera = scene.camera;
+  // Cesium's own tweens (its flights) step on the same clock as the ticks:
+  // a scene's tweens read the system clock unless given a time.
+  const tweens = scene.tweens;
+  const updateTweens = tweens?.update;
+  const clockedTweens = (time) =>
+    updateTweens.call(tweens, time ?? clockNow() / 1000);
+  if (updateTweens) tweens.update = clockedTweens;
 
   // An error listener's own throw is uncaught, never reported again.
   const rendererListeners = {
@@ -421,6 +428,13 @@ export function createCesiumPorts(
         report,
         widget,
         capabilities,
+        now: clockNow,
+        ...(capabilities.has('motionSegments')
+          ? {
+              itemPosition: (item, time) =>
+                drawPart.drawnPosition(item, 0, time),
+            }
+          : {}),
       });
   const cameraPort = cameraPart.port;
   const effectsPart = createCesiumEffects(scene, {
@@ -736,6 +750,9 @@ export function createCesiumPorts(
       settleTick(false);
       for (const off of removers) off();
       scene.canvas?.removeEventListener?.('webglcontextlost', contextLost);
+      // Cesium's own tween clock back, unless another set wrapped it since.
+      if (updateTweens && tweens.update === clockedTweens)
+        tweens.update = updateTweens;
       // A listener that disposes the renderer stops the rest of its event.
       for (const list of Object.values(rendererListeners)) list.clear();
       for (const list of Object.values(frameListeners)) list.clear();

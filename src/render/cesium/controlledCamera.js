@@ -27,6 +27,7 @@
  */
 import * as Cesium from 'cesium';
 import { acquireCameraInput } from './cameraInput.js';
+import { sameEye } from './common.js';
 
 /**
  * The input port's events for a controller made before the port: listeners
@@ -56,31 +57,6 @@ function inputRelay() {
 }
 
 const plain = (v) => ({ x: v.x, y: v.y, z: v.z });
-
-/**
- * How far Cesium's camera may stand from the eye last written and still be
- * that eye: its world vectors are derived again in floating point (a unit
- * vector's component off by 2e-16 now and then), and the controller counts
- * any difference as a move, which would put off `moveEnd` with nothing
- * moving. Metres per metre of distance from the Earth's centre, and the
- * cosine's shortfall from 1 for the unit vectors.
- */
-const ROUNDING = 1e-12;
-
-/** Whether Cesium's `world` vectors are the `written` eye, up to rounding. */
-function sameEye(world, written) {
-  const p = world.position;
-  const q = written.position;
-  const scale = Math.max(1, Math.hypot(q.x, q.y, q.z));
-  if (Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) > ROUNDING * scale)
-    return false;
-  for (const key of ['direction', 'up']) {
-    const a = world[key];
-    const b = written[key];
-    if (a.x * b.x + a.y * b.y + a.z * b.z < 1 - ROUNDING) return false;
-  }
-  return true;
-}
 
 /**
  * @param {{

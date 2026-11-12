@@ -14,7 +14,7 @@
 import * as Cesium from 'cesium';
 import { heightsFor } from './heights.js';
 import { findDraw, provideUnboundQuery } from '../rendererOf.js';
-import { toCartesian } from './common.js';
+import { pickEllipsoidAt, pickRayAt, toCartesian } from './common.js';
 import { unboundDrawPart } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 import { rememberPick } from './pickMemo.js';
@@ -366,13 +366,13 @@ export function createCesiumQuery({
       return ecef(scene.pickPosition(screen(x, y)));
     },
     pickEllipsoid(x, y) {
-      return ecef(camera.pickEllipsoid(screen(x, y)));
+      return ecef(pickEllipsoidAt(scene, camera, x, y));
     },
     pickGlobe(ray) {
       return ecef(scene.globe?.pick(cesiumRay(ray), scene));
     },
     pickRay(x, y) {
-      const ray = camera.getPickRay(screen(x, y));
+      const ray = pickRayAt(scene, camera, x, y);
       return { origin: ecef(ray.origin), direction: ecef(ray.direction) };
     },
     project(position) {

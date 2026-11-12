@@ -453,8 +453,12 @@ test('a sky-facing camera yields no frame and both actions decline', () => {
   scene.pickPosition = () => null;
   scene.globe.pick = () => undefined;
   scene.requestRender = () => {};
-  camera.getPickRay = () => new Cesium.Ray();
-  camera.pickEllipsoid = () => undefined;
+  // 1000 km up, looking above the horizon: no ray from the centre meets
+  // the ellipsoid.
+  camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1_000_000),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(30), roll: 0 },
+  });
   const viewer = withPorts({ camera, scene });
 
   assert.equal(readCameraTargetFrame(viewer), null);

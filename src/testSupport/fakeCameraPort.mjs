@@ -206,14 +206,19 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
     tracks && typeof viewer.entities.add !== 'function'
       ? trackingWidget(viewer)
       : viewer;
-  const real = createCesiumCamera({
+  const made = createCesiumCamera({
     scene,
     camera,
     ...(tracks ? { widget } : {}),
     report: (error) => {
       throw error;
     },
-  }).port;
+  });
+  const real = made.port;
+  // The fake's own moveStart and moveEnd, which a test raises, are the
+  // port's: with no ticks, the port measures no moves of its own.
+  for (const event of ['moveStart', 'moveEnd'])
+    fake[event]?.addEventListener?.(() => made.emit(event));
   const port = Object.create(real, {
     pose: {
       value() {

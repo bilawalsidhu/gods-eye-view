@@ -393,6 +393,7 @@ function tickingWidget() {
     requestRenderMode: true,
     maximumRenderTimeChange: Infinity,
     primitives: { add() {}, remove() {} },
+    tweens: new Cesium.TweenCollection(),
     requestRender() {
       requested += 1;
       scene._renderRequested = true;
@@ -704,10 +705,14 @@ test('without cameraChangeThreshold every changed listener fires at 0.5', () => 
   ports.dispose();
 });
 
-test('camera events: Cesium’s moves relayed, a throw reported, off and dispose stop them', () => {
+test('camera events: moves measured each tick by the given clock, a throw reported, off and dispose stop them', () => {
   const { widget, scene, raise } = tickingWidget();
   cityView(scene.camera);
-  const ports = createCesiumPorts(widget, { capabilities: all });
+  const clock = { ms: 0 };
+  const ports = createCesiumPorts(widget, {
+    capabilities: all,
+    now: () => clock.ms,
+  });
   const errors = [];
   ports.on('error', (e) => errors.push(e.message));
   const seen = [];
@@ -716,23 +721,92 @@ test('camera events: Cesium’s moves relayed, a throw reported, off and dispose
   });
   const off = ports.camera.on('moveStart', () => seen.push('start'));
   ports.camera.on('moveEnd', () => seen.push('end'));
-  ports.camera.on('changed', () => seen.push('changed'), { threshold: 0.01 });
-  scene.camera.moveStart.raiseEvent();
-  scene.camera.moveEnd.raiseEvent();
-  assert.deepEqual(seen, ['start', 'end']);
+  const tick = (ms) => {
+    clock.ms += ms;
+    raise('postUpdate');
+  };
+  tick(16);
+  scene.camera.lookRight(0.01);
+  tick(16);
+  assert.deepEqual(seen, ['start']);
   assert.deepEqual(errors, ['first']);
+  // Cesium's own events are not relayed: it times them by the system clock.
+  scene.camera.moveEnd.raiseEvent();
+  tick(499);
+  assert.deepEqual(seen, ['start'], 'still within 500 ms of the move');
+  tick(1);
+  assert.deepEqual(seen, ['start', 'end']);
   off();
-  scene.camera.moveStart.raiseEvent();
+  scene.camera.lookRight(0.01);
+  tick(16);
   assert.deepEqual(seen, ['start', 'end']);
   assert.throws(
     () => ports.camera.on('turned', () => {}),
     /Unknown camera event/,
   );
   ports.dispose();
-  scene.camera.moveEnd.raiseEvent();
+  tick(600);
   scene.camera.lookRight(1);
-  raise('postUpdate');
+  tick(16);
+  tick(600);
   assert.deepEqual(seen, ['start', 'end'], 'nothing after dispose');
+});
+
+test('a new field of view is a move: moveStart, then moveEnd 500 ms on', () => {
+  const { widget, scene, raise } = tickingWidget();
+  cityView(scene.camera);
+  const clock = { ms: 0 };
+  const ports = createCesiumPorts(widget, {
+    capabilities: all,
+    now: () => clock.ms,
+  });
+  const seen = [];
+  ports.camera.on('moveStart', () => seen.push('start'));
+  ports.camera.on('moveEnd', () => seen.push('end'));
+  raise('postUpdate');
+  // A resize: the eye stays where it is.
+  scene.camera.frustum.aspectRatio = 2;
+  clock.ms += 16;
+  raise('postUpdate');
+  assert.deepEqual(seen, ['start']);
+  clock.ms += 500;
+  raise('postUpdate');
+  assert.deepEqual(seen, ['start', 'end']);
+  ports.dispose();
+});
+
+test('dispose gives the scene back Cesium’s own tween clock', () => {
+  const { widget, scene } = tickingWidget();
+  const own = scene.tweens.update;
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.notEqual(scene.tweens.update, own);
+  ports.dispose();
+  assert.equal(scene.tweens.update, own);
+});
+
+test('moveEnd waits for a still camera: rounding in Cesium’s vectors is no move', () => {
+  const { widget, scene, raise } = tickingWidget();
+  cityView(scene.camera);
+  const clock = { ms: 0 };
+  const ports = createCesiumPorts(widget, {
+    capabilities: all,
+    now: () => clock.ms,
+  });
+  const seen = [];
+  ports.camera.on('moveEnd', () => seen.push('end'));
+  raise('postUpdate');
+  scene.camera.lookRight(0.01);
+  raise('postUpdate');
+  for (let i = 0; i < 40; i++) {
+    // The same view, derived again: off in the last bits.
+    const d = scene.camera.direction;
+    const nudge = (i % 2 ? 1 : -1) * 4 * Number.EPSILON * Math.abs(d.x);
+    scene.camera.direction = new Cesium.Cartesian3(d.x + nudge, d.y, d.z);
+    clock.ms += 16;
+    raise('postUpdate');
+  }
+  assert.deepEqual(seen, ['end']);
+  ports.dispose();
 });
 
 test('pose: degrees, and NaN where Cesium has no cartographic position', () => {
@@ -751,13 +825,19 @@ test('pose: degrees, and NaN where Cesium has no cartographic position', () => {
 });
 
 test('a camera listener that disposes the port stops the rest of its event', () => {
-  const { widget, scene } = tickingWidget();
+  const { widget, scene, raise } = tickingWidget();
+  cityView(scene.camera);
   const ports = createCesiumPorts(widget, { capabilities: all });
   const seen = [];
-  ports.camera.on('moveStart', () => ports.dispose());
+  ports.camera.on('moveStart', () => {
+    seen.push('first');
+    ports.dispose();
+  });
   ports.camera.on('moveStart', () => seen.push('second'));
-  scene.camera.moveStart.raiseEvent();
-  assert.deepEqual(seen, []);
+  raise('postUpdate');
+  scene.camera.lookRight(0.01);
+  raise('postUpdate');
+  assert.deepEqual(seen, ['first']);
 });
 
 test('viewRectangle is in degrees, around the point below a downward eye', () => {

@@ -34,13 +34,15 @@ const angleDelta = (a, b) => {
 };
 
 /**
- * Whether two world views are the same: the same position, and directions
- * and ups whose dot products are each one's own.
+ * Whether two world views are the same: the same position, directions and
+ * ups whose dot products are each one's own, and the same `lens` (a
+ * renderer's key for its field of view and aspect, where it gives one).
  */
 function sameView(a, b) {
   return (
     a &&
     b &&
+    a.lens === b.lens &&
     distance(a.position, b.position) === 0 &&
     dot(a.direction, b.direction) === dot(a.direction, a.direction) &&
     dot(a.up, b.up) === dot(a.up, a.up)
@@ -152,7 +154,12 @@ export function createCameraEvents({
    */
   function stepMoveDetection(now) {
     const v = world();
-    const current = { position: v.position, direction: v.direction, up: v.up };
+    const current = {
+      position: v.position,
+      direction: v.direction,
+      up: v.up,
+      lens: v.lens,
+    };
     const changed = lastView && !sameView(lastView, current);
     lastView = current;
     if (changed) {
