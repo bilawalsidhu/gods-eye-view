@@ -480,6 +480,40 @@ test('a layer that fails to tear down stays in the library', async (t) => {
   library.destroy();
 });
 
+test('the URL keeps the opening lib= before availability loads and for entries it cannot serve', async (t) => {
+  const manager = sealedManager(t);
+  const shareLink = shareLinkDouble();
+  let answer;
+  const pending = new Promise((resolve) => {
+    answer = resolve;
+  });
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(),
+    shareLink,
+    initialHash: '#lat=1&lon=2&lib=00.01',
+    source: { ...source({}), getAvailability: () => pending },
+  });
+  const started = library.start();
+  // A camera move rewrites the hash before the catalog answers.
+  assert.equal(shareLink.encode(), '00.01');
+  answer({
+    server: false,
+    availability: new Map([
+      ['night-lights', { available: false, reason: 'server-unavailable' }],
+      ['sea-marks', { available: true, reason: null }],
+    ]),
+  });
+  await started;
+  await manager.waitForLayerSettled?.('lib-sea-marks');
+  assert.equal(manager.layers.has('lib-night-lights'), false);
+  assert.equal(shareLink.encode(), '00.01');
+  library.destroy();
+});
+
 test('zoom flies to an added layer through the caller, reset removes everything', async (t) => {
   const manager = sealedManager(t);
   const storage = memoryStorage();

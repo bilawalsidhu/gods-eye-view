@@ -257,10 +257,16 @@ export function createDataLibrary({
   }
   shareLink?.setLibraryShareListener?.(applyShare);
 
+  // The URL carries what is on. Until availability loads (or when it never
+  // does) that is still what the page opened with, so a hash write in the
+  // meantime keeps it; an entry this instance cannot serve stays in it too.
   shareLink?.setLibraryParamsEncoder?.((params) =>
     encodeLibraryParam(
       params,
-      selection.on.filter((id) => isRegistered(id)),
+      loaded
+        ? selection.on
+        : ((queuedShare ? idsForTokens(queuedShare) : openingShare()) ??
+            readStoredLibrarySelection(storage, switchable).on),
       tokens.tokenById,
     ),
   );
