@@ -272,7 +272,7 @@ async function main() {
     });
     const consoleErrors = [];
     const failedResponses = [];
-    const externalCesiumEndpointFailures = [];
+    const ionEndpointFailures = [];
     page.on('console', (message) => {
       if (message.type() === 'error') {
         const sourceUrl = message.location()?.url || '';
@@ -288,13 +288,13 @@ async function main() {
     page.on('requestfailed', (request) => {
       const url = request.url();
       if (isIonEndpoint(url)) {
-        externalCesiumEndpointFailures.push(`${request.failure()?.errorText || 'request failed'} ${url}`);
+        ionEndpointFailures.push(`${request.failure()?.errorText || 'request failed'} ${url}`);
       }
     });
     page.on('response', (response) => {
       if (response.status() >= 500) {
         const entry = `HTTP ${response.status()} ${response.url()}`;
-        if (isIonEndpoint(response.url())) externalCesiumEndpointFailures.push(entry);
+        if (isIonEndpoint(response.url())) ionEndpointFailures.push(entry);
         else failedResponses.push(entry);
       }
     });
@@ -4522,7 +4522,7 @@ async function main() {
     if (externalFontFailures.length > 0) {
       console.log(`INFO external Google Fonts resource unavailable (${externalFontFailures.length}); Radio assertions continued with the local fallback font`);
     }
-    if (externalCesiumEndpointFailures.length > 0) {
+    if (ionEndpointFailures.length > 0) {
       const requestEventIndex = actionableConsoleErrors.findIndex((entry) => (
         entry.startsWith('[object RequestErrorEvent]')
         && entry.includes('/node_modules/.vite/deps/cesium.js')
@@ -4535,7 +4535,7 @@ async function main() {
           actionableConsoleErrors.splice(i, 1);
         }
       }
-      console.log(`INFO Cesium ion asset endpoint unavailable (${externalCesiumEndpointFailures.length}); Radio assertions continued against the loaded app`);
+      console.log(`INFO Cesium ion asset endpoint unavailable (${ionEndpointFailures.length}); Radio assertions continued against the loaded app`);
     }
     check(
       'runtime console remains clean',
