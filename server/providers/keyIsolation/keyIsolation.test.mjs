@@ -142,7 +142,7 @@ test('ion: endpoints are served from memory for a minute and refreshed when thei
   assert.equal(n, 2);
 });
 
-test('ion: a client asking again after a minute gets a new document, with ion called at most once a minute per asset', async () => {
+test('ion: a client asking again after a minute gets a new document, with ion called at most once a minute per asset while it answers', async () => {
   // CesiumJS asks for the endpoint again, with the same request, when ion
   // rejects an asset token (IonResource's retry callback).
   let clock = 1_000_000;
