@@ -1555,6 +1555,8 @@ export function createStubRenderer(options = {}) {
   let terrainKey = 'null';
   // The last `setBase` wins; its style load in flight, if any.
   let baseGen = 0;
+  /** The `setBase` call whose base is drawn now (a failed one changes none). */
+  let drawnGen = 0;
   let baseLoad = null;
   const globe = {
     async setBase(base) {
@@ -1589,6 +1591,7 @@ export function createStubRenderer(options = {}) {
         }
         if (!current()) return superseded();
       }
+      drawnGen = gen;
       for (const layer of imageryLayers.slice()) layer.remove();
       // The imagery is added before anything is awaited, so a later call,
       // which removes it, always finds it.
@@ -1599,7 +1602,7 @@ export function createStubRenderer(options = {}) {
       return {
         photoreal: photorealStatus,
         imagery: layers,
-        settled: current(),
+        settled: gen === drawnGen && !destroyed,
       };
     },
     async setPhotoreal(spec) {

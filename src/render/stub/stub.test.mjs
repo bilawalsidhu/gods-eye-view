@@ -253,3 +253,25 @@ test('two setBase calls, neither awaited, leave the later one’s imagery alone'
   assert.equal((await first).settled, false, 'the overtaken one');
   r.destroy();
 });
+
+test('a later setBase whose style fails leaves the earlier one the base, settled', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 500 });
+  try {
+    const r = createStubRenderer();
+    const first = r.globe.setBase({
+      photoreal: null,
+      imagery: [{ kind: 'xyz', url: 'https://a.invalid/{z}/{x}/{y}.png' }],
+    });
+    const second = r.globe.setBase({
+      vector: { styleUrl: 'https://s.invalid/x' },
+    });
+    await assert.rejects(second);
+    const status = await first;
+    assert.deepEqual(r.globe.imagery.list(), status.imagery);
+    assert.equal(status.settled, true, 'its base is the one drawn');
+    r.destroy();
+  } finally {
+    globalThis.fetch = original;
+  }
+});

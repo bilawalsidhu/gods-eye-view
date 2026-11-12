@@ -136,6 +136,8 @@ export function createCesiumGlobe(
   let photorealGen = 0;
   let terrainGen = 0;
   let baseGen = 0;
+  /** The `setBase` call whose base is drawn now (a failed one changes none). */
+  let drawnGen = 0;
   /** Aborts the style load of the `setBase` in flight, if any. */
   let baseLoad = null;
   let baseCredit = null;
@@ -273,6 +275,7 @@ export function createCesiumGlobe(
       }
       if (!current()) return superseded();
     }
+    drawnGen = gen;
     for (const handle of imagery.list()) handle.remove();
     baseCredit?.();
     baseCredit = base.credit && credits ? credits.addStatic(base.credit) : null;
@@ -296,8 +299,9 @@ export function createCesiumGlobe(
     return {
       photoreal: photorealStatus,
       imagery: layers,
-      // A base a later call replaced has not settled.
-      settled: current() && isSettled('base'),
+      // A base a later call replaced has not settled; one whose later call
+      // failed is still drawn.
+      settled: gen === drawnGen && !disposed && isSettled('base'),
     };
   }
 
