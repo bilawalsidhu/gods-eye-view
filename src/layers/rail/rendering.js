@@ -517,6 +517,14 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
+   * Whether the train's playback runs: it is drawn, or a first-person view
+   * rides it, which keeps it moving, hidden, in a category turned off.
+   */
+  function playing(entry) {
+    return categoryShown(entry) || entry.key === state._cockpitSubjectKey;
+  }
+
+  /**
    * A train bound to its railway line is drawn on the line, at the arc its
    * playback has reached; any other train (or a bound train whose reports do
    * not fit the line) is drawn on the time-interpolated straight-line point.
@@ -602,7 +610,7 @@ export function createRendering({ state, services, parts }) {
     place(entry);
     const sample = entry.sample;
     const moving =
-      categoryShown(entry) &&
+      playing(entry) &&
       sample?.phase === 'playing' &&
       sample.segmentSpeedMps > 0;
     if (moving) {
@@ -610,7 +618,7 @@ export function createRendering({ state, services, parts }) {
       return;
     }
     state._moving.delete(entry);
-    if (categoryShown(entry) && Number.isFinite(sample?.nextWakeMonoMs)) {
+    if (playing(entry) && Number.isFinite(sample?.nextWakeMonoMs)) {
       entry.wakeTimer = setTimeout(
         () => {
           entry.wakeTimer = null;

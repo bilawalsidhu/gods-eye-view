@@ -4,7 +4,12 @@
 // hides its marker and card, keeps it selected and ends when it goes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RAIL_POLL_MS, STOP_REFRESH_MS, railTrainKey } from './policy.js';
+import {
+  RAIL_POLL_MS,
+  STOP_REFRESH_MS,
+  railTrainFollowable,
+  railTrainKey,
+} from './policy.js';
 import {
   BOSTON,
   railLayerHarness as harness,
@@ -214,6 +219,128 @@ test('a held train hides its marker and card and keeps the selection', async (t)
     1,
     'the card is back',
   );
+});
+
+const MADRID = { lat: 40.4168, lon: -3.7038 };
+
+test('a held train stays the copy drawn when another feed’s copy outranks it, and keeps moving', async (t) => {
+  const app = harness(t, { at: MADRID });
+  // One Alvia in two feeds: a station-event copy, held, and a poll later a
+  // GPS copy that would outrank it.
+  let step = 0;
+  let gpsCopy = false;
+  const lat = (offset) => MADRID.lat + offset + step * 0.003;
+  app.feeds.set('renfe-cercanias', () => [
+    train('A1', lat(0), MADRID.lon, {
+      label: 'ALVIA 4073',
+      positionSource: 'event',
+    }),
+  ]);
+  app.feeds.set('renfe-larga-distancia', () =>
+    gpsCopy ? [train('B1', lat(0.01), MADRID.lon, { label: '4073' })] : [],
+  );
+  await app.enable();
+  const a = railTrainKey('renfe-cercanias', 'A1');
+  const b = railTrainKey('renfe-larga-distancia', 'B1');
+  for (let i = 0; i < 12 && !railTrainFollowable(app.entry(a)); i += 1) {
+    step += 1;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+  }
+  assert.ok(railTrainFollowable(app.entry(a)), 'the train is moving');
+  assert.equal(app.layer.setCockpitSubject(a), true);
+
+  gpsCopy = true;
+  step += 1;
+  app.run(RAIL_POLL_MS);
+  await app.poll();
+  // The view knows the train by its key, and the copies stand apart: the
+  // held copy stays drawn and selected, the other is the one hidden.
+  assert.equal(app.layer.getCockpitSubject()?.key, a);
+  assert.equal(app.state()._selectedKey, a);
+  assert.equal(app.entry(a).duplicate, false);
+  assert.equal(app.entry(b).duplicate, true);
+  assert.equal(app.entry(a).marker.show, false);
+  assert.equal(app.entry(b).marker.show, false, 'no other marker on it');
+  assert.deepEqual(
+    app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
+    [],
+    'no card',
+  );
+  // It moves between polls, frame by frame.
+  assert.ok(app.state()._moving.has(app.entry(a)), 'still playing');
+  const before = app.layer.getCockpitSubject().position.latitude;
+  app.run(2000);
+  assert.ok(
+    app.layer.getCockpitSubject().position.latitude > before,
+    'still moving',
+  );
+
+  // Let go: the better copy takes over at the next poll, with the selection.
+  app.layer.setCockpitSubject(null);
+  step += 1;
+  app.run(RAIL_POLL_MS);
+  await app.poll();
+  assert.equal(app.entry(a).duplicate, true);
+  assert.equal(app.entry(b).duplicate, false);
+  assert.equal(app.state()._selectedKey, b);
+  assert.equal(app.entry(b).marker.show, true);
+  assert.equal(
+    (app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? []).length,
+    1,
+    'its card',
+  );
+
+  // A hold of the copy hidden draws it at once, in place of the other.
+  assert.equal(app.layer.setCockpitSubject(a), true);
+  assert.equal(app.state()._selectedKey, a);
+  assert.equal(app.entry(a).duplicate, false);
+  assert.equal(app.entry(b).duplicate, true);
+  assert.equal(app.entry(b).marker.show, false);
+  assert.ok(app.state()._moving.has(app.entry(a)), 'playing');
+});
+
+test('a held train keeps the selection and moves, hidden, when its category is turned off', async (t) => {
+  const app = await onTheLine(t);
+  app.layer.setCockpitSubject(T1);
+  app.run(1000);
+  assert.ok(app.state()._moving.has(app.entry(T1)), 'playing');
+  app.layer.setParams({ regional: false });
+  assert.equal(app.state()._selectedKey, T1, 'still selected');
+  assert.equal(app.layer.getCockpitSubject()?.key, T1);
+  assert.equal(app.entry(T1).marker.show, false);
+  assert.equal(app.entry(T2).marker.show, false, 'its category is hidden');
+  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.deepEqual(
+    app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
+    [],
+    'no card',
+  );
+  // It moves between polls, frame by frame.
+  assert.ok(app.state()._moving.has(app.entry(T1)), 'still playing');
+  const before = app.layer.getCockpitSubject().path.s;
+  app.run(2000);
+  assert.ok(app.layer.getCockpitSubject().path.s > before, 'still moving');
+  assert.equal(app.entry(T1).marker.show, false, 'and still hidden');
+
+  // Let go: a train of a hidden category, deselected and stopped as the
+  // toggle would have left it.
+  app.layer.setCockpitSubject(null);
+  assert.equal(app.state()._selectedKey, null);
+  assert.equal(app.state()._moving.has(app.entry(T1)), false);
+  assert.equal(app.entry(T1).marker.show, false);
+  const parked = app.entry(T1).path.drawS;
+  app.run(2000);
+  assert.equal(app.entry(T1).path.drawS, parked, 'stopped');
+  // Held again, hidden, it plays at once; let go, it stops again.
+  assert.equal(app.layer.setCockpitSubject(T1), true);
+  assert.ok(app.state()._moving.has(app.entry(T1)), 'playing at once');
+  app.layer.setCockpitSubject(null);
+  assert.equal(app.state()._moving.has(app.entry(T1)), false);
+  // Shown again, it is drawn and moves as any other.
+  app.layer.setParams({ regional: true });
+  assert.equal(app.entry(T1).marker.show, true);
+  assert.ok(app.state()._moving.has(app.entry(T1)), 'playing again');
 });
 
 test('a held train that goes takes the hold with it; focusTrain selects', async (t) => {

@@ -73,10 +73,15 @@ function reuse(previous, next) {
  * `setCockpitSubject(key)` holds a train: its marker, card and selected line
  * are hidden, it stays selected (so its stops stay fresh and its feed stays
  * polled at any distance) and clicks and Escape no longer change the
- * selection. The hold ends with `setCockpitSubject(null)`, and on its own
- * when the train is removed or the layer is turned off. A train removed while
- * held leaves its feed polled until the next `setCockpitSubject` call, so a
- * view that waits for it holds it again if the feed lists it again.
+ * selection. A held train keeps moving, hidden, and keeps the selection when
+ * its category is turned off, and is the copy of its train drawn though
+ * another feed's copy would outrank it (dedupe.js). Released, it is a train
+ * like any other: one in a category turned off is deselected and stops, and
+ * a better copy takes over at the next poll. The hold ends with
+ * `setCockpitSubject(null)`, and on its own when the train is removed or the
+ * layer is turned off. A train removed while held leaves its feed polled
+ * until the next `setCockpitSubject` call, so a view that waits for it holds
+ * it again if the feed lists it again.
  * `focusTrain(key)` selects a train and hands it the camera, as a click does.
  * A snapshot's `selectedAtMs` is when the user last selected the selected
  * train (a click, or `focusTrain`), even again, for a view's entry to tell a
@@ -233,6 +238,13 @@ export function createRailCockpitSubject({
     return snapshot;
   }
 
+  /** A train's marker and playback again, after a hold on it began or ended. */
+  function replay(entry) {
+    parts.rendering.paint(entry);
+    parts.rendering.schedulePlayback(entry);
+    parts.rendering.syncRenderHold();
+  }
+
   const methods = {
     /** The selected train (see createRailCockpitSubject), or null. */
     getSelectedTrain() {
@@ -253,7 +265,16 @@ export function createRailCockpitSubject({
       if (key === null || key === undefined) {
         state._cockpitSubjectKey = null;
         state._cockpitLostFeedId = null;
-        if (previous) parts.rendering.paint(previous);
+        if (previous) {
+          // Its category turned off meanwhile: deselected, as the toggle
+          // does to any other train (controls.js).
+          if (
+            previous.key === state._selectedKey &&
+            state._categories[previous.category] === false
+          )
+            parts.selection.clearSelection();
+          replay(previous);
+        }
         parts.selection.refreshSelectedCard(true);
         parts.routes.applyHold?.();
         return true;
@@ -267,8 +288,10 @@ export function createRailCockpitSubject({
       }
       state._cockpitSubjectKey = key;
       state._cockpitLostFeedId = null;
-      if (previous && previous !== entry) parts.rendering.paint(previous);
-      parts.rendering.paint(entry);
+      // Another feed's copy drew it: the held copy is drawn now (dedupe.js).
+      if (entry.duplicate === true) parts.ingestion.duplicates?.refresh();
+      if (previous && previous !== entry) replay(previous);
+      replay(entry);
       parts.selection.refreshSelectedCard(true);
       parts.routes.applyHold?.();
       return true;

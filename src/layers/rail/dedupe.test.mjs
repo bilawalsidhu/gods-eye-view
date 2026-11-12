@@ -252,6 +252,32 @@ test('the filter hides the weaker copy and the selection follows its train', () 
   assert.deepEqual(filter.stats(), { groups: 0, hidden: 0 });
 });
 
+test('a copy a first-person view holds stays drawn, with the selection', () => {
+  const pair = [
+    copy('a', 'f1', { number: '160', position: 'event' }),
+    copy('b', 'f2', { number: '160', position: 'gps' }),
+  ];
+  assert.equal(chooseCopies([pair]).winners.get('a'), 'b');
+  const held = chooseCopies([pair], new Map(), 'a');
+  assert.equal(held.winners.get('b'), 'a', 'drawn whatever the scores');
+  assert.deepEqual([...held.hidden], ['b']);
+  // Let go, the better copy takes over.
+  assert.equal(chooseCopies([pair], held.winners).winners.get('a'), 'b');
+
+  const layer = fakeLayer({ selected: 'feed-a:v160' });
+  layer.state._cockpitSubjectKey = 'feed-a:v160';
+  const filter = createDuplicateFilter({ ...layer, defer: (fn) => fn() });
+  filter.refresh();
+  const [unbound, operator] = layer.trains;
+  assert.equal(unbound.duplicate, false, 'the held copy');
+  assert.equal(operator.duplicate, true);
+  assert.deepEqual(layer.calls.selected, [], 'the selection stays on it');
+  layer.state._cockpitSubjectKey = null;
+  filter.refresh();
+  assert.equal(unbound.duplicate, true);
+  assert.deepEqual(layer.calls.selected, [operator.key]);
+});
+
 test('a short number after a local product names a line, not a train (S1, RB 1, U6)', () => {
   for (const label of ['S1', 'RB 1', 'U6', 'S 12', 'RE5'])
     assert.equal(recordTrainNumber({ label }), null, label);
