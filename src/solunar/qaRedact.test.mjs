@@ -1,5 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+
+test('QA does not print arbitrary browser or exception diagnostics', () => {
+  const source = readFileSync(
+    new URL('../../scripts/qa-solunar.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /console\.error\('\[qa-solunar\] unable to complete browser checks'\)/,
+  );
+  assert.doesNotMatch(
+    source,
+    /e\?\.stack|e\?\.message|String\(e\)|JSON\.stringify\(opened\.days\[0\]\)/,
+  );
+  assert.doesNotMatch(source, /detail \? ' - ' \+ detail/);
+});
 import { makeRedactor, urlSecrets } from '../../scripts/qa-solunar-redact.mjs';
 
 test('a failed navigation echoing the QA url prints no userinfo or query value', () => {
