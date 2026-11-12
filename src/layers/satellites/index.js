@@ -7,6 +7,7 @@ import { createRendering } from './rendering.js';
 import { createTracking } from './tracking.js';
 import { createTesting } from './testing.js';
 import { createInteraction } from './interaction.js';
+import { createIssCommand } from './issCommand.js';
 import { createIssLive } from './issLive.js';
 import { createIssModel } from './issModel.js';
 import { createLifecycle } from './lifecycle.js';
@@ -33,6 +34,7 @@ export function createSatellitesLayer({
   parts.rendering = createRendering(context);
   parts.issModel = createIssModel({ ...context, resolveAsset });
   parts.issLive = createIssLive(context);
+  parts.issCommand = createIssCommand(context);
   parts.tracking = createTracking(context);
   parts.testing = createTesting(context);
   parts.interaction = createInteraction(context);

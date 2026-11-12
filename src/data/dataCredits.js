@@ -158,7 +158,7 @@ export const DATA_CREDITS = [
     key: 'nasa-iss-model',
     html:
       'ISS model: ' +
-      '<a href="https://github.com/nasa/NASA-3D-Resources" target="_blank" rel="noopener">NASA 3D Resources</a>',
+      '<a href="https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/" target="_blank" rel="noopener">NASA 3D Resources</a> (JSC IGOAL)',
   },
   {
     key: 'nasa-iss-live',

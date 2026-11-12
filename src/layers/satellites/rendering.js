@@ -236,6 +236,7 @@ export function createRendering({
 
     // NASA's live video beside the card while the ISS is selected.
     parts.issLive?._syncIssLive();
+    parts.issCommand?._syncIssCommand();
 
     _updatePointFocus(now);
 

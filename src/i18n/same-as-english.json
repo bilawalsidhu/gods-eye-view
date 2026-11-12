@@ -405,7 +405,8 @@
     "iNaturalist",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "Manual"
   ],
   "fr": [
     "1 min/s",
@@ -1050,7 +1051,8 @@
     "iNaturalist",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "Manual"
   ],
   "ru": [
     "1900–1945",

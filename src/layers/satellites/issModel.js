@@ -1,11 +1,18 @@
 import * as Cesium from 'cesium';
 import { eciToGeodetic, gstime, propagate } from 'satellite.js';
+import { createIssArticulation } from './issArticulation.js';
 import {
+  ISS_COMPANION_COARSE_M,
+  ISS_COMPANION_RADIUS_M,
+  ISS_COMPANION_SCAN_MS,
+  ISS_CARD_CLEAR_M,
+  ISS_MODEL_LOCAL_AXES,
   ISS_MODEL_MAX_DISTANCE_M,
   ISS_MODEL_MIN_PX,
   ISS_MODEL_NATIVE_SPAN,
   ISS_MODEL_URL,
   ISS_NORAD,
+  ISS_ORBIT_HIDE_M,
   ISS_SPAN_M,
 } from './policy.js';
 
@@ -98,6 +105,8 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
   let loading = false;
   let failed = false;
   let generation = 0;
+  /** Turns the solar arrays and radiators by where the Sun is. */
+  const articulation = createIssArticulation();
   const nearCondition = new Cesium.DistanceDisplayCondition(
     0,
     ISS_MODEL_MAX_DISTANCE_M,
@@ -106,7 +115,15 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
     ISS_MODEL_MAX_DISTANCE_M,
     Number.MAX_VALUE,
   );
+  /** @type {Set<number>} Docked objects whose dots the model stands in for. */
+  const handedCompanions = new Set();
+  let lastCompanionScanMs = Number.NEGATIVE_INFINITY;
+  /** Whether the ISS's orbit ring is hidden for the close-up. */
+  let orbitHidden = false;
   const scratchPosition = new Cesium.Cartesian3();
+  /** The station centre the model last rendered at (for the tracked card). */
+  const visualPosition = new Cesium.Cartesian3();
+  let visualValid = false;
   const scratchRotation = new Cesium.Matrix3();
   const scratchColumn = new Cesium.Cartesian3();
 
@@ -153,6 +170,17 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
     }
   }
 
+  /** An object's inertial position at `date`, km, or null. */
+  function _temeKm(satrec, date) {
+    if (!satrec) return null;
+    try {
+      const position = propagate(satrec, date)?.position;
+      return position && typeof position !== 'boolean' ? position : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Leave the near range to the model: the dots draw only beyond it. */
   function _handOverDots() {
     const point = layerState._points.get(ISS_NORAD);
@@ -167,30 +195,118 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
   }
 
   /**
+   * Objects docked to the ISS (Nauka, a Soyuz, a Dragon…) have dots of their
+   * own at the station's position. Near the model they are part of it, and
+   * their dots, moved only a few times a second, jump across the model at
+   * 7.6 km/s. While the model shows, their dots draw only beyond its range
+   * too. Rescanned once a second: a vehicle that undocks gets its dot back,
+   * and a catalog rebuild's new dots are picked up.
+   * @param {number} nowMs
+   */
+  function _handOverCompanions(nowMs) {
+    if (nowMs - lastCompanionScanMs < ISS_COMPANION_SCAN_MS) return;
+    lastCompanionScanMs = nowMs;
+    const issPosition = layerState._points.get(ISS_NORAD)?.position;
+    // The dots are placed at different moments (far apart with the clock sped
+    // up), so their spacing only rules out what is nowhere near. Whether an
+    // object is docked is read from both orbits at one instant.
+    const date = new Date(layerState.now());
+    const issTeme = _temeKm(layerState._catalog.get(ISS_NORAD)?.satrec, date);
+    if (!issPosition || !issTeme) return;
+    for (const [noradId, point] of layerState._points) {
+      if (noradId === ISS_NORAD || !point?.position) continue;
+      const entry = layerState._catalog.get(noradId);
+      if (entry?.group === 'dense') continue;
+      let docked = false;
+      if (
+        Cesium.Cartesian3.distance(point.position, issPosition) <=
+        ISS_COMPANION_COARSE_M
+      ) {
+        const teme = _temeKm(entry?.satrec, date);
+        docked =
+          Boolean(teme) &&
+          Math.hypot(
+            teme.x - issTeme.x,
+            teme.y - issTeme.y,
+            teme.z - issTeme.z,
+          ) *
+            1000 <=
+            ISS_COMPANION_RADIUS_M;
+      }
+      if (docked) {
+        point.distanceDisplayCondition = farCondition; // no-op when equal
+        handedCompanions.add(noradId);
+      } else if (handedCompanions.has(noradId)) {
+        point.distanceDisplayCondition = undefined;
+        handedCompanions.delete(noradId);
+      }
+    }
+  }
+
+  /** Give docked objects their dots back at every distance. */
+  function _releaseCompanions() {
+    for (const noradId of handedCompanions) {
+      const point = layerState._points.get(noradId);
+      if (point) point.distanceDisplayCondition = undefined;
+    }
+    handedCompanions.clear();
+    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
+  }
+
+  /**
+   * Up close the orbit ring (polyline chords, turned once a second) runs off
+   * the model and jumps across it, so it is hidden there.
+   * @param {boolean} near Camera within ISS_ORBIT_HIDE_M of the station.
+   */
+  function _syncOrbitCloseUp(near) {
+    const path = layerState._orbitPaths.get(ISS_NORAD);
+    if (near) {
+      if (path) path.primitive.show = false;
+      orbitHidden = true;
+    } else if (orbitHidden) {
+      orbitHidden = false;
+      // Back to the ring's own rules, unless the Cockpit holds it hidden.
+      if (layerState._cockpitHiddenPath !== ISS_NORAD)
+        parts.controls._syncIssOrbit?.();
+    }
+  }
+
+  /**
    * Per-frame update from the layer's preRender tick.
    * @returns {void}
    */
   function _updateIssModel() {
+    visualValid = false;
     const show = _shouldShow();
     if (!show) {
       if (model) model.show = false;
+      if (handedCompanions.size) _releaseCompanions();
+      _syncOrbitCloseUp(false);
       return;
     }
+    const point = layerState._points.get(ISS_NORAD);
+    const camera = layerState._viewer?.camera;
+    const cameraDistance =
+      point?.position && camera
+        ? Cesium.Cartesian3.distance(camera.positionWC, point.position)
+        : Number.POSITIVE_INFINITY;
     if (!model) {
-      if (!loading && !failed && resolveAsset) _load();
+      // The file is fetched only once the camera nears the model's range, so
+      // a globe-wide view of the layer never downloads it.
+      if (
+        !loading &&
+        !failed &&
+        resolveAsset &&
+        cameraDistance <= ISS_MODEL_MAX_DISTANCE_M * 1.5
+      )
+        _load();
       return;
     }
     _handOverDots();
-
-    const point = layerState._points.get(ISS_NORAD);
-    const camera = layerState._viewer?.camera;
+    _handOverCompanions(Date.now());
+    _syncOrbitCloseUp(cameraDistance < ISS_ORBIT_HIDE_M);
     // Out of range the model would not draw anyway: skip the SGP4 sample.
-    if (
-      point?.position &&
-      camera &&
-      Cesium.Cartesian3.distance(camera.positionWC, point.position) >
-        ISS_MODEL_MAX_DISTANCE_M * 1.5
-    ) {
+    if (cameraDistance > ISS_MODEL_MAX_DISTANCE_M * 1.5) {
       model.show = false;
       return;
     }
@@ -236,6 +352,7 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
         scratchPosition,
       );
     }
+    Cesium.Cartesian3.clone(scratchPosition, visualPosition);
     const axes = issFlightAxes(
       scratchPosition,
       temeToEcefAxes(posVel.velocity, gmst),
@@ -244,7 +361,7 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
       model.show = false;
       return;
     }
-    ['x', 'y', 'z'].forEach((key, column) => {
+    ISS_MODEL_LOCAL_AXES.forEach((key, column) => {
       scratchColumn.x = axes[key][0];
       scratchColumn.y = axes[key][1];
       scratchColumn.z = axes[key][2];
@@ -260,14 +377,58 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
       scratchPosition,
       model.modelMatrix,
     );
+    articulation.update(model, date, scratchPosition, axes);
     model.show = true;
+    visualValid = true;
   }
 
-  /** Drop the model (destroy or a fresh init); the next need reloads it. */
+  /**
+   * Where the tracked card should anchor: the station centre the model is
+   * rendering at this frame, or null while the model is not drawn (the card
+   * then keeps the dot's position). Up close the dot's cache can be a frame
+   * ahead of the rendered model, ~130 m of orbit, which shook the card.
+   * @returns {Cesium.Cartesian3|null}
+   */
+  function _issVisualPosition() {
+    if (!visualValid || !model?.show) return null;
+    const camera = layerState._viewer?.camera;
+    if (
+      camera &&
+      Cesium.Cartesian3.distance(camera.positionWC, visualPosition) >
+        ISS_MODEL_MAX_DISTANCE_M
+    )
+      return null;
+    return visualPosition;
+  }
+
+  /**
+   * How far the tracked card must stay from its anchor to clear the model, in
+   * pixels, or null while the dot shows.
+   */
+  function _issCardClearPx() {
+    const position = _issVisualPosition();
+    const viewer = layerState._viewer;
+    const camera = viewer?.camera;
+    const height = viewer?.scene?.canvas?.clientHeight;
+    const fovy = camera?.frustum?.fovy;
+    if (!position || !height || !fovy) return null;
+    const distance = Cesium.Cartesian3.distance(camera.positionWC, position);
+    if (!(distance > 0)) return null;
+    const pixelsPerMeter = height / (2 * Math.tan(fovy / 2)) / distance;
+    return Math.min(
+      height * 0.45,
+      Math.max(ISS_MODEL_MIN_PX * 0.35, ISS_CARD_CLEAR_M * pixelsPerMeter),
+    );
+  }
+
   function _destroyIssModel() {
     generation += 1;
     loading = false;
     failed = false;
+    visualValid = false;
+    articulation.reset();
+    _releaseCompanions();
+    _syncOrbitCloseUp(false);
     if (model) {
       const scene = layerState._viewer?.scene;
       if (scene && scene.primitives.contains(model))
@@ -277,5 +438,18 @@ export function createIssModel({ state: layerState, parts, resolveAsset }) {
     }
   }
 
-  return { _updateIssModel, _destroyIssModel };
+  /** Whether the model is standing in for this docked object's dot. */
+  function _issStandsInFor(noradId) {
+    return handedCompanions.has(noradId) && _issVisualPosition() !== null;
+  }
+
+  return {
+    _updateIssModel,
+    _destroyIssModel,
+    _issVisualPosition,
+    _issCardClearPx,
+    _issStandsInFor,
+    /** The joint driver, for the command panel. */
+    _issArticulation: articulation,
+  };
 }

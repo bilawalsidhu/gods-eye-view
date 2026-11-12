@@ -21,7 +21,10 @@ export const ISS_NORAD = 25544;
 
 /**
  * The ISS drawn as a 3D model up close (issModel.js): NASA's "International
- * Space Station (ISS) (A)" from NASA 3D Resources, shipped unmodified.
+ * Space Station (ISS) (D) (IGOAL)" from NASA 3D Resources, the station's
+ * current configuration (Nauka, Prichal, Bishop, the roll-out solar arrays),
+ * with NASA's own textures. The shipped file is that model reduced for the
+ * web and put in one frame, in meters (public/models/README.md says how).
  */
 export const ISS_MODEL_URL = '/models/iss.glb';
 
@@ -29,10 +32,28 @@ export const ISS_MODEL_URL = '/models/iss.glb';
 export const ISS_SPAN_M = 109;
 
 /**
- * The asset's truss length in its own units: the mesh's X extent (37.772)
- * times the root node's scale (0.678121), read from the file's accessors.
+ * The asset's span along its truss (glTF X, solar array to solar array) in
+ * its own units, read from the file's accessors. The file is in meters.
  */
-export const ISS_MODEL_NATIVE_SPAN = 25.614;
+export const ISS_MODEL_NATIVE_SPAN = 109;
+
+/**
+ * The station's bounding-box centre in the file's coordinates, whose origin is
+ * NASA's (the middle of the S0 truss). The scene root is translated by minus
+ * this, so the model's origin is the station's centre. That is what
+ * minimumPixelSize scales about, so the enlarged far-range model stays
+ * centred on the orbital position (and on the tracked card's leader).
+ */
+export const ISS_MODEL_CENTER_NATIVE = Object.freeze([0, -7.38, 0.001]);
+
+/**
+ * Which flight axis each of the model's local axes (Cesium's, after its glTF
+ * axis correction: local X = glTF Z, Y = glTF X, Z = glTF Y) points along.
+ * The file has the U.S. segment at +Z (forward), Kibo at +X (port) and the Z1
+ * truss at +Y (zenith; the Cupola faces -Y), so: local X → along-track, local
+ * Y → orbit normal, local Z → zenith.
+ */
+export const ISS_MODEL_LOCAL_AXES = Object.freeze(['x', 'y', 'z']);
 
 /**
  * Within this camera distance the model replaces the dot; farther out the dot
@@ -46,6 +67,38 @@ export const ISS_MODEL_MAX_DISTANCE_M = 1_500_000;
  * it readable there; within a few kilometres the true size takes over.
  */
 export const ISS_MODEL_MIN_PX = 72;
+
+/**
+ * Objects within this distance of the ISS are docked to it (their element
+ * sets put them within a few hundred meters); while the model shows, their
+ * dots give way to it inside its range (issModel.js).
+ */
+export const ISS_COMPANION_RADIUS_M = 5_000;
+
+/**
+ * Dots are moved at different moments, so with the clock sped up a docked
+ * object's dot can trail the ISS's by a long way. Only objects whose dots are
+ * within this distance are checked orbit against orbit (issModel.js).
+ */
+export const ISS_COMPANION_COARSE_M = 3_000_000;
+
+/** How often the docked set is rescanned, ms. */
+export const ISS_COMPANION_SCAN_MS = 1_000;
+
+/**
+ * Within this camera distance of the ISS its orbit ring is hidden. The ring is
+ * drawn as ~230 km chords and turned with the Earth once a second, so up close
+ * it runs metres to kilometres off the model and jumps; at the tracked view
+ * (~726 km) and beyond it stays.
+ */
+export const ISS_ORBIT_HIDE_M = 50_000;
+
+/**
+ * The tracked card keeps clear of the model: its gap from the anchor is this
+ * many meters of the station as drawn on screen (about its reach from its
+ * centre in an oblique view), so up close the card sits beside the station, not on it.
+ */
+export const ISS_CARD_CLEAR_M = 40;
 
 /**
  * NASA's official live stream from the ISS on YouTube ("Live High-Definition

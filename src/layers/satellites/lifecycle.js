@@ -134,6 +134,7 @@ export function createLifecycle({
       parts.issModel?._updateIssModel(); // off: hides the model
       parts.tracking._clearTracking();
       parts.issLive?._syncIssLive(); // off: closes the live video
+      parts.issCommand?._syncIssCommand(); // off: closes the command panel
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled
       if (layerState._clickHandler) {
@@ -177,6 +178,7 @@ export function createLifecycle({
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
       parts.issModel?._destroyIssModel();
       parts.issLive?._destroyIssLive();
+      parts.issCommand?._destroyIssCommand();
       if (layerState._pointCollection) {
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;

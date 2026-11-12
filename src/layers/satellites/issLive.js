@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { onLocaleChange, t } from '../../i18n/index.js';
 import { ISS_LIVE_VIDEO_ID, ISS_NORAD } from './policy.js';
 
 /**
@@ -41,6 +41,37 @@ export function issLiveShouldShow({
 }
 
 /**
+ * Drag a floating panel by its header, kept inside the window (as the Québec
+ * player).
+ * @param {HTMLElement} root
+ * @param {HTMLElement} header
+ */
+export function makePanelDraggable(root, header) {
+  header.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('button')) return;
+    const rect = root.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    header.setPointerCapture?.(event.pointerId);
+    const view = root.ownerDocument.defaultView;
+    const move = (moveEvent) => {
+      root.style.left = `${Math.max(0, Math.min(view.innerWidth - root.offsetWidth, moveEvent.clientX - offsetX))}px`;
+      root.style.top = `${Math.max(0, Math.min(view.innerHeight - root.offsetHeight, moveEvent.clientY - offsetY))}px`;
+      root.style.right = 'auto';
+      root.style.bottom = 'auto';
+    };
+    const stop = () => {
+      header.removeEventListener('pointermove', move);
+      header.removeEventListener('pointerup', stop);
+      header.removeEventListener('pointercancel', stop);
+    };
+    header.addEventListener('pointermove', move);
+    header.addEventListener('pointerup', stop, { once: true });
+    header.addEventListener('pointercancel', stop, { once: true });
+  });
+}
+
+/**
  * NASA's live view from the ISS, in a panel beside the existing tracked card
  * while the ISS is selected. The player is created on show and removed on
  * hide, so nothing streams while the panel is closed.
@@ -49,51 +80,86 @@ export function createIssLive({ state: layerState, parts }) {
   let panel = null;
   let dismissed = false;
   let lastTracked = null;
+  /** Rewrites the open panel's text in the current language. */
+  let reword = null;
+  /** Stops listening for language changes; set while the panel is open. */
+  let stopLocale = null;
 
+  /**
+   * The project's floating video window (the Québec CCTV player,
+   * src/ui/quebecCctvOverlay.js): its `qci-` classes, a header that drags it,
+   * × and Escape to close, the source's credit, the privacy note and a link
+   * to the provider's page.
+   */
   function _build(documentRef) {
     const root = documentRef.createElement('section');
-    root.className = 'iss-live-panel';
+    root.className = 'qci-panel iss-live-panel';
     root.setAttribute('role', 'region');
-    root.setAttribute('aria-label', t('ISS live video'));
+    // Worded again on a language change, without restarting the player.
+    const word = [];
+    const worded = (apply) => {
+      word.push(apply);
+      apply();
+    };
+    worded(() => root.setAttribute('aria-label', t('ISS live video')));
 
     const header = documentRef.createElement('header');
-    header.className = 'iss-live-header';
-    const title = documentRef.createElement('span');
+    header.className = 'qci-header';
+    const title = documentRef.createElement('strong');
     title.className = 'iss-live-title';
     const dotMark = documentRef.createElement('span');
     dotMark.className = 'iss-live-dot';
     dotMark.setAttribute('aria-hidden', 'true');
-    title.append(dotMark, documentRef.createTextNode(t('ISS LIVE · NASA')));
-    const link = documentRef.createElement('a');
-    link.className = 'iss-live-link';
-    link.href = issLiveWatchUrl(ISS_LIVE_VIDEO_ID);
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = t('Open on YouTube');
+    const titleText = documentRef.createTextNode('');
+    worded(() => (titleText.data = t('ISS LIVE · NASA')));
+    title.append(dotMark, titleText);
     const close = documentRef.createElement('button');
     close.type = 'button';
-    close.className = 'iss-live-close';
     close.textContent = '×';
-    close.title = t('Close ISS live video');
-    close.setAttribute('aria-label', t('Close ISS live video'));
+    worded(() => close.setAttribute('aria-label', t('Close ISS live video')));
     close.addEventListener('click', () => {
       dismissed = true;
       _syncIssLive();
     });
-    header.append(title, link, close);
+    header.append(title, close);
 
-    const frame = documentRef.createElement('div');
-    frame.className = 'iss-live-frame';
     const iframe = documentRef.createElement('iframe');
+    iframe.className = 'qci-live';
     iframe.src = issLiveEmbedUrl(ISS_LIVE_VIDEO_ID);
-    iframe.title = t('Live views from the International Space Station (NASA)');
+    worded(
+      () =>
+        (iframe.title = t(
+          'Live views from the International Space Station (NASA)',
+        )),
+    );
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
     iframe.allowFullscreen = true;
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
     iframe.loading = 'eager';
-    frame.append(iframe);
 
-    root.append(header, frame);
+    const credit = documentRef.createElement('p');
+    credit.className = 'qci-credit';
+    credit.textContent = 'NASA · YouTube'; // i18n-ignore: provider names
+    const note = documentRef.createElement('p');
+    note.className = 'qci-note';
+    worded(
+      () =>
+        (note.textContent = t(
+          'Video plays from YouTube, which sees your IP address.',
+        )),
+    );
+    const link = documentRef.createElement('a');
+    link.href = issLiveWatchUrl(ISS_LIVE_VIDEO_ID);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    worded(() => (link.textContent = t('Open on YouTube')));
+    reword = () => word.forEach((apply) => apply());
+
+    root.append(header, iframe, credit, note, link);
+    root.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close.click();
+    });
+    makePanelDraggable(root, header);
     return root;
   }
 
@@ -124,12 +190,16 @@ export function createIssLive({ state: layerState, parts }) {
     if (!documentRef?.body) return;
     panel = _build(documentRef);
     documentRef.body.append(panel);
+    stopLocale = onLocaleChange(() => reword?.());
   }
 
   function _removePanel() {
     if (!panel) return;
     panel.remove(); // the player goes with it, so the stream stops
     panel = null;
+    reword = null;
+    stopLocale?.();
+    stopLocale = null;
   }
 
   /** Drop the panel and forget the selection (layer destroy). */

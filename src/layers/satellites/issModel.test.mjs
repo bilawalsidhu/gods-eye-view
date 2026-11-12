@@ -9,6 +9,8 @@ import {
   temeToEcefAxes,
 } from './issModel.js';
 import {
+  ISS_MODEL_CENTER_NATIVE,
+  ISS_MODEL_LOCAL_AXES,
   ISS_MODEL_NATIVE_SPAN,
   ISS_MODEL_URL,
   ISS_NORAD,
@@ -61,22 +63,53 @@ test('the model is the ISS by NORAD number, at its real 109 m span', () => {
   );
 });
 
-test('the native span matches the shipped asset', () => {
+test('the native span and centre match the shipped asset', () => {
   const glb = readFileSync(
     new URL(`../../../public${ISS_MODEL_URL}`, import.meta.url),
   );
   const jsonLength = glb.readUInt32LE(12);
   const gltf = JSON.parse(glb.subarray(20, 20 + jsonLength).toString('utf8'));
-  let minX = Infinity;
-  let maxX = -Infinity;
-  for (const node of gltf.nodes.filter((n) => n.mesh !== undefined)) {
-    for (const primitive of gltf.meshes[node.mesh].primitives) {
+  const root = gltf.nodes[gltf.scenes[0].nodes[0]];
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  // Every node below the root rests untransformed (joint nodes included), so
+  // each mesh's bounds are already in the root's frame.
+  const visit = (index) => {
+    const node = gltf.nodes[index];
+    assert.equal(node.rotation ?? null, null);
+    assert.equal(node.scale ?? null, null);
+    assert.equal(node.translation ?? null, null);
+    for (const primitive of gltf.meshes[node.mesh]?.primitives ?? []) {
       const accessor = gltf.accessors[primitive.attributes.POSITION];
-      minX = Math.min(minX, accessor.min[0] * (node.scale?.[0] ?? 1));
-      maxX = Math.max(maxX, accessor.max[0] * (node.scale?.[0] ?? 1));
+      for (let i = 0; i < 3; i++) {
+        min[i] = Math.min(min[i], accessor.min[i]);
+        max[i] = Math.max(max[i], accessor.max[i]);
+      }
     }
-  }
-  assert.ok(Math.abs(maxX - minX - ISS_MODEL_NATIVE_SPAN) < 0.01);
+    (node.children ?? []).forEach(visit);
+  };
+  root.children.forEach(visit);
+  // The truss is the longest axis, glTF X.
+  assert.ok(Math.abs(max[0] - min[0] - ISS_MODEL_NATIVE_SPAN) < 0.01);
+  assert.ok(max[0] - min[0] > max[1] - min[1]);
+  assert.ok(max[0] - min[0] > max[2] - min[2]);
+  ISS_MODEL_CENTER_NATIVE.forEach((value, i) =>
+    assert.ok(Math.abs((min[i] + max[i]) / 2 - value) < 0.01),
+  );
+  // The scene root moves that centre to the origin: minimumPixelSize scales
+  // the model about its origin, so the far-range model stays centred.
+  assert.deepEqual(
+    root.translation.map((value, i) => value + ISS_MODEL_CENTER_NATIVE[i]),
+    [0, 0, 0],
+  );
+  // NASA's own textures ship with it.
+  assert.ok(gltf.textures.length > 0);
+});
+
+test('the model axes are a proper rotation of the flight axes', () => {
+  // A cyclic order of x, y, z keeps the frame right-handed (no mirroring).
+  const order = ISS_MODEL_LOCAL_AXES.join('');
+  assert.ok(['xyz', 'yzx', 'zxy'].includes(order));
 });
 
 test('flight axes: orthonormal, z away from the Earth, x along the motion', () => {

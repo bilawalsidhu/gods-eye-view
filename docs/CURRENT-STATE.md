@@ -1389,6 +1389,25 @@ tracks the ISS. While the ISS is selected, a panel beside the tracked card plays
 NASA's official ISS live stream (YouTube, muted to start); closing it holds
 until the next selection, and untracking, the Cockpit or turning the layer off
 removes the player.
+The model is NASA/JSC IGOAL's current-configuration station, reduced to 3 MB
+with its joints kept as nodes (`public/models/README.md`), fetched only once
+the camera nears its range. `issArticulation.js` turns them every frame, from
+computation, never telemetry: the two alpha joints and eight beta joints face
+the arrays to the Sun (feathered along the flight direction in the Earth's
+shadow, taken as a cylinder), the two radiator joints keep the radiators
+edge-on to it, the two Ku-band dishes aim at the highest TDRS nominal slots
+(41°W, 171°W, 85°E) above the station's horizon plane, and Canadarm2, Dextre's
+arms and the Japanese arm sway a few degrees about NASA's filed pose, which is
+illustrative only (no public source gives their real pose; the European arm has
+no joints in the file). Joints turn at most 12°/s of wall time. Docked objects
+are found by comparing both orbits at one instant, since dots are moved at
+different moments. Selecting the ISS also shows the command panel
+(`issCommand.js`), collapsed, bottom left: **Zoom to the ISS** (offered beyond
+1 km, eases the follow camera to 260 m), **Automatic** (the default, with a
+lit/shadow status line) and **Manual**, whose controls replace the Sun with a
+chosen position or a 40 s orbit, fold the arrays and radiators as a labelled
+demonstration, aim the dishes and pose Canadarm2 by joint. Automatic, a new
+selection, the Cockpit or turning the layer off hand every joint back.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
 Launch Library pad coordinates retain unknown values: missing fields use the
 reported location coordinates when available, and launches without a known pad

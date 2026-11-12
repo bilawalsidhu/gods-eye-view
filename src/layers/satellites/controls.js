@@ -254,6 +254,13 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
+        // Up close the ISS is its 3D model: no mark on it, nor on what is
+        // docked to it.
+        if (
+          parts.issModel?._issStandsInFor?.(noradId) ||
+          (noradId === ISS_NORAD && parts.issModel?._issVisualPosition?.())
+        )
+          continue;
         // The Cockpit camera rides a held subject; a bracket on it would sit
         // on the lens.
         if (isTracked && parts.cockpit?._cockpitHeld()) continue;
