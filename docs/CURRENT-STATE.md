@@ -3078,24 +3078,24 @@ build constants) (`server/providers/keyIsolation/`,
   asset token, and only for assets it reads without an `externalType`) and
   only while its token has more than 10 minutes left; a Bing or Google
   document is kept until its token has 10 minutes or less left, or 30 minutes
-  when it carries no expiry. So while ion returns documents, it is called at
-  most once a minute per asset for terrain, and once per document lifetime for
-  the others, however many clients ask; requests that arrive while a call to
-  ion is under way share it. That bound holds only while ion returns
-  documents. When ion fails (no answer, a timeout, 408, 429, a 5xx, or an
-  answer this server cannot use: one that is too large, is not JSON or
-  contains the account token), it is not called again for that asset for 10
-  seconds, or the `Retry-After` it names (in seconds), at
-  most 60 seconds; meanwhile a held document is served while its token has
-  more than 10 minutes left (a document that carries no expiry, for its 30
-  minutes), and with none the same error is answered from memory with a
-  `Retry-After`. A refusal (401, 403, 404 or another 4xx) is not cached and
-  has no back-off: the held document is dropped, and each request that finds
-  no call to ion under way reaches ion, as often as the per-IP limit allows
-  (300 a minute per client, 1,200 a minute across all clients). A request
-  answered from memory, or one that joins a call under way, does not count
-  against the per-IP limit. An explicit token passed by an embedder still goes
-  straight to ion.
+  when it carries no expiry. So while ion returns documents whose token has
+  more than 10 minutes left, it is called at most once a minute per asset for
+  terrain, and once per document lifetime for the others, however many clients
+  ask; requests that arrive while a call to ion is under way share it. That
+  bound holds only while ion returns such documents. When ion fails (no
+  answer, a timeout, 408, 429, a 5xx, or an answer this server cannot use: one
+  that is too large, is not JSON or contains the account token), it is not
+  called again for that asset for 10 seconds, or the `Retry-After` it names
+  (in seconds), at most 60 seconds; meanwhile a held document is served while
+  its token has more than 10 minutes left (a document that carries no expiry,
+  for its 30 minutes), and with none the same error is answered from memory
+  with a `Retry-After`. A refusal (401, 403, 404 or any other 4xx except 408
+  and 429) is not cached and has no back-off: the held document is dropped,
+  and each request that finds no call to ion under way reaches ion, as often
+  as the per-IP limit allows (300 a minute per client, 1,200 a minute across
+  all clients). A request answered from memory, or one that joins a call under
+  way, does not count against the per-IP limit. An explicit token passed by an
+  embedder still goes straight to ion.
 - **Mapillary.** MapillaryJS and the Street Level source call
   `/api/mapillary/graph/*`; the server adds the token as an `Authorization`
   header and forwards only the Graph paths (`images`, `image_ids`, an image id,

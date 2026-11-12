@@ -39,10 +39,11 @@ const MIN_REMAINING_MS = 10 * 60 * 1000;
  * assets it reads through IonResource without `externalType`: the external
  * Bing imagery and Google 3D Tiles documents are read with no retry. So a
  * terrain document handed out longer ago than this is fetched anew rather
- * than returned a second time. While ion returns documents, that is at most
- * one ion call per allow-listed asset per interval, however many clients ask;
- * while it fails, see TRANSIENT_BACKOFF_S; a refusal is not cached and has no
- * back-off (see refresh), so it reaches ion at the route's per-client limit.
+ * than returned a second time. While ion returns documents whose token has
+ * more than MIN_REMAINING_MS left, that is at most one ion call per
+ * allow-listed asset per interval, however many clients ask; while it fails,
+ * see TRANSIENT_BACKOFF_S; a refusal is not cached and has no back-off (see
+ * refresh), so it reaches ion at the route's per-client limit.
  */
 const REFETCH_AFTER_MS = 60 * 1000;
 /**
