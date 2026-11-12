@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useSolunarStore } from '../../stores/solunar.js';
+import UiButton from '../../kit/UiButton.vue';
 import { dayCard, formatLatLon, ruleLines } from '../../../solunar/format.js';
 
 // The SOLUNAR card as the view renders it: the card owner
@@ -45,21 +46,19 @@ const clockOptions = computed(() => [
         <div class="gev-sl-spot">{{ spotText }}</div>
         <p class="gev-sl-hint">{{ t('Click the map to choose a spot') }}</p>
         <div class="gev-sl-controls">
-          <button
+          <UiButton
             class="data-toggle-chip gev-sl-center"
-            type="button"
             @click="call('useCenter')"
-          >{{ t('Use map centre') }}</button>
-          <button
+          >{{ t('Use map centre') }}</UiButton>
+          <UiButton
             v-for="option in clockOptions"
             :key="String(option.value)"
             class="data-toggle-chip gev-sl-clock"
-            :class="{ active: option.value === hour12 }"
-            type="button"
-            :aria-pressed="String(option.value === hour12)"
+            :pressed="option.value === hour12"
+            pressed-class="active"
             :data-hour12="String(option.value)"
             @click="call('setHour12', option.value)"
-          >{{ option.label }}</button>
+          >{{ option.label }}</UiButton>
         </div>
         <div class="gev-sl-zone">{{
           t('Times are local to the spot ({zone})', { zone })
