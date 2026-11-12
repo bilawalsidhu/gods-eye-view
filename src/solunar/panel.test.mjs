@@ -57,6 +57,10 @@ test('a spot shows seven local days, the zone and the rating rule', async () => 
   const { container, panel } = await setup();
   assert.equal(panel.setSpot(...LAKE), true);
   await nextTick();
+  assert.equal(
+    container.querySelectorAll('.gev-sl-controls .ui-button').length,
+    3,
+  );
   const days = [...container.querySelectorAll('.gev-sl-day')];
   assert.equal(days.length, 7);
   assert.deepEqual(
