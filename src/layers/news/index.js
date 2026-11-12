@@ -172,7 +172,8 @@ const emptyInView = () => ({
  *
  * `pictureCards(cards, { selectedId })`, when given, draws the picture cards
  * instead of the layer: it is called on every render with one card per
- * pictured event on the map, in rank order (`{ id, title, lat, lon,
+ * pictured event on the map, at every height (zoomed out too, where the
+ * hotspots stand as beacons), in rank order (`{ id, title, lat, lon,
  * publishedAt, severity, color, image, video, credit }`), and the selected
  * report's id or null, whose own card the layer still draws at its marker; it
  * is called with no cards when the layer is turned off.
@@ -691,6 +692,16 @@ export function createNewsLayer({
     }
   }
 
+  // What a host's picture cards are chosen from when the hotspots stand as
+  // beacons: every report the close-up view would mark, and the selection.
+  function cardable() {
+    const current = selected();
+    const all = localMode() ? localReports(NEWS_MAP_LIMIT) : mapReports;
+    return current && !all.some((r) => r.id === current.id)
+      ? [...all, current]
+      : all;
+  }
+
   // With a `pictureCards` function the host draws the picture cards: one per
   // event on the map with a picture (its most severe, then newest report),
   // most severe then newest first, at its marker. The host chooses which
@@ -825,7 +836,9 @@ export function createNewsLayer({
     horizon.update();
     updatePulse();
     if (drawPictureCards)
-      drawPictureCards(enabled ? hostCards(drawn) : [], {
+      // At every height: zoomed out, a hotspot's reports give way to its
+      // beacon, but their pictures still stand (the host keeps them apart).
+      drawPictureCards(enabled ? hostCards(detail ? drawn : cardable()) : [], {
         selectedId: enabled ? selectedId : null,
       });
     else pictureCards(drawn, current, labels);

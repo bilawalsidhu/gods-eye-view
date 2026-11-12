@@ -296,6 +296,34 @@ test('a host that draws the picture cards is handed one card per pictured event 
   assert.deepEqual(handed.at(-1), { cards: [], selectedId: null });
 });
 
+test("a host's picture cards stay at every height, beacons or markers", async (t) => {
+  const reports = [
+    report('major', {
+      severity: 3,
+      event: {
+        size: 1,
+        lastAt: '2026-10-28T09:00:00.000Z',
+        sides: [],
+        image: { url: 'https://example.com/major.jpg', publisher: 'Example' },
+      },
+    }),
+  ];
+  const handed = [];
+  const { layer } = fixture(t, {
+    // The whole globe: the hotspot stands as one beacon, its reports unmarked.
+    height: 20_000_000,
+    source: { getFeed: async () => ({ reports, nextBefore: null }) },
+    pictureCards: (cards) => handed.push(cards),
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { minSeverity: 0 } });
+  assert.deepEqual(
+    handed.at(-1).map((card) => card.id),
+    ['major'],
+  );
+});
+
 test('picture cards must be drawn by a function', () => {
   assert.throws(
     () =>
