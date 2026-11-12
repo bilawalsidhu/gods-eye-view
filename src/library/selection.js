@@ -12,7 +12,8 @@ import { LIBRARY_ID_PATTERN } from './manifest.js';
 export const LIBRARY_STORAGE_KEY = 'gev:library:v1';
 export const LIBRARY_SHARE_PARAM = 'lib';
 export const LIBRARY_TOKEN_PATTERN = /^[0-9a-z]{2}$/;
-const MAX_SELECTED = 64;
+/** The most entries one library (and one share link) holds. */
+export const MAX_SELECTED = 64;
 const MAX_PARAM_CHARS = 3 * MAX_SELECTED;
 
 /**

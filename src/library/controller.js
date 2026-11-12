@@ -9,6 +9,7 @@
 import { LIBRARY_ENTRIES, LIBRARY_LEDGER } from './catalog.js';
 import { libraryEntryIdOf, libraryLayerId } from './manifest.js';
 import {
+  MAX_SELECTED,
   decodeLibraryParam,
   encodeLibraryParam,
   normalizeLibrarySelection,
@@ -270,14 +271,17 @@ export function createDataLibrary({
     // link, it alone decides what is on, as it does for core layers, so a
     // share with every library entry off switches the stored ones off.
     // Added entries register even while off, so their rows show.
-    for (const id of [...stored.added, ...(linked || [])]) {
+    // Only what the selection keeps registers: past its cap an entry would
+    // be a row the library no longer knows.
+    const next = normalizeLibrarySelection(
+      { added: [...stored.added, ...(linked || [])], on: linked ?? stored.on },
+      switchable,
+    );
+    for (const id of next.added) {
       const entry = byId.get(id);
       if (entry && addable(id)) register(entry);
     }
-    applySelection(
-      { added: [...stored.added, ...(linked || [])], on: linked ?? stored.on },
-      linked ? 'share-restore' : 'local-restore',
-    );
+    applySelection(next, linked ? 'share-restore' : 'local-restore');
   }
 
   /**
@@ -287,6 +291,9 @@ export function createDataLibrary({
    */
   async function add(id) {
     if (destroyed || !addable(id) || pending.has(id)) return false;
+    // A full library refuses the entry before its layer exists.
+    if (!selection.added.includes(id) && selection.added.length >= MAX_SELECTED)
+      return false;
     const entry = byId.get(id);
     const work = (async () => {
       if (!register(entry)) return false;

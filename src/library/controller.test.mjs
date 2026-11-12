@@ -345,6 +345,64 @@ test('a share opened while an earlier one is still switching on wins', async (t)
   library.destroy();
 });
 
+test('a full library refuses another entry before its layer exists', async (t) => {
+  const many = validateLibraryCatalog(
+    Array.from({ length: 66 }, (_, index) => tiles(`entry-${index}`)),
+  ).entries;
+  const manyLedger = many.map(({ id }, index) => [
+    id,
+    index.toString(36).padStart(2, '0'),
+  ]);
+  const availability = {
+    async getAvailability() {
+      return {
+        server: true,
+        availability: new Map(
+          many.map(({ id }) => [id, { available: true, reason: null }]),
+        ),
+      };
+    },
+    tileTemplate: (entry) => entry.source.url,
+  };
+  const full = JSON.stringify({
+    added: many.slice(0, 64).map(({ id }) => id),
+    on: [],
+  });
+  const manager = sealedManager(t);
+  const library = createDataLibrary({
+    entries: many,
+    ledger: manyLedger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(full),
+    shareLink: fakeShareLink(null),
+    source: availability,
+  });
+  await library.start();
+  assert.equal(manager.layers.size, 64);
+  assert.equal(await library.add('entry-64'), false);
+  assert.equal(manager.layers.size, 64, 'no layer outside the selection');
+  // A share into a full library adds no row the library cannot keep.
+  const shared = sealedManager(t);
+  const opened = createDataLibrary({
+    entries: many,
+    ledger: manyLedger,
+    dataManager: shared,
+    services: {},
+    storage: memoryStorage(full),
+    shareLink: fakeShareLink([manyLedger[65][1]]),
+    source: availability,
+  });
+  await opened.start();
+  assert.equal(shared.layers.has('lib-entry-65'), false);
+  assert.equal(
+    opened.list().filter((row) => row.added).length,
+    shared.layers.size,
+  );
+  library.destroy();
+  opened.destroy();
+});
+
 test('zoom flies to an added layer through the caller, reset removes everything', async (t) => {
   const manager = sealedManager(t);
   const storage = memoryStorage();
