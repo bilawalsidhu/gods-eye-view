@@ -1418,14 +1418,42 @@ export function createStubRenderer(options = {}) {
   // `surfaceIdentity`: bumped by whatever changes what heights answer against.
   let surfaceVersion = 0;
   let terrainKey = 'null';
+  // The last `setBase` wins; its style load in flight, if any.
+  let baseGen = 0;
+  let baseLoad = null;
   const globe = {
     async setBase(base) {
       log('globe', 'setBase', [base]);
       if (base.vector && !capabilities.has('vectorBase'))
         throw new TypeError('This renderer draws no vector base');
+      const gen = ++baseGen;
+      baseLoad?.abort();
+      baseLoad = null;
+      const current = () => gen === baseGen && !destroyed;
+      // Superseded (or destroyed) before its base changes: nothing changes.
+      const superseded = () => ({
+        photoreal: photorealStatus,
+        imagery: [],
+        settled: false,
+      });
+      if (destroyed) return superseded();
       // The style is loaded, as a renderer drawing it loads it, so one that
       // fails changes nothing; the stub paints none of it.
-      if (base.vector) await loadVectorStyle(base.vector.styleUrl);
+      if (base.vector) {
+        const load = new AbortController();
+        baseLoad = load;
+        try {
+          await loadVectorStyle(base.vector.styleUrl, undefined, {
+            signal: load.signal,
+          });
+        } catch (error) {
+          if (!current()) return superseded();
+          throw error;
+        } finally {
+          if (baseLoad === load) baseLoad = null;
+        }
+        if (!current()) return superseded();
+      }
       for (const layer of imageryLayers.slice()) layer.remove();
       if (base.photoreal !== undefined)
         await globe.setPhotoreal(base.photoreal);
@@ -1781,6 +1809,9 @@ export function createStubRenderer(options = {}) {
       // A flight in progress ends cancelled and gives back its input hold.
       camera.endFlight();
       destroyed = true;
+      baseGen += 1;
+      baseLoad?.abort();
+      baseLoad = null;
       if (options.container) canvas.remove?.();
       for (const clear of onceTimers) clear();
       onceTimers.clear();

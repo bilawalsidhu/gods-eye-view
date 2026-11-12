@@ -135,6 +135,9 @@ export function createCesiumGlobe(
   let photorealStatus = { route: 'none' };
   let photorealGen = 0;
   let terrainGen = 0;
+  let baseGen = 0;
+  /** Aborts the style load of the `setBase` in flight, if any. */
+  let baseLoad = null;
   let baseCredit = null;
   // The vector base's sources' credits.
   const vectorCredits = [];
@@ -240,11 +243,36 @@ export function createCesiumGlobe(
   async function setBase(base) {
     if (base.vector && !can('vectorBase'))
       throw new TypeError('This renderer draws no vector base');
+    // The last call wins: one superseded (or disposed) before its base
+    // changes changes nothing and resolves with the base as it stands.
+    const gen = ++baseGen;
+    baseLoad?.abort();
+    baseLoad = null;
+    const current = () => gen === baseGen && !disposed;
+    const superseded = () => ({
+      photoreal: photorealStatus,
+      imagery: [],
+      settled: false,
+    });
+    if (disposed) return superseded();
     // The style loads before the base changes: one that fails changes
     // nothing.
-    const style = base.vector
-      ? await loadVectorStyle(base.vector.styleUrl)
-      : null;
+    let style = null;
+    if (base.vector) {
+      const load = new AbortController();
+      baseLoad = load;
+      try {
+        style = await loadVectorStyle(base.vector.styleUrl, undefined, {
+          signal: load.signal,
+        });
+      } catch (error) {
+        if (!current()) return superseded();
+        throw error;
+      } finally {
+        if (baseLoad === load) baseLoad = null;
+      }
+      if (!current()) return superseded();
+    }
     for (const handle of imagery.list()) handle.remove();
     baseCredit?.();
     baseCredit = base.credit && credits ? credits.addStatic(base.credit) : null;
@@ -268,7 +296,8 @@ export function createCesiumGlobe(
     return {
       photoreal: photorealStatus,
       imagery: layers,
-      settled: isSettled('base'),
+      // A base a later call replaced has not settled.
+      settled: current() && isSettled('base'),
     };
   }
 
@@ -579,6 +608,9 @@ export function createCesiumGlobe(
       disposed = true;
       photorealGen += 1;
       terrainGen += 1;
+      baseGen += 1;
+      baseLoad?.abort();
+      baseLoad = null;
       for (const off of removers) off();
       shading = null;
       dropShadingMaterial();

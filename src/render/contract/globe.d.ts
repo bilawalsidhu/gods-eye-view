@@ -237,7 +237,14 @@ export interface LoadProgress {
 export type SettleKind = 'base' | 'tiles' | 'terrain' | 'imagery' | 'surface';
 
 export interface GlobePort {
-  /** Switch the whole base at once; resolves when the new base has settled. */
+  /**
+   * Switch the whole base at once; resolves when the new base has settled.
+   * The last call wins: one a later `setBase` (or the renderer's disposal)
+   * overtakes before its base changes (its vector style still loading)
+   * changes nothing and resolves with `imagery: []`, `settled: false` and the
+   * photoreal status as it stands, never rejecting; one overtaken after it
+   * changed the base resolves with `settled: false`.
+   */
   setBase(base: BaseSpec): Promise<BaseStatus>;
   /** `photoreal`: on, off or a new token route. */
   setPhotoreal(spec: PhotorealSpec | null): Promise<PhotorealStatus>;

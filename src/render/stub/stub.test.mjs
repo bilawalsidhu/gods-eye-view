@@ -197,3 +197,44 @@ test('the stub camera ends no move while it follows', () => {
   assert.deepEqual(seen, ['start', 'end']);
   r.destroy();
 });
+
+test('a slow vector setBase a later setBase supersedes changes nothing, nor one the destroy ends', async () => {
+  const held = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (url, { signal } = {}) =>
+    new Promise((resolve) => {
+      held.push({
+        signal,
+        answer: () =>
+          resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ version: 8, sources: {}, layers: [] }),
+          }),
+      });
+    });
+  try {
+    const r = createStubRenderer();
+    const slow = r.globe.setBase({
+      vector: { styleUrl: 'https://s.invalid/a' },
+    });
+    const fast = await r.globe.setBase({
+      imagery: [{ kind: 'xyz', url: 'https://one.invalid/{z}/{x}/{y}.png' }],
+    });
+    assert.equal(held[0].signal.aborted, true, 'its style load is aborted');
+    held[0].answer();
+    const status = await slow;
+    assert.deepEqual([status.imagery, status.settled], [[], false]);
+    assert.deepEqual(r.globe.imagery.list(), fast.imagery);
+
+    const ended = r.globe.setBase({
+      vector: { styleUrl: 'https://s.invalid/b' },
+    });
+    r.destroy();
+    held[1].answer();
+    assert.deepEqual((await ended).imagery, []);
+    assert.deepEqual(r.globe.imagery.list(), fast.imagery);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
