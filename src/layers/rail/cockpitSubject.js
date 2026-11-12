@@ -299,10 +299,12 @@ export function createRailCockpitSubject({
     /**
      * Select the train `key` and hand it the camera, as a click on it does.
      * @param {string} key
-     * @returns {boolean} False for a train the layer does not show.
+     * @returns {boolean} False for a train the layer does not show: gone, in
+     *   a category turned off, or a copy another feed draws (dedupe.js).
      */
     focusTrain(key) {
-      if (!state._trains.has(key)) return false;
+      const entry = state._trains.get(key);
+      if (!entry || !parts.rendering.categoryShown(entry)) return false;
       parts.selection.selectAndFocusTrain(key);
       return true;
     },

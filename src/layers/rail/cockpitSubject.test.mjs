@@ -290,6 +290,9 @@ test('a held train stays the copy drawn when another feed’s copy outranks it, 
     1,
     'its card',
   );
+  // The copy hidden is not focused: the selection stays on the one drawn.
+  assert.equal(app.layer.focusTrain(a), false);
+  assert.equal(app.state()._selectedKey, b);
 
   // A hold of the copy hidden draws it at once, in place of the other.
   assert.equal(app.layer.setCockpitSubject(a), true);
@@ -341,6 +344,27 @@ test('a held train keeps the selection and moves, hidden, when its category is t
   app.layer.setParams({ regional: true });
   assert.equal(app.entry(T1).marker.show, true);
   assert.ok(app.state()._moving.has(app.entry(T1)), 'playing again');
+});
+
+test('a ride let go with restore does not focus a train its category hides', async (t) => {
+  const app = await onTheLine(t);
+  // The documented provider: hold on entry; on exit, release, then focus
+  // the train again when asked to restore.
+  assert.equal(app.layer.setCockpitSubject(T1), true);
+  app.layer.setParams({ regional: false });
+  app.layer.setCockpitSubject(null);
+  assert.equal(app.layer.focusTrain(T1), false, 'not drawn');
+  assert.equal(app.state()._selectedKey, null, 'not selected');
+  assert.equal(app.parts().follow.stats(), null, 'not followed');
+  assert.equal(app.viewer.trackedEntity, undefined);
+  assert.equal(app.focusRequests.length, 0, 'not flown to');
+  assert.equal(app.entry(T1).marker.show, false);
+
+  // Shown again, it focuses as before.
+  app.layer.setParams({ regional: true });
+  assert.equal(app.layer.focusTrain(T1), true);
+  assert.equal(app.state()._selectedKey, T1);
+  assert.ok(app.parts().follow.isFollowing(T1), 'the camera is handed to it');
 });
 
 test('a held train that goes takes the hold with it; focusTrain selects', async (t) => {
