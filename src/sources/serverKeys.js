@@ -2,20 +2,22 @@
  * Server-held credentials, browser side.
  *
  * Cesium ion and Mapillary credentials stay on the server (see
- * server/providers/keyIsolation). The browser never receives CESIUM_ION_TOKEN,
- * MAPILLARY_CLIENT_TOKEN or GOOGLE_MAPS_API_KEY. What it holds instead:
+ * server/providers/keyIsolation). The browser never receives CESIUM_ION_TOKEN
+ * or MAPILLARY_CLIENT_TOKEN. The one key it does receive is the Google Maps
+ * browser key, which the build defines into the bundle (restricted at Google,
+ * see SECURITY.md). For ion and Mapillary it holds instead:
  *  - ION_SERVER_MANAGED: a marker (not a credential) meaning "ask this
  *    app's /api/ion/ for asset endpoints". CesiumJS then receives only the
  *    short-lived per-asset token ion issues for the asset it is loading.
- *  - the Mapillary Graph endpoint on this origin, which adds the token, and
- *    one boolean: whether the server holds a Mapillary token.
+ *  - for Mapillary, one boolean: whether the server holds a token. The
+ *    Mapillary source resolves the Graph address itself: this origin's
+ *    route, which adds the token.
  */
 
 /** Stands in for an ion token in the app's credential plumbing. */
 export const ION_SERVER_MANAGED = 'server-managed';
 
 const ION_API_PATH = '/api/ion/';
-const MAPILLARY_GRAPH_PATH = '/api/mapillary/graph/';
 
 /**
  * The address the app's own paths resolve against. In the MCP Apps panel that
@@ -34,11 +36,6 @@ export const ION_STATUS_TIMEOUT_MS = 15_000;
 /** Absolute URL of this app's ion API stand-in (trailing slash required by CesiumJS). */
 export function ionServerUrl(base = baseHref()) {
   return new URL(ION_API_PATH, base).href;
-}
-
-/** Absolute Graph endpoint for MapillaryJS (`new URL(path, endpoint)` needs the slash). */
-export function mapillaryGraphEndpoint(base = baseHref()) {
-  return new URL(MAPILLARY_GRAPH_PATH, base).href;
 }
 
 /**
