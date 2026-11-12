@@ -603,7 +603,7 @@ test('the readout entry reads BRIDGE for a selected vessel', async (t) => {
   assert.match(readoutEntry.textContent, /BRIDGE/);
 });
 
-test('without providers too, the later selection takes entry: a vessel after an aircraft reads BRIDGE', async (t) => {
+test('without providers the built-in order decides: a vessel selected after an aircraft still reads COCKPIT', async (t) => {
   const { $, cockpit, store, selectVessel } = fixture(t, {
     enabled: ['flights', 'ais-live-vessels'],
     tracked: { layerId: 'flights', info: CIVIL },
@@ -614,8 +614,8 @@ test('without providers too, the later selection takes entry: a vessel after an 
   selectVessel(VESSEL);
   cockpit.syncEntry();
   await nextTick();
-  assert.equal(store.presence.entryKind, 'vessel');
-  assert.match($('#cockpit-entry-readout').textContent, /BRIDGE/);
+  assert.equal(store.presence.entryKind, 'aircraft');
+  assert.match($('#cockpit-entry-readout').textContent, /COCKPIT/);
   // And the other way round: an aircraft tracked after the vessel.
   const later = fixture(t, {
     enabled: ['flights', 'ais-live-vessels'],

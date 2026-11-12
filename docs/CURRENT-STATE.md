@@ -1696,9 +1696,7 @@ and portal cleanup follows that restoration.
 
 ### Ship bridge view
 
-Cockpit can also ride the selected AIS vessel; when other subjects are
-selected too, entry takes the most recently selected one (see Application
-subjects below).
+With no aircraft tracked, Cockpit can ride the selected AIS vessel instead.
 Entry needs only the layer of the vessel it rides, Live AIS Vessels, and a
 selected vessel; Contacts and every other layer may be off, before or during
 the bridge (`bridgeEntryAllowed` in `src/contextModePolicy.js`). A Context mode
@@ -1784,9 +1782,9 @@ satellite instead. Entry needs only the Satellites layer
 layer may be off. A Context mode change in flight blocks entry until it
 settles. Debris (rocket bodies, fragments and dead satellites; see the
 satellite class toggles) can be tracked but never entered: no ORBIT entry is
-offered and double-click refuses it. When an aircraft or a vessel is also
-tracked or selected, entry takes the most recently selected subject (see
-Application subjects below). Double-clicking the tracked satellite
+offered and double-click refuses it. A tracked aircraft still takes
+entry first, and a tracked satellite
+takes it before a selected vessel. Double-clicking the tracked satellite
 enters it, and the entry button reads
 ORBIT with a satellite icon in Contacts (`#cockpit-entry`) and under the Intel
 HUD readout (`#cockpit-entry-readout`). Voice (`control_cockpit`) stays
@@ -2001,13 +1999,16 @@ layer on, no Context change in flight and the provider's own
 `isEntryAllowed(candidate)`; voice stays aircraft-only and is refused, with
 the reason, while a provider's view is in use.
 
-Entry rides the most recently selected subject of all kinds: a tracked
-aircraft, the tracked satellite, the selected vessel or a provider's
-candidate, by when the Cockpit first saw it, or saw it selected again (a
-provider candidate's `selectedAt` changing); subjects first seen together keep
-the fixed order (aircraft, satellite, vessel, then providers by priority). The
-newest decides alone: when its gate is shut there is no entry rather than an
-older subject's.
+The built-in kinds keep their fixed entry order (a tracked aircraft, then the
+tracked satellite, then the selected vessel), so without providers entry is
+unchanged. A provider's candidate takes entry only when it was selected after
+every built-in subject present, by when the Cockpit first saw it or saw it
+selected again (its `selectedAt` changing): a train picked after an aircraft
+was tracked takes entry, and an aircraft tracked after it takes it back.
+Providers' candidates are ordered most recently selected first, then by
+priority; one first seen together with a built-in subject comes after it. The
+first in that order decides alone: when its gate is shut there is no entry
+rather than the next subject's.
 
 A frame places the eye `eye.upM` above `heightM` (the shared floor where the
 frame gives none, or where it last stood while that floor is cold; with

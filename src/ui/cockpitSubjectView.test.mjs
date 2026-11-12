@@ -158,6 +158,7 @@ function fixture(t, { providers = [], vessel = null, layerOn = true } = {}) {
     trackedEntityChanged: listeners(),
   };
   let vesselSelected = vessel;
+  let trackedAircraftInfo = null;
   let floorM = FLOOR_M;
   const warned = [];
   t.mock.method(console, 'warn', (message) => warned.push(String(message)));
@@ -168,7 +169,7 @@ function fixture(t, { providers = [], vessel = null, layerOn = true } = {}) {
   const dropped = [];
   const cockpit = new CockpitViewController(viewer, {
     services: {
-      flightsLayer: { getTrackedInfo: () => null },
+      flightsLayer: { getTrackedInfo: () => trackedAircraftInfo },
       militaryFlightsLayer: { getTrackedInfo: () => null },
       aisLiveVesselsLayer: {
         getCockpitSubject: () =>
@@ -235,6 +236,11 @@ function fixture(t, { providers = [], vessel = null, layerOn = true } = {}) {
     selectVessel(record) {
       vesselSelected = record;
     },
+    /** Track the fixture's aircraft as Live Flights does, or untrack it. */
+    trackAircraft(info) {
+      trackedAircraftInfo = info;
+      viewer.trackedEntity = info ? aircraft : undefined;
+    },
     setFloor(value) {
       floorM = value;
     },
@@ -281,6 +287,15 @@ const VESSEL = Object.freeze({
   course: 95,
   heading: 90,
   missedRefreshes: 0,
+});
+
+/** The fixture's aircraft as Live Flights reports it once tracked. */
+const TRACKED_AIRCRAFT = Object.freeze({
+  icao24: 'abc123',
+  callsign: 'UAL123',
+  track: 92,
+  latitude: LAT,
+  longitude: LON,
 });
 
 test('a provider candidate offers its own entry face; a shut gate hides it', async (t) => {
@@ -867,6 +882,51 @@ test('the most recently selected subject wins entry', async (t) => {
   cockpit.syncEntry();
   assert.equal(store.presence.entryAvailable, false);
   assert.equal(cockpit.enter(), false);
+});
+
+test('the built-in kinds keep their order; a subject takes entry only when selected after all of them', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.candidate = null;
+  const { cockpit, selectVessel, trackAircraft } = fixture(t, {
+    providers: [ride],
+  });
+  trackAircraft(TRACKED_AIRCRAFT);
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'aircraft');
+  // A subject selected after the aircraft was tracked takes entry.
+  clock.advance(500);
+  ride.subject.candidate = { id: 'a1', name: 'Example 12' };
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'example-kind');
+  // A vessel selected after it: a built-in kind is newer, so the built-in
+  // order decides, as without providers, and the aircraft comes first.
+  clock.advance(500);
+  selectVessel(VESSEL);
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'aircraft');
+  // The subject selected again is newer than every built-in one.
+  clock.advance(500);
+  ride.subject.candidate = { id: 'a1', name: 'Example 12', selectedAt: 2 };
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'example-kind');
+  // An aircraft tracked after it takes entry back.
+  selectVessel(null);
+  trackAircraft(null);
+  cockpit.syncEntry();
+  clock.advance(500);
+  trackAircraft(TRACKED_AIRCRAFT);
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'aircraft');
+});
+
+test('a subject first seen together with a built-in one comes after it', async (t) => {
+  manualClock(t, 10_000);
+  const ride = subjectProvider();
+  const { cockpit, store } = fixture(t, { providers: [ride], vessel: VESSEL });
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'vessel');
+  assert.equal(store.presence.entryKind, 'vessel');
 });
 
 test('a provider view with look turns with the arrow keys and words its readout', async (t) => {

@@ -273,8 +273,8 @@ export function cockpitSubjectProviders(
  * A provider's candidate: `{id, name, face, selectedAt}`, or null without a
  * usable id. `name` falls back to the id; `face` is null unless well formed;
  * `selectedAt` (a number or a short string, else null) is a token the
- * provider changes each time its subject is selected, even again: entry
- * takes the most recently selected subject (entryCandidates).
+ * provider changes each time its subject is selected, even again: a
+ * subject selected after the built-in ones takes entry (entryCandidates).
  * @param {unknown} raw What `candidate()` returned.
  */
 export function cockpitSubjectCandidate(raw) {

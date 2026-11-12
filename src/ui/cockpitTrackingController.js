@@ -93,7 +93,7 @@ export function subjectInfo(frame) {
   };
 }
 
-/** Entry's fixed order, for candidates first seen at the same moment. */
+/** The built-in kinds' fixed entry order. */
 const BUILT_IN_ENTRY_ORDER = Object.freeze({
   aircraft: 0,
   satellite: 1,
@@ -101,14 +101,19 @@ const BUILT_IN_ENTRY_ORDER = Object.freeze({
 });
 
 /**
- * Every subject entry could ride now, the most recently selected first: a
- * tracked aircraft, the tracked satellite, the selected vessel and each
- * provider's candidate. A candidate's time is when this controller first saw
- * it (it looks on its entry cadence and on tracking changes), or saw it
- * selected again: a provider candidate whose `selectedAt` changes, the same
- * subject clicked again, moves to the front. Candidates first seen together
- * keep the fixed order (aircraft, satellite, vessel, then providers by
- * priority). Each carries `allowed()`, its kind's entry gate.
+ * Every subject entry could ride now, in entry order: a tracked aircraft,
+ * the tracked satellite, the selected vessel and each provider's candidate.
+ * The built-in kinds keep their fixed order (aircraft, satellite, vessel),
+ * whenever each was selected. A provider's candidate goes ahead of them only
+ * when it was selected after every built-in one present: a train picked
+ * after an aircraft was tracked takes entry, an aircraft tracked after it
+ * takes it back. Providers' candidates are ordered most recently selected
+ * first, then by priority. A candidate's time is when this controller first
+ * saw it (it looks on its entry cadence and on tracking changes), or saw it
+ * selected again (a provider candidate whose `selectedAt` changes). One
+ * first seen together with a built-in candidate comes after it. With no
+ * provider, entry is the built-in order alone. Each carries `allowed()`, its
+ * kind's entry gate.
  * @param {number} [nowMs]
  * @returns {Array<{kind: string, id: string, seenAtMs: number, order: number,
  *   allowed: () => boolean, provider?: object, candidate?: object}>}
@@ -167,13 +172,25 @@ export function entryCandidates(nowMs = performance.now()) {
   // A subject gone and back counts as selected again.
   for (const kind of [...seen.keys()])
     if (!list.some((entry) => entry.kind === kind)) seen.delete(kind);
-  return list.sort((a, b) => b.seenAtMs - a.seenAtMs || a.order - b.order);
+  const builtIns = list
+    .filter((entry) => !entry.provider)
+    .sort((a, b) => a.order - b.order);
+  const provided = list
+    .filter((entry) => entry.provider)
+    .sort((a, b) => b.seenAtMs - a.seenAtMs || a.order - b.order);
+  const builtInSeenAtMs = Math.max(
+    -Infinity,
+    ...builtIns.map((entry) => entry.seenAtMs),
+  );
+  const later = provided.filter((entry) => entry.seenAtMs > builtInSeenAtMs);
+  const earlier = provided.filter((entry) => entry.seenAtMs <= builtInSeenAtMs);
+  return [...later, ...builtIns, ...earlier];
 }
 
 /**
- * The subject entry would ride: the most recently selected one. It decides
- * alone, so when its own gate is shut entry is unavailable rather than taken
- * by an older selection.
+ * The subject entry would ride: the first in entry order (entryCandidates).
+ * It decides alone, so when its own gate is shut entry is unavailable rather
+ * than taken by the next one.
  * @returns {object|null} An entry of entryCandidates, or null.
  */
 export function resolveEntry(nowMs = performance.now()) {
@@ -199,9 +216,9 @@ export function readSubjectLayerId() {
 }
 
 /**
- * The kind entry would take: the most recently selected subject's
- * (resolveEntry): a Cesium-tracked aircraft, the tracked satellite, the
- * selected vessel or a provider's candidate.
+ * The kind entry would take, the first in entry order's (resolveEntry): a
+ * Cesium-tracked aircraft, the tracked satellite, the selected vessel or a
+ * provider's candidate.
  * @returns {string|null}
  */
 export function resolveEntryKind() {
@@ -296,7 +313,7 @@ export function syncEntry() {
   const candidates = this.entryCandidates(performance.now());
   const tracked = candidates.some(({ kind }) => kind === 'aircraft');
   this.syncTr3bToggle(tracked ? this.readAircraftInfo() : null);
-  // The most recently selected subject decides (resolveEntry).
+  // The first in entry order decides alone (resolveEntry).
   const chosen = candidates[0] ?? null;
   const entryKind = chosen?.allowed() ? chosen.kind : null;
   const face =
@@ -518,7 +535,7 @@ function enterSubject(provider) {
 }
 
 /**
- * Enter first person on the most recently selected subject (resolveEntry): a
+ * Enter first person on the first subject in entry order (resolveEntry): a
  * tracked aircraft, the tracked satellite's orbital view, the selected
  * vessel's bridge or an application provider's subject.
  * @param {{kind?: string|null}} [options] Restrict entry to one subject kind;

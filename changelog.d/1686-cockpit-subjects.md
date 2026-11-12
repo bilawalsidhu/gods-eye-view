@@ -6,6 +6,7 @@
   under reduced motion) and a bottom progress line. The Rail and Transit
   layers expose read and hold APIs so a selected train or vehicle can be
   ridden, and `./layers/rail/paths` is exported; `docs/APPLICATION.md` shows
-  a minimal provider. GEV itself registers none. Cockpit entry now goes to
-  the most recently selected subject, so a vessel selected after an aircraft
-  is tracked enters BRIDGE (Denis Groshev, @ZloyS, #1686).
+  a minimal provider. GEV itself registers none, and entry to the built-in
+  aircraft, satellite and vessel views is unchanged; a provider's subject
+  takes entry when it was selected after them (Denis Groshev, @ZloyS,
+  #1686).
