@@ -148,7 +148,8 @@ target standing up).
 
 The Cesium port draws clamped shapes of every kind. A clamped outline is a
 draped line (a ground polyline a ring, under the shape's pick id; an outlined
-clamped shape is rebuilt on any change, and its outline does not pulse). What
+clamped shape is rebuilt on any change; a pulsing one pulses through its line's
+material). What
 a ground primitive cannot drape stands on the surface unclamped, the surface
 read when the set is built: an extruded shape from the lowest surface height
 under it up to its `extrudeHeight`, a wall with its foot on the surface under

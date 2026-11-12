@@ -4031,7 +4031,13 @@ export function createCesiumDraw({
     for (const item of items) {
       if (item.outline) outlines.push(item);
       if (!item.fill || item.outlineOnly) {
-        parts.set(item.id, { look: lookOf(item), id: null, ground: null });
+        parts.set(item.id, {
+          look: lookOf(item),
+          id: null,
+          ground: null,
+          pulse: pulseOf(item),
+          show: item.show !== false,
+        });
         continue;
       }
       const objectFill =
@@ -4155,6 +4161,8 @@ export function createCesiumDraw({
       const part = parts.get(item.id);
       // Picked as its shape.
       part.id ??= pickId(record, item);
+      // A pulsing outline's rings share one colour, its material's.
+      const pulsing = Boolean(part.pulse);
       const outline = new Cesium.GroundPolylinePrimitive({
         geometryInstances: rings.map(
           (positions) =>
@@ -4175,7 +4183,13 @@ export function createCesiumDraw({
               id: part.id,
             }),
         ),
-        appearance: new Cesium.PolylineColorAppearance(),
+        appearance: pulsing
+          ? new Cesium.PolylineMaterialAppearance({
+              material: Cesium.Material.fromType('Color', {
+                color: toColor(item.outline),
+              }),
+            })
+          : new Cesium.PolylineColorAppearance(),
         classificationType: classificationOf(
           item.clampTo ?? record.spec.clampTo ?? 'both',
         ),
@@ -4527,20 +4541,30 @@ export function createCesiumDraw({
       }
       for (const parts of [record.shapeParts, record.retiringShapeParts])
         for (const part of parts?.values() ?? []) {
-          if (!part.pulse || !part.show || !part.ground) continue;
+          if (!part.pulse || !part.show) continue;
           const ground = part.ground;
-          if (ground.isDestroyed()) continue;
-          // One still building asks for frames, to pulse once it is ready.
-          pulsing = true;
-          if (!ground.ready) continue;
-          colourOn(
-            ground,
-            part.id,
-            baseColour(part, part.look.fill).withAlpha(
-              pulseAlpha(part.pulse, now),
-              scratchColour,
-            ),
-          );
+          if (ground && !ground.isDestroyed()) {
+            // One still building asks for frames, to pulse once it is ready.
+            pulsing = true;
+            if (ground.ready)
+              colourOn(
+                ground,
+                part.id,
+                baseColour(part, part.look.fill).withAlpha(
+                  pulseAlpha(part.pulse, now),
+                  scratchColour,
+                ),
+              );
+          }
+          // A clamped outline pulses through its material's colour.
+          const outline = part.outlineGround;
+          if (outline && !outline.isDestroyed() && part.look.outline) {
+            pulsing = true;
+            outline.appearance.material.uniforms.color = baseColour(
+              part,
+              part.look.outline,
+            ).withAlpha(pulseAlpha(part.pulse, now));
+          }
         }
     }
     return pulsing;

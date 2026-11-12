@@ -333,6 +333,38 @@ test('a clamped outline is a draped line under its shape’s pick id, a ring eac
   set.dispose();
 });
 
+test('a pulsing clamped outline pulses its alpha through its material', () =>
+  withImageClasses(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'pulsing-outline' });
+    set.set([
+      {
+        id: 'r',
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 2, south: 0, east: 3, north: 1 },
+        },
+        outline: '#00ff00',
+        outlineOnly: true,
+        height: 'clampGround',
+        animate: { property: 'alpha', from: 0.2, to: 0.2, periodMs: 1000 },
+      },
+    ]);
+    const host = scene.added[0];
+    let line;
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPolylinePrimitive)
+        line = host.get(i);
+    assert.ok(line.appearance instanceof Cesium.PolylineMaterialAppearance);
+    frame();
+    const colour = line.appearance.material.uniforms.color;
+    assert.deepEqual(
+      [colour.green, Math.round(colour.alpha * 100) / 100],
+      [1, 0.2],
+    );
+    set.dispose();
+  }));
+
 test('where the scene cannot drape materials, a clamped image fill lies on the surface', () =>
   withImageClasses(() => {
     const scene = fakeScene();
