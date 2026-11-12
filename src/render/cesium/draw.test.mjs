@@ -8027,3 +8027,30 @@ test('a clustered icon set draws one icon a cluster in place of its members, mad
     transforms.worldToWindowCoordinates = project;
   }
 });
+
+test('a points set takes columns as rows, over the items it holds', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'column-dots' });
+  set.set([
+    { id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' },
+    { id: 'gone', pos: { lon: 1, lat: 0 }, pixelSize: 4, color: '#fff' },
+  ]);
+  const at = Cesium.Cartesian3.fromDegrees(10, 20);
+  set.setColumns({
+    ids: ['a'],
+    positions: new Float64Array([at.x, at.y, at.z]),
+    colors: new Uint8Array([255, 0, 0, 255]),
+    shown: new Uint8Array([1]),
+    meta: [{ m: 1 }],
+  });
+  assert.equal(set.size(), 1, 'rows not named are gone');
+  const point = scene.added[0].get(0);
+  assert.ok(Cesium.Cartesian3.equalsEpsilon(point.position, at, 0, 1e-6));
+  assert.deepEqual(
+    [point.color.red, point.color.green, point.color.alpha],
+    [1, 0, 1],
+  );
+  assert.equal(point.pixelSize, 4, 'kept from the item');
+  assert.deepEqual(drawHitOf({ id: point.id })?.meta, { m: 1 });
+  set.dispose();
+});

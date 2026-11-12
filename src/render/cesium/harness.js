@@ -112,6 +112,7 @@ export const CESIUM_CHECKS = new Set([
   'quality.signals',
   'quality.signals.gpuTiming',
   'renderer.listeners',
+  'renderer.shape',
   'renderer.readPixels',
   'renderer.releaseUnused',
   'renderer.whenSettled',

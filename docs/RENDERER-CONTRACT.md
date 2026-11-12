@@ -204,6 +204,12 @@ names the nearest frame's time once every globe tile drawn shows that
 frame's own imagery (`src/render/cesium/imageryFrames.js`). The checks
 `globe.imagery.frames` and `globe.imagery.video` cover both.
 
+Every Cesium draw set takes `setColumns` (`columns`): icon sets on the GPU,
+any other as the rows the columns make over the items it holds, each row the
+item of that id with the columns' fields over it, replacing every item as
+`set` does (`columnRows` in `src/render/cesium/draw.js`, as the stub does).
+`renderer.shape` holds on Cesium.
+
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass; draped too), lines in the
 `inertial` frame (turned each frame by the set's motion clock, a depth-fail

@@ -129,6 +129,38 @@ const displayConditionOf = (range) =>
     : undefined;
 
 /**
+ * `columns` on a set drawn from items: column `i` is row `ids[i]`, the item
+ * of that id the set holds with the columns' fields over it (`pos`,
+ * `course`, `show`, `scale`, `alpha`, `color` as 0..1, `meta`). Rows not
+ * named are gone, as `set` replaces every item.
+ * @param {import('../contract/draw').Columns} columns
+ * @param {Map<string, object>} items
+ */
+export function columnRows(columns, items) {
+  const {
+    positions: p,
+    courses,
+    shown,
+    scales,
+    alphas,
+    colors,
+    meta,
+  } = columns;
+  return columns.ids.map((id, i) => {
+    const key = String(id);
+    const row = { ...(items.get(key) ?? { id: key }) };
+    if (p) row.pos = { x: p[i * 3], y: p[i * 3 + 1], z: p[i * 3 + 2] };
+    if (courses) row.course = courses[i];
+    if (shown) row.show = shown[i] !== 0;
+    if (scales) row.scale = scales[i];
+    if (alphas) row.alpha = alphas[i];
+    if (colors) row.color = [0, 1, 2, 3].map((k) => colors[i * 4 + k] / 255);
+    if (meta) row.meta = meta[i];
+    return row;
+  });
+}
+
+/**
  * Cesium's point blending for a set's `blend`: additive ones are built
  * translucent, a command a set, and added where they draw (`setBlend.js`).
  */
@@ -634,6 +666,9 @@ export function createCesiumDraw({
         record.gpu.columns(columns);
         patched();
       };
+    // Any other set takes columns as the rows they make, replacing its items.
+    else if (capabilities.has('columns'))
+      handle.setColumns = (columns) => handle.set(columnRows(columns, items));
     sets.set(spec.id, record);
     setsVersion += 1;
     return handle;
