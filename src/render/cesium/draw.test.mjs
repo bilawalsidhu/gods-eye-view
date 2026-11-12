@@ -271,10 +271,155 @@ test('clamped fills are ground primitives packed so none overlap within one', ()
     grounds.map((g) => g.geometryInstances.map((instance) => instance.id.id)),
     [['a', 'c', 'x'], ['b']],
   );
-  assert.throws(
-    () => set.set([{ ...disc('o', 0), outline: '#fff' }]),
-    /no clamped outlines/,
+  set.dispose();
+});
+
+test('a clamped outline is a draped line under its shape’s pick id, a ring each', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.shapes({ id: 'outlined' });
+  set.set([
+    {
+      id: 'o',
+      geometry: {
+        kind: 'polygon',
+        rings: [
+          [
+            { lon: 0, lat: 0 },
+            { lon: 1, lat: 0 },
+            { lon: 1, lat: 1 },
+          ],
+          [
+            { lon: 0.5, lat: 0.2 },
+            { lon: 0.7, lat: 0.2 },
+            { lon: 0.7, lat: 0.4 },
+          ],
+        ],
+      },
+      fill: [1, 0, 0, 0.3],
+      outline: '#fff',
+      outlineWidth: 3,
+      height: 'clampGround',
+    },
+    {
+      id: 'r',
+      geometry: {
+        kind: 'rectangle',
+        rect: { west: 2, south: 0, east: 3, north: 1 },
+      },
+      outline: '#0f0',
+      outlineOnly: true,
+      height: 'clampGround',
+    },
+  ]);
+  const host = scene.added[0];
+  const lines = [];
+  for (let i = 0; i < host.length; i++)
+    if (host.get(i) instanceof Cesium.GroundPolylinePrimitive)
+      lines.push(host.get(i));
+  assert.deepEqual(
+    lines.map((l) =>
+      l.geometryInstances.map((g) => [g.id.id, g.geometry._positions.length]),
+    ),
+    [
+      [
+        ['o', 4],
+        ['o', 4],
+      ],
+      [['r', 5]],
+    ],
+    'closed rings',
   );
+  assert.equal(lines[0].geometryInstances[0].geometry.width, 3);
+  set.dispose();
+});
+
+test('where the scene cannot drape materials, a clamped image fill lies on the surface', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    scene.context = { depthTexture: false };
+    const { draw } = drawOver(scene);
+    const set = draw.shapes({ id: 'flat-image' });
+    set.set([
+      {
+        id: 'pic',
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 0, south: 0, east: 0.01, north: 0.01 },
+        },
+        fill: { image: 'pic.png' },
+        height: 'clampGround',
+      },
+    ]);
+    const found = [];
+    const walk = (primitive) => {
+      if (primitive instanceof Cesium.PrimitiveCollection)
+        for (let i = 0; i < primitive.length; i++) walk(primitive.get(i));
+      else found.push(primitive);
+    };
+    scene.added.forEach(walk);
+    const fill = found.find((p) => p instanceof Cesium.Primitive);
+    assert.ok(fill, 'an unclamped primitive');
+    assert.ok(!found.some((p) => p instanceof Cesium.GroundPrimitive));
+    assert.equal(fill.appearance.material.type, 'Image');
+    set.dispose();
+  }));
+
+test('clamped extruded shapes and walls stand on the surface, unclamped', () => {
+  const scene = fakeScene();
+  scene.globe = { show: true, getHeight: () => 120 };
+  const { draw } = drawOver(scene);
+  const set = draw.shapes({ id: 'standing' });
+  set.set([
+    {
+      id: 'block',
+      geometry: {
+        kind: 'polygon',
+        rings: [
+          [
+            { lon: 0, lat: 0 },
+            { lon: 0.01, lat: 0 },
+            { lon: 0.01, lat: 0.01 },
+          ],
+        ],
+      },
+      fill: '#f00',
+      extrudeHeight: 400,
+      height: 'clampGround',
+    },
+    {
+      id: 'fence',
+      geometry: {
+        kind: 'wall',
+        positions: [
+          { lon: 0, lat: 0, height: 10 },
+          { lon: 0.01, lat: 0, height: 20 },
+        ],
+      },
+      fill: '#00f',
+      height: 'clampGround',
+    },
+  ]);
+  const geometries = new Map();
+  const walk = (primitive) => {
+    if (!primitive) return;
+    if (primitive instanceof Cesium.PrimitiveCollection)
+      for (let i = 0; i < primitive.length; i++) walk(primitive.get(i));
+    assert.ok(!(primitive instanceof Cesium.GroundPrimitive), 'not draped');
+    for (const instance of [primitive.geometryInstances ?? []].flat())
+      geometries.set(instance.id?.id, instance.geometry);
+  };
+  scene.added.forEach(walk);
+  const block = geometries.get('block');
+  assert.ok(block instanceof Cesium.PolygonGeometry);
+  assert.deepEqual(
+    [block._height, block._extrudedHeight].sort((a, b) => a - b),
+    [120, 400],
+    'from the surface up to its extruded height',
+  );
+  const fence = geometries.get('fence');
+  assert.ok(fence instanceof Cesium.WallGeometry);
+  assert.deepEqual(fence._minimumHeights, [120, 120], 'its foot on it');
+  assert.deepEqual(fence._maximumHeights, [130, 140], 'its heights above it');
   set.dispose();
 });
 

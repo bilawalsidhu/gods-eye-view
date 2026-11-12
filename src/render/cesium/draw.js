@@ -3623,6 +3623,164 @@ export function createCesiumDraw({
     }
   }
 
+  /** The surface's height under a position now, metres; 0 where unknown. */
+  function surfaceHeight(cartesian, clampTo) {
+    const at = Cesium.Cartographic.fromCartesian(cartesian);
+    if (!at) return 0;
+    const globe = scene.globe;
+    if (clampTo !== 'tiles' && globe?.show !== false) {
+      const h = globe?.getHeight?.(at);
+      if (Number.isFinite(h)) return h;
+    }
+    if (clampTo !== 'terrain' && scene.sampleHeightSupported) {
+      try {
+        const h = scene.sampleHeight(at);
+        if (Number.isFinite(h)) return h;
+      } catch {
+        // No depth to sample in this scene: the ellipsoid.
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * A clamped shape a ground primitive cannot drape, as one standing on the
+   * surface, unclamped: an extruded one (its base at the lowest surface
+   * height under it, up to its `extrudeHeight`), a wall (its foot on the
+   * surface under each position, its heights above it), and an image fill
+   * where the scene cannot drape materials (on the surface under it). The
+   * surface is read when the set is built. Any other item is itself.
+   */
+  function standing(record, item) {
+    if (item.height !== 'clampGround') return item;
+    const g = item.geometry;
+    const imageFill =
+      item.fill && typeof item.fill === 'object' && !Array.isArray(item.fill);
+    if (
+      item.extrudeHeight === undefined &&
+      g.kind !== 'wall' &&
+      !(imageFill && scene.context?.depthTexture === false)
+    )
+      return item;
+    const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+    const at = (cartesian, height) => {
+      const c = Cesium.Cartographic.fromCartesian(cartesian);
+      return {
+        lon: Cesium.Math.toDegrees(c.longitude),
+        lat: Cesium.Math.toDegrees(c.latitude),
+        height,
+      };
+    };
+    const lowest = (points) =>
+      Math.min(...points.map((p) => surfaceHeight(p, clampTo)));
+    let geometry;
+    switch (g.kind) {
+      case 'polygon': {
+        const rings = g.rings.map((ring) => ring.map(toCartesian));
+        const base = lowest(rings.flat());
+        geometry = {
+          kind: 'polygon',
+          rings: rings.map((ring) => ring.map((p) => at(p, base))),
+        };
+        break;
+      }
+      case 'ellipse': {
+        const center = toCartesian(g.center);
+        geometry = { ...g, center: at(center, lowest([center])) };
+        break;
+      }
+      case 'rectangle': {
+        const r = g.rect;
+        const corners = [
+          [r.west, r.south],
+          [r.east, r.south],
+          [r.east, r.north],
+          [r.west, r.north],
+          [(r.west + r.east) / 2, (r.south + r.north) / 2],
+        ].map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat));
+        geometry = { ...g, height: lowest(corners) };
+        break;
+      }
+      case 'wall': {
+        const points = g.positions.map(toCartesian);
+        const feet = points.map((p) => surfaceHeight(p, clampTo));
+        geometry = {
+          kind: 'wall',
+          positions: points.map((p, i) => at(p, feet[i])),
+          minimumHeights: feet.map((h, i) => h + (g.minimumHeights?.[i] ?? 0)),
+          maximumHeights: feet.map(
+            (h, i) => h + (g.maximumHeights?.[i] ?? heightOf(g.positions[i])),
+          ),
+        };
+        break;
+      }
+      default:
+        return item;
+    }
+    return { ...item, geometry, height: 'absolute' };
+  }
+
+  /**
+   * A clamped shape's outline as rings on the surface, each closed: a
+   * polygon's rings, an ellipse cut in 64, a rectangle's turned corners.
+   */
+  function outlineRings(item) {
+    const g = item.geometry;
+    const closed = (ring) =>
+      ring.length && !Cesium.Cartesian3.equals(ring[0], ring.at(-1))
+        ? [...ring, ring[0]]
+        : ring;
+    switch (g.kind) {
+      case 'polygon':
+        return g.rings.map((ring) => closed(ring.map(toCartesian)));
+      case 'ellipse': {
+        const center = toCartesian(g.center);
+        const enu = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+        const turn = g.rotation ?? 0;
+        const ring = [];
+        for (let k = 0; k < 64; k++) {
+          const a = (k / 64) * 2 * Math.PI;
+          // Along the semi-major axis at `rotation` counter-clockwise from north.
+          const major = g.semiMajor * Math.cos(a);
+          const minor = g.semiMinor * Math.sin(a);
+          const east = -major * Math.sin(turn) + minor * Math.cos(turn);
+          const north = major * Math.cos(turn) + minor * Math.sin(turn);
+          ring.push(
+            Cesium.Matrix4.multiplyByPoint(
+              enu,
+              new Cesium.Cartesian3(east, north, 0),
+              new Cesium.Cartesian3(),
+            ),
+          );
+        }
+        return [closed(ring)];
+      }
+      case 'rectangle': {
+        const r = g.rect;
+        const cx = (r.west + r.east) / 2;
+        const cy = (r.south + r.north) / 2;
+        const c = Math.cos(g.rotation ?? 0);
+        const sn = Math.sin(g.rotation ?? 0);
+        const ring = [
+          [r.west, r.south],
+          [r.east, r.south],
+          [r.east, r.north],
+          [r.west, r.north],
+        ].map(([lon, lat]) => {
+          const dx = lon - cx;
+          const dy = lat - cy;
+          return Cesium.Cartesian3.fromDegrees(
+            cx + dx * c - dy * sn,
+            cy + dx * sn + dy * c,
+          );
+        });
+        return [closed(ring)];
+      }
+      default:
+        return [];
+    }
+  }
+
   /**
    * A set's clamped fills as ground primitives, packed as the entities'
    * ground batches are: a fill goes in the first batch it overlaps nothing
@@ -3637,9 +3795,10 @@ export function createCesiumDraw({
     // still draws; a host already retiring keeps its own.
     if (!record.retiring) record.retiringShapeParts = record.shapeParts ?? null;
     record.shapeParts = null;
+    // Clamped outlines, drawn as draped lines: a ground polyline each.
+    const outlines = [];
     for (const item of items) {
-      if (item.outline)
-        throw new Error('the Cesium renderer has no clamped outlines yet');
+      if (item.outline) outlines.push(item);
       if (!item.fill || item.outlineOnly) {
         parts.set(item.id, { look: lookOf(item), id: null, ground: null });
         continue;
@@ -3651,11 +3810,6 @@ export function createCesiumDraw({
       const imageFill = objectFill;
       if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
-      if (item.extrudeHeight !== undefined)
-        throw new Error('the Cesium renderer cannot clamp extruded shapes');
-      // Draping a material needs depth textures (WebGL 2 always has them).
-      if (imageFill && scene.context?.depthTexture === false)
-        throw new Error('the Cesium renderer cannot drape images here');
       // Refused before anything is made, so nothing is left half built.
       const image = imageFill ? imageAt(imageFill.image) : null;
       // Hidden colour fills are built too, hidden, so showing them is a
@@ -3764,6 +3918,42 @@ export function createCesiumDraw({
       for (const part of batch.parts) part.ground = ground;
       return ground;
     });
+    for (const item of outlines) {
+      const rings = outlineRings(item).filter((ring) => ring.length >= 2);
+      if (!rings.length) continue;
+      const part = parts.get(item.id);
+      // Picked as its shape.
+      part.id ??= pickId(record, item);
+      const outline = new Cesium.GroundPolylinePrimitive({
+        geometryInstances: rings.map(
+          (positions) =>
+            new Cesium.GeometryInstance({
+              geometry: new Cesium.GroundPolylineGeometry({
+                positions,
+                width: item.outlineWidth ?? 1,
+                arcType: Cesium.ArcType.GEODESIC,
+              }),
+              attributes: {
+                color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                  toColor(item.outline),
+                ),
+                show: new Cesium.ShowGeometryInstanceAttribute(
+                  item.show !== false,
+                ),
+              },
+              id: part.id,
+            }),
+        ),
+        appearance: new Cesium.PolylineColorAppearance(),
+        classificationType: classificationOf(
+          item.clampTo ?? record.spec.clampTo ?? 'both',
+        ),
+        allowPicking: pickable,
+      });
+      // Any change to an outlined clamped shape rebuilds the set.
+      part.outlineGround = outline;
+      grounds.push(outline);
+    }
     record.shapeParts = parts;
     return grounds;
   }
@@ -3841,7 +4031,7 @@ export function createCesiumDraw({
         continue;
       }
       const was = parts?.get(item.id);
-      if (!was) return false;
+      if (!was || was.outlineGround) return false;
       if (was.ground?.isDestroyed() || was.batch?.isDestroyed()) return false;
       if (sameLook(was, item)) {
         moves.push(false);
@@ -4323,7 +4513,8 @@ export function createCesiumDraw({
       materials.push(material);
       return material;
     };
-    for (const item of record.items.values()) {
+    for (const given of record.items.values()) {
+      const item = standing(record, given);
       // Clamped ones are built hidden as well (`groundFills`), when they
       // are a colour fill it can draw: others hidden stay out, as before.
       if (

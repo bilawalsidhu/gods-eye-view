@@ -146,6 +146,16 @@ one. The stub's is a frame along the ground track, so an autodetect
 pins what both share (the range kept, north-up when still, the frame on the
 target standing up).
 
+The Cesium port draws clamped shapes of every kind. A clamped outline is a
+draped line (a ground polyline a ring, under the shape's pick id; an outlined
+clamped shape is rebuilt on any change, and its outline does not pulse). What
+a ground primitive cannot drape stands on the surface unclamped, the surface
+read when the set is built: an extruded shape from the lowest surface height
+under it up to its `extrudeHeight`, a wall with its foot on the surface under
+each position and its heights above it, and an image fill where the scene
+cannot drape materials (no depth textures). The check `draw.shapes.clamped`
+draws each.
+
 The Cesium port takes every kind of `ImageRef` wherever an image is drawn
 (icons on billboards and on the GPU, line patterns, shape fills, quads and
 raster shells): a URL, SVG, a blob (by an object URL made once per blob), a

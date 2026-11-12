@@ -1974,6 +1974,90 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.shapes.clamped',
+      'clamped shapes of every kind draw: outlined, outline only, extruded and walls, and the filled ones are picked',
+      async (h, r) => {
+        await overAustin(h, r, 3000);
+        const shapes = r.draw.shapes({ id: 'conf:clamped-shapes' });
+        const box = (dLon, dLat, d = 0.0012) => ({
+          west: AUSTIN.lon + dLon - d,
+          south: AUSTIN.lat + dLat - d,
+          east: AUSTIN.lon + dLon + d,
+          north: AUSTIN.lat + dLat + d,
+        });
+        shapes.set([
+          {
+            id: 'outlined',
+            geometry: { kind: 'rectangle', rect: box(-0.004, 0.002) },
+            fill: [1, 0, 0, 0.6],
+            outline: '#ffffff',
+            outlineWidth: 3,
+            height: 'clampGround',
+          },
+          {
+            id: 'rim',
+            geometry: { kind: 'rectangle', rect: box(0.004, 0.002) },
+            outline: '#00ff00',
+            outlineWidth: 3,
+            outlineOnly: true,
+            height: 'clampGround',
+          },
+          {
+            id: 'tower',
+            geometry: {
+              kind: 'ellipse',
+              center: { lon: AUSTIN.lon - 0.004, lat: AUSTIN.lat - 0.003 },
+              semiMajor: 120,
+              semiMinor: 120,
+            },
+            fill: '#0000ff',
+            outline: '#ffffff',
+            extrudeHeight: 300,
+            height: 'clampGround',
+          },
+          {
+            id: 'fence',
+            geometry: {
+              kind: 'wall',
+              positions: [
+                {
+                  lon: AUSTIN.lon + 0.003,
+                  lat: AUSTIN.lat - 0.003,
+                  height: 40,
+                },
+                {
+                  lon: AUSTIN.lon + 0.005,
+                  lat: AUSTIN.lat - 0.003,
+                  height: 40,
+                },
+              ],
+            },
+            fill: '#ffff00',
+            height: 'clampGround',
+          },
+        ]);
+        equal(shapes.size(), 4, 'every kind is taken');
+        await settled(r);
+        await drawn(h, r);
+        for (const [id, lon, lat, height] of [
+          ['outlined', AUSTIN.lon - 0.004, AUSTIN.lat + 0.002, 0],
+          ['tower', AUSTIN.lon - 0.004, AUSTIN.lat - 0.003, 300],
+        ]) {
+          const s = r.query.project(h.toEcef({ lon, lat, height }));
+          ok(s, `${id} projects`);
+          ok(
+            r.query
+              .drillPick(s.x, s.y)
+              .some(
+                (hit) => hit.set === 'conf:clamped-shapes' && hit.id === id,
+              ),
+            `${id} drawn and picked`,
+          );
+        }
+        shapes.dispose();
+      },
+    ),
+    check(
       'draw.shapes.resize',
       'a clamped ellipse whose radius alone is upserted draws at the new radius, growing and shrinking',
       async (h, r) => {
