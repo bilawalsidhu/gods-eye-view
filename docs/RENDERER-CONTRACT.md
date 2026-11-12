@@ -159,7 +159,9 @@ draws each.
 
 The Cesium port takes every kind of `ImageRef` wherever an image is drawn
 (icons on billboards and on the GPU, line patterns, shape fills, quads and
-raster shells): a URL, SVG, a blob (by an object URL made once per blob), a
+raster shells): a URL, SVG, a blob (by an object URL made once per blob,
+revoked once not asked for in a minute and two drawn frames, so blobs no
+longer drawn are let go; drawn again, a blob gets a new one), a
 keyed canvas, and an atlas slot as the image it holds (an icon waits for an
 unregistered slot; anything else refuses it). The check `draw.icons.images`
 draws each kind on still and receding icons.

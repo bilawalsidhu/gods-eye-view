@@ -66,12 +66,71 @@ export function uncaught(error) {
     });
 }
 
-/** Each blob's object URL, made once and kept while the blob lives. */
-const blobUrls = new WeakMap();
+/**
+ * How long a blob's object URL lives after it was last asked for, ms. The
+ * object URL store keeps its blob alive, so a URL never revoked keeps every
+ * blob ever drawn. An image starts loading from its URL as it is given (a
+ * billboard, the icon atlas) or in the next frame drawn (a material), and a
+ * load started goes on after the URL is revoked, so a URL idle this long,
+ * with `BLOB_URL_FRAMES` frames drawn since, is revoked; the blob drawn
+ * again later gets a new one.
+ */
+export const BLOB_URL_IDLE_MS = 60000;
+/** Frames drawn after a blob's URL was last asked for before it is revoked. */
+export const BLOB_URL_FRAMES = 2;
+let blobFrames = 0;
 
-/** A blob's object URL: the same one every time it is drawn. */
+/** A frame was drawn: lazily loaded images have started loading. */
+export function blobUrlFrameDrawn() {
+  blobFrames += 1;
+}
+
+/**
+ * Each blob's object URL: `{blob, url, askedAt, askedFrame}`, while it is
+ * not revoked.
+ */
+const blobUrls = new WeakMap();
+/** The same entries, to sweep. */
+const liveBlobUrls = new Set();
+let blobSweep = null;
+
+/** Revoke the object URLs idle for `BLOB_URL_IDLE_MS`; sweep again while any live. */
+function sweepBlobUrls() {
+  blobSweep = null;
+  const now = Date.now();
+  for (const entry of liveBlobUrls)
+    if (
+      now - entry.askedAt >= BLOB_URL_IDLE_MS &&
+      blobFrames - entry.askedFrame >= BLOB_URL_FRAMES
+    ) {
+      liveBlobUrls.delete(entry);
+      blobUrls.delete(entry.blob);
+      URL.revokeObjectURL(entry.url);
+    }
+  if (liveBlobUrls.size) scheduleBlobSweep();
+}
+
+function scheduleBlobSweep() {
+  if (blobSweep !== null) return;
+  blobSweep = setTimeout(sweepBlobUrls, BLOB_URL_IDLE_MS);
+  // Never what keeps a process running.
+  blobSweep?.unref?.();
+}
+
+/**
+ * A blob's object URL: the same one each time it is drawn, until it has
+ * gone `BLOB_URL_IDLE_MS` and `BLOB_URL_FRAMES` drawn frames without being
+ * asked for, when it is revoked.
+ */
 export function blobUrl(blob) {
-  let url = blobUrls.get(blob);
-  if (!url) blobUrls.set(blob, (url = URL.createObjectURL(blob)));
-  return url;
+  let entry = blobUrls.get(blob);
+  if (!entry) {
+    entry = { blob, url: URL.createObjectURL(blob), askedAt: 0, askedFrame: 0 };
+    blobUrls.set(blob, entry);
+    liveBlobUrls.add(entry);
+  }
+  entry.askedAt = Date.now();
+  entry.askedFrame = blobFrames;
+  scheduleBlobSweep();
+  return entry.url;
 }

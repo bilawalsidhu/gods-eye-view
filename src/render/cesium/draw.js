@@ -36,7 +36,13 @@ import { temeToPseudoFixed } from '../../geo/celestial.js';
 import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
-import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
+import {
+  blobUrl,
+  blobUrlFrameDrawn,
+  listenerList,
+  toCartesian,
+  uncaught,
+} from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
@@ -5196,6 +5202,7 @@ export function createCesiumDraw({
     },
     /** Each frame, after it drew: clamp state, and ground swaps. */
     afterRender() {
+      blobUrlFrameDrawn();
       watchClamp();
       swapReady();
       // Clamped GPU icons take the ground under their segments.
