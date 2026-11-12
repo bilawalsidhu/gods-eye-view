@@ -281,6 +281,8 @@ test('consumer build includes only infrastructure code and resolves assets under
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
   // USGS water layers (copy.js, index.js) ship with the infrastructure
   // package; marker.js is the dependency-free msg() for portable modules.
+  // The gauge cards take their translator from the layer services
+  // (services.i18n), so the i18n runtime and catalogs stay out of this bundle.
   // It draws and takes clicks through the renderer's ports: a viewer with no
   // renderer bound draws once the caller has loaded
   // `./render/cesium/unbound`.

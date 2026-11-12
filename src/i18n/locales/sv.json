@@ -4437,5 +4437,14 @@
   "Zoom in to a region to load river gauges": "Zooma in på en region för att läsa in flodmätare",
   "USGS Rivers & Streams": "USGS floder och vattendrag",
   "USGS Springs": "USGS källor",
-  "Water": "Vatten"
+  "Water": "Vatten",
+  "Discharge": "Flöde",
+  "USGS Water Data · refreshed hourly": "USGS vattendata · uppdateras varje timme",
+  "as of {time}": "per {time}",
+  "Gage height": "Vattenstånd",
+  "Lake elevation above NGVD29": "Sjöns höjd över NGVD29",
+  "Reading": "Avläsning",
+  "Lake elevation above NAVD88": "Sjöns höjd över NAVD88",
+  "Lake/reservoir stage": "Sjö-/magasinsnivå",
+  "No current reading": "Ingen aktuell avläsning"
 }

@@ -10,6 +10,16 @@ import {
   parseJsonl,
   selectStreamTiles,
 } from './index.js';
+import {
+  formatDate,
+  formatNumber,
+  isolate,
+  onLocaleChange,
+  setLocale,
+  t,
+} from '../../i18n/index.js';
+import { localGeoJsonServices } from '../../app/localGeojsonServices.js';
+import { sourceLabel } from '../../ui/layerNames.js';
 
 const tile = (x, y) => ({
   bounds: [x * 4 - 180, y * 4 - 90, x * 4 - 176, y * 4 - 86],
@@ -361,8 +371,342 @@ test('untrusted USGS fetch errors never appear in console or layer status', asyn
 test('the layer source names the hourly server refresh', async () => {
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('./index.js', import.meta.url), 'utf8');
-  assert.match(src, /const SOURCE = 'USGS Water Data · refreshed hourly';/);
+  assert.match(
+    src,
+    /const SOURCE = msg\('USGS Water Data · refreshed hourly'\);/,
+  );
   const { USGS_WATER_REFRESH_MS } =
     await import('../../../server/providers/usgsWater.js');
   assert.equal(USGS_WATER_REFRESH_MS, 60 * 60_000);
+});
+
+test('the layer source is shown in the active language', () => {
+  const [rivers] = createUsgsWaterLayers(services(), opts([]));
+  assert.equal(
+    sourceLabel(rivers.source),
+    'USGS Water Data · refreshed hourly',
+  );
+  setLocale('de');
+  try {
+    assert.equal(
+      sourceLabel(rivers.source),
+      'USGS-Wasserdaten · stündlich aktualisiert',
+    );
+  } finally {
+    setLocale('en');
+  }
+  rivers.destroy();
+});
+
+const GAUGE_READINGS = {
+  stream: [
+    {
+      parameter_name: 'Gage height',
+      value: 3.97,
+      unit: 'ft',
+      observed_time: '2026-10-04T10:00:00Z',
+    },
+  ],
+  lake: [
+    {
+      parameter_name: 'Lake/reservoir stage',
+      value: 38.74,
+      unit: 'ft',
+      observed_time: '2026-10-04T10:00:00Z',
+    },
+  ],
+};
+
+/**
+ * Enable one water layer ('stream' = rivers, 'lake' = lakes) over one gauge
+ * and let it publish its card. The layer stays open: the caller destroys it.
+ * `overrides` are merged over the test services.
+ */
+async function openWaterLayer(cls, overrides = {}) {
+  const gauge = JSON.stringify({
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-97, 32],
+          [-96.99, 32],
+          [-96.99, 32.01],
+          [-97, 32],
+        ],
+      ],
+    },
+    properties: {
+      name: 'Gauge Test',
+      observed_time: '2026-10-04T10:00:00Z',
+      readings: GAUGE_READINGS[cls],
+    },
+  });
+  const fetched = [];
+  const fetchImpl = async (url) => {
+    fetched.push(url);
+    const path = url.replace('/api/usgs-water/', '');
+    const body =
+      path === 'manifest.json' ? JSON.stringify(MANIFEST) : `${gauge}\n`;
+    return { ok: true, status: 200, text: async () => body };
+  };
+  const published = [];
+  const renders = [];
+  const host = { ...services(), ...overrides };
+  host.overlayHost.setEntries = (_id, entries) => published.push(...entries);
+  host.governorRequestRender = (reason) => renders.push(reason);
+  // Rivers load the tile the view rectangle covers; lakes load their file.
+  const viewer = fakeViewer({
+    box:
+      cls === 'stream'
+        ? { west: -100, south: 30, east: -96, north: 34 }
+        : null,
+  });
+  viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(-97, 32, 2_000_000);
+  viewer.camera.frustum = { fov: Math.PI / 3 };
+  const layers = createUsgsWaterLayers(host, {
+    fetchImpl,
+    screenSpaceEventHandlerFactory: () => ({
+      setInputAction() {},
+      destroy() {},
+    }),
+    projectToWindow: () => ({ x: 400, y: 300 }),
+  });
+  const layer = layers[cls === 'stream' ? 0 : 1];
+  await layer.enable(viewer);
+  viewer.scene.preRender.raiseEvent();
+  assert.equal(published.length, 1, 'the gauge card is published');
+  assert.equal(published[0].title, 'Gauge Test');
+  return {
+    layer,
+    viewer,
+    published,
+    renders,
+    fetched,
+    /** One rendered frame, as the render request after a language change causes. */
+    frame: () => viewer.scene.preRender.raiseEvent(),
+    latest: () => published[published.length - 1],
+  };
+}
+
+/** The card an enabled lakes layer publishes; the layer is destroyed. */
+async function publishedLakeCard(overrides = {}) {
+  const open = await openWaterLayer('lake', overrides);
+  open.layer.destroy(open.viewer);
+  return open.published[0];
+}
+
+test('a water layer card shows the gauge readings through the layer hook', async () => {
+  const card = await publishedLakeCard();
+  assert.equal(card.details[0], 'Lake/reservoir stage 38.74 ft');
+  assert.match(card.details[1], /^as of Oct 4, /);
+});
+
+test('without injected wording the card is English whatever the app language is', async () => {
+  setLocale('de');
+  try {
+    const card = await publishedLakeCard();
+    assert.equal(card.details[0], 'Lake/reservoir stage 38.74 ft');
+    assert.match(card.details[1], /^as of Oct 4, /);
+  } finally {
+    setLocale('en');
+  }
+});
+
+test("the layers hand the services' wording functions to the gauge card", async () => {
+  const calls = [];
+  const i18n = {
+    t: (text) => {
+      calls.push('t');
+      return `t:${text}`;
+    },
+    formatNumber: (value) => {
+      calls.push('formatNumber');
+      return `n:${value}`;
+    },
+    formatDate: () => {
+      calls.push('formatDate');
+      return 'D';
+    },
+    isolate: (text) => {
+      calls.push('isolate');
+      return `[${text}]`;
+    },
+  };
+  const card = await publishedLakeCard({ i18n });
+  assert.deepEqual(card.details, [
+    't:Lake/reservoir stage [n:38.74 ft]',
+    't:as of {time}',
+  ]);
+  assert.deepEqual([...new Set(calls)].sort(), [
+    'formatDate',
+    'formatNumber',
+    'isolate',
+    't',
+  ]);
+});
+
+test('the application services word the gauge card in the active language', async () => {
+  const appServices = { i18n: localGeoJsonServices.i18n };
+  const english = await publishedLakeCard(appServices);
+  assert.equal(english.details[0], 'Lake/reservoir stage 38.74 ft');
+  setLocale('de');
+  try {
+    const german = await publishedLakeCard(appServices);
+    assert.equal(german.details[0], 'See-/Stauseepegel 38,74 ft');
+    assert.match(german.details[1], /^Stand: \d+\. Okt\./);
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('the application services carry the real translator and formatters', () => {
+  assert.deepEqual(localGeoJsonServices.i18n, {
+    t,
+    formatNumber,
+    formatDate,
+    isolate,
+    onLocaleChange,
+  });
+  assert.equal(Object.isFrozen(localGeoJsonServices.i18n), true);
+});
+
+/**
+ * The application's real wording, with its language-change subscription
+ * counted: `live` is how many listeners are subscribed right now.
+ */
+function countedAppWording() {
+  const counter = { live: 0, added: 0 };
+  const real = localGeoJsonServices.i18n;
+  const i18n = {
+    ...real,
+    onLocaleChange(listener) {
+      counter.live += 1;
+      counter.added += 1;
+      const stop = real.onLocaleChange(listener);
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        counter.live -= 1;
+        stop();
+      };
+    },
+  };
+  return { i18n, counter };
+}
+
+for (const [cls, label, german, russian] of [
+  ['stream', 'rivers', 'Pegelstand 3,97 ft', 'Уровень воды 3,97 ft'],
+  [
+    'lake',
+    'lakes',
+    'See-/Stauseepegel 38,74 ft',
+    'Уровень озера/водохранилища 38,74 ft',
+  ],
+]) {
+  test(`${label}: a loaded gauge card is worded again when the language changes, without a fetch`, async () => {
+    const { i18n, counter } = countedAppWording();
+    setLocale('de');
+    let open;
+    try {
+      open = await openWaterLayer(cls, { i18n });
+      assert.equal(open.latest().details[0], german);
+      assert.match(open.latest().details[1], /^Stand: /);
+      const fetchesBefore = open.fetched.length;
+      const cardsBefore = open.published.length;
+
+      setLocale('ru');
+      const requested = open.renders.some((reason) =>
+        reason.includes('local-usgs'),
+      );
+      open.frame();
+      assert.equal(open.latest().details[0], russian);
+      assert.equal(open.published.length, cardsBefore + 1, 'one new card');
+      assert.ok(requested, 'a frame is requested so the new wording is shown');
+      assert.match(open.latest().details[1], /^на /);
+      assert.equal(open.latest().title, 'Gauge Test', 'the site name is data');
+      assert.equal(open.fetched.length, fetchesBefore, 'no new request');
+      assert.equal(counter.live, 1, 'one language listener while enabled');
+
+      setLocale('en');
+      open.frame();
+      assert.equal(
+        open.latest().details[0],
+        cls === 'stream' ? 'Gage height 3.97 ft' : 'Lake/reservoir stage 38.74 ft',
+      );
+      assert.equal(open.fetched.length, fetchesBefore, 'still no request');
+    } finally {
+      setLocale('en');
+      open?.layer.destroy(open.viewer);
+    }
+  });
+}
+
+test('a disabled or destroyed water layer holds no language listener and is not touched by a language change', async () => {
+  const { i18n, counter } = countedAppWording();
+  const open = await openWaterLayer('lake', { i18n });
+  try {
+    assert.equal(counter.live, 1);
+    // Enabling again does not add a second listener.
+    await open.layer.enable(open.viewer);
+    assert.equal(counter.live, 1);
+
+    open.layer.disable(open.viewer);
+    assert.equal(counter.live, 0, 'disable unsubscribes');
+    const cards = open.published.length;
+    const renders = open.renders.length;
+    setLocale('de');
+    open.frame();
+    assert.equal(open.published.length, cards, 'a disabled layer publishes nothing');
+    assert.equal(open.renders.length, renders, 'and asks for no frame');
+
+    await open.layer.enable(open.viewer);
+    open.frame();
+    assert.equal(counter.live, 1, 'enable subscribes again');
+    assert.equal(open.latest().details[0], 'See-/Stauseepegel 38,74 ft');
+  } finally {
+    setLocale('en');
+  }
+  open.layer.destroy(open.viewer);
+  assert.equal(counter.live, 0, 'destroy unsubscribes');
+  const cards = open.published.length;
+  const renders = open.renders.length;
+  setLocale('ru');
+  try {
+    open.frame();
+    assert.equal(open.published.length, cards);
+    assert.equal(open.renders.length, renders);
+  } finally {
+    setLocale('en');
+  }
+  // A destroyed layer never subscribes again.
+  await open.layer.enable(open.viewer);
+  assert.equal(counter.live, 0);
+});
+
+test('without injected wording, or without a language listener, nothing subscribes and the card keeps working', async () => {
+  setLocale('de');
+  try {
+    const plain = await openWaterLayer('lake');
+    setLocale('ru');
+    const renders = plain.renders.length;
+    plain.frame();
+    assert.equal(plain.published.length, 1, 'no card is worded again');
+    assert.equal(plain.renders.length, renders);
+    assert.equal(plain.latest().details[0], 'Lake/reservoir stage 38.74 ft');
+    plain.layer.destroy(plain.viewer);
+
+    // Wording without onLocaleChange: the words follow the language when the
+    // card is built, and a later switch changes nothing.
+    setLocale('de');
+    const wordsOnly = await openWaterLayer('lake', { i18n: { t } });
+    assert.equal(wordsOnly.latest().details[0], 'See-/Stauseepegel 38.74 ft');
+    setLocale('ru');
+    wordsOnly.frame();
+    assert.equal(wordsOnly.published.length, 1);
+    wordsOnly.layer.destroy(wordsOnly.viewer);
+  } finally {
+    setLocale('en');
+  }
 });

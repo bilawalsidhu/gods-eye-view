@@ -4543,5 +4543,14 @@
   "USGS Springs": "USGS: manantiales",
   "Zoom in to a region to load river gauges": "Acércate a una región para cargar los medidores de ríos",
   "USGS Lakes & Reservoirs": "USGS: lagos y embalses",
-  "USGS Rivers & Streams": "USGS: ríos y arroyos"
+  "USGS Rivers & Streams": "USGS: ríos y arroyos",
+  "Discharge": "Caudal",
+  "USGS Water Data · refreshed hourly": "Datos hídricos del USGS · actualizados cada hora",
+  "as of {time}": "a fecha de {time}",
+  "Gage height": "Altura limnimétrica",
+  "Lake elevation above NGVD29": "Elevación del lago sobre NGVD29",
+  "Reading": "Lectura",
+  "Lake elevation above NAVD88": "Elevación del lago sobre NAVD88",
+  "Lake/reservoir stage": "Nivel del lago/embalse",
+  "No current reading": "Sin lectura actual"
 }

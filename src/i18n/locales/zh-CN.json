@@ -4331,5 +4331,14 @@
   "USGS Rivers & Streams": "USGS：河流与溪流",
   "Zoom in to a region to load river gauges": "放大到某个区域以加载河流水位站",
   "Water": "水",
-  "USGS Springs": "USGS：泉水"
+  "USGS Springs": "USGS：泉水",
+  "Discharge": "流量",
+  "USGS Water Data · refreshed hourly": "USGS 水文数据 · 每小时刷新",
+  "as of {time}": "截至 {time}",
+  "Gage height": "水位",
+  "Lake elevation above NGVD29": "高于 NGVD29 的湖面高程",
+  "Reading": "读数",
+  "Lake elevation above NAVD88": "高于 NAVD88 的湖面高程",
+  "Lake/reservoir stage": "湖泊/水库水位",
+  "No current reading": "暂无当前读数"
 }

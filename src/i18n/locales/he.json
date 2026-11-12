@@ -4543,5 +4543,14 @@
   "Water": "מים",
   "USGS Springs": "מעיינות של USGS",
   "USGS Rivers & Streams": "נהרות ונחלים של USGS",
-  "Zoom in to a region to load river gauges": "התקרבו לאזור כדי לטעון מדי מפלס נהרות"
+  "Zoom in to a region to load river gauges": "התקרבו לאזור כדי לטעון מדי מפלס נהרות",
+  "Discharge": "ספיקה",
+  "USGS Water Data · refreshed hourly": "נתוני המים של USGS · מתעדכנים מדי שעה",
+  "as of {time}": "נכון ל-{time}",
+  "Gage height": "גובה מד המים",
+  "Lake elevation above NGVD29": "גובה האגם מעל NGVD29",
+  "Reading": "קריאה",
+  "Lake elevation above NAVD88": "גובה האגם מעל NAVD88",
+  "Lake/reservoir stage": "מפלס האגם/המאגר",
+  "No current reading": "אין קריאה עדכנית"
 }
