@@ -399,10 +399,29 @@ function enterSubject(provider) {
   if (!candidate || !this.isSubjectEntryAllowed(provider, candidate))
     return false;
   const failed = {};
-  const held = this.callSubject(provider, 'hold', [candidate.id], failed);
+  const release = () =>
+    this.callSubject(provider, 'release', [candidate.id, { restore: false }]);
+  // An asynchronous hold may land after it was refused: it is released
+  // again once it settles, unless this subject is being ridden by then.
+  const releaseLate = () => {
+    if (
+      this.active &&
+      this.subjectProvider === provider &&
+      this.subjectId === candidate.id
+    )
+      return;
+    release();
+  };
+  const held = this.callSubject(
+    provider,
+    'hold',
+    [candidate.id],
+    failed,
+    releaseLate,
+  );
   if (held === failed) {
     // A hold that threw (or broke the contract) may have half happened.
-    this.callSubject(provider, 'release', [candidate.id, { restore: false }]);
+    release();
     return false;
   }
   if (held !== true) return false;

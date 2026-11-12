@@ -17,8 +17,9 @@ import { displayMotion } from '../transit/movement.js';
  * view that waits for it holds it again if the feed lists it again.
  * `focusTrain(key)` selects a train and hands it the camera, as a click does.
  * A snapshot's `selectedAtMs` is when the user last selected the selected
- * train, even again (null for any other), for a view's entry to tell a
- * re-selection.
+ * train (a click, or `focusTrain`), even again, for a view's entry to tell a
+ * re-selection. It is null for any other train, after a deselection, and for
+ * a train selected only by a hold: a hold is not a user's selection.
  *
  * @param {object} context The layer's state, parts, services and timetable.
  * @returns {{methods: object}}
@@ -181,7 +182,11 @@ export function createRailCockpitSubject({
       }
       const entry = state._trains.get(key);
       if (!entry) return false;
-      if (state._selectedKey !== key) parts.selection.selectTrain(key);
+      if (state._selectedKey !== key) {
+        parts.selection.selectTrain(key);
+        // A hold is not a selection the user made (selectedAtMs).
+        state._selectedAtMs = null;
+      }
       state._cockpitSubjectKey = key;
       state._cockpitLostFeedId = null;
       if (previous && previous !== entry) parts.rendering.paint(previous);

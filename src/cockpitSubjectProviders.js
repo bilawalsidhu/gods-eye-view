@@ -170,8 +170,10 @@ function refusal(provider, kinds) {
  * - `candidate()`, `isEntryAllowed(candidate)` (optional), `hold(id)`,
  *   `read(nowMs, ctx)`, `hud(frame, ctx)` and `release(id, {restore})`, all
  *   synchronous (createCockpitSubjectCaller). `isEntryAllowed` allows entry
- *   only by returning `true`. A `hold` that throws is followed by
- *   `release(id, {restore: false})`.
+ *   only by returning `true`. A `hold` that throws or returns a promise
+ *   refuses entry and is followed by `release(id, {restore: false})`, and by
+ *   another once that promise settles; `release` must therefore be harmless
+ *   when called again for a subject it already gave back.
  *
  * A provider that is not so is left out with one warning naming it.
  * @param {unknown} list
@@ -501,7 +503,9 @@ export function cockpitSubjectHudView(raw) {
  * Provider methods are synchronous: the Cockpit calls them on its render
  * cadence and uses the answer at once. One that returns a promise (an async
  * function, say) breaks that contract: the promise is refused as a throw
- * would be (its rejection, if any, is swallowed), with one warning.
+ * would be (its rejection, if any, is swallowed), with one warning, and
+ * `onSettled`, when given, runs once the promise has settled, so a caller
+ * can undo work that lands late.
  * @param {{warn?: (message: string, error: unknown) => void}} [options]
  */
 export function createCockpitSubjectCaller({
@@ -517,7 +521,13 @@ export function createCockpitSubjectCaller({
       error,
     );
   };
-  return function call(provider, method, args = [], fallback = null) {
+  return function call(
+    provider,
+    method,
+    args = [],
+    fallback = null,
+    onSettled = null,
+  ) {
     let result;
     try {
       result = provider[method](...args);
@@ -530,7 +540,11 @@ export function createCockpitSubjectCaller({
       (typeof result === 'object' || typeof result === 'function') &&
       typeof result.then === 'function'
     ) {
-      Promise.resolve(result).catch(() => {});
+      // Its work may still land: `onSettled` runs once it has, either way.
+      const settled = () => {
+        if (typeof onSettled === 'function') onSettled();
+      };
+      Promise.resolve(result).then(settled, settled);
       warnOnce(
         provider,
         method,

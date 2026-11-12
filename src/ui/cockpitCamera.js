@@ -349,12 +349,33 @@ function updateSubject(nowMs) {
   }
   if (!Number.isFinite(heightM)) {
     // Nothing to stand on yet, from the first frame: the camera stays where
-    // it is while the floor is acquired, as the built-in views wait for the
-    // surface, rather than standing on the ellipsoid (kilometres underground
-    // on a plateau).
+    // it is while the floor is acquired, its HUD saying so, rather than
+    // standing on the ellipsoid (kilometres underground on a plateau). The
+    // wait is bounded as the built-in views' is. Unlike a parked aircraft,
+    // whose fallback is its own reported altitude, such a subject has no
+    // height at all to fall back to: any number would be a guess, so the
+    // view ends and the provider gets its subject back.
+    if (!this.surfaceWaitStartedMs) this.surfaceWaitStartedMs = nowMs;
+    if (
+      cockpitSurfaceWaitExpired(
+        nowMs,
+        this.surfaceWaitStartedMs,
+        COCKPIT_GROUND_WAIT_TIMEOUT_MS,
+      )
+    ) {
+      this.exit({ restoreTracking: false });
+      return;
+    }
     this.surfaceAcquiring = true;
+    if (
+      cockpitUiUpdateDue(nowMs, this.lastHudUpdateMs, COCKPIT_HUD_UPDATE_MS)
+    ) {
+      this.lastHudUpdateMs = nowMs;
+      this.updateHud(this.subjectInfo(frame), nowMs);
+    }
     return;
   }
+  this.surfaceWaitStartedMs = 0;
   this.surfaceAcquiring = false;
   this.subjectHeightM = heightM;
   const target = Cesium.Cartesian3.fromDegrees(

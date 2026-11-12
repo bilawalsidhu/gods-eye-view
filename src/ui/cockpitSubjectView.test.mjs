@@ -15,6 +15,7 @@ import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import { getLocale, setLocale } from '../i18n/index.js';
+import { COCKPIT_GROUND_WAIT_TIMEOUT_MS } from './cockpitPresentation.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 
 const LAT = 47;
@@ -528,18 +529,28 @@ test('a frame with no height and a cold floor never stands the eye on the ellips
   const clock = manualClock(t, 10_000);
   const ride = subjectProvider();
   ride.subject.frame = { ...ride.subject.frame, heightM: null };
-  const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
-  // Nothing to stand on from the first frame: the camera waits where it is.
+  const { $, cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+  // Nothing to stand on from the first frame: the camera waits where it is,
+  // its HUD saying so and still read from the provider.
   setFloor(undefined);
   cockpit.syncEntry();
   assert.equal(cockpit.enter(), true);
   const before = shots.length;
+  const huds = () => ride.calls.filter(([name]) => name === 'hud').length;
+  const hudsBefore = huds();
   for (let i = 0; i < 5; i += 1) {
-    clock.advance(16);
+    clock.advance(200);
     cockpit.update();
   }
+  await settle();
   assert.equal(shots.length, before, 'no camera placed');
   assert.equal(cockpit.active, true, 'the view waits');
+  assert.ok(huds() > hudsBefore, 'the HUD is not frozen');
+  assert.equal($('#cockpit-aircraft-meta').textContent, 'ACQUIRING SURFACE');
+  assert.equal(
+    $('#cockpit-aircraft-meta').getAttribute('data-tone'),
+    'warning',
+  );
   // The floor arrives: the eye stands on it.
   setFloor(FLOOR_M);
   clock.advance(16);
@@ -559,6 +570,60 @@ test('a frame with no height and a cold floor never stands the eye on the ellips
   clock.advance(16);
   cockpit.update();
   assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
+});
+
+test('a floor that never comes ends the view after the bounded wait, releasing the subject', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.frame = { ...ride.subject.frame, heightM: null };
+  const { $, cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+  setFloor(undefined);
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  const before = shots.length;
+  // Acquiring, the HUD updating, for just under the wait...
+  for (let elapsed = 0; elapsed < COCKPIT_GROUND_WAIT_TIMEOUT_MS - 250;) {
+    clock.advance(250);
+    elapsed += 250;
+    cockpit.update();
+  }
+  await settle();
+  assert.equal(cockpit.active, true);
+  assert.equal($('#cockpit-aircraft-meta').textContent, 'ACQUIRING SURFACE');
+  // ...then no guessed height: the view ends and the subject goes back.
+  clock.advance(500);
+  cockpit.update();
+  assert.equal(cockpit.active, false);
+  assert.equal(shots.length, before, 'never placed on a guess');
+  assert.deepEqual(lastRelease(ride.calls), ['release', 'a1', false]);
+});
+
+test('an asynchronous hold that lands after entry was refused is released again', async (t) => {
+  let heldId = null;
+  const releases = [];
+  const ride = subjectProvider({
+    hold: async (id) => {
+      await Promise.resolve();
+      heldId = id;
+      return true;
+    },
+    release: (id, options) => {
+      releases.push([id, options.restore]);
+      heldId = null;
+    },
+  });
+  const { cockpit, warned } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), false, 'refused at once');
+  assert.deepEqual(releases, [['a1', false]]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(heldId, null, 'the late hold is let go');
+  assert.deepEqual(releases, [
+    ['a1', false],
+    ['a1', false],
+  ]);
+  assert.equal(cockpit.active, false);
+  assert.match(warned[0], /hold\(\) returned a promise/);
 });
 
 test('a provider’s labels, entry face and look follow a change of language', async (t) => {

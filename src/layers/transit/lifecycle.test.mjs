@@ -4196,6 +4196,32 @@ test('the selected vehicle reads as a snapshot of its place, motion and source',
   assert.ok(Number.isFinite(view.position.latitude));
 });
 
+test('selectedAtMs is the user’s selection time; a hold and a deselection leave none', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  // A vehicle only a hold selected reports none.
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  assert.equal(app.layer.getCockpitSubject().selectedAtMs, null);
+  app.layer.setCockpitSubject(null);
+  assert.equal(app.layer.setCockpitSubject(null), true, 'twice is harmless');
+  assert.equal(app.state()._selectedKey, key);
+  // The user's selection stamps it, again on a re-selection.
+  assert.equal(app.layer.focusVehicle(key), true);
+  const first = app.layer.getSelectedVehicle().selectedAtMs;
+  assert.ok(Number.isFinite(first));
+  app.run(1000);
+  app.layer.focusVehicle(key);
+  assert.ok(app.layer.getSelectedVehicle().selectedAtMs > first);
+  // Deselected, then held: none.
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, null);
+  assert.equal(app.state()._selectedAtMs, null);
+  app.layer.setCockpitSubject(key);
+  assert.equal(app.layer.getCockpitSubject().selectedAtMs, null);
+});
+
 test('a held vehicle hides, keeps moving out of view, and lets go when it goes', async (t) => {
   const app = harness(t);
   const key = await busRunningNorth(app);

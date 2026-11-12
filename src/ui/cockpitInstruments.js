@@ -183,9 +183,12 @@ function updateSubjectHud(info, nowMs, forceContext) {
   view.trackSource = null;
   view.kicker = hud.kicker || provider.labels.kicker;
   view.callsign = hud.title || info.name || '';
-  view.meta.text = hud.meta.text;
-  view.meta.tone = hud.meta.tone;
-  view.meta.emergency = hud.meta.tone === 'alert';
+  // While the floor under a subject with no height is acquired
+  // (cockpitCamera.js), the meta line says so in place of the provider's.
+  const acquiring = this.surfaceAcquiring === true;
+  view.meta.text = acquiring ? t('ACQUIRING SURFACE') : hud.meta.text;
+  view.meta.tone = acquiring ? 'warning' : hud.meta.tone;
+  view.meta.emergency = !acquiring && hud.meta.tone === 'alert';
   const speed = hud.speed?.value ?? null;
   view.speed = hud.speed
     ? {

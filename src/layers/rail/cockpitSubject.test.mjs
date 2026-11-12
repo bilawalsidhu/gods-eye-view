@@ -196,6 +196,36 @@ test('a held train its feed drops leaves the feed polled until the view lets go'
   assert.equal(app.state()._trains.size, 0);
 });
 
+test('selectedAtMs is the user’s selection time, never a hold’s or another train’s', async (t) => {
+  const app = await onTheLine(t);
+  assert.equal(app.layer.focusTrain(T1), true);
+  const first = app.layer.getSelectedTrain().selectedAtMs;
+  assert.ok(Number.isFinite(first), 'a click or focusTrain stamps it');
+  // Selected again: a later stamp.
+  app.run(1000);
+  app.layer.focusTrain(T1);
+  assert.ok(app.layer.getSelectedTrain().selectedAtMs > first);
+  // A hold of another train is not the user's selection.
+  app.layer.setCockpitSubject(T2);
+  assert.equal(app.layer.getCockpitSubject().key, T2);
+  assert.equal(app.layer.getCockpitSubject().selectedAtMs, null);
+  app.layer.setCockpitSubject(null);
+  // Nor after a deselection (Escape), then a hold.
+  app.layer.focusTrain(T1);
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, null);
+  assert.equal(app.state()._selectedAtMs, null, 'deselection clears it');
+  app.layer.setCockpitSubject(T2);
+  assert.equal(app.layer.getCockpitSubject().selectedAtMs, null);
+  // Releasing twice is harmless: the selection stays.
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  assert.equal(app.state()._selectedKey, T2);
+  assert.equal(app.layer.getCockpitSubject(), null);
+});
+
 test('turning the layer off ends the hold', async (t) => {
   const app = await onTheLine(t);
   app.layer.setCockpitSubject(T1);

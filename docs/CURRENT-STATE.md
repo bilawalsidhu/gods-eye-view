@@ -2011,7 +2011,9 @@ older subject's.
 
 A frame places the eye `eye.upM` above `heightM` (the shared floor where the
 frame gives none, or where it last stood while that floor is cold; with
-neither the camera waits where it is), slews toward `headingDeg` at the provider's rate, and may
+neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
+at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
+subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
 turn off the floor clamps (`groundClamp: false`, for a subject inside a
 structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
 layer that already moves it smoothly); `cameraIntervalMs: 0` updates the
@@ -2034,7 +2036,8 @@ The Rail layer offers a read API for such a view: `getSelectedTrain()` and
 `getCockpitSubject()` (a snapshot of the train: where it is along its line,
 which way it runs (`pathBinding.js` learns it), its rail height, speed as
 reported or derived, position source, feed credit and stops, and
-`selectedAtMs`, when the user last selected it, even again),
+`selectedAtMs`, when the user last selected it by a click or `focusTrain`,
+even again; null after a deselection and for a train only a hold selected),
 `setCockpitSubject(key)` (its marker and card hidden, the selection kept, its
 feed held, clicks and Escape left to the view) and `focusTrain(key)`; its pure
 path module is exported as `@gods-eye-view/core/layers/rail/paths`. Transit

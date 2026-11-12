@@ -127,6 +127,7 @@ export function createSelection({ state, services, parts }) {
     const hadSelection = state._selectedKey !== null;
     parts.follow.release({ untrack });
     state._selectedKey = null;
+    state._selectedAtMs = null;
     state._selectedCardText = null;
     if (hadSelection) {
       parts.rendering.paintAll();

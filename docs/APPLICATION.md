@@ -306,3 +306,18 @@ for a provider placing a train along its line. The frame, HUD view and
 candidate fields are documented in `src/cockpitSubjectProviders.js`; the Rail
 and Transit read APIs in `src/layers/rail/cockpitSubject.js` and
 `src/layers/transit/cockpitSubject.js`.
+
+A candidate's `selectedAt` is a token that changes each time the user selects
+the subject, even the same one again, so entry takes it first. The Rail and
+Transit snapshots give one, `selectedAtMs`: when the user last selected the
+train or vehicle by a click or `focusTrain`/`focusVehicle`. It is null after
+a deselection and for one selected only by a hold, since a hold is not the
+user's selection.
+
+A frame with `heightM: null` stands on the shared floor, or where it last
+stood while that floor is cold. If no height has been known since entry, the
+view waits, showing ACQUIRING SURFACE, for at most five seconds
+(`COCKPIT_GROUND_WAIT_TIMEOUT_MS`), then ends and releases the subject. A
+`hold` that throws or returns a promise refuses entry and is followed by
+`release(id, { restore: false })`, again once a returned promise settles, so
+`release` must be harmless when called more than once.

@@ -97,6 +97,7 @@ export function createSelection({ state, services, parts }) {
       : null;
     parts.trails.clear();
     state._selectedKey = null;
+    state._selectedAtMs = null;
     state._selectedCardText = null;
     state._detectRevision += 1;
     // Cleared first: the styling path reads the selection from state.
@@ -104,12 +105,18 @@ export function createSelection({ state, services, parts }) {
     state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
   }
 
-  function selectVehicle(key) {
+  /**
+   * Select a vehicle. `byUser` marks a selection the user made (a click, or
+   * focusVehicle), even of the selected vehicle again: its time is the
+   * snapshot's `selectedAtMs` (cockpitSubject.js). A first-person view's hold
+   * selects without it.
+   */
+  function selectVehicle(key, { byUser = false } = {}) {
     clearSelection();
     const entry = state._vehicles.get(key);
     if (!entry?.marker) return;
     state._selectedKey = key;
-    state._selectedAtMs = Date.now();
+    if (byUser) state._selectedAtMs = Date.now();
     state._detectRevision += 1;
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);
@@ -190,11 +197,11 @@ export function createSelection({ state, services, parts }) {
           typeof primitiveId === 'string' &&
           state._vehicles.has(primitiveId)
         ) {
-          selectVehicle(primitiveId);
+          selectVehicle(primitiveId, { byUser: true });
           return;
         }
         if (typeof picked.id === 'string' && state._vehicles.has(picked.id)) {
-          selectVehicle(picked.id);
+          selectVehicle(picked.id, { byUser: true });
           return;
         }
       }

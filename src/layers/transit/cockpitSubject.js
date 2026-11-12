@@ -17,8 +17,10 @@ import { displayMotion } from './movement.js';
  * change the selection. The hold ends with `setCockpitSubject(null)`, and on
  * its own when the vehicle is removed or the layer is turned off.
  * `focusVehicle(key)` selects a vehicle, as a click does. A snapshot's
- * `selectedAtMs` is when the user last selected the selected vehicle, even
- * again (null for any other).
+ * `selectedAtMs` is when the user last selected the selected vehicle (a
+ * click, or `focusVehicle`), even again. It is null for any other vehicle,
+ * after a deselection, and for a vehicle selected only by a hold: a hold is
+ * not a user's selection.
  *
  * @param {object} context The layer's state, parts and services.
  * @returns {{methods: object}}
@@ -165,7 +167,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
      */
     focusVehicle(key) {
       if (!state._vehicles.get(key)?.marker) return false;
-      parts.selection.selectVehicle(key);
+      parts.selection.selectVehicle(key, { byUser: true });
       return true;
     },
   };
