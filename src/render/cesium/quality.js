@@ -19,12 +19,81 @@
  *
  * Building the port changes nothing in the scene; each setting is applied
  * when it is first set, and a detail set back to 1 hands each tileset and
- * the globe the error it had (or was given since). There is no GPU timing:
- * frame signals carry the CPU time of each drawn tick, from the tick's start
- * (before any frame listener) to the end of its draw.
+ * the globe the error it had (or was given since). Frame signals carry the
+ * CPU time of each drawn tick, from the tick's start (before any frame
+ * listener) to the end of its draw. Where the context has
+ * `EXT_disjoint_timer_query_webgl2` (the `gpuTiming` capability), each drawn
+ * frame is timed on the GPU too, from `preRender` to `postRender`, while
+ * anyone listens; a frame's GPU time comes back a frame or more later, so a
+ * signal carries `gpuMs` of the latest frame whose timing has come back (none
+ * until the first does, and a timing the GPU marks disjoint is dropped).
  */
 import * as Cesium from 'cesium';
 import { listenerList } from './common.js';
+import { webglContext } from './internals.js';
+
+/** Timer queries kept waiting at most: past it, the oldest is dropped. */
+const MAX_PENDING_QUERIES = 8;
+
+/**
+ * The context's GPU timer extension, or null where it has none (WebGL 1, or
+ * a GPU or browser without timer queries).
+ * @param {WebGL2RenderingContext|object|undefined} gl
+ */
+export function gpuTimerOf(gl) {
+  if (typeof gl?.createQuery !== 'function') return null;
+  try {
+    return gl.getExtension?.('EXT_disjoint_timer_query_webgl2') ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Times frames on the GPU with timer queries: `begin()` before a frame's
+ * draw, `end()` after it, and `latest()` the milliseconds of the newest frame
+ * whose timing has come back.
+ */
+function createGpuTimer(gl, ext) {
+  const pending = [];
+  const free = [];
+  let active = null;
+  let latestMs;
+  function poll() {
+    while (pending.length > 0) {
+      const query = pending[0];
+      if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) break;
+      pending.shift();
+      const ns = gl.getQueryParameter(query, gl.QUERY_RESULT);
+      if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) latestMs = ns / 1e6;
+      free.push(query);
+    }
+  }
+  return {
+    begin() {
+      if (active) this.end();
+      active = free.pop() ?? gl.createQuery();
+      gl.beginQuery(ext.TIME_ELAPSED_EXT, active);
+    },
+    end() {
+      if (!active) return;
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      pending.push(active);
+      active = null;
+      if (pending.length > MAX_PENDING_QUERIES) gl.deleteQuery(pending.shift());
+      poll();
+    },
+    latest: () => latestMs,
+    dispose() {
+      if (active) gl.endQuery(ext.TIME_ELAPSED_EXT);
+      for (const query of [active, ...pending, ...free])
+        if (query) gl.deleteQuery(query);
+      active = null;
+      pending.length = 0;
+      free.length = 0;
+    },
+  };
+}
 
 const MSAA_OPTIONS = Object.freeze([0, 2, 4, 8]);
 /** Screen-space error at detail 0, as a multiple of the error at detail 1. */
@@ -68,7 +137,9 @@ function tilesetsIn(collection, isTileset, isCollection, out = []) {
  *   isCollection?: (p: object) => boolean,
  *   limits?: {maximumTextureSize: number, maximumSamples: number},
  *   tickStarted?: () => number,
- * }} options `tickStarted` is when the tick under way started, on the
+ *   gl?: object,
+ * }} options `gl` is the WebGL context GPU timing reads (the scene's by
+ *   default). `tickStarted` is when the tick under way started, on the
  *   `performance.now()` clock; without it the port times from its own
  *   preUpdate listener. Tests pass the predicates and limits; they default
  *   to Cesium's classes and context limits.
@@ -84,9 +155,12 @@ export function createCesiumQuality(
     isCollection = (p) => p instanceof Cesium.PrimitiveCollection,
     limits = Cesium.ContextLimits,
     tickStarted = null,
+    gl = webglContext(widget.scene),
   },
 ) {
   const scene = widget.scene;
+  const timerExt = gpuTimerOf(gl);
+  const gpuTimer = timerExt ? createGpuTimer(gl, timerExt) : null;
   let disposed = false;
   const gone = () => disposed || scene.isDestroyed?.() === true;
 
@@ -282,7 +356,7 @@ export function createCesiumQuality(
       backend: scene.context?.webgl2 ? 'webgl2' : 'webgl1',
       maxTextureSize: limits.maximumTextureSize,
       msaaSamples: scene.msaaSupported ? msaaOptions() : [0],
-      gpuTimer: false,
+      gpuTimer: Boolean(gpuTimer),
     };
   }
 
@@ -302,14 +376,18 @@ export function createCesiumQuality(
         ]),
     scene.preRender.addEventListener(() => {
       if (signalListeners.size === 0) return;
+      gpuTimer?.begin();
       const pending = frame.diagnostics?.().pendingReasons ?? [];
       requested = pending.length > 0;
       mode = scene.requestRenderMode ? 'demand' : 'continuous';
     }),
     scene.postRender.addEventListener(() => {
       if (signalListeners.size === 0) return;
+      gpuTimer?.end();
+      const gpuMs = gpuTimer?.latest();
       signalListeners.fire({
         cpuMs: performance.now() - (tickStarted ? tickStarted() : tickStart),
+        ...(gpuMs === undefined ? {} : { gpuMs }),
         pixelRatio: scene.pixelRatio ?? 1,
         width: scene.drawingBufferWidth ?? scene.canvas?.width ?? 0,
         height: scene.drawingBufferHeight ?? scene.canvas?.height ?? 0,
@@ -354,7 +432,7 @@ export function createCesiumQuality(
       };
     },
     signals: {
-      gpuTiming: 'none',
+      gpuTiming: gpuTimer ? 'frame' : 'none',
       on(event, cb) {
         if (event !== 'frame') return () => {};
         return signalListeners.on(cb);
@@ -370,6 +448,7 @@ export function createCesiumQuality(
       disposed = true;
       signalListeners.clear();
       for (const off of removers) off();
+      gpuTimer?.dispose();
       offWatch?.();
       offWatch = null;
     },

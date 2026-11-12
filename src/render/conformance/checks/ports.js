@@ -3870,6 +3870,43 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
       },
     ),
     check(
+      'quality.signals.gpuTiming',
+      'with gpuTiming, drawn frames come to carry their GPU time; without it they never do',
+      async (h, r) => {
+        const timed = r.capabilities.has('gpuTiming');
+        equal(
+          r.quality.signals.gpuTiming !== 'none',
+          timed,
+          'gpuTiming says whether frames are timed',
+        );
+        equal(r.quality.device().gpuTimer, timed, 'device facts agree');
+        const signals = [];
+        const off = r.quality.signals.on('frame', (s) => signals.push(s));
+        for (let i = 0; i < 30 && !signals.some((s) => 'gpuMs' in s); i++)
+          await drawn(h, r, 1);
+        off();
+        const gpu = signals.filter((s) => 'gpuMs' in s);
+        if (timed) {
+          ok(gpu.length > 0, 'a GPU time came back within 30 frames');
+          ok(
+            gpu.every((s) => Number.isFinite(s.gpuMs) && s.gpuMs >= 0),
+            'GPU times are milliseconds',
+          );
+        } else equal(gpu.length, 0, 'no GPU time without gpuTiming');
+        if (!timed) return;
+        const without = await h.create({
+          viewport: SCRIPT_VIEWPORT,
+          capabilities: CAPABILITIES.filter((c) => c !== 'gpuTiming'),
+        });
+        if (!without) return;
+        try {
+          equal(without.quality.signals.gpuTiming, 'none', 'none without it');
+        } finally {
+          without.destroy();
+        }
+      },
+    ),
+    check(
       'quality.signals',
       'frame signals arrive for drawn frames',
       async (h, r) => {

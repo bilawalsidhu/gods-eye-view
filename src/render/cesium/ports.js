@@ -22,7 +22,7 @@ import { createCesiumEffects } from './effects.js';
 import { renderNow, willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuery, queryCapabilities } from './query.js';
-import { createCesiumQuality } from './quality.js';
+import { createCesiumQuality, gpuTimerOf } from './quality.js';
 import { screenModulationSupported } from './screenModulation.js';
 import {
   atEndOfTick,
@@ -30,6 +30,7 @@ import {
   onEngineWorkCompleted,
   renderPending,
   trimGlobeTiles,
+  webglContext,
 } from './internals.js';
 
 export { listenerList, toCartesian };
@@ -87,6 +88,8 @@ export function cesiumCapabilities(scene, only) {
     ...(screenModulationSupported() ? ['screenModulation'] : []),
     ...GLOBE_CAPABILITIES,
     ...queryCapabilities(scene),
+    // Frame timing on the GPU, where the context has timer queries.
+    ...(gpuTimerOf(webglContext(scene)) ? ['gpuTiming'] : []),
   ];
   const allowed = only && new Set(only);
   return all.filter(
@@ -361,6 +364,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     frame,
     report,
     tickStarted: () => tickNow,
+    gl: capabilities.has('gpuTiming') ? webglContext(scene) : null,
   });
 
   const creditsPart = createCesiumCredits({

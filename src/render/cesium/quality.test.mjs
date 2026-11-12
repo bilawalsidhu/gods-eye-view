@@ -38,6 +38,7 @@ function fixture({
   msaaSupported = true,
   maximumSamples = 8,
   tickStarted,
+  gl = null,
 } = {}) {
   const primitives = new Collection();
   const scene = {
@@ -75,6 +76,7 @@ function fixture({
     isCollection: (p) => p instanceof Collection,
     limits: { maximumTextureSize: 16384, maximumSamples },
     tickStarted,
+    gl,
   });
   const tick = () => {
     scene.preUpdate.raise();
@@ -243,6 +245,73 @@ test('frame signals come with each drawn frame and follow the listener rules', (
   dispose();
   tick();
   assert.equal(seen.length, 1, 'nothing after dispose');
+});
+
+/** A WebGL 2 context with timer queries whose results come back when told. */
+function timerContext() {
+  const ext = { TIME_ELAPSED_EXT: 0x88bf, GPU_DISJOINT_EXT: 0x8fbb };
+  const log = [];
+  const results = new Map();
+  let disjoint = false;
+  let made = 0;
+  const gl = {
+    QUERY_RESULT: 0x8866,
+    QUERY_RESULT_AVAILABLE: 0x8867,
+    log,
+    getExtension: (name) =>
+      name === 'EXT_disjoint_timer_query_webgl2' ? ext : null,
+    createQuery: () => ({ n: made++ }),
+    deleteQuery: (q) => log.push(['delete', q.n]),
+    beginQuery: (target, q) => log.push(['begin', q.n]),
+    endQuery: () => log.push(['end']),
+    getQueryParameter: (q, what) =>
+      what === gl.QUERY_RESULT_AVAILABLE ? results.has(q.n) : results.get(q.n),
+    getParameter: (what) => (what === ext.GPU_DISJOINT_EXT ? disjoint : null),
+    /** Query `n` took `ms` on the GPU. */
+    finish: (n, ms) => results.set(n, ms * 1e6),
+    setDisjoint: (value) => (disjoint = value),
+  };
+  return gl;
+}
+
+test('with timer queries, drawn frames are timed on the GPU and signals carry the latest', () => {
+  const gl = timerContext();
+  const { quality, tick, dispose } = fixture({ gl });
+  assert.equal(quality.signals.gpuTiming, 'frame');
+  assert.equal(quality.device().gpuTimer, true);
+  tick();
+  assert.deepEqual(gl.log, [], 'nothing timed while no one listens');
+  const seen = [];
+  quality.signals.on('frame', (s) => seen.push(s));
+  tick();
+  assert.deepEqual(gl.log, [['begin', 0], ['end']], 'the frame is timed');
+  assert.ok(!('gpuMs' in seen[0]), 'none back yet');
+  gl.finish(0, 3.5);
+  tick();
+  assert.equal(seen[1].gpuMs, 3.5, 'the last frame’s, once it is back');
+  assert.deepEqual(
+    gl.log.slice(2),
+    [['begin', 1], ['end']],
+    'a new query while the last is out',
+  );
+  gl.setDisjoint(true);
+  gl.finish(1, 99);
+  tick();
+  assert.deepEqual(gl.log.slice(4), [['begin', 0], ['end']], 'one reused');
+  assert.equal(seen[2].gpuMs, 3.5, 'a disjoint timing is dropped');
+  dispose();
+  assert.ok(
+    gl.log.some(([kind]) => kind === 'delete'),
+    'queries let go',
+  );
+});
+
+test('without timer queries the port says so', () => {
+  const { quality } = fixture({
+    gl: { createQuery() {}, getExtension: () => null },
+  });
+  assert.equal(quality.signals.gpuTiming, 'none');
+  assert.equal(quality.device().gpuTimer, false);
 });
 
 test('device and probe describe the context and the browser', () => {

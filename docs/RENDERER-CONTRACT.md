@@ -126,6 +126,14 @@ optional, so a renderer written before it still conforms:
   [The application and its renderer](#the-application-and-its-renderer).
 - `frame.renderNow()` throws when the frame fails to draw.
 
+The Cesium port lists `gpuTiming` where its context has
+`EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,
+each drawn frame is timed on the GPU from `preRender` to `postRender`, and a
+signal carries `gpuMs` of the newest frame whose timing has come back (a
+frame or more late; a disjoint timing is dropped). Without the extension it
+answers `gpuTiming: 'none'` and lists no capability. The check
+`quality.signals.gpuTiming` pins both.
+
 The Cesium port lists `modelAtmosphere`: Cesium scatters drawn models
 through the atmosphere in the same stage as its distance fog, so models take
 it while `globe.sky`'s `fog` is on.

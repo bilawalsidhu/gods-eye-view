@@ -297,6 +297,7 @@ export function createStubRenderer(options = {}) {
     for (const waiter of onceWaiters.splice(0)) waiter();
     const signals = {
       cpuMs: 0,
+      ...(capabilities.has('gpuTiming') ? { gpuMs: 0 } : {}),
       pixelRatio: qualitySettings.pixelRatio || 1,
       width: viewport.width,
       height: viewport.height,
