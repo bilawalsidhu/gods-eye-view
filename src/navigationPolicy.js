@@ -25,6 +25,7 @@ const COCKPIT_REFUSALS = Object.freeze({
   fire: msg('Exit cockpit to fly to a fire'),
   sighting: msg('Exit cockpit to fly to a sighting'),
   'sighting-area': msg('Exit cockpit to fly to a sighting area'),
+  train: msg('Exit cockpit to fly to a train'),
   route: msg('Exit cockpit to fly to a route'),
   file: msg('Exit cockpit to fly to a file'),
   drawing: msg('Exit cockpit to fly to a drawing'),
@@ -33,6 +34,8 @@ const COCKPIT_REFUSALS = Object.freeze({
   // «View coverage» button); the cyclone layer flies to the selected storm.
   weather: msg('Exit cockpit to view weather coverage'),
   cyclone: msg('Exit cockpit to fly to a cyclone'),
+  // The News panel's cards and the news layer's hotspots fly to the event.
+  news: msg('Exit cockpit to fly to a news report'),
   // Voice track_entity (TRACKABLE_FAMILIES kinds in gevActions.js) and
   // frame_overhead, which frames the contacts around the current view.
   aircraft: msg('Exit cockpit to fly to an aircraft'),
@@ -178,4 +181,38 @@ export function reassertNavigationHandoff({
   }
   release?.();
   return true;
+}
+
+/** Gestures on the globe that take the camera from a pending request. */
+const CAMERA_GESTURES = ['pointerdown', 'wheel'];
+
+/**
+ * Whether the camera is still a request's: a navigation the shell stamps (a
+ * search, the assistant, a link) or a press or wheel on the globe hands it to
+ * someone else. `claim()` takes the navigation stamped so far as the
+ * request's (its own flight); a gesture is never forgiven. `stop()` removes
+ * the gesture listeners.
+ */
+export function watchCameraOwner(viewer, navigation) {
+  let generation = navigation?._navigationGeneration;
+  const canvas = viewer?.canvas ?? viewer?.scene?.canvas ?? null;
+  let taken = false;
+  const onGesture = () => {
+    taken = true;
+  };
+  for (const type of CAMERA_GESTURES)
+    canvas?.addEventListener?.(type, onGesture, { passive: true });
+  return {
+    claim: () => {
+      generation = navigation?._navigationGeneration;
+    },
+    taken: () =>
+      taken ||
+      (Number.isFinite(generation) &&
+        navigation._navigationGeneration !== generation),
+    stop: () => {
+      for (const type of CAMERA_GESTURES)
+        canvas?.removeEventListener?.(type, onGesture);
+    },
+  };
 }

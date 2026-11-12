@@ -9,6 +9,7 @@ import {
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
+import { createRailSource } from '../layers/rail/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
 import { createInstallationSource } from '../layers/installations/source.js';
@@ -20,6 +21,8 @@ import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
+import { createNewsSource } from '../layers/news/source.js';
+import { createShipwrecksSource } from '../layers/shipwrecks/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
@@ -53,6 +56,7 @@ export function createStandaloneLayerSources(
     radio: createRadioSource(),
     traffic: createTrafficSource({ mapTiles: trafficTiles }),
     transit: createTransitSource(),
+    rail: createRailSource(),
     bikeshare: createBikeshareSource(),
     installations: createInstallationSource({ mapTiles: installationTiles }),
     satellites: createSatelliteSource(),
@@ -60,6 +64,11 @@ export function createStandaloneLayerSources(
     alpr: createAlprTileSource(),
     firms: createFirmsSource(),
     's2-ghostmaps': createGhostMapsSource(),
+    // Same-origin /api/news: the local server proxies GEV_NEWS_ORIGIN and,
+    // without it, answers "not configured", which the layer shows as
+    // unavailable without retrying.
+    news: createNewsSource(),
+    shipwrecks: createShipwrecksSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),

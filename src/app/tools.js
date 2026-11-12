@@ -1,6 +1,11 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import {
+  claimPointer,
+  isPointerFree,
+  releasePointer,
+} from '../data/inputOwnership.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -35,6 +40,7 @@ export function createApplicationTools({
   startChrome,
   onSceneDirector,
   sceneDataPacks,
+  drawMarkActions = [],
   signal,
   defer,
 }) {
@@ -80,12 +86,15 @@ export function createApplicationTools({
   // while a session is open, so its teardown belongs to the application
   // lifetime rather than to whoever last pressed the button. A row's fly-to
   // goes through the shell's navigation policy, as Import's does.
+  // `drawMarkActions` are an application's own buttons on a drawn area's or
+  // line's row (annotations/drawMarks.js); the standalone shell adds none.
   const drawTool = initDrawTool({
     viewer,
     annotations,
     navigation: styleManager,
     publish: (view) => displayStore.publishDraw(view),
     connect: connectDisplay,
+    markActions: drawMarkActions,
   });
   defer(() => drawTool?.destroy());
   // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
@@ -237,9 +246,23 @@ export function createApplicationTools({
       shell: styleManager,
       viewer,
       dataManager,
-      run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      run: (name, args, options = {}) =>
+        voiceCommands.runner(name, args, { ...options, signal }),
       signal,
+      terrain: operations.requests.terrain,
     }),
   );
-  return { sceneDirector, annotations, voiceCommands };
+  // An application's own tool takes the pointer as Draw does, and its own
+  // click handlers yield while a tool holds it, as the layers' do
+  // (data/inputOwnership.js).
+  return {
+    sceneDirector,
+    annotations,
+    voiceCommands,
+    pointer: {
+      claim: claimPointer,
+      release: releasePointer,
+      isFree: isPointerFree,
+    },
+  };
 }

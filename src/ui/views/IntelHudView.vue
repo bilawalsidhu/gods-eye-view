@@ -16,8 +16,8 @@ const view = computed(() => hud.value ?? EMPTY);
 // button, so first person needs no Contacts panel. The Cockpit controller
 // answers its clicks.
 const { presence: cockpit } = storeToRefs(useCockpitStore());
-// The entry rides the tracked aircraft (cockpitEntryFace).
-const entry = computed(() => cockpitEntryFace('aircraft'));
+// The entry names the subject it would ride (cockpitEntryFace).
+const entry = computed(() => cockpitEntryFace(cockpit.value?.entryKind));
 </script>
 
 <template>

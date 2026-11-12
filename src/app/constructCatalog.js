@@ -1,7 +1,9 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
+import { worldClock } from '../time/worldClock.js';
+import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
-import { createCyclonesLayer } from '../layers/cyclones/index.js';
+import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
@@ -17,6 +19,7 @@ import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
 import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
+import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
@@ -29,7 +32,9 @@ import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
+import { createApplicationShipwrecks } from './layers/shipwrecks.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
+import { createApplicationNews } from './layers/news.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationBorderWaits } from './layers/borderWaits.js';
 import { createApplicationCables } from './layers/submarineCables.js';
@@ -66,6 +71,7 @@ export function createApplicationCatalog({
   signal,
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
+  newsOptions,
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
@@ -79,7 +85,7 @@ export function createApplicationCatalog({
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
-  const weatherClock = createWeatherClock();
+  const weatherClock = createWeatherClock({ world: worldClock });
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
     militaryRegistry.dispose();
@@ -136,8 +142,16 @@ export function createApplicationCatalog({
           windowMs: sources['gnss-integrity'].windowMs,
         }),
         createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+        createApplicationShipwrecks({ source: sources.shipwrecks }),
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
+        }),
+        // Ages, the window and the counts read the world clock: a host that
+        // follows it for the layer shows the news at the time on the timeline.
+        createApplicationNews({
+          now: worldClock.timeFor(NEWS_LAYER_ID),
+          ...newsOptions,
+          source: sources.news,
         }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
@@ -184,10 +198,11 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
-        createCyclonesLayer({ feed: sources.cyclones }),
+        createApplicationCyclones({ feed: sources.cyclones }),
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationRail({ surface, source: sources.rail }),
         createApplicationFirms({
           surface,
           id: 'local-firms',

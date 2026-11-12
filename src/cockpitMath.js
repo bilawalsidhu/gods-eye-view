@@ -176,6 +176,46 @@ export function compassDivisions(heading) {
   );
 }
 
+/**
+ * A heading tape that scrolls continuously: the 30-degree divisions within
+ * `reach` divisions of `heading`, each placed by its offset from the exact
+ * heading in division slots, so the centre caret reads the heading itself
+ * rather than the nearest division. `nearest` marks the division closest to
+ * the caret.
+ * @param {number} heading Degrees true.
+ * @param {number} [reach] Divisions each side of the caret.
+ * @returns {Array<{heading: number, slot: number, nearest: boolean}>}
+ */
+export function scrollingCompassDivisions(heading, reach = 4) {
+  if (!Number.isFinite(heading)) return [];
+  const exact = normalizeHeading(heading);
+  const centre = Math.round(exact / 30) * 30;
+  const divisions = [];
+  for (let step = -reach; step <= reach; step += 1) {
+    const division = normalizeHeading(centre + step * 30);
+    divisions.push({
+      heading: division,
+      slot: Number((relativeBearing(division, exact) / 30).toFixed(4)),
+      nearest: step === 0,
+    });
+  }
+  return divisions;
+}
+
+/**
+ * Where a heading falls on the `scrollingCompassDivisions(tapeHeading)` tape:
+ * its offset from the caret (the tape's exact heading) in division slots of
+ * 30 degrees, or null when it lies more than three divisions out.
+ * @param {number} heading Degrees true.
+ * @param {number} tapeHeading The heading under the tape's caret.
+ * @returns {?number}
+ */
+export function compassMarkerSlot(heading, tapeHeading) {
+  if (!Number.isFinite(heading) || !Number.isFinite(tapeHeading)) return null;
+  const slot = Number((relativeBearing(heading, tapeHeading) / 30).toFixed(4));
+  return Math.abs(slot) <= 3 ? slot : null;
+}
+
 /** Format a compass division as a cardinal/intercardinal label or degrees. */
 export function formatCompassDivision(heading) {
   const normalized = normalizeHeading(heading);

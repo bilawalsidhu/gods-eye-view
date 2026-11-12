@@ -7,7 +7,7 @@ import {
   loadHoustonSourcesFromOpenData,
 } from '../../server/providers/cctv/sources.js';
 import {
-  DEFAULT_CCTV_MAX_SOURCES,
+  CCTV_SHARED_SOURCE_SLOTS,
   DEFAULT_HOUSTON_MAX_SOURCES,
   HOUSTON_CAMERAS_URL,
   HOUSTON_GROUND_ELEVATION_M,
@@ -387,8 +387,8 @@ test('Houston stays unloaded unless CCTV_HOUSTON_ENABLED=1', async (t) => {
   }
 });
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('the shared catalog slots are not raised to make room for this pack', () => {
+  assert.equal(CCTV_SHARED_SOURCE_SLOTS, 4000);
   assert.equal(DEFAULT_HOUSTON_MAX_SOURCES, 250);
 });
 
