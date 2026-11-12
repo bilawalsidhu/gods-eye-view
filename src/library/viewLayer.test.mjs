@@ -116,6 +116,47 @@ test('below it, the layer loads the box around the view centre and reads PARTIAL
   assert.equal(added.length, 0);
 });
 
+test('returning to the drawn view cancels the request for the view in between', async () => {
+  let release;
+  const signals = [];
+  let call = 0;
+  const layer = createLibraryViewLayer(entry, {
+    source: {
+      loadDataset: async (target, { signal }) => {
+        signals.push(signal);
+        call += 1;
+        if (call === 2)
+          await new Promise((resolve) => {
+            release = resolve;
+          });
+        return { features: [polygon], truncated: false };
+      },
+    },
+    cesium: fakeCesium,
+  });
+  const { viewer, added } = fakeViewer({ height: 2000 });
+  const moveTo = (lon, lat) => {
+    viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(lon, lat, 2000);
+    viewer.camera.pickEllipsoid = () => Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+    viewer.camera.computeViewRectangle = () =>
+      Cesium.Rectangle.fromDegrees(lon - 1, lat - 1, lon + 1, lat + 1);
+  };
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  const drawn = added[0];
+  moveTo(-77.2, 38.95);
+  const between = layer.enable(viewer);
+  await new Promise((resolve) => setImmediate(resolve));
+  moveTo(-77.03, 38.89);
+  await layer.enable(viewer);
+  assert.equal(signals[1].aborted, true);
+  release();
+  await between;
+  assert.deepEqual(added, [drawn]);
+  assert.equal(layer.getStats().loading, false);
+  await layer.destroy(viewer);
+});
+
 test('the row legend labels each colour and counts what is in view', async () => {
   const { colorByLegend } = await import('./layers.js');
   const bridges = libraryEntry('ntad-national-bridges');

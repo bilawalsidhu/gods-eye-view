@@ -753,7 +753,16 @@ export function createLibraryViewLayer(
     const box = viewBox(height);
     if (!box) return;
     const key = box.map((value) => value.toFixed(4)).join(',');
-    if (key === loadedKey && dataSource) return;
+    // Back on the view already drawn: a request for the view in between is
+    // obsolete and must not replace it.
+    if (key === loadedKey && dataSource) {
+      if (controller) {
+        abort();
+        loading = false;
+        render();
+      }
+      return;
+    }
     abort();
     const current = new AbortController();
     controller = current;
