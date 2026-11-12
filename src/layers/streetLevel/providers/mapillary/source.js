@@ -52,16 +52,20 @@ function endpointBase(endpoint) {
 /**
  * Mapillary network access: tiles and Graph API lookups both go through this
  * app's server, which adds the client token (the browser never holds it).
- * `configured` is learned from the status route. With `graphEndpoint` (a Graph
+ * Whether the server holds a token is learned from the status route; the
+ * application asks once before it starts and passes the answer as
+ * `configured`, so `hasToken()` is right from the first call, and the
+ * provider's own status check keeps it current. With `graphEndpoint` (a Graph
  * API base that adds the token itself, such as a same-origin proxy), the
  * source's Graph lookups and the photo viewer's go there instead.
- * @param {{fetchImpl?: Function, endpoints?: object, graphEndpoint?: string}}
- *   options
+ * @param {{fetchImpl?: Function, endpoints?: object, graphEndpoint?: string,
+ *   configured?: boolean}} options
  */
 export function createMapillarySource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   endpoints = {},
   graphEndpoint = '',
+  configured: knownConfigured = false,
 } = {}) {
   const graphBase = endpointBase(graphEndpoint);
   const urls = {
@@ -70,7 +74,7 @@ export function createMapillarySource({
     graph: '/api/mapillary/graph',
     ...endpoints,
   };
-  let configured = false;
+  let configured = knownConfigured === true;
 
   async function graph(path, params = {}, { signal, timeoutMs = 0 } = {}) {
     if (!timeoutMs) return graphOnce(path, params, { signal });
@@ -141,6 +145,11 @@ export function createMapillarySource({
           'http://localhost/',
       ).href;
     },
+    /**
+     * Whether a Graph base was named, as opposed to this app's own route
+     * (which always exists, token or not).
+     */
+    hasGraphProxy: () => Boolean(graphBase),
     /** True once the server has said it holds a token. */
     hasToken: () => configured,
 

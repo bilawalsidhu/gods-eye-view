@@ -7,7 +7,8 @@
  *  - ION_SERVER_MANAGED: a marker (not a credential) meaning "ask this
  *    app's /api/ion/ for asset endpoints". CesiumJS then receives only the
  *    short-lived per-asset token ion issues for the asset it is loading.
- *  - the Mapillary Graph endpoint on this origin, which adds the token.
+ *  - the Mapillary Graph endpoint on this origin, which adds the token, and
+ *    one boolean: whether the server holds a Mapillary token.
  */
 
 /** Stands in for an ion token in the app's credential plumbing. */
@@ -55,37 +56,39 @@ export function ionRequestOptions(credential, base) {
   return { accessToken: value };
 }
 
+const MAPILLARY_API_PATH = '/api/mapillary/';
+
 /**
- * Whether the server holds an ion token. Never throws and never waits longer
- * than `timeoutMs`: a missing route, a refusal, an unreachable server or no
- * answer at all read as "not configured", which keeps the keyless map stacks.
- * @param {Function} [fetchImpl]
- * @param {{timeoutMs?: number}} [options]
+ * Ask a same-origin status route whether the server holds a credential.
+ * Never throws and never waits longer than `timeoutMs`: a missing route, a
+ * refusal, an unreachable server, an answer that is not JSON and no answer at
+ * all all read as false.
+ * @param {string} path
+ * @param {Function} fetchImpl
+ * @param {number} timeoutMs
+ * @returns {Promise<boolean>}
  */
-export async function fetchIonCredential(
-  fetchImpl = (...args) => globalThis.fetch(...args),
-  { timeoutMs = ION_STATUS_TIMEOUT_MS } = {},
-) {
+async function askConfigured(path, fetchImpl, timeoutMs) {
   const controller = new AbortController();
   let timer;
   const gaveUp = new Promise((resolve) => {
     timer = setTimeout(() => {
       controller.abort();
-      resolve('');
+      resolve(false);
     }, timeoutMs);
   });
   const asked = (async () => {
     try {
-      const response = await fetchImpl(`${ION_API_PATH}status`, {
+      const response = await fetchImpl(`${path}status`, {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
         signal: controller.signal,
       });
-      if (!response.ok) return '';
+      if (!response.ok) return false;
       const status = await response.json();
-      return status?.configured === true ? ION_SERVER_MANAGED : '';
+      return status?.configured === true;
     } catch {
-      return '';
+      return false;
     }
   })();
   try {
@@ -93,4 +96,50 @@ export async function fetchIonCredential(
   } finally {
     clearTimeout(timer);
   }
+}
+
+const pageFetch = (...args) => globalThis.fetch(...args);
+
+/**
+ * Whether the server holds an ion token: the server-managed marker, or ''
+ * (which keeps the keyless map stacks) when it does not or cannot say.
+ * @param {Function} [fetchImpl]
+ * @param {{timeoutMs?: number}} [options]
+ */
+export async function fetchIonCredential(
+  fetchImpl = pageFetch,
+  { timeoutMs = ION_STATUS_TIMEOUT_MS } = {},
+) {
+  return (await askConfigured(ION_API_PATH, fetchImpl, timeoutMs))
+    ? ION_SERVER_MANAGED
+    : '';
+}
+
+/**
+ * Whether the server holds a Mapillary token (a boolean, never the token).
+ * Street Level reads it when it is constructed, to start on Mapillary or on
+ * the first keyless source; false when the server cannot say in time.
+ * @param {Function} [fetchImpl]
+ * @param {{timeoutMs?: number}} [options]
+ */
+export function fetchMapillaryConfigured(
+  fetchImpl = pageFetch,
+  { timeoutMs = ION_STATUS_TIMEOUT_MS } = {},
+) {
+  return askConfigured(MAPILLARY_API_PATH, fetchImpl, timeoutMs);
+}
+
+/**
+ * What the application learns from its server before it starts: both status
+ * requests go out together, so startup waits for the slower one, not both.
+ * @param {Function} [fetchImpl]
+ * @param {{timeoutMs?: number}} [options]
+ * @returns {Promise<{cesiumToken: string, mapillaryConfigured: boolean}>}
+ */
+export async function fetchServerKeyStatus(fetchImpl = pageFetch, options) {
+  const [cesiumToken, mapillaryConfigured] = await Promise.all([
+    fetchIonCredential(fetchImpl, options),
+    fetchMapillaryConfigured(fetchImpl, options),
+  ]);
+  return { cesiumToken, mapillaryConfigured };
 }
