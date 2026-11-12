@@ -28,13 +28,36 @@ export function vectorBaseProvider(style) {
     rectangle: tilingScheme.rectangle,
     credit: undefined,
     errorEvent: new Cesium.Event(),
-    hasAlphaChannel: false,
+    // Where the style paints no opaque background the base below (or the
+    // globe's own colour) shows through, never black.
+    hasAlphaChannel: true,
     tileDiscardPolicy: undefined,
     proxy: undefined,
     getTileCredits: () => undefined,
     pickFeatures: () => undefined,
-    requestImage: (x, y, level) =>
-      paintVectorTile(style, level, x, y, { size: VECTOR_TILE_PX }),
+    // A tile whose request was cancelled (its layer removed) is not
+    // painted once its source tiles arrive.
+    requestImage: (x, y, level, request) =>
+      paintVectorTile(style, level, x, y, {
+        size: VECTOR_TILE_PX,
+        signal: cancelledBy(request),
+      }),
+  };
+}
+
+/**
+ * An `AbortSignal`-like view of a Cesium request: aborted once the request
+ * is cancelled. Undefined without a request.
+ */
+export function cancelledBy(request) {
+  if (!request) return undefined;
+  return {
+    get aborted() {
+      return request.cancelled === true;
+    },
+    get reason() {
+      return new DOMException('The tile request was cancelled', 'AbortError');
+    },
   };
 }
 

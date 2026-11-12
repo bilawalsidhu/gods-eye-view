@@ -16,8 +16,21 @@ test('the vector base is Web Mercator imagery painted from its style', () => {
   });
   assert.ok(provider.tilingScheme instanceof Cesium.WebMercatorTilingScheme);
   assert.equal(provider.tileWidth, VECTOR_TILE_PX);
-  assert.equal(provider.hasAlphaChannel, false);
+  // A style with no (or a translucent) background is transparent there.
+  assert.equal(provider.hasAlphaChannel, true);
   assert.equal(typeof provider.requestImage, 'function');
+});
+
+test('a tile whose Cesium request was cancelled is not painted', async () => {
+  const provider = vectorBaseProvider({
+    layers: [],
+    sources: {},
+    tiles: new Map(),
+  });
+  await assert.rejects(
+    provider.requestImage(0, 0, 0, { cancelled: true }),
+    (error) => error.name === 'AbortError',
+  );
 });
 
 test('a source’s attribution is credited as plain text', () => {

@@ -352,7 +352,8 @@ leaves the base as it was; a later `setBase`, or disposal, aborts the load and
 the overtaken call changes nothing, resolving with `imagery: []` and
 `settled: false`), draws it as Web Mercator imagery under the
 base's other imagery (`src/render/cesium/vectorBase.js`, 256 px tiles to
-level 20), and credits each source's attribution as plain text. The stub
+level 20, transparent where the style paints no opaque background; a tile
+whose request is cancelled, its layer removed, is not painted), and credits each source's attribution as plain text. The stub
 loads the style and paints nothing. The check `globe.base.vector` serves a
 style and a tile from data URLs and reads the drawn fill.
 
