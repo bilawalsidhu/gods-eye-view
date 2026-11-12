@@ -485,15 +485,16 @@ test('leaving by the exit control asks the provider to restore its subject', asy
   assert.deepEqual(lastRelease(ride.calls), ['release', 'a1', true]);
 });
 
-test('entry fails, releasing nothing it did not hold, when hold or the first frame fails', async (t) => {
-  const refused = subjectProvider();
-  refused.subject.hold = false;
-  let app = fixture(t, { providers: [refused] });
+test('entry fails when the gate is shut, the hold fails or no first frame comes, releasing only what it held', async (t) => {
+  const shut = subjectProvider();
+  shut.subject.allowed = false;
+  let app = fixture(t, { providers: [shut] });
   app.cockpit.syncEntry();
   assert.equal(app.cockpit.enter(), false);
   assert.equal(
-    refused.calls.some(([name]) => name === 'release'),
+    shut.calls.some(([name]) => name === 'hold' || name === 'release'),
     false,
+    'a shut gate neither holds nor releases',
   );
   const blank = subjectProvider();
   blank.subject.frame = null;
@@ -523,6 +524,108 @@ test('entry fails, releasing nothing it did not hold, when hold or the first fra
   assert.equal(app.cockpit.enter(), false);
   assert.deepEqual(lastRelease(later.calls), ['release', 'a1', false]);
   assert.match(app.warned[0], /returned a promise/);
+});
+
+test('a hold that answers false refuses entry; any answer but true or false warns once; each is released', async (t) => {
+  for (const [answer, warns] of [
+    [false, false],
+    [undefined, true],
+    [1, true],
+    ['held', true],
+  ]) {
+    const ride = subjectProvider();
+    ride.subject.hold = answer;
+    const { cockpit, warned } = fixture(t, { providers: [ride] });
+    const holdWarnings = () =>
+      warned.filter((message) =>
+        /example-kind hold\(\) must return true or false/.test(message),
+      ).length;
+    cockpit.syncEntry();
+    assert.equal(cockpit.enter(), false, `hold answered ${String(answer)}`);
+    assert.equal(cockpit.active, false);
+    assert.deepEqual(lastRelease(ride.calls), ['release', 'a1', false]);
+    assert.equal(holdWarnings(), warns ? 1 : 0);
+    assert.equal(warned.length, warns ? 1 : 0, 'no other warning');
+    // Once per provider and method.
+    assert.equal(cockpit.enter(), false);
+    assert.equal(holdWarnings(), warns ? 1 : 0);
+    assert.equal(
+      ride.calls.filter(([name]) => name === 'release').length,
+      2,
+      'released each time',
+    );
+  }
+});
+
+test('a class-based provider keeps its `this` from entry to release', async (t) => {
+  manualClock(t, 10_000);
+  const { frame } = subjectProvider().subject;
+  class Ride {
+    #word = 'RIDE';
+    #held = null;
+    calls = [];
+    kind = 'example-kind';
+    layerId = 'example-layer';
+    entryFace() {
+      return { icon: 'commute', label: this.#word };
+    }
+    get labels() {
+      return {
+        view: `${this.#word} view`,
+        exit: 'Exit ride view',
+        exitText: `EXIT ${this.#word}`,
+      };
+    }
+    look() {
+      return { aheadLabel: `Look ahead, ${this.#word}` };
+    }
+    candidate() {
+      return { id: 'a1', name: `Example ${this.#word}` };
+    }
+    isEntryAllowed(candidate) {
+      return this.#held === null && candidate.id === 'a1';
+    }
+    hold(id) {
+      this.#held = id;
+      this.calls.push(['hold', id]);
+      return true;
+    }
+    read() {
+      this.calls.push(['read', this.#held]);
+      return this.#held ? { ...frame, id: this.#held } : null;
+    }
+    hud(view) {
+      this.calls.push(['hud', view.id]);
+      return { ...HUD, title: `${this.#word} ${view.id}` };
+    }
+    release(id, { restore }) {
+      this.calls.push(['release', id, restore]);
+      this.#held = null;
+    }
+  }
+  const ride = new Ride();
+  const { $, cockpit, warned } = fixture(t, {
+    providers: [{ definition: ride }],
+  });
+  cockpit.syncEntry();
+  await nextTick();
+  assert.match($('#cockpit-entry').textContent, /RIDE/);
+  $('#cockpit-entry').click();
+  await settle();
+  assert.equal(cockpit.active, true);
+  assert.equal($('#cockpit-callsign').textContent, 'RIDE a1');
+  assert.equal($('#cockpit-hud').getAttribute('aria-label'), 'RIDE view');
+  assert.match($('#map-view-switch').textContent, /EXIT RIDE/);
+  assert.equal(
+    $('#cockpit-look-ahead').getAttribute('aria-label'),
+    'Look ahead, RIDE',
+  );
+  assert.ok(ride.calls.some(([name, id]) => name === 'read' && id === 'a1'));
+  assert.ok(ride.calls.some(([name, id]) => name === 'hud' && id === 'a1'));
+  $('#map-view-switch').click();
+  assert.equal(cockpit.active, false);
+  assert.deepEqual(lastRelease(ride.calls), ['release', 'a1', true]);
+  assert.deepEqual(warned, []);
 });
 
 test('a frame with no height and a cold floor never stands the eye on the ellipsoid', async (t) => {

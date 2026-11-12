@@ -66,12 +66,17 @@ const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
 /**
  * `value` as display text: trimmed, at most `max` characters (the last one
- * an ellipsis when cut); '' for anything that is not a string or a number.
+ * an ellipsis when cut, the cut never inside a surrogate pair, so an emoji is
+ * kept whole or left out); '' for anything that is not a string or a number.
  */
 export function cockpitSubjectText(value, max) {
   if (typeof value !== 'string' && !finite(value)) return '';
   const text = String(value).replace(/\s+/g, ' ').trim();
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  if (text.length <= max) return text;
+  let end = max - 1;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
 }
 
 const tone = (value) => (TONES.has(value) ? value : 'normal');
@@ -101,13 +106,13 @@ function labelsOf(raw) {
 
 /**
  * A provider's worded member as it reads now: the value, or what the
- * function it is returns (so it can follow the page's language); undefined
- * when that throws.
+ * function it is returns when called on `provider` (so it can follow the
+ * page's language); undefined when that throws.
  */
-function wordedNow(value) {
+function wordedNow(value, provider) {
   if (typeof value !== 'function') return value;
   try {
-    return value();
+    return value.call(provider);
   } catch {
     return undefined;
   }
@@ -132,10 +137,11 @@ function refusal(provider, kinds) {
     typeof provider.isEntryAllowed !== 'function'
   )
     return 'isEntryAllowed is not a function';
-  if (!faceOf(wordedNow(provider.entryFace))) return 'malformed entry face';
-  if (!labelsOf(wordedNow(provider.labels)))
+  if (!faceOf(wordedNow(provider.entryFace, provider)))
+    return 'malformed entry face';
+  if (!labelsOf(wordedNow(provider.labels, provider)))
     return 'labels need view, exit and exitText';
-  const look = wordedNow(provider.look);
+  const look = wordedNow(provider.look, provider);
   if (
     provider.look != null &&
     (!isObject(look) || !cockpitSubjectText(look.aheadLabel, 64))
@@ -159,21 +165,24 @@ function refusal(provider, kinds) {
  *   on a bridge, resting at `restPitchDeg` (default 0, -90..90), its Look
  *   ahead button named `aheadLabel`;
  *   `entryFace`, `labels` and `look` may each be a function returning the
- *   object: it is called again whenever they are shown and when the page's
- *   language changes, so its words can follow it (`./i18n/locale`). A read
- *   that throws or is malformed keeps the last good one; `look` is on or off
- *   and `restPitchDeg` fixed as first read;
+ *   object: it is called on the provider again whenever they are shown and
+ *   when the page's language changes, so its words can follow it
+ *   (`./i18n/locale`). A read that throws or is malformed keeps the last
+ *   good one; `look` is on or off and `restPitchDeg` fixed as first read;
  * - `cameraIntervalMs` (optional): 0..1000, null for the Cockpit's default; 0
  *   updates the camera every rendered frame;
  * - `headingSlewDps` (optional): how fast the view turns to a new heading,
  *   positive or Infinity, null for the Cockpit's default;
  * - `candidate()`, `isEntryAllowed(candidate)` (optional), `hold(id)`,
  *   `read(nowMs, ctx)`, `hud(frame, ctx)` and `release(id, {restore})`, all
- *   synchronous (createCockpitSubjectCaller). `isEntryAllowed` allows entry
- *   only by returning `true`. A `hold` that throws or returns a promise
- *   refuses entry and is followed by `release(id, {restore: false})`, and by
- *   another once that promise settles; `release` must therefore be harmless
- *   when called again for a subject it already gave back.
+ *   synchronous (createCockpitSubjectCaller) and called on the provider, so
+ *   a class instance's methods keep their `this`. `isEntryAllowed` allows
+ *   entry only by returning `true`. `hold` returns `true` once it holds the
+ *   subject, or `false` to refuse entry; any other answer refuses it too,
+ *   with one warning. A refused hold, and one that throws or returns a
+ *   promise, is followed by `release(id, {restore: false})`, and by another
+ *   once that promise settles; `release` must therefore be harmless for a
+ *   subject it does not hold or already gave back.
  *
  * A provider that is not so is left out with one warning naming it.
  * @param {unknown} list
@@ -199,9 +208,10 @@ export function cockpitSubjectProviders(
     kinds.add(provider.kind);
     // Worded members are read again on each use (see above); the last good
     // read stands in for a bad one.
-    let face = faceOf(wordedNow(provider.entryFace));
-    let labels = labelsOf(wordedNow(provider.labels));
-    const firstLook = wordedNow(provider.look);
+    const worded = (value) => wordedNow(value, provider);
+    let face = faceOf(worded(provider.entryFace));
+    let labels = labelsOf(worded(provider.labels));
+    const firstLook = worded(provider.look);
     const lookOf = (raw) =>
       Object.freeze({
         restPitchDeg: finite(firstLook.restPitchDeg)
@@ -217,16 +227,16 @@ export function cockpitSubjectProviders(
         priority: finite(provider.priority) ? provider.priority : 0,
         order,
         get entryFace() {
-          face = faceOf(wordedNow(provider.entryFace)) ?? face;
+          face = faceOf(worded(provider.entryFace)) ?? face;
           return face;
         },
         get labels() {
-          labels = labelsOf(wordedNow(provider.labels)) ?? labels;
+          labels = labelsOf(worded(provider.labels)) ?? labels;
           return labels;
         },
         get look() {
           if (!look) return null;
-          const raw = wordedNow(provider.look);
+          const raw = worded(provider.look);
           if (isObject(raw) && cockpitSubjectText(raw.aheadLabel, 64))
             look = lookOf(raw);
           return look;
@@ -242,12 +252,16 @@ export function cockpitSubjectProviders(
           (finite(provider.headingSlewDps) && provider.headingSlewDps > 0)
             ? provider.headingSlewDps
             : null,
-        candidate: provider.candidate,
-        isEntryAllowed: provider.isEntryAllowed ?? (() => true),
-        hold: provider.hold,
-        read: provider.read,
-        hud: provider.hud,
-        release: provider.release,
+        // Bound, so a method that uses `this` (a class instance's, say)
+        // still reads its own provider when called on this copy.
+        candidate: provider.candidate.bind(provider),
+        isEntryAllowed: provider.isEntryAllowed
+          ? provider.isEntryAllowed.bind(provider)
+          : () => true,
+        hold: provider.hold.bind(provider),
+        read: provider.read.bind(provider),
+        hud: provider.hud.bind(provider),
+        release: provider.release.bind(provider),
       }),
     );
   });
@@ -506,6 +520,10 @@ export function cockpitSubjectHudView(raw) {
  * would be (its rejection, if any, is swallowed), with one warning, and
  * `onSettled`, when given, runs once the promise has settled, so a caller
  * can undo work that lands late.
+ *
+ * `call.warnOnce(provider, method, message, error)` warns on the same
+ * once-per-provider-and-method footing, for an answer the caller finds
+ * malformed.
  * @param {{warn?: (message: string, error: unknown) => void}} [options]
  */
 export function createCockpitSubjectCaller({
@@ -521,7 +539,7 @@ export function createCockpitSubjectCaller({
       error,
     );
   };
-  return function call(
+  function call(
     provider,
     method,
     args = [],
@@ -529,17 +547,20 @@ export function createCockpitSubjectCaller({
     onSettled = null,
   ) {
     let result;
+    let thenable;
     try {
       result = provider[method](...args);
+      // Reading `then` runs provider code too (a getter may throw), so it is
+      // guarded as the call is.
+      thenable =
+        result !== null &&
+        (typeof result === 'object' || typeof result === 'function') &&
+        typeof result.then === 'function';
     } catch (error) {
       warnOnce(provider, method, 'failed', error);
       return fallback;
     }
-    if (
-      result !== null &&
-      (typeof result === 'object' || typeof result === 'function') &&
-      typeof result.then === 'function'
-    ) {
+    if (thenable) {
       // Its work may still land: `onSettled` runs once it has, either way.
       const settled = () => {
         if (typeof onSettled === 'function') onSettled();
@@ -554,5 +575,7 @@ export function createCockpitSubjectCaller({
       return fallback;
     }
     return result;
-  };
+  }
+  call.warnOnce = warnOnce;
+  return call;
 }

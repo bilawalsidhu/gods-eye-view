@@ -389,6 +389,21 @@ test('texts are trimmed, collapsed and cut with an ellipsis', () => {
   assert.equal(cockpitSubjectText(NaN, 10), '');
 });
 
+test('a cut never splits a surrogate pair', () => {
+  // The cut would fall between the emoji's halves: it is left out whole.
+  assert.equal(cockpitSubjectText('abcd😀efgh', 6), 'abcd…');
+  // One that fits before the cut is kept whole.
+  assert.equal(cockpitSubjectText('abc😀efgh', 6), 'abc😀…');
+  const lone =
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  for (let max = 2; max <= 24; max += 1)
+    assert.equal(
+      lone.test(cockpitSubjectText('🚆 Example 12 🚉 Central', max)),
+      false,
+      `cut at ${max}`,
+    );
+});
+
 test('a provider method that throws returns the fallback and warns once', () => {
   const warnings = [];
   const call = createCockpitSubjectCaller({
@@ -425,6 +440,114 @@ test('a provider method that returns a promise is refused as a throw is, warning
   assert.match(warnings[0], /hold\(\) returned a promise/);
   // The rejected promise is not left unhandled.
   await new Promise((resolve) => setTimeout(resolve, 0));
+});
+
+test('an answer whose `then` throws when read is handled as a throw', () => {
+  const warnings = [];
+  const call = createCockpitSubjectCaller({
+    warn: (message) => warnings.push(message),
+  });
+  const tricky = {
+    kind: 'example-kind',
+    hold: () => ({
+      get then() {
+        throw new Error('no then');
+      },
+    }),
+  };
+  assert.equal(call(tricky, 'hold', ['a1'], 'refused'), 'refused');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /example-kind hold\(\) failed/);
+});
+
+test('the caller’s warnOnce shares its once-per-provider-and-method record', () => {
+  const warnings = [];
+  const call = createCockpitSubjectCaller({
+    warn: (message) => warnings.push(message),
+  });
+  const ride = {
+    kind: 'example-kind',
+    hold() {
+      throw new Error('boom');
+    },
+  };
+  call.warnOnce(ride, 'read', 'is odd');
+  call.warnOnce(ride, 'read', 'is odd again');
+  call(ride, 'hold', ['a1']);
+  call.warnOnce(ride, 'hold', 'is odd');
+  assert.deepEqual(warnings, [
+    '[Cockpit] subject provider example-kind read() is odd',
+    '[Cockpit] subject provider example-kind hold() failed',
+  ]);
+});
+
+test('a class-based provider keeps its `this`, in its methods and its worded members', () => {
+  class Ride {
+    #word = 'RIDE';
+    #held = null;
+    kind = 'example-kind';
+    layerId = 'example-layer';
+    speak(word) {
+      this.#word = word;
+    }
+    entryFace() {
+      return { icon: 'commute', label: this.#word };
+    }
+    get labels() {
+      return {
+        view: `${this.#word} view`,
+        exit: 'Exit ride view',
+        exitText: 'EXIT RIDE',
+      };
+    }
+    look() {
+      return { aheadLabel: `Look ahead, ${this.#word}` };
+    }
+    candidate() {
+      return { id: 'a1', name: this.#word };
+    }
+    isEntryAllowed(candidate) {
+      return candidate.id === 'a1' && this.#held === null;
+    }
+    hold(id) {
+      this.#held = id;
+      return true;
+    }
+    read() {
+      return this.#held;
+    }
+    hud(frame) {
+      return { title: `${this.#word} ${frame}` };
+    }
+    release() {
+      this.#held = null;
+      return 'released';
+    }
+  }
+  const instance = new Ride();
+  const { kept, warnings } = keep([instance]);
+  assert.deepEqual(warnings, []);
+  const [ride] = kept;
+  assert.equal(ride.entryFace.label, 'RIDE');
+  assert.equal(ride.labels.view, 'RIDE view');
+  assert.equal(ride.look.aheadLabel, 'Look ahead, RIDE');
+  instance.speak('FAHRT');
+  assert.equal(ride.entryFace.label, 'FAHRT', 'read again, on the instance');
+  assert.equal(ride.look.aheadLabel, 'Look ahead, FAHRT');
+  // Called on the kept copy, as the Cockpit calls them.
+  const failures = [];
+  const call = createCockpitSubjectCaller({
+    warn: (message) => failures.push(message),
+  });
+  assert.deepEqual(call(ride, 'candidate'), { id: 'a1', name: 'FAHRT' });
+  assert.equal(ride.isEntryAllowed({ id: 'a1' }), true);
+  assert.equal(call(ride, 'hold', ['a1']), true);
+  assert.equal(ride.isEntryAllowed({ id: 'a1' }), false);
+  assert.equal(call(ride, 'read', [0, {}]), 'a1');
+  assert.deepEqual(call(ride, 'hud', ['a1', {}]), { title: 'FAHRT a1' });
+  assert.equal(call(ride, 'release', ['a1', { restore: true }]), 'released');
+  assert.equal(call(ride, 'read', [0, {}]), null);
+  assert.deepEqual(failures, []);
 });
 
 test('labels, entry face and look given as functions are read again on each use', () => {

@@ -388,9 +388,9 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
 
 /**
  * Enter a provider's view on its candidate: hold it, read a first frame, then
- * take the camera as the built-in views do. Entry fails, releasing what was
- * held, when the gate is shut, the provider refuses the hold or no frame
- * comes.
+ * take the camera as the built-in views do. Entry fails when the gate is shut,
+ * the hold answers anything but `true` or no frame comes; past the gate, a
+ * failed entry releases the subject, since the hold may have taken it.
  * @param {object} provider From cockpitSubjectProviders.
  * @returns {boolean}
  */
@@ -419,12 +419,20 @@ function enterSubject(provider) {
     failed,
     releaseLate,
   );
-  if (held === failed) {
-    // A hold that threw (or broke the contract) may have half happened.
+  if (held !== true) {
+    // `false` refuses entry; a hold that threw, returned a promise or
+    // answered anything else (warned of once) may still have taken the
+    // subject. Each is released.
+    if (held !== false && held !== failed)
+      this.callSubject.warnOnce(
+        provider,
+        'hold',
+        'must return true or false; entry refused',
+        held,
+      );
     release();
     return false;
   }
-  if (held !== true) return false;
   const frame = cockpitSubjectFrame(
     this.callSubject(
       provider,

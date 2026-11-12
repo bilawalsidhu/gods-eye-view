@@ -239,7 +239,8 @@ providers, checked once when the controls are built
 warning. Entry rides the most recently selected subject of all kinds and needs
 the provider's `layerId` on; the provider then holds its subject, hands the
 camera a frame and the generic HUD a view model on every update, and releases
-it on exit. Provider methods are synchronous; one that throws or returns a
+it on exit. Provider methods are synchronous and are called on the provider,
+so a class instance's methods keep their `this`; one that throws or returns a
 promise is treated as having failed.
 
 ```js
@@ -317,7 +318,11 @@ user's selection.
 A frame with `heightM: null` stands on the shared floor, or where it last
 stood while that floor is cold. If no height has been known since entry, the
 view waits, showing ACQUIRING SURFACE, for at most five seconds
-(`COCKPIT_GROUND_WAIT_TIMEOUT_MS`), then ends and releases the subject. A
-`hold` that throws or returns a promise refuses entry and is followed by
-`release(id, { restore: false })`, again once a returned promise settles, so
-`release` must be harmless when called more than once.
+(`COCKPIT_GROUND_WAIT_TIMEOUT_MS`), then ends and releases the subject.
+
+`hold(id)` returns `true` once it holds the subject, or `false` to refuse
+entry; any other answer, `undefined` included, refuses entry too, with one
+warning. A refused hold, and one that throws or returns a promise, is followed
+by `release(id, { restore: false })`, again once a returned promise settles,
+so `release` must be harmless for a subject it does not hold and when called
+more than once.
