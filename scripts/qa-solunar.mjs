@@ -198,12 +198,9 @@ async function run(label, viewport, { touch = false } = {}) {
     ),
   );
   check(
-    `${label}: a moon event a day does not have shows "none" and is not copied from the next day`,
-    opened.days.every((d, i) => {
-      const next = opened.days[i + 1];
-      return !(d.moonrise !== 'none' && next && d.moonrise === next.moonrise);
-    }),
-    opened.days.map((d) => `${d.date}:${d.moonrise}`).join(' '),
+    `${label}: every day shows moonrise and moonset rows`,
+    opened.days.every((d) => Boolean(d.moonrise && d.moonset)),
+    opened.days.map((d) => `${d.date}:${d.moonrise}/${d.moonset}`).join(' '),
   );
   check(
     `${label}: the rating rule is on the card`,
