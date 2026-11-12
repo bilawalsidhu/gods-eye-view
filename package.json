@@ -167,6 +167,7 @@
     "./ui/cockpit/math": "./src/cockpitMath.js",
     "./ui/cockpit/layout": "./src/cockpitUtilityLayout.js",
     "./ui/cockpit/vision": "./src/cockpitVisionPolicy.js",
+    "./i18n/locale": "./src/i18n/hostLocale.js",
     "./ui/scenes": "./src/ui/scenes.js",
     "./ui/shell": "./src/ui/applicationShell.js",
     "./ui/styles": "./src/ui/styles.js",
@@ -290,6 +291,7 @@
     },
     "./sources/rail-service": "./src/sources/railService.js",
     "./layers/rail/source": "./src/layers/rail/source.js",
+    "./layers/rail/paths": "./src/data/railPaths.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js",
     "./server/providers/mapillary": {
       "node": "./server/providers/mapillary.js"

@@ -189,7 +189,7 @@ const LOOK_KEY_OWNERS = [
  * @returns {boolean} True when the key was taken.
  */
 function handleLookKey(event) {
-  if (!this.active || this.subjectKind !== 'vessel') return false;
+  if (!this.looksAround) return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   const step = lookKeyStep(event.key, event.shiftKey);
   const reset = !event.repeat && (event.key === 'Home' || event.key === '0');

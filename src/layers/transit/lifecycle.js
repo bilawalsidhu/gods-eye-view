@@ -151,6 +151,7 @@ export function createLifecycle({ state, services, parts }) {
       state._vehicles.clear();
       parts.height.clear();
       state._selectedKey = null;
+      state._cockpitSubjectKey = null;
       state._lastUpdate = null;
       state._error = null;
       state._limitWarned = false;

@@ -508,6 +508,15 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
+   * Whether the train's marker shows: its category is on, and no
+   * first-person view rides it (cockpitSubject.js). A held train keeps its
+   * playback; only its marker hides.
+   */
+  function markerShown(entry) {
+    return categoryShown(entry) && entry.key !== state._cockpitSubjectKey;
+  }
+
+  /**
    * A train bound to its railway line is drawn on the line, at the arc its
    * playback has reached; any other train (or a bound train whose reports do
    * not fit the line) is drawn on the time-interpolated straight-line point.
@@ -536,7 +545,7 @@ export function createRendering({ state, services, parts }) {
       undefined,
       scratchPosition,
     );
-    entry.marker.show = categoryShown(entry);
+    entry.marker.show = markerShown(entry);
   }
 
   /** While a train is selected, every other train is drawn see-through. */
@@ -554,7 +563,7 @@ export function createRendering({ state, services, parts }) {
     entry.marker.width = size;
     entry.marker.height = size;
     entry.marker.color = tintFor(entry);
-    entry.marker.show = categoryShown(entry);
+    entry.marker.show = markerShown(entry);
   }
 
   /** Re-tint every train after the selection appeared, moved or cleared. */
@@ -658,7 +667,7 @@ export function createRendering({ state, services, parts }) {
   function cullSelected() {
     const entry = state._trains.get(state._selectedKey);
     if (!entry?.marker) return;
-    const shown = categoryShown(entry) && facesCamera(entry.marker.position);
+    const shown = markerShown(entry) && facesCamera(entry.marker.position);
     if (entry.marker.show !== shown) entry.marker.show = shown;
     parts.routes.cullStops(facesCamera);
   }
@@ -697,7 +706,7 @@ export function createRendering({ state, services, parts }) {
   function applyCategoryVisibility() {
     for (const entry of state._trains.values()) {
       if (!entry.marker) continue;
-      entry.marker.show = categoryShown(entry);
+      entry.marker.show = markerShown(entry);
       schedulePlayback(entry);
     }
     syncRenderHold();

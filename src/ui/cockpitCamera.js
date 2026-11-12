@@ -16,6 +16,7 @@ import {
   waterlineProbePoints,
 } from '../cockpitSubjects.js';
 import { easeLook } from '../cockpitLook.js';
+import { cockpitSubjectFrame } from '../cockpitSubjectProviders.js';
 import {
   COCKPIT_HEADING_SLEW_DPS,
   COCKPIT_FORWARD_OFFSET_M,
@@ -53,6 +54,10 @@ export function update() {
   }
 
   const nowMs = performance.now();
+  if (this.subjectProvider) {
+    updateSubject.call(this, nowMs);
+    return;
+  }
   if (this.subjectKind === 'vessel') {
     updateVessel.call(this, nowMs);
     return;
@@ -298,8 +303,99 @@ function updateVessel(nowMs) {
 }
 
 /**
+ * Drive the camera from an application provider's subject: read its frame,
+ * stand the eye `eye.upM` above `heightM` (the shared floor where the frame
+ * gives none) and slew toward its heading. A frame that is null, malformed or
+ * for another subject ends the view, as an aircraft tracked meanwhile does.
+ * The update runs on the provider's `cameraIntervalMs` (0: every frame).
+ */
+function updateSubject(nowMs) {
+  const provider = this.subjectProvider;
+  if (this.viewer.trackedEntity?.position) {
+    this.exit({ restoreTracking: false });
+    return;
+  }
+  if (
+    !cockpitUiUpdateDue(
+      nowMs,
+      this.lastCameraUpdateMs,
+      provider.cameraIntervalMs ?? COCKPIT_CAMERA_UPDATE_MS,
+    )
+  )
+    return;
+  this.lastCameraUpdateMs = nowMs;
+  const frame = cockpitSubjectFrame(
+    this.callSubject(provider, 'read', [nowMs, this.subjectContext()], null),
+    this.subjectId,
+  );
+  if (!frame) {
+    this.exit({ restoreTracking: false });
+    return;
+  }
+  this.lastSubjectFrame = frame;
+  let heightM = frame.heightM;
+  if (heightM === null) {
+    this.services.warmGroundFloor?.([
+      { lat: frame.latitude, lon: frame.longitude },
+    ]);
+    const floorM = this.services.cachedGroundFloor?.(
+      frame.latitude,
+      frame.longitude,
+    );
+    heightM = Number.isFinite(floorM) ? floorM : 0;
+  }
+  const target = Cesium.Cartesian3.fromDegrees(
+    frame.longitude,
+    frame.latitude,
+    heightM,
+    Cesium.Ellipsoid.WGS84,
+    this.scratchTarget,
+  );
+  const dtSec = Math.min(0.1, Math.max(0, (nowMs - this.lastFrameMs) / 1000));
+  this.lastFrameMs = nowMs;
+  if (frame.headingDeg !== null) {
+    const rate = provider.headingSlewDps ?? COCKPIT_HEADING_SLEW_DPS;
+    this.heading =
+      rate === Infinity
+        ? frame.headingDeg
+        : slewHeading(
+            this.heading ?? frame.headingDeg,
+            frame.headingDeg,
+            rate * dtSec,
+          );
+  }
+  let look = null;
+  if (provider.look) {
+    this.lookView = easeLook(
+      this.lookView,
+      this.lookTarget,
+      nowMs - (this.lookLastMs || nowMs),
+    );
+    this.lookLastMs = nowMs;
+    look = this.lookView;
+  }
+  placeCamera.call(
+    this,
+    target,
+    this.subjectInfo(frame),
+    nowMs,
+    dtSec,
+    {
+      forwardM: frame.eye.forwardM,
+      upM: frame.eye.upM,
+      pitchDeg: frame.eye.pitchDeg,
+      minClearanceM: frame.eye.minClearanceM,
+    },
+    look,
+  );
+}
+
+/**
  * Place the camera for one update: advance the inertial anchor, clamp it and
  * the eye against the rendered surface, and look along the slewed heading.
+ * A subject with `anchor: 'exact'` keeps the anchor on its target (its layer
+ * already moves it smoothly), and one with `groundClamp: false` (inside a
+ * structure, say) is never pushed up to the floor.
  * @param {Cesium.Cartesian3} target Authoritative subject position.
  * @param {object} info Subject info; `motionCourse` (when present) is the
  *   direction the subject moves, otherwise it moves where it faces.
@@ -339,7 +435,8 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     ? Math.max(0, info.velocityMps)
     : 0;
 
-  if (info.stale) {
+  const groundClamp = info.groundClamp !== false;
+  if (info.stale || info.anchor === 'exact') {
     // A feed backoff has no authoritative velocity epoch to advance from.
     // Hold the cockpit on the exact layer-rendered position so the camera
     // cannot coast away while the icon correctly remains fixed.
@@ -498,7 +595,7 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     cockpitFloorM =
       targetCartographic.height - this.services.GROUND_FLOOR_LIFT_M;
   }
-  if (anchorCartographic && Number.isFinite(cockpitFloorM)) {
+  if (groundClamp && anchorCartographic && Number.isFinite(cockpitFloorM)) {
     const minimumAnchorHeightM = cockpitGroundSafeHeight(
       anchorCartographic.height,
       cockpitFloorM,
@@ -579,7 +676,7 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     Cesium.Ellipsoid.WGS84,
     this.scratchCameraCartographic,
   );
-  if (cameraCartographic) {
+  if (groundClamp && cameraCartographic) {
     const cameraLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
     const cameraLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
     const cameraFloorM = this.services.cachedGroundFloor(cameraLat, cameraLon);

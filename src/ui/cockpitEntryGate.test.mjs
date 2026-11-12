@@ -55,6 +55,7 @@ function fixture(
     changing = false,
     dataManager: suppliedManager = null,
     readContext = null,
+    subjects = [],
   } = {},
 ) {
   document.body.replaceChildren();
@@ -113,6 +114,7 @@ function fixture(
       isTr3b: () => false,
       holdContinuousRender() {},
       releaseContinuousRender() {},
+      cockpitSubjects: subjects,
     },
     elements: {},
     operations: {
@@ -147,6 +149,7 @@ function fixture(
       'cockpit-mode',
       'cockpit-bridge',
       'cockpit-orbit',
+      'cockpit-subject',
     );
   });
   /** Turn a layer off and tell the Context owner, as the data manager does. */
@@ -647,4 +650,95 @@ test('turning Satellites off ends the orbital view', (t) => {
   assert.equal(cockpit.active, true, 'other feeds are free to go off');
   disable('satellites');
   assert.equal(cockpit.active, false);
+});
+
+/** An application provider whose subject sits on `example-layer`. */
+function exampleSubject() {
+  const released = [];
+  return {
+    released,
+    provider: {
+      kind: 'example-kind',
+      layerId: 'example-layer',
+      entryFace: { icon: 'commute', label: 'RIDE' },
+      labels: { view: 'Example view', exit: 'Exit example', exitText: 'EXIT' },
+      candidate: () => ({ id: 'a1', name: 'Example 12' }),
+      hold: () => true,
+      read: () => ({
+        id: 'a1',
+        name: 'Example 12',
+        latitude: 30,
+        longitude: -97,
+        heightM: 200,
+        headingDeg: 90,
+        eye: { upM: 2 },
+      }),
+      hud: () => ({ title: 'Example 12' }),
+      release: (id, { restore }) => released.push([id, restore]),
+    },
+  };
+}
+
+test("a provider's subject needs only its own layer, and never a Context change in flight", async (t) => {
+  const { provider } = exampleSubject();
+  let changing = false;
+  const off = fixture(t, { subjects: [provider] });
+  off.cockpit.syncEntry();
+  await nextTick();
+  assert.equal(off.$('#cockpit-entry').hidden, true, 'its layer is off');
+  assert.equal(off.cockpit.enter(), false);
+  const on = fixture(t, {
+    enabled: ['example-layer'],
+    subjects: [provider],
+    readContext: () => ({ mode: null, changing }),
+  });
+  changing = true;
+  on.cockpit.syncEntry();
+  await nextTick();
+  assert.equal(on.$('#cockpit-entry').hidden, true, 'Context is changing');
+  changing = false;
+  on.cockpit.syncEntry();
+  await nextTick();
+  assert.equal(on.$('#cockpit-entry').hidden, false);
+  assert.match(on.$('#cockpit-entry').textContent, /RIDE/);
+  assert.match(on.$('#cockpit-entry-readout').textContent, /commute/);
+});
+
+test("a provider's view reports its subject, refuses voice entry and ends with its layer", async (t) => {
+  const { provider, released } = exampleSubject();
+  const { cockpit, coordinator, disable } = fixture(t, {
+    enabled: ['example-layer', 'flights'],
+    subjects: [provider],
+  });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  const state = coordinator.getCockpitState();
+  assert.equal(state.active, true);
+  assert.deepEqual(state.subject, {
+    kind: 'example-kind',
+    id: 'a1',
+    layerId: 'example-layer',
+    callsign: null,
+    name: 'Example 12',
+  });
+  assert.equal(coordinator.controlCockpit('enter').ok, false);
+  assert.match(coordinator._cockpitEntryRefusal(), /another first-person view/);
+  disable('flights');
+  assert.equal(cockpit.active, true, 'another layer is free to go off');
+  disable('example-layer');
+  assert.equal(cockpit.active, false, 'its own layer going off ends it');
+  assert.deepEqual(released, [['a1', false]]);
+});
+
+test('a malformed provider is left out and the built-in kinds are unchanged', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const { cockpit } = fixture(t, {
+    enabled: ['flights'],
+    tracked: { layerId: 'flights', info: CIVIL },
+    subjects: [{ kind: 'aircraft', layerId: 'flights' }],
+  });
+  assert.deepEqual(cockpit.subjectProviders, []);
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  assert.equal(cockpit.subjectKind, 'aircraft');
 });

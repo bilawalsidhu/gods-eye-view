@@ -10,6 +10,8 @@ import { t } from '../i18n/index.js';
  * opens a share code (the `<code>` of `/share/<code>`) at start-up, for a host
  * whose address does not carry one. `localePicker: false` removes the language
  * picker, for a host that does not initialize Core's locale.
+ * `services.cockpitSubjects` adds the application's own first-person subjects
+ * to the Cockpit (src/cockpitSubjectProviders.js).
  */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations },

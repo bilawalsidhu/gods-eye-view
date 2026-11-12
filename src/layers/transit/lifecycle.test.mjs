@@ -7,6 +7,7 @@ import {
   FEED_STALE_AFTER_MS,
   MISSED_POLLS_TO_DROP,
   TRANSIT_POLL_MS,
+  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
   VEHICLE_MAX_FIX_AGE_MS,
 } from './policy.js';
 import { FLOOR_WARM_PER_POLL } from './policy.js';
@@ -4141,4 +4142,121 @@ test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) 
     app.layer.getStats().statusMessage,
     'Fly below 2,850 km to a covered region',
   );
+});
+
+/** A bus running north a step a poll, polled `polls` times; its key. */
+async function busRunningNorth(app, polls = 4, extra = {}) {
+  let step = 0;
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [
+        vehicle('bus-1', 42.36 + step * 0.001, -71.06, reported(), {
+          stopId: 'place-1',
+          status: 'IN_TRANSIT_TO',
+          ...extra,
+        }),
+      ],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  for (let i = 0; i < polls; i += 1) {
+    step += 1;
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+    app.settle();
+  }
+  return 'mbta:bus-1';
+}
+
+test('the selected vehicle reads as a snapshot of its place, motion and source', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app, 4, { speedMps: 9 });
+  assert.equal(app.layer.getSelectedVehicle(), null);
+  app.layer._transitPartsForTest().selection.selectVehicle(key);
+  const view = app.layer.getSelectedVehicle();
+  assert.ok(Object.isFrozen(view));
+  assert.equal(view.key, key);
+  assert.equal(view.feedId, 'mbta');
+  assert.equal(view.id, 'bus-1');
+  assert.equal(view.routeId, '1');
+  assert.equal(typeof view.mode, 'string');
+  assert.ok(view.feed.attribution, 'the feed names its credit');
+  assert.equal(view.motion.reportedSpeedMps, 9);
+  assert.equal(view.motion.speedSource, 'reported');
+  assert.equal(view.provenance.positionSource, 'gps');
+  assert.deepEqual(view.stop, { stopId: 'place-1', status: 'IN_TRANSIT_TO' });
+  const entry = app.vehicles()[0];
+  assert.equal(view.position.groundHeightM, entry.heightM - 1.5);
+  assert.ok(Number.isFinite(view.position.latitude));
+});
+
+test('a held vehicle hides, keeps moving out of view, and lets go when it goes', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  assert.equal(app.layer.setCockpitSubject('mbta:nope'), false);
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  assert.equal(app.state()._selectedKey, key, 'holding selects it');
+  assert.equal(app.layer.getCockpitSubject().key, key);
+  assert.equal(
+    app.overlaySources.has(TRANSIT_SELECTED_OVERLAY_SOURCE_ID),
+    false,
+    'no card',
+  );
+  const [entry] = app.vehicles();
+  app.frame();
+  assert.equal(entry.marker.show, false);
+  // The camera's view leaves it, as a view from inside it does: it plays on.
+  app.lookAt({ west: 10, south: 10, east: 11, north: 11 });
+  app.settle();
+  assert.equal(
+    app.layer._transitPartsForTest().rendering.vehicleInView(entry),
+    true,
+  );
+  const before = app.layer.getCockpitSubject().position.latitude;
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  assert.ok(
+    app.layer.getCockpitSubject().position.latitude > before,
+    'still moving',
+  );
+  // Escape and clicks are the view's while it holds the vehicle.
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, key);
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  assert.equal(app.layer.getCockpitSubject(), null);
+  app.lookAt({
+    west: -71.2,
+    south: 42.2,
+    east: -70.9,
+    north: 42.5,
+  });
+  app.settle();
+  assert.equal(entry.marker.show, true, 'shown again');
+  assert.equal(app.layer.focusVehicle('mbta:nope'), false);
+  assert.equal(app.layer.focusVehicle(key), true);
+
+  app.layer.setCockpitSubject(key);
+  app.silence('mbta');
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot('mbta', 'MBTA', [], { fetchedAt: Date.now() }),
+  }));
+  for (let i = 0; i < MISSED_POLLS_TO_DROP + 1; i += 1) {
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+  }
+  assert.equal(app.vehicles().length, 0, 'the vehicle is gone');
+  assert.equal(app.state()._cockpitSubjectKey, null);
+  assert.equal(app.layer.getCockpitSubject(), null);
 });

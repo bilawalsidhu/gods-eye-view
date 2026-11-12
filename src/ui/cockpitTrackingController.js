@@ -5,6 +5,10 @@ import {
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
+import {
+  cockpitSubjectCandidate,
+  cockpitSubjectFrame,
+} from '../cockpitSubjectProviders.js';
 
 /** The camera's own heading in degrees, or 0 when it has none. */
 function cameraHeadingDeg(camera) {
@@ -34,14 +38,150 @@ export function readSatelliteInfo() {
 }
 
 /**
+ * What an application subject provider would have entry ride now, or null.
+ * @param {object} provider A provider from cockpitSubjectProviders.
+ * @returns {{id: string, name: string, face: object|null}|null}
+ */
+export function readSubjectCandidate(provider) {
+  return cockpitSubjectCandidate(
+    this.callSubject(provider, 'candidate', [], null),
+  );
+}
+
+/**
+ * What a provider's `read` and `hud` receive besides the frame: the shared
+ * ground floor at a point (metres, or null), a way to warm its cells, and the
+ * floor service's lift.
+ */
+export function subjectContext() {
+  this._subjectContext ??= Object.freeze({
+    groundHeightAt: (latitude, longitude) => {
+      const height = this.services.cachedGroundFloor?.(latitude, longitude);
+      return Number.isFinite(height) ? height : null;
+    },
+    warmGround: (points) => {
+      this.services.warmGroundFloor?.(points);
+    },
+    liftM: Number.isFinite(this.services.GROUND_FLOOR_LIFT_M)
+      ? this.services.GROUND_FLOOR_LIFT_M
+      : 0,
+  });
+  return this._subjectContext;
+}
+
+/**
+ * The ridden provider subject as the camera and HUD read it: the frame's
+ * place and motion, named like the built-in kinds' info.
+ * @param {object} frame From cockpitSubjectFrame.
+ */
+export function subjectInfo(frame) {
+  return {
+    kind: this.subjectProvider?.kind ?? null,
+    generic: true,
+    layerId: this.subjectProvider?.layerId ?? null,
+    id: frame.id,
+    name: frame.name,
+    latitude: frame.latitude,
+    longitude: frame.longitude,
+    track: frame.headingDeg,
+    motionCourse: frame.courseDeg,
+    velocityMps: frame.speedMps ?? 0,
+    stale: frame.stale,
+    groundClamp: frame.groundClamp,
+    anchor: frame.anchor,
+    onGround: false,
+  };
+}
+
+/** Entry's fixed order, for candidates first seen at the same moment. */
+const BUILT_IN_ENTRY_ORDER = Object.freeze({
+  aircraft: 0,
+  satellite: 1,
+  vessel: 2,
+});
+
+/**
+ * Every subject entry could ride now, the most recently selected first: a
+ * tracked aircraft, the tracked satellite, the selected vessel and each
+ * provider's candidate. A candidate's time is when this controller first saw
+ * it (it looks on its entry cadence and on tracking changes); candidates
+ * first seen together keep the fixed order (aircraft, satellite, vessel, then
+ * providers by priority). Each carries `allowed()`, its kind's entry gate.
+ * @param {number} [nowMs]
+ * @returns {Array<{kind: string, id: string, seenAtMs: number, order: number,
+ *   allowed: () => boolean, provider?: object, candidate?: object}>}
+ */
+export function entryCandidates(nowMs = performance.now()) {
+  const seen = (this._entrySeen ??= new Map());
+  const list = [];
+  const note = (kind, id, entry) => {
+    const last = seen.get(kind);
+    if (!last || last.id !== id) seen.set(kind, { id, atMs: nowMs });
+    list.push({ kind, id, seenAtMs: seen.get(kind).atMs, ...entry });
+  };
+  const aircraft = this.readAircraftInfo();
+  if (aircraft && this.viewer.trackedEntity?.position)
+    note(
+      'aircraft',
+      String(
+        this.viewer.trackedEntity.gevTrackedId ||
+          aircraft.icao24 ||
+          aircraft.id ||
+          'aircraft',
+      ),
+      {
+        order: BUILT_IN_ENTRY_ORDER.aircraft,
+        allowed: () => this.isEntryAllowed(),
+      },
+    );
+  const satellite = this.readSatelliteInfo();
+  if (satellite)
+    note('satellite', String(satellite.noradId ?? satellite.id ?? ''), {
+      order: BUILT_IN_ENTRY_ORDER.satellite,
+      allowed: () => this.isOrbitEntryAllowed(),
+    });
+  const vessel = this.readVesselInfo();
+  if (vessel)
+    note('vessel', String(vessel.id ?? ''), {
+      order: BUILT_IN_ENTRY_ORDER.vessel,
+      allowed: () => this.isBridgeEntryAllowed(),
+    });
+  this.subjectProviders.forEach((provider, index) => {
+    const candidate = this.readSubjectCandidate(provider);
+    if (candidate)
+      note(provider.kind, candidate.id, {
+        order: 3 + index,
+        provider,
+        candidate,
+        allowed: () => this.isSubjectEntryAllowed(provider, candidate),
+      });
+  });
+  // A subject gone and back counts as selected again.
+  for (const kind of [...seen.keys()])
+    if (!list.some((entry) => entry.kind === kind)) seen.delete(kind);
+  return list.sort((a, b) => b.seenAtMs - a.seenAtMs || a.order - b.order);
+}
+
+/**
+ * The subject entry would ride: the most recently selected one. It decides
+ * alone, so when its own gate is shut entry is unavailable rather than taken
+ * by an older selection.
+ * @returns {object|null} An entry of entryCandidates, or null.
+ */
+export function resolveEntry(nowMs = performance.now()) {
+  return this.entryCandidates(nowMs)[0] ?? null;
+}
+
+/**
  * The layer the active view rides: Live AIS Vessels on a bridge, Satellites
- * in orbit, else the aircraft's own layer. It is read from the tracked
- * entity's id once the layer has dropped its tracking, so a layer turned off
- * still names itself.
- * @returns {'flights'|'military'|'ais-live-vessels'|'satellites'|null}
+ * in orbit, a provider's own layer, else the aircraft's own layer. It is read
+ * from the tracked entity's id once the layer has dropped its tracking, so a
+ * layer turned off still names itself.
+ * @returns {string|null}
  */
 export function readSubjectLayerId() {
   if (!this.active) return null;
+  if (this.subjectProvider) return this.subjectProvider.layerId;
   if (this.subjectKind === 'vessel') return 'ais-live-vessels';
   if (this.subjectKind === 'satellite') return 'satellites';
   const layerId = this.readAircraftInfo()?.layerId;
@@ -51,23 +191,20 @@ export function readSubjectLayerId() {
 }
 
 /**
- * The subject entry would take: a Cesium-tracked aircraft first, then the
- * tracked satellite, else the selected vessel. Vessels never take Cesium
- * tracking, so an aircraft and a vessel cannot be live through the same owner.
- * @returns {'aircraft'|'satellite'|'vessel'|null}
+ * The kind entry would take: the most recently selected subject's
+ * (resolveEntry): a Cesium-tracked aircraft, the tracked satellite, the
+ * selected vessel or a provider's candidate.
+ * @returns {string|null}
  */
 export function resolveEntryKind() {
-  if (this.readAircraftInfo() && this.viewer.trackedEntity?.position)
-    return 'aircraft';
-  if (this.readSatelliteInfo()) return 'satellite';
-  return this.readVesselInfo() ? 'vessel' : null;
+  return this.resolveEntry()?.kind ?? null;
 }
 
 export function dispatchCockpitModeChanged(active, info = null) {
   const subjectId = active
     ? String(
         info?.icao24 ||
-          (info?.kind === 'vessel' ? info.id : '') ||
+          (info?.kind === 'vessel' || info?.generic === true ? info.id : '') ||
           info?.noradId ||
           '',
       )
@@ -76,9 +213,13 @@ export function dispatchCockpitModeChanged(active, info = null) {
     : null;
   const layerId =
     active &&
-    ['flights', 'military', 'ais-live-vessels', 'satellites'].includes(
+    (['flights', 'military', 'ais-live-vessels', 'satellites'].includes(
       info?.layerId,
-    )
+    ) ||
+      (info?.generic === true &&
+        this.subjectProviders.some(
+          (provider) => provider.layerId === info.layerId,
+        )))
       ? info.layerId
       : null;
   window.dispatchEvent(
@@ -130,37 +271,43 @@ export function syncTr3bToggle(info) {
 export function syncEntry() {
   if (this.destroyed) return false;
   if (this.active) return;
-  const info = this.readAircraftInfo();
-  const trackedContact = !!(info && this.viewer.trackedEntity?.position);
-  this.syncTr3bToggle(trackedContact ? info : null);
-  const orbitContact = !trackedContact && !!this.readSatelliteInfo();
-  const bridgeContact =
-    !trackedContact && !orbitContact && !!this.readVesselInfo();
-  let entryKind = null;
-  if (trackedContact) entryKind = this.isEntryAllowed() ? 'aircraft' : null;
-  else if (orbitContact)
-    entryKind = this.isOrbitEntryAllowed() ? 'satellite' : null;
-  else if (bridgeContact)
-    entryKind = this.isBridgeEntryAllowed() ? 'vessel' : null;
+  const candidates = this.entryCandidates(performance.now());
+  const tracked = candidates.some(({ kind }) => kind === 'aircraft');
+  this.syncTr3bToggle(tracked ? this.readAircraftInfo() : null);
+  // The most recently selected subject decides (resolveEntry).
+  const chosen = candidates[0] ?? null;
+  const entryKind = chosen?.allowed() ? chosen.kind : null;
+  const face =
+    entryKind && chosen.provider
+      ? (chosen.candidate.face ?? chosen.provider.entryFace)
+      : null;
   const available = entryKind !== null;
   // Change-only publishes: this runs on a preUpdate cadence, and a fresh
   // presence every frame would re-render the views even when nothing
   // changed. (perf item 9)
   if (
     this.presence.entryAvailable === available &&
-    this.presence.entryKind === entryKind
+    this.presence.entryKind === entryKind &&
+    this.presence.entryFace?.icon === face?.icon &&
+    this.presence.entryFace?.label === face?.label
   )
     return;
   this.presence.entryAvailable = available;
   this.presence.entryKind = entryKind;
+  this.presence.entryFace = face && { icon: face.icon, label: face.label };
   this.publishPresenceView();
 }
 
 export function navigateContext(direction, options = {}) {
   if (this.destroyed) return false;
-  // Contact navigation moves between aircraft; a bridge does not jump ship
-  // and an orbital view stays with its satellite.
-  if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
+  // Contact navigation moves between aircraft; a bridge does not jump ship,
+  // an orbital view stays with its satellite and a provider's view with its
+  // subject.
+  if (
+    this.subjectKind === 'vessel' ||
+    this.subjectKind === 'satellite' ||
+    this.subjectProvider
+  )
     return false;
   const method = direction < 0 ? 'navigatePrevious' : 'navigateNext';
   const wasActive = this.active;
@@ -180,9 +327,14 @@ export function navigateContext(direction, options = {}) {
 }
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
-  // An aircraft tracked from the bridge or from orbit ends that view (see the
-  // vessel and orbital camera updates); it is never adopted as its subject.
-  if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
+  // An aircraft tracked from the bridge, from orbit or from a provider's view
+  // ends that view (see the camera updates); it is never adopted as its
+  // subject.
+  if (
+    this.subjectKind === 'vessel' ||
+    this.subjectKind === 'satellite' ||
+    this.subjectProvider
+  )
     return false;
   const nextEntity = this.viewer.trackedEntity;
   if (
@@ -213,16 +365,119 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
 }
 
 /**
- * Enter first person on a tracked aircraft or, with none tracked, the
- * tracked satellite's orbital view or the selected vessel's bridge.
- * @param {{kind?: 'aircraft'|'satellite'|'vessel'|null}} [options] Restrict
- *   entry to one subject kind; voice entry is aircraft-only.
+ * Enter a provider's view on its candidate: hold it, read a first frame, then
+ * take the camera as the built-in views do. Entry fails, releasing what was
+ * held, when the gate is shut, the provider refuses the hold or no frame
+ * comes.
+ * @param {object} provider From cockpitSubjectProviders.
+ * @returns {boolean}
+ */
+function enterSubject(provider) {
+  const candidate = this.readSubjectCandidate(provider);
+  if (!candidate || !this.isSubjectEntryAllowed(provider, candidate))
+    return false;
+  if (this.callSubject(provider, 'hold', [candidate.id], false) !== true)
+    return false;
+  const frame = cockpitSubjectFrame(
+    this.callSubject(
+      provider,
+      'read',
+      [performance.now(), this.subjectContext()],
+      null,
+    ),
+    candidate.id,
+  );
+  if (!frame) {
+    this.callSubject(provider, 'release', [candidate.id, { restore: false }]);
+    return false;
+  }
+  this.entryFocusOrigin =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  this.onCameraTakeover?.();
+  this.viewer.camera.cancelFlight();
+  this.subjectKind = provider.kind;
+  this.subjectProvider = provider;
+  this.subjectId = candidate.id;
+  this.lastSubjectFrame = frame;
+  this.subjectHud = null;
+  this.subjectSignalKeys = new Set();
+  this.vesselWaterline = null;
+  this.vesselFix = null;
+  this.trackedEntity = null;
+  this.heading = normalizeHeading(
+    frame.headingDeg ?? cameraHeadingDeg(this.viewer.camera),
+  );
+  this.lastFrameMs = performance.now();
+  this.lastCameraUpdateMs = 0;
+  this.lastHudUpdateMs = 0;
+  this.lastContextUpdateMs = 0;
+  this.contextNavigationDeadlineMs = 0;
+  this.lastGroundProbeMs = 0;
+  this.surfaceWaitStartedMs = 0;
+  this.surfaceAcquiring = false;
+  this.surfaceFallback = false;
+  this.cockpitAnchorValid = false;
+  this.lookRestPitchDeg = provider.look?.restPitchDeg ?? null;
+  this.resetLook({ immediate: true });
+  this.active = true;
+  this.services.holdContinuousRender('cockpit');
+  this.viewer.trackedEntity = undefined;
+  this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  document.body.classList.add('cockpit-mode', 'cockpit-subject');
+  this._tr3bSignature = null;
+  Object.assign(this.presence, {
+    active: true,
+    entryAvailable: false,
+    entryKind: null,
+    entryFace: null,
+    subjectKind: provider.kind,
+    subjectGeneric: true,
+    subjectLabels: { ...provider.labels },
+    subjectLook: provider.look
+      ? { aheadLabel: provider.look.aheadLabel }
+      : null,
+    tr3b: null,
+  });
+  this.publishPresenceView();
+  this.publishRadar(null);
+  this.signalItems = [];
+  this.signalSignatures.clear();
+  this.showBriefPage(0);
+  this.startBriefRotation();
+  this.pushCockpitSignal('track', 'track', t('TRACK ACQUIRED'), frame.name);
+  const info = this.subjectInfo(frame);
+  this.updateHud(info, performance.now(), true);
+  this.setVisionMode(this.getInitialVisionMode());
+  this.scheduleContextLayout();
+  Promise.resolve().then(() => {
+    if (this.active && !this.destroyed)
+      this.mapViewButton?.focus({ preventScroll: true });
+  });
+  this.onEntered?.();
+  this.onRide?.(provider.layerId);
+  this.dispatchCockpitModeChanged(true, info);
+  return true;
+}
+
+/**
+ * Enter first person on the most recently selected subject (resolveEntry): a
+ * tracked aircraft, the tracked satellite's orbital view, the selected
+ * vessel's bridge or an application provider's subject.
+ * @param {{kind?: string|null}} [options] Restrict entry to one subject kind;
+ *   voice entry is aircraft-only.
  * @returns {boolean} True when the view was entered.
  */
 export function enter({ kind = null } = {}) {
   if (this.destroyed) return false;
   if (this.active) return false;
   const subjectKind = kind ?? this.resolveEntryKind() ?? 'aircraft';
+  const provider = this.subjectProviders.find(
+    (entry) => entry.kind === subjectKind,
+  );
+  if (provider) return enterSubject.call(this, provider);
+  if (!['aircraft', 'satellite', 'vessel'].includes(subjectKind)) return false;
   const vessel = subjectKind === 'vessel';
   const satellite = subjectKind === 'satellite';
   const allowed = vessel
@@ -371,11 +626,17 @@ export function enter({ kind = null } = {}) {
 export function exit({ restoreTracking = true } = {}) {
   if (!this.active) return false;
   const entity = this.trackedEntity;
+  const provider = this.subjectProvider;
+  const providerSubject = provider ? this.subjectId : null;
   const vesselSubject = this.subjectKind === 'vessel' ? this.subjectId : null;
   const satelliteSubject =
     this.subjectKind === 'satellite' ? this.subjectId : null;
   this.active = false;
   this.subjectKind = null;
+  this.subjectProvider = null;
+  this.lastSubjectFrame = null;
+  this.subjectHud = null;
+  this.lookRestPitchDeg = null;
   this.vesselWaterline = null;
   this.vesselFix = null;
   this.subjectId = null;
@@ -399,6 +660,7 @@ export function exit({ restoreTracking = true } = {}) {
     'cockpit-mode',
     'cockpit-bridge',
     'cockpit-orbit',
+    'cockpit-subject',
   );
   // The camera's own field of view returns before any follow resumes.
   this.endOrbital();
@@ -406,6 +668,9 @@ export function exit({ restoreTracking = true } = {}) {
   this.publishUtilityLayout(null);
   this.presence.active = false;
   this.presence.subjectKind = null;
+  this.presence.subjectGeneric = false;
+  this.presence.subjectLabels = null;
+  this.presence.subjectLook = null;
   this.publishPresenceView();
   this.routeView.visible = false;
   this.clearPredictiveRoute();
@@ -419,6 +684,13 @@ export function exit({ restoreTracking = true } = {}) {
     this.services.aisLiveVesselsLayer?.setCockpitSubject?.(null);
   if (satelliteSubject !== null)
     this.services.satellitesLayer?.setCockpitSubject?.(null);
+  // The provider gives its subject back; `restore` asks it to bring the map
+  // back to it, as the built-in kinds' refocus does.
+  if (provider)
+    this.callSubject(provider, 'release', [
+      providerSubject,
+      { restore: restoreTracking === true },
+    ]);
   this.dispatchCockpitModeChanged(false);
   if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
     this.viewer.trackedEntity = entity;

@@ -1422,5 +1422,15 @@
   "src/ui/ownerFlagSheet.js",
   "src/data/placePacksLoading.test.mjs",
   "src/ui/placePacksLoading.js",
-  "src/ui/placePacksLoading.test.mjs"
+  "src/ui/placePacksLoading.test.mjs",
+  "src/cockpitSubjectProviders.js",
+  "src/cockpitSubjectProviders.test.mjs",
+  "src/cockpitProgress.js",
+  "src/cockpitProgress.test.mjs",
+  "src/i18n/hostLocale.js",
+  "src/ui/cockpitSubjectView.test.mjs",
+  "src/ui/styles/cockpitSubject.css",
+  "src/layers/rail/cockpitSubject.js",
+  "src/layers/rail/cockpitSubject.test.mjs",
+  "src/layers/transit/cockpitSubject.js"
 ]

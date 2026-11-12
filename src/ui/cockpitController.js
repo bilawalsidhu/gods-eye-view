@@ -3,7 +3,12 @@ import {
   readAircraftInfo,
   readSatelliteInfo,
   readVesselInfo,
+  readSubjectCandidate,
   readSubjectLayerId,
+  subjectContext,
+  subjectInfo,
+  entryCandidates,
+  resolveEntry,
   resolveEntryKind,
   dispatchCockpitModeChanged,
   toggleTrackedTr3b,
@@ -100,6 +105,7 @@ import {
 import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
 import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
 import { stepLook } from '../cockpitLook.js';
+import { createCockpitSubjectCaller } from '../cockpitSubjectProviders.js';
 import * as Cesium from 'cesium';
 
 /** Whether the user asked for reduced motion: look turns then jump. */
@@ -120,6 +126,8 @@ export class CockpitViewController {
       isEntryAllowed = null,
       isBridgeEntryAllowed = null,
       isOrbitEntryAllowed = null,
+      subjectProviders = [],
+      isSubjectEntryAllowed = null,
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
@@ -134,10 +142,27 @@ export class CockpitViewController {
     this.disposed = false;
     this.active = false;
     /**
-     * 'aircraft', 'vessel' or 'satellite' while active; which subject the
-     * camera rides.
+     * 'aircraft', 'vessel', 'satellite' or a provider's kind while active;
+     * which subject the camera rides.
      */
     this.subjectKind = null;
+    /**
+     * The application's subject providers (cockpitSubjectProviders.js),
+     * checked by the coordinator; the one ridden while active, else null.
+     */
+    this.subjectProviders = Array.isArray(subjectProviders)
+      ? subjectProviders
+      : [];
+    this.subjectProvider = null;
+    /** The ridden provider subject's last frame and normalized HUD view. */
+    this.lastSubjectFrame = null;
+    this.subjectHud = null;
+    /** The Live Signals rows the provider's HUD view pushed. */
+    this.subjectSignalKeys = new Set();
+    /** Provider methods run through one guard: a throw warns once. */
+    this.callSubject = createCockpitSubjectCaller();
+    /** The look's rest pitch for a provider's view; null on a bridge. */
+    this.lookRestPitchDeg = null;
     /**
      * The vessel subject's id or the satellite's NORAD id; aircraft are
      * identified by trackedEntity.
@@ -203,6 +228,11 @@ export class CockpitViewController {
       typeof isOrbitEntryAllowed === 'function'
         ? isOrbitEntryAllowed
         : () => false;
+    // Nor a provider's subject without a gate for it.
+    this.isSubjectEntryAllowed =
+      typeof isSubjectEntryAllowed === 'function'
+        ? isSubjectEntryAllowed
+        : () => false;
     this.isUtilityDisclosureOpen =
       typeof isUtilityDisclosureOpen === 'function'
         ? isUtilityDisclosureOpen
@@ -246,7 +276,14 @@ export class CockpitViewController {
       entryAvailable: false,
       // Which subject the entry button would enter, and the active subject.
       entryKind: null,
+      // A provider's entry face, `{icon, label}`; null for the built-ins.
+      entryFace: null,
       subjectKind: null,
+      // While a provider's subject is ridden: its HUD and exit labels, and
+      // `{aheadLabel}` when it looks around.
+      subjectGeneric: false,
+      subjectLabels: null,
+      subjectLook: null,
       tr3b: null,
       context: false,
       // The Contact and briefing cards' collapse, which their toggles show.
@@ -508,6 +545,21 @@ export class CockpitViewController {
     if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
     return reset;
   }
+  readSubjectCandidate(provider) {
+    return readSubjectCandidate.call(this, provider);
+  }
+  subjectContext() {
+    return subjectContext.call(this);
+  }
+  subjectInfo(frame) {
+    return subjectInfo.call(this, frame);
+  }
+  entryCandidates(nowMs) {
+    return entryCandidates.call(this, nowMs);
+  }
+  resolveEntry(nowMs) {
+    return resolveEntry.call(this, nowMs);
+  }
   readSubjectLayerId() {
     return readSubjectLayerId.call(this);
   }
@@ -568,6 +620,19 @@ export class CockpitViewController {
   presentLook() {
     return presentLook.call(this);
   }
+  /** Whether the active view looks around: a bridge, or a provider's with `look`. */
+  get looksAround() {
+    return (
+      this.active &&
+      (this.subjectKind === 'vessel' || Boolean(this.subjectProvider?.look))
+    );
+  }
+  /** Where the look rests: the bridge's pitch, or the provider's. */
+  get lookRestPitch() {
+    return Number.isFinite(this.lookRestPitchDeg)
+      ? this.lookRestPitchDeg
+      : VESSEL_BRIDGE_PITCH_DEG;
+  }
   /**
    * Turn the bridge view one arrow step (see `lookKeyStep`). The camera
    * eases there unless the user prefers reduced motion.
@@ -575,7 +640,7 @@ export class CockpitViewController {
    * @returns {boolean} True when a bridge view was turned.
    */
   turnLook(step) {
-    if (!this.active || this.subjectKind !== 'vessel' || !step) return false;
+    if (!this.looksAround || !step) return false;
     this.lookTarget = stepLook(this.lookTarget, step);
     if (prefersReducedMotion()) this.lookView = { ...this.lookTarget };
     this.presentLook();
@@ -588,7 +653,7 @@ export class CockpitViewController {
    *   as entry and exit do.
    */
   resetLook({ immediate = false } = {}) {
-    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    this.lookTarget = { yawDeg: 0, pitchDeg: this.lookRestPitch };
     if (immediate || prefersReducedMotion())
       this.lookView = { ...this.lookTarget };
     this.lookLastMs = performance.now();
@@ -601,7 +666,7 @@ export class CockpitViewController {
    * @returns {boolean} True on a bridge.
    */
   lookAhead() {
-    if (!this.active || this.subjectKind !== 'vessel') return false;
+    if (!this.looksAround) return false;
     const button = document.getElementById('cockpit-look-ahead');
     const hadFocus = !!button && button.contains(document.activeElement);
     this.resetLook();
