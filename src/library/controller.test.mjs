@@ -316,6 +316,35 @@ test('navigating between shares switches library entries on and off', async (t) 
   assert.equal(shareLink.listener, null);
 });
 
+test('a share opened while an earlier one is still switching on wins', async (t) => {
+  const manager = sealedManager(t);
+  const shareLink = fakeShareLink(null);
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(),
+    shareLink,
+    source: source({}),
+  });
+  await library.start();
+  const settle = () =>
+    Promise.all(
+      ['lib-night-lights', 'lib-sea-marks'].map((id) =>
+        manager.waitForLayerSettled?.(id),
+      ),
+    );
+  // Neither share waits for the one before it to settle.
+  shareLink.listener(['00']);
+  assert.equal(manager.isEnabled('lib-night-lights'), false, 'still enabling');
+  shareLink.listener(['01']);
+  await settle();
+  assert.equal(manager.isEnabled('lib-night-lights'), false);
+  assert.equal(manager.isEnabled('lib-sea-marks'), true);
+  library.destroy();
+});
+
 test('zoom flies to an added layer through the caller, reset removes everything', async (t) => {
   const manager = sealedManager(t);
   const storage = memoryStorage();

@@ -204,7 +204,12 @@ export function createDataLibrary({
       if (wanted && !register(entry)) continue;
       if (!isRegistered(id)) continue;
       const layerId = libraryLayerId(id);
-      if (wanted === (dataManager.isEnabled?.(layerId) === true)) continue;
+      // Compare with the newest request, not settled state: a layer still
+      // switching on for an earlier share must be switched off by this one.
+      const current =
+        dataManager.isEffectivelyEnabled?.(layerId) ??
+        dataManager.isEnabled?.(layerId);
+      if (wanted === (current === true)) continue;
       dataManager
         .setEnabled(layerId, wanted, { origin })
         .catch((error) =>
