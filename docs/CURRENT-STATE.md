@@ -640,7 +640,8 @@ spot's own time zone, with a 12 h / 24 h switch that is remembered.
   (`src/i18n/locales/sv.json`; `src/i18n/sv-solunar.test.mjs`).
 - Feature gate: `npm run qa:solunar` (`scripts/qa-solunar.mjs`, needs a dev server and
   Chrome; set `QA_BASE_URL`) opens the card in a real browser on desktop and phone sizes
-  and checks the seven days, the "none" rule, the rule text, the map dot and the console.
+  and checks seven days, moon-event rows, the rule text, the map dot and filtered console errors.
+  The deterministic panel test verifies the missing-moonrise "none" rule.
 - New dependencies: `astronomy-engine` 2.1.19 (MIT, sun and moon positions) and
   `tz-lookup` 6.1.25 (CC0, bundled, offline) for the zone.
 
