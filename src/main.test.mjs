@@ -103,7 +103,7 @@ test('a page without the loading screen does not turn a failure to start into an
       loadingScreen: false,
     });
     assert.equal(await application, app);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(unhandled, []);
     assert.equal(logged[0][1], failure);
   } finally {
