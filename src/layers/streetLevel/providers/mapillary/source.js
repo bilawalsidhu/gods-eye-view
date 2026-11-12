@@ -132,10 +132,13 @@ export function createMapillarySource({
     get graphEndpoint() {
       if (graphBase) return graphBase;
       // MapillaryJS resolves paths against this with `new URL`, so it must be
-      // absolute and end in a slash.
+      // absolute and end in a slash. In the MCP Apps panel the app's address
+      // is the one the panel names, not the host page's.
       return new URL(
         `${urls.graph.replace(/\/$/, '')}/`,
-        globalThis.location?.href ?? 'http://localhost/',
+        globalThis.GEV_APP_BASE_URL ??
+          globalThis.location?.href ??
+          'http://localhost/',
       ).href;
     },
     /** True once the server has said it holds a token. */
