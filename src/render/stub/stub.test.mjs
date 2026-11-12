@@ -238,3 +238,17 @@ test('a slow vector setBase a later setBase supersedes changes nothing, nor one 
     globalThis.fetch = original;
   }
 });
+
+test('two setBase calls, neither awaited, leave the later one’s imagery alone', async () => {
+  const r = createStubRenderer();
+  const url = (name) => `https://${name}.invalid/{z}/{x}/{y}.png`;
+  const first = r.globe.setBase({
+    photoreal: null,
+    imagery: [{ kind: 'xyz', url: url('a') }],
+  });
+  const second = r.globe.setBase({ imagery: [{ kind: 'xyz', url: url('b') }] });
+  const [, later] = await Promise.all([first, second]);
+  assert.deepEqual(r.globe.imagery.list(), later.imagery);
+  assert.equal((await first).settled, false, 'the overtaken one');
+  r.destroy();
+});

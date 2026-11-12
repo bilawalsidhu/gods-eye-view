@@ -1590,10 +1590,17 @@ export function createStubRenderer(options = {}) {
         if (!current()) return superseded();
       }
       for (const layer of imageryLayers.slice()) layer.remove();
+      // The imagery is added before anything is awaited, so a later call,
+      // which removes it, always finds it.
+      const layers = (base.imagery ?? []).map((spec) => addImagery(spec));
       if (base.photoreal !== undefined)
         await globe.setPhotoreal(base.photoreal);
-      const layers = (base.imagery ?? []).map((spec) => addImagery(spec));
-      return { photoreal: photorealStatus, imagery: layers, settled: true };
+      // A base a later call replaced has not settled.
+      return {
+        photoreal: photorealStatus,
+        imagery: layers,
+        settled: current(),
+      };
     },
     async setPhotoreal(spec) {
       log('globe', 'setPhotoreal', [spec]);
