@@ -7,8 +7,9 @@
  * browser key, which the build defines into the bundle (restricted at Google,
  * see SECURITY.md). For ion and Mapillary it holds instead:
  *  - ION_SERVER_MANAGED: a marker (not a credential) meaning "ask this
- *    app's /api/ion/ for asset endpoints". CesiumJS then receives only the
- *    short-lived per-asset token ion issues for the asset it is loading.
+ *    app's /api/ion/ for asset endpoints". CesiumJS then receives ion's
+ *    endpoint document for the asset it is loading (see
+ *    server/providers/keyIsolation/ionEndpoint.js), never the account token.
  *  - for Mapillary, one boolean: whether the server holds a token. The
  *    Mapillary source resolves the Graph address itself: this origin's
  *    route, which adds the token.

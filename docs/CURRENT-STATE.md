@@ -3054,23 +3054,40 @@ browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
 ## Cesium ion and Mapillary tokens stay on the server
 
 `CESIUM_ION_TOKEN` and `MAPILLARY_CLIENT_TOKEN` are no longer injected into the
-browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
-(`server/providers/keyIsolation/`, `src/sources/serverKeys.js`).
+browser bundle; the build defines no credential other than the Google Maps
+browser key `GOOGLE_MAPS_API_KEY` (it also defines the validated Photon URL and
+build constants) (`server/providers/keyIsolation/`,
+`src/sources/serverKeys.js`).
 
 - **Cesium ion.** At start the browser asks `/api/ion/status` whether the server
   holds a token. If it does, world terrain, Bing imagery and ion-hosted Google
   3D load through CesiumJS's `server` option, so CesiumJS requests
   `/api/ion/v1/assets/{id}/endpoint` from this app. The server calls ion with
-  the token and returns only ion's endpoint document (for terrain a one-hour
-  token limited to that asset). Only assets 1-4 and 2275207 are answered;
-  an endpoint document is served from memory for at most a minute, and only
-  while its token has at least 10 minutes left (30 minutes when it carries no
-  expiry), so ion is called at most once a minute per asset however many
-  clients ask. CesiumJS requests the endpoint again, with the same request,
-  when ion rejects an asset token, and after that minute it gets a fresh
-  document. An answer that would contain the
-  configured token is refused. An explicit token passed by an embedder still
-  goes straight to ion.
+  the token and returns only ion's endpoint document. Only assets 1-4 and
+  2275207 are answered. What a document holds depends on the asset: terrain
+  (asset 1) gets an access token ion issues for that asset; the Bing documents
+  (assets 2-4) carry a Bing Maps key ion issues, which CesiumJS passes to its
+  Bing imagery provider as `key`; the Google Photorealistic 3D Tiles document
+  (asset 2275207) is an external 3D Tiles asset whose `options.url`, the
+  tileset address CesiumJS uses, points at Google's tile service and may carry
+  a provider key in its URL. Their lifetime is ion's to set. A visitor who can
+  reach the route obtains those documents; the account token is never
+  returned, and an answer that would contain it is refused.
+  A terrain document is served from memory for at most a minute (CesiumJS
+  requests the endpoint again, with the same request, when ion rejects an
+  asset token, and only for assets it reads without an `externalType`) and
+  only while its token has at least 10 minutes left; a Bing or Google document
+  is kept until its token has under 10 minutes left, or 30 minutes when it
+  carries no expiry. So while ion answers, it is called at most once a minute
+  per asset for terrain, and once per document lifetime for the others, however
+  many clients ask. When ion fails (no answer, a timeout, 429, a 5xx), it is
+  not called again for that asset for 10 seconds, or the `Retry-After` it
+  names, at most 60 seconds; meanwhile a held document whose token still has 10
+  minutes left is served, and with none the same error is answered from memory
+  with a `Retry-After`. A refusal (token rejected, asset not available) drops
+  the held document. A request answered from memory does not count against
+  the per-IP limit. An explicit token passed by an embedder still goes
+  straight to ion.
 - **Mapillary.** MapillaryJS and the Street Level source call
   `/api/mapillary/graph/*`; the server adds the token as an `Authorization`
   header and forwards only the Graph paths (`images`, `image_ids`, an image id,
@@ -3084,12 +3101,13 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   `server/providers/common/same-site.js`, the form the keyless map routes use
   as `admitSameSiteKeyless`): ion is needed to render terrain and imagery, so an
   install behind a reverse proxy with the key in `.env` keeps ion, and a
-  visitor can obtain only the short-lived, single-asset endpoint documents the
-  page needs. A single `X-Forwarded-Proto` supplies the scheme an `Origin` is
-  compared with. `/api/mapillary/graph/*` keeps the full gate, so behind a
-  reverse proxy it answers 403, as the Mapillary tile and status routes
-  already did. The per-IP limits key on the socket peer, so all users behind
-  one proxy share one bucket (300 a minute for ion, 1200 for Graph).
+  visitor can obtain the endpoint documents the page needs (the ion item above
+  says what they hold). A single `X-Forwarded-Proto` supplies the scheme an
+  `Origin` is compared with. `/api/mapillary/graph/*` keeps the full gate, so
+  behind a reverse proxy it answers 403, as the Mapillary tile and status
+  routes already did. The per-IP limits key on the socket peer, so all users
+  behind one proxy share one bucket (300 a minute for ion, 1200 for Graph); an
+  ion request answered from memory does not count against it.
   `server/providers/keyIsolation/routeGate.test.mjs` runs the plugin's mounts
   on a real HTTP server and pins each rule.
 - **`application` is a Promise.** The app learns from `/api/ion/status` and
@@ -3140,9 +3158,9 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   `graphEndpoint` for its own Graph proxy that adds the token (the provider
   then counts the key as present). `createBrowserViteConfig`
   (`gods-eye-view/build/vite`) likewise ignores `cesiumToken` and
-  `mapillaryToken`; it defines only the Google Maps key. A `cesiumToken` handed
-  to `createStandaloneApplication` still works: an explicit token goes
-  straight to ion.
+  `mapillaryToken`; it defines no credential other than the Google Maps key. A
+  `cesiumToken` handed to `createStandaloneApplication` still works: an explicit
+  token goes straight to ion.
 - `src/tooling/keyExposure.test.mjs` starts the real Vite config with fake
   tokens and fails if either reaches served client code, and walks the sources
   (without git) for a read of either token from `import.meta.env`;

@@ -107,7 +107,8 @@ export default createBrowserViteConfig({
 });
 ```
 
-`createBrowserViteConfig` defines only the Google Maps browser key. A `cesiumToken` or
+`createBrowserViteConfig` defines no credential other than the Google Maps browser key
+(it also defines the validated Photon URL and build constants). A `cesiumToken` or
 `mapillaryToken` passed to it is ignored: the Cesium ion and Mapillary tokens
 stay on the server (`server/providers/keyIsolation/`), and the browser asks the
 server for what it needs.
