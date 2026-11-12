@@ -33,6 +33,8 @@ import {
   activateWorldOverlayAction,
   initWorldOverlay,
   subscribeWorldOverlayActions,
+  subscribeWorldOverlayCards,
+  setWorldOverlayViewCardMode,
   getQueuedOverlayEntryAlpha,
   isOverlayPointVisible,
   normalizeOverlayEntry,
@@ -2485,8 +2487,8 @@ test('diagnostics facade preserves the complete binding shape', () => {
   const fields = [
     'sourceCount', 'entryCount', 'candidateCount', 'projectedCount', 'selectedCount',
     'fadingCount', 'paintedCount', 'hitRectCount', 'projectionMs', 'solveMs',
-    'paintMs', 'solveRevision', 'paintItemPoolSize', 'paintRectPoolSize',
-    'candidateIndexSize', 'entriesBySource', 'paintedBySource',
+    'paintMs', 'viewCardCount', 'viewCardMs', 'solveRevision', 'paintItemPoolSize',
+    'paintRectPoolSize', 'candidateIndexSize', 'entriesBySource', 'paintedBySource',
   ];
   assert.deepEqual(Object.keys(diagnostics).sort(), fields.sort());
 });
@@ -2547,6 +2549,62 @@ test('installation titles share persistent card arbitration and retain a bounded
   assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
 });
 
+
+test('a card presenter draws selected cards as elements while the canvas keeps their leaders', () => {
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  const views = [];
+  const frames = [];
+  const unsubscribe = subscribeWorldOverlayCards({
+    content: (view) => views.push(view),
+    frame: (list, count) => frames.push(list.slice(0, count).map(({ key, x, y, scale, alpha }) => ({ key, x, y, scale, alpha }))),
+  });
+  try {
+    initWorldOverlay(env.viewer);
+    const texts = () => env.ctx.calls.filter(([op]) => op === 'fillText').map(([, text]) => text);
+    const paint = () => { env.ctx.calls.length = 0; env.postRender.raise(); };
+    const ambient = { id: 'site', position: positionAtScreen(120, 220), title: 'Ambient site', variant: 'card', collisionGroup: 'ambient-card', horizonCull: false, edgeFade: false };
+    setOverlayEntries('view-cards', [selectedEntry('picked', { title: 'Picked site', details: ['OPENSTREETMAP'], position: positionAtScreen(200, 150) }), ambient]);
+    paint();
+    env.advanceTime(200);
+    frames.length = 0;
+    paint();
+
+    const { cards } = views.at(-1);
+    assert.deepEqual(cards.map((card) => [card.kind, card.title, card.details]), [['selected', 'Picked site', ['OPENSTREETMAP']]]);
+    const rect = getOverlayPaintRect('view-cards', 'picked');
+    assert.deepEqual([cards[0].w, cards[0].h], [rect.w, rect.h], 'the element is the rectangle the overlay solved with');
+    assert.deepEqual(frames.at(-1), [{ key: cards[0].key, x: rect.x, y: rect.y, scale: 1, alpha: 1 }]);
+    assert.deepEqual(texts(), ['Ambient site'], 'the selected card paints no text; the ambient card stays on the canvas');
+    assert.ok(env.ctx.calls.some(([op]) => op === 'stroke'), 'its leader is still painted');
+
+    const published = views.length;
+    paint();
+    assert.equal(views.length, published, 'an unchanged card republishes no content');
+    assert.equal(frames.length, 2, 'every painted frame writes positions');
+    assert.equal(getWorldOverlayDiagnostics().viewCardCount, 1);
+
+    setWorldOverlayViewCardMode('all');
+    paint();
+    assert.deepEqual(views.at(-1).cards.map((card) => card.kind).sort(), ['card', 'selected']);
+    assert.deepEqual(texts(), []);
+
+    setWorldOverlayViewCardMode('off');
+    paint();
+    assert.deepEqual(views.at(-1).cards, []);
+    assert.deepEqual(texts().sort(), ['Ambient site', 'OPENSTREETMAP', 'Picked site']);
+
+    setWorldOverlayViewCardMode('focus');
+    paint();
+    assert.equal(views.at(-1).cards.length, 1);
+    unsubscribe();
+    paint();
+    assert.deepEqual(texts().sort(), ['Ambient site', 'OPENSTREETMAP', 'Picked site'], 'without a presenter every card paints on the canvas');
+  } finally {
+    unsubscribe();
+    setWorldOverlayViewCardMode('focus');
+    env.cleanup();
+  }
+});
 
 test('promoting an ambient entry to selected paints it once with no fading duplicate', () => {
   const env = installMockEnvironment();

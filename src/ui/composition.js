@@ -30,7 +30,9 @@ import {
   activateWorldOverlayAction,
   destroyWorldOverlay,
   initWorldOverlay,
+  setWorldOverlayViewCardMode,
   subscribeWorldOverlayActions,
+  subscribeWorldOverlayCards,
 } from '../overlays/worldOverlay.js';
 import {
   destroyDetection,
@@ -92,6 +94,8 @@ export class StyleManager extends ApplicationShell {
         initWorldOverlay,
         subscribeWorldOverlayActions,
         activateWorldOverlayAction,
+        subscribeWorldOverlayCards,
+        setWorldOverlayViewCardMode,
         destroyDetection,
         initDetection,
         cycleDetectionMode,

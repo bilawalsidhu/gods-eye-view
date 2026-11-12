@@ -114,13 +114,13 @@ test('a pin renders its reticle, leader and callout on the page board', async (t
   assert.equal(leader.getAttribute('x1'), '200.0');
   assert.equal(leader.getAttribute('x2'), '218.0');
   // The card is sized to its measured text, and the leader meets its bottom.
-  const [card, accent, text] = callout.children;
+  assert.equal(callout.children.length, 2, 'a card and its text, no accent bar');
+  const [card, text] = callout.children;
   assert.equal(text.textContent, 'Capitol');
   assert.equal(text.getAttribute('x'), '9');
   assert.equal(card.getAttribute('width'), '58');
   assert.equal(card.getAttribute('height'), '26');
-  assert.equal(accent.getAttribute('height'), '18');
-  assert.equal(accent.getAttribute('fill'), '#ffb547');
+  assert.equal(card.style.stroke, '#ffb547', 'outlined in the mark\u2019s colour');
   assert.equal(callout.getAttribute('transform'), 'translate(218.0, 266.0)');
   assert.equal(leader.getAttribute('y2'), '292.0');
   frames();

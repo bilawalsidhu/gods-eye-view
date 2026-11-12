@@ -60,6 +60,7 @@ import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
+import { useWorldOverlayCardsStore } from './stores/worldOverlayCards.js';
 import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
 import { useHudStore } from './stores/hud.js';
 import { useDisplayStore } from './stores/display.js';
@@ -119,6 +120,8 @@ export class StyleManager extends ShellFacade {
       initWorldOverlay,
       subscribeWorldOverlayActions,
       activateWorldOverlayAction,
+      subscribeWorldOverlayCards,
+      setWorldOverlayViewCardMode,
       initDetection,
       setDetectionStyle,
       trafficLayer,
@@ -532,6 +535,19 @@ export class StyleManager extends ShellFacade {
     this._overlayActionsUnsubscribe = subscribeWorldOverlayActions((view) =>
       overlayActionsStore.publish(view),
     );
+    // The selected and tracked cards, which the scene chrome draws as
+    // elements; `?overlayCards=all|off` widens or disables that for comparison.
+    const overlayCardsStore = useWorldOverlayCardsStore(applicationPinia());
+    // A composition that predates view cards keeps every card on the canvas.
+    setWorldOverlayViewCardMode?.(
+      new URLSearchParams(globalThis.location?.search ?? '').get(
+        'overlayCards',
+      ),
+    );
+    this._overlayCardsUnsubscribe = subscribeWorldOverlayCards?.({
+      content: (view) => overlayCardsStore.publish(view),
+      frame: (frames, count) => overlayCardsStore.writeFrame(frames, count),
+    });
 
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline
@@ -1922,6 +1938,9 @@ export class StyleManager extends ShellFacade {
     destroyDetection();
     this._overlayActionsUnsubscribe?.();
     this._overlayActionsUnsubscribe = null;
+    this._overlayCardsUnsubscribe?.();
+    this._overlayCardsUnsubscribe = null;
+    useWorldOverlayCardsStore(applicationPinia()).publish(null);
     destroyWorldOverlay();
     const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
     overlayActionsStore.connect(null);

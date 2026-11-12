@@ -19,7 +19,9 @@ import {
   distanceFade,
   distanceScale,
   measureOverlayEntry,
+  overlayEntryViewCardKind,
   paintOverlayEntry,
+  paintOverlayEntryConnector,
   placementVariants,
   truncateOverlayTitle,
 } from './worldOverlayDraw.js';
@@ -118,6 +120,19 @@ let _ctx = null;
 let _actions = null;
 const _actionsListeners = new Set();
 let _accessibilitySignature = '';
+/** The view that draws cards as elements: `{ content(view), frame(frames, count) }`. */
+let _cardPresenter = null;
+/** Which cards the view draws: 'focus' (selected, tracked), 'all' or 'off'. */
+let _viewCardMode = 'focus';
+/** The cards last handed to the view, with the tokens to draw them in. */
+let _viewCards = Object.freeze({
+  owner: {},
+  style: WORLD_OVERLAY_STYLE,
+  cards: Object.freeze([]),
+});
+/** This frame's view cards, pooled: where and how visibly each one sits. */
+const _viewCardFrames = [];
+let _viewCardCount = 0;
 const _accessibleActivatorByKey = new Map();
 /** @type {HTMLCanvasElement|null} Host-owned detection blend-isolation surface. */
 let _detectionSurface = null;
@@ -237,6 +252,8 @@ const _diagnostics = {
   projectionMs: 0,
   solveMs: 0,
   paintMs: 0,
+  viewCardCount: 0,
+  viewCardMs: 0,
   solveRevision: 0,
   paintItemPoolSize: 0,
   paintRectPoolSize: 0,
@@ -2446,6 +2463,131 @@ function syncAccessibleActions() {
   presentActions({ ..._actions, items });
 }
 
+/**
+ * Draw cards as elements. The presenter receives the card list whenever a
+ * card's content or size changes (`content`), and every painted frame the
+ * pooled positions (`frame`): `{ key, x, y, scale, alpha }` in CSS pixels,
+ * valid only during the call. Without a presenter every card is painted on
+ * the canvas.
+ * @param {{content: (view: {owner: object, style: object, cards: object[]}) => void,
+ *   frame: (frames: object[], count: number) => void}} presenter
+ * @returns {() => void} Unsubscribe.
+ */
+export function subscribeWorldOverlayCards(presenter) {
+  _cardPresenter = presenter;
+  presenter.content(_viewCards);
+  _viewer?.scene?.requestRender?.();
+  return () => {
+    if (_cardPresenter !== presenter) return;
+    _cardPresenter = null;
+    _viewer?.scene?.requestRender?.();
+  };
+}
+
+/**
+ * Choose which cards the presenter draws: `'focus'` (selected and tracked
+ * cards, the default), `'all'` (ambient detail cards too) or `'off'`.
+ * @param {'focus'|'all'|'off'} mode
+ */
+export function setWorldOverlayViewCardMode(mode) {
+  const next = mode === 'all' || mode === 'off' ? mode : 'focus';
+  if (next === _viewCardMode) return;
+  _viewCardMode = next;
+  _viewer?.scene?.requestRender?.();
+}
+
+/** The kind of view card `entry` is drawn as this frame, or null for canvas. */
+function viewCardKind(entry) {
+  if (!_cardPresenter || _viewCardMode === 'off') return null;
+  const kind = overlayEntryViewCardKind(entry);
+  return kind === 'card' && _viewCardMode !== 'all' ? null : kind;
+}
+
+function queueViewCard(item, kind, alpha) {
+  const { record, placement } = item;
+  const frame =
+    _viewCardFrames[_viewCardCount] || (_viewCardFrames[_viewCardCount] = {});
+  _viewCardCount++;
+  frame.key = record.key;
+  frame.kind = kind;
+  frame.entry = record.entry;
+  frame.x = placement.rect.x;
+  frame.y = placement.rect.y;
+  frame.scale = record.paintScale;
+  frame.w = placement.rect.w / record.paintScale;
+  frame.h = placement.rect.h / record.paintScale;
+  frame.alpha = alpha;
+}
+
+function viewCardMatches(card, frame) {
+  const entry = frame.entry;
+  if (
+    card.key !== frame.key ||
+    card.kind !== frame.kind ||
+    card.title !== entry.title ||
+    card.accent !== entry.accent ||
+    card.w !== frame.w ||
+    card.h !== frame.h ||
+    card.details.length !== entry.details.length
+  )
+    return false;
+  for (let i = 0; i < card.details.length; i++)
+    if (card.details[i] !== entry.details[i]) return false;
+  return true;
+}
+
+/** Hand the presenter this frame's cards: content on change, positions always. */
+function syncViewCards() {
+  if (!_cardPresenter) {
+    _viewCardCount = 0;
+    if (_viewCards.cards.length)
+      _viewCards = Object.freeze({
+        owner: _viewCards.owner,
+        style: WORLD_OVERLAY_STYLE,
+        cards: Object.freeze([]),
+      });
+    return;
+  }
+  const started = nowMs();
+  const shown = _viewCards.cards;
+  let changed = shown.length !== _viewCardCount;
+  for (let i = 0; !changed && i < _viewCardCount; i++)
+    changed = !viewCardMatches(shown[i], _viewCardFrames[i]);
+  if (changed) {
+    const cards = [];
+    for (let i = 0; i < _viewCardCount; i++) {
+      const frame = _viewCardFrames[i];
+      const entry = frame.entry;
+      const layout = entry._overlayLayout || {};
+      cards.push(
+        Object.freeze({
+          key: frame.key,
+          kind: frame.kind,
+          title: entry.title,
+          details: Object.freeze(entry.details.slice()),
+          accent: entry.accent,
+          w: frame.w,
+          h: frame.h,
+          padX: layout.padX || 0,
+          padY: layout.padY || 0,
+          titleH: layout.titleH || 0,
+          lineH: layout.lineH || 0,
+        }),
+      );
+    }
+    _viewCards = Object.freeze({
+      owner: _viewCards.owner,
+      style: WORLD_OVERLAY_STYLE,
+      cards: Object.freeze(cards),
+    });
+    _cardPresenter.content(_viewCards);
+  }
+  if (_viewCardCount > 0 || changed)
+    _cardPresenter.frame(_viewCardFrames, _viewCardCount);
+  _diagnostics.viewCardCount = _viewCardCount;
+  _diagnostics.viewCardMs = nowMs() - started;
+}
+
 let _detectionSurfacePrepared = false;
 
 function paintCustomLane(lane) {
@@ -2512,8 +2654,12 @@ function paintEntryItem(item, keyhole, sonar) {
     keyholeAlpha *
     (sonar ? sonar.label(sonar.at(placement.anchorX, placement.anchorY)) : 1);
   if (finalAlpha <= 0.001) return;
+  // A view card keeps its leader here; the view draws its plate and text.
+  const viewKind = viewCardKind(entry);
+  const paint = viewKind ? paintOverlayEntryConnector : paintOverlayEntry;
+  let viewAlpha;
   if (record.paintScale === 1) {
-    paintOverlayEntry(
+    viewAlpha = paint(
       _ctx,
       entry,
       placement,
@@ -2530,7 +2676,7 @@ function paintEntryItem(item, keyhole, sonar) {
     _ctx.save();
     _ctx.translate(placement.rect.x, placement.rect.y);
     _ctx.scale(record.paintScale, record.paintScale);
-    paintOverlayEntry(
+    viewAlpha = paint(
       _ctx,
       entry,
       scaled,
@@ -2540,6 +2686,7 @@ function paintEntryItem(item, keyhole, sonar) {
     );
     _ctx.restore();
   }
+  if (viewKind) queueViewCard(item, viewKind, viewAlpha);
   publishPaintRect(item);
   if (_paintedBySource[entry.source] === undefined) {
     _paintedBySource[entry.source] = 0;
@@ -2646,6 +2793,7 @@ function paintFrame(keyhole) {
     clearCanvas(false, true);
   _paintRectCount = 0;
   _hitRectCount = 0;
+  _viewCardCount = 0;
   declutterYieldingEntries();
   sortPooledRange(_paintQueue, _paintCount, comparePaintItems);
   // The shared canvas is not clipped either. Cards already avoid solid chrome
@@ -2669,6 +2817,7 @@ function paintFrame(keyhole) {
   _diagnostics.paintRectPoolSize = _paintRectPool.length;
   _diagnostics.paintMs = nowMs() - started;
   syncAccessibleActions();
+  syncViewCards();
   syncPaintVisibility();
   _canvasNeedsClear =
     _paintRectCount > 0 || activeCustomPaintLaneCount(PAINT_TARGET_SHARED) > 0;
@@ -2697,6 +2846,8 @@ function localizeScaledPlacement(placement, scale, out) {
 }
 
 function resetFrameDiagnostics() {
+  _diagnostics.viewCardCount = 0;
+  _diagnostics.viewCardMs = 0;
   _diagnostics.candidateCount = 0;
   _diagnostics.projectedCount = 0;
   _diagnostics.selectedCount = 0;
@@ -2725,6 +2876,10 @@ function drawWorldOverlay() {
     if (_accessibilitySignature) {
       _hitRectCount = 0;
       syncAccessibleActions();
+    }
+    if (_viewCards.cards.length) {
+      _viewCardCount = 0;
+      syncViewCards();
     }
     syncPaintVisibility(false);
     return;
@@ -2888,6 +3043,15 @@ export function destroyWorldOverlay() {
   _hitRects.length = 0;
   _accessibleActivatorByKey.clear();
   _accessibilitySignature = '';
+  // The presenter outlives a host: empty its list, then start a fresh one.
+  _viewCardCount = 0;
+  if (_viewCards.cards.length) syncViewCards();
+  _viewCards = Object.freeze({
+    owner: {},
+    style: WORLD_OVERLAY_STYLE,
+    cards: Object.freeze([]),
+  });
+  _cardPresenter?.content(_viewCards);
   _paintRectByKey.clear();
   _queuedItemBySource.clear();
   _paintCount = 0;
@@ -2954,6 +3118,8 @@ export function destroyWorldOverlay() {
     projectionMs: 0,
     solveMs: 0,
     paintMs: 0,
+    viewCardCount: 0,
+    viewCardMs: 0,
     solveRevision: 0,
     paintItemPoolSize: 0,
     paintRectPoolSize: 0,
