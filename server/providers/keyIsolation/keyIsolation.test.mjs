@@ -1,6 +1,7 @@
 // Third-party keys stay on the server. Pins the ion endpoint route and
-// the Mapillary Graph route (server/providers/keyIsolation) and the browser-side
-// helpers that replace the injected tokens.
+// the Mapillary Graph route (server/providers/keyIsolation) and the
+// browser-side functions in src/sources/serverKeys.js that ask the server
+// for them.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {

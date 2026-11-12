@@ -104,9 +104,13 @@ import { createBrowserViteConfig } from 'gods-eye-view/build/vite';
 export default createBrowserViteConfig({
   plugins: [],
   googleApiKey: undefined,
-  cesiumToken: undefined,
 });
 ```
+
+The helper defines only the Google Maps browser key. A `cesiumToken` or
+`mapillaryToken` passed to it is ignored: the Cesium ion and Mapillary tokens
+stay on the server (`server/providers/keyIsolation/`), and the browser asks the
+server for what it needs.
 
 Consumers supply compatible Vite and vite-plugin-cesium development dependencies.
 The package's `node` export condition has no browser fallback. The boundary gate

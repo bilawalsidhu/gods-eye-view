@@ -3063,8 +3063,12 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   `/api/ion/v1/assets/{id}/endpoint` from this app. The server calls ion with
   the token and returns only ion's endpoint document (for terrain a one-hour
   token limited to that asset). Only assets 1-4 and 2275207 are answered;
-  endpoint documents are cached while their token has at least 10 minutes left
-  (30 minutes when they carry no expiry), and an answer that would contain the
+  an endpoint document is served from memory for at most a minute, and only
+  while its token has at least 10 minutes left (30 minutes when it carries no
+  expiry), so ion is called at most once a minute per asset however many
+  clients ask. CesiumJS requests the endpoint again, with the same request,
+  when ion rejects an asset token, and after that minute it gets a fresh
+  document. An answer that would contain the
   configured token is refused. An explicit token passed by an embedder still
   goes straight to ion.
 - **Mapillary.** MapillaryJS and the Street Level source call
@@ -3072,7 +3076,22 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   header and forwards only the Graph paths (`images`, `image_ids`, an image id,
   its `tiles`) and parameters the app uses, dropping any client-supplied
   `access_token`. Image CDN URLs in the answers carry no token.
-- Both routes sit behind the cross-site gate and a per-IP limit.
+- **The cross-site gate.** Both routes refuse cross-site browser requests (a
+  foreign or opaque `Origin`, a `Sec-Fetch-Site` other than
+  `same-origin`/`none`) and sit behind a per-IP limit. They differ on
+  forwarding headers. `/api/ion/status` and `/api/ion/v1/assets/{id}/endpoint`
+  use the proxy-tolerant gate (`sameSiteGatedBehindProxy` in
+  `server/providers/common/same-site.js`, the form the keyless map routes use
+  as `admitSameSiteKeyless`): ion is needed to render terrain and imagery, so an
+  install behind a reverse proxy with the key in `.env` keeps ion, and a
+  visitor can obtain only the short-lived, single-asset endpoint documents the
+  page needs. A single `X-Forwarded-Proto` supplies the scheme an `Origin` is
+  compared with. `/api/mapillary/graph/*` keeps the full gate, so behind a
+  reverse proxy it answers 403, as the Mapillary tile and status routes
+  already did. The per-IP limits key on the socket peer, so all users behind
+  one proxy share one bucket (300 a minute for ion, 1200 for Graph).
+  `server/providers/keyIsolation/routeGate.test.mjs` runs the plugin's mounts
+  on a real HTTP server and pins each rule.
 - **`application` is a Promise.** The app learns from `/api/ion/status` and
   `/api/mapillary/status` whether the server holds an ion token and a
   Mapillary token before it creates itself, so `src/main.js` now exports
@@ -3081,6 +3100,8 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   together, so startup waits for the slower one. Neither question fails, and
   each is given up after 15 seconds: a missing route, a refusal, an error or
   no answer all read as "no token" and keep the keyless terrain and imagery.
+  A synchronous failure to create the application is reported on the loading
+  screen like a failure to start it, and `application` still rejects.
 - **Street Level's first source.** The Mapillary answer (a boolean, never the
   token) is handed to the Mapillary source as its starting state, so Street
   Level, which chooses its first source when it is built, starts on Mapillary
@@ -3096,8 +3117,10 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   mounts those routes (`server/providers/keyIsolation/plugin.js` covers the
   development and the preview server; Docker and Pinokio run the same
   configuration). `panel_request` sends neither `Origin` nor `Sec-Fetch-Site`,
-  so the cross-site gate lets it through, while a server the MCP server reaches
-  through a reverse proxy that adds forwarding headers refuses it. The ion
+  so the cross-site gate lets it through. A server the MCP server reaches
+  through a reverse proxy that adds forwarding headers still answers the ion
+  routes but refuses the Graph route, so Mapillary coverage reports a missing
+  key there. The ion
   endpoint and Graph addresses resolve against `GEV_APP_BASE_URL`, the address
   the panel names for the app, since a host may serve the page from an address
   that cannot be a base. Without an answer the panel runs keyless: no ion
@@ -3107,8 +3130,22 @@ browser bundle; the build defines only `GOOGLE_MAPS_API_KEY`
   security policy still lists `graph.mapillary.com`, which the panel no longer
   calls itself. Tests: `server/mcp/panelKeyRoutes.test.mjs` (the real
   `panel_request` against the key routes) and `src/sources/serverKeys.test.mjs`.
+- **For embedders (a breaking change).** `createMapillarySource({ token })`
+  (`gods-eye-view/layers/street-level/mapillary/source`) no longer takes a
+  token: the option is ignored and `source.token` is gone, because the source
+  never holds one. Its Graph calls go to this app's `/api/mapillary/graph/`,
+  or to `graphEndpoint` when one is passed. An embedder runs the server routes
+  (`server/providers/keyIsolation/`, mounted by the servers this repository
+  starts) with `MAPILLARY_CLIENT_TOKEN` set on the server, or passes
+  `graphEndpoint` for its own Graph proxy that adds the token (the provider
+  then counts the key as present). `createBrowserViteConfig`
+  (`gods-eye-view/build/vite`) likewise ignores `cesiumToken` and
+  `mapillaryToken`; it defines only the Google Maps key. A `cesiumToken` handed
+  to `createStandaloneApplication` still works: an explicit token goes
+  straight to ion.
 - `src/tooling/keyExposure.test.mjs` starts the real Vite config with fake
-  tokens and fails if either reaches served client code;
+  tokens and fails if either reaches served client code, and walks the sources
+  (without git) for a read of either token from `import.meta.env`;
   `node scripts/check-key-exposure.mjs` scans a running app or a production
   build the same way. The Google browser key is expected in the bundle.
 
