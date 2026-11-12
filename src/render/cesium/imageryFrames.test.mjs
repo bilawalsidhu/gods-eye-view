@@ -247,9 +247,9 @@ const endSeek = (video) => {
   video.dispatchEvent(new Event('seeked'));
 };
 
-test('after a seek that timed out, the next frame loads a fresh video rather than drawing what shows', async () => {
+test('after a seek that timed out, the video is not loaded again for a while, then afresh rather than drawing what shows', async () => {
   const { made, restore } = fakeVideoPage();
-  mock.timers.enable({ apis: ['setTimeout'] });
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   try {
     const videos = createTileVideos(4);
     const first = videos.frame('a.webm', 0.5);
@@ -260,6 +260,10 @@ test('after a seek that timed out, the next frame loads a fresh video rather tha
     mock.timers.tick(VIDEO_SEEK_TIMEOUT_MS);
     await assert.rejects(first, /did not seek/);
     assert.equal(made[0].src, '', 'the stuck video is let go');
+    // Asked again soon: failed at once, never waited on for another timeout.
+    await assert.rejects(videos.frame('a.webm', 0.5), /failed to load lately/);
+    assert.equal(made.length, 1, 'not loaded again');
+    mock.timers.tick(VIDEO_RETRY_MS);
     let drawn = false;
     const second = videos.frame('a.webm', 0.5).then(() => (drawn = true));
     assert.equal(made.length, 2, 'a fresh video');
@@ -270,6 +274,29 @@ test('after a seek that timed out, the next frame loads a fresh video rather tha
     endSeek(made[1]);
     await second;
     assert.equal(drawn, true);
+  } finally {
+    mock.timers.reset();
+    restore();
+  }
+});
+
+test('clear forgets the videos that failed, so each is loaded again at once', async () => {
+  const { made, restore } = fakeVideoPage();
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  try {
+    const videos = createTileVideos(4);
+    const first = videos.frame('a.webm', 0.5);
+    made[0].dispatchEvent(new Event('error'));
+    await assert.rejects(first, /did not load/);
+    await assert.rejects(videos.frame('a.webm', 0.5), /failed to load lately/);
+    videos.clear();
+    const again = videos.frame('a.webm', 0.5);
+    assert.equal(made.length, 2, 'loaded again');
+    made[1].duration = 10;
+    made[1].dispatchEvent(new Event('loadeddata'));
+    await flush();
+    endSeek(made[1]);
+    assert.ok(await again);
   } finally {
     mock.timers.reset();
     restore();

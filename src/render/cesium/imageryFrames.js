@@ -29,9 +29,9 @@ export const VIDEO_SEEK_TIMEOUT_MS = 10000;
  */
 export const VIDEO_DURATION_TIMEOUT_MS = 60000;
 /**
- * How long a video that failed to load (or to say how long it is) fails its
- * frames at once, ms, before it is loaded again: not downloaded afresh for
- * every tile that asks.
+ * How long a video that failed to load (to say how long it is, or to seek)
+ * fails its frames at once, ms, before it is loaded again: not downloaded
+ * afresh for every tile that asks.
  */
 export const VIDEO_RETRY_MS = 180000;
 
@@ -180,8 +180,18 @@ function seekTo(video, time, url, timeoutMs = VIDEO_SEEK_TIMEOUT_MS) {
 export function createTileVideos(limit = VIDEO_CACHE) {
   /** url → {video, ready: Promise, queue: Promise, gone: Promise, release} */
   const videos = new Map();
-  /** url → when a video that failed to load may be loaded again, epoch ms. */
+  /**
+   * url → when a video that failed to load (or to seek) may be loaded again,
+   * epoch ms; pruned as it is added to.
+   */
   const failed = new Map();
+  /** Fail a url's frames at once for `VIDEO_RETRY_MS`. */
+  function fail(url) {
+    const now = Date.now();
+    for (const [other, retryAt] of failed)
+      if (retryAt <= now) failed.delete(other);
+    failed.set(url, now + VIDEO_RETRY_MS);
+  }
   /** Let go of a url's video, if `entry` is still the one it holds. */
   function drop(url, entry) {
     if (videos.get(url) !== entry) return;
@@ -249,7 +259,7 @@ export function createTileVideos(limit = VIDEO_CACHE) {
     const loadedEntry = entry;
     ready.catch(() => {
       if (videos.get(url) !== loadedEntry) return;
-      failed.set(url, Date.now() + VIDEO_RETRY_MS);
+      fail(url);
       drop(url, loadedEntry);
     });
     while (videos.size > limit) {
@@ -283,8 +293,11 @@ export function createTileVideos(limit = VIDEO_CACHE) {
         try {
           await until(seekTo(video, at, url));
         } catch (error) {
-          // A video whose seek did not end is let go: the next frame asked
-          // of it loads a fresh one rather than waiting on this one again.
+          // A video whose seek did not end (or failed) is let go and, like
+          // one that failed to load, loaded again only after
+          // `VIDEO_RETRY_MS`: a url that always hangs is not waited on by
+          // every tile that asks. One let go meanwhile has not failed.
+          if (!entry.released) fail(url);
           drop(url, entry);
           throw error;
         }
@@ -302,6 +315,7 @@ export function createTileVideos(limit = VIDEO_CACHE) {
     clear() {
       for (const [url, entry] of videos) release(entry, url);
       videos.clear();
+      failed.clear();
     },
   };
 }
