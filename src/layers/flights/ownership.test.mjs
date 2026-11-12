@@ -492,6 +492,10 @@ test('a route answer for a callsign the plane no longer flies is dropped', async
   assert.deepEqual(meta.route, {
     origin: { code: 'NEWO' },
     destination: { code: 'NEWD' },
+    source: 'adsbdb',
+    retrievedAtMs: null,
+    operatingDate: null,
+    verification: 'unverified-reference',
   });
   assert.equal(meta.routeCallsign, 'UAL10');
   flightState.lifetime.abort();
