@@ -137,6 +137,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('OSM routing'),
     msg('Mapped camera locations'),
     msg('OpenStreetMap · community mapped'),
+    msg('USGS Water Data · refreshed hourly'),
   ].map((key) => [key, key]),
 );
 

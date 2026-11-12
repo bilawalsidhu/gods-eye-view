@@ -58,10 +58,12 @@ class MockLayerEvent {
  * @param {boolean} [options.sampleHeightSupported] Scene height-sampling capability.
  * @param {Function} [options.sampleHeight] Initial scene.sampleHeight behavior
  *   (default: throws like a scene whose tiles are not sampleable yet).
+ * @param {object} [options.layerOptions] Extra createLocalGeoJsonLayer options.
  */
 async function createRealLocalLayerHarness({
   sampleHeightSupported = false,
   sampleHeight = () => { throw new Error('tiles not sampleable yet'); },
+  layerOptions = {},
 } = {}) {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
@@ -149,6 +151,7 @@ async function createRealLocalLayerHarness({
       setInputAction() {},
       destroy() {},
     }),
+    ...layerOptions,
   });
   try {
     await layer.enable(viewer);
@@ -202,6 +205,58 @@ test('local infrastructure card copy uses the owner-approved source fields', () 
     title: 'Amazon Web Services',
     details: [],
   });
+});
+
+test('a layer supplies its own card detail lines through the cardDetails hook', () => {
+  const seen = [];
+  const cardDetails = (props) => {
+    seen.push(props);
+    return ['Line one', 'x'.repeat(60)];
+  };
+  const copy = localInfrastructureOverlayCopy({ name: 'Site A', extra: 1 }, 'local-example', cardDetails);
+  assert.equal(copy.title, 'Site A');
+  assert.deepEqual(copy.details, ['Line one', `${'x'.repeat(45)}...`], 'lines are clamped like every other card line');
+  assert.deepEqual(seen, [{ name: 'Site A', extra: 1 }]);
+
+  const entry = createLocalInfrastructureOverlayEntry({
+    id: 'a',
+    layerId: 'local-example',
+    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 2000),
+    properties: { name: 'Site A' },
+    priority: 1,
+    accent: '#fff',
+    cardDetails: () => ['From the hook'],
+  });
+  assert.deepEqual(entry.details, ['From the hook']);
+});
+
+test('a cardDetails hook that returns nothing adds no lines and does not fail the card', () => {
+  for (const nothing of [null, undefined, 'a string', {}, 0]) {
+    assert.deepEqual(
+      localInfrastructureOverlayCopy({ name: 'Site A' }, 'local-example', () => nothing),
+      { title: 'Site A', details: [] },
+      `a hook returning ${String(nothing)}`,
+    );
+  }
+  const entry = createLocalInfrastructureOverlayEntry({
+    id: 'a',
+    layerId: 'local-example',
+    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 2000),
+    properties: { name: 'Site A' },
+    priority: 1,
+    accent: '#fff',
+    cardDetails: () => null,
+  });
+  assert.deepEqual(entry.details, []);
+});
+
+test('the core adds no detail lines for a layer that does not supply a hook, and names no layer family', () => {
+  assert.deepEqual(localInfrastructureOverlayCopy({ name: 'Gauge' }, 'local-usgs-water'), {
+    title: 'Gauge',
+    details: [],
+  });
+  const source = readFileSync(new URL('./localGeojsonCore.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /usgs/i);
 });
 
 test('local infrastructure entries satisfy the shared presentation contract', () => {
@@ -365,6 +420,42 @@ test('slow parked frames do not keep republishing the same local overlay cohort'
   await env.layer.enable(env.viewer);
   env.preRender.raise();
   assert.equal(publications().length, 3, 're-enable must republish after clearing the host');
+});
+
+test('a layer words its cards again from the loaded features, without a request', async (t) => {
+  let round = 0;
+  const seen = [];
+  const env = await createRealLocalLayerHarness({
+    layerOptions: {
+      id: 'local-example',
+      cardDetails: (props) => {
+        seen.push(props.name);
+        return [`wording ${round}`];
+      },
+    },
+  });
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => { requests += 1; throw new Error('no request expected'); };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const cards = () => env.hostCalls.filter(([type]) => type === 'entries');
+  env.preRender.raise();
+  assert.deepEqual(cards().at(-1)[2].map((entry) => entry.details), [['wording 0']]);
+
+  round = 1;
+  env.layer.refreshCards();
+  assert.equal(cards().length, 1, 'the new cards go out with the next frame');
+  env.preRender.raise();
+  assert.equal(cards().length, 2);
+  assert.deepEqual(cards().at(-1)[2].map((entry) => entry.details), [['wording 1']]);
+  assert.deepEqual(seen, ['Runtime Dam', 'Runtime Dam'], 'the hook ran once per card per wording');
+  assert.equal(requests, 0, 'no request after the load');
+
+  env.layer.disable(env.viewer);
+  const before = seen.length;
+  env.layer.refreshCards();
+  assert.equal(seen.length, before, 'a disabled layer holds nothing to word again');
 });
 
 test('real layer disable clears its published host entries and balances settle listeners', async () => {

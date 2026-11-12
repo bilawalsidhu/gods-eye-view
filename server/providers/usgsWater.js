@@ -51,7 +51,10 @@ export const USGS_WATER_CLASSES = Object.freeze({
   spring: Object.freeze({ site: 'SP', params: ['00065', '00060'] }),
 });
 
-// Data, not UI copy: the layer translates these when it shows them.
+// Fixed English parameter names, sent as they are in the payload. They are
+// labels, not feed data: the card translates them when it is built
+// (PARAMETER_LABELS in src/layers/usgsWater/copy.js, which a test keeps in
+// step with this list).
 export const USGS_PARAM_NAMES = Object.freeze({
   '00065': 'Gage height',
   '00060': 'Discharge',

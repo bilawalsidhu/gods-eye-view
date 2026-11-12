@@ -3610,5 +3610,14 @@
   "Zoom in to a region to load river gauges": "Zoomen Sie in eine Region, um Pegelmessstellen zu laden",
   "USGS Springs": "USGS: Quellen",
   "USGS Rivers & Streams": "USGS: Flüsse und Bäche",
-  "USGS Lakes & Reservoirs": "USGS: Seen und Stauseen"
+  "USGS Lakes & Reservoirs": "USGS: Seen und Stauseen",
+  "as of {time}": "Stand: {time}",
+  "No current reading": "Keine aktuelle Messung",
+  "Reading": "Messwert",
+  "Gage height": "Pegelstand",
+  "Discharge": "Abfluss",
+  "Lake/reservoir stage": "See-/Stauseepegel",
+  "Lake elevation above NGVD29": "Seespiegelhöhe über NGVD29",
+  "Lake elevation above NAVD88": "Seespiegelhöhe über NAVD88",
+  "USGS Water Data · refreshed hourly": "USGS-Wasserdaten · stündlich aktualisiert"
 }

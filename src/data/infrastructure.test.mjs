@@ -201,6 +201,8 @@ test('consumer build includes only infrastructure code and resolves assets under
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
   // USGS water layers (copy.js, index.js) ship with the infrastructure
   // package; marker.js is the dependency-free msg() for portable modules.
+  // The gauge cards take their translator from the layer services
+  // (services.i18n), so the i18n runtime and catalogs stay out of this bundle.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
     'copy.js',
     'index.js',

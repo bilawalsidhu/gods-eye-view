@@ -3784,5 +3784,14 @@
   "Water": "Вода",
   "USGS Rivers & Streams": "USGS: реки и ручьи",
   "USGS Springs": "USGS: родники",
-  "Zoom in to a region to load river gauges": "Приблизьте регион, чтобы загрузить речные датчики"
+  "Zoom in to a region to load river gauges": "Приблизьте регион, чтобы загрузить речные датчики",
+  "as of {time}": "на {time}",
+  "No current reading": "Нет текущих показаний",
+  "Reading": "Показание",
+  "Gage height": "Уровень воды",
+  "Discharge": "Расход воды",
+  "Lake/reservoir stage": "Уровень озера/водохранилища",
+  "Lake elevation above NGVD29": "Высота озера над NGVD29",
+  "Lake elevation above NAVD88": "Высота озера над NAVD88",
+  "USGS Water Data · refreshed hourly": "Данные USGS о воде · обновляются ежечасно"
 }

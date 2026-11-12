@@ -3697,5 +3697,14 @@
   "Zoom in to a region to load river gauges": "Zoomez sur une région pour charger les stations hydrométriques",
   "USGS Springs": "USGS : sources",
   "USGS Rivers & Streams": "USGS : rivières et ruisseaux",
-  "USGS Lakes & Reservoirs": "USGS : lacs et réservoirs"
+  "USGS Lakes & Reservoirs": "USGS : lacs et réservoirs",
+  "as of {time}": "au {time}",
+  "No current reading": "Aucune mesure actuelle",
+  "Reading": "Mesure",
+  "Gage height": "Hauteur d'eau",
+  "Discharge": "Débit",
+  "Lake/reservoir stage": "Niveau du lac/réservoir",
+  "Lake elevation above NGVD29": "Altitude du lac au-dessus du NGVD29",
+  "Lake elevation above NAVD88": "Altitude du lac au-dessus du NAVD88",
+  "USGS Water Data · refreshed hourly": "Données hydrologiques USGS · actualisées toutes les heures"
 }

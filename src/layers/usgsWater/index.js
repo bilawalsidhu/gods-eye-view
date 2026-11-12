@@ -15,6 +15,7 @@
 import * as Cesium from 'cesium';
 import { msg } from '../../i18n/marker.js';
 import { createLocalGeoJsonLayer } from '../../data/localGeojsonCore.js';
+import { usgsWaterCardDetails } from './copy.js';
 
 export const USGS_WATER_BASE = '/api/usgs-water';
 /** Wider than this many degrees (lon or lat span) → streams wait for zoom-in. */
@@ -22,7 +23,8 @@ export const STREAM_MAX_VIEW_DEG = 24;
 /** Hard ceiling on stream tiles fetched for one view. */
 export const STREAM_MAX_TILES = 40;
 
-const SOURCE = 'USGS Water Data · refreshed hourly';
+// Shown through sourceLabel() (src/ui/layerNames.js), which translates it.
+const SOURCE = msg('USGS Water Data · refreshed hourly');
 
 /** Water layers in panel order. `cls` matches the server classes. */
 export const USGS_WATER_LAYERS = Object.freeze([
@@ -121,8 +123,22 @@ async function fetchText(url, signal, fetchImpl) {
  * Create the water layers. Each returned layer is a standard local GeoJSON
  * layer; the stream layer additionally reloads on camera settle and reports
  * a 'zoom-in' guidance status when the view is too wide.
- * @param {object} services local GeoJSON services (overlay host, contexts, ...)
- * @param {{fetchImpl?: Function, base?: string}} [options]
+ * @param {object} services local GeoJSON services (overlay host, contexts, ...).
+ *   An optional `services.i18n` ({ t, formatNumber, formatDate, isolate,
+ *   onLocaleChange }) words the gauge cards in the application's language and,
+ *   through `onLocaleChange(listener) => stop`, words the cards of an enabled
+ *   layer again when the language changes (no new request). English without
+ *   it; a card is not worded again when `onLocaleChange` is missing.
+ * @param {object} [options]
+ * @param {Function} [options.fetchImpl] `fetch` replacement (default: the
+ *   global `fetch`).
+ * @param {string} [options.base] URL prefix of the server's water files
+ *   (default `/api/usgs-water`).
+ * @param {Function} [options.screenSpaceEventHandlerFactory] Passed to each
+ *   local GeoJSON layer: `(canvas) => handler` for the click handler.
+ * @param {Function} [options.projectToWindow] Passed to each local GeoJSON
+ *   layer: `(scene, position) => {x, y}|undefined`, how a card position is
+ *   projected to the screen (default: Cesium's world-to-window transform).
  */
 export function createUsgsWaterLayers(
   services,
@@ -130,6 +146,7 @@ export function createUsgsWaterLayers(
     fetchImpl = (...a) => fetch(...a),
     base = USGS_WATER_BASE,
     screenSpaceEventHandlerFactory,
+    projectToWindow,
   } = {},
 ) {
   return USGS_WATER_LAYERS.map((spec) => {
@@ -138,6 +155,8 @@ export function createUsgsWaterLayers(
     let tileKeys = '';
     let moveRemover = null;
     let reloadTimer = null;
+    let stopLocaleWatch = null;
+    let destroyed = false;
 
     async function loadManifest(signal) {
       manifest = JSON.parse(
@@ -186,12 +205,33 @@ export function createUsgsWaterLayers(
         labelGridPx: 138,
         loadFeatures,
         cacheLoadedFeatures: false,
+        // Gauge readings and observation time on the card, worded with the
+        // application's translator when the services carry one.
+        cardDetails: (props) =>
+          usgsWaterCardDetails(props, { i18n: services.i18n }),
         ...(screenSpaceEventHandlerFactory
           ? { screenSpaceEventHandlerFactory }
           : {}),
+        ...(projectToWindow ? { projectToWindow } : {}),
       },
       services,
     );
+
+    // Cards are worded when a layer loads; a language change words them again
+    // from the loaded gauges, with no request. Listening only while enabled
+    // keeps a disabled or destroyed layer out of language changes.
+    const watchLocale = () => {
+      if (destroyed || stopLocaleWatch) return;
+      const watch = services?.i18n?.onLocaleChange;
+      if (typeof watch !== 'function') return;
+      const stop = watch(() => layer.refreshCards());
+      stopLocaleWatch = typeof stop === 'function' ? stop : () => {};
+    };
+    const unwatchLocale = () => {
+      const stop = stopLocaleWatch;
+      stopLocaleWatch = null;
+      stop?.();
+    };
 
     const baseEnable = layer.enable;
     const baseDisable = layer.disable;
@@ -200,6 +240,7 @@ export function createUsgsWaterLayers(
 
     // Re-fetch the small classes on every enable (no stale in-memory cache).
     layer.enable = async (viewer) => {
+      watchLocale();
       await baseEnable(viewer);
       if (!spec.viewport || moveRemover || !viewer?.camera?.moveEnd) return;
       moveRemover = viewer.camera.moveEnd.addEventListener(() => {
@@ -225,12 +266,15 @@ export function createUsgsWaterLayers(
       }
     };
     layer.disable = (viewer) => {
+      unwatchLocale();
       stopTracking();
       viewStatus = 'ok';
       tileKeys = '';
       return baseDisable(viewer);
     };
     layer.destroy = (viewer) => {
+      destroyed = true;
+      unwatchLocale();
       stopTracking();
       return baseDestroy(viewer);
     };

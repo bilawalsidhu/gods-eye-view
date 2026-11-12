@@ -3958,5 +3958,14 @@
   "Water": "المياه",
   "USGS Lakes & Reservoirs": "USGS: البحيرات والخزانات",
   "Zoom in to a region to load river gauges": "قرّب إلى منطقة لتحميل محطات قياس الأنهار",
-  "USGS Rivers & Streams": "USGS: الأنهار والجداول"
+  "USGS Rivers & Streams": "USGS: الأنهار والجداول",
+  "as of {time}": "عند {time}",
+  "No current reading": "لا توجد قراءة حالية",
+  "Reading": "القراءة",
+  "Gage height": "ارتفاع المقياس",
+  "Discharge": "التصريف",
+  "Lake/reservoir stage": "منسوب البحيرة/الخزان",
+  "Lake elevation above NGVD29": "ارتفاع البحيرة فوق NGVD29",
+  "Lake elevation above NAVD88": "ارتفاع البحيرة فوق NAVD88",
+  "USGS Water Data · refreshed hourly": "بيانات المياه من USGS · تُحدَّث كل ساعة"
 }

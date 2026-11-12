@@ -3784,5 +3784,14 @@
   "USGS Lakes & Reservoirs": "USGS: озера та водосховища",
   "USGS Springs": "USGS: джерела",
   "Water": "Вода",
-  "Zoom in to a region to load river gauges": "Наблизьте регіон, щоб завантажити вимірювачі рівня річок"
+  "Zoom in to a region to load river gauges": "Наблизьте регіон, щоб завантажити вимірювачі рівня річок",
+  "as of {time}": "станом на {time}",
+  "No current reading": "Немає поточних показань",
+  "Reading": "Показання",
+  "Gage height": "Рівень води",
+  "Discharge": "Витрата води",
+  "Lake/reservoir stage": "Рівень озера/водосховища",
+  "Lake elevation above NGVD29": "Висота озера над NGVD29",
+  "Lake elevation above NAVD88": "Висота озера над NAVD88",
+  "USGS Water Data · refreshed hourly": "Дані USGS про воду · оновлюються щогодини"
 }
