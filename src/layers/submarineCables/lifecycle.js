@@ -39,8 +39,11 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
             // requested for a fallback sweep: it only fires while the camera is
             // already moving, so frames are flowing by construction.
             if (!state._enabled || !state._loaded) return;
-            // Landing markers left over from the last sweep, a few per frame.
+            // Markers left over from the last sweep, a few per frame; line
+            // shows and rebuilt stems waiting for their geometry.
             parts.rendering.revealLandingMarkers();
+            parts.rendering.syncLineShow();
+            parts.rendering.settleStems();
             if (!state._referenceSweepGate.shouldRun(viewer.camera)) return;
             parts.rendering.updateReferenceVisibility();
           },
@@ -78,10 +81,15 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         state._loading = false;
         state._loadingLabel = '';
       }
-      // Free the entities rather than hide them; enable() rebuilds from the
-      // cached JSON. An in-flight load's own post-await ownership check
-      // removes whatever that stale generation adds later.
-      parts.rendering.releaseDataSources(state._viewer);
+      // Hide what is built and keep it: a hidden primitive is skipped by
+      // the scene, so it costs nothing per frame, and the next enable shows
+      // it again without a rebuild. Only the stems go: they are sized for
+      // the view and the next sweep redraws them in a worker. An in-flight load's own post-await
+      // ownership check stops that stale generation from building anything.
+      state._pendingLandingReveals.length = 0;
+      parts.rendering.dropStems();
+      parts.rendering.updateVisibility();
+      state._viewer?.scene?.requestRender?.();
     },
 
     update(viewer) {
@@ -90,9 +98,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
 
     destroy(viewer) {
       if (state._abort) state._abort.abort();
-      parts.rendering.releaseDataSources(viewer || state._viewer);
-      state._cachedCableJson = null;
-      state._cachedLandingJson = null;
+      parts.rendering.destroyScene(viewer || state._viewer);
       // hide() clears every published host entry and goes invisible while
       // keeping the publisher reusable — the legacy layer supported re-init
       // after destroy, and hidden publishers already drop late publishes.
@@ -126,16 +132,6 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._error = null;
       state._lastUpdate = null;
       state._loadingLabel = '';
-      state._cableDataSource = null;
-      state._landingDataSource = null;
-      state._referenceDataSource = null;
-      state._referenceRecords = [];
-      state._surfaceRecords = [];
-      state._pickByEntity = new WeakMap();
-      state._referenceLabelCount = 0;
-      state._publishScratch.length = 0;
-      state._markerBlendDone = false;
-      state._markerBlendInvariantWarned = false;
       parts.rendering.resetPublishSignature();
       state._referenceSweepGate.reset();
     },

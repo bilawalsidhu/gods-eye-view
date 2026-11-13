@@ -30,31 +30,50 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._loadGeneration = 0;
 
-  state._cableDataSource = null;
-
-  state._landingDataSource = null;
-
-  state._referenceDataSource = null;
-
   /**
-   * Fetched cable/landing JSON kept across disable/enable. A disable RELEASES
-   * the three data sources (see releaseDataSources) instead of hiding them,
-   * so a re-enable has to rebuild the entities; the network/parse half of
-   * that rebuild is the expensive part users would notice, so it is cached.
+   * What the layer draws, built once per load and kept across disable/enable
+   * (a disable only hides them, which costs nothing per frame):
+   * one ground polyline primitive for every line, one billboard collection
+   * for every point marker, a point collection for the reference tips and
+   * one polyline primitive for the reference stems.
    */
 
-  state._cachedCableJson = null;
+  state._cablePrimitive = null;
 
-  state._cachedLandingJson = null;
+  state._markerBillboards = null;
+
+  state._referencePoints = null;
+
+  /** The stems now drawn, and their replacement while it builds. */
+
+  state._stemPrimitive = null;
+
+  state._stemPrimitivePending = null;
+
+  state._stemsDirty = false;
 
   state._referenceRecords = [];
 
-  state._surfaceRecords = [];
+  /** One record per drawn line: its pick record, horizon base and show state. */
 
-  /** Landing records the last sweep found visible but not shown yet; drained
+  state._lineRecords = [];
+
+  /** Line show states still to be written once the primitive is ready. */
+
+  state._lineShowDirty = false;
+
+  /** One record per point marker: its billboard and horizon base. */
+
+  state._markerRecords = [];
+
+  /** Markers the last sweep found visible but not on the ground yet; drained
    * a few per frame (CABLE_LANDING_REVEALS_PER_FRAME). */
 
   state._pendingLandingReveals = [];
+
+  /** The pick records handed to Cesium as ids, so a pick is known to be ours. */
+
+  state._pickRecords = new WeakSet();
 
   state._clickHandler = null;
 
@@ -67,14 +86,6 @@ export function createState({ sweepClock, overlayHost }) {
   /** Active ground-line classification; refined from live scene state at init. */
 
   state._classificationType = Cesium.ClassificationType.BOTH;
-
-  /** True once both marker collections blend translucent (or the shape probe failed). */
-
-  state._markerBlendDone = false;
-
-  state._markerBlendInvariantWarned = false;
-
-  state._pickByEntity = new WeakMap();
 
   state._referenceLabelCount = 0;
 

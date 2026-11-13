@@ -1,9 +1,8 @@
 import * as Cesium from 'cesium';
 import {
-  probeTranslucentMarkerBlend,
-  commitTranslucentMarkerBlend,
-} from './surface.js';
-import { CABLE_LANDING_REVEALS_PER_FRAME } from './policy.js';
+  CABLE_LANDING_REVEALS_PER_FRAME,
+  CABLE_MARKER_SIZE,
+} from './policy.js';
 import {
   clampLabel,
   createCableOverlayEntry,
@@ -12,7 +11,13 @@ import {
   cableReferencePriority,
 } from './overlay.js';
 
-export function createRendering({ state }) {
+const defaultMarkerImage = (color) =>
+  new Cesium.PinBuilder().fromColor(color, CABLE_MARKER_SIZE);
+
+export function createRendering({
+  state,
+  createMarkerImage = defaultMarkerImage,
+}) {
   function resetPublishSignature() {
     state._lastPublishedIds.length = 0;
     state._lastPublishedPriorities.length = 0;
@@ -20,130 +25,131 @@ export function createRendering({ state }) {
   }
 
   /**
-   * Remove the three data sources from the viewer and forget the built
-   * entities. Hiding them (`show = false`) is NOT enough: Cesium's
-   * DataSourceDisplay still walks every visualizer of a hidden source on
-   * every frame, and the thousands of hidden polylines/billboards keep
-   * costing CPU and GC pressure long after the user toggled the layer off —
-   * that is the "everything gets sluggish after I turn layers off" report.
-   * The fetched JSON stays cached, so the next enable rebuilds without a
-   * network round trip or a re-parse.
+   * Build everything the layer draws, in one synchronous pass with no entity
+   * per feature. The layer used to load two GeoJsonDataSources and a
+   * CustomDataSource: 6,459 entities whose creation held about 1 GB of
+   * short-lived heap, whose visualizers ran 100–250 ms tasks whenever shows
+   * or stems changed, and whose removal on disable was a 150 ms task. These
+   * are the primitives Cesium built from those entities, made directly:
+   *
+   * - lines: one GroundPolylinePrimitive, a colour and a show flag per line
+   *   (Cesium's own batch for clamped colour polylines), tessellated in a
+   *   worker;
+   * - point markers: one BillboardCollection, each billboard hidden and
+   *   unclamped until revealLandingMarkers puts it on the ground;
+   * - references: one PointPrimitiveCollection for the tips, whose positions
+   *   and shows are plain buffer writes, and one Primitive of polylines for
+   *   the stems (see rebuildStems).
+   *
+   * `lines`, `markers` and `references` come from ingestion; each line and
+   * marker carries the pick record Cesium returns as the pick id.
    */
 
-  function releaseDataSources(viewer) {
-    const sources = [
-      state._cableDataSource,
-      state._landingDataSource,
-      state._referenceDataSource,
-    ];
-    state._cableDataSource = null;
-    state._landingDataSource = null;
-    state._referenceDataSource = null;
+  function buildScene(viewer, { lines, markers, references }) {
+    const scene = viewer.scene;
+    state._lineRecords = [];
+    state._markerRecords = [];
     state._referenceRecords = [];
-    state._surfaceRecords = [];
     state._pendingLandingReveals.length = 0;
-    state._pickByEntity = new WeakMap();
-    state._referenceLabelCount = 0;
-    state._publishScratch.length = 0;
-    // The blend pass targets the collections being dropped; the rebuilt
-    // sources need their own pass.
-    state._markerBlendDone = false;
-    state._loaded = false;
-    state._referenceSweepGate.reset();
-    for (const source of sources) {
-      if (!source) continue;
-      try {
-        viewer?.dataSources?.remove(source, true);
-      } catch {
-        /* collection gone */
-      }
-    }
-  }
 
-  function updateVisibility() {
-    if (state._cableDataSource) state._cableDataSource.show = state._enabled;
-    if (state._landingDataSource)
-      state._landingDataSource.show = state._enabled;
-    if (state._referenceDataSource)
-      state._referenceDataSource.show = state._enabled;
-  }
-
-  function styleCableEntity(entity, feature) {
-    if (!entity?.polyline) return;
-    const color = feature?.properties?.color
-      ? Cesium.Color.fromCssColorString(String(feature.properties.color))
-      : state.cableColor;
-    entity.polyline.material = color.withAlpha(0.92);
-    entity.polyline.width = 2.5;
-    entity.polyline.clampToGround = true;
-    entity.polyline.classificationType = state._classificationType;
-    entity.show = true;
-  }
-
-  /**
-   * Apply the single translucent blend pass to the landing-billboard and
-   * reference-point collections. Landing entities carry only billboards and
-   * reference entities only points, so completion is one applied collection
-   * per source; a failed shape probe disables the optimization permanently
-   * for this session and says so loudly in dev builds.
-   * Both sources are probed BEFORE either is committed, so the helper's
-   * "defaults untouched on shape drift" fallback holds across the pair too —
-   * a reference-source failure can never leave the landing source already
-   * forced to TRANSLUCENT.
-   */
-
-  function applyMarkerBlendOnce() {
-    const landing = probeTranslucentMarkerBlend(state._landingDataSource);
-    const reference = probeTranslucentMarkerBlend(state._referenceDataSource);
-    if (landing.invariantFailed || reference.invariantFailed) {
-      state._markerBlendDone = true;
-      if (!state._markerBlendInvariantWarned && import.meta.env?.DEV === true) {
-        state._markerBlendInvariantWarned = true;
-        console.error(
-          '[Data:telegeography-submarine-cables] EntityCluster marker-collection ' +
-            'shape changed — single-pass translucent blend skipped; markers fall ' +
-            "back to Cesium's default two-pass blend.",
+    if (lines.length) {
+      // The entity display gave every line this attribute too. It is a float
+      // attribute, and with one present Cesium keeps the per-line width as a
+      // float; without it the 2.5 px width is stored as a byte and draws 2 px.
+      const always =
+        Cesium.DistanceDisplayConditionGeometryInstanceAttribute.fromDistanceDisplayCondition(
+          new Cesium.DistanceDisplayCondition(),
         );
+      const instances = lines.map(
+        (line) =>
+          new Cesium.GeometryInstance({
+            id: line.info,
+            geometry: new Cesium.GroundPolylineGeometry({
+              positions: line.positions,
+              width: line.width,
+              // GeoJSON lines are rhumb lines (GeoJsonDataSource's choice).
+              arcType: Cesium.ArcType.RHUMB,
+            }),
+            attributes: {
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                line.color,
+              ),
+              show: new Cesium.ShowGeometryInstanceAttribute(true),
+              distanceDisplayCondition: always,
+            },
+          }),
+      );
+      state._cablePrimitive = scene.groundPrimitives.add(
+        new Cesium.GroundPolylinePrimitive({
+          geometryInstances: instances,
+          appearance: new Cesium.PolylineColorAppearance(),
+          classificationType: state._classificationType,
+          asynchronous: true,
+          show: state._enabled,
+        }),
+      );
+      for (const line of lines)
+        state._lineRecords.push({
+          info: line.info,
+          base: line.base,
+          visible: true,
+          shown: true,
+          attributes: null,
+        });
+    }
+
+    if (markers.length) {
+      // Every marker is translucent, so one blend pass, not Cesium's two.
+      const billboards = scene.primitives.add(
+        new Cesium.BillboardCollection({
+          scene,
+          blendOption: Cesium.BlendOption.TRANSLUCENT,
+          show: state._enabled,
+        }),
+      );
+      state._markerBillboards = billboards;
+      const images = new Map();
+      for (const marker of markers) {
+        const key = marker.color.toCssHexString();
+        let image = images.get(key);
+        if (!image) {
+          image = {
+            id: `gev-cable-marker-${key}`,
+            source: createMarkerImage(marker.color),
+          };
+          images.set(key, image);
+        }
+        const billboard = billboards.add({
+          id: marker.info,
+          position: marker.position,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          show: false,
+        });
+        billboard.setImage(image.id, image.source);
+        state._markerRecords.push({
+          info: marker.info,
+          marker: billboard,
+          base: marker.base,
+          // A position with its own height is drawn there, as before.
+          clamped: marker.hasHeight,
+          visible: false,
+        });
       }
-      return;
     }
-    const landingBlend = commitTranslucentMarkerBlend(landing);
-    const referenceBlend = commitTranslucentMarkerBlend(reference);
-    if (landingBlend.applied > 0 && referenceBlend.applied > 0)
-      state._markerBlendDone = true;
-  }
 
-  /**
-   * Re-classify every cable ground line for the active surface. One batched
-   * ground-primitive rebuild per stack switch — never per frame.
-   * @param {Cesium.ClassificationType} next
-   */
-
-  function applyCableClassification(next) {
-    if (next === undefined || next === state._classificationType) return;
-    state._classificationType = next;
-    if (!state._cableDataSource) return;
-    const entities = state._cableDataSource.entities.values;
-    for (let i = 0; i < entities.length; i++) {
-      const polyline = entities[i].polyline;
-      if (polyline) polyline.classificationType = next;
+    if (references.length) {
+      state._referencePoints = scene.primitives.add(
+        new Cesium.PointPrimitiveCollection({
+          blendOption: Cesium.BlendOption.TRANSLUCENT,
+          show: state._enabled,
+        }),
+      );
+      for (const reference of references) addReferenceStem(reference);
     }
-    state._viewer?.scene?.requestRender?.();
-  }
-
-  function styleLandingEntity(entity, feature) {
-    if (!entity?.point) return;
-    entity.point.color = state.landingColor.withAlpha(0.92);
-    entity.point.pixelSize = feature?.properties?.is_tbd ? 6 : 7;
-    entity.point.outlineColor = state.cableOutline;
-    entity.point.outlineWidth = 1;
-    entity.point.disableDepthTestDistance = 0;
-    entity.show = true;
+    state._lineShowDirty = false;
   }
 
   function addReferenceStem({ reference, label, kind, color, feature }) {
-    if (!state._referenceDataSource || !reference) return;
-
     const base = Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0);
     const tip = Cesium.Cartesian3.fromDegrees(
       reference.lon,
@@ -156,42 +162,31 @@ export function createRendering({ state }) {
       label,
       featureId: feature?.id || feature?.properties?.id || null,
     };
+    state._pickRecords.add(info);
     const pointColor = color.withAlpha(kind === 'cable' ? 0.84 : 0.94);
-    const stemColor = color.withAlpha(kind === 'cable' ? 0.58 : 0.68);
-    // Constant properties on the sweep cadence, never per-frame callbacks:
-    // the sweep redefines them through the alternating buffers below.
-    const stemPositionBuffers = [
-      [base, tip],
-      [base, tip],
-    ];
-
-    const entity = state._referenceDataSource.entities.add({
-      id: `${kind}-reference-${state._referenceRecords.length}-${info.featureId || 'feature'}`,
+    // The tip is moved in place on the sweep cadence (overlay.js), never by a
+    // per-frame callback.
+    const point = state._referencePoints.add({
+      id: info,
       position: tip,
-      polyline: {
-        positions: stemPositionBuffers[0],
-        width: kind === 'cable' ? 2 : 2.4,
-        material: new Cesium.ColorMaterialProperty(stemColor),
-      },
-      point: {
-        pixelSize: kind === 'cable' ? 7 : 8,
-        color: pointColor,
-        outlineColor: Cesium.Color.BLACK.withAlpha(0.65),
-        outlineWidth: 1,
-        disableDepthTestDistance: 0,
-      },
+      pixelSize: kind === 'cable' ? 7 : 8,
+      color: pointColor,
+      outlineColor: Cesium.Color.BLACK.withAlpha(0.65),
+      outlineWidth: 1,
+      disableDepthTestDistance: 0,
+      show: false,
     });
-
-    entity.__gevTeleGeography = info;
-    state._pickByEntity.set(entity, info);
     const record = {
-      id: entity.id,
-      entity,
+      id: `${kind}-reference-${state._referenceRecords.length}-${info.featureId || 'feature'}`,
+      info,
+      point,
       base,
       tip,
       nextTip: Cesium.Cartesian3.clone(tip),
-      stemPositionBuffers,
-      stemPositionBufferIndex: 0,
+      stemColor: Cesium.ColorGeometryInstanceAttribute.fromColor(
+        color.withAlpha(kind === 'cable' ? 0.58 : 0.68),
+      ),
+      stemWidth: kind === 'cable' ? 2 : 2.4,
       reference,
       kind,
       label: clampLabel(label),
@@ -204,10 +199,192 @@ export function createRendering({ state }) {
   }
 
   /**
-   * Show the next few landing markers the last sweep found visible, and ask
-   * for another frame while any are left. Called from the sweep and then once
-   * per rendered frame, so a parked camera costs nothing once the list is
-   * empty.
+   * Draw the stems of the references now in view, base to tip. Stems are one
+   * static polyline primitive, as the entity display batched them: nothing
+   * runs for it per frame, and a stem's length cannot change without new
+   * geometry. So a sweep that moved a tip or changed which references are
+   * in view builds a replacement in a worker, and settleStems swaps it in
+   * once it is ready; the previous stems stay until then. A sweep that
+   * changed nothing builds nothing.
+   */
+
+  function rebuildStems() {
+    const primitives = state._viewer?.scene?.primitives;
+    if (!primitives) return;
+    if (state._stemPrimitivePending) {
+      // Superseded before it was ever shown.
+      primitives.remove(state._stemPrimitivePending);
+      state._stemPrimitivePending = null;
+    }
+    const instances = [];
+    for (const record of state._referenceRecords) {
+      if (!record.visible) continue;
+      instances.push(
+        new Cesium.GeometryInstance({
+          id: record.info,
+          geometry: new Cesium.PolylineGeometry({
+            positions: [record.base, record.tip],
+            width: record.stemWidth,
+            vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+          }),
+          attributes: { color: record.stemColor },
+        }),
+      );
+    }
+    state._stemsDirty = false;
+    if (!instances.length) {
+      if (state._stemPrimitive) primitives.remove(state._stemPrimitive);
+      state._stemPrimitive = null;
+      return;
+    }
+    state._stemPrimitivePending = primitives.add(
+      new Cesium.Primitive({
+        geometryInstances: instances,
+        appearance: new Cesium.PolylineColorAppearance({ translucent: true }),
+        asynchronous: true,
+        // Hidden while it builds; settleStems shows it.
+        show: false,
+      }),
+    );
+    state._viewer.scene.requestRender?.();
+  }
+
+  /** Swap in rebuilt stems once their geometry is ready; called per frame. */
+
+  function settleStems() {
+    const pending = state._stemPrimitivePending;
+    if (!pending) return;
+    const scene = state._viewer?.scene;
+    if (!pending.ready) {
+      // Keep frames coming until the geometry is in.
+      scene?.requestRender?.();
+      return;
+    }
+    pending.show = state._enabled;
+    if (state._stemPrimitive) scene?.primitives?.remove(state._stemPrimitive);
+    state._stemPrimitive = pending;
+    state._stemPrimitivePending = null;
+    scene?.requestRender?.();
+  }
+
+  /** Remove and destroy everything buildScene made. Only destroy() does this;
+   * a disable hides the primitives and keeps them for the next enable. */
+
+  function destroyScene(viewer) {
+    const scene = viewer?.scene;
+    const owned = [
+      [scene?.groundPrimitives, state._cablePrimitive],
+      [scene?.primitives, state._markerBillboards],
+      [scene?.primitives, state._stemPrimitive],
+      [scene?.primitives, state._stemPrimitivePending],
+      [scene?.primitives, state._referencePoints],
+    ];
+    state._cablePrimitive = null;
+    state._markerBillboards = null;
+    state._stemPrimitive = null;
+    state._stemPrimitivePending = null;
+    state._stemsDirty = false;
+    state._referencePoints = null;
+    state._referenceRecords = [];
+    state._lineRecords = [];
+    state._markerRecords = [];
+    state._lineShowDirty = false;
+    state._pendingLandingReveals.length = 0;
+    state._pickRecords = new WeakSet();
+    state._referenceLabelCount = 0;
+    state._publishScratch.length = 0;
+    state._loaded = false;
+    state._referenceSweepGate.reset();
+    for (const [collection, primitive] of owned) {
+      if (!primitive) continue;
+      try {
+        // A collection destroys what it removes; one that is already gone
+        // has destroyed it too.
+        if (!collection?.remove?.(primitive) && !primitive.isDestroyed())
+          primitive.destroy();
+      } catch {
+        /* collection gone */
+      }
+    }
+  }
+
+  /**
+   * Drop the stems, shown and building, so the next sweep draws them afresh.
+   * A disable does this: stems kept from the view the layer was switched off
+   * in would show at their old lengths until the rebuild for the new view
+   * was ready.
+   */
+
+  function dropStems() {
+    const primitives = state._viewer?.scene?.primitives;
+    for (const primitive of [state._stemPrimitive, state._stemPrimitivePending])
+      if (primitive) primitives?.remove(primitive);
+    state._stemPrimitive = null;
+    state._stemPrimitivePending = null;
+    state._stemsDirty = true;
+  }
+
+  function updateVisibility() {
+    for (const primitive of [
+      state._cablePrimitive,
+      state._markerBillboards,
+      state._stemPrimitive,
+      state._referencePoints,
+    ])
+      if (primitive) primitive.show = state._enabled;
+  }
+
+  /**
+   * Re-classify the cable ground lines for the active surface. The primitive
+   * reads its classification as it queues commands, so this is one
+   * assignment per stack switch and no rebuild.
+   * @param {Cesium.ClassificationType} next
+   */
+
+  function applyCableClassification(next) {
+    if (next === undefined || next === state._classificationType) return;
+    state._classificationType = next;
+    if (!state._cablePrimitive) return;
+    state._cablePrimitive.classificationType = next;
+    state._viewer?.scene?.requestRender?.();
+  }
+
+  /**
+   * Write the line show states the last sweep worked out. The primitive
+   * builds its geometry in a worker and has no per-line attributes until it
+   * is ready, so the states wait in the records until then.
+   */
+
+  function syncLineShow() {
+    if (!state._lineShowDirty) return;
+    const primitive = state._cablePrimitive;
+    if (!primitive?.ready) {
+      // Keep frames coming until the geometry is in.
+      if (primitive) state._viewer?.scene?.requestRender?.();
+      return;
+    }
+    for (const record of state._lineRecords) {
+      if (record.shown === record.visible) continue;
+      record.attributes ??= primitive.getGeometryInstanceAttributes(
+        record.info,
+      );
+      if (!record.attributes) continue;
+      record.attributes.show = Cesium.ShowGeometryInstanceAttribute.toValue(
+        record.visible,
+        record.attributes.show,
+      );
+      record.shown = record.visible;
+    }
+    state._lineShowDirty = false;
+  }
+
+  /**
+   * Put the next few markers the last sweep found visible on the ground and
+   * show them, and ask for another frame while any are left. Called from the
+   * sweep and then once per rendered frame, so a parked camera costs nothing
+   * once the list is empty. Clamping is what reads the terrain height, once
+   * per marker; Cesium then keeps the marker on the surface as terrain loads,
+   * within its own per-frame time budget.
    */
 
   function revealLandingMarkers() {
@@ -216,9 +393,13 @@ export function createRendering({ state }) {
     let budget = CABLE_LANDING_REVEALS_PER_FRAME;
     while (pending.length && budget > 0) {
       const record = pending.pop();
-      if (!record.visible || record.entity.show) continue;
-      record.entity.show = true;
-      budget--;
+      if (!record.visible || record.marker.show) continue;
+      if (!record.clamped) {
+        record.marker.heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+        record.clamped = true;
+        budget--;
+      }
+      record.marker.show = true;
     }
     if (pending.length) state._viewer?.scene?.requestRender?.();
   }
@@ -238,22 +419,33 @@ export function createRendering({ state }) {
       const visible = occluder.isPointVisible(record.base);
       record.visible = visible;
       record.distanceM = Cesium.Cartesian3.distance(cameraPos, record.base);
-      if (record.entity.show !== visible) {
-        record.entity.show = visible;
+      if (record.point.show !== visible) {
+        record.point.show = visible;
+        state._stemsDirty = true;
       }
-      // Hidden stems keep their last geometry; this same sweep refreshes them
-      // in the pass where they turn visible again.
-      if (visible)
-        updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
+      // Hidden stems keep their last tip; this same sweep refreshes them in
+      // the pass where they turn visible again.
+      if (
+        visible &&
+        updateCableReferenceStem(record, cameraPos, canvasHeight, fov)
+      )
+        state._stemsDirty = true;
     }
+    if (state._stemsDirty) rebuildStems();
+    for (const record of state._lineRecords) {
+      record.visible = occluder.isPointVisible(record.base);
+      if (record.visible !== record.shown) state._lineShowDirty = true;
+    }
+    syncLineShow();
     state._pendingLandingReveals.length = 0;
-    for (const record of state._surfaceRecords) {
+    for (const record of state._markerRecords) {
       const visible = occluder.isPointVisible(record.base);
       record.visible = visible;
-      if (record.entity.show === visible) continue;
-      // Landing markers are shown a few per frame; hiding is immediate.
-      if (visible && record.staged) state._pendingLandingReveals.push(record);
-      else record.entity.show = visible;
+      if (record.marker.show === visible) continue;
+      // A marker not yet on the ground waits its turn; one that already is
+      // shows at once, and hiding is immediate.
+      if (visible && !record.clamped) state._pendingLandingReveals.push(record);
+      else record.marker.show = visible;
     }
     revealLandingMarkers();
     const winners = selectCableReferenceLabelWinners(state._referenceRecords);
@@ -273,9 +465,6 @@ export function createRendering({ state }) {
     }
     state._publishScratch.length = winners.length;
     state._referenceLabelCount = winners.length;
-    // The marker collections are created lazily by the visualizers, so the
-    // single-pass blend is applied on the sweep cadence until both landed.
-    if (!state._markerBlendDone) applyMarkerBlendOnce();
     if (!changed) return;
     state._overlayPublisher.publish(state._publishScratch);
     state._lastPublishedCount = winners.length;
@@ -288,13 +477,13 @@ export function createRendering({ state }) {
   }
   return {
     resetPublishSignature,
-    releaseDataSources,
+    buildScene,
+    destroyScene,
     updateVisibility,
-    styleCableEntity,
-    applyMarkerBlendOnce,
     applyCableClassification,
-    styleLandingEntity,
-    addReferenceStem,
+    syncLineShow,
+    settleStems,
+    dropStems,
     revealLandingMarkers,
     updateReferenceVisibility,
   };

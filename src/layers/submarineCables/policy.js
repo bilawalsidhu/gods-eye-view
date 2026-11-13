@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export const BASE_CABLE_COLOR = '#39d5ff';
 
 export const BASE_LANDING_COLOR = '#8fffd2';
@@ -67,14 +65,20 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
 });
 
 /**
- * Landing markers shown per rendered frame. Each one is a ground-clamped
- * billboard, and Cesium reads the terrain height when it creates one.
- * Showing all 1,917 in the frame after the layer was switched on did those
- * reads in a single task (measured 1.2 s on a loaded globe); a few dozen per
- * frame keeps each frame short and the markers still fill in within a second.
+ * Landing markers clamped to the ground per rendered frame. A marker is put
+ * on the surface the first time it comes into view, and that reads the
+ * terrain height under it. Doing it for all 1,917 in the frame after the
+ * layer was switched on was a single task (measured 1.2 s on a loaded
+ * globe); a few dozen per frame keeps each frame short and the markers still
+ * fill in within a second. A marker is clamped once: after that Cesium moves
+ * it as terrain loads, and hiding or showing it reads nothing.
  */
 
 export const CABLE_LANDING_REVEALS_PER_FRAME = 48;
+
+/** Pixel size of the marker drawn for point geometry (GeoJSON's small pin). */
+
+export const CABLE_MARKER_SIZE = 6;
 
 /**
  * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion
@@ -90,19 +94,6 @@ export const CABLE_LANDING_REVEALS_PER_FRAME = 48;
 export const CABLE_GLOBE_STACK_IDS = Object.freeze(
   new Set(['bing-aerial', 'bing-labels', 'esri-imagery', 'osm']),
 );
-
-/** EntityCluster's private marker collections and their required types. */
-
-export const MARKER_COLLECTION_EXPECTATIONS = Object.freeze([
-  Object.freeze({
-    key: '_billboardCollection',
-    type: Cesium.BillboardCollection,
-  }),
-  Object.freeze({
-    key: '_pointCollection',
-    type: Cesium.PointPrimitiveCollection,
-  }),
-]);
 
 /**
  * Monotonic clock for the sweep gate's motion probe. A hoisted declaration:

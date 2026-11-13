@@ -2,9 +2,10 @@ import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
-  function registerPickEntity(entity, info) {
-    entity.__gevTeleGeography = info;
-    state._pickByEntity.set(entity, info);
+  /** Every drawn part carries its own record as the Cesium pick id. */
+  function registerPick(info) {
+    state._pickRecords.add(info);
+    return info;
   }
 
   function beginInteraction(viewer) {
@@ -22,32 +23,8 @@ export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
   }
 
   function resolvePickRecord(picked) {
-    if (!picked) return null;
-    const primitive = picked.primitive;
-    if (primitive) {
-      const primitiveInfo = state._pickByEntity.get(primitive);
-      if (primitiveInfo) return primitiveInfo;
-      if (primitive.__gevTeleGeography) return primitive.__gevTeleGeography;
-      if (
-        primitive.id &&
-        typeof primitive.id === 'object' &&
-        primitive.id.reference
-      ) {
-        return primitive.id;
-      }
-    }
-
-    const entity = picked.id;
-    if (entity) {
-      const entityInfo = state._pickByEntity.get(entity);
-      if (entityInfo) return entityInfo;
-      if (entity.__gevTeleGeography) return entity.__gevTeleGeography;
-      if (entity.id && typeof entity.id === 'object' && entity.id.reference) {
-        return entity.id;
-      }
-    }
-
-    return null;
+    const info = picked?.id;
+    return info && state._pickRecords.has(info) ? info : null;
   }
 
   function flyToReference(viewer, reference) {
@@ -70,7 +47,7 @@ export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
     });
   }
   return {
-    registerPickEntity,
+    registerPick,
     beginInteraction,
     resolvePickRecord,
     flyToReference,
