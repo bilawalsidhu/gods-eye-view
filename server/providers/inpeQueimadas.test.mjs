@@ -132,3 +132,35 @@ test('an empty lookback is no fires rather than a failure', async () => {
     { source: 'INPE_QUEIMADAS', count: 0, ok: true },
   ]);
 });
+
+test('a populated cache survives an HTTP 200 listing without CSV links', async () => {
+  const file = name('2026-10-29T20:40');
+  const source = fakeInpe({
+    [file]: csv('-1,-51,NOAA-21,2026-10-29 20:00:00'),
+  });
+  let maintenance = false;
+  const fetchImpl = (url, init) =>
+    maintenance && url === INPE_10MIN_URL
+      ? Promise.resolve(new Response('<html>INPE maintenance</html>'))
+      : source.fetchImpl(url, init);
+  const inpe = createInpeFires({ fetchImpl, now: () => NOW, log: quiet });
+
+  assert.equal((await inpe.refresh()).fires.length, 1);
+  assert.equal(inpe.fileCount(), 1);
+
+  // A proxy that treats this successful HTTP response as an empty listing
+  // would wipe the file cache and replace its last-good snapshot with zero.
+  maintenance = true;
+  await assert.rejects(inpe.refresh(), /listing unexpectedly empty/);
+  assert.equal(inpe.fileCount(), 1, 'keep cached files for a later retry');
+
+  maintenance = false;
+  source.requests.length = 0;
+  const recovered = await inpe.refresh();
+  assert.equal(recovered.fires.length, 1);
+  assert.deepEqual(
+    source.requests.map((request) => request.url),
+    [INPE_10MIN_URL],
+    'recovery should reuse the cached CSV, not download it again',
+  );
+});

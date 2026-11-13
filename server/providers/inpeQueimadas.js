@@ -70,6 +70,11 @@ export function createInpeFires({
     const listing = parseInpeListing(
       await getText(INPE_10MIN_URL, LISTING_MAX_BYTES),
     );
+    // INPE normally retains several days of 10-minute files. An HTTP 200
+    // error page may contain no CSV links; don't discard a populated cache
+    // and report zero fires as a successful refresh.
+    if (files.size > 0 && listing.length === 0)
+      throw new Error('INPE listing unexpectedly empty');
     const wanted = listing.filter((file) => file.at >= at - LOOKBACK_MS);
     const keep = new Set(wanted.map((file) => file.name));
     for (const name of files.keys()) if (!keep.has(name)) files.delete(name);
