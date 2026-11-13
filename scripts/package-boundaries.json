@@ -376,6 +376,7 @@
     "modules": [
       "server/providers/firms.js",
       "server/providers/common/http.js",
+      "server/providers/common/compress.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/data/firmsCsv.js"

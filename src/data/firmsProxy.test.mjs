@@ -7,11 +7,15 @@ import dnsLookup from 'node:dns';
 import https from 'node:https';
 import net from 'node:net';
 import { Readable } from 'node:stream';
-import { filterTrailing24h, parseFirmsCsv } from './firmsCsv.js';
+import os from 'node:os';
+import path from 'node:path';
+import { gunzipSync } from 'node:zlib';
+import { filterTrailing24h, parseFirmsCsv, trailing24hWindow } from './firmsCsv.js';
 import {
   describeFetchError,
   fetchFirms,
   fetchIpv4,
+  firmsProxy,
   isAddressSelectionFailure,
 } from '../../server/providers/firms.js';
 
@@ -315,4 +319,120 @@ test('FIRMS requests only the satellites NASA still delivers', () => {
   // NASA stopped delivering Suomi NPP on 2026-11-02; asking for it only spends
   // a MAP_KEY transaction.
   assert.ok(!SOURCES.includes('VIIRS_SNPP_NRT'));
+});
+
+// The /api/firms handler itself, over a disk cache seeded in a temp directory:
+// no server, no upstream, and a placeholder MAP_KEY that is never sent anywhere.
+const TTL_MS = 30 * 60_000;
+const fire = (acqDate, acqTime, lat = 1) => ({ lat, lon: 2, frp: 4.5, confidence: 'n', brightness: 330.1,
+  brightnessTi5: 290.2, daynight: 'D', acqDate, acqTime, satellite: 'N20', instrument: 'VIIRS' });
+const SERVED_SOURCES = SOURCES.map((source, index) => ({ source, count: index === 0 ? 20_001 : 0, ok: true }));
+// 20,000 detections an hour old and one that turns 24 h old five minutes after NOW.
+const SERVED_FIRES = [fire('2026-09-10', '1205'), ...Array.from({ length: 20_000 }, (_, i) => fire('2026-09-11', '1100', i / 1000))];
+const LEAVES_AT = NOW + 5 * 60_000;
+/** What the handler sent before it kept a body: one JSON.stringify of the payload per request. */
+const unfixedBody = (at, stale, now) => {
+  const fires = filterTrailing24h(SERVED_FIRES, now);
+  return JSON.stringify({ fetchedAt: at, stale, ttlMs: TTL_MS, sources: SERVED_SOURCES, count: fires.length, fires });
+};
+
+function createFirmsHandler(t, at) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'firms-proxy-'));
+  fs.mkdirSync(path.join(dir, '.gev-cache'));
+  fs.writeFileSync(path.join(dir, '.gev-cache', 'firms.json'), JSON.stringify({ at, sources: SERVED_SOURCES, fires: SERVED_FIRES }));
+  const cwd = process.cwd();
+  const key = process.env.FIRMS_MAP_KEY;
+  const realFetch = globalThis.fetch;
+  process.env.FIRMS_MAP_KEY = 'unit-test-placeholder';
+  // A refresh must never reach NASA from a test: every upstream call fails.
+  globalThis.fetch = async () => { throw new Error('upstream down'); };
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['Date'], now: NOW });
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    if (key === undefined) delete process.env.FIRMS_MAP_KEY; else process.env.FIRMS_MAP_KEY = key;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  let handler;
+  process.chdir(dir); // the proxy resolves its cache directory when created
+  try {
+    firmsProxy().configureServer({ middlewares: { use: (route, fn) => { handler = fn; } } });
+  } finally {
+    process.chdir(cwd);
+  }
+  return (acceptEncoding) => new Promise((resolve, reject) => {
+    const res = {
+      headersSent: false,
+      writeHead(status, headers) { this.headersSent = true; this.status = status; this.headers = headers; },
+      end(body) { resolve({ status: this.status, headers: this.headers, body }); },
+    };
+    handler({ url: '/', headers: acceptEncoding === undefined ? {} : { 'accept-encoding': acceptEncoding } }, res).catch(reject);
+  });
+}
+
+test('/api/firms serialises once for requests that share a payload', async (t) => {
+  const request = createFirmsHandler(t, NOW);
+  const first = await request();
+  t.mock.timers.setTime(LEAVES_AT); // exactly 24 h old is still inside the window
+  const second = await request();
+  assert.equal(first.status, 200);
+  assert.ok(Buffer.isBuffer(first.body), 'the body is kept as bytes');
+  assert.equal(second.body, first.body, 'the second request sends the kept bytes, not a new serialisation');
+  assert.equal(first.body.toString(), unfixedBody(NOW, false, NOW), 'byte-identical to the per-request serialisation');
+  assert.equal(JSON.parse(first.body).count, 20_001);
+});
+
+test('/api/firms sends gzip only to a client that accepts it', async (t) => {
+  const request = createFirmsHandler(t, NOW);
+  const identity = await request();
+  const gzipped = await request('gzip, deflate, br');
+  const refused = await request('gzip;q=0, br');
+  assert.deepEqual(identity.headers,
+    { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding' });
+  assert.deepEqual(gzipped.headers, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store',
+    'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' });
+  assert.deepEqual(refused.headers, identity.headers);
+  assert.equal(refused.body, identity.body);
+  assert.ok(gzipped.body.byteLength < identity.body.byteLength / 4, 'the fire set compresses');
+  assert.equal(gunzipSync(gzipped.body).toString(), unfixedBody(NOW, false, NOW), 'decodes to the identity bytes');
+  assert.equal((await request('gzip')).body, gzipped.body, 'compressed once');
+});
+
+test('/api/firms never reuses a body the request would not have produced', async (t) => {
+  const request = createFirmsHandler(t, NOW - TTL_MS + 6 * 60_000);
+  const at = NOW - TTL_MS + 6 * 60_000;
+  const before = await request();
+  t.mock.timers.setTime(LEAVES_AT + 1); // one detection is now older than 24 h
+  const after = await request('gzip');
+  assert.equal(before.body.toString(), unfixedBody(at, false, NOW));
+  assert.equal(gunzipSync(after.body).toString(), unfixedBody(at, false, LEAVES_AT + 1));
+  assert.equal(JSON.parse(gunzipSync(after.body)).count, 20_000);
+  t.mock.timers.setTime(NOW + 6 * 60_000); // the entry reaches its TTL and the refresh fails
+  const stale = await request();
+  assert.equal(stale.body.toString(), unfixedBody(at, true, NOW + 6 * 60_000));
+  assert.equal((await request()).body, stale.body, 'the stale body is kept too');
+});
+
+test('trailing24hWindow spans the clock values that keep the same records', () => {
+  const records = [fire('2026-09-10', '1205'), fire('2026-09-10', '1300'), fire('2026-09-11', '1100'),
+    fire('2026-09-11', '1430'), fire('2026-09-11', '1600'), fire('bad-date', '1006')];
+  const edges = records.map((r) => Date.parse(`${r.acqDate}T${r.acqTime.slice(0, 2)}:${r.acqTime.slice(2)}Z`))
+    .filter(Number.isFinite).flatMap((ms) => [ms - 2 * 3600_000, ms + 24 * 3600_000]);
+  assert.equal(edges.length, 10);
+  const clocks = [NOW, ...edges.flatMap((ms) => [ms - 1, ms, ms + 1])];
+  for (const now of clocks) {
+    const { kept, from, until } = trailing24hWindow(records, now);
+    assert.deepEqual(kept, filterTrailing24h(records, now));
+    assert.ok(from <= now && now <= until, 'the span holds its own clock');
+    for (const other of clocks) {
+      const then = filterTrailing24h(records, other);
+      const same = then.length === kept.length && then.every((r, i) => r === kept[i]);
+      // Before the first record and after the last both keep nothing; the span covers one side.
+      const bothEmpty = then.length === 0 && kept.length === 0;
+      if (other >= from && other <= until) assert.ok(same, `${other} is inside the span of ${now}`);
+      else assert.ok(!same || bothEmpty, `${other} is outside the span of ${now}`);
+    }
+  }
+  assert.deepEqual(trailing24hWindow([], NOW), { kept: [], from: -Infinity, until: Infinity });
+  assert.deepEqual(trailing24hWindow(records, NaN), { kept: [], from: NaN, until: NaN });
 });
