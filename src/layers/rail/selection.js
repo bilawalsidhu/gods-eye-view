@@ -19,10 +19,15 @@ import { t } from '../../i18n/index.js';
 export function createSelection({ state, services, parts }) {
   const { governorRequestRender } = services.render;
 
-  /** The card's anchor: the marker's current position, read on every paint. */
+  /**
+   * The card's anchor: the marker's current position, read on every paint,
+   * whether the train is drawn as its marker or as its 3D model.
+   */
   function anchorFor(entry) {
     return () => {
-      const p = entry.marker?.show !== false ? entry.marker?.position : null;
+      const drawn =
+        entry.marker?.show !== false || entry.modelOwnsVisual === true;
+      const p = drawn ? entry.marker?.position : null;
       return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
     };
   }

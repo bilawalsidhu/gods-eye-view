@@ -1437,5 +1437,9 @@
   "src/ui/styles/cockpitSubject.css",
   "src/layers/rail/cockpitSubject.js",
   "src/layers/rail/cockpitSubject.test.mjs",
-  "src/layers/transit/cockpitSubject.js"
+  "src/layers/transit/cockpitSubject.js",
+  "src/data/fleetModels.test.mjs",
+  "src/data/fleetModelInstances.test.mjs",
+  "src/testSupport/fleetGlb.mjs",
+  "scripts/measure-fleet-trail-anchors.mjs"
 ]
