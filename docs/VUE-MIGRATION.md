@@ -235,7 +235,14 @@ a feature supplying only its accent.
    that `bindCameraOrientationControls` publishes each drawn frame it
    changes, which only `GlobeCompass` renders; an owner publishes only
    while it answers the button, so a shell replaced by a newer one leaves
-   its state alone), the recording safe frame (the scene chrome renders
+   its state alone), the on-screen navigation control
+   (`NavControl` teleports to the body what the navigation owner in
+   `src/ui/navControl/` publishes to the `gev-nav-control` store: the heading,
+   the tilt and whether a followed entity holds the camera. The buttons are
+   `UiButton`s and the tilt a `UiSlider`; presses, compass-ring drags, keys
+   and slider changes go back through the store, and the owner keeps the
+   camera subscriptions, the easing, the press-and-hold repeat and the tilt
+   read it defers past `moveEnd`), the recording safe frame (the scene chrome renders
    the frame `RecordingControls` publishes to the `gev-recording` store),
    the Scene actions panel (`SceneInteractions`
    teleports what the scene interactions owner publishes to the

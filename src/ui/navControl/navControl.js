@@ -237,7 +237,6 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
  *   The `gev-nav-control` store the view renders and calls.
  * @param {Function} [options.runNavigation] `(noun, navigate) => result`; the
  *   shell's explicit-navigation policy. Defaults to calling `navigate()`.
- * @param {Function} [options.showToast] Operator-visible message.
  * @param {Function} [options.now] Millisecond clock (tests inject one).
  * @param {Object} [options.timers] `{setTimeout, clearTimeout}` (tests inject).
  * @returns {{perform: Function, refresh: Function, destroy: Function, destroyed: boolean}}
