@@ -27,6 +27,7 @@ export class LayerOpacity {
    * @param {object} [options]
    * @param {Location|null} [options.locationRef] The page address to read and keep.
    * @param {History|null} [options.historyRef] Where the address is rewritten.
+   * @param {EventTarget|null} [options.navigationTarget] Watches links.
    * @param {() => void} [options.requestRender] Ask the scene to draw again.
    * @param {number} [options.addressDelayMs] Wait before the address is rewritten.
    */
@@ -35,6 +36,7 @@ export class LayerOpacity {
     {
       locationRef = globalThis.location ?? null,
       historyRef = globalThis.history ?? null,
+      navigationTarget = globalThis.window ?? null,
       requestRender = () => {},
       addressDelayMs = ADDRESS_DELAY_MS,
     } = {},
@@ -49,6 +51,13 @@ export class LayerOpacity {
     this._listeners = new Set();
     this._addressTimer = null;
     this._destroyed = false;
+    this._navigationTarget = navigationTarget;
+    this._onNavigation = () => this.restore();
+    this._navigationTarget?.addEventListener?.('popstate', this._onNavigation);
+    this._navigationTarget?.addEventListener?.(
+      'hashchange',
+      this._onNavigation,
+    );
   }
 
   /** Whether the layer has an opacity control. */
@@ -102,6 +111,12 @@ export class LayerOpacity {
     const carried = readLayerOpacityFromUrl(this._location.href, (id) =>
       this.supports(id),
     );
+    // An incoming link replaces the previous snapshot, including values it
+    // omits. Cancel a pending write of the old view before applying it.
+    clearTimeout(this._addressTimer);
+    this._addressTimer = null;
+    for (const id of [...this._values.keys()])
+      if (!carried.has(id)) this.reset(id);
     for (const [id, value] of carried) this.set(id, value);
   }
 
@@ -151,6 +166,14 @@ export class LayerOpacity {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._navigationTarget?.removeEventListener?.(
+      'popstate',
+      this._onNavigation,
+    );
+    this._navigationTarget?.removeEventListener?.(
+      'hashchange',
+      this._onNavigation,
+    );
     clearTimeout(this._addressTimer);
     this._addressTimer = null;
     this._listeners.clear();

@@ -18,6 +18,7 @@ function fixture({ href = 'https://gev.example/app/?lang=de#v=2&l=f' } = {}) {
     ]),
   };
   const location = { href };
+  const navigationTarget = new EventTarget();
   const writes = [];
   const history = {
     state: { kept: true },
@@ -30,6 +31,7 @@ function fixture({ href = 'https://gev.example/app/?lang=de#v=2&l=f' } = {}) {
   const opacity = new LayerOpacity(manager, {
     locationRef: location,
     historyRef: history,
+    navigationTarget,
     requestRender: () => renders++,
     addressDelayMs: 0,
   });
@@ -38,6 +40,7 @@ function fixture({ href = 'https://gev.example/app/?lang=de#v=2&l=f' } = {}) {
     manager,
     location,
     history,
+    navigationTarget,
     calls,
     writes,
     renders: () => renders,
@@ -266,4 +269,43 @@ test('destroy stops the pending address write and the control', async () => {
   assert.equal(opacity.supports('wind'), false);
   assert.equal(opacity.set('wind', 0.3), false);
   assert.deepEqual(heard, ['wind']);
+});
+
+test('share navigation resets omitted opacity and pending writes', async () => {
+  const { opacity, location, navigationTarget, calls, writes } = fixture({
+    href: 'https://gev.example/app/?lop=wind:40,sea-marks:25#lat=1&lon=2',
+  });
+  opacity.restore();
+  assert.equal(opacity.get('wind'), 0.4);
+  assert.equal(opacity.get('sea-marks'), 0.25);
+
+  // Back/Forward changes the page address without reconstructing the app.
+  location.href = 'https://gev.example/app/?lop=sea-marks:50#lat=3&lon=4';
+  navigationTarget.dispatchEvent(new Event('popstate'));
+  navigationTarget.dispatchEvent(new Event('hashchange'));
+  assert.equal(opacity.get('wind'), 1, 'an omitted layer returns to default');
+  assert.equal(opacity.get('sea-marks'), 0.5);
+  assert.deepEqual(calls, [
+    ['wind', 0.4],
+    ['sea-marks', 0.25],
+    ['wind', 1],
+    ['sea-marks', 0.5],
+  ]);
+
+  // A link with no lop means all layers are at 100%.
+  location.href = 'https://gev.example/app/#lat=5&lon=6';
+  navigationTarget.dispatchEvent(new Event('hashchange'));
+  assert.equal(opacity.get('sea-marks'), 1);
+  await wait();
+  assert.deepEqual(
+    writes,
+    [],
+    'the old debounced state must not rewrite a new link',
+  );
+
+  const count = calls.length;
+  opacity.destroy();
+  location.href = 'https://gev.example/app/?lop=wind:20#lat=7&lon=8';
+  navigationTarget.dispatchEvent(new Event('popstate'));
+  assert.equal(calls.length, count, 'destroy removes navigation listeners');
 });
