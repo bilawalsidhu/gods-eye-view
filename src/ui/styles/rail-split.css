@@ -1,37 +1,5 @@
-/* Experiment: with a left panel open, its rail icon leaves the rail and sits
-   level with the panel's title, as the panel's own tab. The other icons stay
-   in the rail underneath it and close the gap. With nothing open the rail keeps its
-   labelled pills. */
-.gev-panel-rail--left:has(.ui-rail--collapsible:not(.ui-rail--expanded) .ui-rail__item--on) {
-  /* The lifted chip (42px) centres on the panel title (26px into the
-     stack); the rail starts 6px below the chip. */
-  top: 53px;
-}
-
-.gev-panel-rail--left .ui-rail--collapsible:not(.ui-rail--expanded) {
-  position: relative;
-}
-
-.gev-panel-rail--left
-  .ui-rail--collapsible:not(.ui-rail--expanded)
-  .ui-tooltip:has(> .ui-rail__item--on) {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: -1px;
-  padding: 4px;
-  border: 1px solid var(--glass-border);
-  border-radius: calc(var(--btn-radius) + 4px);
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-.gev-panel-rail--left
-  .ui-rail--collapsible:not(.ui-rail--expanded)
-  .ui-tooltip:has(> .ui-rail__item--on)
-  .ui-rail__item {
-  width: 32px;
-}
+/* The left rail's icons keep their places whether or not a panel is open;
+   only the highlight moves to the open one. */
 
 /* With nothing open, the icons and their names split into two glass panels
    side by side: the plain icon rail, and a name panel beside it with one row
@@ -179,14 +147,18 @@
   color: #fff;
 }
 
-/* The open item's highlight sits on the button itself, so it shows wherever
-   the button is (the lifted chip, the edge row). */
+/* The open item takes the accent colour; its highlight is the rail's shared
+   one, which slides to it. Without that highlight the button carries its own. */
 :is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item.ui-rail__item--on {
   color: #00d4ff !important;
-  background: rgba(0, 212, 255, 0.15) !important;
-  border-color: rgba(0, 212, 255, 0.15) !important;
 }
 
-:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail.ui-rail--glide::before {
-  display: none !important;
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail:not(.ui-rail--glide) .ui-rail__item.ui-rail__item--on {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.15);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail::before {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.28);
 }

@@ -62,24 +62,9 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   // highlight is showing is kept here, and the classes are put back each time.
   const gliding = new WeakSet();
 
-  // Where a rail lifts its open item out to sit beside the panel's title, the
-  // items left in the rail follow on from it in turn, so the next one in line
-  // is the one directly under it and a step brings that one up. A rail that
-  // keeps its open item in place keeps its own order.
-  function reorder(rail, on) {
-    const slots = [...rail.children].filter((slot) => slot.querySelector?.('.ui-rail__item'));
-    const at = on ? slots.findIndex((slot) => slot.contains(on)) : -1;
-    const lifted = at >= 0 && win.getComputedStyle(slots[at]).position === 'absolute';
-    slots.forEach((slot, index) => {
-      const order = lifted ? String((index - at + slots.length) % slots.length) : '';
-      if (slot.style.order !== order) slot.style.order = order;
-    });
-  }
-
   function glide(rail) {
     rail.classList.toggle('ui-rail--edge-hot', rail === hot);
     const on = rail.querySelector('.ui-rail__item[aria-pressed="true"]');
-    reorder(rail, on);
     if (!on?.offsetWidth) {
       gliding.delete(rail);
       rail.classList.remove('ui-rail--glide');
@@ -263,7 +248,6 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     win.removeEventListener('resize', onResize);
     doc.querySelectorAll('.ui-rail').forEach((rail) => {
       rail.classList.remove('ui-rail--glide', 'ui-rail--glide-jump', 'ui-rail--edge-hot');
-      reorder(rail, null);
     });
   };
 }

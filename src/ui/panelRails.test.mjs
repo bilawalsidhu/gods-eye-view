@@ -359,14 +359,23 @@ test('right rail aligns to the left rail buttons while the left stack is offset'
   assert.equal(f.stack.dataset.safeTop, '286.7');
 });
 
-test('left rail buttons hold still while a tall panel moves the stack', () => {
+test('left rail buttons hold still whether the open panel is short or tall', () => {
+  // Where the rail sits: the stack's top, the stack's rise, and the rail's
+  // own offset inside the stack.
+  const railTop = (stack) =>
+    (parseFloat(stack.style.getPropertyValue('--left-stack-safe-top')) * 900) /
+      100 +
+    parseFloat(stack.style.getPropertyValue('--panel-rail-lift')) +
+    parseFloat(stack.style.getPropertyValue('--panel-rail-offset'));
+  const short = fixture('left');
+  short.expand(short.first, 250);
+  short.run();
   const f = fixture('left');
   f.expand(f.first, 900);
   f.run();
   assert.equal(f.stack.dataset.layoutMode, 'focus');
-  assert.ok(
-    parseFloat(f.stack.style.getPropertyValue('--panel-rail-offset')) > 0,
-  );
+  assert.notEqual(short.stack.dataset.layoutMode, 'focus');
+  assert.ok(Math.abs(railTop(f.stack) - railTop(short.stack)) < 0.2);
 
   // A theme that pins the stack's top (Cyber) leaves nothing to offset.
   f.stack.computed.getPropertyValue = (name) =>

@@ -71,16 +71,6 @@ body.panels-edge-right:not(.context-docked) .gev-panel-rail--right .ui-rail--col
   gap: 4px;
 }
 
-/* The open panel's icon joins the row instead of floating above it. */
-body.panels-edge-left .gev-panel-rail--left .ui-rail--collapsible:not(.ui-rail--expanded) .ui-tooltip {
-  position: static !important;
-  padding: 0 !important;
-  border: 0 !important;
-  background: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
 body.panels-edge-left #left-panel-stack > :not(.gev-panel-rail):not(.collapsed) {
   transform: translate(calc(-1 * var(--panel-rail-clearance, 48px)), var(--edge-rail-row));
   max-height: calc(100% - var(--edge-rail-row)) !important;
