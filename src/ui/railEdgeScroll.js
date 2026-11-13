@@ -222,6 +222,12 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     const notch = stepped && cooled && speed >= NOTCH_DELTA;
     const flick = stepped && cooled && slowed && speed > Math.max(8, lastSpeed * 1.8);
     if (!inGesture || turned || notch || flick) {
+      // A held step belongs to the motion it came from; a reversal or a new
+      // flick replaces it rather than queueing behind it.
+      if (turned && heldStep) {
+        win.clearTimeout(heldStep);
+        heldStep = 0;
+      }
       travel = 0;
       stepped = false;
       peakSpeed = 0;
@@ -246,10 +252,12 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     }
     // Too soon after the last step: hold this one until the gap has passed.
     if (heldStep) return;
+    const heldRail = hot;
     heldStep = win.setTimeout(() => {
       heldStep = 0;
-      // The pointer may have left the strip meanwhile; then nothing steps.
-      if (!hot) return;
+      // The pointer may have left the strip, or moved to the other rail,
+      // meanwhile; then nothing steps.
+      if (!hot || hot !== heldRail) return;
       steppedAt = win.performance?.now?.() ?? Date.now();
       step(direction);
     }, wait);
