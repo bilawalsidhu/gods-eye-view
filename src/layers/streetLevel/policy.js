@@ -40,6 +40,14 @@ export const FILTER_DEFAULT = Object.freeze({ pano: 'all', sinceDays: 0 });
 /** Nearest-image search radius in metres. */
 export const NEAREST_RADIUS_M = 50;
 
+/**
+ * Widest nearest-image radius a caller may ask for, in metres. A geocoded
+ * landmark sits at its centroid, often further than 50 m from the nearest
+ * street; providers that can search wider (Google) honour it, the rest keep
+ * their own cap.
+ */
+export const NEAREST_RADIUS_MAX_M = 250;
+
 /** The Google 3D map stack: Street View may be shown only on it. */
 export const GOOGLE_3D_MAP_STACK_ID = 'photoreal';
 

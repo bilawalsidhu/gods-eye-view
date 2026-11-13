@@ -81,6 +81,8 @@ export function createFirmsState({ services, config }) {
 
   layerState._lastUpdate = null;
 
+  layerState._at = null;
+
   layerState._currentLodId = null;
 
   layerState._currentLodIndex = -1;

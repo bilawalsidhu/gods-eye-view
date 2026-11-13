@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
-test('panel presentation places Transit between Street Traffic and Bike Share in Movement', () => {
+test('panel presentation places Transit and Rail between Street Traffic and Bike Share in Movement', () => {
   const source = readFileSync(
     new URL('./layerPanel.js', import.meta.url),
     'utf8',
@@ -28,10 +28,12 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'ais-live-vessels',
       'traffic',
       'transit',
+      'rail',
       'bikeshare',
     ],
   );
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
+  assert.equal(order.filter(({ id }) => id === 'rail').length, 1);
 });
 
 test('Wildlife follows Events and precedes Weather', () => {
@@ -50,7 +52,8 @@ test('Wildlife follows Events and precedes Weather', () => {
   );
   const wildlife = order.findIndex(({ id }) => id === 'wildlife-sightings');
   assert.equal(order[wildlife].label, 'Wildlife');
-  assert.equal(order[wildlife - 1].id, 's2-ghostmaps');
+  // News is the last of Events.
+  assert.equal(order[wildlife - 1].id, 'news');
   assert.equal(order[wildlife + 1].id, 'air-quality');
   assert.equal(order.filter(({ id }) => id === 'wildlife-sightings').length, 1);
 });

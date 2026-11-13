@@ -905,6 +905,30 @@ html:not([lang='en'])
   outline: none;
 }
 
+/* An icon action chip (RailChips.vue `icon`): a square button sized to the
+   text chips beside it. */
+.data-toggle-chip.chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
+  letter-spacing: 0;
+  /* A glyph alone needs more contrast than a text chip to read. */
+  color: var(--text-secondary);
+}
+
+.data-toggle-chip.chip-icon:hover,
+.data-toggle-chip.chip-icon:focus-visible {
+  color: var(--text-primary);
+}
+
+.data-toggle-chip.chip-icon .material-symbols-outlined {
+  font-size: 15px;
+  line-height: 1;
+}
+
 .data-toggle-chip:hover,
 .data-toggle-chip:focus-visible {
   border-color: var(--glass-border-hover);
@@ -1090,6 +1114,43 @@ html:not([lang='en']) .data-row-list-text {
   padding: 3px 6px;
   font-size: 8px;
   letter-spacing: 0.8px;
+}
+
+/* Optional start and end pickers on one line (e.g. a layer's period). The
+   shared field style paints each select. */
+.data-toggle-range {
+  flex-basis: 100%;
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.data-toggle-range-ends {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.data-toggle-range-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.data-toggle-range-caption {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.data-toggle-range-select {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  font: 10px/1 var(--font-mono);
 }
 
 /* Optional per-layer quantitative slider (Active Fires minimum FRP). The

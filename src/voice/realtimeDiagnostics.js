@@ -1,3 +1,11 @@
+import { t } from '../i18n/index.js';
+
+/** The voice error when the server has no OpenAI key: where to add it. */
+export const missingVoiceKeyText = () =>
+  t('Needs {envVars} — add it in Provider Settings', {
+    envVars: 'OPENAI_API_KEY',
+  });
+
 const ERROR_LOG_LIMIT = 30;
 
 const ERROR_STORAGE_KEY = 'gev-realtime-errors';
@@ -83,6 +91,7 @@ function createErrorRecord(source, error, extra = {}) {
       String(error?.message || '').trim() ||
       'No browser error message supplied',
     errorDetail: rtcError?.errorDetail || null,
+    code: typeof rtcError?.code === 'string' ? rtcError.code : null,
     sctpCauseCode: rtcError?.sctpCauseCode ?? null,
     receivedAlert: rtcError?.receivedAlert ?? null,
     sentAlert: rtcError?.sentAlert ?? null,
@@ -91,6 +100,8 @@ function createErrorRecord(source, error, extra = {}) {
 }
 
 function formatErrorForDisplay(record) {
+  // A missing key is a setup step, not a connection fault: say where to add it.
+  if (record.code === 'API_KEY_MISSING') return missingVoiceKeyText();
   const primary = [record.source, record.message].filter(Boolean).join(': ');
   const state = [
     record.errorDetail && `detail=${record.errorDetail}`,
@@ -172,7 +183,11 @@ export class RealtimeDiagnostics {
     storeErrors(this.errors);
     console.error('[GEV Realtime]', record);
     this.debugLog('error', record);
-    this.setStatus('error', formatErrorForDisplay(record));
+    this.setStatus(
+      'error',
+      formatErrorForDisplay(record),
+      record.code === 'API_KEY_MISSING' ? { missingKey: true } : undefined,
+    );
     return record;
   }
 

@@ -156,6 +156,11 @@ export async function fetchFirms(
  * keyless answer, 503 {error:'no_key'}. FIRMS itself is never touched without
  * a key.
  *
+ * /api/firms answers the trailing 24 hours to now. A source may instead
+ * answer the 24 hours to a set time, naming its end as `at` (epoch ms); the
+ * layer's row then shows that time rather than LIVE. This proxy never sets
+ * `at`.
+ *
  * @returns {import('vite').Plugin}
  */
 export function firmsProxy() {

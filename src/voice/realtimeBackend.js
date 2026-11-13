@@ -39,8 +39,9 @@ export function createRealtimeBackend({
       if (!response.ok) {
         const reason =
           typeof data?.error === 'string' ? data.error : data?.error?.message;
-        throw new Error(
-          reason || `Realtime token failed: HTTP ${response.status}`,
+        throw Object.assign(
+          new Error(reason || `Realtime token failed: HTTP ${response.status}`),
+          typeof data?.code === 'string' ? { code: data.code } : {},
         );
       }
       const token =

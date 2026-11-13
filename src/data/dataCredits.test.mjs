@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DATA_CREDITS,
+  LIVEUAMAP_CREDIT,
   NYC_DOT_DISCLAIMER,
   transitFeedCredit,
 } from './dataCredits.js';
@@ -189,6 +190,26 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
     );
 });
 
+test('the News layer credits its built-in sources', () => {
+  const credit = (key) => DATA_CREDITS.find((entry) => entry.key === key);
+  // GDELT's terms ask for a citation and a link.
+  assert.match(
+    credit('gdelt-news').html,
+    /href="https:\/\/www\.gdeltproject\.org\/"[^>]*>GDELT Project</,
+  );
+  // World News API's free plan asks for this exact link.
+  assert.match(
+    credit('worldnewsapi').html,
+    /<a href="https:\/\/worldnewsapi\.com\/"[^>]*>World News API<\/a>/,
+  );
+  assert.match(LIVEUAMAP_CREDIT.html, />Liveuamap</);
+  assert.ok(
+    !DATA_CREDITS.some((entry) => entry.key === LIVEUAMAP_CREDIT.key),
+    'Liveuamap is credited only once its key is in use',
+  );
+  assert.doesNotMatch(credit('news').html, /No single provider/);
+});
+
 test('the PR #1506 camera packs are credited with their sources and terms', () => {
   const html = (key) => DATA_CREDITS.find((entry) => entry.key === key)?.html;
   assert.match(html('ottawa-cctv') || '', /traffic\.ottawa\.ca/);
@@ -222,4 +243,13 @@ test('Warsaw and Poznań credits carry the data date their licences ask for', ()
   });
   assert.equal(mbta.key, 'transit-mbta');
   assert.doesNotMatch(mbta.html, /data of/);
+});
+
+test('the always-on rail credit names live feeds only, never timetables', () => {
+  // Every train shown is where its operator reported it; none is placed
+  // from a timetable.
+  const rail = DATA_CREDITS.find((entry) => entry.key === 'rail-gtfs-rt');
+  assert.ok(rail);
+  assert.match(rail.html, /realtime feeds/);
+  assert.doesNotMatch(rail.html, /timetable|placed from/i);
 });

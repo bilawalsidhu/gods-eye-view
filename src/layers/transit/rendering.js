@@ -232,11 +232,16 @@ export function createRendering({ state, services, parts }) {
     const displayPx = basePx * presetSpriteScale(style, selected);
     const frame = haloFrame(halo, displayPx);
     const px = displayPx * frame.ratio;
+    // A glyph with a front only when there is a course to point it along:
+    // without one the billboard sits at rotation 0 and a nose would say north.
+    const heading = Number.isFinite(entry.courseDeg);
+    entry.iconHeading = heading;
     marker.image = transitIcon(
       entry.mode,
       selected ? SELECTED_ICON_PX : undefined,
       {
         style,
+        heading,
       },
     );
     marker.width = px;
@@ -250,6 +255,12 @@ export function createRendering({ state, services, parts }) {
     else
       marker.color =
         MODE_CESIUM_COLORS[entry.mode] || MODE_CESIUM_COLORS.unknown;
+  }
+
+  /** Swap between the pointed and the neutral glyph when a course appears or is lost. */
+  function syncHeadingIcon(entry) {
+    if (entry.marker && entry.iconHeading !== Number.isFinite(entry.courseDeg))
+      applySpriteStyle(entry);
   }
 
   function addMarker(key, entry) {
@@ -324,6 +335,7 @@ export function createRendering({ state, services, parts }) {
     for (const entry of state._visible) {
       // Idle contacts still need a course when their first usable bearing arrives.
       if (!state._moving.has(entry)) applyDisplayCourse(entry, monoNow);
+      syncHeadingIcon(entry);
       if (entry.key === state._selectedKey) continue;
       const course = entry.courseDeg;
       if (!Number.isFinite(course)) {
@@ -427,6 +439,7 @@ export function createRendering({ state, services, parts }) {
     refreshRotations(Date.now());
     const selected = state._vehicles.get(state._selectedKey);
     if (selected && state._visible.has(selected)) {
+      syncHeadingIcon(selected);
       selected.marker.rotation = Number.isFinite(selected.courseDeg)
         ? perspectiveProjectedRotation(
             state._viewer.scene,
