@@ -310,8 +310,10 @@
   bottom: 12vh;
 }
 
+/* Minimal keeps its coordinates in the corner block, where the other layouts
+   have them; the full-width strip would only repeat the same position. */
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  display: flex;
+  display: none;
   bottom: calc(12vh + 4rem);
 }
 

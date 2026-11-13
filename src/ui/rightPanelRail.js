@@ -236,19 +236,20 @@ export function layoutRightPanelRail({
   // CCTV does the same, so its feed and controls have the room.
   const FULL_HEIGHT = new Set(['global-context-panel', 'cctv-panel']);
   const contextOpen = panels.some(
-    (panel) => FULL_HEIGHT.has(panel.id) && !panel.classList.contains('collapsed'),
+    (panel) =>
+      FULL_HEIGHT.has(panel.id) && !panel.classList.contains('collapsed'),
   );
-  // Any open panel starts from that same raised top, so switching between
-  // Context, CCTV and Street Level does not move the column. Only the two
-  // above also stretch to the bottom.
-  const anyOpen = panels.some((panel) => !panel.classList.contains('collapsed'));
+  // Every panel starts level with the left rail, open or not, so the two
+  // rails line up in every HUD layout (Minimal has no top-right readout to
+  // push this column down) and switching between Context, CCTV and Street
+  // Level does not move it. Only the two above also stretch to the bottom.
   const layout = resolveHudRailLayout({
     viewportHeight,
     panelHeight: naturalHeight,
     laneLeft: stackRect.left,
     laneRight: stackRect.right,
     obstacles: obstacleRects,
-    baseTop: anyOpen ? viewportHeight * 0.04 : alignedTop,
+    baseTop: alignedTop,
     baseBottom: viewportHeight * 0.96,
     gap: safeGap,
     align: 'start',
