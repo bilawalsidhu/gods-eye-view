@@ -174,21 +174,62 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
   });
   setTimeout(readView, 0);
 
+  /** Layers whose own map click already follows what was clicked. */
+  const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites', 'ais-live-vessels']);
+
+  // Keep the card's "following" in step with the camera. When the camera
+  // stops following (Escape, another tool, the craft gone) the card stops
+  // saying so, and picking the same item again follows it again; when one of
+  // the layers above starts following from its own click, the card says so.
+  // A layer switching what it follows lets go for a moment and takes hold
+  // again in the same turn, so this is checked once that settles.
+  let trackCheck = 0;
+  const removeTrackedChanged = viewer.trackedEntityChanged.addEventListener(() => {
+    clearTimeout(trackCheck);
+    trackCheck = setTimeout(() => {
+      if (!viewer.trackedEntity) store.following = null;
+      else if (CLICK_FOLLOWS.has(store.card?.layerId)) store.following = store.card.key;
+    }, 250);
+  });
+
   const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  // What is under the pointer is read when the button goes down: by the time
+  // the click arrives, a layer may already have acted on it (the flights
+  // layer swaps a clicked plane's icon for its model), and a pick then would
+  // find whatever was behind it.
+  const pickAt = (position) => {
+    try {
+      return viewer.scene.pick(position) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  let pressed = null;
+  handler.setInputAction(({ position }) => {
+    pressed = isPointerFree() ? { picked: pickAt(position), x: position.x, y: position.y } : null;
+  }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
   handler.setInputAction(({ position }) => {
     // A tool that owns the pointer (draw, measure) keeps its clicks.
+    const press = pressed;
+    pressed = null;
     if (!isPointerFree()) return;
-    let picked = null;
-    try {
-      picked = viewer.scene.pick(position);
-    } catch {
-      picked = null;
-    }
+    const samePlace = press && Math.hypot(press.x - position.x, press.y - position.y) < 6;
+    const picked = samePlace ? press.picked : pickAt(position);
     const identity = resolvePickedContext(picked, {
       dataManager: getDataManager(),
     });
-    // A click on open ground or sea selects nothing and leaves the card as it is.
-    if (identity) store.select(identity);
+    if (identity) {
+      // These layers start following on their own click; following again
+      // from here would fight them (the flights layer reads a second track
+      // of the same plane as a click on empty map and lets go).
+      store.select(identity, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
+      return;
+    }
+    // A click on open ground, sea or sky lets go of what was selected; the
+    // photorealistic ground is a tileset, so a click on it counts as ground.
+    // A click on something else Context cannot describe (a label, a trail)
+    // leaves the card as it is.
+    if (!picked || picked.primitive instanceof Cesium.Cesium3DTileset) store.clear();
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   // Layers that select through the context store (GeoJSON sites, fires,
@@ -209,6 +250,8 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
     handler.destroy();
     removeMoveEnd();
     removeChanged();
+    removeTrackedChanged();
+    clearTimeout(trackCheck);
     globalThis.removeEventListener?.('gev:entity-selected', onSelected);
     store.connect(null);
   };
