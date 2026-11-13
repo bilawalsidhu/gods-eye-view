@@ -295,9 +295,40 @@ for (const [feedType, liveUrl] of [
       feedType,
       'a failed optional snapshot cannot turn a live feed location-only',
     );
+    // The stream payload reads the source feed type directly and never
+    // consults feed availability, so this only shows it is unaffected.
     assert.equal(
       JSON.parse((await get(`/stream/${camera.id}`)).body).feedType,
       feedType,
     );
   });
 }
+
+test('mjpeg without a snapshot url keeps its live feed after two frame failures', async (t) => {
+  t.mock.method(Date, 'now', () => T0);
+  const camera = {
+    ...CAM,
+    id: 'live-mjpeg-nosnap',
+    feedType: 'mjpeg',
+    url: 'https://cams.upstream.invalid/live.mjpg',
+  };
+  let attempts = 0;
+  const { frame, feedType: listedType } = fixture(
+    t,
+    async (url) => {
+      attempts += 1;
+      assert.equal(String(url), camera.url);
+      return new Response(null, { status: 404 });
+    },
+    camera,
+  );
+  assert.equal(await listedType(), 'mjpeg');
+  await frame();
+  await frame();
+  assert.equal(attempts, 2, 'both frame attempts reached the live url');
+  assert.equal(
+    await listedType(),
+    'mjpeg',
+    'a live mjpeg stream with no snapshot stays advertised',
+  );
+});

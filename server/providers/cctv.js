@@ -329,12 +329,20 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               // 'none' = location-only (no public picture found).
-              feedType: feedAvailability.isUnavailable(
-                source.id,
-                feedGroupKey(source),
-              )
-                ? 'none'
-                : normalizeFeedType(source.feedType),
+              // Only a still camera can be location-only: a stored mark on a
+              // live feed (HLS, MP4, WebM, MJPEG) must not hide its media.
+              feedType: (() => {
+                const listed = normalizeFeedType(source.feedType);
+                const stillCamera =
+                  !isVideoFeedType(listed) && listed !== 'mjpeg';
+                return stillCamera &&
+                  feedAvailability.isUnavailable(
+                    source.id,
+                    feedGroupKey(source),
+                  )
+                  ? 'none'
+                  : listed;
+              })(),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               sourceUrl: source.sourceUrl || '',
