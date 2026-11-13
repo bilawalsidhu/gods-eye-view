@@ -49,8 +49,15 @@ export function collectUserLayerEntries(modules) {
  */
 export function instantiateUserLayer(entry) {
   const layer = entry.createLayer();
-  if (layer && layer.showInTogglePanel === undefined)
-    layer.showInTogglePanel = true;
+  // The catalog refuses a missing layer or one under another id and would
+  // stop startup, so a bad result fails here, like a throwing factory.
+  if (!layer || typeof layer !== 'object')
+    throw new TypeError(`${entry.id} createLayer() returned no layer`);
+  if (layer.id !== entry.id)
+    throw new TypeError(
+      `${entry.id} createLayer() returned a layer with id ${JSON.stringify(layer.id)}`,
+    );
+  if (layer.showInTogglePanel === undefined) layer.showInTogglePanel = true;
   return layer;
 }
 

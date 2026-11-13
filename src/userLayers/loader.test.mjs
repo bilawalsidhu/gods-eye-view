@@ -147,6 +147,26 @@ test('a createLayer() that throws leaves out that layer, not the others', (t) =>
   );
 });
 
+test('a createLayer() that returns no layer or another id leaves out that layer', (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const entries = registerUserLayers([
+    { id: 'alpha', createLayer: () => ({ id: 'alpha' }) },
+    { id: 'empty', createLayer: () => null },
+    { id: 'missing', createLayer: () => undefined },
+    { id: 'other', createLayer: () => ({ id: 'alpha' }) },
+    { id: 'charlie', createLayer: () => ({ id: 'charlie' }) },
+  ]);
+
+  const layers = instantiateUserLayers(entries);
+
+  assert.deepEqual(
+    layers.map((layer) => layer.id),
+    ['alpha', 'charlie'],
+  );
+  assert.deepEqual(userLayerIds(), ['alpha', 'charlie']);
+  assert.equal(logged.mock.callCount(), 3);
+});
+
 test('when every createLayer() succeeds the registry is left as it was', () => {
   const entries = registerUserLayers([
     { id: 'alpha', createLayer: () => ({ id: 'alpha' }) },
