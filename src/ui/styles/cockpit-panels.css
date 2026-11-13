@@ -24,7 +24,33 @@
 .cockpit-context-window:not([data-collapsed='true']),
 .cockpit-signal-window:not([data-collapsed='true']) {
   width: min(280px, 23vw);
-  height: min(34vh, 330px);
+  height: min(27vh, 260px);
+}
+
+/* Contact's header: the buttons share the kicker's row, so the subject runs
+   the full width on at most two lines instead of wrapping beside them. */
+.cockpit-context-window:not([data-collapsed='true']) .cockpit-context-header > div {
+  display: contents;
+}
+
+.cockpit-context-window:not([data-collapsed='true']) .cockpit-context-kicker {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.cockpit-context-window:not([data-collapsed='true']) .cockpit-context-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.cockpit-context-window:not([data-collapsed='true']) #cockpit-context-subject {
+  display: -webkit-box;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* Their foot sits just above the bottom HUD readouts (MGRS / GSD), which
@@ -92,19 +118,57 @@ body.cockpit-mode .cockpit-utility-control.is-expanded {
 }
 
 /* ── Cockpit uses the main page's rails ───────────────────────────────
-   The left rail shows (Data Layers, Utilities; Authoring has no place in
-   first person, and the cockpit has its own Display control on the right in
-   place of Visual), one panel opens beside it, and the collapsed header
-   strips the cockpit used instead are hidden. */
+   The left rail shows Data Layers and Visual (Authoring has no place in
+   first person, and Utilities has nothing to do there), one panel opens
+   beside it, and the collapsed header strips the cockpit used instead are
+   hidden. */
 body.cockpit-mode #left-panel-stack > .gev-panel-rail--left {
   display: block;
 }
 
-body.cockpit-mode #left-panel-stack > .gev-panel-rail--left :is([data-rail-item='scene-panel'], [data-rail-item='pp-toggles']) {
+body.cockpit-mode #left-panel-stack > .gev-panel-rail--left :is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel']),
+body.cockpit-mode
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-tooltip:has(> :is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'])) {
   display: none;
 }
 
-body.cockpit-mode #left-panel-stack > [data-panel-id].collapsed {
+/* With some icons hidden, the runs between them break up: with a panel
+   open, each icon left is its own island. */
+body.cockpit-mode
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip::before {
+  inset: -4px -5px;
+  border-width: 1px;
+  border-radius: 14px;
+}
+
+/* Authoring or Utilities may still be open underneath; its hidden icon must
+   not split the rail into islands. */
+body.cockpit-mode
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'])[aria-pressed='true'])
+  > .ui-tooltip::before {
+  display: none;
+}
+
+body.cockpit-mode
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'])[aria-pressed='true']) {
+  background: rgba(16, 20, 28, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+body.cockpit-mode #left-panel-stack > [data-panel-id].collapsed,
+body.cockpit-mode #left-panel-stack > :is([data-panel-id='scene-panel'], [data-panel-id='utilities-panel']) {
   display: none;
 }
 
@@ -570,7 +634,7 @@ body.cockpit-mode .cockpit-utility-rail {
 body.cockpit-mode :is(.cockpit-utility-rail__labels, .cockpit-utility-rail__icons) {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 12px;
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
@@ -632,6 +696,37 @@ body.cockpit-mode .cockpit-utility-rail__item.is-on:hover {
   border-color: rgba(0, 212, 255, 0.15);
   background: rgba(0, 212, 255, 0.15);
   color: #00d4ff;
+}
+
+/* With a panel open, each icon is its own island, as on the main rails. */
+body.cockpit-mode .cockpit-utility-rail.is-open .cockpit-utility-rail__icons {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.cockpit-mode .cockpit-utility-rail.is-open .cockpit-utility-rail__item {
+  position: relative;
+}
+
+body.cockpit-mode .cockpit-utility-rail.is-open .cockpit-utility-rail__item::before {
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(16, 20, 28, 0.82);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  content: '';
+  pointer-events: none;
+}
+
+body.cockpit-mode.panels-edge-right .cockpit-utility-rail.is-open .cockpit-utility-rail__icons {
+  gap: 12px;
 }
 
 /* Hovering an icon lights its label too, as on the left. */
