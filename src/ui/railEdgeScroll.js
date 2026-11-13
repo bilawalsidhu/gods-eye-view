@@ -18,8 +18,8 @@ const GESTURE_GAP_MS = 180;
 const STEP_COOLDOWN_MS = 220;
 /**
  * The least time (ms) between two steps, whatever the wheel does. A motion
- * that would step sooner is used up without stepping, so panels never switch
- * back to back.
+ * that would step sooner waits and steps once the gap has passed (one step
+ * held at most), so panels never switch back to back and no step is lost.
  */
 const STEP_GAP_MS = 500;
 /** A wheel event this large (pixels) is a mouse wheel notch, not a trackpad. */
@@ -49,6 +49,8 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   let stepped = false;
   /** When the last step was taken, the fastest the gesture has been, and whether it has slowed since. */
   let steppedAt = 0;
+  /** A step waiting for the gap to pass, if any. */
+  let heldStep = 0;
   let peakSpeed = 0;
   let slowed = false;
   let frame = 0;
@@ -59,7 +61,9 @@ export function installRailEdgeScroll(doc = globalThis.document) {
       .filter(({ rail }) => rail && rail.getBoundingClientRect().width > 0);
 
   const items = (rail) =>
-    [...rail.querySelectorAll('.ui-rail__item')].filter((item) => !item.disabled);
+    // Only items that show: a theme or mode may hide some, and the wheel must
+    // not open those.
+    [...rail.querySelectorAll('.ui-rail__item')].filter((item) => !item.disabled && item.offsetWidth > 0);
 
   // ── The sliding highlight ──
   // Each rail draws it as a ::before under its items, placed by custom
@@ -233,9 +237,22 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     travel += event.deltaY;
     if (Math.abs(travel) < STEP_DELTA) return;
     stepped = true;
-    if (now - steppedAt < STEP_GAP_MS) return;
-    steppedAt = now;
-    step(Math.sign(travel));
+    const direction = Math.sign(travel);
+    const wait = STEP_GAP_MS - (now - steppedAt);
+    if (wait <= 0) {
+      steppedAt = now;
+      step(direction);
+      return;
+    }
+    // Too soon after the last step: hold this one until the gap has passed.
+    if (heldStep) return;
+    heldStep = win.setTimeout(() => {
+      heldStep = 0;
+      // The pointer may have left the strip meanwhile; then nothing steps.
+      if (!hot) return;
+      steppedAt = win.performance?.now?.() ?? Date.now();
+      step(direction);
+    }, wait);
   }
 
   const onResize = () => follow(2);
@@ -246,6 +263,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   follow();
 
   return () => {
+    win.clearTimeout(heldStep);
     setHot(null);
     observer?.disconnect();
     win.cancelAnimationFrame(frame);
