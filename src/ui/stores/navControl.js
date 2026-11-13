@@ -40,9 +40,8 @@ export const useNavControlStore = defineStore('gev-nav-control', () => {
 
   /** Stop answering for `token`; the control goes when no owner is left. */
   function detach(token) {
-    const owned = owners.owns(token, 'press');
     owners.detach(token);
-    if (owned) view.value = null;
+    if (!owners.ownerOf('press')) view.value = null;
   }
 
   const { act } = owners;
