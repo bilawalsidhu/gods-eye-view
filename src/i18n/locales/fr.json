@@ -3587,5 +3587,6 @@
   "{source} imagery could not be opened": "Impossible d'ouvrir les images de {source}",
   "{place} has no position to look for imagery at": "{place} n'a pas de position où chercher des images",
   "No {source} imagery near {place}": "Aucune image {source} près de {place}",
-  "{reason} (filters on: {filters})": "{reason} (filtres actifs : {filters})"
+  "{reason} (filters on: {filters})": "{reason} (filtres actifs : {filters})",
+  "{country} (ICAO block)": "{country} (bloc ICAO)"
 }

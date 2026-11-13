@@ -3668,5 +3668,6 @@
   "{source} imagery could not be opened": "Не вдалося відкрити знімки {source}",
   "{place} has no position to look for imagery at": "Для місця «{place}» немає координат для пошуку знімків",
   "No {source} imagery near {place}": "Немає знімків {source} поблизу {place}",
-  "{reason} (filters on: {filters})": "{reason} (увімкнено фільтри: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (увімкнено фільтри: {filters})",
+  "{country} (ICAO block)": "{country} (блок ICAO)"
 }

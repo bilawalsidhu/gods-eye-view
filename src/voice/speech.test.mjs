@@ -135,6 +135,26 @@ test('aircraft identity always covers operator, type and route from returned fie
   );
   assertSpeakable(sparse.identityLine);
 
+  const blockOnly = envelope('get_entity_context', {
+    ok: true,
+    selected: {
+      id: '43c6f2',
+      layerId: 'military',
+      name: 'BRK50',
+      properties: {
+        callsign: 'BRK50',
+        type: 'C17',
+        registrationCountry: 'United Kingdom',
+      },
+    },
+  });
+  assert.equal(
+    blockOnly.identityLine,
+    'BRK50, operator unknown, registered in United Kingdom, C17, no route on file.',
+    'the ICAO-block country fills in for a missing operator, never replaces one',
+  );
+  assertSpeakable(blockOnly.identityLine);
+
   const routeString = envelope('get_entity_context', {
     ok: true,
     selected: {

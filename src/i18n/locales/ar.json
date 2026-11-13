@@ -3830,5 +3830,6 @@
   "{source} imagery could not be opened": "تعذّر فتح صور {source}",
   "{place} has no position to look for imagery at": "لا يوجد لـ{place} موضع للبحث عن الصور فيه",
   "No {source} imagery near {place}": "لا توجد صور {source} قرب {place}",
-  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})",
+  "{country} (ICAO block)": "{country} (نطاق ICAO)"
 }
