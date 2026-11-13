@@ -80,6 +80,15 @@ export function saObservationTime(value) {
     )
   )
     return null;
+  // Date.parse can roll impossible calendar dates (e.g. February 30) forward.
+  const calendarDay = value.slice(0, 10);
+  const midnight = new Date(`${calendarDay}T00:00:00Z`);
+  if (
+    !Number.isFinite(midnight.getTime()) ||
+    midnight.toISOString().slice(0, 10) !== calendarDay ||
+    Number(value.slice(11, 13)) > 23
+  )
+    return null;
   const time = Date.parse(
     /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}+02:00`,
   );

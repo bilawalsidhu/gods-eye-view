@@ -115,6 +115,25 @@ test('timestamps use source offsets or SAST and reject ambiguous dates', () => {
   assert.equal(saObservationTime('20/10/2026'), null);
 });
 
+test('impossible SAAQIS calendar dates never become current observations', () => {
+  for (const timestamp of [
+    '2026-02-30T12:00:00',
+    '2025-02-29T12:00:00+02:00',
+    '2026-09-31T11:00:00+02:00',
+    '2026-10-20T24:00:00+02:00',
+  ]) {
+    assert.equal(saObservationTime(timestamp), null, timestamp);
+  }
+  assert.equal(
+    saObservationTime('2024-02-29T12:00:00+02:00'),
+    Date.parse('2024-02-29T10:00:00Z'),
+  );
+  assert.deepEqual(
+    snapshot([channel({ datetime: '2026-09-31T11:00:00+02:00' })]).readings,
+    [],
+  );
+});
+
 test('fresh station timestamp cannot hide years-old channel data', () => {
   const p = snapshot([channel({ datetime: '2020-06-01T00:00:00+02:00' })]);
   assert.equal(

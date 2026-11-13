@@ -11,3 +11,5 @@
   visible retry time. Translate AQHI risk, EEA quality and SAAQIS categories
   in separate contexts so Russian labels remain consistent within each scale
   (khanmjk, #1291).
+- Reject calendar-impossible SAAQIS observation timestamps instead of
+  silently rolling them into another day (khanmjk, #1291).
