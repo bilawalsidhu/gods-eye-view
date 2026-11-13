@@ -1,0 +1,47 @@
+{
+  "id": "gvp-holocene-volcanoes",
+  "kind": "dataset",
+  "family": "environment",
+  "title": "Holocene volcanoes (Smithsonian GVP)",
+  "provider": "Smithsonian GVP",
+  "description": "The roughly 1,200 volcanoes with eruptions in the last 12,000 years, from the Smithsonian Global Volcanism Program's Volcanoes of the World.",
+  "icon": "▲",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://webservices.volcano.si.edu/geoserver/GVP-VOTW/ows",
+    "query": {
+      "service": "WFS",
+      "version": "2.0.0",
+      "request": "GetFeature",
+      "typeName": "GVP-VOTW:Smithsonian_VOTW_Holocene_Volcanoes",
+      "outputFormat": "application/json"
+    },
+    "fetch": "proxied",
+    "cacheSeconds": 86400,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000
+  },
+  "display": {
+    "color": "#ff3d6b",
+    "label": "Volcano_Name",
+    "fields": ["Primary_Volcano_Type", "Last_Eruption_Year"],
+    "rank": {
+      "field": "Last_Eruption_Year",
+      "order": "desc"
+    }
+  },
+  "licence": {
+    "name": "Smithsonian Terms of Use (personal, educational, non-commercial use; cite the Global Volcanism Program)",
+    "url": "https://www.si.edu/termsofuse"
+  },
+  "attribution": {
+    "text": "Global Volcanism Program, Smithsonian Institution — Volcanoes of the World",
+    "url": "https://volcano.si.edu/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-21"
+}

@@ -48,6 +48,7 @@ export const LEGACY_SHARE_STATE_KEYS = Object.freeze([
   'layerState',
   'layerStateInvalid',
   'panelState',
+  'library',
   'sharedAtMs',
 ]);
 

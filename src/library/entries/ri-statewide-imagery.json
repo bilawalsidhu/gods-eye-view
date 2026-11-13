@@ -1,0 +1,48 @@
+{
+  "id": "ri-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Rhode Island Statewide Imagery (2019)",
+  "provider": "RIGIS",
+  "description": "Aerial orthophotos: Statewide coverage of Rhode Island.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-71.9065, 41.1437, -71.1078, 42.0276]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/S8zZg9pg23JUEexQ/arcgis/rest/services/RI_201811_RGB_3in_web/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "3–6 in",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2019–present",
+    "updateCycle": "Periodic",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open — RIGIS terms",
+    "url": "https://www.rigis.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "URI EDC, RIGIS",
+    "url": "https://www.rigis.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
