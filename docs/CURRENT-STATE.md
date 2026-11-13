@@ -2619,12 +2619,20 @@ comparison/progression controls keep their specialized presentation and behavior
 
 ## On-screen navigation control
 
-A Google Earth-style control sits at the bottom right (`src/ui/navControl/`):
+A Google Earth-style control sits at the bottom right. The `NavControl` view
+(`src/ui/views/panels/NavControl.vue`, with `UiButton` and `UiSlider` from the
+kit) renders the `gev-nav-control` store, and the framework-free owner in
+`src/ui/navControl/` publishes the heading, tilt and follow state to it and
+answers the view's actions through the store. The control has
 a compass ring that shows the heading and turns the map when dragged (arrow
 keys turn it, Home returns to north), a north-up button, a tilt slider with
 up/down buttons and a top-down button, zoom in/out with press-and-hold repeat,
-and a four-way look-around pad. Steps ease over about 220 ms; a pointer press
-or wheel on the globe cancels a step that is still easing.
+and a four-way look-around pad. Steps ease over about 220 ms; a step that is
+still easing stops as soon as anything else moves the camera (a drag or wheel
+on the globe, a flight) or the followed entity changes. The tilt shown is read
+from the camera's target one task after a camera move ends, never inside the
+`moveEnd` event, so the depth read cannot delay other `moveEnd` observers
+(the arrival timing in `npm run test:track`).
 
 The control orbits the camera around the point under the centre of the view
 through the same `readCameraTargetFrame` / `setCameraTargetFrame` helpers as
@@ -2636,8 +2644,8 @@ zoom step never drives the camera under the ground while tiles are still
 streaming. The look-around buttons are disabled while an entity is tracked.
 The control is hidden in Cockpit, Scene playback, recording and Clean UI; on
 phones it is also hidden while a sheet is open, and on short landscape phones
-while the world timeline is showing. Its listeners are removed when the shell is
-destroyed. Its text is translated in every shipped locale.
+while the world timeline is showing. The owner's camera subscriptions are removed and the view
+withdrawn when the shell is destroyed. Its text is translated in every shipped locale.
 
 ## Shared control CSS ownership
 
