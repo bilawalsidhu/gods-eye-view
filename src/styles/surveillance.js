@@ -59,7 +59,8 @@ export const nightVisionShader = {
 
     // ── Honeycomb pattern (fiber optic plate texture) ─────
     float honeycomb(vec2 uv) {
-      vec2 dims = colorTextureDimensions;
+      // CSS pixels, so the effect keeps its size at any drawing ratio.
+      vec2 dims = colorTextureDimensions / czm_pixelRatio;
       float scale = min(dims.x, dims.y) * 0.008;
       vec2 p = uv * dims * scale;
       // Hex grid
@@ -140,7 +141,8 @@ export const nightVisionShader = {
 
     void main() {
       vec2 uv = v_textureCoordinates;
-      vec2 dims = colorTextureDimensions;
+      // CSS pixels, so the effect keeps its size at any drawing ratio.
+      vec2 dims = colorTextureDimensions / czm_pixelRatio;
       vec2 texel = 1.0 / dims;
 
       // ── Barrel distortion (NVG lens distortion) ─────────

@@ -35,7 +35,8 @@ export const animeShader = {
 
     void main() {
       vec2 uv = v_textureCoordinates;
-      vec2 texel = 1.0 / colorTextureDimensions;
+      // CSS pixels, so the effect keeps its size at any drawing ratio.
+      vec2 texel = czm_pixelRatio / colorTextureDimensions;
       vec4 color = texture(colorTexture, uv);
 
       // Cel-shade: quantize luminance into bands

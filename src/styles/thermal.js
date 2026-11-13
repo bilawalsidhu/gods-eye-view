@@ -142,7 +142,8 @@ export const thermalShader = {
 
     void main() {
       vec2 uv = v_textureCoordinates;
-      vec2 dims = colorTextureDimensions;
+      // CSS pixels, so the effect keeps its size at any drawing ratio.
+      vec2 dims = colorTextureDimensions / czm_pixelRatio;
       vec2 texel = 1.0 / dims;
       vec2 hudUV = uv; // preserve original UV for HUD overlay
 

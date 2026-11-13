@@ -33,6 +33,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
+import { getResolutionDiagnostics } from './resolutionGovernor.js';
 
 /** Attach scene tools, rendering listeners and the application debug handle. */
 export function createApplicationTools({
@@ -265,6 +266,7 @@ export function createApplicationTools({
     weatherEffects,
     cockpitCloudEffects,
     getRenderGovernorDiagnostics,
+    getResolutionDiagnostics: () => getResolutionDiagnostics(viewer),
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
   };
