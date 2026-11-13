@@ -51,6 +51,7 @@ import {
 } from './detectionPolicy.js';
 import { detectionBracketOpacity } from './detectionPresentation.js';
 import { SurfaceOcclusion } from './detectionOcclusion.js';
+import { createDetectionPaintCache } from './detectionPaintCache.js';
 import { SceneOcclusionProbe } from './sceneOcclusionProbe.js';
 import {
   createCyberSonarSampler,
@@ -244,6 +245,15 @@ let _calloutLane = null;
 let _transitBracketPaths = new Map();
 let _transitBracketAlpha = 1;
 /**
+ * What the last full sweep of the objects built, kept for the paints that
+ * follow it with the same view and the same objects. See `_drawOverlay`.
+ */
+const _paintCache = createDetectionPaintCache();
+/** Scratch for `_paintViewOf`; the cache copies it when it keeps a paint. */
+const _paintView = [];
+/** Paints since `initDetection` that reused a kept sweep (diagnostics). */
+let _paintReuseCount = 0;
+/**
  * Callouts solved by the sensor lane this frame, replayed by the callout lane.
  * The array and its rows are POOLED — `_calloutCount` is the live length — so a
  * dense field costs no per-frame allocation. Retaining the previous frame's
@@ -379,6 +389,8 @@ export function destroyDetection() {
   _calloutLane?.unregister?.();
   _calloutLane = null;
   _transitBracketPaths.clear();
+  _paintCache.clear();
+  _paintReuseCount = 0;
   _calloutCount = 0;
   _viewer = null;
   _layers = [];
@@ -643,6 +655,7 @@ function _publishDiagnostics() {
   dataset.solveMs = String(_lastDiagnostics.solveMs ?? 0);
   dataset.frameTotalMs = String(_lastDiagnostics.frameTotalMs ?? 0);
   dataset.throttleSkipCount = String(_lastDiagnostics.throttleSkipCount ?? 0);
+  dataset.paintReuseCount = String(_lastDiagnostics.paintReuseCount ?? 0);
 }
 
 /**
@@ -718,6 +731,7 @@ function _applyModeState() {
     _syncSurfaceVisibility();
     _setLanesActive(false);
     _labelArbiter.clear();
+    _paintCache.clear();
     _surfaceOcclusion.clear();
     _surfaceSuppressedKeys.clear();
     _occlusionProbe.reset();
@@ -1260,14 +1274,52 @@ function _materializeCandidate(
 }
 
 /**
+ * Every value of the view that the object sweep in `_drawOverlay` and the
+ * callout candidates it builds read, in a fixed order, for
+ * `detectionPaintCache`. A value the sweep starts to read belongs here.
+ */
+function _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive) {
+  const view = _paintView;
+  const { keyhole, cameraPosition, viewProjectionMatrix, uiRects } = frame;
+  let n = 0;
+  view[n++] = _mode;
+  view[n++] = _theme;
+  view[n++] = _charWidth;
+  view[n++] = frame.width;
+  view[n++] = frame.height;
+  view[n++] = keyholeOutsideOpacity;
+  view[n++] = cyberMapActive;
+  view[n++] = keyhole?.centerX;
+  view[n++] = keyhole?.centerY;
+  view[n++] = keyhole?.radius;
+  view[n++] = keyhole?.featherPx;
+  view[n++] = cameraPosition?.x;
+  view[n++] = cameraPosition?.y;
+  view[n++] = cameraPosition?.z;
+  for (let i = 0; i < 16; i++) view[n++] = viewProjectionMatrix[i];
+  const rectCount = Array.isArray(uiRects) ? uiRects.length : -1;
+  view[n++] = rectCount;
+  for (let i = 0; i < rectCount; i++) {
+    const rect = uiRects[i];
+    view[n++] = rect?.x;
+    view[n++] = rect?.y;
+    view[n++] = rect?.w;
+    view[n++] = rect?.h;
+  }
+  view.length = n;
+  return view;
+}
+
+/**
  * Paint detection against the shared host frame. Brackets remain broad and
  * per-frame; rich placements rebuild only for selected/fading identities and
  * for a bounded cohort on solve ticks.
  */
 function _drawOverlay(frame) {
-  _transitBracketPaths.clear();
   const { width, height } = frame;
   if (!_ctx || width <= 0 || height <= 0) {
+    _transitBracketPaths.clear();
+    _paintCache.forget();
     return {
       didSolve: false,
       solveMs: 0,
@@ -1309,6 +1361,8 @@ function _drawOverlay(frame) {
     // callout lane repaints the last solve on frames the sensor lane skips,
     // leaving rows here would strand the final callsigns on screen after the
     // last data layer is switched off.
+    _transitBracketPaths.clear();
+    _paintCache.clear();
     _calloutCount = 0;
     _ctx.font = FONT;
     _drawScanlines(width, height, now);
@@ -1361,6 +1415,9 @@ function _drawOverlay(frame) {
   // every host lane. Detection retains the manual scalar projection below.
   const occluder = frame.occluder;
   const camPos = frame.cameraPosition;
+  const camX = camPos.x;
+  const camY = camPos.y;
+  const camZ = camPos.z;
   // Answers to the occlusion tests started on earlier frames land here.
   _surfaceOcclusion.beginFrame(now);
   _occlusionProbe.beginFrame(_viewer?.scene, _surfaceOcclusion.now);
@@ -1390,7 +1447,7 @@ function _drawOverlay(frame) {
   if (!_charWidth) _charWidth = _ctx.measureText('0000000000').width / 10 || 6;
   const tiers = _theme.tiers || null;
   const colorFor = (key) => (tiers && tiers[key]) || _theme.line;
-  const bracketPaths = new Map();
+  let bracketPaths = new Map();
   // Global Context sonar echoes: a second bracket, banded by strength, around
   // each flight or vessel a pulse front has just crossed.
   // Resting pulses light nothing, so the per-contact echo work is skipped.
@@ -1415,14 +1472,41 @@ function _drawOverlay(frame) {
   };
 
   let visibleCount = 0;
-  const bracketOpacityCounts = { full: 0, partial: 0, hidden: 0 };
-  const aircraftBracketSectors = { left: 0, front: 0, right: 0 };
+  let bracketOpacityCounts = { full: 0, partial: 0, hidden: 0 };
+  let aircraftBracketSectors = { left: 0, front: 0, right: 0 };
   let protectedVisibleCount = 0;
-  const candidateMap = new Map();
+  let candidateMap = new Map();
   const cohortBuilders = shouldSolve ? new Map() : null;
   const demandByLayer = shouldSolve ? new Map() : null;
   let placementBuildCount = 0;
-  for (let i = 0; i < objects.length; i++) {
+
+  // The sweep below is the cost of this paint: every object projected, faded
+  // and given its bracket. What it builds depends only on the view and on the
+  // objects, so when both are exactly what the last sweep had, that sweep's
+  // paths, counts and callout candidates are used again and only the strokes
+  // and the callouts are repainted. Three things keep a paint from being
+  // reused or kept:
+  // - the Cyber sonar sweep and Global Context echoes change brackets with the
+  //   clock alone;
+  // - a solve needs the sweep to gather its cohort;
+  // - a depth-tested contact gets its answer from the scene, not from here.
+  // A kept solve paint holds the solve's own candidates too, so the callouts a
+  // solve has just chosen are placed from the same map either way.
+  const paintKeepable = !sonarActive && !echoField;
+  const paintView = paintKeepable
+    ? _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive)
+    : null;
+  const kept =
+    paintKeepable && !shouldSolve
+      ? _paintCache.reuse(paintView, objects)
+      : null;
+  let depthTestedSwept = false;
+  let identityLayerId;
+  let renderSources;
+  let selectedSources;
+  if (!kept) _transitBracketPaths.clear();
+  const sweepCount = kept ? 0 : objects.length;
+  for (let i = 0; i < sweepCount; i++) {
     const obj = objects[i];
     if (!obj.position) continue;
     // Skip objects occluded by the ellipsoid (behind the horizon)
@@ -1450,8 +1534,12 @@ function _drawOverlay(frame) {
     let halfW;
     let halfH;
     if (obj.type === 'AIR') {
+      // Cartesian3.distance, without its two argument checks per object.
+      const dx = camX - px;
+      const dy = camY - py;
+      const dz = camZ - pz;
       const bscale = nearFarScale(
-        Cesium.Cartesian3.distance(camPos, obj.position),
+        Math.sqrt(dx * dx + dy * dy + dz * dz),
         BILL_NEAR,
         BILL_NEAR_SCALE,
         BILL_FAR,
@@ -1477,6 +1565,7 @@ function _drawOverlay(frame) {
     // Something the scene drew in front of a depth-tested contact hides its
     // bracket and callout too, on every frame, not only on solves.
     if (obj.depthTested === true) {
+      depthTestedSwept = true;
       const testedLayerId = obj._layerId || 'unknown';
       const testedSourceId = obj.sourceId ?? obj.id ?? i;
       const hidden = _surfaceOcclusion.isHidden(
@@ -1557,14 +1646,29 @@ function _drawOverlay(frame) {
     if (!primary && !micro) continue;
     const layerId = obj._layerId || 'unknown';
     const sourceId = obj.sourceId ?? obj.id ?? i;
-    const liveForRender = renderIdentities.get(layerId)?.has(sourceId) || false;
+    // Objects arrive a layer at a time, so the layer's sets are looked up once
+    // per run of objects, not once per object.
+    if (layerId !== identityLayerId) {
+      identityLayerId = layerId;
+      renderSources = renderIdentities.get(layerId);
+      selectedSources = selectedIdentities?.get(layerId);
+    }
+    const liveForRender = renderSources?.has(sourceId) || false;
     if (!shouldSolve && !liveForRender) continue;
 
     obj._cohortSourceId = sourceId;
     obj._cohortPriority = _semanticPriority(obj);
     obj._cohortBand =
       admissionAlpha >= 0.999 ? 8 : Math.floor(admissionAlpha * 8);
-    obj._cohortHash = stableIdentityHash(layerId, sourceId);
+    // The hash is of the identity alone, so it is worked out once per identity.
+    if (
+      obj._cohortHashLayerId !== layerId ||
+      obj._cohortHashSourceId !== sourceId
+    ) {
+      obj._cohortHash = stableIdentityHash(layerId, sourceId);
+      obj._cohortHashLayerId = layerId;
+      obj._cohortHashSourceId = sourceId;
+    }
     obj._candidateScreenX = sx;
     obj._candidateScreenY = sy;
     obj._candidateHalfW = halfW;
@@ -1578,8 +1682,7 @@ function _drawOverlay(frame) {
       demandByLayer.set(layerId, (demandByLayer.get(layerId) || 0) + 1);
       if (!cohortBuilders.has(layerId))
         cohortBuilders.set(layerId, new BoundedCohort(256));
-      const incumbent =
-        selectedIdentities?.get(layerId)?.has(sourceId) || false;
+      const incumbent = selectedSources?.has(sourceId) || false;
       cohortBuilders.get(layerId).consider(obj, incumbent);
     }
 
@@ -1599,6 +1702,29 @@ function _drawOverlay(frame) {
   }
   // Start this frame's occlusion tests; nothing here waits for them.
   _occlusionProbe.endFrame();
+  if (kept) {
+    _paintReuseCount++;
+    ({
+      bracketPaths,
+      visibleCount,
+      bracketOpacityCounts,
+      aircraftBracketSectors,
+      protectedVisibleCount,
+      candidateMap,
+    } = kept);
+  } else if (paintKeepable && !depthTestedSwept) {
+    // `candidateMap` is kept by reference: a solve below adds to it.
+    _paintCache.keep(paintView, objects, {
+      bracketPaths,
+      visibleCount,
+      bracketOpacityCounts,
+      aircraftBracketSectors,
+      protectedVisibleCount,
+      candidateMap,
+    });
+  } else {
+    _paintCache.forget();
+  }
 
   const altitude = _viewer?.camera?.positionCartographic?.height ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
@@ -1782,6 +1908,7 @@ function _drawOverlay(frame) {
       // drawing them cost it.
       surfaceProbeTests: _occlusionProbe.lastFrameTests,
       surfaceProbeMs: _occlusionProbe.lastFrameMs,
+      paintReuseCount: _paintReuseCount,
     };
   } else {
     const selectedCount = _labelArbiter.selectedKeys.size;
@@ -1795,6 +1922,7 @@ function _drawOverlay(frame) {
     _lastDiagnostics.aircraftBracketSectors = aircraftBracketSectors;
     _lastDiagnostics.bracketPresentationOpacity = bracketPresentationOpacity;
     _lastDiagnostics.protectedVisibleCount = protectedVisibleCount;
+    _lastDiagnostics.paintReuseCount = _paintReuseCount;
   }
 
   _drawScanlines(width, height, now);
