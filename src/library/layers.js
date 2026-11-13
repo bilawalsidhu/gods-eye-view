@@ -161,13 +161,25 @@ export function createLibraryDatasetLayer(
   let rowListener = null;
   let legendCounts = null;
   // Live data: features older than the source's cacheSeconds are loaded
-  // again, on the next enable and on a timer while the layer is on.
+  // again, on the next enable and on the manager's refresh tick while the
+  // layer is on. Their age counts from when they were requested, and a tick
+  // allows a little slack, so a tick every cacheSeconds refreshes on every
+  // tick rather than every other one.
   const maxAgeMs = entry.source.cacheSeconds * 1000;
+  const tickSlackMs = Math.min(5000, maxAgeMs / 10);
+  /** When the drawn data was requested; 0 until a load succeeds. */
   let loadedAt = 0;
-  let prefetched = null;
   let refreshController = null;
   let on = false;
-  const stale = () => Date.now() - loadedAt >= maxAgeMs;
+  const age = () => Date.now() - loadedAt;
+  function take(result, requestedAt) {
+    loadedAt = requestedAt;
+    truncated = result.truncated;
+    loaded = result.features.length;
+    extent = featureExtent(result.features);
+    if (colorBy) legendCounts = countColorKeys(result.features);
+    rowListener?.();
+  }
   const colorBy = entry.display.colorBy || null;
   const layer = createLocalGeoJsonLayer(
     {
@@ -186,15 +198,9 @@ export function createLibraryDatasetLayer(
             colorBy.colors[String(properties?.__gevColorKey ?? '')] || null
         : null,
       loadFeatures: async ({ signal }) => {
-        const result =
-          prefetched ?? (await source.loadDataset(entry, { signal }));
-        prefetched = null;
-        loadedAt = Date.now();
-        truncated = result.truncated;
-        loaded = result.features.length;
-        extent = featureExtent(result.features);
-        if (colorBy) legendCounts = countColorKeys(result.features);
-        rowListener?.();
+        const requestedAt = Date.now();
+        const result = await source.loadDataset(entry, { signal });
+        take(result, requestedAt);
         return result.features;
       },
     },
@@ -207,7 +213,6 @@ export function createLibraryDatasetLayer(
   const cancelRefresh = () => {
     refreshController?.abort();
     refreshController = null;
-    prefetched = null;
   };
   return Object.assign(layer, {
     libraryEntryId: entry.id,
@@ -215,27 +220,30 @@ export function createLibraryDatasetLayer(
     async enable(viewer, ...rest) {
       on = true;
       registerDynamicCredit(viewer, libraryCredit(entry));
-      if (stale()) layer.dropCachedFeatures();
+      if (loadedAt && age() >= maxAgeMs) layer.dropCachedFeatures();
       return enable(viewer, ...rest);
     },
     /**
-     * The manager's refresh tick: once the data is stale, load it again and
-     * swap it in only when the new set is ready, so the old features stay
-     * drawn while the request runs and stay if it fails.
+     * The manager's refresh tick: once the data is due, load it again and
+     * swap it in where it is drawn, so the old features (and a selected
+     * one) stay while the request runs and stay if it fails. Nothing to
+     * refresh before a first load has succeeded: the tick that follows
+     * enable() must not retry a failed load and fail the switch-on.
      */
     async update(viewer) {
-      if (!on || !stale() || refreshController) return;
+      if (!on || !loadedAt || refreshController) return;
+      if (age() < maxAgeMs - tickSlackMs) return;
       const current = new AbortController();
       refreshController = current;
+      const requestedAt = Date.now();
       try {
         const result = await source.loadDataset(entry, {
           signal: current.signal,
         });
         if (!on || current.signal.aborted) return;
-        prefetched = result;
-        layer.dropCachedFeatures();
-        disable(viewer);
-        await enable(viewer);
+        await layer.replaceFeatures(viewer, result.features);
+        if (!on || current.signal.aborted) return;
+        take(result, requestedAt);
       } finally {
         if (refreshController === current) refreshController = null;
       }

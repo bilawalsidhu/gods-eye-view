@@ -366,6 +366,12 @@ export function createLocalGeoJsonLayer(
    */
   let _cachedFeatures = null;
   /**
+   * The source a `replaceFeatures()` rebuild is replacing: it stays drawn
+   * until the new one is in the scene, and comes back if the rebuild fails.
+   * @type {{source: object, stemRecords: object[], count: number, lastUpdate: number|null, error: string|null}|null}
+   */
+  let _outgoing = null;
+  /**
    * Globe-LOD active set: the record ids allowed to carry a live stem right
    * now. This bounds geometry refreshes and ground-sample work to the
    * camera-height budget in localGeojsonLod.js. Recomputed only
@@ -449,7 +455,19 @@ export function createLocalGeoJsonLayer(
    * survive a disable is the per-frame visualizer walk and the entity memory.
    * @param {object} viewer
    */
+  const releaseOutgoing = (viewer) => {
+    if (!_outgoing) return;
+    const { source } = _outgoing;
+    _outgoing = null;
+    try {
+      viewer?.dataSources?.remove(source, true);
+    } catch {
+      /* already gone */
+    }
+  };
+
   const releaseDataSource = (viewer) => {
+    releaseOutgoing(viewer);
     if (!_dataSource) return;
     const source = _dataSource;
     _dataSource = null;
@@ -489,7 +507,7 @@ export function createLocalGeoJsonLayer(
     }
   };
 
-  return {
+  const layer = {
     id,
     name,
     icon,
@@ -726,7 +744,7 @@ export function createLocalGeoJsonLayer(
                 // Store references for bounded stem scaling and native picking.
                 feature.__localBaseCarto = carto;
                 feature.__localBaseCartesian = base;
-                registerEntityContext(feature, {
+                const context = registerEntityContext(feature, {
                   id: `${id}:${recordId}`,
                   layerId: id,
                   layerName: name,
@@ -769,6 +787,7 @@ export function createLocalGeoJsonLayer(
                 _stemRecords.push({
                   id: recordId,
                   entity: feature,
+                  context,
                   carto,
                   base,
                   tip,
@@ -1111,6 +1130,99 @@ export function createLocalGeoJsonLayer(
       _cachedFeatures = null;
     },
 
+    /**
+     * Draw a new feature set in place of the current one while the layer is
+     * on (a live loader's refresh). The current features stay drawn until
+     * the new ones are in the scene; a selected feature stays selected when
+     * the new set still has it (same id, or same place and label); a failed
+     * rebuild keeps the current features and rejects. Off, the set is only
+     * kept for the next enable().
+     * @param {object} viewer
+     * @param {object[]} features GeoJSON features.
+     */
+    replaceFeatures: async (viewer, features) => {
+      if (_destroyed) return;
+      const previousFeatures = _cachedFeatures;
+      _cachedFeatures = features;
+      if (!_enabled || !_dataSource || _loadPromise) return;
+      const selected =
+        viewer?.selectedEntity?.__localLayerId === id
+          ? viewer.selectedEntity
+          : null;
+      const selectedLabel = selected
+        ? _stemRecords.find((record) => record.entity === selected)?.context
+            ?.label
+        : undefined;
+      _outgoing = {
+        source: _dataSource,
+        stemRecords: _stemRecords,
+        count: _count,
+        lastUpdate: _lastUpdate,
+        error: _error,
+      };
+      const outgoing = _outgoing;
+      _dataSource = null;
+      await coreEnable(viewer);
+      // Disabled or destroyed meanwhile: release took both sources.
+      if (_destroyed || !_enabled || _outgoing !== outgoing) return;
+      _outgoing = null;
+      if (!_dataSource) {
+        // The rebuild failed: the current features come back as they were.
+        const failure = _error;
+        _cachedFeatures = previousFeatures;
+        _dataSource = outgoing.source;
+        _stemRecords = outgoing.stemRecords;
+        _count = outgoing.count;
+        _lastUpdate = outgoing.lastUpdate;
+        _error = outgoing.error;
+        _stemGeometryDirty = true;
+        _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+        for (const record of _stemRecords)
+          if (record.context)
+            registerEntityContext(record.entity, record.context);
+        if (selected && viewer.selectedEntity === selected)
+          selectEntityContext(selected);
+        throw new Error(failure || 'dataset unavailable');
+      }
+      try {
+        viewer?.dataSources?.remove(outgoing.source, true);
+      } catch {
+        /* already gone */
+      }
+      // Records the new set no longer has go with the old source.
+      removeEntityContextsForLayer(id, {
+        retainIds: new Set(
+          _stemRecords.map((record) => record.context?.id).filter(Boolean),
+        ),
+      });
+      if (selected) {
+        const same = (record) => {
+          const old = selected.__localBaseCarto;
+          const next = record.entity.__localBaseCarto;
+          return (
+            old &&
+            next &&
+            Math.abs(old.longitude - next.longitude) < 1e-9 &&
+            Math.abs(old.latitude - next.latitude) < 1e-9 &&
+            record.context?.label === selectedLabel
+          );
+        };
+        const match = _stemRecords.find((record) =>
+          selected.id !== undefined && record.entity.id === selected.id
+            ? true
+            : same(record),
+        );
+        if (match) {
+          viewer.selectedEntity = match.entity;
+          selectEntityContext(match.entity);
+        } else if (viewer.selectedEntity === selected) {
+          viewer.selectedEntity = undefined;
+          clearSelectedEntityContextForLayer(id);
+        }
+      }
+      viewer?.scene?.requestRender?.();
+    },
+
     destroy: (viewer) => {
       if (_destroyed) return;
       _destroyed = true;
@@ -1135,6 +1247,8 @@ export function createLocalGeoJsonLayer(
       _error = null;
     },
   };
+  const coreEnable = layer.enable;
+  return layer;
 }
 
 function compareLocalOverlayRecords(a, b) {
