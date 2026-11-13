@@ -13,7 +13,7 @@
 #                                                                              #
 #       SECTION 1: SECRETS   -->  keep them in this file                       #
 #                                                                              #
-#       Every value in this section is a credential. People, scripts and       #
+#       Every value in this section is a credential. Users, scripts and        #
 #       AI assistants: never read, print, log or commit these values.          #
 #       Under Pinokio this one file holds keys and settings; in a plain        #
 #       checkout keys go in .env.local and settings in .env.                   #
