@@ -492,3 +492,25 @@ test('the application shell mounts the owner on the page store and releases it',
   shell._navControl.destroy();
   assert.equal(nav.view, null);
 });
+
+test('mounting the navigation control leaves the shell’s Tilt and North-up buttons toasting', async () => {
+  const { StyleManager } = await import('../applicationShell.js');
+  const { applicationPinia } = await import('../vueRuntime.js');
+  const { useGlobeActionsStore } = await import('../stores/globeActions.js');
+  const globe = useGlobeActionsStore(applicationPinia());
+  const viewer = createViewer();
+  orbit(viewer, { heading: 40 });
+  const toasts = [];
+  const shell = {
+    viewer,
+    _navigation: { runOrientation: (_noun, navigate) => navigate() },
+    _showToast: (text) => toasts.push(text),
+  };
+  StyleManager.prototype._initCameraOrientationControls.call(shell);
+  StyleManager.prototype._initNavControl.call(shell);
+  globe.act('northUp');
+  assert.deepEqual(toasts, ['North up'], 'the orientation buttons still toast');
+  shell._cameraOrientationControls.destroy();
+  globe.detach(shell._orientationToken);
+  shell._navControl.destroy();
+});
