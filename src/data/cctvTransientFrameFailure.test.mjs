@@ -28,11 +28,21 @@ const CAM = {
 };
 const T0 = 1800000000000;
 
-function fixture(t, fetchImpl, cam = CAM, worldRows = null) {
+function fixture(t, fetchImpl, cam = CAM, worldRows = null, savedMarks = null) {
   const saved = { ...process.env };
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-1314-transient-'));
+  if (savedMarks) {
+    const cacheDir = path.join(root, '.gev-cache');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cacheDir, 'cctv-feed-availability.json'),
+      JSON.stringify(savedMarks),
+    );
+  }
   const server = new EventEmitter();
-  process.env.CCTV_SOURCES_JSON = JSON.stringify([cam]);
+  process.env.CCTV_SOURCES_JSON = JSON.stringify(
+    Array.isArray(cam) ? cam : [cam],
+  );
   process.env.CCTV_SOURCES_FILE = 'absent.json';
   process.env.CCTV_FORCE_AUSTIN = '0';
   delete process.env.GOOGLE_MAPS_API_KEY;
@@ -331,4 +341,44 @@ test('mjpeg without a snapshot url keeps its live feed after two frame failures'
     'mjpeg',
     'a live mjpeg stream with no snapshot stays advertised',
   );
+});
+
+test('a stored mark hides a still camera but not a live feed', async (t) => {
+  t.mock.method(Date, 'now', () => T0);
+  const live = [
+    ['hls', 'https://cams.upstream.invalid/live.m3u8'],
+    ['mp4', 'https://cams.upstream.invalid/live.mp4'],
+    ['webm', 'https://cams.upstream.invalid/live.webm'],
+    ['mjpeg', 'https://cams.upstream.invalid/live.mjpg'],
+  ].map(([feedType, url]) => ({
+    ...CAM,
+    id: `stored-${feedType}`,
+    feedType,
+    url,
+    snapshotUrl: 'https://cams.upstream.invalid/live.jpg',
+  }));
+  const still = {
+    ...CAM,
+    id: 'stored-still',
+    feedType: 'image',
+    snapshotUrl: 'https://cams.upstream.invalid/still.jpg',
+  };
+  const marks = { 'stored-still': T0 };
+  for (const camera of live) marks[camera.id] = T0;
+  const { get } = fixture(
+    t,
+    async () => new Response(null, { status: 404 }),
+    [...live, still],
+    null,
+    { cameras: marks },
+  );
+  const listed = Object.fromEntries(
+    JSON.parse((await get('/sources')).body).sources.map((source) => [
+      source.id,
+      source.feedType,
+    ]),
+  );
+  for (const camera of live)
+    assert.equal(listed[camera.id], camera.feedType);
+  assert.equal(listed['stored-still'], 'none');
 });
