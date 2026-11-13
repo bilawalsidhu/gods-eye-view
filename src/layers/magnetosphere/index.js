@@ -250,7 +250,8 @@ export function createMagnetosphereLayer({
      */
     async retrace(signal) {
       const next = selectExternalModel(state);
-      model = next;
+      // `model` names what drew the filaments on screen, so it only moves when
+      // a trace with this key exists - never before an early return below.
       const key = next ? next.key : 'internal';
       if (!coefficients) return false;
       // One trace at a time. A second refresh arriving mid-trace would other-
@@ -261,7 +262,10 @@ export function createMagnetosphereLayer({
         next !== null &&
         (!tracedSun ||
           degreesBetween(sunDirection, tracedSun) >= RETRACE_SUN_DEGREES);
-      if (key === tracedKey && !sunMoved) return false;
+      if (key === tracedKey && !sunMoved) {
+        model = next;
+        return false;
+      }
       const tracedAgainst = sunDirection;
       const externalField = next
         ? externalFieldFor({
@@ -283,6 +287,7 @@ export function createMagnetosphereLayer({
       retracing = null;
       if (signal?.aborted) return false;
       filaments = traced;
+      model = next;
       tracedKey = key;
       tracedSun = tracedAgainst;
       return true;
