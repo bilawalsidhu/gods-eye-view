@@ -96,7 +96,10 @@ function createImageryService({ fetchImpl }) {
     async latest({ box, signal }) {
       const result = await searchHls({ box, fetchImpl, signal });
       return {
-        ...rankLatest(result.candidates, { truncated: result.truncated }),
+        ...rankLatest(result.candidates, {
+          truncated: result.truncated,
+          box,
+        }),
         errors: result.errors,
       };
     },

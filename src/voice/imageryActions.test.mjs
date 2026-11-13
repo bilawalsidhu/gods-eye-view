@@ -363,6 +363,54 @@ test('date ranges and selection helpers', () => {
   assert.equal(best.day, '2026-09-18');
 });
 
+// A clear tile over the box with a cloudy one clipping its north edge by
+// 0.001°: the layer weighs cloud by the box, so voice must pick the same day.
+const SLIVER_DAY = {
+  key: 'S30:2026-09-20',
+  product: 'S30',
+  day: '2026-09-20',
+  granules: [
+    {
+      cloud: 5,
+      timeStart: '2026-09-20T17:00:00Z',
+      footprint: [
+        [-1, -1],
+        [2, -1],
+        [2, 2],
+        [-1, 2],
+      ],
+    },
+    {
+      cloud: 90,
+      timeStart: '2026-09-20T17:01:00Z',
+      footprint: [
+        [-1, 0.999],
+        [2, 0.999],
+        [2, 2],
+        [-1, 2],
+      ],
+    },
+  ],
+  cloud: { min: 5, max: 90 },
+  timeRange: { start: '2026-09-20T17:00:00Z', end: '2026-09-20T17:01:30Z' },
+  availability: 'present',
+  coverage: 'full',
+};
+
+test('voice ranks cloud over the searched box, like START HERE', async () => {
+  const candidates = [SLIVER_DAY, hls('2026-09-15', 15)];
+  const box = { west: 0, south: 0, east: 1, north: 1 };
+  assert.equal(
+    selectImagery(candidates).best.day,
+    '2026-09-15',
+    'without a box the worst granule makes the sliver day cloudy',
+  );
+  assert.equal(selectImagery(candidates, { box }).best.day, '2026-09-20');
+  const result = await findImagery(deps(fakeLayer({ candidates })).value, {});
+  assert.equal(result.ok, true);
+  assert.equal(result.shown.date, '2026-09-20');
+});
+
 // ── Review regressions: the real layer, and the operator taking it back ──
 
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';

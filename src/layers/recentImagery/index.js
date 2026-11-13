@@ -283,7 +283,10 @@ export function createRecentImageryLayer({
   }
 
   const rank = (list) =>
-    rankLatest(list.map(withAvailability), { truncated: _truncated });
+    rankLatest(list.map(withAvailability), {
+      truncated: _truncated,
+      box: _box,
+    });
 
   /** Focus the START HERE day and preview it when the mode's slot is empty. */
   function autoPreview() {
