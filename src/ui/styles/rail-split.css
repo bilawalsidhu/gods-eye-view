@@ -245,3 +245,10 @@
   border-radius: 14px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
+
+/* The side rails fold their labels away at once when a panel opens, and back
+   when it closes: easing the labels' width made every button visibly
+   stretch and shrink. Only their fade eases. */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__label {
+  transition: opacity var(--transition-fast);
+}
