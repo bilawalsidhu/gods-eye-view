@@ -713,8 +713,13 @@ test('feeds that publish km/h are marked for conversion, and only those', () => 
     .map((f) => f.id)
     .sort();
   assert.deepEqual(kmh, [
+    'azalys-blois',
     'carris-metropolitana-lisboa',
+    'divia-dijon',
+    'maelis-montlucon',
     'mpm-toulon',
+    'rubis-bourg-en-bresse',
+    'setram-le-mans',
     'tam-montpellier',
   ]);
 });

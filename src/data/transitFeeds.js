@@ -1,5 +1,7 @@
 import { greatCircleKm } from '../geoDistance.js';
 import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
+import { FRANCE_TRANSIT_FEED_ROWS } from './transitFeedsFrance.js';
+import { FRANCE_ROUTE_NAMES } from './transitRouteNamesFrance.js';
 
 /**
  * @module transitFeeds
@@ -10,6 +12,8 @@ import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
  * `/api/transit/vehicles/<id>` for a registered id (see SECURITY.md: proxies
  * never fetch client-supplied URLs). Adding a feed means adding a row here,
  * a DATA_SOURCES.md row with its license, and a credit in dataCredits.js.
+ * The French networks listed on transport.data.gouv.fr are rows of the same
+ * shape in `transitFeedsFrance.js`, appended to the registry below.
  *
  * Admission rules for a feed:
  *  - No key, token, or registration required (identify-yourself headers are
@@ -558,6 +562,58 @@ function transitFeed(fields) {
     terms: Object.freeze({ ...fields.terms }),
     ...(fields.headers
       ? { headers: Object.freeze({ ...fields.headers }) }
+      : {}),
+  });
+}
+
+/**
+ * A French network row (`transitFeedsFrance.js`) as a registry entry. Every
+ * one is a bus network unless its row says otherwise: `routeModes` names the
+ * route ids that are trams or boats, and a route id it does not name stays a
+ * default, never a resolved "bus". The licence name, record link and terms
+ * note are built from the row's `licence`, `record`, `vehicles` and `note`.
+ * A feed with a table in
+ * `transitRouteNamesFrance.js` reads its line names from it; an id missing
+ * from the table renders unchanged.
+ * @param {object} row
+ * @returns {Readonly<object>}
+ */
+function franceTransitFeed(row) {
+  const { routeModes, licence, record, vehicles, note, ...fields } = row;
+  const odbl = licence === 'odc-odbl';
+  const names = Object.hasOwn(FRANCE_ROUTE_NAMES, row.id)
+    ? FRANCE_ROUTE_NAMES[row.id]
+    : null;
+  return transitFeed({
+    defaultMode: 'bus',
+    ...fields,
+    license: odbl ? 'ODbL' : 'Licence Ouverte 2.0',
+    licenseUrl: `https://transport.data.gouv.fr/datasets/${record}`,
+    terms: {
+      quote: `licence: ${licence}`,
+      note: [
+        `Dataset record’s licence field quoted; this is the record’s own GTFS-RT vehicle feed (${vehicles} vehicles on 2026-11-13).`,
+        odbl
+          ? 'ODbL asks for credit and share-alike on a derived database; the layer draws positions and redistributes no database.'
+          : '',
+        note ?? '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    },
+    ...(routeModes
+      ? {
+          routeMode: (routeId) =>
+            routeId && Object.hasOwn(routeModes, routeId)
+              ? routeModes[routeId]
+              : 'unknown',
+        }
+      : {}),
+    ...(names
+      ? {
+          routeLabel: (routeId) =>
+            routeId && Object.hasOwn(names, routeId) ? names[routeId] : routeId,
+        }
       : {}),
   });
 }
@@ -1586,6 +1642,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     },
     defaultMode: 'bus',
   }),
+  ...FRANCE_TRANSIT_FEED_ROWS.map(franceTransitFeed),
 ]);
 
 /**
