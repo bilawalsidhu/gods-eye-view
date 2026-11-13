@@ -142,7 +142,10 @@ export function auroraProxy({
         cacheAge >= ttlMs &&
         cacheAge <= staleMaxMs &&
         now() - lastFailureAt < ttlMs;
-      const unavailableCooling = !cache && now() - lastFailureAt < ttlMs;
+      // No usable forecast (none yet, or the last one is past its stale limit):
+      // answer unavailable until the failure cools down, without asking NOAA.
+      const unavailableCooling =
+        (!cache || cacheAge > staleMaxMs) && now() - lastFailureAt < ttlMs;
       const value =
         fresh || retryCooling
           ? cache.value
