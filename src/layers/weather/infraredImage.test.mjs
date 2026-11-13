@@ -48,6 +48,53 @@ test('the transfer is applied to the canvas pixels in place, with no copy writte
   assert.deepEqual([...read.data], [194, 0, 0, 98]);
 });
 
+test('with transfer off an infrared frame is drawn and never read back', async () => {
+  const drawn = [];
+  const createCanvas = () => {
+    const output = {};
+    output.getContext = () => ({
+      drawImage: (image) => drawn.push(image),
+      getImageData: () => {
+        throw new Error('the frame was read back on the page');
+      },
+      putImageData: () => {
+        throw new Error('the frame was rewritten on the page');
+      },
+    });
+    return output;
+  };
+  const size = { width: 4096, height: 2048 };
+  const image = { ...size, close() {} };
+  const options = {
+    signal: new AbortController().signal,
+    mode: 'filtered',
+    size,
+    maxBytes: 1024,
+    createCanvas,
+    transfer: false,
+  };
+  const fetched = await acquireWeatherImage(
+    'clouds-regional',
+    '2026-09-15T20:00:00.000Z',
+    {
+      ...options,
+      fetchImpl: async () => ({
+        ok: true,
+        headers: new Headers(),
+        arrayBuffer: async () => new ArrayBuffer(1),
+      }),
+      decodeImage: async () => image,
+    },
+  );
+  assert.equal(fetched.texture.width, 4096);
+  const supplied = { ...size };
+  await acquireWeatherImage('clouds-regional', '2026-09-15T20:00:00.000Z', {
+    ...options,
+    frameSource: { getImage: async () => supplied },
+  });
+  assert.deepEqual(drawn, [image, supplied]);
+});
+
 test('decoded pixels are processed once on a same-sized canvas', () => {
   const image = { width: 1, height: 1 };
   const output = processInfraredImage(image, 'filtered', canvas);

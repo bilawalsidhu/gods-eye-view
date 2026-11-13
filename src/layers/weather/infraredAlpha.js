@@ -1,7 +1,9 @@
 export const INFRARED_ALPHA_T0 = 0.4;
 export const INFRARED_ALPHA_T1 = 0.7;
 
-function infraredAmount(strength) {
+/** How much of the cloud key applies, 0–1, for a display mode or a 0–100
+ * strength. The weather shell passes it to its fragment shader. */
+export function infraredAmount(strength) {
   return strength === 'full'
     ? 0
     : strength === 'filtered' || !Number.isFinite(strength)

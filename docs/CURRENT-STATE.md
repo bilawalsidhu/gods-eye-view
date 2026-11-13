@@ -891,9 +891,11 @@ image proxy accepts `bbox=west,south,east,north` for every product: inside the
 product bounds, 2:1 within 1 %, rounded to 0.25°, up to 4096×2048 (the
 default), cached by product, time, size and bbox. Diagnostics report
 `shell.detail` (`bbox`, `size`, `ready`, `enabled`).
-Clouds only applies a soft brightness ramp to decoded pixels once, using
+Clouds only applies a soft brightness ramp, using
 Cesium's sRGB-to-linear conversion (`channel ** 2.2`) and smoothstep from 0.40
-to 0.70. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
+to 0.70. Globe hosts apply it to decoded pixels once; a shell applies the same
+ramp in its fragment shader from a strength uniform, so its images are drawn
+as decoded and a strength change neither fetches nor rewrites an image. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
 preserved in Full image mode; both modes use the chosen layer opacity. This
 is a display filter, not a cloud mask. The cloud-filter slider is a continuous
 0–100% strength: 0% is Full, 100% is the existing Clouds only key, and
@@ -909,13 +911,13 @@ and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
 avoiding request-dependent contrast seams.
 On globe hosts, regional infrared retains network tiles and processes each
-decoded tile once; shells process each whole frame once.
+decoded tile once; shells never read a frame's pixels back.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
 errors remain uncached. Each globe renderer retains up to 6 processed global
 mosaics in a least-recently-used cache keyed by observation time and infrared
 mode (up to 48 MiB of canvas pixels). Each shell keeps decoded full-extent and
 detail images in one least-recently-used cache bounded at 128 MiB, keyed by
-time, mode and window: the shown frame and the warmed next frame, each
+time and window: the shown frame and the warmed next frame, each
 full-extent and detail; nothing older survives them. Disable clears the caches.
 Cache hits skip
 fetch/decode and report `mosaic.cached: true` with zero decode time.
