@@ -32,7 +32,7 @@ import {
 
 /** Strict ISO 8601 date-time with an explicit zone; anything else is no time. */
 const ISO_DATE_TIME =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 /** `<operator>:route:<id>` — the route tag in an annotation list. */
 const ROUTE_ANNOTATION = /^[a-z0-9_-]{1,32}:route:(.+)$/i;
 /** `<operator>:sentido:<0|1>` (Portuguese) or `:direction:` — the GTFS direction_id. */
@@ -69,7 +69,19 @@ function boundedString(value, flags) {
 /** Epoch seconds from a strict ISO 8601 string, or null. */
 function isoToEpochSeconds(value) {
   if (typeof value !== 'string' || value.length > 64) return null;
-  if (!ISO_DATE_TIME.test(value)) return null;
+  const match = ISO_DATE_TIME.exec(value);
+  if (!match) return null;
+  // Date.parse normalizes dates such as February 30 into another month.
+  // Never turn an impossible operator observation into a live vehicle fix.
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+  ];
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1])
+    return null;
   const ms = Date.parse(value);
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : null;
 }

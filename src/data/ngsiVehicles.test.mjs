@@ -151,6 +151,24 @@ test('a loose or zoneless time is no time, and a negative speed is no speed', ()
   );
 });
 
+test('calendar-invalid observation times cannot be reinterpreted as newer bus fixes', () => {
+  for (const value of [
+    '2026-02-30T23:28:06Z',
+    '2026-04-31T23:28:06+00:00',
+    '2025-02-29T23:28:06Z',
+  ]) {
+    const record = normalizeNgsiVehicle(
+      stcpEntity({ observationDateTime: { value } }),
+    );
+    assert.equal(record.timestamp, null, value);
+  }
+  const leapTime = '2024-02-29T23:28:06Z';
+  const leapRecord = normalizeNgsiVehicle(
+    stcpEntity({ observationDateTime: { value: leapTime } }),
+  );
+  assert.equal(leapRecord.timestamp, Date.parse(leapTime) / 1000);
+});
+
 test('decoding an entity array gives a full-dataset snapshot, newest fix per vehicle', () => {
   const older = stcpEntity({
     observationDateTime: { value: '2026-11-07T23:27:00Z' },

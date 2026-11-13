@@ -5,3 +5,6 @@
   JSON `Vehicle` entities into the same vehicle records, under the same
   registered-URL, redirect, size, entity-count and string-length rules; an
   unknown format is refused (IMBrandao, #1629).
+- Reject calendar-invalid zoned NGSI observation times instead of silently
+  rolling them to a different day. The shared missing-time fallback then
+  applies to these STCP vehicles (IMBrandao, #1629).

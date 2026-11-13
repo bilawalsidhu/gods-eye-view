@@ -5717,7 +5717,9 @@ Burlington, Barrie and Kingston. Porto's is the one feed that is not
 GTFS-Realtime: its registry entry declares `format: 'ngsi-v2'`, and the
 proxy decodes the FIWARE broker's JSON `Vehicle` entities
 (`src/data/ngsiVehicles.js`) into the same vehicle records, under the same
-URL, redirect, size, entity-count and string-length bounds. Mode silhouettes
+URL, redirect, size, entity-count and string-length bounds. Invalid calendar
+dates cannot masquerade as newer observations: the shared timestamp fallback
+labels their time as a fetch-time estimate. Mode silhouettes
 identify buses, trams, subways, trains, ferries and unclassified vehicles.
 
 Retained transit history uses the same outlier quarantine as live observations and
