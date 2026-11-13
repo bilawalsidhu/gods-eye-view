@@ -8,12 +8,14 @@
  * record and `terms.quote` the licence it links. The credit names the
  * operator in Japanese, as the operator publishes it.
  *
- * Most rows were added overnight in Japan, when the feeds answer with an
- * empty message: each note says whether vehicle positions have been seen,
- * and a row whose positions have not been seen carries `liveSeen: false`,
- * which keeps it out of the globe-view coverage glow until it is confirmed.
- * `center` is the catalogue's bounding-box centre and `loadRadiusKm` an
- * estimate from the kind of network, to be tightened once vehicles are seen.
+ * The rows were added overnight in Japan, when the feeds answer with an
+ * empty message, and probed again at 08:00 Japan time on Saturday
+ * 2026-11-14. Each note says whether vehicle positions have been seen. A row
+ * whose positions have not been seen carries `liveSeen: false`, which keeps
+ * it out of the coverage heat-map until it is confirmed; its `center` is the
+ * catalogue's bounding-box centre and its `loadRadiusKm` an estimate from the
+ * kind of network. A row seen with five or more vehicles is centred on them,
+ * with a radius that covers the farthest one.
  *
  * Pure data: no imports.
  */
@@ -26,10 +28,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Toyama Chitetsu Bus (富山地方鉄道)',
     region: 'Toyama Prefecture, Japan',
     center: {
-      lat: 36.734,
-      lon: 137.249,
+      lat: 36.689,
+      lon: 137.212,
     },
-    loadRadiusKm: 30,
+    loadRadiusKm: 25,
     url: 'https://gtfs-rt-files.buscatch.jp/toyama/chitetsu/VehiclePositions.pb',
     license: 'CC0 1.0',
     licenseUrl:
@@ -37,9 +39,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山地方鉄道 (Toyama Chitetsu Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (26 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'kitokito-bus-imizu',
@@ -58,9 +59,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '射水市 (Imizu Kitokito Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'kaetsuno-bus-himi',
@@ -79,9 +79,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '加越能バス (Kaetsunō Bus Himi loop)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'kaetsuno-bus',
@@ -89,10 +88,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Kaetsunō Bus (加越能バス)',
     region: 'Toyama Prefecture, Japan',
     center: {
-      lat: 36.74,
-      lon: 136.903,
+      lat: 36.755,
+      lon: 136.995,
     },
-    loadRadiusKm: 25,
+    loadRadiusKm: 40,
     url: 'https://gtfs-rt-files.buscatch.jp/toyama/kaetsuno/VehiclePositions.pb',
     license: 'CC0 1.0',
     licenseUrl:
@@ -100,9 +99,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '加越能バス (Kaetsunō Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (13 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'kaetsuno-world-heritage-bus',
@@ -121,9 +119,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '加越能バス (Kaetsunō World Heritage Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'kamiichi-town-bus',
@@ -142,9 +139,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '上市町 (Kamiichi Town Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'kurobe-city-bus',
@@ -163,7 +159,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '黒部市 (Kurobe City Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -184,7 +180,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '黒部市 (Kurobe Shinkansen–Ikuji Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -205,7 +201,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '滑川市 (Namerikawa Noru my car)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -218,7 +214,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       lat: 36.482,
       lon: 136.969,
     },
-    loadRadiusKm: 20,
+    loadRadiusKm: 45,
     url: 'https://gtfs-rt-files.buscatch.jp/toyama/nanto-city/VehiclePositions.pb',
     license: 'CC0 1.0',
     licenseUrl:
@@ -226,9 +222,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '南砺市 (Nanto City Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (2 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'noran-my-car-nyuzen',
@@ -247,7 +242,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '入善町 (Nyūzen Noran my car)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -268,7 +263,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '小矢部市 (Oyabe City Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -289,7 +284,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '高岡市 (Takaoka City Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -310,7 +305,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '立山町 (Tateyama Town Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -331,9 +326,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '常滑市 (Tokoname Gruun)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (3 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'tonami-city-bus',
@@ -352,7 +346,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '砺波市 (Tonami City Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -373,7 +367,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山県朝日町 (Asahi Asahimachi Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -394,7 +388,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Fuchū Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -415,7 +409,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Horikawa-Minami Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -436,7 +430,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Jōjō Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -457,7 +451,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Kureha Ikiiki Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -478,7 +472,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Maidohaya Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -499,7 +493,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Mizuhashi Fureai Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -520,9 +514,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Ōyama Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'toyama-yamada-community-bus',
@@ -541,9 +534,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Yamada Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (2 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'toyama-yatsuo-community-bus',
@@ -562,9 +554,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '富山市 (Toyama Yatsuo Community Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'uozu-citizens-bus',
@@ -583,9 +574,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '魚津市 (Uozu Citizens’ Bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (4 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'uozu-omotenashi-bus',
@@ -604,7 +594,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '魚津市 (Uozu Omotenashi direct bus)',
     terms: {
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -625,9 +615,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '知多市 (Chita Aiai Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (1 vehicle). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'okage-bus-ise',
@@ -635,10 +624,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Ise Okage Bus (伊勢市)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 34.514,
-      lon: 136.724,
+      lat: 34.5,
+      lon: 136.698,
     },
-    loadRadiusKm: 15,
+    loadRadiusKm: 10,
     url: 'https://bus-vision.jp/realtime/iseshi_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -646,9 +635,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '伊勢市 (Ise Okage Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (5 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'keisei-bus-chiba-west-shiohama',
@@ -656,10 +644,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Keisei Bus Chiba West (Shiohama) (京成バス千葉ウエスト株式会社)',
     region: 'Chiba Prefecture, Japan',
     center: {
-      lat: 35.682,
-      lon: 139.92,
+      lat: 35.683,
+      lon: 139.918,
     },
-    loadRadiusKm: 15,
+    loadRadiusKm: 10,
     url: 'https://s3-ajt-mobusta-gtfs.s3.ap-northeast-1.amazonaws.com/realtime/35/vehicle_position.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -668,9 +656,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       '京成バス千葉ウエスト株式会社 (Keisei Bus Chiba West (Shiohama))',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (17 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'kamoshika-go-komono',
@@ -689,7 +676,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '菰野町 (Komono Kamoshika-gō)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -699,10 +686,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Kumamoto Bus (熊本バス)',
     region: 'Kumamoto Prefecture, Japan',
     center: {
-      lat: 32.709,
-      lon: 130.831,
+      lat: 32.783,
+      lon: 130.726,
     },
-    loadRadiusKm: 30,
+    loadRadiusKm: 25,
     url: 'https://km.bus-vision.jp/realtime/kumabus_vpos_update.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -710,7 +697,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '熊本バス (Kumamoto Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight Japan time. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight and again on 2026-11-14 at 08:00 Japan time (15 vehicles). The centre is the middle of the vehicles seen then.',
     },
   },
   {
@@ -719,10 +706,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Kumamoto Toshi Bus (熊本都市バス)',
     region: 'Kumamoto Prefecture, Japan',
     center: {
-      lat: 32.831,
-      lon: 130.738,
+      lat: 32.802,
+      lon: 130.708,
     },
-    loadRadiusKm: 20,
+    loadRadiusKm: 15,
     url: 'https://km.bus-vision.jp/realtime/toshibus_vpos_update.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -730,7 +717,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '熊本都市バス (Kumamoto Toshi Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight Japan time. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight and again on 2026-11-14 at 08:00 Japan time (31 vehicles). The centre is the middle of the vehicles seen then.',
     },
   },
   {
@@ -739,8 +726,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Kumamoto Dentetsu Bus (熊本電鉄)',
     region: 'Kumamoto Prefecture, Japan',
     center: {
-      lat: 32.882,
-      lon: 130.779,
+      lat: 32.831,
+      lon: 130.725,
     },
     loadRadiusKm: 25,
     url: 'https://km.bus-vision.jp/realtime/dentetsu_vpos_update.bin',
@@ -750,7 +737,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '熊本電鉄 (Kumamoto Dentetsu Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight Japan time. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight and again on 2026-11-14 at 08:00 Japan time (22 vehicles). The centre is the middle of the vehicles seen then.',
     },
   },
   {
@@ -759,10 +746,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Chūsei office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 34.747,
-      lon: 136.473,
+      lat: 34.734,
+      lon: 136.512,
     },
-    loadRadiusKm: 35,
+    loadRadiusKm: 25,
     url: 'https://bus-vision.jp/realtime/chusei_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -770,9 +757,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Chūsei office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (31 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-iga',
@@ -780,8 +766,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Iga office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 34.828,
-      lon: 136.443,
+      lat: 34.708,
+      lon: 136.128,
     },
     loadRadiusKm: 35,
     url: 'https://bus-vision.jp/realtime/iga_vpos_update_v2.bin',
@@ -791,9 +777,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Iga office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (11 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-nanki',
@@ -801,10 +786,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Nanki office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 33.981,
-      lon: 136.163,
+      lat: 34.076,
+      lon: 136.189,
     },
-    loadRadiusKm: 50,
+    loadRadiusKm: 45,
     url: 'https://bus-vision.jp/realtime/nanki_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -812,9 +797,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Nanki office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (6 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-ise',
@@ -822,8 +806,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Ise office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 34.394,
-      lon: 136.646,
+      lat: 34.486,
+      lon: 136.713,
     },
     loadRadiusKm: 35,
     url: 'https://bus-vision.jp/realtime/ise_vpos_update_v2.bin',
@@ -833,9 +817,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Ise office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (13 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-kuwana',
@@ -843,10 +826,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Kuwana office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 35.099,
-      lon: 136.713,
+      lat: 35.082,
+      lon: 136.684,
     },
-    loadRadiusKm: 35,
+    loadRadiusKm: 30,
     url: 'https://bus-vision.jp/realtime/kuwana_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -854,9 +837,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Kuwana office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (22 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-matsusaka',
@@ -864,10 +846,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Matsusaka office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 34.502,
-      lon: 136.384,
+      lat: 34.525,
+      lon: 136.529,
     },
-    loadRadiusKm: 35,
+    loadRadiusKm: 30,
     url: 'https://bus-vision.jp/realtime/matsusaka_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -875,9 +857,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Matsusaka office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (9 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-shima',
@@ -885,10 +866,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Shima office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 34.378,
-      lon: 136.766,
+      lat: 34.329,
+      lon: 136.814,
     },
-    loadRadiusKm: 35,
+    loadRadiusKm: 30,
     url: 'https://bus-vision.jp/realtime/shima_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -896,9 +877,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Shima office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (8 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'mie-kotsu-yokkaichi',
@@ -906,10 +886,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Mie Kōtsū Yokkaichi office (三重交通)',
     region: 'Mie Prefecture, Japan',
     center: {
-      lat: 35.021,
-      lon: 136.666,
+      lat: 34.975,
+      lon: 136.606,
     },
-    loadRadiusKm: 35,
+    loadRadiusKm: 40,
     url: 'https://bus-vision.jp/realtime/yokkaichi_vpos_update_v2.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -917,9 +897,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '三重交通 (Mie Kōtsū Yokkaichi office)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (24 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'nagai-bus-maebashi',
@@ -927,10 +906,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Nagai Bus (永井運輸株式会社)',
     region: 'Gunma Prefecture, Japan',
     center: {
-      lat: 36.366,
-      lon: 139.121,
+      lat: 36.384,
+      lon: 139.105,
     },
-    loadRadiusKm: 30,
+    loadRadiusKm: 15,
     url: 'https://nagai.nolbe.net/buslocation/VehiclePosition.pb',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -938,9 +917,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '永井運輸株式会社 (Nagai Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (7 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'nagano-city-bus',
@@ -959,7 +937,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '長野市 (Nagano City Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -980,7 +958,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '尾張旭市 (Owariasahi Asapī-gō)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -990,10 +968,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Sankō Bus (産交バス)',
     region: 'Kumamoto Prefecture, Japan',
     center: {
-      lat: 32.864,
-      lon: 130.832,
+      lat: 32.797,
+      lon: 130.703,
     },
-    loadRadiusKm: 70,
+    loadRadiusKm: 100,
     url: 'https://km.bus-vision.jp/realtime/sankobus_vpos_update.bin',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -1001,7 +979,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '産交バス (Sankō Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight Japan time. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-13 around midnight and again on 2026-11-14 at 08:00 Japan time (132 vehicles). The centre is the middle of the vehicles seen then.',
     },
   },
   {
@@ -1021,7 +999,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '株式会社タケヤ交通 (Takeya Kōtsū)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -1042,9 +1020,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '土浦市 (Tsuchiura Tsuchimaru Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (3 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'yanbaru-express-bus',
@@ -1063,7 +1040,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '合同会社やんばる急行バス (Yanbaru Express Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. The feed answered with a well-formed, empty message at 01:40 and again at 08:00 Japan time on Saturday 2026-11-14, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
     liveSeen: false,
   },
@@ -1073,10 +1050,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Kenkō Hokubu Kōtsū (株式会社県交北部交通)',
     region: 'Kōchi Prefecture, Japan',
     center: {
-      lat: 33.636,
-      lon: 133.369,
+      lat: 33.56,
+      lon: 133.524,
     },
-    loadRadiusKm: 40,
+    loadRadiusKm: 30,
     url: 'https://api-public.odpt.org/api/v4/gtfs/realtime/odpt_KenkoHokubuKotsu_Localbus_vehicle',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -1084,9 +1061,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '株式会社県交北部交通 (Kenkō Hokubu Kōtsū)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (6 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'kochi-koryo-kotsu',
@@ -1105,9 +1081,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '高知高陵交通株式会社 (Kōchi Kōryō Kōtsū)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (3 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'kochi-seinan-kotsu',
@@ -1115,10 +1090,10 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     operator: 'Kōchi Seinan Kōtsū (高知西南交通株式会社)',
     region: 'Kōchi Prefecture, Japan',
     center: {
-      lat: 32.951,
-      lon: 132.867,
+      lat: 32.932,
+      lon: 132.841,
     },
-    loadRadiusKm: 50,
+    loadRadiusKm: 35,
     url: 'https://api-public.odpt.org/api/v4/gtfs/realtime/odpt_KochiSeinanTraffic_Localbus_vehicle',
     license: 'CC BY 4.0',
     licenseUrl:
@@ -1126,9 +1101,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '高知西南交通株式会社 (Kōchi Seinan Kōtsū)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (11 vehicles). The centre is the middle of the vehicles seen then.',
     },
-    liveSeen: false,
   },
   {
     id: 'susaki-city-bus',
@@ -1147,9 +1121,8 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
     attribution: '須崎市 (Susaki City Bus)',
     terms: {
       quote: 'https://creativecommons.org/licenses/by/4.0/',
-      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
+      note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Vehicle positions were seen on 2026-11-14 at 08:00 Japan time (2 vehicles). The centre is the catalogue’s bounding-box centre for the network.',
     },
-    liveSeen: false,
   },
   {
     id: 'aomori-city-community-bus',
