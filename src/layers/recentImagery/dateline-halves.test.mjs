@@ -340,8 +340,8 @@ test('a half that fails or stalls after the other half proved data does not unse
   assert.equal(response.headers.get('Data-Present'), 'true');
   assert.deepEqual(
     response.presentBoxes,
-    [EAST_HALF, WEST_HALF],
-    'the unproven half is not called empty',
+    [WEST_HALF],
+    'the stalled half is not draped: VIIRS is a JPEG without alpha',
   );
 
   const failing = timedFetch({
@@ -666,9 +666,15 @@ test('a failed half is not mistaken for confirmed empty when the other is presen
     halfDeadlineMs: 20,
   });
   const response = await source.getThumbnail(FIJI_CANDIDATE, FIJI_BOX);
+  assert.equal(
+    response.headers.get('Data-Present'),
+    'true',
+    'the day itself stays present',
+  );
   assert.deepEqual(
     new Set(response.presentBoxes.map(bbox)),
-    new Set([bbox(EAST_HALF), bbox(WEST_HALF)]),
+    new Set([bbox(EAST_HALF)]),
+    'the failed half is not draped: VIIRS is a JPEG without alpha',
   );
 });
 

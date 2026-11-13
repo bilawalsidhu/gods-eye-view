@@ -1410,3 +1410,20 @@ test('a box dragged across the dateline is searched, listed and draped as one bo
   assert.equal(f.drapes().a, `${S18}|none`, 'the crossing box is draped');
   assert.equal(f.snap().boxSizeKm.width < 100, true, 'the short arc, not 360°');
 });
+
+
+test('thumbnail availability changes refresh an already shown day', async () => {
+  const f = fixture();
+  const priorGet = f.thumbnails.get;
+  let boxes = [BOX];
+  f.thumbnails.get = (key) => ({ ...priorGet(key), availableBoxes: boxes });
+  await f.ready();
+  f.thumbnails.probeRequested();
+  const slot = Object.keys(f.owned()).find((id) => f.owned()[id]);
+  assert.ok(slot, 'a day is already on the map');
+  const key = f.owned()[slot].key;
+  boxes = [{ ...BOX, east: BOX.west + 1 }];
+  f.thumbnails.probe(key, 'present');
+  assert.deepEqual(f.owned()[slot].availableBoxes, boxes);
+  f.layer.destroy();
+});

@@ -190,3 +190,88 @@ test('a rejected half does not hide data on the other half, and never reads as e
     /Thumbnail request failed/,
   );
 });
+
+// PR #1540 review (P2): a half whose probe failed or hung must not be
+// draped for a product without alpha. VIIRS is a JPEG, so an empty or
+// unknown half would land on the map as a black rectangle. Only a half
+// Worldview confirmed present (`Data-Present: true`) may be draped for it.
+// PNG products (HLS) keep an unknown half: alpha hides it.
+const JPEG_CANDIDATE = { product: 'VIIRS', day: '2026-10-01' };
+const WIDE_BOX = { west: -180, south: 0, east: -179, north: 1 };
+const NARROW_BOX = { west: 179.9, south: 0, east: 180, north: 1 };
+
+test('a JPEG product drapes only the half Worldview confirmed present: a rejected half is not draped', async () => {
+  const { source } = halvesSource({
+    '-180/-179': new Error('network'),
+    '179.9/180': dated('true', 'narrow'),
+  });
+  const response = await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
+  assert.equal(
+    response.headers.get('Data-Present'),
+    'true',
+    'the day itself stays present',
+  );
+  assert.deepEqual(
+    response.presentBoxes,
+    [NARROW_BOX],
+    'the failed half is not draped',
+  );
+});
+
+test('a JPEG product does not drape a half whose probe hung', async () => {
+  const requested = [];
+  const source = createRecentImagerySource({
+    thumbnailUrl: ({ box }) => {
+      requested.push(box);
+      return `https://imagery.example/${box.west}/${box.east}`;
+    },
+    halfDeadlineMs: 20,
+    fetchImpl: async (url) => {
+      const answer = {
+        '-180/-179': () => new Promise(() => {}),
+        '179.9/180': () => dated('true', 'narrow'),
+      }[url.split('imagery.example/')[1]];
+      return answer();
+    },
+  });
+  const response = await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
+  assert.equal(requested.length, 2, 'both halves were requested');
+  assert.equal(
+    response.headers.get('Data-Present'),
+    'true',
+    'the day itself stays present',
+  );
+  assert.deepEqual(
+    response.presentBoxes,
+    [NARROW_BOX],
+    'the hung half is not draped',
+  );
+});
+
+test('a JPEG product does not drape a half that answered with an unknown presence', async () => {
+  const { source } = halvesSource({
+    '-180/-179': dated('unknown', 'maybe'),
+    '179.9/180': dated('true', 'narrow'),
+  });
+  const response = await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
+  assert.equal(response.headers.get('Data-Present'), 'true');
+  assert.deepEqual(
+    response.presentBoxes,
+    [NARROW_BOX],
+    'an unproven half is not draped',
+  );
+});
+
+test('a PNG product keeps an unknown or failed half: alpha hides it', async () => {
+  const { source } = halvesSource({
+    '-180/-179': new Error('network'),
+    '179.9/180': dated('true', 'narrow'),
+  });
+  const response = await source.getThumbnail(candidate, NARROW_WEST);
+  assert.equal(await response.text(), 'narrow');
+  assert.deepEqual(
+    response.presentBoxes,
+    [WIDE_BOX, NARROW_BOX],
+    'a PNG keeps the unproven half',
+  );
+});

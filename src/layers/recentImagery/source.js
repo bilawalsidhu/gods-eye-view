@@ -1,5 +1,10 @@
 import { searchHls } from './catalog.js';
-import { gibsTemplate, nonCrossingBoxes, wvsSnapshotUrl } from './model.js';
+import {
+  PRODUCTS,
+  gibsTemplate,
+  nonCrossingBoxes,
+  wvsSnapshotUrl,
+} from './model.js';
 
 /**
  * A half's answer is only worth so much waiting: past this deadline the half
@@ -22,6 +27,15 @@ function requestBoxes(box) {
 }
 
 const isPresent = (response) => dataPresent(response) === 'true';
+
+/**
+ * A product without alpha (the VIIRS JPEG) cannot hide an empty half: it
+ * would drape as a black rectangle. Only a half Worldview confirmed present
+ * may be draped for it; a PNG (HLS) has alpha, so an unknown half is safe
+ * to keep and drape.
+ */
+const drapesOnlyProven = (candidate) =>
+  PRODUCTS[candidate?.product]?.format === 'jpg';
 
 const dataPresent = (response) =>
   response?.ok
@@ -209,10 +223,14 @@ export function createRecentImagerySource({
         return withPresentBoxes(
           combineHalves(responses),
           probes
-            .filter(
-              (probe, i) =>
-                results[i].status === 'rejected' ||
-                dataPresent(results[i].value) !== 'false',
+            .filter((probe, i) =>
+              // A product without alpha may drape only a half Worldview
+              // confirmed present: an empty or unproven half would land on
+              // the map as a black rectangle. A PNG keeps an unproven half.
+              drapesOnlyProven(candidate)
+                ? isPresent(results[i].value)
+                : results[i].status === 'rejected' ||
+                  dataPresent(results[i].value) !== 'false',
             )
             .map((entry) => nonCrossingBoxes(entry.half)[0]),
         );
