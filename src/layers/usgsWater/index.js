@@ -61,7 +61,7 @@ export function parseJsonl(text) {
 
 /**
  * The camera view as a degree box, or null when it cannot be expressed as one
- * (looking at space / horizon / across the antimeridian).
+ * (looking at space / horizon). A west > east box crosses the antimeridian.
  */
 export function viewBoxDegrees(viewer) {
   const rect = viewer?.camera?.computeViewRectangle?.(
@@ -75,7 +75,7 @@ export function viewBoxDegrees(viewer) {
     north: Cesium.Math.toDegrees(rect.north),
   };
   if (!Object.values(box).every(Number.isFinite)) return null;
-  if (box.north <= box.south || box.east <= box.west) return null;
+  if (box.north <= box.south || box.east === box.west) return null;
   return box;
 }
 
@@ -86,12 +86,21 @@ export function viewBoxDegrees(viewer) {
  * @returns {{status:'ok'|'zoom-in', tiles:Array<{key:string,file:string,count:number}>}}
  */
 export function selectStreamTiles(tiles, box) {
-  if (!box) return { status: 'zoom-in', tiles: [] };
+  if (!box || box.east === box.west) return { status: 'zoom-in', tiles: [] };
+  const longitudeSpan =
+    box.east >= box.west
+      ? box.east - box.west
+      : box.east + 360 - box.west;
   if (
-    box.east - box.west > STREAM_MAX_VIEW_DEG ||
+    longitudeSpan > STREAM_MAX_VIEW_DEG ||
     box.north - box.south > STREAM_MAX_VIEW_DEG
   )
     return { status: 'zoom-in', tiles: [] };
+  // A narrow view crossing +180/-180 has two longitude intervals.
+  const longitudeSpans =
+    box.east < box.west
+      ? [[box.west, 180], [-180, box.east]]
+      : [[box.west, box.east]];
   const picked = [];
   // Degrees round-trip through radians (Cesium rectangles), so a view that
   // stops exactly on a tile edge comes back a hair inside it. Without a
@@ -100,10 +109,11 @@ export function selectStreamTiles(tiles, box) {
   for (const [key, tile] of Object.entries(tiles || {})) {
     const [w, s, e, n] = tile.bounds || [];
     if (
-      e <= box.west + EPS ||
-      w >= box.east - EPS ||
       n <= box.south + EPS ||
-      s >= box.north - EPS
+      s >= box.north - EPS ||
+      !longitudeSpans.some(
+        ([west, east]) => e > west + EPS && w < east - EPS,
+      )
     )
       continue;
     picked.push({ key, file: tile.file, count: tile.count });
