@@ -2224,7 +2224,9 @@ Frame loading, calibration editing and status display have separate modules;
 providers, camera placement and navigation policy retain their existing owners.
 Changing cameras invalidates old image callbacks and cancels an unfinished
 calibration edit. Failed refreshes preserve settled pixels for the same camera,
-while a newly selected camera never shows the prior camera's image. Disposal
+while a newly selected camera never shows the prior camera's image. A frame is
+shown without a fade once it is decoded (or after one second if its decode never
+settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
 ## UI disposal
