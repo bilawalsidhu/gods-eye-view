@@ -581,6 +581,41 @@ test('the URL keeps the opening lib= before availability loads and for entries i
   library.destroy();
 });
 
+test('a layer switched off before its teardown failed is no longer shared as on', async (t) => {
+  const manager = sealedManager(t);
+  const storage = memoryStorage();
+  const shareLink = shareLinkDouble();
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage,
+    shareLink,
+    initialHash: '',
+    source: source({}),
+  });
+  await library.start();
+  await library.add('night-lights');
+  assert.equal(shareLink.encode(), '00');
+  const { module } = manager.layers.get('lib-night-lights');
+  const destroy = module.destroy;
+  module.destroy = async () => {
+    throw new Error('stuck');
+  };
+  t.mock.method(console, 'warn', () => {});
+  try {
+    assert.equal(await library.remove('night-lights'), false);
+    assert.equal(manager.isEnabled('lib-night-lights'), false);
+    assert.equal(shareLink.encode(), null);
+    const saved = JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY));
+    assert.deepEqual(saved, { added: ['night-lights'], on: [] });
+  } finally {
+    module.destroy = destroy;
+  }
+  library.destroy();
+});
+
 test('zoom flies to an added layer through the caller, reset removes everything', async (t) => {
   const manager = sealedManager(t);
   const storage = memoryStorage();

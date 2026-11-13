@@ -388,8 +388,19 @@ export function createDataLibrary({
       if (
         isRegistered(id) &&
         !(await dataManager.unregisterLibraryLayer(libraryLayerId(id)))
-      )
+      ) {
+        // Switched off before teardown failed: it is no longer on, so the
+        // link and what is remembered must not say it is.
+        if (!dataManager.isEnabled?.(libraryLayerId(id))) {
+          selection = {
+            ...selection,
+            on: selection.on.filter((other) => other !== id),
+          };
+          savedOn = savedOn.filter((other) => other !== id);
+          persist();
+        }
         return false;
+      }
       selection = {
         added: selection.added.filter((other) => other !== id),
         on: selection.on.filter((other) => other !== id),
