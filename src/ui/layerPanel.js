@@ -55,6 +55,7 @@ const PANEL_GROUPS = [
       'transit',
       'rail',
       'bikeshare',
+      'border-waits',
     ],
   },
   {

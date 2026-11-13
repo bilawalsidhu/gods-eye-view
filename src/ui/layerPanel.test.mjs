@@ -30,6 +30,7 @@ test('panel presentation places Transit and Rail between Street Traffic and Bike
       'transit',
       'rail',
       'bikeshare',
+      'border-waits',
     ],
   );
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);

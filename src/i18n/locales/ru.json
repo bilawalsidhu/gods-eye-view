@@ -3779,5 +3779,15 @@
   "500–1,000 m": "500–1000 м",
   "1,000–2,000 m": "1000–2000 м",
   "2,000–3,000 m": "2000–3000 м",
-  "3,000 m and above": "3000 м и выше"
+  "3,000 m and above": "3000 м и выше",
+  "Under 15 min": "Менее 15 мин",
+  "15–29 min": "15–29 мин",
+  "30–59 min": "30–59 мин",
+  "60 min or more": "60 мин и более",
+  "BORDER · {crossing}": "ГРАНИЦА · {crossing}",
+  "Border wait source unavailable": "Источник времени ожидания на границе недоступен",
+  "Closed": "Закрыто",
+  "No wait reported": "Время ожидания не сообщается",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "Цвет показывает время ожидания легковых автомобилей для въезда в США по данным CBP.",
+  "Border Wait Times": "Ожидание на границе"
 }

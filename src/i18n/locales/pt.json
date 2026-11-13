@@ -3692,5 +3692,15 @@
   "Confirm: remove every added entry from Data Layers": "Confirmar: remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Remove every added entry from Data Layers": "Remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Showing {shown} of {total}": "Mostrando {shown} de {total}",
-  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS"
+  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS",
+  "Under 15 min": "Menos de 15 min",
+  "15–29 min": "15–29 min",
+  "30–59 min": "30–59 min",
+  "60 min or more": "60 min ou mais",
+  "BORDER · {crossing}": "FRONTEIRA · {crossing}",
+  "Border wait source unavailable": "Fonte de tempos de espera na fronteira indisponível",
+  "Closed": "Fechado",
+  "No wait reported": "Nenhuma espera informada",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "A cor mostra a espera de veículos de passageiros para entrar nos EUA, segundo a CBP.",
+  "Border Wait Times": "Tempos de espera na fronteira"
 }

@@ -3518,5 +3518,15 @@
   "Confirm: remove every added entry from Data Layers": "確認：從數據圖層中移除所有已添加條目",
   "Remove every added entry from Data Layers": "從數據圖層中移除所有已添加條目",
   "Showing {shown} of {total}": "顯示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "瀏覽數據資源庫"
+  "BROWSE DATA LIBRARY": "瀏覽數據資源庫",
+  "Under 15 min": "少於 15 分鐘",
+  "15–29 min": "15–29 分鐘",
+  "30–59 min": "30–59 分鐘",
+  "60 min or more": "60 分鐘以上",
+  "BORDER · {crossing}": "邊境 · {crossing}",
+  "Border wait source unavailable": "邊境等候時間資料來源無法使用",
+  "Closed": "已關閉",
+  "No wait reported": "未回報等候時間",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "顏色表示 CBP 回報的小客車入境美國等候時間。",
+  "Border Wait Times": "邊境等候時間"
 }

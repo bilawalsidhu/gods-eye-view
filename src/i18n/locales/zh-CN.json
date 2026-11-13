@@ -3518,5 +3518,15 @@
   "Confirm: remove every added entry from Data Layers": "确认：从数据图层中移除所有已添加条目",
   "Remove every added entry from Data Layers": "从数据图层中移除所有已添加条目",
   "Showing {shown} of {total}": "显示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "浏览数据资源库"
+  "BROWSE DATA LIBRARY": "浏览数据资源库",
+  "Under 15 min": "少于 15 分钟",
+  "15–29 min": "15–29 分钟",
+  "30–59 min": "30–59 分钟",
+  "60 min or more": "60 分钟及以上",
+  "BORDER · {crossing}": "边境 · {crossing}",
+  "Border wait source unavailable": "边境等候时间数据源不可用",
+  "Closed": "已关闭",
+  "No wait reported": "未报告等候时间",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "颜色表示 CBP 报告的乘用车入境美国的等候时间。",
+  "Border Wait Times": "边境等候时间"
 }

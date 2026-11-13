@@ -3605,5 +3605,15 @@
   "Confirm: remove every added entry from Data Layers": "Bekräfta: ta bort alla tillagda poster från Datalager",
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
   "Showing {shown} of {total}": "Visar {shown} av {total}",
-  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET"
+  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "Under 15 min": "Under 15 min",
+  "15–29 min": "15–29 min",
+  "30–59 min": "30–59 min",
+  "60 min or more": "60 min eller mer",
+  "BORDER · {crossing}": "GRÄNS · {crossing}",
+  "Border wait source unavailable": "Källan för väntetider vid gränsen är otillgänglig",
+  "Closed": "Stängd",
+  "No wait reported": "Ingen väntetid rapporterad",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "Färgen visar väntetiden för personbilar in i USA, enligt CBP.",
+  "Border Wait Times": "Väntetider vid gränsen"
 }

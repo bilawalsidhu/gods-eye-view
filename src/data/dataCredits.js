@@ -227,6 +227,21 @@ export const DATA_CREDITS = [
     key: 'inaturalist',
     html: 'Wildlife sightings: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors (licences per record; photos credited on each card)',
   },
+  {
+    key: 'cbp-border-wait-times',
+    html:
+      'Border wait times: ' +
+      '<a href="https://bwt.cbp.gov/" target="_blank" rel="noopener">U.S. Customs and Border Protection</a>' +
+      ' · Crossing locations: ' +
+      '<a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) and ' +
+      '<a href="https://data.bts.gov/d/keg4-3bc2" target="_blank" rel="noopener">U.S. DOT Bureau of Transportation Statistics</a>',
+  },
+  {
+    key: 'cbsa-border-wait-times',
+    html:
+      'Waits into Canada: Canada Border Services Agency. Contains information licensed under the ' +
+      '<a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

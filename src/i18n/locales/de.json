@@ -3605,5 +3605,15 @@
   "Confirm: remove every added entry from Data Layers": "Bestätigen: alle hinzugefügten Einträge aus Datenebenen entfernen",
   "Remove every added entry from Data Layers": "Alle hinzugefügten Einträge aus Datenebenen entfernen",
   "Showing {shown} of {total}": "{shown} von {total} angezeigt",
-  "BROWSE DATA LIBRARY": "DATENBIBLIOTHEK DURCHSUCHEN"
+  "BROWSE DATA LIBRARY": "DATENBIBLIOTHEK DURCHSUCHEN",
+  "Under 15 min": "Unter 15 Min.",
+  "15–29 min": "15–29 Min.",
+  "30–59 min": "30–59 Min.",
+  "60 min or more": "60 Min. oder mehr",
+  "BORDER · {crossing}": "GRENZE · {crossing}",
+  "Border wait source unavailable": "Quelle für Grenzwartezeiten nicht verfügbar",
+  "Closed": "Geschlossen",
+  "No wait reported": "Keine Wartezeit gemeldet",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "Die Farbe zeigt die von der CBP gemeldete Wartezeit für Pkw bei der Einreise in die USA.",
+  "Border Wait Times": "Wartezeiten an der Grenze"
 }

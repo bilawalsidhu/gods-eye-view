@@ -3692,5 +3692,15 @@
   "Confirm: remove every added entry from Data Layers": "Confirmer : retirer du panneau Couches toutes les entrées ajoutées",
   "Remove every added entry from Data Layers": "Retirer du panneau Couches toutes les entrées ajoutées",
   "Showing {shown} of {total}": "Affichées : {shown} sur {total}",
-  "BROWSE DATA LIBRARY": "PARCOURIR LA BIBLIOTHÈQUE DE DONNÉES"
+  "BROWSE DATA LIBRARY": "PARCOURIR LA BIBLIOTHÈQUE DE DONNÉES",
+  "Under 15 min": "Moins de 15 min",
+  "15–29 min": "15–29 min",
+  "30–59 min": "30–59 min",
+  "60 min or more": "60 min ou plus",
+  "BORDER · {crossing}": "FRONTIÈRE · {crossing}",
+  "Border wait source unavailable": "Source des temps d’attente à la frontière indisponible",
+  "Closed": "Fermé",
+  "No wait reported": "Aucune attente signalée",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "La couleur indique l’attente des véhicules de tourisme pour entrer aux États-Unis, selon la CBP.",
+  "Border Wait Times": "Temps d’attente à la frontière"
 }

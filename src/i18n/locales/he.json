@@ -3692,5 +3692,15 @@
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
-  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
+  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "Under 15 min": "פחות מ-15 דק׳",
+  "15–29 min": "15–29 דק׳",
+  "30–59 min": "30–59 דק׳",
+  "60 min or more": "60 דק׳ ומעלה",
+  "BORDER · {crossing}": "גבול · {crossing}",
+  "Border wait source unavailable": "מקור זמני ההמתנה בגבול אינו זמין",
+  "Closed": "סגור",
+  "No wait reported": "לא דווחה המתנה",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "הצבע מציג את זמן ההמתנה לרכב פרטי בכניסה לארה״ב, כפי שדווח על ידי CBP.",
+  "Border Wait Times": "זמני המתנה בגבול"
 }

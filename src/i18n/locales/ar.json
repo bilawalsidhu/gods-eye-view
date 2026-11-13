@@ -3953,5 +3953,15 @@
   "Confirm: remove every added entry from Data Layers": "تأكيد: إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Remove every added entry from Data Layers": "إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Showing {shown} of {total}": "عرض {shown} من {total}",
-  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات"
+  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات",
+  "Under 15 min": "أقل من 15 دقيقة",
+  "15–29 min": "15–29 دقيقة",
+  "30–59 min": "30–59 دقيقة",
+  "60 min or more": "60 دقيقة أو أكثر",
+  "BORDER · {crossing}": "الحدود · {crossing}",
+  "Border wait source unavailable": "مصدر أوقات الانتظار على الحدود غير متاح",
+  "Closed": "مغلق",
+  "No wait reported": "لم يُبلَّغ عن وقت انتظار",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "يُظهر اللون مدة انتظار سيارات الركاب لدخول الولايات المتحدة، حسب CBP.",
+  "Border Wait Times": "أوقات الانتظار على الحدود"
 }

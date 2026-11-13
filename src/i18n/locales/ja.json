@@ -3518,5 +3518,15 @@
   "Confirm: remove every added entry from Data Layers": "確認：追加したすべての項目をデータレイヤーから削除",
   "Remove every added entry from Data Layers": "追加したすべての項目をデータレイヤーから削除",
   "Showing {shown} of {total}": "{total}件中{shown}件を表示",
-  "BROWSE DATA LIBRARY": "データライブラリを見る"
+  "BROWSE DATA LIBRARY": "データライブラリを見る",
+  "Under 15 min": "15分未満",
+  "15–29 min": "15〜29分",
+  "30–59 min": "30〜59分",
+  "60 min or more": "60分以上",
+  "BORDER · {crossing}": "国境 · {crossing}",
+  "Border wait source unavailable": "国境待ち時間のデータソースを利用できません",
+  "Closed": "閉鎖",
+  "No wait reported": "待ち時間の報告なし",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "色は CBP が報告する米国入国時の乗用車の待ち時間を示します。",
+  "Border Wait Times": "国境の待ち時間"
 }

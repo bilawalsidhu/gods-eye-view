@@ -3692,5 +3692,15 @@
   "500–1,000 m": "500–1000 m",
   "1,000–2,000 m": "1000–2000 m",
   "2,000–3,000 m": "2000–3000 m",
-  "3,000 m and above": "3000 m o más"
+  "3,000 m and above": "3000 m o más",
+  "Under 15 min": "Menos de 15 min",
+  "15–29 min": "15–29 min",
+  "30–59 min": "30–59 min",
+  "60 min or more": "60 min o más",
+  "BORDER · {crossing}": "FRONTERA · {crossing}",
+  "Border wait source unavailable": "Fuente de tiempos de espera fronterizos no disponible",
+  "Closed": "Cerrado",
+  "No wait reported": "Sin espera informada",
+  "Colour shows the passenger-vehicle wait to enter the U.S., as reported by CBP.": "El color indica la espera de vehículos de pasajeros para entrar en EE. UU., según la CBP.",
+  "Border Wait Times": "Tiempos de espera en la frontera"
 }

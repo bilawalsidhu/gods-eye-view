@@ -3291,6 +3291,13 @@
       "src/layers/news/source.js",
       "src/layers/news/sprites.js",
       "src/layers/news/cards.js",
+      "src/app/layers/borderWaits.js",
+      "src/layers/borderWaits/index.js",
+      "src/layers/borderWaits/cards.js",
+      "src/layers/borderWaits/records.js",
+      "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
+      "src/layers/borderWaits/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -4278,6 +4285,13 @@
       "src/layers/news/source.js",
       "src/layers/news/sprites.js",
       "src/layers/news/cards.js",
+      "src/app/layers/borderWaits.js",
+      "src/layers/borderWaits/index.js",
+      "src/layers/borderWaits/cards.js",
+      "src/layers/borderWaits/records.js",
+      "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
+      "src/layers/borderWaits/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -5107,7 +5121,8 @@
       "src/layers/wildlifeSightings/bounds.js",
       "src/layers/wildlifeSightings/acartiaTaxa.js",
       "src/layers/wildlifeSightings/gridViewport.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/borderWaits/source.js"
     ],
     "external": []
   },
@@ -5625,6 +5640,44 @@
       "src/layers/droneAirspace/records.js",
       "src/sources/httpBody.js",
       "src/layers/droneAirspace/source.js",
+      "src/i18n/marker.js"
+    ],
+    "external": []
+  },
+  "border-waits": {
+    "exports": ["./layers/border-waits"],
+    "modules": [
+      "src/layers/borderWaits/index.js",
+      "src/layers/borderWaits/cards.js",
+      "src/layers/borderWaits/records.js",
+      "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
+      "src/layers/borderWaits/source.js",
+      "src/sources/httpBody.js",
+      "src/i18n/marker.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/ar.json",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/he.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/sv.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json"
+    ],
+    "external": ["cesium"]
+  },
+  "border-waits-source": {
+    "exports": ["./layers/border-waits/source"],
+    "modules": [
+      "src/layers/borderWaits/source.js",
+      "src/sources/httpBody.js",
       "src/i18n/marker.js"
     ],
     "external": []

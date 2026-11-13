@@ -34,6 +34,7 @@ import { droneAirspaceProxy } from './droneAirspace.js';
 import { newsProxy } from './news.js';
 import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
+import { borderWaitsProxy } from './borderWaits.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 import { libraryProxy } from './library.js';
@@ -93,6 +94,7 @@ function localProviderPlugins({
     newsProxy(),
     inaturalistProxy(),
     acartiaProxy(),
+    borderWaitsProxy(),
     keySetupEndpoint(),
   ];
 }
