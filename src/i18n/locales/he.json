@@ -3385,6 +3385,8 @@
   "(+{minutes} min late)": "(+{minutes} דק׳ איחור)",
   "Exit cockpit to fly to a train": "צא מתא הטייס כדי לטוס לרכבת",
   "Photo © {photographer}": "צילום © {photographer}",
+  "Photo: {photographer} · {licence}": "צילום: {photographer} · {licence}",
+  "Photo · {licence}": "צילום · {licence}",
   "1 h/s": "שעה/שנ׳",
   "1 d/s": "יום/שנ׳",
   "1 wk/s": "שבוע/שנ׳",
