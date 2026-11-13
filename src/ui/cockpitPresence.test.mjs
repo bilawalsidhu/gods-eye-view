@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import { CockpitViewController } from './cockpitController.js';
+import { setLocale } from '../i18n/index.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
@@ -254,4 +255,17 @@ test('entering asks for a panel layout before Vue shows the cards', async (t) =>
   await new Promise((resolve) => requestAnimationFrame(resolve));
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.deepEqual(laid, ['context', 'signals']);
+});
+
+test('an aircraft is acquired on its CURSO in Portuguese; a ship keeps RUMO', async (t) => {
+  const { cockpit } = fixture(t);
+  t.after(() => setLocale('en'));
+  setLocale('pt');
+  const signals = [];
+  cockpit.pushCockpitSignal = (...args) => signals.push(args);
+  cockpit.enter();
+  await nextTick();
+  const acquired = signals.find(([key]) => key === 'track');
+  assert.ok(acquired, JSON.stringify(signals));
+  assert.equal(acquired[3], 'UAL123 · CURSO 092°');
 });

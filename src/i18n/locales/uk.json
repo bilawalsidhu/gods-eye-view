@@ -71,8 +71,18 @@
   "{severity} only": "Лише {severity}",
   "All categories": "Усі категорії",
   "Reading the news…": "Читаємо новини…",
-  "News, last {hours} hours": "Новини за {hours} год",
-  "Last {hours} h": "За {hours} год",
+  "News, last {hours} hours": {
+    "one": "Новини за останню {hours} годину",
+    "few": "Новини за останні {hours} години",
+    "many": "Новини за останні {hours} годин",
+    "other": "Новини за останні {hours} години"
+  },
+  "Last {hours} h": {
+    "one": "За {hours} год",
+    "few": "За {hours} год",
+    "many": "За {hours} год",
+    "other": "За {hours} год"
+  },
   "Time window": "Період",
   "Conflicts": "Конфлікти",
   "Local": "Місцеві",
@@ -81,9 +91,19 @@
   "Hotspots": "Гарячі точки",
   "Severity": "Тяжкість",
   "Category": "Категорія",
-  "Nothing reported near here in the last {hours} h": "За {hours} год поблизу нічого не повідомлялося",
+  "Nothing reported near here in the last {hours} h": {
+    "one": "За останню {hours} год поблизу нічого не повідомлялося",
+    "few": "За останні {hours} год поблизу нічого не повідомлялося",
+    "many": "За останні {hours} год поблизу нічого не повідомлялося",
+    "other": "За останні {hours} год поблизу нічого не повідомлялося"
+  },
   "Latest news": "Останні новини",
-  "No news matches these filters in the last {hours} h": "За {hours} год немає новин за цими фільтрами",
+  "No news matches these filters in the last {hours} h": {
+    "one": "За останню {hours} год немає новин за цими фільтрами",
+    "few": "За останні {hours} год немає новин за цими фільтрами",
+    "many": "За останні {hours} год немає новин за цими фільтрами",
+    "other": "За останні {hours} год немає новин за цими фільтрами"
+  },
   "Load older news": "Завантажити давніші новини",
   "How to read the map": "Як читати карту",
   "Colour: severity · icon: type of event": "Колір: тяжкість · значок: тип події",
@@ -594,6 +614,7 @@
   "Previous — prior visited contact in the 250 km window": "Назад — попередній переглянутий контакт у радіусі 250 км",
   "PREVIOUS": "НАЗАД",
   "FOCUS": "ФОКУС",
+  "site status|FOCUS": "ФОКУС",
   "Next — nearest unvisited contact in the 250 km window": "Далі — найближчий ще не переглянутий контакт у радіусі 250 км",
   "NEXT": "ДАЛІ",
   "Named areas ({n})": "Іменовані зони ({n})",
@@ -956,7 +977,7 @@
   "ORBITAL VELOCITY": "ОРБІТАЛЬНА ШВИДКІСТЬ",
   "SUB-SATELLITE POINT": "ПІДСУПУТНИКОВА ТОЧКА",
   "NORTH UP": "ПІВНІЧ УГОРІ",
-  "CURRENTLY OVER": "ЗАРАЗ НАД",
+  "CURRENTLY OVER": "ПІД СУПУТНИКОМ",
   "{division}, {country}": "{division}, {country}",
   "{region} · near {place}": "{region} · поблизу: {place}",
   "NORAD {id}": "NORAD {id}",
@@ -1859,7 +1880,12 @@
   "ROUTE DATA UNAVAILABLE": "ДАНІ МАРШРУТУ НЕДОСТУПНІ",
   "CONTACT NAVIGATION OFF": "НАВІГАЦІЮ КОНТАКТАМИ ВИМКНЕНО",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "МІСТОК ЗАЛИШАЄТЬСЯ НА ВИБРАНОМУ СУДНІ",
-  "{range} NM": "{range} МОР. МИЛ.",
+  "{range} NM": {
+    "one": "{range} МОР. МИЛЯ",
+    "few": "{range} МОР. МИЛІ",
+    "many": "{range} МОР. МИЛЬ",
+    "other": "{range} МОР. МИЛІ"
+  },
   "AIS DESTINATION · CREW REPORTED": "ПРИЗНАЧЕННЯ AIS · ВКАЗАНО ЕКІПАЖЕМ",
   "DEST {bearing}": "ПРИЗН. {bearing}",
   "Disable cockpit weather effects": "Вимкнути погодні ефекти кабіни",
@@ -1908,6 +1934,7 @@
   "Reclassify as TR-3B": "Перекласифікувати як TR-3B",
   "TRACK ACQUIRED": "ТРЕК ЗАХОПЛЕНО",
   "{label} · COURSE {heading}°": "{label} · ШЛЯХОВИЙ КУТ {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · ШЛЯХОВИЙ КУТ {heading}°",
   "{label} · HEADING {heading}°": "{label} · КУРС {heading}°",
   "{label} · NO HEADING": "{label} · НЕМАЄ КУРСУ",
   "{label} · NADIR VIEW": "{label} · ВИГЛЯД У НАДИР",
@@ -2188,6 +2215,7 @@
   "Observed history": "Історія спостережень",
   "Later observation": "Наступне спостереження",
   "Latest": "Останні",
+  "news list|Latest": "Останні",
   "Newest frame per product": "Найсвіжіший кадр кожного продукту",
   "Replay observed history": "Відтворити історію спостережень",
   "Imagery on Esri · Google 3D returns when cleared": "Підкладка: Esri · скидання поверне Google 3D",
@@ -2954,7 +2982,12 @@
   "Contact cockpit summary": "Зведення контакту в кабіні",
   "CONTACT": "КОНТАКТ",
   "CONTACTS · 250 KM": "КОНТАКТИ · 250 КМ",
-  "RINGS {spacing} NM": "КІЛЬЦЯ {spacing} МОР. МИЛ.",
+  "RINGS {spacing} NM": {
+    "one": "КІЛЬЦЯ {spacing} МОР. МИЛЯ",
+    "few": "КІЛЬЦЯ {spacing} МОР. МИЛІ",
+    "many": "КІЛЬЦЯ {spacing} МОР. МИЛЬ",
+    "other": "КІЛЬЦЯ {spacing} МОР. МИЛІ"
+  },
   "{count} CONTACTS": {
     "one": "{count} КОНТАКТ",
     "few": "{count} КОНТАКТИ",
@@ -3295,6 +3328,7 @@
   "Left panels": "Ліві панелі",
   "Right panels": "Праві панелі",
   "CONFIRMED": "ПІДТВЕРДЖЕНО",
+  "sightings filter|CONFIRMED": "ПІДТВЕРДЖЕНО",
   "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS",
   "Name of {name}": "Назва: {name}",
   "Change the colour of {name}": "Змінити колір: {name}",
@@ -3554,7 +3588,12 @@
   "Photo of {name}": "Фото {name}",
   "Acartia": "Acartia",
   "CC BY 4.0": "CC BY 4.0",
-  "{count} sightings in view": "Спостережень у кадрі: {count}",
+  "{count} sightings in view": {
+    "one": "{count} спостереження в кадрі",
+    "few": "{count} спостереження в кадрі",
+    "many": "{count} спостережень у кадрі",
+    "other": "{count} спостереження в кадрі"
+  },
   "Close sighting": "Закрити спостереження",
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "Спостереження живої природи за 48 год (китоподібні — 7 днів). Колір і символ значка позначають таксономічну групу. Вразливі види показано лише комірками 0,2°; повідомлення Acartia про морських ссавців моря Селіш округлено до 0,01°. Не перепис.",
   "Open {name} on iNaturalist": "Відкрити {name} в iNaturalist",
@@ -3565,20 +3604,33 @@
   "{days}d": "{days} дн",
   "All markers": "Усі мітки",
   "Show markers of every age": "Показати мітки будь-якого віку",
-  "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн; мітки без дати залишаються",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "one": "Максимальний вік події: {days} дн; мітки без дати залишаються",
+    "few": "Максимальний вік події: {days} дн; мітки без дати залишаються",
+    "many": "Максимальний вік події: {days} дн; мітки без дати залишаються",
+    "other": "Максимальний вік події: {days} дн; мітки без дати залишаються"
+  },
   "event age filter|All": "Усі",
   "Event age": "Вік події",
-  "Event age: {days}d · undated kept": "Вік події: {days} дн · мітки без дати залишаються",
+  "Event age: {days}d · undated kept": {
+    "one": "Вік події: {days} дн · мітки без дати залишаються",
+    "few": "Вік події: {days} дн · мітки без дати залишаються",
+    "many": "Вік події: {days} дн · мітки без дати залишаються",
+    "other": "Вік події: {days} дн · мітки без дати залишаються"
+  },
   "Close camera preview": "Закрити перегляд камери",
   "Refresh map still": "Оновити кадр на карті",
   "The map still uses a separate request and may show a different moment.": "Кадр на карті запитується окремо та може показувати інший момент.",
   "Video plays from Québec 511, which sees your IP address.": "Відео відтворюється з Québec 511, який бачить вашу IP-адресу.",
   "Press OPEN to load the photo": "Натисніть «ВІДКРИТИ», щоб завантажити фото",
   "Captured {month}": "Знято: {month}",
-  "this spot": "це місце",
   "the view centre": "центр карти",
   "{source} at {place}": "{source}: {place}",
+  "{source} at this spot": "{source} у цьому місці",
+  "{source} at the view centre": "{source} у центрі карти",
   "Street level at {place}": "Вуличні знімки: {place}",
+  "Street level at this spot": "Вуличні знімки в цьому місці",
+  "Street level at the view centre": "Вуличні знімки в центрі карти",
   "Switching map": "Перемикання карти",
   "Opening imagery": "Відкриття знімків",
   "Street View is ready: press {open} to load it": "Перегляд вулиць готовий: натисніть «{open}», щоб завантажити",
@@ -3670,6 +3722,7 @@
   "{source} imagery could not be opened": "Не вдалося відкрити знімки {source}",
   "{place} has no position to look for imagery at": "Для місця «{place}» немає координат для пошуку знімків",
   "No {source} imagery near {place}": "Немає знімків {source} поблизу: {place}",
+  "No {source} imagery near the view centre": "Немає знімків {source} поблизу центру карти",
   "{reason} (filters on: {filters})": "{reason} (увімкнено фільтри: {filters})",
   "tiles unavailable": "тайли недоступні",
   "zoom in to load this layer": "наблизьте карту, щоб завантажити цей шар",
@@ -3778,6 +3831,11 @@
   "REMOVE ALL": "ВИДАЛИТИ ВСЕ",
   "Confirm: remove every added entry from Data Layers": "Підтвердити: видалити всі додані записи з «Шарів даних»",
   "Remove every added entry from Data Layers": "Видалити всі додані записи з «Шарів даних»",
-  "Showing {shown} of {total}": "Показано {shown} з {total}",
+  "Showing {shown} of {total}": {
+    "one": "Показано {shown} з {total}",
+    "few": "Показано {shown} з {total}",
+    "many": "Показано {shown} з {total}",
+    "other": "Показано {shown} з {total}"
+  },
   "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ"
 }

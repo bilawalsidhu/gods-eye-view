@@ -62,8 +62,12 @@
   "{severity} only": "{severity}のみ",
   "All categories": "すべてのカテゴリ",
   "Reading the news…": "ニュースを読み込み中…",
-  "News, last {hours} hours": "直近{hours}時間のニュース",
-  "Last {hours} h": "直近{hours}時間",
+  "News, last {hours} hours": {
+    "other": "直近{hours}時間のニュース"
+  },
+  "Last {hours} h": {
+    "other": "直近{hours}時間"
+  },
   "Time window": "期間",
   "Conflicts": "紛争",
   "Local": "ローカル",
@@ -72,9 +76,13 @@
   "Hotspots": "ホットスポット",
   "Severity": "深刻度",
   "Category": "カテゴリ",
-  "Nothing reported near here in the last {hours} h": "直近{hours}時間、この付近の報道はありません",
+  "Nothing reported near here in the last {hours} h": {
+    "other": "直近{hours}時間、この付近の報道はありません"
+  },
   "Latest news": "最新ニュース",
-  "No news matches these filters in the last {hours} h": "直近{hours}時間で条件に合うニュースはありません",
+  "No news matches these filters in the last {hours} h": {
+    "other": "直近{hours}時間で条件に合うニュースはありません"
+  },
   "Load older news": "以前のニュースを読み込む",
   "How to read the map": "地図の見方",
   "Colour: severity · icon: type of event": "色：深刻度 · アイコン：出来事の種類",
@@ -564,6 +572,7 @@
   "Previous — prior visited contact in the 250 km window": "前へ：250 km圏内で直前に訪れたコンタクト",
   "PREVIOUS": "前へ",
   "FOCUS": "フォーカス",
+  "site status|FOCUS": "フォーカス",
   "Next — nearest unvisited contact in the 250 km window": "次へ：250 km圏内で最も近い未訪問のコンタクト",
   "NEXT": "次へ",
   "Named areas ({n})": "名前付きエリア（{n}）",
@@ -1776,7 +1785,9 @@
   "ROUTE DATA UNAVAILABLE": "経路データなし",
   "CONTACT NAVIGATION OFF": "コンタクトナビゲーション オフ",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "ブリッジは選択中の船舶に固定",
-  "{range} NM": "{range}海里",
+  "{range} NM": {
+    "other": "{range}海里"
+  },
   "AIS DESTINATION · CREW REPORTED": "AIS目的地 · 乗組員入力",
   "DEST {bearing}": "目的地 {bearing}",
   "Disable cockpit weather effects": "コックピットの天候エフェクトを無効にする",
@@ -1822,6 +1833,7 @@
   "Reclassify as TR-3B": "TR-3Bに再分類",
   "TRACK ACQUIRED": "追跡開始",
   "{label} · COURSE {heading}°": "{label} · 対地針路 {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · 対地針路 {heading}°",
   "{label} · HEADING {heading}°": "{label} · 船首方位 {heading}°",
   "{label} · NO HEADING": "{label} · 船首方位なし",
   "{label} · NADIR VIEW": "{label} · 直下視",
@@ -2078,6 +2090,7 @@
   "Observed history": "観測履歴",
   "Later observation": "次の観測",
   "Latest": "最新",
+  "news list|Latest": "最新",
   "Newest frame per product": "プロダクトごとの最新フレーム",
   "Replay observed history": "観測履歴を再生",
   "Imagery on Esri · Google 3D returns when cleared": "画像はEsri上に表示 · 消去するとGoogle 3Dに戻ります",
@@ -2730,7 +2743,9 @@
   "Contact cockpit summary": "コンタクトのコックピット概要",
   "CONTACT": "コンタクト",
   "CONTACTS · 250 KM": "コンタクト · 250 km",
-  "RINGS {spacing} NM": "距離環 {spacing}海里",
+  "RINGS {spacing} NM": {
+    "other": "距離環 {spacing}海里"
+  },
   "{count} CONTACTS": {
     "other": "コンタクト {count}件"
   },
@@ -3057,6 +3072,7 @@
   "Left panels": "左パネル",
   "Right panels": "右パネル",
   "CONFIRMED": "確認済み",
+  "sightings filter|CONFIRMED": "確認済み",
   "PAD / RTLS": "射場 / RTLS",
   "fire confidence filter|All": "すべて",
   "fire confidence filter|Nominal+": "中以上",
@@ -3311,7 +3327,9 @@
   "Photo of {name}": "{name}の写真",
   "Acartia": "Acartia",
   "CC BY 4.0": "CC BY 4.0",
-  "{count} sightings in view": "表示範囲に{count}件の目撃情報",
+  "{count} sightings in view": {
+    "other": "表示範囲に{count}件の目撃情報"
+  },
   "Close sighting": "目撃情報を閉じる",
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "過去48時間以内に観察された野生生物（クジラ類は7日間）。色とバッジのアイコンは分類群を表します。保護が必要な種は0.2°のセルとしてのみ表示し、セイリッシュ海のAcartiaによる海生哺乳類の目撃情報は0.01°に丸めます。個体数調査ではありません。",
   "Open {name} on iNaturalist": "iNaturalistで{name}を開く",
@@ -3322,20 +3340,27 @@
   "{days}d": "{days}日",
   "All markers": "すべてのマーカー",
   "Show markers of every age": "日付にかかわらずすべてのマーカーを表示",
-  "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "other": "イベントの最大経過日数：{days}日。日付のないマーカーは保持"
+  },
   "event age filter|All": "すべて",
   "Event age": "経過日数",
-  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
+  "Event age: {days}d · undated kept": {
+    "other": "経過日数：{days}日以内 · 日付なしは保持"
+  },
   "Close camera preview": "カメラのプレビューを閉じる",
   "Refresh map still": "地図上の静止画を更新",
   "The map still uses a separate request and may show a different moment.": "地図上の静止画は別のリクエストで取得されるため、異なる時点を表示する場合があります。",
   "Video plays from Québec 511, which sees your IP address.": "動画はQuébec 511から再生され、お使いのIPアドレスはQuébec 511側から見えます。",
   "Press OPEN to load the photo": "［開く］を押して写真を読み込む",
   "Captured {month}": "{month}撮影",
-  "this spot": "この地点",
   "the view centre": "表示中心",
   "{source} at {place}": "{place}の{source}",
+  "{source} at this spot": "この地点の{source}",
+  "{source} at the view centre": "表示中心の{source}",
   "Street level at {place}": "{place}のストリートレベル",
+  "Street level at this spot": "この地点のストリートレベル",
+  "Street level at the view centre": "表示中心のストリートレベル",
   "Switching map": "地図を切り替え中",
   "Opening imagery": "画像を開いています",
   "Street View is ready: press {open} to load it": "ストリートビューの準備ができました：［{open}］を押して読み込んでください",
@@ -3427,6 +3452,7 @@
   "{source} imagery could not be opened": "{source}の画像を開けませんでした",
   "{place} has no position to look for imagery at": "{place}には画像を探す位置がありません",
   "No {source} imagery near {place}": "{place}の近くに{source}の画像はありません",
+  "No {source} imagery near the view centre": "表示中心の近くに{source}の画像はありません",
   "{reason} (filters on: {filters})": "{reason}（有効なフィルター：{filters}）",
   "tiles unavailable": "タイルを利用できません",
   "zoom in to load this layer": "ズームインしてこのレイヤーを読み込む",
@@ -3517,6 +3543,8 @@
   "REMOVE ALL": "すべて削除",
   "Confirm: remove every added entry from Data Layers": "確認：追加したすべての項目をデータレイヤーから削除",
   "Remove every added entry from Data Layers": "追加したすべての項目をデータレイヤーから削除",
-  "Showing {shown} of {total}": "{total}件中{shown}件を表示",
+  "Showing {shown} of {total}": {
+    "other": "{total}件中{shown}件を表示"
+  },
   "BROWSE DATA LIBRARY": "データライブラリを見る"
 }

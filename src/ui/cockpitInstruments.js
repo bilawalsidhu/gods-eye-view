@@ -1,5 +1,5 @@
 /** Instrument values, routes and vision controls for the Cockpit controller. */
-import { formatNumber, t } from '../i18n/index.js';
+import { formatNumber, t, tn } from '../i18n/index.js';
 import {
   COCKPIT_VISION_MODES,
   normalizeCockpitVisionMode,
@@ -379,7 +379,10 @@ export function updateRadar(info) {
   );
   this.publishRadar({
     ...picture,
-    rangeLabel: t('{range} NM', { range: formatNumber(rangeNm) }),
+    // A plural, as the ring spacing is: ru «3 МОР. МИЛИ», «12 МОР. МИЛЬ».
+    rangeLabel: tn(rangeNm, '{range} NM', '{range} NM', {
+      range: formatNumber(rangeNm),
+    }),
   });
 }
 

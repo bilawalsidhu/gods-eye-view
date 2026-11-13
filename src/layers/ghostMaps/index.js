@@ -762,9 +762,12 @@ export function createGhostMapsLayer({
             title:
               days === null
                 ? t('Show markers of every age')
-                : t('Maximum event age: {days}d; undated markers are kept', {
-                    days: formatNumber(days),
-                  }),
+                : tn(
+                    days,
+                    'Maximum event age: {days}d; undated markers are kept',
+                    'Maximum event age: {days}d; undated markers are kept',
+                    { days: formatNumber(days) },
+                  ),
             active: days === _ageDays,
             onClick: () => setAgeDays(days),
           })),
@@ -799,7 +802,7 @@ export function createGhostMapsLayer({
           };
         }),
         legend: [],
-        info: `${_ageDays === null ? t('All markers') : t('Event age: {days}d · undated kept', { days: formatNumber(_ageDays) })} · ${info}`,
+        info: `${_ageDays === null ? t('All markers') : tn(_ageDays, 'Event age: {days}d · undated kept', 'Event age: {days}d · undated kept', { days: formatNumber(_ageDays) })} · ${info}`,
         infoTitle: t(
           'S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.',
         ),

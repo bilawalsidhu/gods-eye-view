@@ -326,9 +326,11 @@ export function enter({ kind = null } = {}) {
       'track',
       t('TRACK ACQUIRED'),
       // A ship with no true heading is held on its course over ground; one
-      // with neither is named without a direction.
+      // with neither is named without a direction. A ship's course has a
+      // word of its own: pt «RUMO», where an aircraft's is «CURSO».
       info.trackSource === 'course'
         ? t('{label} · COURSE {heading}°', {
+            context: 'vessel',
             label: info.name,
             heading: trackHeading,
           })

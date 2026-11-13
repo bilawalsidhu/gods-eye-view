@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLocale, t as translate } from '../i18n/index.js';
 import { createNewsPanel } from './newsPanel.js';
 import {
   NEWS_CATEGORIES,
@@ -383,6 +384,55 @@ test('the window choice offers shorter windows; the longest is the server window
   choice.value = '12';
   choice.dispatchEvent(new Event('change'));
   assert.deepEqual(calls.at(-1)[1], { filters: { hours: null } });
+});
+
+test('the time window agrees with its number of hours', (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('es');
+  const { news, panel } = fixture();
+  news.update(view({ windowHours: 24, windowChoices: [24, 12, 6, 3, 1] }));
+  const choice = panel.querySelector(
+    'select.news-readout__window-choice, .news-readout__window-choice select',
+  );
+  assert.deepEqual(
+    [...choice.options].map((option) => option.textContent),
+    ['Últimas 24 h', 'Últimas 12 h', 'Últimas 6 h', 'Últimas 3 h', 'Última 1 h'],
+  );
+  news.update(view({ windowHours: 1, items: [], hasMore: false }));
+  assert.equal(
+    panel.querySelector('.news-readout__window').textContent,
+    'Última 1 h',
+  );
+  assert.equal(
+    panel.querySelector('.news-readout').getAttribute('aria-label'),
+    'Noticias de la última 1 hora',
+  );
+  assert.match(
+    panel.textContent,
+    /En la última 1 h no hay noticias que coincidan con estos filtros/,
+  );
+  setLocale('ru');
+  news.update(view({ windowHours: 1, items: [], hasMore: false }));
+  assert.equal(
+    panel.querySelector('.news-readout').getAttribute('aria-label'),
+    'Новости за последний 1 час',
+  );
+  news.update(view({ windowHours: 12, items: [], hasMore: false }));
+  assert.equal(
+    panel.querySelector('.news-readout').getAttribute('aria-label'),
+    'Новости за последние 12 часов',
+  );
+  news.destroy();
+});
+
+test('the Latest news heading is worded apart from the timeline button (fr)', (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('fr');
+  const { news, panel } = fixture();
+  news.update(view());
+  assert.equal(panel.querySelector('.news-readout__head').textContent, 'Dernières');
+  assert.equal(translate('Latest'), 'Dernière', 'the timeline keeps its own');
+  news.destroy();
 });
 
 test('the panel names the window the server serves', () => {

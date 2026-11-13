@@ -478,6 +478,7 @@
   "PREVIOUS": "הקודם",
   "Previous — prior visited contact in the 250 km window": "הקודם — מגע שכבר ביקרת בו בחלון של 250 ק\"מ",
   "FOCUS": "התמקד",
+  "site status|FOCUS": "במוקד",
   "NEXT": "הבא",
   "Next — nearest unvisited contact in the 250 km window": "הבא — המגע הקרוב ביותר שלא ביקרת בו בחלון של 250 ק\"מ",
   "Named areas ({n})": "אזורים בעלי שם ({n})",
@@ -832,6 +833,7 @@
   "ORBIT REPLAY · {mission}": "שחזור מסלול · {mission}",
   "PAUSED · {title}": "מושהה · {title}",
   "CONFIRMED": "מאושר",
+  "sightings filter|CONFIRMED": "מאושרות",
   "PAD / RTLS": "כן שיגור / RTLS",
   "UNSPECIFIED": "לא צוין",
   "{value} KM DOWNRANGE": "{value} ק\"מ לאורך המסלול",
@@ -1268,7 +1270,11 @@
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "חיות בר נצפו ב-48 השעות האחרונות (לווייתנים · 7 ימים). הצבע וגליף התג מציגים את קבוצת הטקסון. מינים רגישים מוצגים כתאי 0.2° בלבד; דיווחי יונקי הים של Salish Sea דרך Acartia מעוגלים ל-0.01°. אינו מפקד אוכלוסין.",
   "iNaturalist contributors · Acartia {count} (Salish Sea) · licences per record": "תורמי iNaturalist · Acartia {count} (Salish Sea) · רישיונות לכל רשומה",
   "iNaturalist contributors · licences per record": "תורמי iNaturalist · רישיונות לכל רשומה",
-  "{count} sightings in view": "{count} תצפיות בתצוגה",
+  "{count} sightings in view": {
+    "one": "{count} תצפית בתצוגה",
+    "two": "{count} תצפיות בתצוגה",
+    "other": "{count} תצפיות בתצוגה"
+  },
   "Zoom in for local sightings": "התקרב לתצפיות מקומיות",
   "No recent sightings in view": "אין תצפיות אחרונות בתצוגה",
   "Acartia feed unavailable": "פיד Acartia אינו זמין",
@@ -1737,6 +1743,7 @@
   "SOURCE STATUS UNAVAILABLE": "מצב המקור אינו זמין",
   "TRACK ACQUIRED": "המעקב ננעל",
   "{label} · COURSE {heading}°": "{label} · מהלך {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · מהלך {heading}°",
   "Context could not restore every layer; try again": "ההקשר לא שיחזר את כל השכבות; נסה שוב",
   "No selected data layers": "אין שכבות נתונים נבחרות",
   "{count} data layers could not be cleared": {
@@ -1998,6 +2005,7 @@
   "Later observation": "תצפית מאוחרת",
   "Newest frame per product": "השקופית החדשה לכל מוצר",
   "Latest": "האחרונה",
+  "news list|Latest": "האחרונות",
   "Replay observed history": "הצגת ההיסטוריה הנצפית שוב",
   "Imagery on Esri · Google 3D returns when cleared": "צילומים ב-Esri · Google 3D חוזר כשמנקים",
   "Point the camera at the ground to use the view": "כוון את המצלמה אל הקרקע כדי להשתמש בתצוגה",
@@ -3238,9 +3246,17 @@
   "event age filter|All": "הכול",
   "{days}d": "{days} ימ׳",
   "Show markers of every age": "הצגת סמנים בכל גיל",
-  "Maximum event age: {days}d; undated markers are kept": "גיל אירוע מרבי: {days} ימ׳; סמנים ללא תאריך נשמרים",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "one": "גיל אירוע מרבי: {days} יום; סמנים ללא תאריך נשמרים",
+    "two": "גיל אירוע מרבי: {days} ימים; סמנים ללא תאריך נשמרים",
+    "other": "גיל אירוע מרבי: {days} ימים; סמנים ללא תאריך נשמרים"
+  },
   "All markers": "כל הסמנים",
-  "Event age: {days}d · undated kept": "גיל האירוע: {days} ימ׳ · ללא תאריך נשמרים",
+  "Event age: {days}d · undated kept": {
+    "one": "גיל האירוע: {days} יום · ללא תאריך נשמרים",
+    "two": "גיל האירוע: {days} ימים · ללא תאריך נשמרים",
+    "other": "גיל האירוע: {days} ימים · ללא תאריך נשמרים"
+  },
   "30-DAY MISSION INDEX UNAVAILABLE": "רשימת המשימות ל-30 יום אינה זמינה",
   "STATIONS": "תחנות",
   "Crewed stations and the craft that visit them": "תחנות מאוישות והחלליות המבקרות בהן",
@@ -3276,7 +3292,11 @@
   "LIVE AIS": "AIS חי",
   "CONTACT NAVIGATION OFF": "ניווט המגעים כבוי",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "הגשר נשאר עם האונייה הנבחרת",
-  "{range} NM": "{range} NM",
+  "{range} NM": {
+    "one": "{range} NM",
+    "two": "{range} NM",
+    "other": "{range} NM"
+  },
   "AIS DESTINATION · CREW REPORTED": "יעד AIS · דווח על ידי הצוות",
   "FWD": "קדימה",
   "AFT": "אחורה",
@@ -3295,10 +3315,13 @@
   "Video plays from Québec 511, which sees your IP address.": "הווידאו זורם מ-Québec 511, שרואה את כתובת ה-IP שלך.",
   "Press OPEN to load the photo": "לחץ על \"פתח\" כדי לטעון את התמונה",
   "Captured {month}": "צולם ב-{month}",
-  "this spot": "המקום הזה",
   "the view centre": "מרכז התצוגה",
   "{source} at {place}": "{source}: {place}",
+  "{source} at this spot": "{source} במקום הזה",
+  "{source} at the view centre": "{source} במרכז התצוגה",
   "Street level at {place}": "צילומי רחוב: {place}",
+  "Street level at this spot": "צילומי רחוב במקום הזה",
+  "Street level at the view centre": "צילומי רחוב במרכז התצוגה",
   "Switching map": "מחליף מפה",
   "Opening imagery": "פותח צילומים",
   "Street View is ready: press {open} to load it": "Street View מוכן: לחץ על \"{open}\" כדי לטעון אותו",
@@ -3358,7 +3381,11 @@
   "Zoom in (+)": "התקרבות (+)",
   "Zoom to the imaging sensor swath": "זום אל רצועת הסריקה של חיישן הצילום",
   "SENSOR": "חיישן",
-  "RINGS {spacing} NM": "טבעות {spacing} NM",
+  "RINGS {spacing} NM": {
+    "one": "טבעות {spacing} NM",
+    "two": "טבעות {spacing} NM",
+    "other": "טבעות {spacing} NM"
+  },
   "{count} CONTACTS": {
     "one": "{count} מגע",
     "two": "{count} מגעים",
@@ -3504,20 +3531,36 @@
   "{severity} and above": "{severity} ומעלה",
   "{severity} only": "{severity} בלבד",
   "All categories": "כל הקטגוריות",
-  "Last {hours} h": "{hours} שע׳ אחורה",
+  "Last {hours} h": {
+    "one": "השעה האחרונה ({hours})",
+    "two": "{hours} שע׳ אחרונות",
+    "other": "{hours} שע׳ אחרונות"
+  },
   "News from {area}": "חדשות מ-{area}",
   "Within {km} km of the view centre": "בטווח {km} ק\"מ ממרכז התצוגה",
   "Reading the news…": "קורא את החדשות…",
-  "News, last {hours} hours": "חדשות, {hours} שע׳ אחורה",
+  "News, last {hours} hours": {
+    "one": "חדשות, השעה האחרונה ({hours})",
+    "two": "חדשות, {hours} השעות האחרונות",
+    "other": "חדשות, {hours} השעות האחרונות"
+  },
   "Time window": "חלון זמן",
   "News sections": "מדורי חדשות",
   "Hotspots": "מוקדים",
   "Severity": "חומרה",
   "Category": "קטגוריה",
   "Zoom in to see local news": "התקרב כדי לראות חדשות מקומיות",
-  "Nothing reported near here in the last {hours} h": "לא דווח דבר בסביבה בחלון של {hours} שע׳",
+  "Nothing reported near here in the last {hours} h": {
+    "one": "לא דווח דבר בסביבה בשעה האחרונה ({hours})",
+    "two": "לא דווח דבר בסביבה ב־{hours} השעות האחרונות",
+    "other": "לא דווח דבר בסביבה ב־{hours} השעות האחרונות"
+  },
   "Latest news": "חדשות אחרונות",
-  "No news matches these filters in the last {hours} h": "אין חדשות התואמות למסננים אלה בחלון של {hours} שע׳",
+  "No news matches these filters in the last {hours} h": {
+    "one": "אין חדשות התואמות למסננים אלה בשעה האחרונה ({hours})",
+    "two": "אין חדשות התואמות למסננים אלה ב־{hours} השעות האחרונות",
+    "other": "אין חדשות התואמות למסננים אלה ב־{hours} השעות האחרונות"
+  },
   "Load older news": "טעינת חדשות ישנות יותר",
   "How to read the map": "איך לקרוא את המפה",
   "Colour: severity · icon: type of event": "צבע: חומרה · סמל: סוג האירוע",
@@ -3589,6 +3632,7 @@
   "{source} imagery could not be opened": "לא ניתן היה לפתוח את הצילומים של {source}",
   "{place} has no position to look for imagery at": "ל-{place} אין מיקום לחיפוש צילומים",
   "No {source} imagery near {place}": "אין צילומים של {source} ליד {place}",
+  "No {source} imagery near the view centre": "אין צילומים של {source} ליד מרכז התצוגה",
   "{reason} (filters on: {filters})": "{reason} (מסננים פעילים: {filters})",
   "tiles unavailable": "האריחים אינם זמינים",
   "zoom in to load this layer": "התקרב כדי לטעון את השכבה הזאת",
@@ -3691,6 +3735,10 @@
   "REMOVE ALL": "הסרת הכול",
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
-  "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
+  "Showing {shown} of {total}": {
+    "one": "מוצג {shown} מתוך {total}",
+    "two": "מוצגים {shown} מתוך {total}",
+    "other": "מוצגים {shown} מתוך {total}"
+  },
   "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
 }

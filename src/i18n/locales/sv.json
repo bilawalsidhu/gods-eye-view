@@ -67,18 +67,30 @@
   "{severity} and above": "{severity} och uppåt",
   "{severity} only": "Endast ”{severity}”",
   "All categories": "Alla kategorier",
-  "Last {hours} h": "Senaste {hours} h",
+  "Last {hours} h": {
+    "one": "Senaste {hours} h",
+    "other": "Senaste {hours} h"
+  },
   "Reading the news…": "Läser in nyheterna …",
-  "News, last {hours} hours": "Nyheter, senaste {hours} h",
+  "News, last {hours} hours": {
+    "one": "Nyheter, senaste {hours} h",
+    "other": "Nyheter, senaste {hours} h"
+  },
   "Time window": "Tidsfönster",
   "News sections": "Nyhetssektioner",
   "Hotspots": "Oroshärdar",
   "Severity": "Allvarlighetsgrad",
   "Category": "Kategori",
   "Zoom in to see local news": "Zooma in för att se lokala nyheter",
-  "Nothing reported near here in the last {hours} h": "Inget rapporterat i närheten senaste {hours} h",
+  "Nothing reported near here in the last {hours} h": {
+    "one": "Inget rapporterat i närheten senaste {hours} h",
+    "other": "Inget rapporterat i närheten senaste {hours} h"
+  },
   "Latest news": "Senaste nyheterna",
-  "No news matches these filters in the last {hours} h": "Inga nyheter matchar filtren senaste {hours} h",
+  "No news matches these filters in the last {hours} h": {
+    "one": "Inga nyheter matchar filtren senaste {hours} h",
+    "other": "Inga nyheter matchar filtren senaste {hours} h"
+  },
   "Load older news": "Ladda äldre nyheter",
   "How to read the map": "Så läses kartan",
   "Colour: severity · icon: type of event": "Färg: allvarlighetsgrad · ikon: typ av händelse",
@@ -198,6 +210,7 @@
   "Previous — prior visited contact in the 250 km window": "Förra – senast besökta kontakt inom 250 km",
   "PREVIOUS": "FÖRRA",
   "FOCUS": "FOKUS",
+  "site status|FOCUS": "FOKUS",
   "Next — nearest unvisited contact in the 250 km window": "Nästa – närmaste obesökta kontakt inom 250 km",
   "NEXT": "NÄSTA",
   "Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.": "Kartlagd/observerad kontext från öppna källor. Uteblivna sändningar, kartområden som inte har laddats eller platser som inte är kartlagda bevisar inte att något saknas.",
@@ -565,6 +578,7 @@
   "Reclassify as TR-3B": "Klassa om som TR-3B",
   "TRACK ACQUIRED": "SPÅR LÅST",
   "{label} · COURSE {heading}°": "{label} · FÄRDRIKTNING {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · FÄRDRIKTNING {heading}°",
   "Context could not restore every layer; try again": "Läget ”Kontext” kunde inte återställa alla lager – försök igen",
   "No selected data layers": "Inga valda datalager",
   "{count} data layers could not be cleared": {
@@ -2326,6 +2340,7 @@
   "Observed history": "Observerad historik",
   "Later observation": "Senare observation",
   "Latest": "Senaste",
+  "news list|Latest": "Senaste",
   "Newest frame per product": "Senaste bildruta per produkt",
   "Replay observed history": "Spela upp observerad historik",
   "Imagery on Esri · Google 3D returns when cleared": "Bilder på Esri · Google 3D återkommer när de rensas",
@@ -3049,6 +3064,7 @@
   "Left panels": "Vänstra paneler",
   "Right panels": "Högra paneler",
   "CONFIRMED": "BEKRÄFTAD",
+  "sightings filter|CONFIRMED": "BEKRÄFTADE",
   "PAD / RTLS": "RAMP / RTLS",
   "fire confidence filter|All": "Alla",
   "fire confidence filter|Nominal+": "Normal+",
@@ -3309,7 +3325,10 @@
   "Photo of {name}": "Foto av {name}",
   "Acartia": "Acartia",
   "CC BY 4.0": "CC BY 4.0",
-  "{count} sightings in view": "Observationer i vyn: {count}",
+  "{count} sightings in view": {
+    "one": "{count} observation i vyn",
+    "other": "{count} observationer i vyn"
+  },
   "Close sighting": "Stäng observationen",
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "Djur, växter och svampar observerade de senaste 48 h (valar 7 d). Färg och symbol visar artgruppen. Känsliga arter visas bara som rutor på 0,2°; rapporter om marina däggdjur i Salish Sea via Acartia avrundas till 0,01°. Ingen inventering.",
   "Open {name} on iNaturalist": "Öppna {name} på iNaturalist",
@@ -3320,20 +3339,29 @@
   "{days}d": "{days} d",
   "All markers": "Alla markörer",
   "Show markers of every age": "Visa markörer oavsett ålder",
-  "Maximum event age: {days}d; undated markers are kept": "Högsta ålder på händelser: {days} d; markörer utan datum behålls",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "one": "Högsta ålder på händelser: {days} d; markörer utan datum behålls",
+    "other": "Högsta ålder på händelser: {days} d; markörer utan datum behålls"
+  },
   "event age filter|All": "Alla",
   "Event age": "Händelsernas ålder",
-  "Event age: {days}d · undated kept": "Händelsernas ålder: {days} d · utan datum behålls",
+  "Event age: {days}d · undated kept": {
+    "one": "Händelsernas ålder: {days} d · utan datum behålls",
+    "other": "Händelsernas ålder: {days} d · utan datum behålls"
+  },
   "Close camera preview": "Stäng förhandsvisningen av kameran",
   "Refresh map still": "Uppdatera stillbilden på kartan",
   "The map still uses a separate request and may show a different moment.": "Stillbilden på kartan hämtas separat och kan visa ett annat ögonblick.",
   "Video plays from Québec 511, which sees your IP address.": "Videon spelas upp från Québec 511, som ser din IP-adress.",
   "Press OPEN to load the photo": "Tryck på ÖPPNA för att ladda fotot",
   "Captured {month}": "Tagen {month}",
-  "this spot": "den här platsen",
   "the view centre": "vyns mitt",
   "{source} at {place}": "{source} vid {place}",
+  "{source} at this spot": "{source} på den här platsen",
+  "{source} at the view centre": "{source} i vyns mitt",
   "Street level at {place}": "Gatunivå vid {place}",
+  "Street level at this spot": "Gatunivå på den här platsen",
+  "Street level at the view centre": "Gatunivå i vyns mitt",
   "Switching map": "Byter karta",
   "Opening imagery": "Öppnar bilder",
   "Street View is ready: press {open} to load it": "Street View är redo: tryck på {open} för att ladda den",
@@ -3367,7 +3395,10 @@
   "LIVE AIS": "LIVE-AIS",
   "CONTACT NAVIGATION OFF": "KONTAKTNAVIGERING AV",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "BRYGGAN STANNAR PÅ DET VALDA FARTYGET",
-  "{range} NM": "{range} NM",
+  "{range} NM": {
+    "one": "{range} NM",
+    "other": "{range} NM"
+  },
   "AIS DESTINATION · CREW REPORTED": "AIS-DESTINATION · ANGIVEN AV BESÄTTNINGEN",
   "{label} · NADIR VIEW": "{label} · NADIRVY",
   "SITES STANDBY": "PLATSER I VÄNTLÄGE",
@@ -3446,7 +3477,10 @@
   "Zoom in (+)": "Zooma in (+)",
   "Zoom to the imaging sensor swath": "Zooma till sensorns avbildningsstråk",
   "SENSOR": "SENSOR",
-  "RINGS {spacing} NM": "RINGAR {spacing} NM",
+  "RINGS {spacing} NM": {
+    "one": "RINGAR {spacing} NM",
+    "other": "RINGAR {spacing} NM"
+  },
   "{count} CONTACTS": {
     "one": "{count} KONTAKT",
     "other": "{count} KONTAKTER"
@@ -3500,6 +3534,7 @@
   "{source} imagery could not be opened": "Bilder från {source} kunde inte öppnas",
   "{place} has no position to look for imagery at": "{place} har ingen position att söka efter bilder vid",
   "No {source} imagery near {place}": "Inga bilder från {source} nära {place}",
+  "No {source} imagery near the view centre": "Inga bilder från {source} nära vyns mitt",
   "{reason} (filters on: {filters})": "{reason} (aktiva filter: {filters})",
   "1 h/s": "1 h/s",
   "1 d/s": "1 d/s",
@@ -3604,6 +3639,9 @@
   "REMOVE ALL": "TA BORT ALLA",
   "Confirm: remove every added entry from Data Layers": "Bekräfta: ta bort alla tillagda poster från Datalager",
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
-  "Showing {shown} of {total}": "Visar {shown} av {total}",
+  "Showing {shown} of {total}": {
+    "one": "Visar {shown} av {total}",
+    "other": "Visar {shown} av {total}"
+  },
   "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET"
 }

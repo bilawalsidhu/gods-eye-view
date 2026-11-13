@@ -68,8 +68,16 @@
   "{severity} only": "Solo {severity}",
   "All categories": "Tutte le categorie",
   "Reading the news…": "Lettura delle notizie…",
-  "News, last {hours} hours": "Notizie, periodo in ore: {hours}",
-  "Last {hours} h": "Periodo: {hours} h",
+  "News, last {hours} hours": {
+    "one": "Notizie dell'ultima {hours} ora",
+    "many": "Notizie delle ultime {hours} di ore",
+    "other": "Notizie delle ultime {hours} ore"
+  },
+  "Last {hours} h": {
+    "one": "Ultima {hours} h",
+    "many": "Ultime {hours} h",
+    "other": "Ultime {hours} h"
+  },
   "Time window": "Periodo",
   "Conflicts": "Conflitti",
   "Local": "Locale",
@@ -78,9 +86,17 @@
   "Hotspots": "Focolai",
   "Severity": "Gravità",
   "Category": "Categoria",
-  "Nothing reported near here in the last {hours} h": "Nessuna segnalazione qui vicino · periodo: {hours} h",
+  "Nothing reported near here in the last {hours} h": {
+    "one": "Nessuna segnalazione qui vicino nell'ultima {hours} h",
+    "many": "Nessuna segnalazione qui vicino nelle ultime {hours} h",
+    "other": "Nessuna segnalazione qui vicino nelle ultime {hours} h"
+  },
   "Latest news": "Ultime notizie",
-  "No news matches these filters in the last {hours} h": "Nessuna notizia corrisponde a questi filtri · periodo: {hours} h",
+  "No news matches these filters in the last {hours} h": {
+    "one": "Nessuna notizia dell'ultima {hours} h corrisponde a questi filtri",
+    "many": "Nessuna notizia delle ultime {hours} h corrisponde a questi filtri",
+    "other": "Nessuna notizia delle ultime {hours} h corrisponde a questi filtri"
+  },
   "Load older news": "Carica notizie precedenti",
   "How to read the map": "Come leggere la mappa",
   "Colour: severity · icon: type of event": "Colore: gravità · icona: tipo di evento",
@@ -584,6 +600,7 @@
   "Previous — prior visited contact in the 250 km window": "Precedente — contatto visitato in precedenza nella finestra di 250 km",
   "PREVIOUS": "PREC",
   "FOCUS": "FOCUS",
+  "site status|FOCUS": "FOCUS",
   "Next — nearest unvisited contact in the 250 km window": "Successivo — contatto non visitato più vicino nella finestra di 250 km",
   "NEXT": "SUCC",
   "Named areas ({n})": "Aree con nome ({n})",
@@ -941,7 +958,7 @@
   "ORBITAL VELOCITY": "VELOCITÀ ORBITALE",
   "SUB-SATELLITE POINT": "PUNTO SUBSATELLITARE",
   "NORTH UP": "NORD IN ALTO",
-  "CURRENTLY OVER": "ATTUALMENTE SOPRA",
+  "CURRENTLY OVER": "SOTTO IL SATELLITE",
   "{division}, {country}": "{division}, {country}",
   "{region} · near {place}": "{region} · vicino a {place}",
   "NORAD {id}": "NORAD {id}",
@@ -1832,7 +1849,11 @@
   "ROUTE DATA UNAVAILABLE": "DATI ROTTA NON DISPONIBILI",
   "CONTACT NAVIGATION OFF": "NAVIGAZIONE CONTATTI DISATTIVATA",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "LA PLANCIA RESTA SULLA NAVE SELEZIONATA",
-  "{range} NM": "{range} MN",
+  "{range} NM": {
+    "one": "{range} MN",
+    "many": "{range} MN",
+    "other": "{range} MN"
+  },
   "AIS DESTINATION · CREW REPORTED": "DESTINAZIONE AIS · DICHIARATA DALL'EQUIPAGGIO",
   "DEST {bearing}": "DEST {bearing}",
   "Disable cockpit weather effects": "Disattiva gli effetti meteo del cockpit",
@@ -1880,6 +1901,7 @@
   "Reclassify as TR-3B": "Riclassifica come TR-3B",
   "TRACK ACQUIRED": "TRACCIA ACQUISITA",
   "{label} · COURSE {heading}°": "{label} · ROTTA {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · ROTTA {heading}°",
   "{label} · HEADING {heading}°": "{label} · PRUA {heading}°",
   "{label} · NO HEADING": "{label} · PRUA N/D",
   "{label} · NADIR VIEW": "{label} · VISTA AL NADIR",
@@ -2152,6 +2174,7 @@
   "Observed history": "Storico osservato",
   "Later observation": "Osservazione successiva",
   "Latest": "Più recente",
+  "news list|Latest": "Più recenti",
   "Newest frame per product": "Fotogramma più recente per prodotto",
   "Replay observed history": "Rivedi lo storico osservato",
   "Imagery on Esri · Google 3D returns when cleared": "Immagini su Esri · Google 3D torna con CANCELLA",
@@ -2880,7 +2903,11 @@
   "Contact cockpit summary": "Riepilogo contatto del cockpit",
   "CONTACT": "CONTATTO",
   "CONTACTS · 250 KM": "CONTATTI · 250 KM",
-  "RINGS {spacing} NM": "CERCHI {spacing} MN",
+  "RINGS {spacing} NM": {
+    "one": "CERCHI {spacing} MN",
+    "many": "CERCHI {spacing} MN",
+    "other": "CERCHI {spacing} MN"
+  },
   "{count} CONTACTS": {
     "one": "{count} CONTATTO",
     "many": "{count} DI CONTATTI",
@@ -3207,6 +3234,7 @@
   "Left panels": "Pannelli a sinistra",
   "Right panels": "Pannelli a destra",
   "CONFIRMED": "CONFERMATA",
+  "sightings filter|CONFIRMED": "CONFERMATE",
   "PAD / RTLS": "RAMPA / RTLS",
   "fire confidence filter|All": "Tutti",
   "fire confidence filter|Nominal+": "Nominale+",
@@ -3473,7 +3501,11 @@
   "Photo of {name}": "Foto di {name}",
   "Acartia": "Acartia",
   "CC BY 4.0": "CC BY 4.0",
-  "{count} sightings in view": "Avvistamenti nella vista: {count}",
+  "{count} sightings in view": {
+    "one": "{count} avvistamento nella vista",
+    "many": "{count} di avvistamenti nella vista",
+    "other": "{count} avvistamenti nella vista"
+  },
   "Close sighting": "Chiudi avvistamento",
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "Fauna osservata nelle ultime 48 h (cetacei 7 giorni). Colore e simbolo del contrassegno indicano il gruppo tassonomico. Le specie sensibili sono mostrate solo in celle di 0,2°; le segnalazioni di mammiferi marini di Acartia nel mar dei Salish sono arrotondate a 0,01°. Non è un censimento.",
   "Open {name} on iNaturalist": "Apri {name} su iNaturalist",
@@ -3484,20 +3516,31 @@
   "{days}d": "{days} g",
   "All markers": "Tutti i marcatori",
   "Show markers of every age": "Mostra i marcatori di qualsiasi età",
-  "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} g; marcatori senza data mantenuti",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "one": "Età massima degli eventi: {days} giorno; marcatori senza data mantenuti",
+    "many": "Età massima degli eventi: {days} di giorni; marcatori senza data mantenuti",
+    "other": "Età massima degli eventi: {days} giorni; marcatori senza data mantenuti"
+  },
   "event age filter|All": "Tutti",
   "Event age": "Età degli eventi",
-  "Event age: {days}d · undated kept": "Età degli eventi: {days} g · senza data mantenuti",
+  "Event age: {days}d · undated kept": {
+    "one": "Età degli eventi: {days} giorno · senza data mantenuti",
+    "many": "Età degli eventi: {days} di giorni · senza data mantenuti",
+    "other": "Età degli eventi: {days} giorni · senza data mantenuti"
+  },
   "Close camera preview": "Chiudi anteprima della telecamera",
   "Refresh map still": "Aggiorna immagine fissa sulla mappa",
   "The map still uses a separate request and may show a different moment.": "L'immagine sulla mappa usa una richiesta separata e può mostrare un momento diverso.",
   "Video plays from Québec 511, which sees your IP address.": "Il video viene riprodotto da Québec 511, che vede il tuo indirizzo IP.",
   "Press OPEN to load the photo": "Premi APRI per caricare la foto",
   "Captured {month}": "Scattata: {month}",
-  "this spot": "questo punto",
   "the view centre": "il centro della vista",
   "{source} at {place}": "{source}: {place}",
+  "{source} at this spot": "{source} in questo punto",
+  "{source} at the view centre": "{source} al centro della vista",
   "Street level at {place}": "Vista stradale: {place}",
+  "Street level at this spot": "Vista stradale in questo punto",
+  "Street level at the view centre": "Vista stradale al centro della vista",
   "Switching map": "Cambio mappa",
   "Opening imagery": "Apertura delle immagini",
   "Street View is ready: press {open} to load it": "Street View è pronto: premi {open} per caricarlo",
@@ -3589,6 +3632,7 @@
   "{source} imagery could not be opened": "Impossibile aprire le immagini di {source}",
   "{place} has no position to look for imagery at": "{place} non ha una posizione in cui cercare immagini",
   "No {source} imagery near {place}": "Nessuna immagine di {source} vicino a {place}",
+  "No {source} imagery near the view centre": "Nessuna immagine di {source} vicino al centro della vista",
   "{reason} (filters on: {filters})": "{reason} (filtri attivi: {filters})",
   "tiles unavailable": "tile non disponibili",
   "zoom in to load this layer": "ingrandisci per caricare questo livello",
@@ -3691,6 +3735,10 @@
   "REMOVE ALL": "RIMUOVI TUTTO",
   "Confirm: remove every added entry from Data Layers": "Conferma: rimuovi da Livelli dati tutte le voci aggiunte",
   "Remove every added entry from Data Layers": "Rimuovi da Livelli dati tutte le voci aggiunte",
-  "Showing {shown} of {total}": "Mostrati: {shown} su {total}",
+  "Showing {shown} of {total}": {
+    "one": "{shown} di {total} mostrata",
+    "many": "{shown} di {total} mostrate",
+    "other": "{shown} di {total} mostrate"
+  },
   "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI"
 }
