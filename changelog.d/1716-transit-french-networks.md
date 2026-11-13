@@ -18,3 +18,8 @@
 - Add 55 Japanese bus networks to the Transit layer, the first in Toyama,
   Mie, Kumamoto, Kōchi, Aichi, Okinawa and Aomori prefectures, each recorded
   under CC0 1.0 or CC BY 4.0 with the operator credited in Japanese (#1716).
+- Show where Transit has coverage from globe view. Above about 3,000 km,
+  where the layer draws no vehicles, each feed is a soft green spot and
+  regions with many networks glow hotter; the spots fade out as the camera
+  comes down to the height where vehicles appear. Drawn from the feed
+  registry, so no feed is polled for it (#1716).

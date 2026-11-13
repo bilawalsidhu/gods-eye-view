@@ -31,6 +31,37 @@ export const TRANSIT_POLL_MS = 15_000;
  */
 /** Camera altitude (m) above which the layer idles: a national fleet still reads at 3,000 km. */
 export const ACTIVATION_ALTITUDE_M = 3_000_000;
+/**
+ * Camera heights (m) over which the globe-view coverage glow fades in: none
+ * below `from`, where vehicles themselves are what a person reads, and full
+ * by `to`, just past the height at which the layer stops polling. The fade
+ * straddles the altitude gate so there is never a height with neither
+ * vehicles nor glow.
+ */
+export const COVERAGE_FADE = Object.freeze({ from: 1_800_000, to: 3_400_000 });
+const COVERAGE_FADE_STEPS = 20;
+/** Alpha of a coverage spot at full fade; overlapping spots add up past it. */
+export const COVERAGE_PEAK_ALPHA = 0.8;
+
+/**
+ * Opacity of the coverage glow at a camera height, quantized so a slow zoom
+ * does not restyle the imagery layer on every camera event.
+ * @param {number} altitude Camera height above the ellipsoid, metres.
+ * @returns {number} 0..1
+ */
+export function coverageOpacityAt(altitude) {
+  if (!Number.isFinite(altitude)) return altitude === Infinity ? 1 : 0;
+  const t = Math.min(
+    1,
+    Math.max(
+      0,
+      (altitude - COVERAGE_FADE.from) / (COVERAGE_FADE.to - COVERAGE_FADE.from),
+    ),
+  );
+  return (
+    Math.round(t * t * (3 - 2 * t) * COVERAGE_FADE_STEPS) / COVERAGE_FADE_STEPS
+  );
+}
 export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
 export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 150_000;
 /** Debounce (ms) for camera-change proximity checks. */

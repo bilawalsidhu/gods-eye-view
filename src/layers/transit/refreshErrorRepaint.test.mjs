@@ -56,6 +56,7 @@ test('leaving a feed whose tick failed repaints its error away', async () => {
       sweepAgedVehicles() {},
     },
     rendering: { requestVisibility() {}, syncRenderHold() {} },
+    coverage: { sync() {} },
   };
   parts.viewport = createViewport({ state, services, parts });
   const queries = createQueries({ state, parts }).methods;

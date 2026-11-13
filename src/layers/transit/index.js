@@ -6,6 +6,7 @@ import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
 import { createIngestion } from './ingestion.js';
 import { createViewport } from './viewport.js';
+import { createCoverage } from './coverage.js';
 import { createQueries } from './queries.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
@@ -49,6 +50,7 @@ export function createTransitLayer({
   parts.selection = createSelection(context);
   parts.rendering = createRendering(context);
   parts.ingestion = createIngestion(context);
+  parts.coverage = createCoverage(context);
   parts.viewport = createViewport(context);
   parts.queries = createQueries(context);
   parts.controls = createControls(context);
