@@ -756,12 +756,11 @@ test('clear view R1: holding H in the sky toggles Clear view once and never reac
   assert.ok(esc.stopped > 0);
   assert.deepEqual(shellCalls, [], 'no shell shortcut ran inside the sky');
   assert.equal(hudToggles, 0);
-  // Ctrl+H is not a Clear view key (modifier handling is the shell's)
+  // Ctrl+H is not a Clear view key, and the shell leaves chords to the browser
   const ctrl = press('h', { ctrlKey: true });
   assert.equal(ctrl.stopped, 0, 'Ctrl+H not taken by the Sky view');
   assert.equal(handle.clearView.on, false);
-  assert.equal(hudToggles, 1, 'Ctrl+H reaches the shell as before');
-  press('h', { ctrlKey: true });
+  assert.equal(hudToggles, 0, 'Ctrl+H runs no shell shortcut (chords go to the browser)');
   assert.equal(hudVisible, hud0);
   hudToggles = 0;
   // holding H while typing in the search box is just typing
