@@ -1846,9 +1846,9 @@ export class StyleManager extends ShellFacade {
     this._navControl?.destroy();
     this._navControl = mountNavControl({
       viewer: this.viewer,
+      store: useNavControlStore(applicationPinia()),
       runNavigation: (noun, navigate) =>
         this._navigation.runOrientation(noun, navigate),
-      showToast: (message) => this._showToast(message),
     });
   }
 
