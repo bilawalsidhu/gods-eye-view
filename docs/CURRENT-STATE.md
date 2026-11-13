@@ -6570,6 +6570,10 @@ silently demoting every later lookup for the session.
   far cap, retargeting the existing video/canvas texture pipeline. Stills are drawn at their source aspect, centered on the placeholder dark (`#01070c`), instead of being stretched to the 16:9 canvas. Manual calibration only —
   auto-calibration and the drape mesh pipeline are deleted. A one-shot activation obstruction
   probe (`pickFromRay` on camera activation, clamping the plane short of the first hit) remains;
+  a hit at or beyond the camera's range counts as a miss, and on a globe map the plane also clamps
+  short of the globe's terrain along the axis (flat ground at the mount's ground when terrain is
+  missed or met beyond the range), whichever is nearer, so it never stands at the full range there
+  (about a kilometre wide and hundreds of metres up);
   ground placement is superseded by the shared-floor v3 behavior below. Calibration persists to
   `godsEyeView.cctv.calibration.v2` (wiped clean, no v1 import); a panel-only CAL badge shows
   `CALIBRATED`/`CURATED`/`RAW PRIOR` (no in-world tint). Panel is titled "CCTV" (not "CCTV
