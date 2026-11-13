@@ -68,8 +68,16 @@
   "{severity} only": "Solo {severity}",
   "All categories": "Todas las categorías",
   "Reading the news…": "Leyendo las noticias…",
-  "News, last {hours} hours": "Noticias desde hace {hours} h",
-  "Last {hours} h": "Desde hace {hours} h",
+  "News, last {hours} hours": {
+    "one": "Noticias de la última {hours} hora",
+    "many": "Noticias de las últimas {hours} de horas",
+    "other": "Noticias de las últimas {hours} horas"
+  },
+  "Last {hours} h": {
+    "one": "Última {hours} h",
+    "many": "Últimas {hours} h",
+    "other": "Últimas {hours} h"
+  },
   "Time window": "Periodo",
   "Conflicts": "Conflictos",
   "Local": "Local",
@@ -78,9 +86,17 @@
   "Hotspots": "Focos",
   "Severity": "Gravedad",
   "Category": "Categoría",
-  "Nothing reported near here in the last {hours} h": "No hay noticias cerca de aquí desde hace {hours} h",
+  "Nothing reported near here in the last {hours} h": {
+    "one": "No hay noticias cerca de aquí en la última {hours} h",
+    "many": "No hay noticias cerca de aquí en las últimas {hours} h",
+    "other": "No hay noticias cerca de aquí en las últimas {hours} h"
+  },
   "Latest news": "Últimas noticias",
-  "No news matches these filters in the last {hours} h": "Desde hace {hours} h no hay noticias que coincidan con estos filtros",
+  "No news matches these filters in the last {hours} h": {
+    "one": "En la última {hours} h no hay noticias que coincidan con estos filtros",
+    "many": "En las últimas {hours} h no hay noticias que coincidan con estos filtros",
+    "other": "En las últimas {hours} h no hay noticias que coincidan con estos filtros"
+  },
   "Load older news": "Cargar noticias anteriores",
   "How to read the map": "Cómo leer el mapa",
   "Colour: severity · icon: type of event": "Color: gravedad · icono: tipo de suceso",
@@ -139,7 +155,11 @@
   "ALTITUDE": "ALTITUD",
   "CONTACT": "CONTACTO",
   "CONTACTS · 250 KM": "CONTACTOS · 250 KM",
-  "RINGS {spacing} NM": "ANILLOS {spacing} MN",
+  "RINGS {spacing} NM": {
+    "one": "ANILLOS {spacing} MN",
+    "many": "ANILLOS {spacing} MN",
+    "other": "ANILLOS {spacing} MN"
+  },
   "{count} CONTACTS": {
     "one": "{count} CONTACTO",
     "many": "{count} DE CONTACTOS",
@@ -266,7 +286,11 @@
   "ROUTE DATA UNAVAILABLE": "DATOS DE RUTA NO DISPONIBLES",
   "CONTACT NAVIGATION OFF": "NAVEGACIÓN DE CONTACTOS DESACTIVADA",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "EL PUENTE PERMANECE EN EL BUQUE SELECCIONADO",
-  "{range} NM": "{range} MN",
+  "{range} NM": {
+    "one": "{range} MN",
+    "many": "{range} MN",
+    "other": "{range} MN"
+  },
   "AIS DESTINATION · CREW REPORTED": "DESTINO AIS · NOTIFICADO POR LA TRIPULACIÓN",
   "FROM": "DESDE",
   "TO": "HACIA",
@@ -352,6 +376,7 @@
   "Current style: {style} — click for next": "Estilo actual: {style} — haz clic para el siguiente",
   "TRACK ACQUIRED": "RASTREO ADQUIRIDO",
   "{label} · COURSE {heading}°": "{label} · RUMBO {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · RUMBO {heading}°",
   "{label} · HEADING {heading}°": "{label} · PROA {heading}°",
   "{label} · NO HEADING": "{label} · PROA N/D",
   "{label} · NADIR VIEW": "{label} · VISTA AL NADIR",
@@ -546,6 +571,7 @@
   "NEAREST": "MÁS CERCANA",
   "CCTV camera": "Cámara CCTV",
   "FOCUS": "ENFOCAR",
+  "site status|FOCUS": "ENFOCADO",
   "COVERAGE OFF": "COBERTURA DESACTIVADA",
   "AUTO HOP OFF": "SALTO AUTO: NO",
   "PROJECTION ON": "PROYECCIÓN ACTIVADA",
@@ -899,6 +925,7 @@
   "awaiting first AIS message…": "esperando el primer mensaje AIS…",
   "EST. DOWNRANGE": "DIST. ESTIMADA",
   "CONFIRMED": "CONFIRMADA",
+  "sightings filter|CONFIRMED": "CONFIRMADAS",
   "PAD / RTLS": "PLATAFORMA / RTLS",
   "MISSION CONTROL · FIRST LAUNCH": "CENTRO DE MANDO · PRIMER INICIO",
   "Choose your first view": "Elige tu primera vista",
@@ -1669,6 +1696,7 @@
   "Observed history": "Historial observado",
   "Later observation": "Observación posterior",
   "Latest": "Último",
+  "news list|Latest": "Últimas",
   "Newest frame per product": "Fotograma más reciente por producto",
   "Replay observed history": "Reproducir el historial observado",
   "S on another day replaces it · × unpins": "S en otro día lo reemplaza · × quita la fijación",
@@ -3473,7 +3501,11 @@
   "Photo of {name}": "Foto de {name}",
   "Acartia": "Acartia",
   "CC BY 4.0": "CC BY 4.0",
-  "{count} sightings in view": "Avistamientos a la vista: {count}",
+  "{count} sightings in view": {
+    "one": "{count} avistamiento a la vista",
+    "many": "{count} de avistamientos a la vista",
+    "other": "{count} avistamientos a la vista"
+  },
   "Close sighting": "Cerrar avistamiento",
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "Fauna y flora observadas en las últimas 48 h (cetáceos 7 días). El color y el símbolo de la insignia indican el grupo taxonómico. Las especies sensibles solo se muestran en celdas de 0,2°; los informes de mamíferos marinos de Acartia en el mar de Salish se redondean a 0,01°. No es un censo.",
   "Open {name} on iNaturalist": "Abrir {name} en iNaturalist",
@@ -3484,20 +3516,31 @@
   "{days}d": "{days} d",
   "All markers": "Todos los marcadores",
   "Show markers of every age": "Mostrar marcadores de cualquier antigüedad",
-  "Maximum event age: {days}d; undated markers are kept": "Antigüedad máxima: {days} d; se conservan los marcadores sin fecha",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "one": "Antigüedad máxima: {days} día; se conservan los marcadores sin fecha",
+    "many": "Antigüedad máxima: {days} de días; se conservan los marcadores sin fecha",
+    "other": "Antigüedad máxima: {days} días; se conservan los marcadores sin fecha"
+  },
   "event age filter|All": "Todos",
   "Event age": "Antigüedad",
-  "Event age: {days}d · undated kept": "Antigüedad: {days} d · se conservan los marcadores sin fecha",
+  "Event age: {days}d · undated kept": {
+    "one": "Antigüedad: {days} día · se conservan los marcadores sin fecha",
+    "many": "Antigüedad: {days} de días · se conservan los marcadores sin fecha",
+    "other": "Antigüedad: {days} días · se conservan los marcadores sin fecha"
+  },
   "Close camera preview": "Cerrar vista previa de la cámara",
   "Refresh map still": "Actualizar imagen fija del mapa",
   "The map still uses a separate request and may show a different moment.": "La imagen del mapa usa una solicitud independiente y puede mostrar otro momento.",
   "Video plays from Québec 511, which sees your IP address.": "El vídeo se reproduce desde Québec 511, que ve tu dirección IP.",
   "Press OPEN to load the photo": "Pulsa ABRIR para cargar la foto",
   "Captured {month}": "Capturada en {month}",
-  "this spot": "este punto",
   "the view centre": "el centro de la vista",
   "{source} at {place}": "{source} en {place}",
+  "{source} at this spot": "{source} en este punto",
+  "{source} at the view centre": "{source} en el centro de la vista",
   "Street level at {place}": "A pie de calle en {place}",
+  "Street level at this spot": "A pie de calle en este punto",
+  "Street level at the view centre": "A pie de calle en el centro de la vista",
   "Switching map": "Cambiando de mapa",
   "Opening imagery": "Abriendo imágenes",
   "Street View is ready: press {open} to load it": "Street View está listo: pulsa {open} para cargarlo",
@@ -3589,6 +3632,7 @@
   "{source} imagery could not be opened": "No se pudieron abrir las imágenes de {source}",
   "{place} has no position to look for imagery at": "{place} no tiene una posición donde buscar imágenes",
   "No {source} imagery near {place}": "No hay imágenes de {source} cerca de {place}",
+  "No {source} imagery near the view centre": "No hay imágenes de {source} cerca del centro de la vista",
   "{reason} (filters on: {filters})": "{reason} (filtros activos: {filters})",
   "tiles unavailable": "teselas no disponibles",
   "Environment": "Medio ambiente",
@@ -3671,7 +3715,11 @@
   "switch on a dataset to load features": "activa un conjunto de datos para cargar elementos",
   "Data Library at a glance": "La biblioteca de datos de un vistazo",
   "Map features": "Elementos del mapa",
-  "Showing {shown} of {total}": "Mostrando {shown} de {total}",
+  "Showing {shown} of {total}": {
+    "one": "Mostrando {shown} de {total}",
+    "many": "Mostrando {shown} de {total}",
+    "other": "Mostrando {shown} de {total}"
+  },
   "Datasets": "Conjuntos de datos",
   "Themes": "Temas",
   "zoom in to load this layer": "acércate para cargar esta capa",

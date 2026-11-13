@@ -8,7 +8,7 @@ Catalog: `src/i18n/locales/ru.json`. General rules: [TRANSLATORS.md](../TRANSLAT
 - Sentence case, not Title Case: "Live Flights" → «Рейсы в реальном времени».
 - Quotes inside Russian text are «ёлочки». Write ё where it belongs: её, ещё, всё.
 - In short labels, a standard abbreviation with a period beats a wrapped line: НЕОПРЕД., СЛЕД.
-- Units: км, м, км/ч, м/с, уз (knots), фт (feet), ч, мин, с; in UPPERCASE text КМ, М, КМ/С, УЗ, ФТ. MW is МВт in any case. `°` and `%` stay.
+- Units: км, м, км/ч, м/с, уз (knots), фт (feet), ч, мин, с; in UPPERCASE text КМ, М, КМ/С, УЗ, ФТ. MW is МВт in any case. `°` and `%` stay. Nautical miles on the bridge radar are «мор. миля», a noun that follows the count: «3 МОР. МИЛИ», «12 МОР. МИЛЬ», «0,75 МОР. МИЛИ».
 
 ## Plurals
 

@@ -3917,6 +3917,8 @@ async function requestStreetLevel(
   };
 
   // Then the place: a name that geocodes to nothing changes nothing else.
+  // "the view centre" is English for the model; the card (speech.js) gives
+  // it messages of its own, since it is a phrase and not a place name.
   label =
     query ||
     (entity ? String(entity.label || entity.id) : '') ||

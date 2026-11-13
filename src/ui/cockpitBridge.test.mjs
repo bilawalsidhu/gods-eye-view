@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import { CockpitViewController } from './cockpitController.js';
+import { setLocale } from '../i18n/index.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
@@ -353,6 +354,33 @@ test('the bridge radar shows nearby ships without its own and steps its range', 
   await settle();
   assert.equal(store.radar, null, 'the radar ends with the bridge');
   assert.ok(!$('#cockpit-radar') || $('#cockpit-radar').hidden);
+});
+
+test('the radar range and ring spacing agree with their distance (ru)', async (t) => {
+  const { $, cockpit } = fixture(t);
+  t.after(() => setLocale('en'));
+  setLocale('ru');
+  cockpit.enter();
+  await settle();
+  const shown = () => [
+    $('#cockpit-radar-range').textContent.trim(),
+    $('.cockpit-radar-rings').textContent.trim(),
+  ];
+  // The ring spacing is a fraction at the short ranges: Intl.PluralRules
+  // gives 0.75 and 1.5 the form of their own.
+  const expected = [
+    ['3 МОР. МИЛИ', 'КОЛЬЦА 0,75 МОР. МИЛИ'],
+    ['6 МОР. МИЛЬ', 'КОЛЬЦА 1,5 МОР. МИЛИ'],
+    ['12 МОР. МИЛЬ', 'КОЛЬЦА 3 МОР. МИЛИ'],
+    ['24 МОР. МИЛИ', 'КОЛЬЦА 6 МОР. МИЛЬ'],
+  ];
+  for (const [index, labels] of expected.entries()) {
+    if (index) {
+      $('#cockpit-radar-range').click();
+      await settle();
+    }
+    assert.deepEqual(shown(), labels);
+  }
 });
 
 test('contact navigation does not jump ship from the bridge', async (t) => {
@@ -1199,6 +1227,18 @@ test('a ship with no true heading is held, and labelled, on its course', async (
   );
   assert.ok(
     signals.some(([, , , detail]) => /COURSE 095°/.test(detail)),
+    JSON.stringify(signals),
+  );
+  // A ship's course has a word of its own: pt RUMO, an aircraft's CURSO.
+  t.after(() => setLocale('en'));
+  setLocale('pt');
+  signals.length = 0;
+  cockpit.exit();
+  await settle();
+  cockpit.enter();
+  await settle();
+  assert.ok(
+    signals.some(([, , , detail]) => /· RUMO 095°$/.test(detail)),
     JSON.stringify(signals),
   );
 });

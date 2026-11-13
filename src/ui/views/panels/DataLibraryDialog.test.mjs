@@ -163,6 +163,20 @@ test('filters narrow the list as the viewer types and picks', async (t_) => {
   assert.deepEqual(shownIds(), ['nasa-eonet-events']);
 });
 
+test('the shown count agrees with its number (he)', async (t_) => {
+  const { owner } = mount(t_);
+  setLocale('he');
+  owner.open();
+  await settle();
+  const status = () => $('.data-library-status').textContent.trim();
+  assert.match(status(), /^מוצגים\s+\S*3\S*\s+מתוך/);
+  const search = $('#data-library input[type="search"]');
+  search.value = 'eonet';
+  search.dispatchEvent(new Event('input'));
+  await settle();
+  assert.match(status(), /^מוצג\s+\S*1\S*\s+מתוך/);
+});
+
 test('Add becomes Remove on the same focused button; Zoom closes first', async (t_) => {
   const { owner, library } = mount(t_);
   owner.open();

@@ -132,7 +132,8 @@ function siteRows(info, { settled = true } = {}) {
       }),
     });
     const words = [installationClassLabel(site.class), angle];
-    if (focused) words.unshift(t('FOCUS'));
+    // A status, not the FOCUS command: es «ENFOCADO», not «ENFOCAR».
+    if (focused) words.unshift(t('FOCUS', { context: 'site status' }));
     return {
       key: `site:${site.id}`,
       // The held site reads as the subject does.

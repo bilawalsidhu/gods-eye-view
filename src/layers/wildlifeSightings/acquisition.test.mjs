@@ -542,7 +542,7 @@ test('retention never revives an incumbent card after the observation window exp
 test('all heights and the sampled fallback use the same sightings-in-view count label', () => {
   const h = harness();
   h.state.renderedRows = [sighting];
-  assert.equal(h.layer.getStats().countLabel, '1 sightings in view');
+  assert.equal(h.layer.getStats().countLabel, '1 sighting in view');
   h.state.sightingCount = 2000;
   assert.equal(h.layer.getStats().count, 2000);
   assert.equal(
@@ -558,6 +558,32 @@ test('all heights and the sampled fallback use the same sightings-in-view count 
     assert.equal(h.layer.getStats().count, 870);
     assert.equal(h.layer.getStats().countLabel, '870 sightings in view');
   }
+});
+
+test('the sightings count takes the plural form of its number', (t) => {
+  t.after(() => setLocale('en'));
+  const h = harness();
+  const label = (count) => {
+    h.state.sightingCount = count;
+    return h.layer.getStats().countLabel;
+  };
+  setLocale('ru');
+  assert.equal(label(1), '1 наблюдение в кадре');
+  assert.equal(label(3), '3 наблюдения в кадре');
+  assert.equal(label(5), '5 наблюдений в кадре');
+  setLocale('de');
+  assert.equal(label(1), '1 Beobachtung im Bild');
+  assert.equal(label(2000), '2.000 Beobachtungen im Bild');
+});
+
+test('the CONFIRMED chip names the sightings, apart from a confirmed launch landing', (t) => {
+  t.after(() => setLocale('en'));
+  const h = harness();
+  assert.equal(h.chip('quality-confirmed').label, 'CONFIRMED');
+  setLocale('sv');
+  assert.equal(h.chip('quality-confirmed').label, 'BEKRÄFTADE');
+  setLocale('es');
+  assert.equal(h.chip('quality-confirmed').label, 'CONFIRMADAS');
 });
 
 test('a stale fallback with a failed-refresh deadline remains DEGRADED, retryable and dated to the cached data', async () => {

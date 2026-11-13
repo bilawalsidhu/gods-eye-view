@@ -62,8 +62,12 @@
   "{severity} only": "僅{severity}",
   "All categories": "所有類別",
   "Reading the news…": "正在讀取新聞…",
-  "News, last {hours} hours": "最近 {hours} 小時的新聞",
-  "Last {hours} h": "最近 {hours} 小時",
+  "News, last {hours} hours": {
+    "other": "最近 {hours} 小時的新聞"
+  },
+  "Last {hours} h": {
+    "other": "最近 {hours} 小時"
+  },
   "Time window": "時間範圍",
   "Conflicts": "衝突",
   "Local": "本地",
@@ -72,9 +76,13 @@
   "Hotspots": "熱點",
   "Severity": "嚴重程度",
   "Category": "類別",
-  "Nothing reported near here in the last {hours} h": "最近 {hours} 小時附近無報道",
+  "Nothing reported near here in the last {hours} h": {
+    "other": "最近 {hours} 小時附近無報道"
+  },
   "Latest news": "最新新聞",
-  "No news matches these filters in the last {hours} h": "最近 {hours} 小時沒有符合這些篩選條件的新聞",
+  "No news matches these filters in the last {hours} h": {
+    "other": "最近 {hours} 小時沒有符合這些篩選條件的新聞"
+  },
   "Load older news": "加載更早的新聞",
   "How to read the map": "如何解讀地圖",
   "Colour: severity · icon: type of event": "顏色：嚴重程度 · 圖標：事件類型",
@@ -563,6 +571,7 @@
   "Previous — prior visited contact in the 250 km window": "上一個：250 km 範圍內先前訪問過的目標",
   "PREVIOUS": "上一個",
   "FOCUS": "聚焦",
+  "site status|FOCUS": "聚焦",
   "Next — nearest unvisited contact in the 250 km window": "下一個：250 km 範圍內最近的未訪問目標",
   "NEXT": "下一個",
   "Named areas ({n})": "已命名區域（{n}）",
@@ -924,6 +933,7 @@
   "Cancel replay": "取消回放",
   "EST. DOWNRANGE": "預估落點距離",
   "CONFIRMED": "已確認",
+  "sightings filter|CONFIRMED": "已確認",
   "PAD / RTLS": "發射臺 / RTLS",
   "PLANNED · ": "計劃 · ",
   "SUPPLIED TRAJECTORY POINTS": "提供的軌跡點",
@@ -1742,7 +1752,9 @@
   "ROUTE DATA UNAVAILABLE": "航線數據不可用",
   "CONTACT NAVIGATION OFF": "目標導航已關閉",
   "THE BRIDGE STAYS WITH THE SELECTED VESSEL": "駕駛臺保持在所選船舶上",
-  "{range} NM": "{range} 海里",
+  "{range} NM": {
+    "other": "{range} 海里"
+  },
   "AIS DESTINATION · CREW REPORTED": "AIS 目的地 · 船員申報",
   "DEST {bearing}": "目的地 {bearing}",
   "Disable cockpit weather effects": "停用座艙天氣效果",
@@ -1788,6 +1800,7 @@
   "Reclassify as TR-3B": "重新歸類為 TR-3B",
   "TRACK ACQUIRED": "已獲取航跡",
   "{label} · COURSE {heading}°": "{label} · 對地航向 {heading}°",
+  "vessel|{label} · COURSE {heading}°": "{label} · 對地航向 {heading}°",
   "{label} · HEADING {heading}°": "{label} · 船首向 {heading}°",
   "{label} · NO HEADING": "{label} · 無船首向",
   "{label} · NADIR VIEW": "{label} · 天底視圖",
@@ -2038,6 +2051,7 @@
   "Observed history": "觀測歷史",
   "Later observation": "較晚觀測",
   "Latest": "最新",
+  "news list|Latest": "最新",
   "Newest frame per product": "每個產品的最新一幀",
   "Replay observed history": "回放觀測歷史",
   "Imagery on Esri · Google 3D returns when cleared": "影像顯示在 Esri 底圖上 · 清除後恢復 Google 3D",
@@ -2619,7 +2633,9 @@
   "Contact cockpit summary": "目標座艙摘要",
   "CONTACT": "目標",
   "CONTACTS · 250 KM": "目標 · 250 km",
-  "RINGS {spacing} NM": "距標圈 {spacing} 海里",
+  "RINGS {spacing} NM": {
+    "other": "距標圈 {spacing} 海里"
+  },
   "{count} CONTACTS": {
     "other": "{count} 個目標"
   },
@@ -3311,7 +3327,9 @@
   "Photo of {name}": "{name} 的照片",
   "Acartia": "Acartia",
   "CC BY 4.0": "CC BY 4.0",
-  "{count} sightings in view": "視野內有 {count} 次目擊",
+  "{count} sightings in view": {
+    "other": "視野內有 {count} 次目擊"
+  },
   "Close sighting": "關閉目擊記錄",
   "Wildlife observed within 48 h (whales 7 d). Color and badge glyph show the taxon group. Sensitive species are shown only as 0.2° cells; Salish Sea marine mammal reports via Acartia are rounded to 0.01°. Not a census.": "近 48 小時內觀察到的野生生物（鯨類為 7 天）。顏色與徽章圖標表示分類群。敏感物種僅以 0.2° 網格顯示；Acartia 提供的薩利希海海洋哺乳動物目擊位置四捨五入到 0.01°。並非種群普查。",
   "Open {name} on iNaturalist": "在 iNaturalist 上打開 {name}",
@@ -3322,20 +3340,27 @@
   "{days}d": "{days} 天",
   "All markers": "所有標記",
   "Show markers of every age": "顯示所有時間的標記",
-  "Maximum event age: {days}d; undated markers are kept": "僅顯示 {days} 天內的事件；保留無日期標記",
+  "Maximum event age: {days}d; undated markers are kept": {
+    "other": "僅顯示 {days} 天內的事件；保留無日期標記"
+  },
   "event age filter|All": "全部",
   "Event age": "事件時間",
-  "Event age: {days}d · undated kept": "事件時間：{days} 天內 · 保留無日期標記",
+  "Event age: {days}d · undated kept": {
+    "other": "事件時間：{days} 天內 · 保留無日期標記"
+  },
   "Close camera preview": "關閉攝像頭預覽",
   "Refresh map still": "刷新地圖靜止畫面",
   "The map still uses a separate request and may show a different moment.": "地圖靜止畫面通過單獨的請求獲取，可能顯示不同的時刻。",
   "Video plays from Québec 511, which sees your IP address.": "視頻從 Québec 511 播放，Québec 511 會看到你的 IP 地址。",
   "Press OPEN to load the photo": "點擊“打開”加載照片",
   "Captured {month}": "拍攝於 {month}",
-  "this spot": "此處",
   "the view centre": "視野中心",
   "{source} at {place}": "{place} 的 {source}",
+  "{source} at this spot": "此處的 {source}",
+  "{source} at the view centre": "視圖中心的 {source}",
   "Street level at {place}": "{place} 的街景",
+  "Street level at this spot": "此處的街景",
+  "Street level at the view centre": "視圖中心的街景",
   "Switching map": "正在切換地圖",
   "Opening imagery": "正在打開影像",
   "Street View is ready: press {open} to load it": "街景已就緒：點擊“{open}”加載",
@@ -3427,6 +3452,7 @@
   "{source} imagery could not be opened": "無法打開 {source} 影像",
   "{place} has no position to look for imagery at": "{place} 沒有可查找影像的位置",
   "No {source} imagery near {place}": "{place} 附近沒有 {source} 影像",
+  "No {source} imagery near the view centre": "視圖中心附近沒有 {source} 影像",
   "{reason} (filters on: {filters})": "{reason}（已開啟篩選：{filters}）",
   "tiles unavailable": "瓦片不可用",
   "zoom in to load this layer": "放大以加載此圖層",
@@ -3517,6 +3543,8 @@
   "REMOVE ALL": "全部移除",
   "Confirm: remove every added entry from Data Layers": "確認：從數據圖層中移除所有已添加條目",
   "Remove every added entry from Data Layers": "從數據圖層中移除所有已添加條目",
-  "Showing {shown} of {total}": "顯示 {shown} / {total}",
+  "Showing {shown} of {total}": {
+    "other": "顯示 {shown} / {total}"
+  },
   "BROWSE DATA LIBRARY": "瀏覽數據資源庫"
 }

@@ -1,7 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
-import { t, tn } from '../../../i18n/index.js';
+import { formatNumber, t, tn } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import {
@@ -53,12 +53,18 @@ watch(
 
 const tiles = computed(() => libraryStatTiles(props.view.summary));
 const themes = computed(() => libraryThemeOptions());
+// The words for the shown entries agree with their count: he «מוצג 1».
 const status = computed(() =>
   props.view.ready
-    ? t('Showing {shown} of {total}', {
-        shown: props.view.shown.length,
-        total: props.view.total,
-      })
+    ? tn(
+        props.view.shown.length,
+        'Showing {shown} of {total}',
+        'Showing {shown} of {total}',
+        {
+          shown: formatNumber(props.view.shown.length),
+          total: formatNumber(props.view.total),
+        },
+      )
     : t('Checking what this instance serves…'),
 );
 const resetText = computed(() => {

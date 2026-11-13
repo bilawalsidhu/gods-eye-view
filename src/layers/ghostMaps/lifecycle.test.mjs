@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { setLocale } from '../../i18n/index.js';
 import { createGhostMapsLayer } from './index.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
@@ -246,6 +247,35 @@ test('age controls default to seven days and widening restores filtered and expi
     'age options are one switch, not product chips',
   );
   assert.equal(ageChip(layer, null).active, true);
+});
+
+test('the event age agrees with its number of days', async (t) => {
+  t.after(() => setLocale('en'));
+  const { layer, viewer } = fixture(t, { reports: [{ name: 'Undated' }] });
+  await layer.update(viewer);
+  const info = () =>
+    layer.getRowControls().info.split(' · ').slice(0, 2).join(' · ');
+  assert.equal(
+    ageChip(layer, 1).title,
+    'Maximum event age: 1d; undated markers are kept',
+  );
+  setLocale('de');
+  assert.equal(
+    ageChip(layer, 1).title,
+    'Maximales Ereignisalter: 1 Tag; undatierte Markierungen bleiben erhalten',
+  );
+  assert.equal(
+    ageChip(layer, 7).title,
+    'Maximales Ereignisalter: 7 Tage; undatierte Markierungen bleiben erhalten',
+  );
+  assert.equal(info(), 'Ereignisalter: 7 Tage · undatierte bleiben');
+  await ageChip(layer, 1).onClick();
+  assert.equal(info(), 'Ereignisalter: 1 Tag · undatierte bleiben');
+  setLocale('es');
+  assert.equal(
+    info(),
+    'Antigüedad: 1 día · se conservan los marcadores sin fecha',
+  );
 });
 
 test('age preferences persist independently of product choices and reject invalid storage', async (t) => {
