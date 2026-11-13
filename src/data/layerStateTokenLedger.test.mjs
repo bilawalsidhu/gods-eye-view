@@ -98,11 +98,17 @@ function withPublishedBase(
 }
 
 // The ledger before Wildlife Sightings took the last digit and News,
-// Shipwrecks and Eclipse Paths the first pairs, for the allocation rules
-// written against it.
+// Shipwrecks, Rail and Eclipse Paths the first pairs, for the allocation
+// rules written against it.
 const beforeLastDigitRows = reservationRows.filter(
   ([id]) =>
-    !['wildlife-sightings', 'news', 'shipwrecks', 'eclipse-paths'].includes(id),
+    ![
+      'wildlife-sightings',
+      'news',
+      'shipwrecks',
+      'rail',
+      'eclipse-paths',
+    ].includes(id),
 );
 
 function writeCodecFixture(cwd, rows, entries) {
@@ -114,6 +120,7 @@ function writeCodecFixture(cwd, rows, entries) {
       readFileSync(new URL(`./${name}`, import.meta.url)),
     );
   let source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
+  // Layers published after the fixture's ledger are not in its registry.
   if (!rows.some(([id]) => id === 'wildlife-sightings'))
     source = source.replace(
       /  Object\.freeze\(\{\s*id: 'wildlife-sightings',[\s\S]*?\}\),\n/,
@@ -127,6 +134,11 @@ function writeCodecFixture(cwd, rows, entries) {
   if (!rows.some(([id]) => id === 'shipwrecks'))
     source = source.replace(
       /  Object\.freeze\(\{\s*id: 'shipwrecks',[\s\S]*?\}\),\n/,
+      '',
+    );
+  if (!rows.some(([id]) => id === 'rail'))
+    source = source.replace(
+      /  Object\.freeze\(\{\s*id: 'rail',[\s\S]*?\}\),\n/,
       '',
     );
   if (!rows.some(([id]) => id === 'eclipse-paths'))
@@ -157,7 +169,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     { ...parseLayerStateTokenReservations(reservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 39);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 40);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -172,7 +184,8 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       'wildlife-sightings': '9',
       news: '00',
       shipwrecks: '01',
-      'eclipse-paths': '02',
+      rail: '02',
+      'eclipse-paths': '03',
     },
   );
   assert.throws(
@@ -198,9 +211,9 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     /Duplicate layer-state token reservation/,
   );
   assert.equal(
-    parseLayerStateTokenReservations([...reservationRows, ['future', '03']])
+    parseLayerStateTokenReservations([...reservationRows, ['future', '04']])
       .future,
-    '03',
+    '04',
   );
   assert.throws(
     () =>
@@ -431,19 +444,19 @@ test('an isolated valid two-character fixture round-trips an l field beyond the 
 test('checker reads a complete future base ledger and rejects retired-token reuse', () => {
   withPublishedBase(
     {
-      rows: [...reservationRows, ['retired-layer', '03']],
+      rows: [...reservationRows, ['retired-layer', '04']],
       source:
-        'export const LAYER_STATE_TOKEN_RESERVATIONS = Object.freeze({ ["retired-layer"]: "03" });\n',
+        'export const LAYER_STATE_TOKEN_RESERVATIONS = Object.freeze({ ["retired-layer"]: "04" });\n',
     },
     (cwd) => {
       const published = readPublishedLayerStateReservations('HEAD', cwd);
-      assert.equal(Object.keys(published).length, 40);
-      assert.equal(published['retired-layer'], '03');
+      assert.equal(Object.keys(published).length, 41);
+      assert.equal(published['retired-layer'], '04');
       assert.throws(
         () =>
           validateLayerStateAllocations(published, {
             ...LAYER_STATE_TOKEN_RESERVATIONS,
-            newcomer: '03',
+            newcomer: '04',
           }),
         /changed or removed/,
       );

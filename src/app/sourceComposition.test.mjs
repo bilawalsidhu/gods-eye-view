@@ -37,7 +37,7 @@ test('every acquisition source can be omitted without losing catalog membership'
 
 test('all acquisition sources may be absent, and enable fails before initializing or fetching', async (t) => {
   const actual = catalog({}, t);
-  assert.equal(actual.layers.length, 41);
+  assert.equal(actual.layers.length, 42);
   const manager = new LayerLifecycle(
     {},
     { getSourceAvailability: actual.getSourceAvailability },
@@ -246,4 +246,19 @@ test('absent military acquisition does not poll, suppress flights, or erase supp
   assert.equal(await manager.setEnabled('military', true), false);
   assert.equal(registry.isMilitaryLayerActive(), false);
   assert.equal(fetches, 0);
+});
+
+test('a rail source must carry the feed catalog that keeps unbuilt packs out', () => {
+  // Without getFeeds the layer could never learn which schedule packs are
+  // built, so the live feeds that read their routes from one would never run.
+  assert.throws(
+    () =>
+      resolveCatalogSources({ rail: { requestSnapshot: async () => null } }),
+    /Invalid catalog source: rail/,
+  );
+  const source = {
+    requestSnapshot: async () => null,
+    getFeeds: async () => [],
+  };
+  assert.equal(resolveCatalogSources({ rail: source }).sources.rail, source);
 });

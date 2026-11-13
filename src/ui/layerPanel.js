@@ -53,6 +53,7 @@ const PANEL_GROUPS = [
       'ais-live-vessels',
       'traffic',
       'transit',
+      'rail',
       'bikeshare',
     ],
   },

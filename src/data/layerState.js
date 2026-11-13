@@ -313,6 +313,13 @@ const OPTION_GROUPS = Object.freeze({
       high: 'h',
     }),
   ]),
+  rail: Object.freeze([
+    booleanOption('transit', 't', true),
+    booleanOption('local', 'l', true),
+    booleanOption('regional', 'r', true),
+    booleanOption('national', 'n', true),
+    booleanOption('international', 'i', true),
+  ]),
   'wildlife-sightings': Object.freeze([
     booleanOption('confirmed', 'c', false),
     enumOption(
@@ -651,7 +658,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'eclipse-paths',
-    token: '02',
+    token: '03',
     disposition: 'enabled-only',
   }),
   Object.freeze({
@@ -704,6 +711,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'r',
     disposition: 'enabled+options',
     optionOwner: 'radio',
+  }),
+  Object.freeze({
+    id: 'rail',
+    token: '02',
+    disposition: 'enabled+options',
+    optionOwner: 'rail',
   }),
   Object.freeze({
     id: 'recent-imagery',
