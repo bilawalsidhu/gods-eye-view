@@ -53,7 +53,7 @@ Worst first. "Fix" names the pull request that carries the fix.
 | 13 | AIS store | Both vessel maps are walked on every position message, and sorted whole once past the cap | #1712 |
 | 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | #1713 (canvas path) |
 | 15 | NVG and FLIR styles | Over 100 texture reads per pixel on every frame | not started |
-| 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop, 200 to 600 ms estimated per refresh | not started |
+| 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop. Measured afterwards: 68 ms blocked per warm refresh, about 250 ms on the first, about 400 ms when all six keys refresh together | #1717 |
 | 17 | Imported geo files and other per-feature ground clamps | Measured afterwards: imported files do not freeze; see below | none needed |
 
 ## Cause and fix, per finding
@@ -143,8 +143,11 @@ lowering the rate would change how the layer looks. `disable()` releases the
 baked geometry on purpose, at the price of one task of about 130 ms on
 re-enable.
 
-No fix is proposed. Warming the shader programs before the first zoom is the
-one thing left to try.
+A third look, timing every program link on a preview build, settled it: Wind
+owns two shader programs, both link during load in 9 to 18 ms, and none ever
+linked during a zoom. The programs that do link on a zoom are Cesium's own
+globe-surface variants, with Wind on or off, and Cesium links them
+synchronously. No fix is proposed.
 
 ### 7. Submarine cables
 
@@ -256,7 +259,8 @@ Fix: a separable or half-resolution blur, and noise ticked at about 15 Hz.
 `server/providers/wind/decode.js` decodes about a million doubles per message
 synchronously, hourly, for six keys.
 
-Fix: decode in a worker thread and keep the decoded U and V fields per cycle.
+Fix: decode on a worker thread, and keep the sampled U and V of the last
+forecast file per model so that choosing an overlay fetches only its field.
 
 ### 17. Per-feature ground clamps
 
