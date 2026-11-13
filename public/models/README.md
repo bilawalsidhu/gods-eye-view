@@ -9,7 +9,7 @@ like the source code.
 
 | Path | What it holds |
 |---|---|
-| `fleet/catalog.json` | Every model by name: its file, category, built length, beam and bounds (metres, glTF axes, Z up, nose toward −X), the clearance below its origin, and its 2D icon class. |
+| `fleet/catalog.json` | Every model by name: its file, category, built length, beam and bounds (metres, in Cesium's Z-up model frame: x along the length with the nose toward −X, y across the beam, z up), the clearance below its origin, and its 2D icon class. |
 | `fleet/types.json` | Which model draws which vehicle, and at what length: ICAO aircraft and helicopter type codes, ADS-B emitter categories, AIS ship-type and length ranges, GTFS route types, transit modes and rail categories, with the defaults. |
 | `fleet/aircraft/`, `fleet/helicopters/`, `fleet/ships/`, `fleet/buoys/`, `fleet/transit/`, `fleet/other/` | The models, one GLB each (EXT_meshopt_compression and KHR_mesh_quantization, vertex colours, no textures). |
 
@@ -22,7 +22,7 @@ How the layers use them:
 - An aircraft model's origin is its axis; it stands that model's scaled
   clearance above the ground. A ship's origin is its waterline, and a transit
   or rail vehicle's the road or rail top (a monorail or gondola is raised by
-  its `transit.elevation` entry).
+  its `transit.elevation` entry, for a source that names those modes).
 - Transit and rail models carry a `_TINT` vertex attribute that marks where
   the route or category colour is painted.
 - The whole set loads once, up front, when a layer that draws it starts; no
