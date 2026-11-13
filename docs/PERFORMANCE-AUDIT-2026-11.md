@@ -27,33 +27,33 @@ are marked "read in code".
 
 ## Findings and fixes
 
-Worst first. "Fix" names the pull request; a dash means none is open yet.
+Worst first. "Fix" names the pull request that carries the fix.
 
 ### Measured
 
 | # | Where | What happens | Fix |
 | ---: | --- | --- | --- |
 | 1 | Bike Share, local data layers, Transit, Rail | 18 s freeze switching Bike Share on over New York (2,519 stations); 2.7 s on Data Centers; multi-second freezes with Transit while zooming | #1688, #1689 |
-| 2 | Shipwrecks | 3 to 5 s freeze when the markers are built over loaded terrain; a share link with the layer on held the loading screen for 22.9 s in one run | — |
-| 3 | Camera | Rendering stops until reload: at a whole-globe view looking straight down, pan a few times, then scroll one notch | — |
-| 4 | Street Traffic | Zooming at 250 m over Manhattan: 25 long tasks in 24 s, longest 746 ms, 6.6 s in total | — |
-| 5 | ALPR cameras | Up to a 1.9 s long task on load; eight off/on toggles cost 512 depth samples and 6.3 s | — |
+| 2 | Shipwrecks | 3 to 5 s freeze when the markers are built over loaded terrain; a share link with the layer on held the loading screen for 22.9 s in one run | #1703 |
+| 3 | Camera | Rendering stops until reload: at a whole-globe view looking straight down, pan a few times, then scroll one notch | #1704 |
+| 4 | Street Traffic | Zooming at 250 m over Manhattan: 25 long tasks in 24 s, longest 746 ms, 6.6 s in total | #1705 |
+| 5 | ALPR cameras | Depth samples inside the overlay paint, repeated on every re-enable: 240 samples and about 1 s across eight toggles. A first-sample freeze of up to 1.9 s was seen in the sweep but not on a second day | #1706 |
 | 6 | Wind | First zoom after load: up to 14 long tasks (longest 414 ms). Re-measured as one-off shader links, not a standing cost: see below | none proposed |
-| 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | — |
-| 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | — |
-| 9 | Radio | 7 to 10 long tasks when the directory loads, longest 447 ms | — |
+| 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | #1707 (first step) |
+| 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | #1708 (fleet pass); overlay is a follow-up |
+| 9 | Radio | 7 to 10 long tasks when the directory loads, longest 447 ms | #1709 |
 | 10 | Pointer pick | Not reproduced on a second look: see below | none needed |
-| 11 | CCTV | A still-image camera holds continuous rendering at 60 frames a second although its picture changes about every 10 s | — |
+| 11 | CCTV | A still-image camera holds continuous rendering at 60 frames a second although its picture changes about every 10 s | #1710 |
 
 ### Read in code
 
 | # | Where | What happens | Fix |
 | ---: | --- | --- | --- |
-| 12 | `/api/firms` | The whole fire set is filtered, serialised and sent uncompressed on every request; 15 to 55 MB estimated in a heavy season | — |
-| 13 | AIS store | Both vessel maps are walked on every position message, and sorted whole once past the cap | — |
-| 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | — |
-| 15 | NVG and FLIR styles | Over 100 texture reads per pixel on every frame | — |
-| 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop, 200 to 600 ms estimated per refresh | — |
+| 12 | `/api/firms` | The whole fire set is filtered, serialised and sent uncompressed on every request; 15 to 55 MB estimated in a heavy season | #1711 |
+| 13 | AIS store | Both vessel maps are walked on every position message, and sorted whole once past the cap | #1712 |
+| 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | #1713 (canvas path) |
+| 15 | NVG and FLIR styles | Over 100 texture reads per pixel on every frame | not started |
+| 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop, 200 to 600 ms estimated per refresh | not started |
 | 17 | Imported geo files and other per-feature ground clamps | Measured afterwards: imported files do not freeze; see below | none needed |
 
 ## Cause and fix, per finding
@@ -222,8 +222,11 @@ lands or while a focus fade runs.
 request, with no kept body and no compression, and the client refetches every
 ten minutes.
 
-Fix: build the body and its gzip once per refresh and serve those bytes, as the
-OpenSky provider does.
+Fix: keep the response bytes and their gzip and serve those, as the OpenSky
+provider does. The route filters to the trailing 24 hours at serve time, so the
+bytes can only be reused while that filter keeps the same records (about a
+minute at a time): bursts and several clients gain most, and every response is
+about seven times smaller.
 
 ### 13. AIS store
 
