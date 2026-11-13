@@ -1349,7 +1349,12 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/ui/aircraftTypeCard.js",
+      "src/layers/flights/typeCard.js",
+      "src/data/aircraftTypes/index.js",
+      "src/data/aircraftClass.js",
+      "src/data/aircraftTypes/catalog.json"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1583,7 +1588,8 @@
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
       "src/time/julian.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/trackedHologram.js"
     ],
     "external": ["cesium"]
   },
@@ -1655,7 +1661,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/data/trackedHologram.js"
     ],
     "external": ["cesium"]
   },
@@ -3817,7 +3824,12 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/ui/aircraftTypeCard.js",
+      "src/layers/flights/typeCard.js",
+      "src/data/aircraftTypes/index.js",
+      "src/data/trackedHologram.js",
+      "src/data/aircraftTypes/catalog.json"
     ],
     "external": [
       "hls.js",
@@ -4535,7 +4547,8 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/data/trackedHologram.js"
     ],
     "external": [
       "hls.js",
