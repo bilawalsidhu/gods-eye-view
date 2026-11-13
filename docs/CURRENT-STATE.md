@@ -7398,7 +7398,9 @@ Gamepad navigation binds standard gamepads to Cesium camera translation, orienta
 and zoom via `src/ui/gamepadNavigation.js`. Stick input samples during `scene.preUpdate`
 with a configurable deadzone and asserts continuous render holds so interaction remains
 smooth under request-render mode when the globe would otherwise idle. Face buttons
-provide edge-triggered triggers for HUD, orbit, clean view / flight cancel, style cycling
+provide edge-triggered triggers for HUD, orbit, clean view / flight cancel, style cycling.
+Zero altitude uses the same 10-meter speed floor for movement and zoom as other
+low-altitude positions, rather than the missing-height fallback.
 Wikipedia spatial intelligence (`src/services/wikipedia.js`) provides coordinate-based
 nearby article lookups, page summary extracts, and search with client-side TTL caching,
 in-flight request deduplication, request concurrency limiting (maximum 4 in flight),

@@ -84,6 +84,33 @@ test('left stick translates camera forward, backward, left and right', () => {
   nav.destroy();
 });
 
+test('zero camera height uses the minimum gamepad move and zoom speeds', () => {
+  const viewer = createMockViewer();
+  viewer.camera.positionCartographic.height = 0;
+  const gamepad = {
+    index: 0,
+    axes: [1, 0, 0, 0],
+    buttons: [],
+  };
+  gamepad.buttons[7] = { value: 1, pressed: true };
+
+  const nav = createGamepadNavigation({
+    viewer,
+    navigatorRef: { getGamepads: () => [gamepad] },
+  });
+
+  nav.poll(0.1);
+  assert.equal(
+    viewer.cameraCalls.find((call) => call.action === 'moveRight')?.distance,
+    1,
+  );
+  assert.equal(
+    viewer.cameraCalls.find((call) => call.action === 'zoomIn')?.distance,
+    1,
+  );
+  nav.destroy();
+});
+
 test('right stick rotates and tilts camera', () => {
   const viewer = createMockViewer();
   const mockGamepad = {

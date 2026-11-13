@@ -240,7 +240,7 @@ export function createGamepadNavigation({
       viewer?.scene?.requestRender?.();
 
       // Height-scaled motion rates
-      const height = camera.positionCartographic?.height
+      const height = Number.isFinite(camera.positionCartographic?.height)
         ? Math.max(10, camera.positionCartographic.height)
         : 1000;
 
