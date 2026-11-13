@@ -57,6 +57,7 @@ const sliceTypes = {
   vessels: [
     {
       types: [70, 79],
+      typical_len: 300,
       rules: [
         { min_len: 70, max_len: 140, max_bl: 0.12, model: 'inland_cargo' },
         {
@@ -131,6 +132,29 @@ test('vessels: the first matching rule of the first type range with one, else th
     model: 'generic_vessel',
     length: null,
   });
+});
+
+test("vessels of unknown length are chosen and drawn at their range's typical length", () => {
+  assert.deepEqual(resolveVessel(sliceTypes, 70), {
+    model: 'container_ship',
+    length: 300,
+  });
+  assert.deepEqual(resolveVessel(sliceTypes, 70, 511, 126), {
+    model: 'container_ship',
+    length: 300,
+  });
+  assert.deepEqual(resolveVessel(sliceTypes, 70, 90, 15), {
+    model: 'general_cargo',
+    length: 90,
+  });
+  assert.deepEqual(resolveVessel(sliceTypes, 31), {
+    model: 'tug',
+    length: null,
+  });
+  // Every passenger, cargo and tanker range of the set has one.
+  for (const code of [60, 70, 80]) {
+    assert.ok(resolveVessel(types, code).length > 100, String(code));
+  }
 });
 
 test("vessels: AIS's out-of-range sizes (511 m long, 126 m abeam) are unknown, drawn as built", () => {
@@ -267,6 +291,12 @@ test('vessel specs read AIS codes and text families, stretched to the reported b
   const [sx, sy, sz] = box.scaleXYZ;
   assert.ok(Math.abs(sy - 51 / catalog.container_ship.beam) < 1e-12);
   assert.ok(Math.abs(sz - (sx + sy) / 2) < 1e-12);
+  // A beam with no reported length: the type's typical length, in the model's
+  // own proportions, not a typical-length hull squeezed to that beam.
+  const unsized = vesselModelSpec(set, { type: '70', length: 0, beam: 14 });
+  assert.equal(unsized.model, 'container_ship');
+  const [ux, uy, uz] = unsized.scaleXYZ;
+  assert.ok(Math.abs(uy - ux) < 1e-12 && Math.abs(uz - ux) < 1e-12);
   assert.equal(vesselModelSpec(set, { type: 'Tug', length: 30 }).model, 'tug');
   assert.equal(vesselModelSpec(set, { type: '36' }).model, 'sailboat');
   // No type, no size: the generic vessel as built.
