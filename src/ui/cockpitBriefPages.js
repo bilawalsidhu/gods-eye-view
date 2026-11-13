@@ -32,12 +32,6 @@ export const COCKPIT_BRIEF_PAGES = [
     sourceKey: msg('SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS'),
   },
   {
-    id: 'news',
-    kickerKey: msg('REGIONAL NEWS'),
-    subtitleKey: msg('LATEST LOCATION-MATCHED REPORTING'),
-    // The news footer comes from the news state (`news.footer`), not here.
-  },
-  {
     id: 'local',
     kickerKey: msg('LOCAL INFO'),
     subtitleKey: msg('PLACE / CONDITIONS / POSITION'),
@@ -52,7 +46,7 @@ export const CYCLE_HELP_KEYS = Object.freeze({
     'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.',
   ),
   off: msg(
-    'Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.',
+    'Cycle briefing pages automatically every 9 seconds (Signals → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.',
   ),
 });
 

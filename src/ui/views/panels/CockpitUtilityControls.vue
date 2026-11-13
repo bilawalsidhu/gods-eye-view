@@ -8,6 +8,20 @@ import { useRadioStore } from '../../stores/radio.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiPanelEdge from '../../kit/UiPanelEdge.vue';
+
+// The open panel's header carries the same edge switch and collapse button as
+// the main panels; collapsing goes through each launcher's own toggle.
+function collapse(which) {
+  if (which === 'radio') act('toggleCockpitRadio');
+  else document.getElementById('cockpit-display-toggle-btn')?.click();
+}
+// The rail opens one panel at a time, as the main page's rails do.
+function railToggle(which) {
+  const other = which === 'radio' ? 'display' : 'radio';
+  if (open.value[other]) collapse(other);
+  collapse(which);
+}
 
 // The Cockpit's Display and Radio launchers and their popovers. RadioControls
 // presents which popover is open and the compact Radio controls; until it
@@ -52,6 +66,8 @@ const radioLabel = computed(() =>
       <div class="cockpit-utility-launcher" data-cockpit-launcher="display">
         <span>{{ t('DISPLAY') }}</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
+        <UiPanelEdge v-if="open.display" />
+        <button v-if="open.display" type="button" class="cockpit-utility-collapse" :aria-label="t('Collapse panel')" :title="t('Collapse panel')" @click="collapse('display')">−</button>
         <button id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel">{{ open.display ? '▶' : '◀' }}</button>
       </div>
       <div id="cockpit-display-panel" class="cockpit-utility-popover ui-scroll" v-class-toggle="{ 'uses-shared-display-controls': !!cockpitPortal }" role="group" :aria-label="t('Cockpit display options')" :hidden="!open.display">
@@ -65,6 +81,8 @@ const radioLabel = computed(() =>
       <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
         <span>{{ t('RADIO') }}</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
+        <UiPanelEdge v-if="open.radio" />
+        <button v-if="open.radio" type="button" class="cockpit-utility-collapse" :aria-label="t('Collapse panel')" :title="t('Collapse panel')" @click="collapse('radio')">−</button>
         <button id="cockpit-radio-toggle-btn" @click="act('toggleCockpitRadio')" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel">{{ open.radio ? '▶' : '◀' }}</button>
       </div>
       <div id="cockpit-radio-panel" class="cockpit-utility-popover cockpit-radio-compact" role="group" :aria-label="t('Cockpit compact Radio controls')" :hidden="!open.radio">
@@ -82,5 +100,15 @@ const radioLabel = computed(() =>
         </label>
       </div>
     </div>
+    <nav class="cockpit-utility-rail" :class="{ 'is-open': open.display || open.radio }" :aria-label="t('Cockpit display and Radio controls')">
+      <span class="cockpit-utility-rail__labels" aria-hidden="true">
+        <span>{{ t('DISPLAY') }}</span>
+        <span>{{ t('RADIO') }}</span>
+      </span>
+      <span class="cockpit-utility-rail__icons">
+        <button type="button" class="cockpit-utility-rail__item" :class="{ 'is-on': open.display }" :aria-pressed="String(open.display)" :aria-label="displayLabel" :title="displayLabel" @click="railToggle('display')"><span class="material-symbols-outlined" aria-hidden="true">tune</span></button>
+        <button type="button" class="cockpit-utility-rail__item" :class="{ 'is-on': open.radio }" :aria-pressed="String(open.radio)" :aria-label="radioLabel" :title="radioLabel" @click="railToggle('radio')"><span class="material-symbols-outlined" aria-hidden="true">radio</span></button>
+      </span>
+    </nav>
   </aside>
 </template>
