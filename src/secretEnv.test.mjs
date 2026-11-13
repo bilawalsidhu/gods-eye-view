@@ -290,6 +290,32 @@ test('planSecretMigration moves a multi-line quoted value whole and keeps CRLF',
   assert.deepEqual(plan.moved, ['OTTAWA_CAMERA_CERTIFICATE']);
 });
 
+
+test('planSecretMigration preserves the last credential assignment from .env', () => {
+  const env = [
+    'OPENAI_API_KEY=sk-obsolete',
+    'AISSTREAM_API_KEY=ais-kept',
+    'OPENAI_API_KEY=sk-current',
+    'PORT=1',
+    '',
+  ].join('\n');
+  const plan = planSecretMigration(
+    env,
+    'OPENAI_API_KEY=\nAISSTREAM_API_KEY=\n',
+  );
+  assert.equal(plan.env, 'PORT=1\n');
+  assert.deepEqual(plan.moved, ['OPENAI_API_KEY', 'AISSTREAM_API_KEY']);
+  assert.deepEqual(plan.conflicts, ['OPENAI_API_KEY']);
+  assert.match(plan.local, /^OPENAI_API_KEY=sk-current$/m);
+  assert.match(plan.local, /^AISSTREAM_API_KEY=ais-kept$/m);
+  assert.match(plan.local, /^# OPENAI_API_KEY=sk-obsolete$/m);
+  assert.doesNotMatch(plan.local, /^OPENAI_API_KEY=sk-obsolete$/m);
+
+  const rerun = planSecretMigration(plan.env, plan.local);
+  assert.equal(rerun.local, plan.local);
+  assert.equal(rerun.localChanged, false);
+});
+
 test('planSecretMigration leaves a file with no secrets byte-identical', () => {
   const env = '# only settings\nPORT=4173\nHOST=localhost\n';
   const plan = planSecretMigration(env, '');

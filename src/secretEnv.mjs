@@ -263,7 +263,15 @@ export function planSecretMigration(envText, localText = '') {
       });
     else append.push(...span);
   };
+  // Dotenv uses the last assignment for a repeated name. Migrate the latest
+  // nonblank value first so an earlier assignment cannot become active.
+  // Keep each name's first-appearance order for the migration summary.
+  const byName = new Map();
   for (const entry of dotenvEntries(lines)) {
+    if (!byName.has(entry.name)) byName.set(entry.name, []);
+    byName.get(entry.name).push(entry);
+  }
+  for (const entry of [...byName.values()].flatMap((group) => group.reverse())) {
     if (!isSecretEnvName(entry.name)) continue;
     const span = lines.slice(entry.start, entry.end + 1);
     const value = comparableValue(entry.value);

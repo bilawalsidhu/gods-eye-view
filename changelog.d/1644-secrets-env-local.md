@@ -7,4 +7,6 @@
   file each key came from and warns while a key is still in `.env`, and the
   `tools/` scripts read `.env.local`. The launchers no longer pass OpenSky's
   retired username/password, and the Pinokio template gains the same two
-  sections (BeerMan81, #1644).
+  sections (BeerMan81, #1644). Repeated key assignments in an existing
+  `.env` now keep the latest nonblank value active after migration, preserving
+  the earlier value as a comment.
