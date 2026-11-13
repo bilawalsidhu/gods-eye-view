@@ -1,0 +1,48 @@
+{
+  "id": "nctcog-tx",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "North Central Texas (NCTCOG) Ortho",
+  "provider": "NCTCOG",
+  "description": "Aerial orthophotos: North Central Texas (NCTCOG) jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-97.5865, 32.5326, -96.9946, 33.0056]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://mapitimage.tarrantcounty.com/arcgis/rest/services/Aerials/2011_NCTCOG_Ortho/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2011–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.nctcog.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "North Central Texas Council of Governments",
+    "url": "https://www.nctcog.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

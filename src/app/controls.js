@@ -9,7 +9,8 @@ import { t } from '../i18n/index.js';
  * Construct the existing controls and camera presentation. `initialShareCode`
  * opens a share code (the `<code>` of `/share/<code>`) at start-up, for a host
  * whose address does not carry one. `localePicker: false` removes the language
- * picker, for a host that does not initialize Core's locale.
+ * picker, for a host that offers its own language choice (`switchLocale` from
+ * the `./i18n` entry).
  */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations },
