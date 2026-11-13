@@ -187,11 +187,9 @@ test('a stalled type endpoint times out without holding up snapshots, then retri
       requests += 1;
       if (requests === 1)
         return new Promise((_resolve, reject) => {
-          signal?.addEventListener(
-            'abort',
-            () => reject(signal.reason),
-            { once: true },
-          );
+          signal?.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
         });
       return Response.json({
         aircraft: { a1b2c3: ['B738', 'N123AB'] },
