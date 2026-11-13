@@ -3803,7 +3803,11 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/source.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",
@@ -4519,7 +4523,10 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",

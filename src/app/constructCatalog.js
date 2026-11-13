@@ -5,6 +5,7 @@ import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
+import { createAuroraLayer } from '../layers/aurora/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
@@ -203,6 +204,7 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
+        createAuroraLayer({ feed: sources.aurora }),
         createApplicationCyclones({ feed: sources.cyclones }),
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
