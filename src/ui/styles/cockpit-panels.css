@@ -131,19 +131,19 @@ body.cockpit-mode .cockpit-utility-control.is-expanded {
 }
 
 /* ── Cockpit uses the main page's rails ───────────────────────────────
-   The left rail shows Data Layers and Visual (Authoring has no place in
-   first person, and Utilities has nothing to do there), one panel opens
-   beside it, and the collapsed header strips the cockpit used instead are
-   hidden. */
+   The left rail shows Data Layers only (Authoring has no place in first
+   person, Utilities has nothing to do there, and the cockpit's own Display
+   panel stands in for Visual), one panel opens beside it, and the collapsed
+   header strips the cockpit used instead are hidden. */
 body.cockpit-mode #left-panel-stack > .gev-panel-rail--left {
   display: block;
 }
 
-body.cockpit-mode #left-panel-stack > .gev-panel-rail--left :is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel']),
+body.cockpit-mode #left-panel-stack > .gev-panel-rail--left :is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'], [data-rail-item='pp-toggles']),
 body.cockpit-mode
   #left-panel-stack
   > .gev-panel-rail--left
-  .ui-tooltip:has(> :is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'])) {
+  .ui-tooltip:has(> :is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'], [data-rail-item='pp-toggles'])) {
   display: none;
 }
 
@@ -159,38 +159,25 @@ body.cockpit-mode
   border-radius: 14px;
 }
 
-/* In cockpit, Visual keeps only what the cockpit's own Display panel does
-   not already offer: the HUD, detection, parameters and 3D-model groups live
-   there (its portal moves them while it shows; hidden here otherwise, so they
-   never appear twice), and the celestial ring and Clean UI have no place in
-   first person. */
-body.cockpit-mode
-  #pp-toggles
-  :is(
-    .pp-toggle-group:has(#hud-toggle),
-    .pp-toggle-group:has(#detection-toggle),
-    .pp-toggle-group:has(#models3d-toggle),
-    .pp-toggle-group:has(#celestial-toggle),
-    #clean-view-toggle,
-    #param-slider-panel
-  ) {
-  display: none !important;
-}
-
-/* Authoring or Utilities may still be open underneath; its hidden icon must
+/* Authoring, Utilities or Visual may still be open underneath; its hidden icon must
    not split the rail into islands. */
 body.cockpit-mode
   #left-panel-stack
   > .gev-panel-rail--left
-  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'])[aria-pressed='true'])
-  > .ui-tooltip::before {
+  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'], [data-rail-item='pp-toggles'])[aria-pressed='true'])
+  > .ui-tooltip::before,
+body.cockpit-mode
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'], [data-rail-item='pp-toggles'])[aria-pressed='true'])::before {
+  /* Nor may the sliding highlight stay where the hidden icon was. */
   display: none;
 }
 
 body.cockpit-mode
   #left-panel-stack
   > .gev-panel-rail--left
-  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'])[aria-pressed='true']) {
+  .ui-rail:has(:is([data-rail-item='scene-panel'], [data-rail-item='utilities-panel'], [data-rail-item='pp-toggles'])[aria-pressed='true']) {
   background: rgba(16, 20, 28, 0.82) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45) !important;
@@ -199,7 +186,7 @@ body.cockpit-mode
 }
 
 body.cockpit-mode #left-panel-stack > [data-panel-id].collapsed,
-body.cockpit-mode #left-panel-stack > :is([data-panel-id='scene-panel'], [data-panel-id='utilities-panel']) {
+body.cockpit-mode #left-panel-stack > :is([data-panel-id='scene-panel'], [data-panel-id='utilities-panel'], [data-panel-id='pp-toggles']) {
   display: none;
 }
 
