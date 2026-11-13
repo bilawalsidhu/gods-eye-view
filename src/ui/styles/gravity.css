@@ -1,0 +1,182 @@
+/* Mass change: a right-rail readout laid out by the rail like RECENT IMAGERY.
+   Transport classes and chips come from the rail rules in weather.css. */
+.gravity-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+#gravity-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#gravity-panel .panel-header {
+  flex: 0 0 auto;
+}
+#gravity-panel-body {
+  min-height: 0;
+  max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
+}
+#gravity-panel.collapsed #gravity-panel-body,
+#gravity-panel[hidden],
+#gravity-panel [hidden] {
+  display: none !important;
+}
+#gravity-panel.collapsed .panel-title {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+#gravity-panel.collapsed .panel-header {
+  margin-bottom: 2px;
+}
+#gravity-panel.collapsed .gravity-panel-inner {
+  padding-bottom: 10px;
+}
+
+.gravity-readout {
+  --weather-card-border: rgba(98, 181, 255, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-dim);
+  font: 9px/1.45 var(--font-mono);
+  letter-spacing: 0.5px;
+}
+.gravity-month {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.gravity-month-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: #e8feff;
+  letter-spacing: 0.3px;
+}
+.gravity-month-window {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.gravity-timeline {
+  padding: 0 0 8px;
+}
+.gravity-point-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+.gravity-point-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.gravity-chart {
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin-top: 4px;
+  cursor: crosshair;
+  border: 1px solid var(--weather-card-border);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.gravity-chart-zero {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.gravity-chart-series polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.gravity-chart-marker {
+  fill: #e8feff;
+  stroke: var(--accent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.gravity-chart-wrap {
+  position: relative;
+}
+.gravity-chart-scale span {
+  position: absolute;
+  left: 5px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(4, 12, 20, 0.72);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.gravity-chart-high {
+  top: 2px;
+}
+.gravity-chart-low {
+  bottom: 2px;
+}
+.gravity-legend-ticks {
+  position: relative;
+  height: 1.45em;
+  font-variant-numeric: tabular-nums;
+}
+.gravity-legend-ticks > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.gravity-legend-ticks > span:first-child {
+  transform: none;
+}
+.gravity-legend-ticks > span:last-child {
+  transform: translateX(-100%);
+}
+.gravity-legend-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-dim);
+}
+.gravity-ramp {
+  height: 6px;
+  margin-top: 0;
+}
+.gravity-display {
+  margin-top: 0;
+}
+.gravity-note {
+  margin: 0;
+  color: var(--text-dim);
+}

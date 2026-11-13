@@ -180,6 +180,24 @@ function enumOption(
   });
 }
 
+/** A UTC calendar day, YYYY-MM-DD; anything else restores as unset. */
+function dateOption(key, token, defaultValue = null) {
+  const day = (value) =>
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+      ? value
+      : null;
+  return Object.freeze({
+    key,
+    token,
+    defaultValue,
+    normalize: day,
+    encode: (value) => String(value),
+    decode: day,
+  });
+}
+
 function integerOption(key, token, defaultValue) {
   return Object.freeze({
     key,
@@ -346,6 +364,14 @@ const OPTION_GROUPS = Object.freeze({
     // Street Traffic row toggles: flow-colored road lines, moving dots.
     booleanOption('lines', 'l', false),
     booleanOption('dots', 'd', true),
+  ]),
+  gravity: Object.freeze([
+    dateOption('month', 'm'),
+    enumOption('area', 'a', 'land', ['land', 'all'], { land: 'l', all: 'a' }),
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
   ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
@@ -671,6 +697,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     id: 'gnss-integrity',
     token: '3',
     disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'gravity',
+    token: '03',
+    disposition: 'enabled+options',
+    optionOwner: 'gravity',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({

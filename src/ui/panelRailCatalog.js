@@ -27,6 +27,7 @@ export const PANEL_RAIL_ITEMS = Object.freeze({
     icon: 'satellite_alt',
     label: msg('RECENT IMAGERY'),
   },
+  'gravity-panel': { icon: 'water_drop', label: msg('MASS CHANGE') },
   'street-level-panel': { icon: 'streetview', label: msg('STREET LEVEL') },
   'global-context-panel': { icon: 'radar', label: msg('CONTEXT') },
 });

@@ -147,6 +147,7 @@
 #right-context-rail > #street-level-panel,
 #right-context-rail > #weather-panel,
 #right-context-rail > #recent-imagery-panel,
+#right-context-rail > #gravity-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
@@ -161,14 +162,16 @@
 #right-context-rail #cctv-panel,
 #right-context-rail #street-level-panel,
 #right-context-rail #weather-panel,
-#right-context-rail #recent-imagery-panel {
+#right-context-rail #recent-imagery-panel,
+#right-context-rail #gravity-panel {
   width: 100%;
   max-height: 100%;
   pointer-events: auto;
 }
 /* Collapsed readouts must stay hideable by the rail's exclusive layout. */
 #right-context-rail > #weather-panel:not(.collapsed),
-#right-context-rail > #recent-imagery-panel:not(.collapsed) {
+#right-context-rail > #recent-imagery-panel:not(.collapsed),
+#right-context-rail > #gravity-panel:not(.collapsed) {
   display: flex;
   flex-direction: column;
   flex-shrink: 1;
@@ -177,7 +180,8 @@
 #right-context-rail #cctv-panel.collapsed,
 #right-context-rail #street-level-panel.collapsed,
 #right-context-rail #weather-panel.collapsed,
-#right-context-rail #recent-imagery-panel.collapsed {
+#right-context-rail #recent-imagery-panel.collapsed,
+#right-context-rail #gravity-panel.collapsed {
   width: var(--right-display-collapsed-width);
   margin-inline-start: auto;
 }
@@ -193,6 +197,7 @@
 #right-context-rail #street-level-panel.collapsed .street-level-panel-inner,
 #right-context-rail #weather-panel.collapsed .weather-panel-inner,
 #right-context-rail #recent-imagery-panel.collapsed .recent-imagery-panel-inner,
+#right-context-rail #gravity-panel.collapsed .gravity-panel-inner,
 #right-context-rail
   #global-context-panel.collapsed
   .global-context-panel-inner {
@@ -290,6 +295,7 @@ body.recording-mode .gev-panel-rail {
 #right-context-rail.layout-focus > #street-level-panel:not(.collapsed),
 #right-context-rail.layout-focus > #weather-panel:not(.collapsed),
 #right-context-rail.layout-focus > #recent-imagery-panel:not(.collapsed),
+#right-context-rail.layout-focus > #gravity-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -312,6 +318,9 @@ body.recording-mode .gev-panel-rail {
 #right-context-rail.layout-focus
   > #recent-imagery-panel:not(.collapsed)
   .recent-imagery-panel-inner,
+#right-context-rail.layout-focus
+  > #gravity-panel:not(.collapsed)
+  .gravity-panel-inner,
 #right-context-rail.layout-focus
   > #global-context-panel:not(.collapsed)
   .global-context-panel-inner {
@@ -364,6 +373,9 @@ body.recording-mode .gev-panel-rail {
 #right-context-rail[data-rail-measuring]
   > [data-panel-id]:not(.collapsed)
   > .recent-imagery-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .gravity-panel-inner,
 #right-context-rail[data-rail-measuring]
   > [data-panel-id]:not(.collapsed)
   > .global-context-panel-inner {
@@ -1256,7 +1268,8 @@ body.recording-mode #right-context-rail > [data-panel-id] {
 }
 @media (max-width: 720px) {
   #right-context-rail #weather-panel.collapsed,
-  #right-context-rail #recent-imagery-panel.collapsed {
+  #right-context-rail #recent-imagery-panel.collapsed,
+  #right-context-rail #gravity-panel.collapsed {
     width: 100%;
   }
 }
