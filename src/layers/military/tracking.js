@@ -752,7 +752,7 @@ export function createTracking({
         _trailFloorPosition(clone(fix.position)),
         historyFixEpochMs(fix),
         TRAIL_MAX_POINTS,
-        { nullAltitude: fix.inventedHeight === true },
+        { nullAltitude: fix.inventedHeight === true, onGround: fix.onGround },
       );
     }
     if (!flightState._trail && flightState._viewer) {
@@ -881,10 +881,17 @@ export function createTracking({
         };
       }),
     );
+    // A history that ends in the air does not join an aircraft now on the
+    // ground (or the reverse) across a landing or take-off nobody saw.
     flightState._trailFixes = joinTrailBackfill(
       backfill,
       flightState._trailFixes,
       TRAIL_MAX_POINTS,
+      {
+        backfillEndsOnGround: parsed[parsed.length - 1].onGround,
+        onGroundNow: flightState.records.data.get(icao24)?.onGround,
+        nowMs: flightState.now(),
+      },
     );
     _refreshTrailDisplay();
   }

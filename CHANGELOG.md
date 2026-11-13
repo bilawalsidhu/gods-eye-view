@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- A tracked aircraft's trail no longer draws a straight line from its track
+  history across a landing or take-off that was not seen: a parked or
+  taxiing aircraft whose history ends in the air (often its previous flight)
+  starts its trail on the ground (samehkhamis).
 - Aircraft from adsb.lol that report no ground track (parked or taxiing
   slowly) now face their reported true heading instead of north, so parked
   models line up with their gates (samehkhamis).

@@ -113,6 +113,9 @@ export function createFlightSnapshotRenderer({
           // Drawn at an invented height: a trail seeded from history keeps no
           // position for it.
           inventedHeight: meta.renderAltitudeInvented === true,
+          // Whether this report was on the ground: a trail backfill joins it
+          // only across a landing or take-off it saw.
+          onGround: meta.onGround === true,
         });
         if (history.length > POSITION_HISTORY_LIMIT) {
           history.shift();

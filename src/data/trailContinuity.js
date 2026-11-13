@@ -12,7 +12,10 @@
  * longer than 48 minutes (a coverage hole or a separate flight), when the
  * implied great-circle speed is over 1,500 kt, or when either point has no
  * reported altitude. A parked aircraft is the exception: a pair under three
- * hours apart within 0.1 nm stays one path.
+ * hours apart within 0.1 nm stays one path. A history backfill that ends in
+ * the air does not join an aircraft now on the ground (or the reverse) when
+ * more than five minutes lie between them: the landing or take-off was not
+ * seen, and is often a different flight.
  *
  * Civil and military flight tracking share these rules.
  */
@@ -39,6 +42,13 @@ export const TRAIL_STATIONARY_HOLD_MAX_GAP_MS = 3 * 60 * 60_000;
 
 /** @constant {number} How close (nautical miles) two points must be to count as parked. */
 export const TRAIL_STATIONARY_HOLD_MAX_DISTANCE_NM = 0.1;
+
+/**
+ * @constant {number} An airborne point and a ground point more than this far
+ *   apart in time do not join: the landing or take-off between them was not
+ *   seen. A last waypoint on short final is a few minutes from the runway.
+ */
+export const TRAIL_UNSEEN_TRANSITION_MAX_GAP_MS = 5 * 60_000;
 
 /** @constant {number} The head never joins a body point farther than this from the aircraft. */
 export const TRAIL_HEAD_JOIN_MAX_M = 150_000;
@@ -140,20 +150,75 @@ export function trailBackfillFixes(waypoints) {
 }
 
 /**
+ * Whether the line from an airborne point to a ground point (in either
+ * order) skips a landing or take-off that was not seen.
+ * @param {boolean} prevOnGround - Whether the earlier point is on the ground.
+ * @param {boolean} nextOnGround - Whether the later point is on the ground.
+ * @param {number} deltaMs - Later point's time minus the earlier one's.
+ * @returns {boolean}
+ */
+export function trailGroundTransitionBreaks(
+  prevOnGround,
+  nextOnGround,
+  deltaMs,
+) {
+  return (
+    prevOnGround !== nextOnGround &&
+    !(deltaMs <= TRAIL_UNSEEN_TRANSITION_MAX_GAP_MS)
+  );
+}
+
+/**
  * Put backfill fixes ahead of the live trail. The join follows the same
  * rule, so a distant history tail never connects to the first live fix.
- * Past `maxPoints` the oldest recorded points go first, then the oldest
- * reports.
+ * A backfill whose last waypoint is in the air while the first live report
+ * is on the ground (or the reverse), more than five minutes before it, does
+ * not join it either. A live report that does not say uses the aircraft's
+ * state now; with no live fix to start after it, the backfill is checked
+ * against now and left out, so the head never draws that line. Past `maxPoints` the oldest
+ * recorded points go first, then the oldest reports.
  * @param {{fixes: object[], breakAfter: boolean}} backfill
  * @param {object[]} live - Live fixes; the first one's break is recomputed.
  * @param {number} maxPoints - Point limit across all segments.
+ * @param {object} [ground] - Ground state across the join.
+ * @param {boolean} [ground.backfillEndsOnGround] - The last waypoint's.
+ * @param {boolean} [ground.onGroundNow] - The aircraft's now, for a live
+ *   report that does not carry its own `onGround`.
+ * @param {number} [ground.nowMs] - Time the aircraft is at now.
  * @returns {object[]} The joined trail.
  */
-export function joinTrailBackfill({ fixes, breakAfter }, live, maxPoints) {
+export function joinTrailBackfill(
+  { fixes, breakAfter },
+  live,
+  maxPoints,
+  ground = null,
+) {
   if (!fixes.length) return live;
-  if (live.length)
-    live[0].breakBefore =
-      breakAfter || trailFixBreaks(fixes[fixes.length - 1], live[0]);
+  const last = fixes[fixes.length - 1];
+  const unseen = (laterMs, laterOnGround) =>
+    ground !== null &&
+    typeof ground.backfillEndsOnGround === 'boolean' &&
+    typeof laterOnGround === 'boolean' &&
+    trailGroundTransitionBreaks(
+      ground.backfillEndsOnGround,
+      laterOnGround,
+      laterMs - last.timeMs,
+    );
+  if (!live.length)
+    return Number.isFinite(ground?.nowMs) &&
+      unseen(ground.nowMs, ground.onGroundNow)
+      ? live
+      : keepTrailLimit(fixes, maxPoints);
+  const first = live[0];
+  live[0].breakBefore =
+    breakAfter ||
+    trailFixBreaks(last, first) ||
+    unseen(
+      first.timeMs,
+      typeof first.onGround === 'boolean'
+        ? first.onGround
+        : ground?.onGroundNow,
+    );
   return keepTrailLimit(fixes.concat(live), maxPoints);
 }
 
@@ -499,9 +564,10 @@ function reportFrom(fixes, i) {
  * @param {{x: number, y: number, z: number}} position - Owned position.
  * @param {number} timeMs - The report's epoch ms.
  * @param {number} maxPoints - Point limit across all segments.
- * @param {{nullAltitude?: boolean, displayMs?: number, settleMs?: number}} [options]
+ * @param {{nullAltitude?: boolean, displayMs?: number, settleMs?: number, onGround?: boolean}} [options]
  *   `displayMs`: the time the aircraft is drawn at as the report arrives;
- *   `settleMs`: how long the icon takes to ease onto a correction.
+ *   `settleMs`: how long the icon takes to ease onto a correction;
+ *   `onGround`: whether the report was on the ground, when known.
  * @returns {object[]} `fixes`.
  */
 export function insertTrailFix(
@@ -509,7 +575,12 @@ export function insertTrailFix(
   position,
   timeMs,
   maxPoints,
-  { nullAltitude = false, displayMs = NaN, settleMs = 0 } = {},
+  {
+    nullAltitude = false,
+    displayMs = NaN,
+    settleMs = 0,
+    onGround = undefined,
+  } = {},
 ) {
   const entry = {
     position: nullAltitude ? null : position,
@@ -518,6 +589,9 @@ export function insertTrailFix(
     drawn: false,
     breakBefore: false,
   };
+  // Whether the report was on the ground, when known: a history backfill
+  // joins it only across a landing or take-off it saw.
+  if (typeof onGround === 'boolean') entry.onGround = onGround;
   let i = insertionIndex(fixes, timeMs);
   // The guess drawn after a report the display already passed.
   fixes.splice(i, reportFrom(fixes, i) - i);
