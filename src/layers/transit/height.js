@@ -78,6 +78,9 @@ export function createHeight({ state, services, parts }) {
     cameraLat = NaN,
     cameraHeight = NaN;
   const terrainStats = { reads: 0, reused: 0, deferred: 0, borrowed: 0 };
+  /** The globe and terrain provider the kept heights were read from. */
+  let terrainGlobeRead = null,
+    terrainProviderRead = null;
 
   /** A number unique to a point on a `scale`-per-degree grid. */
   function gridKey(lat, lon, scale) {
@@ -219,11 +222,16 @@ export function createHeight({ state, services, parts }) {
     // On a terrain globe, use the loaded surface under the marker. This reads
     // tiles already loaded and does not launch a terrain request.
     const globe = state._viewer?.scene?.globe;
+    const provider = state._viewer?.terrainProvider;
+    // A height belongs to the terrain it was read from. Checked before the
+    // flat-globe answer, so terrain → flat → terrain starts afresh too.
+    if (globe !== terrainGlobeRead || provider !== terrainProviderRead) {
+      clearTerrainHeights();
+      terrainGlobeRead = globe;
+      terrainProviderRead = provider;
+    }
     if (globe?.show === true) {
-      if (
-        state._viewer?.terrainProvider instanceof
-        Cesium.EllipsoidTerrainProvider
-      )
+      if (provider instanceof Cesium.EllipsoidTerrainProvider)
         return { cell, height: GROUND_FLOOR_LIFT_M, prior: null };
       const rendered = globe.getHeight
         ? terrainHeight(globe, lat, lon, need)

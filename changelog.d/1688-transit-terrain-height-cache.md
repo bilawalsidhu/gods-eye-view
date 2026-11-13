@@ -2,5 +2,6 @@
   globe, most visibly while zooming over a large fleet. Every reread asked the
   terrain for the height of every trail fix of every vehicle in view; heights
   are now kept per point, read again only while the camera moves or tiles
-  load, and read within a time budget that puts vehicle positions first
-  (mazy1998, #1688).
+  load, and read within a time budget that puts vehicle positions first.
+  Switching the terrain provider or globe starts the kept heights afresh
+  (mazy1998, review by kvnloo, #1688).
