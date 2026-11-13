@@ -247,7 +247,9 @@
     "NORAD: {id}",
     "COMMUNITY",
     "Regional",
-    "OPT-IN"
+    "OPT-IN",
+    "{minutes} min",
+    "1 min/s"
   ],
   "es": [
     "1 min/s",
@@ -630,7 +632,8 @@
     "{count} packs",
     "Orthophoto",
     "Oblique",
-    "Type"
+    "Type",
+    "{range} NM"
   ],
   "it": [
     "1 min/s",
