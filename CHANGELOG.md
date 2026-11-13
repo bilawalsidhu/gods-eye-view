@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Aircraft from adsb.lol that report no ground track (parked or taxiing
+  slowly) now face their reported true heading instead of north, so parked
+  models line up with their gates (samehkhamis).
 - A renderer can draw weather: the `weather` capability adds `globe.weather`,
   with clouds, fog, haze, rain and snow (each 0 to 1) and the wind they drift
   on. Where the renderer lists it, the view shows the conditions observed
