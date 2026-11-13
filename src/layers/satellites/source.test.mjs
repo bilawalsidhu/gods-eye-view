@@ -164,3 +164,24 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
     { status: 'no-tle' },
   );
 });
+
+test('a SATCAT read says when the proxy served its last copy', async () => {
+  const headers = (cache) => ({
+    get: (name) => (name === 'x-satcat-cache' ? cache : null),
+  });
+  let cache = 'STALE-ERROR';
+  const source = createSatelliteSource({
+    fetchImpl: async (url) => {
+      assert.equal(url, '/api/celestrak-satcat/visual');
+      return {
+        ok: true,
+        status: 200,
+        headers: headers(cache),
+        text: async () => 'OBJECT_NAME,NORAD_CAT_ID,OBJECT_TYPE',
+      };
+    },
+  });
+  assert.equal((await source.readSatcat('visual')).stale, true);
+  cache = 'HIT';
+  assert.equal((await source.readSatcat('visual')).stale, false);
+});

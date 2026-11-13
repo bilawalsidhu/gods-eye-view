@@ -12,13 +12,25 @@
  */
 
 import * as Cesium from 'cesium';
-import { announceNavigationAuthority } from '../navigationPolicy.js';
-import { annotationsFromParams, createView } from '../view/index.js';
+import {
+  announceNavigationAuthority,
+  watchCameraOwner,
+} from '../navigationPolicy.js';
+import { t, translateKnown } from '../i18n/index.js';
+import { GOOGLE_LABEL } from '../layers/streetLevel/providers/google/policy.js';
+import {
+  annotationsFromParams,
+  createView,
+  followFromParams,
+  groundedLookAt,
+  streetLevelFromParams,
+} from '../view/index.js';
 
 const EMBED_VIEW_MESSAGE = 'gev:view';
 const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
 const EMBED_READY_MESSAGE = 'gev:ready';
 
+const STREET_LEVEL_LAYER = 'street-level';
 const FOLLOW_LAYERS = {
   aircraft: 'flights',
   military_aircraft: 'military',
@@ -27,6 +39,8 @@ const FOLLOW_LAYERS = {
 const FOLLOW_ATTEMPTS = 20;
 const FOLLOW_RETRY_MS = 1000;
 const FLIGHT_SECONDS = 2;
+/** How long a posted view waits for the terrain under its camera. */
+const TERRAIN_WAIT_MS = 2000;
 
 /**
  * Whether this page shows the app embedded: `?embed=1` when another page
@@ -43,6 +57,14 @@ export function isEmbedded(location = globalThis.location) {
 /** Whether a panel page loaded the app into itself. */
 export function isEmbeddedInline() {
   return globalThis.GEV_EMBED_INLINE === true;
+}
+
+/**
+ * Whether the panel page started the app for a tool result issued just now,
+ * not one its host handed back on mounting the panel again.
+ */
+function isFreshPanelResult() {
+  return isEmbeddedInline() && globalThis.GEV_EMBED_FRESH === true;
 }
 
 /**
@@ -166,6 +188,40 @@ function flyTo(viewer, camera) {
 }
 
 /**
+ * The `show_street_level` arguments for a view's street-level photos. A plain
+ * link (`autoOpen: false`) only arms a source that bills every load; a view
+ * posted into the embedded app is the client's own request and opens.
+ */
+function streetLevelArgs(streetLevel, { autoOpen = true } = {}) {
+  return {
+    latitude: streetLevel.lat,
+    longitude: streetLevel.lon,
+    ...(streetLevel.provider ? { provider: streetLevel.provider } : {}),
+    fly: true,
+    ...(autoOpen ? {} : { autoOpen: false }),
+  };
+}
+
+const STREET_LEVEL_PANEL_ID = 'street-level-panel';
+/** Dispatched on the window when a link opened after start-up has restored. */
+const SHARE_NAVIGATION_RESTORED_EVENT = 'gev:share-navigation-restore-settled';
+
+/** The armed link's toast, naming the OPEN button as the panel shows it. */
+function armedToast() {
+  return t('Street View is ready: press {open} to load it', {
+    open: t('OPEN {labels}', { labels: translateKnown(GOOGLE_LABEL) }),
+  });
+}
+
+/** Why a link's photo stays shut: its source has no working key here. */
+function keyToast(result) {
+  return t(
+    "{source} cannot open this link's street-level photo without a working key",
+    { source: translateKnown(result.providerName || 'Street Level') },
+  );
+}
+
+/**
  * Make the app show a view: style and map, exactly the view's layers,
  * annotations, the camera, and the followed entity. Each step runs through the
  * app's own actions (`run(name, args)`); a failed step is reported and the
@@ -173,13 +229,20 @@ function flyTo(viewer, camera) {
  */
 export async function applyView(
   view,
-  { viewer, dataManager, run, signal, retryMs = FOLLOW_RETRY_MS },
+  {
+    viewer,
+    dataManager,
+    run,
+    signal,
+    autoOpen = true,
+    retryMs = FOLLOW_RETRY_MS,
+  },
 ) {
   const steps = [];
-  const act = async (name, args) => {
+  const act = async (name, args, options) => {
     let result = null;
     try {
-      result = await run(name, args);
+      result = await run(name, args, options);
     } catch (error) {
       result = { ok: false, error: error?.message || String(error) };
     }
@@ -198,6 +261,8 @@ export async function applyView(
       await act('set_layer_visibility', { layerId: layer.id, enabled: false });
   }
   for (const layerId of view.layers) {
+    // The street-level action lights its source first, then the layer.
+    if (view.street_level && layerId === STREET_LEVEL_LAYER) continue;
     if (!dataManager.isEnabled(layerId))
       await act('set_layer_visibility', { layerId, enabled: true });
   }
@@ -207,6 +272,29 @@ export async function applyView(
   await act('clear_annotations', {});
   if (view.annotations.length)
     await act('annotate_map', { annotations: [...view.annotations] });
+  if (view.street_level) {
+    // The photos frame the camera; when the action fails before flying, the
+    // view's own camera still applies.
+    // A posted view replays someone else's view, as a link does: the source
+    // it lights is not saved as the visitor's own choice.
+    const result = await act(
+      'show_street_level',
+      streetLevelArgs(view.street_level, { autoOpen }),
+      { origin: 'programmatic' },
+    );
+    if (result?.ok !== true) {
+      // Overtaken (a click on the map, a newer request): hands off.
+      if (result?.cancelled || result?.superseded) return steps;
+      // An earlier view's photo must not stay over a place this view left.
+      // From the imagery stage on the action has settled the panel itself
+      // (a photo it could not load keeps its error).
+      if (result?.stage !== 'imagery')
+        dataManager.layers?.get?.(STREET_LEVEL_LAYER)?.module?.closeViewer?.();
+      if (!result?.location)
+        steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
+    }
+    return steps;
+  }
   if (!view.follow) {
     steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
     return steps;
@@ -250,18 +338,115 @@ export function installViews({
   dataManager,
   run,
   signal,
+  terrain = null,
   location = globalThis.location,
   windowRef = globalThis.window,
 }) {
   const ready = Promise.resolve(shell.initialRestorePromise).catch(() => {});
-  const linked = annotationsFromParams(
-    new URLSearchParams(String(location?.hash || '').replace(/^#/, '')),
+  const hashParams = new URLSearchParams(
+    String(location?.hash || '').replace(/^#/, ''),
   );
-  if (linked.length)
-    void ready.then(() => {
-      if (!signal?.aborted) void run('annotate_map', { annotations: linked });
+  // The link's own steps run first, one at a time, and posted views queue
+  // behind them; one failing step does not take the next with it. A passive
+  // link never flies over someone who took the camera: its steps are skipped
+  // when a newer link superseded it, when its flight never landed (the
+  // recipient dragged or searched), or after any navigation since the
+  // generation its restore flight owned.
+  const cameraLanded = (outcome) => outcome?.share?.camera === 'applied';
+  const restoreGeneration = (outcome) =>
+    Number.isInteger(outcome?.navigationToken)
+      ? outcome.navigationToken
+      : shell._navigationGeneration;
+  let generationAtRestore = null;
+  let startSuperseded = false;
+  let queue = ready.then((outcome) => {
+    generationAtRestore = restoreGeneration(outcome);
+    startSuperseded =
+      outcome?.status === 'superseded' ||
+      (Boolean(outcome?.share) && !cameraLanded(outcome));
+  });
+  const navigatedSince = (generation) =>
+    Number.isFinite(generation) && shell._navigationGeneration !== generation;
+  const linkStep = (work) =>
+    queue.then(async () => {
+      if (signal?.aborted) return;
+      try {
+        await work();
+      } catch {
+        /* reported by the action itself */
+      }
     });
-  if (!isEmbedded(location)) return () => {};
+  const linked = annotationsFromParams(hashParams);
+  if (linked.length)
+    queue = linkStep(() => run('annotate_map', { annotations: linked }));
+  // A link's street-level photos open once it has restored. A billed source
+  // only arms, except for the panel page's own link to a result issued just
+  // now. A link that follows an entity keeps the camera on it.
+  const linkedStreetLevel = (params) =>
+    followFromParams(params) ? null : streetLevelFromParams(params);
+  const openLinkedStreetLevel = async (
+    streetLevel,
+    { generation, autoOpen = false },
+  ) => {
+    if (navigatedSince(generation)) return;
+    // The link replays the sender's view: nothing it switches becomes the
+    // recipient's own preference.
+    const result = await run(
+      'show_street_level',
+      streetLevelArgs(streetLevel, { autoOpen }),
+      { origin: 'programmatic' },
+    );
+    // A source without a working key changes nothing: say why, or the link
+    // looks broken. In a frame the host reads the result instead.
+    if (result?.stage === 'key' && !isEmbedded(location)) {
+      shell._showToast?.(keyToast(result));
+      return;
+    }
+    // OPEN must be in view, but embed mode hides the rail that holds it: in
+    // a frame a posted view is the way to open a photo.
+    if (result?.armed === true && !isEmbedded(location)) {
+      // Opened for this link only: the recipient's saved layout stays theirs.
+      shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
+        explicit: true,
+        persist: false,
+      });
+      // On a phone the panel sits in a tab sheet: open it so OPEN shows.
+      shell.revealPanel?.(STREET_LEVEL_PANEL_ID);
+      shell._showToast?.(armedToast());
+    }
+  };
+  const startStreetLevel = linkedStreetLevel(hashParams);
+  if (startStreetLevel)
+    queue = linkStep(() =>
+      startSuperseded
+        ? undefined
+        : openLinkedStreetLevel(startStreetLevel, {
+            generation: generationAtRestore,
+            autoOpen: isFreshPanelResult(),
+          }),
+    );
+  // A link pasted into the open tab: its photos follow once its restore
+  // settles, under the same rules.
+  const onNavigatedRestore = (event) => {
+    if (event?.detail?.status !== 'settled' || !cameraLanded(event.detail))
+      return;
+    const streetLevel = linkedStreetLevel(
+      new URLSearchParams(String(location?.hash || '').replace(/^#/, '')),
+    );
+    if (!streetLevel) return;
+    const generation = restoreGeneration(event.detail);
+    queue = linkStep(() => openLinkedStreetLevel(streetLevel, { generation }));
+  };
+  windowRef?.addEventListener?.(
+    SHARE_NAVIGATION_RESTORED_EVENT,
+    onNavigatedRestore,
+  );
+  const stopNavigatedRestores = () =>
+    windowRef?.removeEventListener?.(
+      SHARE_NAVIGATION_RESTORED_EVENT,
+      onNavigatedRestore,
+    );
+  if (!isEmbedded(location)) return stopNavigatedRestores;
 
   windowRef.document.body.classList.add('ui-embed');
   shell.setCleanView?.(true);
@@ -278,7 +463,6 @@ export function installViews({
       peer.postMessage(message, origin);
   };
   // Views apply one at a time, in the order they arrive.
-  let queue = ready;
   const onMessage = (event) => {
     if (event.source !== peer || event.data?.type !== EMBED_VIEW_MESSAGE)
       return;
@@ -302,19 +486,82 @@ export function installViews({
       );
       return;
     }
-    queue = queue.then(async () => {
-      if (signal?.aborted) return;
-      const steps = await applyView(view, { viewer, dataManager, run, signal });
-      post(
-        {
-          type: EMBED_APPLIED_MESSAGE,
-          id,
-          ok: steps.every((step) => step.ok),
-          steps,
-        },
-        replyOrigin,
+    // A panel's host can hand back old results on a remount: only one issued
+    // just now may open a billed photo. A framing page's view is its own.
+    const autoOpen = !isEmbeddedInline() || event.data.fresh === true;
+    // Photos asked for without a point open where the camera looks, measured
+    // from the ground under it, as show_in_gods_eye_view places them.
+    const asked = event.data.view?.street_level;
+    const unplaced =
+      asked &&
+      typeof asked === 'object' &&
+      asked.lat == null &&
+      asked.lon == null;
+    queue = queue
+      .then(async () => {
+        if (signal?.aborted) return;
+        if (unplaced && view.street_level) {
+          // A terrain service that does not answer soon leaves the view's
+          // own estimate.
+          const wait = AbortSignal.timeout(TERRAIN_WAIT_MS);
+          const owner = watchCameraOwner(viewer, shell);
+          const point = await groundedLookAt(
+            view.camera,
+            terrain,
+            signal ? AbortSignal.any([signal, wait]) : wait,
+          )
+            .catch(() => null)
+            .finally(() => owner.stop());
+          if (signal?.aborted) return;
+          // Whoever takes the camera while the terrain answers (a drag, a
+          // search, the assistant) keeps it: the view stands down.
+          if (owner.taken()) {
+            post(
+              {
+                type: EMBED_APPLIED_MESSAGE,
+                id,
+                ok: false,
+                steps: [{ step: 'street_level', ok: false, superseded: true }],
+              },
+              replyOrigin,
+            );
+            return;
+          }
+          if (point)
+            view = createView({
+              ...event.data.view,
+              street_level: { ...asked, ...point },
+            });
+        }
+        const steps = await applyView(view, {
+          viewer,
+          dataManager,
+          run,
+          signal,
+          autoOpen,
+        });
+        post(
+          {
+            type: EMBED_APPLIED_MESSAGE,
+            id,
+            ok: steps.every((step) => step.ok),
+            steps,
+          },
+          replyOrigin,
+        );
+      })
+      // A view that fails is answered, and the views behind it still apply.
+      .catch((error) =>
+        post(
+          {
+            type: EMBED_APPLIED_MESSAGE,
+            id,
+            ok: false,
+            error: error?.message || String(error),
+          },
+          replyOrigin,
+        ),
       );
-    });
   };
   windowRef.addEventListener('message', onMessage);
   void ready.then(() => {
@@ -322,6 +569,7 @@ export function installViews({
   });
   return () => {
     stopRendering();
+    stopNavigatedRestores();
     windowRef.removeEventListener('message', onMessage);
   };
 }

@@ -4,7 +4,11 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
-import { initMobileShell } from './mobileShell.js';
+import {
+  initMobileShell,
+  MOBILE_SHELL_MEDIA_QUERY,
+  sheetForPanelId,
+} from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -64,6 +68,9 @@ import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
+import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import { withPlacePacks } from './placePacksLoading.js';
+import { preloadOwnerFlags } from './ownerFlag.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -158,8 +165,15 @@ export class StyleManager extends ShellFacade {
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
     this._feedback = new ShellFeedback({
-      readLayers: () => this._dataManager?.getAll?.() || [],
+      readLayers: () => withPlacePacks(this._dataManager?.getAll?.() || []),
     });
+    // The satellite owner flags load with the app, not on the first ride.
+    preloadOwnerFlags();
+    // The place names under a Cockpit load on its first lookup: the loading
+    // status names them meanwhile.
+    this._offPlacePacks = onPlacePacksLoadingChange(() =>
+      this._updateGlobalLoadingFeedback(),
+    );
     this.viewer = viewer;
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -361,6 +375,10 @@ export class StyleManager extends ShellFacade {
       services: {
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
+        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
+        satellitesLayer: services.satellitesLayer,
+        // Orbit's Live Signals rows list and focus its mapped sites.
+        militaryInstallationsLayer: services.militaryInstallationsLayer,
         isTr3b: services.isTr3b,
         toggleTr3b: services.toggleTr3b,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
@@ -375,6 +393,13 @@ export class StyleManager extends ShellFacade {
         fetchRegionalBrief: services.fetchRegionalBrief,
         regionalDistanceM: services.regionalDistanceM,
         weatherCodeLabel: services.weatherCodeLabel,
+        // Orbit reads flat Esri imagery: Google 3D tiles stay coarse from
+        // hundreds of kilometres up. The lease puts the map back on exit.
+        acquireOrbitImagery: () =>
+          this.mapStackController?.acquireImageryComparison?.({
+            owner: 'cockpit-orbit',
+            switchPolicy: 'esri-if-photoreal',
+          }) ?? null,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -400,6 +425,10 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishVision(view),
           signals: (rows) =>
             useCockpitStore(applicationPinia()).publishSignals(rows),
+          radar: (view) =>
+            useCockpitStore(applicationPinia()).publishRadar(view),
+          orbital: (view) =>
+            useCockpitStore(applicationPinia()).publishOrbital(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },
@@ -447,7 +476,12 @@ export class StyleManager extends ShellFacade {
       initialShareCode,
     });
     this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
-      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+      readShareFollowSubject({
+        viewer: this.viewer,
+        nowMs,
+        readSelectedVessel: () =>
+          this.services.aisLiveVesselsLayer?.getSelectedFix?.() ?? null,
+      }),
     );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
@@ -1113,6 +1147,7 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
+        revealPanel: () => this.revealPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1154,6 +1189,7 @@ export class StyleManager extends ShellFacade {
         _cctvSummary: this._cctvSummary,
       },
       cctv: cctvLayer,
+      viewer: this.viewer,
       actions: {
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
@@ -1225,6 +1261,20 @@ export class StyleManager extends ShellFacade {
     } = {},
   ) {
     return this._panelChrome.setPanelCollapsed(...arguments);
+  }
+
+  /**
+   * Bring a panel into view on a phone, where the rails show only as tab
+   * sheets: opens the sheet that holds it. Does nothing above 720px.
+   * @param {string} panelId - DOM id of the panel.
+   * @returns {void}
+   */
+  revealPanel(panelId) {
+    const sheet = sheetForPanelId(panelId);
+    if (!globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches) return;
+    if (sheet) this._mobileShell?.setSheet(sheet);
+    // The sheet opens at its top; a panel lower in the rail is scrolled to.
+    document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });
   }
 
   /**
@@ -1333,9 +1383,12 @@ export class StyleManager extends ShellFacade {
       };
     }
     if (!target.available) {
+      // The controller knows why (Google 3D: no Maps key; others: no ion token).
       return {
         ok: false,
-        error: `${target.label} requires a Cesium ion token`,
+        error:
+          target.unavailableReason ||
+          `${target.label} requires a Cesium ion token`,
         activeStack: this.mapStackController.getActiveId(),
       };
     }
@@ -1809,6 +1862,7 @@ export class StyleManager extends ShellFacade {
     this._wildlifeSightingCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
+    this._offPlacePacks();
     this._feedback.destroy();
 
     this._displayBindings.destroy();

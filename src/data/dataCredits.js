@@ -135,6 +135,13 @@ export const DATA_CREDITS = [
       'explicit permission of David J Taylor, Edinburgh',
   },
   {
+    key: 'planespotters',
+    html:
+      'Aircraft photos: ' +
+      '<a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> ' +
+      '· each photo is © its photographer, credited beside it',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
@@ -143,9 +150,22 @@ export const DATA_CREDITS = [
   {
     key: 'celestrak',
     html:
-      'Satellites (TLEs): CelesTrak ' +
+      'Satellites (TLEs and SATCAT): CelesTrak ' +
       '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>), ' +
       'Dr. T.S. Kelso',
+  },
+  {
+    key: 'ucs-satellite-database',
+    html:
+      'Satellite operators and purposes: ' +
+      '<a href="https://www.ucsusa.org/satellite_database" target="_blank" rel="noopener">UCS Satellite Database</a> ' +
+      '(UCS-Satellite-Database 5-1-2023), Union of Concerned Scientists',
+  },
+  {
+    key: 'imaging-sensors',
+    html:
+      'Imaging sensor swaths: operator and agency specifications, ' +
+      'cited per platform',
   },
   {
     key: 'launch-library-2',
@@ -316,6 +336,38 @@ export const DATA_CREDITS = [
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
   },
   {
+    key: 'ottawa-cctv',
+    html:
+      'Traffic cameras (Ottawa, with an access certificate): ' +
+      '<a href="https://traffic.ottawa.ca/en/traffic-map-data-lists-and-resources/about-the-data" target="_blank" rel="noopener">City of Ottawa Traffic Camera Images API</a>',
+  },
+  {
+    key: 'quebec-cctv',
+    html:
+      'Camera locations (Québec): Ministère des Transports et de la Mobilité durable via ' +
+      '<a href="https://www.donneesquebec.ca/" target="_blank" rel="noopener">Données Québec</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); ' +
+      'Montréal camera locations © OpenStreetMap contributors (ODbL). ' +
+      'Video (when enabled) and linked webcam pages stay with ' +
+      '<a href="https://www.quebec511.info/" target="_blank" rel="noopener">Québec 511</a> and each operator, under their own terms',
+  },
+  {
+    key: 'tripcheck-cctv',
+    html:
+      'Road camera stills (Oregon): camera courtesy of ODOT, via ' +
+      '<a href="https://www.tripcheck.com/" target="_blank" rel="noopener">TripCheck</a>; ' +
+      'partner cameras (counties, cities, Caltrans, WSDOT) are named in the camera label',
+  },
+  {
+    key: 'mlit-river-cctv',
+    html:
+      'River camera stills (Japan): 出典：国土交通省 ' +
+      '<a href="https://www.river.go.jp/" target="_blank" rel="noopener">川の防災情報</a> ' +
+      '(Ministry of Land, Infrastructure, Transport and Tourism; ' +
+      '<a href="https://www.river.go.jp/kawabou/kwb_apend/html/caution.html" target="_blank" rel="noopener">terms</a>), ' +
+      'fetched on view, at most every ten minutes per camera',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
@@ -336,6 +388,15 @@ export const DATA_CREDITS = [
       '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
       '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
       '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'iceland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Iceland): road camera images, fetched live, from the ' +
+      '<a href="https://www.vegagerdin.is/" target="_blank" rel="noopener">Icelandic Road and Coastal Administration (Vegagerðin)</a> — ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(<a href="https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions" target="_blank" rel="noopener">terms</a>); ' +
+      'no endorsement by IRCA is implied',
   },
   {
     key: 'kingcounty-cctv',
@@ -360,6 +421,14 @@ export const DATA_CREDITS = [
       'Traffic snapshot cameras (Hong Kong): ' +
       '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
       '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
+    key: 'webcamromania-cctv',
+    html:
+      'Giroc camera (when configured): ' +
+      '<a href="https://webcamromania.ro/webcam-orase/webcam-giroc/" target="_blank" rel="noopener">Webcam Romania</a>. ' +
+      'Video rights remain with the camera operator; ' +
+      '<a href="https://webcamromania.ro/termeni-si-conditii/" target="_blank" rel="noopener">provider terms</a> apply.',
   },
   {
     key: 'vegvesen-cctv',
@@ -451,6 +520,10 @@ export const DATA_CREDITS = [
     html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
+    key: 'rail-gtfs-rt',
+    html: 'Trains: operator realtime feeds (each operator is credited below when its trains are shown)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -521,6 +594,38 @@ export const DATA_CREDITS = [
       'Shown as published; reports are S2 assessments, not verified fact.',
   },
   {
+    key: 'news',
+    html:
+      'News: every report is credited to its own publisher and links to the original article; ' +
+      'pictures are the publishers’ own, shown from their sites with the publisher named. ' +
+      'Places, categories, severity and English headlines are derived automatically, by ' +
+      'bundled rules, the news provider or the configured news server, and can be wrong.',
+  },
+  {
+    // GDELT's terms ask for a citation and a link.
+    key: 'gdelt-news',
+    html:
+      'News, Conflicts without a news server: events and page titles from the ' +
+      '<a href="https://www.gdeltproject.org/" target="_blank" rel="noopener">GDELT Project</a> ' +
+      '(GDELT 2.0 events and GKG; places and categories are machine-coded)',
+  },
+  {
+    // World News API's free plan asks for a visible "World News API" link to
+    // its site; always listed, so a free-plan key is never shown without it.
+    key: 'worldnewsapi',
+    html:
+      'News, Local without a news server: headlines from ' +
+      '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a>',
+  },
+  {
+    key: 'shipwrecks',
+    html:
+      'Shipwrecks (Europe): <a href="https://emodnet.ec.europa.eu/en/human-activities" target="_blank" rel="noopener">EMODnet Human Activities</a> ' +
+      '(data originator AND-International, compiled from SHOM, Ireland&rsquo;s National Monuments Service, Historic England and the Oxford Roman Economy Project), ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
@@ -586,6 +691,15 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/** Registered when the News layer shows a Liveuamap report (only with
+ * LIVEUAMAP_API_KEY set and no news server). */
+export const LIVEUAMAP_CREDIT = {
+  key: 'liveuamap',
+  html:
+    'News, Conflicts: mapped reports from ' +
+    '<a href="https://liveuamap.com/" target="_blank" rel="noopener">Liveuamap</a>',
+};
+
 /** Registered when the first Natural Earth region or state/province outline
  * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
@@ -627,21 +741,55 @@ export const OSM_PLACES_CREDIT = {
 /**
  * Per-feed transit credit, registered the first time that feed's vehicles
  * render (see `src/data/transitFeeds.js` for the license of each).
- * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ *
+ * Two optional registry fields serve licences that ask for more than a name:
+ * `sourceUrl` links the attribution to the publisher (Warsaw asks for a link
+ * to its API), and `creditDated` adds the UTC date of the data, from the feed
+ * header or else the fetch time (Warsaw and Poznań ask for the download or
+ * update date). A dated credit is keyed by its date, so a new day registers a
+ * new line instead of keeping yesterday's.
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string,
+ *   sourceUrl?: string, creditDated?: boolean }} feed
+ * @param {{ feedTimestamp?: number|null, fetchedAt?: number|null }} [snapshot]
+ *   `feedTimestamp` in epoch seconds, `fetchedAt` in epoch ms.
  * @returns {{ key: string, html: string }}
  */
-export function transitFeedCredit(feed) {
+export function transitFeedCredit(feed, snapshot = null) {
   const escape = (text) =>
     String(text)
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;');
+  const source = feed.sourceUrl
+    ? `<a href="${escape(feed.sourceUrl)}" target="_blank" rel="noopener">${escape(feed.attribution)}</a>`
+    : escape(feed.attribution);
+  const dataMs = Number.isFinite(snapshot?.feedTimestamp)
+    ? snapshot.feedTimestamp * 1000
+    : snapshot?.fetchedAt;
+  const date =
+    feed.creditDated === true && Number.isFinite(dataMs) && dataMs > 0
+      ? new Date(dataMs).toISOString().slice(0, 10)
+      : null;
   return {
-    key: `transit-${feed.id}`,
+    key: date ? `transit-${feed.id}-${date}` : `transit-${feed.id}`,
     html:
-      `Transit (${escape(feed.attribution)}): ` +
+      `Transit (${source}${date ? `, data of ${date}` : ''}): ` +
       `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
+
+/**
+ * Per-feed rail credit, registered the first time that feed's trains render
+ * (see `src/data/railFeeds.js` for the licence of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function railFeedCredit(feed) {
+  const transit = transitFeedCredit(feed);
+  return {
+    key: `rail-${feed.id}`,
+    html: transit.html.replace(/^Transit \(/, 'Trains ('),
   };
 }
 

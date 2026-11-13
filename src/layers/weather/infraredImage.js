@@ -1,6 +1,11 @@
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import { msg } from '../../i18n/index.js';
-import { weatherImageUrl } from './source.js';
+import {
+  weatherImageUrl,
+  weatherPixelSize,
+  drawWeatherPixels,
+  closeWeatherPixels,
+} from './source.js';
 import { infraredAlpha } from './infraredAlpha.js';
 
 export const MAX_MOSAIC_BYTES = 4 * 1024 * 1024;
@@ -20,10 +25,35 @@ export function processInfraredImage(
   if (flipY) context.setTransform(1, 0, 0, -1, 0, image.height);
   context.drawImage(image, 0, 0);
   if (flipY) context.setTransform(1, 0, 0, 1, 0, 0);
+  applyInfraredTransfer(context, canvas, mode);
+  return canvas;
+}
+
+function applyInfraredTransfer(context, canvas, mode) {
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
   pixels.data.set(infraredAlpha(pixels.data, mode));
   context.putImageData(pixels, 0, 0);
-  return canvas;
+}
+
+/** Draw pixels a frame source supplied into a new canvas, with the display
+ * transfer for infrared products, and release them. They must be `size`. */
+function drawSuppliedImage(pixels, product, mode, size, signal, createCanvas) {
+  try {
+    signal.throwIfAborted();
+    const { width, height } = weatherPixelSize(pixels);
+    if (width !== size.width || height !== size.height)
+      throw new Error('Invalid weather image dimensions');
+    const texture = createCanvas();
+    texture.width = width;
+    texture.height = height;
+    const context = texture.getContext('2d');
+    drawWeatherPixels(context, pixels);
+    if (product === 'clouds' || product === 'clouds-regional')
+      applyInfraredTransfer(context, texture, mode);
+    return texture;
+  } finally {
+    closeWeatherPixels(pixels);
+  }
 }
 
 /** Decode locally, releasing the object URL on success, failure or cancellation. */
@@ -60,7 +90,8 @@ export function decodeInfraredImage(blob, signal) {
 /** Fetch one capped whole-extent frame, or a `bbox` detail window of it, and draw
  * it into a canvas. Infrared frames get the display transfer; a canvas also keeps
  * Cesium's texture row order, which an ImageBitmap upload would not. The decoded
- * image is always released. */
+ * image is always released. With a `frameSource` that has `getImage`, the host
+ * supplies the decoded pixels instead and nothing is fetched or decoded here. */
 export async function acquireWeatherImage(
   product,
   time,
@@ -75,8 +106,30 @@ export async function acquireWeatherImage(
     decodeImage = decodeInfraredImage,
     now = () => performance.now(),
     onFetched = () => {},
+    frameSource = null,
   },
 ) {
+  if (frameSource?.getImage) {
+    signal.throwIfAborted();
+    const started = now();
+    const pixels = await frameSource.getImage({
+      product,
+      time,
+      size,
+      bbox,
+      signal,
+    });
+    onFetched();
+    const texture = drawSuppliedImage(
+      pixels,
+      product,
+      mode,
+      size,
+      signal,
+      createCanvas,
+    );
+    return { texture, decodeMs: now() - started };
+  }
   const response = await fetchImpl(weatherImageUrl(product, time, size, bbox), {
     signal,
   });

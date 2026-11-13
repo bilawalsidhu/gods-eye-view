@@ -1,0 +1,57 @@
+{
+  "id": "imf-portwatch-disruptions",
+  "kind": "dataset",
+  "family": "events",
+  "title": "Port disruptions (IMF PortWatch)",
+  "provider": "IMF PortWatch",
+  "description": "Areas of natural-hazard events that disrupted ports since 2019, such as cyclones and floods, with the ports affected, from IMF PortWatch and GDACS.",
+  "icon": "◌",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/PortWatch_disruptions_database/FeatureServer/0",
+    "query": {
+      "outFields": "htmlname,alertlevel,country,fromdate,n_affectedports"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxFeatures": 500,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "htmlname",
+    "fields": ["alertlevel", "n_affectedports"],
+    "rank": {
+      "field": "fromdate",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "alertlevel",
+      "colors": {
+        "RED": "#d03b3b",
+        "ORANGE": "#ec835a",
+        "GREEN": "#0ca30c"
+      },
+      "labels": {
+        "RED": "Red alert",
+        "ORANGE": "Orange alert",
+        "GREEN": "Green alert"
+      }
+    }
+  },
+  "licence": {
+    "name": "IMF PortWatch terms; attribution required (reuse terms under review)",
+    "url": "https://www.imf.org/external/terms.htm",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "IMF PortWatch (portwatch.imf.org), with GDACS event data",
+    "url": "https://portwatch.imf.org/"
+  },
+  "status": "incubating",
+  "reviewed": "2026-10-22"
+}

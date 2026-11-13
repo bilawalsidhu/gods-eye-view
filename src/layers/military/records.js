@@ -6,17 +6,60 @@ import {
   GROUND_FLOOR_WARM_MAX_ALT_M,
   LANDED_MISSING_POLL_LIMIT,
   MISSING_POLL_LIMIT,
+  TRACKED_RETENTION_MS,
 } from './recordPolicy.js';
 
 /** Portable military aircraft metadata and bounded missing-poll retention. */
 export class MilitaryFlightRecords {
-  constructor({ geoidHeight, cachedGroundFloor, floorAltitudeM }) {
+  constructor({
+    geoidHeight,
+    cachedGroundFloor,
+    floorAltitudeM,
+    now = () => Date.now(),
+  }) {
     this.services = { geoidHeight, cachedGroundFloor, floorAltitudeM };
+    /** The time records are judged at: the layer's clock. */
+    this.now = now;
     this.data = new Map();
     this.missingPolls = new Map();
+    // Contacts whose last poll re-sent a fix no newer than the one before.
+    this.fixRepeated = new Set();
+    this.lastSnapshotMs = null;
+    this.snapshotAdvanced = true;
     this.geoidNCache = new Map();
     this.geoidReady = false;
   }
+  /**
+   * Start reading a snapshot taken at `observedAtMs`. A fix re-sent in a
+   * newer snapshot marks its contact as not updated; the same snapshot read
+   * again does not.
+   * @param {number} observedAtMs
+   */
+  beginSnapshot(observedAtMs) {
+    this.snapshotAdvanced =
+      !Number.isFinite(observedAtMs) ||
+      !Number.isFinite(this.lastSnapshotMs) ||
+      observedAtMs > this.lastSnapshotMs;
+    if (Number.isFinite(observedAtMs))
+      this.lastSnapshotMs = Math.max(
+        this.lastSnapshotMs ?? -Infinity,
+        observedAtMs,
+      );
+  }
+
+  /** Note a received fix: the newest fix time, and whether it advanced. */
+  _noteFix(id, prevMeta, fixEpochMs) {
+    const prevFixMs = prevMeta?.newestFixMs;
+    // A fix counts as new only when it moves on by a second: feeds that
+    // derive fix time from receipt (readsb `now − seen_pos`, 0.1 s) jitter.
+    if (!Number.isFinite(prevFixMs) || fixEpochMs >= prevFixMs + 1000) {
+      this.fixRepeated.delete(id);
+      return fixEpochMs;
+    }
+    if (this.snapshotAdvanced) this.fixRepeated.add(id);
+    return prevFixMs;
+  }
+
   receive(
     aircraft,
     { observedAtMs, floorWarmPoints: _floorWarmPoints, modelOwnsVisual },
@@ -88,6 +131,10 @@ export class MilitaryFlightRecords {
     // already uses (which also carries the on-ground 0 m / last-known-baro
     // case), so the two never disagree on the "no data yet" case.
     let renderAltitudeM = pickedAltM != null ? pickedAltM : altitudeM;
+    // No altitude for an airborne contact: the height is the airborne
+    // default, invented. The tracked trail keeps no point there.
+    const renderAltitudeInvented =
+      pickedAltM == null && !onGround && aircraft.baroAltitudeM == null;
     // Field-test fix (RS46 heli-in-hillside, 2026-07-06): a baro-only
     // AIRBORNE contact near steep terrain can compute a render height
     // BELOW the local surface (no alt_geom; baro+N carries QNH error
@@ -127,9 +174,11 @@ export class MilitaryFlightRecords {
     // Sticky merge — adsb.lol intermittently drops flight/t/r/ownOp; hold
     // last-known-good (bounded by the layer's eviction, which deletes the entry).
     const stickyType = stickyText(type, prevMeta?.type);
+    const fixEpochMs = aircraft.positionTimeMs ?? observedAtMs;
     const meta = {
       sourceReference: aircraft.reference,
-      observedReceiptMs: Date.now(),
+      observedReceiptMs: this.now(),
+      newestFixMs: this._noteFix(icao24, prevMeta, fixEpochMs),
       callsign: stickyText(callsign, prevMeta?.callsign),
       type: stickyType,
       // Type outranks category automatically inside classifyAircraft.
@@ -146,6 +195,7 @@ export class MilitaryFlightRecords {
       // altitudeFt/baro).
       geoAltitudeM,
       renderAltitudeM,
+      renderAltitudeInvented,
       // A poll that omits track/speed holds the last values, like the civil
       // records; 0 only until one is known. A grounded row without a speed
       // reads 0, so a parked plane never coasts at its landing speed.
@@ -184,19 +234,36 @@ export class MilitaryFlightRecords {
       prevMeta,
       meta,
       groundFlipped,
-      fixEpochMs: aircraft.positionTimeMs ?? observedAtMs,
+      fixEpochMs,
     };
   }
-  absence(id, { complete, retainIds, likelyLanded }) {
+  absence(
+    id,
+    { complete, retainIds, likelyLanded, tracked = false, nowMs = this.now() },
+  ) {
+    const misses = (this.missingPolls.get(id) || 0) + 1;
+    // The tracked contact has missed an update: it is stale from the first
+    // one, and kept (so the camera keeps its target) until ten minutes after
+    // its newest fix, whatever the snapshot says. With no fix time known it
+    // takes the ordinary limits below.
+    const meta = this.data.get(id);
+    const fixMs = meta?.newestFixMs ?? meta?.observedReceiptMs;
+    if (tracked && Number.isFinite(fixMs)) {
+      if (nowMs - fixMs < TRACKED_RETENTION_MS) {
+        this.missingPolls.set(id, misses);
+        return 'stale';
+      }
+      this.missingPolls.delete(id);
+      return 'remove';
+    }
     // Partial admissions and position-less rows do not prove absence, but
     // retention remains bounded; a likely-landed position-less contact
     // still takes the landed limit.
     if (
       (!complete || (retainIds?.has(id) && !likelyLanded)) &&
-      Date.now() - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
+      nowMs - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
     )
       return 'retain';
-    const misses = (this.missingPolls.get(id) || 0) + 1;
     const limit = likelyLanded ? LANDED_MISSING_POLL_LIMIT : MISSING_POLL_LIMIT;
     if (misses < limit) {
       this.missingPolls.set(id, misses);
@@ -205,9 +272,18 @@ export class MilitaryFlightRecords {
     this.missingPolls.delete(id);
     return 'remove';
   }
+  /** Forget every observation, as when the world clock jumps to another time. */
+  reset() {
+    this.data.clear();
+    this.missingPolls.clear();
+    this.fixRepeated.clear();
+    this.lastSnapshotMs = null;
+    this.snapshotAdvanced = true;
+  }
   forget(id) {
     this.data.delete(id);
     this.missingPolls.delete(id);
+    this.fixRepeated.delete(id);
     this.geoidNCache.delete(id);
   }
 }

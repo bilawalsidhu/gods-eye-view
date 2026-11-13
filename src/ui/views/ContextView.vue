@@ -20,8 +20,8 @@ import { cockpitEntryFace } from '../cockpitPresentation.js';
 // publishes them; until it does, the panel shows its initial markup.
 const { view: ctx } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
-// The entry rides the tracked aircraft (cockpitEntryFace).
-const entry = computed(() => cockpitEntryFace('aircraft'));
+// The entry names the subject it would ride (cockpitEntryFace).
+const entry = computed(() => cockpitEntryFace(cockpit.value?.entryKind));
 // While the Bhote Koshi event is on, its panel is the rail's only content.
 const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
 // The Scene runtime chip SceneControls presents while a scene plays.
@@ -35,6 +35,10 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
     <RailPanel id="weather-panel" hidden :title="t('WEATHER')" sideways rail-scroller>
       <template #badge><span id="weather-panel-count" :aria-label="t('Active weather products')">0</span></template>
       <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
+    <RailPanel id="news-panel" hidden :title="t('NEWS')" sideways rail-scroller>
+      <template #badge><span id="news-panel-count" :aria-label="t('News items in the feed')">0</span></template>
+      <div id="news-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
     <RailPanel id="recent-imagery-panel" hidden :title="t('RECENT IMAGERY')" sideways rail-scroller>
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>

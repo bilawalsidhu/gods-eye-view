@@ -12,14 +12,18 @@ import {
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
-import { translateFeedError, translateStatusLine } from './statusText.js';
+import { createNewsPanel } from './newsPanel.js';
+import {
+  translateFeedError,
+  translateStatusLine,
+  translateStatusMessage,
+} from './statusText.js';
 import {
   formatNumber,
   getLocale,
   msg,
   onLocaleChange,
   t,
-  translateKnown,
 } from '../i18n/index.js';
 
 // Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
@@ -50,6 +54,7 @@ const PANEL_GROUPS = [
       'ais-live-vessels',
       'traffic',
       'transit',
+      'rail',
       'bikeshare',
     ],
   },
@@ -80,6 +85,8 @@ const PANEL_GROUPS = [
       'fire-perimeters',
       'gnss-integrity',
       's2-ghostmaps',
+      'shipwrecks',
+      'news',
     ],
   },
   {
@@ -115,6 +122,17 @@ const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids, containerId }) =>
 const PANEL_POSITIONS = new Map(
   PANEL_ORDER.map(({ id }, index) => [id, index]),
 );
+// Data Library layers follow every core group, in the order they were added.
+const LIBRARY_GROUP = msg('Library');
+const panelPosition = (layer) =>
+  layer.libraryEntryId
+    ? PANEL_ORDER.length + 1
+    : (PANEL_POSITIONS.get(layer.id) ?? PANEL_ORDER.length);
+const panelGroup = (layer) =>
+  layer.libraryEntryId
+    ? LIBRARY_GROUP
+    : (PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
+      msg('Other layers'));
 
 function englishPanelLabel(layer) {
   return PANEL_LABELS[layer.id] || LAYER_NAME_KEYS[layer.id] || layer.name;
@@ -326,6 +344,11 @@ export class LayerPanel {
         container?.ownerDocument?.getElementById?.('weather-panel-body'),
       setLayerParams: this.setLayerParams,
     });
+    this._newsPanel?.destroy();
+    this._newsPanel = createNewsPanel({
+      container: container?.ownerDocument?.getElementById?.('news-panel-body'),
+      setLayerParams: this.setLayerParams,
+    });
     this._mountRecentImagery();
     this._renderToggles();
   }
@@ -361,6 +384,8 @@ export class LayerPanel {
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
+    this._newsPanel?.destroy();
+    this._newsPanel = null;
     this._recentImageryPanel?.destroy();
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
@@ -370,6 +395,10 @@ export class LayerPanel {
     this._groupContainers = new Map();
     this._toggleContainer = null;
   }
+  /** Rebuild the rows after the layer set changed (a Data Library add/remove). */
+  rerender() {
+    this._renderToggles();
+  }
   _renderToggles() {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
@@ -378,19 +407,13 @@ export class LayerPanel {
     // its toggle and metadata.
     const layers = this.getAll()
       .slice()
-      .sort(
-        (a, b) =>
-          (PANEL_POSITIONS.get(a.id) ?? PANEL_ORDER.length) -
-          (PANEL_POSITIONS.get(b.id) ?? PANEL_ORDER.length),
-      );
+      .sort((a, b) => panelPosition(a) - panelPosition(b));
     this._rows = [];
     this._rowViews = new Map();
     let previousGroup = '';
     for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
-      const group =
-        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
-        msg('Other layers');
+      const group = panelGroup(layer);
       const containerId =
         PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.containerId;
       const container = this._groupContainers.has(containerId)
@@ -425,10 +448,12 @@ export class LayerPanel {
       onLocaleChange(() => {
         this._paint();
         this._refreshWeatherPanel();
+        this._refreshNewsPanel();
       }),
     );
     this._paint();
     this._refreshWeatherPanel();
+    this._refreshNewsPanel();
   }
 
   /** Present every row from the layers' current state and render them. */
@@ -460,6 +485,8 @@ export class LayerPanel {
             this._selectListItem(layerId, itemId, generation),
           onSlider: (layerId, sliderId, value) =>
             this._moveSlider(layerId, sliderId, value, generation),
+          onRange: (layerId, rangeId, end, value) =>
+            this._pickRangeEnd(layerId, rangeId, end, value, generation),
         }),
         id === null ? this._toggleContainer : this._groupContainers.get(id),
       );
@@ -480,6 +507,7 @@ export class LayerPanel {
       id: layer.id,
       // English name for voice tools, which must not receive translated text.
       englishName: englishPanelLabel(layer),
+      libraryEntry: layer.libraryEntryId || null,
       icon: layer.icon,
       name: panelLabel(layer),
       count: row.count
@@ -496,7 +524,7 @@ export class LayerPanel {
   }
 
   /**
-   * A layer's row chips, one-of-many switch, slider, color legend, info line
+   * A layer's row chips, one-of-many switch, slider, start/end pickers, color legend, info line
    * and ordered list. The block
    * is hidden while the layer is off (or while a dependency owner has
    * surrendered it), so a quiet row stays quiet. Chips and list items are
@@ -505,7 +533,12 @@ export class LayerPanel {
    * controls for good, and a shown info line stays.
    */
   _presentControls(row, layer) {
-    const controls = layer.enabled ? this._rowControlsFor(layer.id) : null;
+    // A quiet row stays quiet while off, except Data Library rows, whose
+    // actions (zoom, remove) work on a layer that is off.
+    const controls =
+      layer.enabled || layer.libraryEntryId
+        ? this._rowControlsFor(layer.id)
+        : null;
     if (controls?.readout) {
       // The row became a rail readout: its controls go for good.
       row.controls = false;
@@ -523,6 +556,7 @@ export class LayerPanel {
     const infoText = controls?.info ? String(controls.info) : '';
     const segmented = controls?.segmented || null;
     const slider = controls?.slider || null;
+    const range = controls?.range || null;
     // The info line, once shown, stays in place and hides when empty.
     if (infoText) row.info = true;
     return {
@@ -531,10 +565,12 @@ export class LayerPanel {
         legend.length === 0 &&
         !infoText &&
         !segmented &&
-        !slider,
+        !slider &&
+        !range,
       chips,
       segmented,
       slider,
+      range,
       legend,
       info: row.info
         ? { text: infoText, title: controls?.infoTitle || '' }
@@ -578,7 +614,8 @@ export class LayerPanel {
       ...(live?.chips || []),
       ...(live?.segmented?.options || []),
     ].find((entry) => entry.id === chipId);
-    if (!chip || chip.disabled || !this.isEnabled(id)) return;
+    if (!chip || chip.disabled || (!this.isEnabled(id) && !chip.whileOff))
+      return;
     if (typeof chip.onClick === 'function') chip.onClick();
     else if (chip.params)
       this.setLayerParams(id, chip.params, { origin: 'user' });
@@ -597,6 +634,20 @@ export class LayerPanel {
     )
       return;
     this.setLayerParams(id, slider.params(value), { origin: 'user' });
+  }
+
+  _pickRangeEnd(id, rangeId, end, value, generation = this._generation) {
+    if (this._destroyed || this._generation !== generation) return;
+    const range = this._rowControlsFor(id)?.range;
+    if (
+      !range ||
+      range.id !== rangeId ||
+      (end !== 'from' && end !== 'to') ||
+      typeof range.params !== 'function' ||
+      !this.isEnabled(id)
+    )
+      return;
+    this.setLayerParams(id, range.params(end, value), { origin: 'user' });
   }
 
   _selectListItem(id, itemId, generation = this._generation) {
@@ -664,6 +715,15 @@ export class LayerPanel {
     }
     this._paint();
     this._refreshWeatherPanel();
+    this._refreshNewsPanel();
+  }
+
+  /** Feed the News rail panel the view the news layer publishes while on. */
+  _refreshNewsPanel() {
+    const layer = this.getAll().find(({ id }) => id === 'news');
+    this._newsPanel?.update(
+      layer?.enabled ? this._rowControlsFor(layer.id)?.feed || null : null,
+    );
   }
 
   _wellDescription(layer) {
@@ -752,9 +812,11 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      return `${source} · ${translateKnown(stats.statusMessage.trim())}`;
+      return `${source} · ${translateStatusMessage(stats.statusMessage.trim())}`;
     }
-    const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : t('never');
+    const ago = stats.lastUpdate
+      ? this._timeAgo(stats.lastUpdate, stats.atMs)
+      : t('never');
     if (stats.loading) {
       const loadingLabel =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
@@ -797,7 +859,7 @@ export class LayerPanel {
       // row by the oldest of it, not by the load that re-served it.
       const dataAgo =
         Number(stats.oldestTileAt) > 0
-          ? this._timeAgo(stats.oldestTileAt)
+          ? this._timeAgo(stats.oldestTileAt, stats.atMs)
           : ago;
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
         return t('{state} · {source} · {ago} · retrying in {seconds}s', {
@@ -822,8 +884,11 @@ export class LayerPanel {
     return t('{source} · {ago}', { source, ago });
   }
 
-  _timeAgo(timestamp) {
-    const diff = Math.floor((Date.now() - timestamp) / 1000);
+  /** How long before `nowMs` (the layer's world time, else the wall clock). */
+  _timeAgo(timestamp, nowMs) {
+    const diff = Math.floor(
+      ((Number.isFinite(nowMs) ? nowMs : Date.now()) - timestamp) / 1000,
+    );
     if (diff < 5) return t('just now');
     if (diff < 60) return t('{count}s ago', { count: diff });
     if (diff < 3600) return t('{count}m ago', { count: Math.floor(diff / 60) });

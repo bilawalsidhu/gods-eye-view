@@ -364,7 +364,12 @@ const layers = [
   },
   {
     id: 'street-level',
-    aliases: ['street level', 'street-level imagery', 'mapillary'],
+    aliases: [
+      'street level',
+      'street-level imagery',
+      'mapillary',
+      'street view',
+    ],
     context: false,
     noQuery: 'street-level imagery; no countable records',
   },
@@ -458,8 +463,12 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   // query for this layer wait until there is room.
   'drone-airspace':
     'informational airspace layer; no room in the prompt budget',
+  // Same budget: a historical wreck archive waits for room too.
+  shipwrecks: 'historical shipwreck archive; no room in the prompt budget',
+  news: 'browsed in the News panel; voice tools are a later step',
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
+  rail: 'train layer; no room in the prompt budget, and "trains" still names transit',
 });
 
 const TYPE_NAMES = Object.freeze({
