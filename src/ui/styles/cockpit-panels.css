@@ -103,6 +103,19 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
+/* The weather tiles stand apart as cards, with no lit grid behind them,
+   and are short enough to fit the shorter window. */
+.cockpit-local-grid {
+  gap: 5px;
+  background: none;
+}
+
+.cockpit-local-grid > div {
+  min-height: 0;
+  gap: 2px;
+  padding: 6px 9px;
+}
+
 .cockpit-route-card {
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
@@ -331,13 +344,13 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
    The status colour is a slim inset bar (cyan for the aircraft you ride,
    white for nearby, amber for military / warnings), not a bent border. */
 .cockpit-signal-list {
-  gap: 5px;
+  gap: 4px;
 }
 
 .cockpit-signal-list li {
   position: relative;
   display: block;
-  padding: 8px 12px 8px 14px;
+  padding: 5px 10px 5px 12px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: inset 2px 0 0 rgba(244, 251, 255, 0.22);
 }
@@ -365,8 +378,8 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 
 .cockpit-signal-list time {
   position: absolute;
-  top: 9px;
-  right: 30px;
+  top: 6px;
+  right: 28px;
   color: rgba(224, 236, 242, 0.4);
   font: 7px/1 var(--font-mono);
   letter-spacing: 0.06em;
@@ -374,7 +387,7 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 }
 
 .cockpit-signal-list li > div {
-  gap: 3px;
+  gap: 1px;
 }
 
 .cockpit-signal-target {
