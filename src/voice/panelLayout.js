@@ -254,7 +254,7 @@ function layOut({ ui, name, minimize, restore }) {
         .getElementById?.('command-dock')
         ?.getBoundingClientRect();
       panel.style.removeProperty('height');
-      const corner = mobile && h <= 520;
+      const corner = mobile && h <= 520 && w > h;
       const phoneStyle = mobile ? view.getComputedStyle(doc.body) : null;
       const leftInset =
         parseFloat(phoneStyle?.getPropertyValue('--mobile-left-inset')) || 0;
