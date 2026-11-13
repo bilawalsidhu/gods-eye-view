@@ -1347,6 +1347,32 @@ test('a layer option filed under a mirror layer is ignored', () => {
   ]);
 });
 
+test('air-quality compact links retain provider and pollutant without changing legacy defaults', () => {
+  const defaults = createDefaultLayerState();
+  defaults.enabledLayerIds = ['air-quality'];
+  assert.deepEqual(
+    decodeOk(encodeShareView({ layerState: defaults })).state.layerState
+      .options['air-quality'],
+    {
+      provider: 'eccc',
+      parameter: 'PM2.5',
+    },
+  );
+  for (const provider of ['saaqis', 'openaq', 'community-network']) {
+    for (const parameter of ['PM2.5', 'NO2', 'CO2']) {
+      const layerState = createDefaultLayerState();
+      layerState.enabledLayerIds = ['air-quality'];
+      layerState.options['air-quality'] = { provider, parameter };
+      assert.deepEqual(
+        decodeOk(assertRoundTrip({ layerState })).state.layerState.options[
+          'air-quality'
+        ],
+        { provider, parameter },
+      );
+    }
+  }
+});
+
 test('the world time is written only away from live, and may lie ahead', () => {
   const at = (worldTime) =>
     decodeShareView(encodeShareView({ sharedAtMs: NOW_MS, worldTime }), {

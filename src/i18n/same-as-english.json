@@ -633,7 +633,8 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "Canada"
   ],
   "it": [
     "1 min/s",
@@ -839,7 +840,8 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "Canada"
   ],
   "ja": [
     "1090 MHz",

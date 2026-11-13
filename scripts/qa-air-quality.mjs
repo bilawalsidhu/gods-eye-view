@@ -47,7 +47,14 @@ async function main() {
     const page = await browser.newPage();
     page.on('pageerror', (e) => consoleErrors.push(String(e).slice(0, 160)));
     page.on('console', (m) => {
-      if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 160));
+      if (m.type() !== 'error') return;
+      const sourceUrl = m.location()?.url || '';
+      // googleTokens.js deliberately probes an optional host capability. A
+      // standalone server without it returns 404 and falls back to keyless maps.
+      // Keep every other resource error and every page exception as a failure.
+      if (sourceUrl === new URL('/api/google/tiles-token', APP_URL).href &&
+          /Failed to load resource.*404/i.test(m.text())) return;
+      consoleErrors.push(`${m.text().slice(0, 160)} [${sourceUrl}]`);
     });
 
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -135,15 +142,17 @@ async function main() {
     );
     const readoutOk =
       controls?.readout === true &&
-      Array.isArray(controls?.legend?.colors) &&
-      controls.legend.colors.length === controls.legend.labels.length &&
+      Array.isArray(controls?.legend) &&
+      controls.legend.length === 4 &&
+      controls.legend.every((band) => /^#[0-9a-f]{6}$/i.test(band.color) && band.label) &&
+      controls.legendCategorical === true &&
       Array.isArray(controls?.list?.items) &&
       controls.list.items.length > 0 &&
-      controls.list.items.every((item) => item.id && item.label && item.value) &&
+      controls.list.items.every((item) => item.id && item.lead && item.text) &&
       /Canada only/.test(controls?.summary?.coverage || '');
     record('the Weather readout lists the worst readings in view, with a legend', readoutOk,
       controls
-        ? `bands=${controls.legend?.labels?.join('/')} inView=${controls.list?.items?.length} coverage="${controls.summary?.coverage}"`
+        ? `bands=${controls.legend?.map((band) => band.label).join('/')} inView=${controls.list?.items?.length} coverage="${controls.summary?.coverage}"`
         : 'no descriptor');
     if (!readoutOk) exitCode = 1;
 

@@ -108,3 +108,10 @@ export function createEcccAirQualitySource({
     },
   };
 }
+
+// Portable composition is available without importing Cesium or the layer UI.
+export {
+  createAirQualitySource,
+  createAirQualitySnapshotSource,
+  createDefaultAirQualityProviders,
+} from './providers.js';

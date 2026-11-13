@@ -400,3 +400,49 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   storm.click();
   assert.equal(calls.length, before);
 });
+
+test('row lists render and update shared status badges without replacing the focused row', () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  const paint = (badge, badgeColor) =>
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'stations',
+            type: 'list',
+            list: {
+              ariaLabel: 'Stations',
+              items: [
+                {
+                  id: 'station',
+                  lead: 'PM2.5',
+                  text: 'Cape Town',
+                  badge,
+                  badgeColor,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+  paint('Good', '#50c9b5');
+  const row = f.container.querySelector('.data-row-list-item');
+  const badge = row.querySelector('.data-row-list-badge');
+  assert.ok(badge.classList.contains('ui-badge'));
+  assert.ok(badge.classList.contains('gev-status-badge--box'));
+  assert.equal(badge.textContent, 'Good');
+  assert.equal(badge.style.color, '#50c9b5');
+  row.focus();
+  paint('<img onerror=alert(1)>', 'url(https://example.com)');
+  assertSameNode(f.container.querySelector('.data-row-list-item'), row);
+  assert.equal(badge.textContent, '<img onerror=alert(1)>');
+  assert.equal(badge.querySelector('img'), null);
+  assert.equal(badge.style.color, '');
+  paint(null, null);
+  assert.equal(row.querySelector('.data-row-list-badge'), null);
+  assertSameNode(f.container.querySelector('.data-row-list-item'), row);
+  view.destroy();
+});
