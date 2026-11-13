@@ -3500,6 +3500,7 @@
       "src/voice/geminiCaptureWorklet.js",
       "src/ui/libraryBrowser.js",
       "src/library/manifest.js",
+      "src/data/libraryLayerIds.js",
       "src/library/selection.js",
       "src/library/ledger.json",
       "src/library/entries/ak-statewide-imagery.json",
@@ -4571,7 +4572,7 @@
     "modules": [
       "src/data/lifecycle.js",
       "src/data/cameraArrival.js",
-      "src/library/manifest.js"
+      "src/data/libraryLayerIds.js"
     ],
     "external": []
   },

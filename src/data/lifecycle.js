@@ -1,5 +1,5 @@
 import { cancelCameraArrival } from './cameraArrival.js';
-import { libraryEntryIdOf } from '../library/manifest.js';
+import { libraryEntryIdOf } from './libraryLayerIds.js';
 
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);

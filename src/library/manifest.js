@@ -10,6 +10,12 @@
  * this module, so it loads no catalogs and touches no DOM. See
  * docs/DATA-LIBRARY.md for the authoring guide.
  */
+import {
+  LIBRARY_ID_PATTERN,
+  LIBRARY_LAYER_PREFIX,
+  libraryEntryIdOf,
+  libraryLayerId,
+} from '../data/libraryLayerIds.js';
 
 /** The three entry kinds this build renders. */
 export const LIBRARY_KINDS = Object.freeze(['dataset', 'tiles', 'pack']);
@@ -88,8 +94,6 @@ export const LIBRARY_FAMILIES = Object.freeze([
 /** Host layers a `pack` entry may extend, with the env switch grammar. */
 export const PACK_HOSTS = Object.freeze(['cctv']);
 
-export const LIBRARY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,47}$/;
-export const LIBRARY_LAYER_PREFIX = 'lib-';
 export const DEFAULT_CACHE_SECONDS = 3600;
 export const MIN_CACHE_SECONDS = 60;
 export const MAX_CACHE_SECONDS = 86_400;
@@ -742,18 +746,13 @@ export function validateLibraryCatalog(manifests) {
   return { ok: errors.length === 0, errors, entries };
 }
 
-/** The manager id a library entry's layer registers under. */
-export function libraryLayerId(entryId) {
-  return `${LIBRARY_LAYER_PREFIX}${entryId}`;
-}
-
-/** The entry id behind a library layer id, or null. */
-export function libraryEntryIdOf(layerId) {
-  if (typeof layerId !== 'string' || !layerId.startsWith(LIBRARY_LAYER_PREFIX))
-    return null;
-  const id = layerId.slice(LIBRARY_LAYER_PREFIX.length);
-  return LIBRARY_ID_PATTERN.test(id) ? id : null;
-}
+// The layer namespace belongs to the layer lifecycle; the library reads it.
+export {
+  LIBRARY_ID_PATTERN,
+  LIBRARY_LAYER_PREFIX,
+  libraryEntryIdOf,
+  libraryLayerId,
+};
 
 /**
  * Whether the operator switched an opt-in entry on. `GEV_LIBRARY_ENABLE`
