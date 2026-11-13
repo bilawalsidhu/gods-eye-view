@@ -712,16 +712,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
+        const sourceFeedType = normalizeFeedType(source?.feedType);
         const upstreamCandidate =
           source?.snapshotUrl ||
-          (!isVideoFeedType(normalizeFeedType(source?.feedType))
-            ? source?.url
-            : '');
+          (!isVideoFeedType(sourceFeedType) ? source?.url : '');
         // /media reports a pullable HLS camera's health. Without a snapshot of
         // its own, the placeholder or Street View frame here says nothing about
         // its stream, so it leaves that health as it is.
         const keepHealth =
-          normalizeFeedType(source?.feedType) === 'hls' &&
+          sourceFeedType === 'hls' &&
           !source?.snapshotUrl &&
           isPullableHlsUrl(source?.url || '');
 
@@ -795,7 +794,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           source &&
           upstreamCandidate &&
           source.pack !== 'world-cameras' &&
-          source.sourceKind !== 'ottawa-traffic'
+          source.sourceKind !== 'ottawa-traffic' &&
+          // A missing optional still preview cannot invalidate live video.
+          !isVideoFeedType(sourceFeedType) &&
+          sourceFeedType !== 'mjpeg'
         )
           feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok, {
             transient: fetchOutcome.transient,

@@ -256,3 +256,48 @@ test('world-camera sources (throttled fetch path) are not learned from', async (
   );
   assert.notEqual(await kind(), 'none');
 });
+
+for (const [feedType, liveUrl] of [
+  ['hls', 'https://cams.upstream.invalid/live.m3u8'],
+  ['mp4', 'https://cams.upstream.invalid/live.mp4'],
+  ['webm', 'https://cams.upstream.invalid/live.webm'],
+  ['mjpeg', 'https://cams.upstream.invalid/live.mjpg'],
+]) {
+  test(`${feedType}: broken still preview preserves live feed`, async (t) => {
+    t.mock.method(Date, 'now', () => T0);
+    const camera = {
+      ...CAM,
+      id: `live-${feedType}`,
+      feedType,
+      url: liveUrl,
+      snapshotUrl: 'https://cams.upstream.invalid/missing.jpg',
+    };
+    let snapshotAttempts = 0;
+    const {
+      frame,
+      feedType: listedType,
+      get,
+    } = fixture(
+      t,
+      async (url) => {
+        assert.equal(String(url), camera.snapshotUrl);
+        snapshotAttempts += 1;
+        return new Response(null, { status: 404 });
+      },
+      camera,
+    );
+    assert.equal(await listedType(), feedType);
+    await frame();
+    await frame();
+    assert.equal(snapshotAttempts, 2, 'both preview attempts reached upstream');
+    assert.equal(
+      await listedType(),
+      feedType,
+      'a failed optional snapshot cannot turn a live feed location-only',
+    );
+    assert.equal(
+      JSON.parse((await get(`/stream/${camera.id}`)).body).feedType,
+      feedType,
+    );
+  });
+}
