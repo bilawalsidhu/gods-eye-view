@@ -5,4 +5,4 @@
   category; Vessels, Transit and Rail now draw models too, under the same 3D
   toggle and distances, a ship at its AIS length and beam and a tram, bus or
   train in its mode or category colour. The whole set loads once when a layer
-  starts (samehkhamis, #1697).
+  starts (samehkhamis, #1714).
