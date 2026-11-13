@@ -64,8 +64,8 @@ export class DisplayBindings {
         },
         toggleOrbit: () => this._toggleOrbit(),
         toggleCleanView: () => this.toggleCleanView(),
-        toggleLayers: () =>
-          document.getElementById('data-panel').classList.toggle('active'),
+        // Same collapse as the panel's own button, so its rail entry stays.
+        toggleLayers: () => this._togglePanel('data-panel'),
         cycleDetection: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.claimDetection();

@@ -576,6 +576,7 @@ export class StyleManager extends ShellFacade {
         _toggleOrbit: (...args) => this._toggleOrbit(...args),
         toggleCleanView: (...args) => this.toggleCleanView(...args),
         _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _togglePanel: (panelId) => this._panelChrome._togglePanel(panelId),
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),

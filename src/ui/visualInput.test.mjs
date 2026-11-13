@@ -117,9 +117,19 @@ test('the supplied search target retains editing even without form markup', () =
   assert.deepEqual(f.calls, [['dismissSearch']]);
 });
 
-test('shortcut extraction does not change repeat or modifier policy', () => {
+test('browser shortcuts with Cmd, Ctrl or Alt never reach app shortcuts', () => {
   const f = shortcuts();
-  f.press('h', new Element(), { repeat: true, ctrlKey: true });
+  for (const modifier of ['metaKey', 'ctrlKey', 'altKey'])
+    for (const key of ['1', 'h', 'o', 'v', 'f', 'd', 'c'])
+      f.press(key, new Element(), { [modifier]: true });
+  assert.deepEqual(f.calls, []);
+  f.press('Escape', new Element(), { metaKey: true });
+  assert.deepEqual(f.calls, [['dismissSearch']]);
+});
+
+test('a held key still repeats its shortcut', () => {
+  const f = shortcuts();
+  f.press('h', new Element(), { repeat: true });
   assert.deepEqual(f.calls, [['toggleHud']]);
 });
 
