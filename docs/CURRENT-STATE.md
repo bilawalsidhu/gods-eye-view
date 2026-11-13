@@ -2894,9 +2894,11 @@ whose images live on another operator's site). Instead of an endless
 upstream answers (`server/providers/cctv/feedAvailability.js`) and serves those
 cameras from `/api/cctv/sources` with `feedType: 'none'`:
 
-- Per camera: two consecutive failed frame fetches mark a camera; any success
-  clears it. A mark expires after 24 h, so the browser tries the feed again and
-  the camera heals by itself when the provider fixes it.
+- Per still-image camera: two consecutive failed frame fetches mark it; any
+  success clears it. If the marking failure is temporary (5xx, 408, 429,
+  timeout or network error), the mark is a 10-minute in-memory retry window;
+  otherwise it expires after 24 h. A failed optional snapshot does not
+  reclassify a live HLS, MP4, WebM or MJPEG feed as location-only.
 - Per TxDOT district: up to three evenly spaced cameras are probed, one request
   at a time. One all-fail probe makes the district suspect and it is probed
   again after 10 minutes; only a second consecutive all-fail probe makes it
