@@ -613,9 +613,19 @@ export function createRendering({
       ? STALE_ALPHA
       : 1;
     if (model.color?.alpha === alpha) return;
-    model.color = (
-      flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR
-    ).withAlpha(alpha);
+    model.color = Cesium.Color.WHITE.withAlpha(alpha);
+  }
+
+  /** Creation-time look of the tracked model: IR flat white, else the amber hologram. */
+  function trackedModelLook() {
+    if (flightState._irBoost)
+      return {
+        color: Cesium.Color.WHITE,
+        colorBlendMode: Cesium.ColorBlendMode.MIX,
+        colorBlendAmount: 1.0,
+        customShader: flightState._IR_UNLIT_SHADER,
+      };
+    return flightState._hologram.modelOptions(true);
   }
 
   function _updateTrackedModel() {
@@ -661,13 +671,7 @@ export function createRendering({
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
-        color: flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // near self-illuminated tint so planes read uniform near AND far; IR boost → flat UNLIT white (hot)
-        colorBlendAmount: flightState._irBoost ? 1.0 : MODEL_COLOR_BLEND_AMOUNT,
-        customShader: flightState._irBoost
-          ? flightState._IR_UNLIT_SHADER
-          : undefined,
+        ...trackedModelLook(),
         // Pick id (H1): without it, clicking the very plane being tracked read as
         // EMPTY SPACE (scene.pick → primitive with no id) → an unintended
         // deselect. With the icao, the click handler recognizes it as ours.
@@ -781,6 +785,15 @@ export function createRendering({
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
       flightState._trackedModel.show = true;
+      if (!flightState._irBoost)
+        flightState._hologram.tick(
+          true,
+          parts.motion._trackedFocusSizePx(
+            flightState._trackedIcao,
+            displayPos,
+          ),
+          performance.now(),
+        );
     }
   }
 

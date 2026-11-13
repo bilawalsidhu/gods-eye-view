@@ -121,6 +121,9 @@ export function createQueries({
       // getTrackedSubject and the voice narration can read it straight off the
       // descriptor instead of reaching back into `_flightData`.
       registration: _toCleanText(info?.registration) || null,
+      // ICAO type designator, the join key to the aircraft type library.
+      typeCode: _toCleanText(info?.type) || null,
+      military: true,
       position: Cesium.Cartesian3.clone(basePos),
       latitude: Cesium.Math.toDegrees(carto.latitude),
       longitude: Cesium.Math.toDegrees(carto.longitude),
