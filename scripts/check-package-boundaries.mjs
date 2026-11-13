@@ -5,6 +5,15 @@ import vue from '@vitejs/plugin-vue';
 import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import { build, normalizePath } from 'vite';
 
+/**
+ * Operator-supplied layers are discovered by `import.meta.glob` and are
+ * gitignored by design, so they can never appear in a package manifest. A
+ * deployment that has any would otherwise fail this gate for doing exactly
+ * what `docs/USER-LAYERS.md` tells it to do.
+ */
+const USER_LAYER_PATTERN = /[/\\]src[/\\]userLayers[/\\][^/\\]+\.layer\.js$/;
+const isUserLayer = (id) => USER_LAYER_PATTERN.test(String(id || ''));
+
 /** Build each browser or Node export group and reject imports outside its declared ownership. */
 export async function checkPackageBoundaries(root) {
   root = await realpath(root);
@@ -109,7 +118,7 @@ export async function checkPackageBoundaries(root) {
             // template blocks belong to the component file itself.
             if (info.id.startsWith('\0')) return;
             const id = info.id.split('?')[0];
-            if (!allowed.has(id)) {
+            if (!allowed.has(id) && !isUserLayer(id)) {
               throw new Error(
                 `Package boundary ${name} imports an unowned module: ${path.relative(root, id)}`,
               );
