@@ -1,0 +1,57 @@
+{
+  "id": "ntad-national-bridges",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "US bridges and their condition (NBI)",
+  "provider": "USDOT BTS",
+  "description": "All of the about 624,000 highway bridges in the National Bridge Inventory, coloured by condition. Loads the bridges in view below 15 km.",
+  "icon": "⌒",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US", "PR"]
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_National_Bridge_Inventory/FeatureServer/0",
+    "query": {
+      "outFields": "BRIDGE_CONDITION,FACILITY_CARRIED_007,FEATURES_DESC_006A,YEAR_BUILT_027,ADT_029"
+    },
+    "fetch": "browser-direct",
+    "view": {
+      "maxAltitudeM": 15000,
+      "sample": [-80.02, 40.43, -79.98, 40.46]
+    },
+    "cacheSeconds": 86400,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "FACILITY_CARRIED_007",
+    "fields": ["BRIDGE_CONDITION", "YEAR_BUILT_027"],
+    "colorBy": {
+      "field": "BRIDGE_CONDITION",
+      "colors": {
+        "G": "#0ca30c",
+        "F": "#fab219",
+        "P": "#d03b3b"
+      },
+      "labels": {
+        "G": "Good",
+        "F": "Fair",
+        "P": "Poor"
+      }
+    }
+  },
+  "licence": {
+    "name": "U.S. government work: unrestricted public use",
+    "url": "https://www.bts.gov/ntad"
+  },
+  "attribution": {
+    "text": "USDOT Bureau of Transportation Statistics — National Transportation Atlas Database, National Bridge Inventory",
+    "url": "https://www.bts.gov/ntad"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

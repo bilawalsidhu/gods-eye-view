@@ -1,0 +1,49 @@
+{
+  "id": "wv-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "West Virginia Statewide Imagery",
+  "provider": "WV GIS Technical Center (WVU)",
+  "description": "Aerial orthophotos: Statewide coverage of West Virginia.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-82.6924, 37.1844, -77.681, 40.6905]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://services.wvgis.wvu.edu/arcgis/rest/services/Imagery_BaseMaps_EarthCover/wv_imagery_NAIP_2018_60cm/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#fdfdfd"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "60 cm",
+    "resolutionM": 0.6,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open — WV GIS Technical Center terms",
+    "url": "https://wvgis.wvu.edu/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "WV GIS Technical Center, West Virginia University",
+    "url": "https://wvgis.wvu.edu/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

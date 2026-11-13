@@ -86,6 +86,13 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (Array.isArray(props.__gevDetails)) {
+    // Data Library features carry their card lines from the manifest
+    // (src/library/formats.js presentLibraryProperties).
+    for (const line of props.__gevDetails.slice(0, 2)) {
+      const clean = cleanLabel(line);
+      if (clean) details.push(clampCardLine(clean));
+    }
   }
 
   return { title, details };
@@ -292,7 +299,10 @@ export function localDatasetError(error) {
  * A minimal, rock-solid native implementation for loading local GeoJSON Data.
  * Draws 3D stems (polylines) attached to Point entities and ensures
  * standard scene.pick natively clicks them.
- * @param {object} options Dataset URL, identity, appearance and optional Cesium adapters.
+ * @param {object} options Dataset URL (or a `loadFeatures({signal})` loader
+ *   resolving to GeoJSON features), identity, appearance (an optional
+ *   `featureColor(properties)` returns a CSS colour per feature) and optional
+ *   Cesium adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
  * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
@@ -310,6 +320,8 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    loadFeatures = null,
+    featureColor = null,
     screenSpaceEventHandlerFactory = (canvas) =>
       new Cesium.ScreenSpaceEventHandler(canvas),
     projectToWindow = (scene, position) =>
@@ -353,6 +365,12 @@ export function createLocalGeoJsonLayer(
    * @type {Array<object>|null}
    */
   let _cachedFeatures = null;
+  /**
+   * The source a `replaceFeatures()` rebuild is replacing: it stays drawn
+   * until the new one is in the scene, and comes back if the rebuild fails.
+   * @type {{source: object, stemRecords: object[], count: number, lastUpdate: number|null, error: string|null}|null}
+   */
+  let _outgoing = null;
   /**
    * Globe-LOD active set: the record ids allowed to carry a live stem right
    * now. This bounds geometry refreshes and ground-sample work to the
@@ -437,7 +455,19 @@ export function createLocalGeoJsonLayer(
    * survive a disable is the per-frame visualizer walk and the entity memory.
    * @param {object} viewer
    */
+  const releaseOutgoing = (viewer) => {
+    if (!_outgoing) return;
+    const { source } = _outgoing;
+    _outgoing = null;
+    try {
+      viewer?.dataSources?.remove(source, true);
+    } catch {
+      /* already gone */
+    }
+  };
+
   const releaseDataSource = (viewer) => {
+    releaseOutgoing(viewer);
     if (!_dataSource) return;
     const source = _dataSource;
     _dataSource = null;
@@ -477,7 +507,7 @@ export function createLocalGeoJsonLayer(
     }
   };
 
-  return {
+  const layer = {
     id,
     name,
     icon,
@@ -585,7 +615,17 @@ export function createLocalGeoJsonLayer(
             let addedToScene = false;
             try {
               let features = _cachedFeatures;
-              if (!features) {
+              if (!features && loadFeatures) {
+                // A caller-owned loader (the Data Library) fetches and bounds
+                // its own live dataset; this layer only renders it.
+                features = await loadFeatures({
+                  signal: _loadController.signal,
+                });
+                if (_destroyed) return;
+                if (!Array.isArray(features))
+                  throw new Error('dataset unavailable');
+                _cachedFeatures = features;
+              } else if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
                 });
@@ -639,9 +679,21 @@ export function createLocalGeoJsonLayer(
               _stemRecords = [];
               _stemGeometryDirty = true;
 
+              // An optional per-feature colour (Data Library colorBy); one
+              // Cesium colour per distinct CSS value.
+              const colorCache = new Map([[color, baseColor]]);
+              const colorFor = (entity) => {
+                if (typeof featureColor !== 'function') return baseColor;
+                const css = featureColor(propertyObject(entity)) || color;
+                if (!colorCache.has(css))
+                  colorCache.set(css, Cesium.Color.fromCssColorString(css));
+                return colorCache.get(css);
+              };
+
               for (let i = 0; i < entities.length; i++) {
                 const feature = entities[i];
                 feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
+                const featureBaseColor = colorFor(feature);
 
                 let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
@@ -649,7 +701,10 @@ export function createLocalGeoJsonLayer(
                   // It's a polygon or line
                   if (feature.polygon) {
                     feature.polygon.outline = true;
-                    feature.polygon.outlineColor = baseColor;
+                    feature.polygon.outlineColor = featureBaseColor;
+                    if (featureBaseColor !== baseColor)
+                      feature.polygon.material =
+                        featureBaseColor.withAlpha(0.3);
 
                     // Calculate center point for the stem
                     const hierarchy = feature.polygon.hierarchy?.getValue(
@@ -689,7 +744,7 @@ export function createLocalGeoJsonLayer(
                 // Store references for bounded stem scaling and native picking.
                 feature.__localBaseCarto = carto;
                 feature.__localBaseCartesian = base;
-                registerEntityContext(feature, {
+                const context = registerEntityContext(feature, {
                   id: `${id}:${recordId}`,
                   layerId: id,
                   layerName: name,
@@ -716,11 +771,11 @@ export function createLocalGeoJsonLayer(
                 feature.polyline = new Cesium.PolylineGraphics({
                   positions: stemPositionBuffers[0],
                   width: 3.5,
-                  material: new Cesium.ColorMaterialProperty(baseColor),
+                  material: new Cesium.ColorMaterialProperty(featureBaseColor),
                 });
                 feature.point = new Cesium.PointGraphics({
                   pixelSize: 10,
-                  color: baseColor,
+                  color: featureBaseColor,
                   outlineColor: Cesium.Color.BLACK,
                   outlineWidth: 2,
                   // Never depth-cull the anchor against the photoreal mesh —
@@ -732,6 +787,7 @@ export function createLocalGeoJsonLayer(
                 _stemRecords.push({
                   id: recordId,
                   entity: feature,
+                  context,
                   carto,
                   base,
                   tip,
@@ -749,7 +805,7 @@ export function createLocalGeoJsonLayer(
                         position: tip,
                         properties,
                         priority,
-                        accent: color,
+                        accent: featureBaseColor.toCssHexString(),
                       })
                     : null,
                 });
@@ -1065,6 +1121,108 @@ export function createLocalGeoJsonLayer(
 
     disable: disableLayer,
 
+    /**
+     * Forget the parsed features so the next enable() loads them again: a
+     * caller-owned live loader (the Data Library) uses it once its data is
+     * older than the source allows.
+     */
+    dropCachedFeatures: () => {
+      _cachedFeatures = null;
+    },
+
+    /**
+     * Draw a new feature set in place of the current one while the layer is
+     * on (a live loader's refresh). The current features stay drawn until
+     * the new ones are in the scene; a selected feature stays selected when
+     * the new set still has it (same id, or same place and label); a failed
+     * rebuild keeps the current features and rejects. Off, the set is only
+     * kept for the next enable().
+     * @param {object} viewer
+     * @param {object[]} features GeoJSON features.
+     */
+    replaceFeatures: async (viewer, features) => {
+      if (_destroyed) return;
+      const previousFeatures = _cachedFeatures;
+      _cachedFeatures = features;
+      if (!_enabled || !_dataSource || _loadPromise) return;
+      const selected =
+        viewer?.selectedEntity?.__localLayerId === id
+          ? viewer.selectedEntity
+          : null;
+      const selectedLabel = selected
+        ? _stemRecords.find((record) => record.entity === selected)?.context
+            ?.label
+        : undefined;
+      _outgoing = {
+        source: _dataSource,
+        stemRecords: _stemRecords,
+        count: _count,
+        lastUpdate: _lastUpdate,
+        error: _error,
+      };
+      const outgoing = _outgoing;
+      _dataSource = null;
+      await coreEnable(viewer);
+      // Disabled or destroyed meanwhile: release took both sources.
+      if (_destroyed || !_enabled || _outgoing !== outgoing) return;
+      _outgoing = null;
+      if (!_dataSource) {
+        // The rebuild failed: the current features come back as they were.
+        const failure = _error;
+        _cachedFeatures = previousFeatures;
+        _dataSource = outgoing.source;
+        _stemRecords = outgoing.stemRecords;
+        _count = outgoing.count;
+        _lastUpdate = outgoing.lastUpdate;
+        _error = outgoing.error;
+        _stemGeometryDirty = true;
+        _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+        for (const record of _stemRecords)
+          if (record.context)
+            registerEntityContext(record.entity, record.context);
+        if (selected && viewer.selectedEntity === selected)
+          selectEntityContext(selected);
+        throw new Error(failure || 'dataset unavailable');
+      }
+      try {
+        viewer?.dataSources?.remove(outgoing.source, true);
+      } catch {
+        /* already gone */
+      }
+      // Records the new set no longer has go with the old source.
+      removeEntityContextsForLayer(id, {
+        retainIds: new Set(
+          _stemRecords.map((record) => record.context?.id).filter(Boolean),
+        ),
+      });
+      if (selected) {
+        const same = (record) => {
+          const old = selected.__localBaseCarto;
+          const next = record.entity.__localBaseCarto;
+          return (
+            old &&
+            next &&
+            Math.abs(old.longitude - next.longitude) < 1e-9 &&
+            Math.abs(old.latitude - next.latitude) < 1e-9 &&
+            record.context?.label === selectedLabel
+          );
+        };
+        const match = _stemRecords.find((record) =>
+          selected.id !== undefined && record.entity.id === selected.id
+            ? true
+            : same(record),
+        );
+        if (match) {
+          viewer.selectedEntity = match.entity;
+          selectEntityContext(match.entity);
+        } else if (viewer.selectedEntity === selected) {
+          viewer.selectedEntity = undefined;
+          clearSelectedEntityContextForLayer(id);
+        }
+      }
+      viewer?.scene?.requestRender?.();
+    },
+
     destroy: (viewer) => {
       if (_destroyed) return;
       _destroyed = true;
@@ -1089,6 +1247,8 @@ export function createLocalGeoJsonLayer(
       _error = null;
     },
   };
+  const coreEnable = layer.enable;
+  return layer;
 }
 
 function compareLocalOverlayRecords(a, b) {
@@ -1323,6 +1483,10 @@ function labelPriorityFromProperties(props, layerId) {
   if (props.output || tags['plant:output:electricity']) score += 120;
   if (layerId === 'local-dams') score += 80;
   if (layerId === 'local-datacenters') score += 60;
+  // Data Library features carry their manifest importance (0–600), below the
+  // named/unnamed gap so a rank never promotes an unnamed feature.
+  if (Number.isFinite(props.__gevRank))
+    score += Math.max(0, Math.min(600, props.__gevRank));
   return score;
 }
 

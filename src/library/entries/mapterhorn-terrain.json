@@ -1,0 +1,32 @@
+{
+  "id": "mapterhorn-terrain",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Global terrain shaded relief (Mapterhorn)",
+  "provider": "Mapterhorn",
+  "description": "Elevation of the whole land surface from Mapterhorn's open terrain tiles (Copernicus and national elevation models), coloured by height and hill-shaded.",
+  "icon": "⛰",
+  "maintainer": "github:asturksever",
+  "coverage": { "global": true },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "encoding": "terrarium",
+    "tileSize": 512,
+    "minZoom": 0,
+    "maxZoom": 15
+  },
+  "display": { "opacity": 0.85 },
+  "licence": {
+    "name": "Open data, per source (mostly CC BY 4.0 and public domain)",
+    "url": "https://mapterhorn.com/attribution"
+  },
+  "attribution": {
+    "text": "© Mapterhorn and its open elevation sources",
+    "url": "https://mapterhorn.com/attribution"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
