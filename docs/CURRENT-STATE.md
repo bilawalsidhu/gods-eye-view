@@ -2329,6 +2329,8 @@ typing and Escape behavior retain their existing mappings. A shortcut key held
 with Cmd, Ctrl or Alt runs no shortcut, so the browser's own chord (Cmd+C to
 copy, Cmd+F to find, Cmd+1 to switch tab) does not also toggle CCTV, the layers
 panel or a style; Shift does not count, and Escape dismisses search either way.
+The Q/W/E/R/T keys of an expanded city's points of interest follow the same
+rule.
 Capture-phase surfaces continue to arbitrate their own keyboard events first.
 
 The UI facade retains shader values, share-restore authority, render requests,
