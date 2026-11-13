@@ -764,9 +764,12 @@ export function createLibraryViewLayer(
     // Back on the view already drawn: a request for the view in between is
     // obsolete and must not replace it.
     if (key === loadedKey && dataSource) {
-      if (controller) {
+      // What is drawn is this view's, so an error from the view in between
+      // no longer applies.
+      if (controller || error) {
         abort();
         loading = false;
+        error = null;
         render();
       }
       return;

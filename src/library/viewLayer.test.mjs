@@ -157,6 +157,40 @@ test('returning to the drawn view cancels the request for the view in between', 
   await layer.destroy(viewer);
 });
 
+test('returning to the drawn view clears an error from the view in between', async () => {
+  let call = 0;
+  const layer = createLibraryViewLayer(entry, {
+    source: {
+      loadDataset: async () => {
+        call += 1;
+        if (call === 2) throw new Error('HTTP 503');
+        return { features: [polygon], truncated: false };
+      },
+    },
+    cesium: fakeCesium,
+    debounceMs: 0,
+  });
+  const { viewer, listeners } = fakeViewer({ height: 2000 });
+  const moveTo = async (lon, lat) => {
+    viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(lon, lat, 2000);
+    viewer.camera.pickEllipsoid = () =>
+      Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+    viewer.camera.computeViewRectangle = () =>
+      Cesium.Rectangle.fromDegrees(lon - 1, lat - 1, lon + 1, lat + 1);
+    // The camera settles: the layer's moveEnd listener schedules a load.
+    for (const listener of listeners) listener();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  await moveTo(-77.2, 38.95);
+  assert.ok(layer.getStats().error);
+  await moveTo(-77.03, 38.89);
+  assert.equal(layer.getStats().error, null);
+  assert.equal(layer.getStats().count, 1);
+  await layer.destroy(viewer);
+});
+
 test('the row legend labels each colour and counts what is in view', async () => {
   const { colorByLegend } = await import('./layers.js');
   const bridges = libraryEntry('ntad-national-bridges');
