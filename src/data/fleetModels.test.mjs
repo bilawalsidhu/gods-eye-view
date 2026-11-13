@@ -291,6 +291,12 @@ test('vessel specs read AIS codes and text families, stretched to the reported b
   const [sx, sy, sz] = box.scaleXYZ;
   assert.ok(Math.abs(sy - 51 / catalog.container_ship.beam) < 1e-12);
   assert.ok(Math.abs(sz - (sx + sy) / 2) < 1e-12);
+  // A beam with no reported length: the type's typical length, in the model's
+  // own proportions, not a typical-length hull squeezed to that beam.
+  const unsized = vesselModelSpec(set, { type: '70', length: 0, beam: 14 });
+  assert.equal(unsized.model, 'container_ship');
+  const [ux, uy, uz] = unsized.scaleXYZ;
+  assert.ok(Math.abs(uy - ux) < 1e-12 && Math.abs(uz - ux) < 1e-12);
   assert.equal(vesselModelSpec(set, { type: 'Tug', length: 30 }).model, 'tug');
   assert.equal(vesselModelSpec(set, { type: '36' }).model, 'sailboat');
   // No type, no size: the generic vessel as built.

@@ -343,18 +343,22 @@ export function aircraftModelSpec(set, { typeCode, type, category } = {}) {
  * @returns {object} {@link fleetModelSpec}
  */
 export function vesselModelSpec(set, { type, length, beam, name } = {}) {
+  // A beam counts only beside a reported length: a vessel drawn at its type's
+  // typical length keeps the model's proportions.
+  const reported = hullLength(length ?? undefined);
+  const hullWidth = reported === undefined ? undefined : (beam ?? undefined);
   const resolved = resolveVessel(
     set.types,
     aisShipTypeCode(type),
-    length ?? undefined,
-    beam ?? undefined,
+    reported,
+    hullWidth,
     name ?? undefined,
   );
   return specOf(
     set,
     resolved,
     (r) => ({ model: set.types.default_vessel, length: r.length }),
-    { beam: beam ?? undefined },
+    { beam: hullWidth },
   );
 }
 
