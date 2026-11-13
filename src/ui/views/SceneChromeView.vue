@@ -21,6 +21,7 @@ import GlobeActions from './panels/GlobeActions.vue';
 import { useGlobeActionsStore } from '../stores/globeActions.js';
 import Omnibar from './panels/Omnibar.vue';
 import RenderFailure from './panels/RenderFailure.vue';
+import NavControl from './panels/NavControl.vue';
 import WorldTimeline from './panels/WorldTimeline.vue';
 
 // The title's logo goes back to live at the start view, as the shell answers it.
@@ -126,4 +127,5 @@ const vToastText = {
   <ScreenAnnotations />
   <AwarenessDirection />
   <WorldTimeline />
+  <NavControl />
 </template>

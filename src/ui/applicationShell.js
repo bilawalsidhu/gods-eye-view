@@ -83,6 +83,7 @@ import { installEntityContext } from './entityContextBridge.js';
 import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
+import { useNavControlStore } from './stores/navControl.js';
 import { useRecordingStore } from './stores/recording.js';
 import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
 import {
@@ -1833,9 +1834,9 @@ export class StyleManager extends ShellFacade {
           return;
         if (store.owns(token, 'tilt')) store.publishCamera(state);
       },
+      store: useNavControlStore(applicationPinia()),
       runNavigation: (noun, navigate) =>
         this._navigation.runOrientation(noun, navigate),
-      showToast: (message) => this._showToast(message),
     });
     this._cameraOrientationControls = controls;
   }

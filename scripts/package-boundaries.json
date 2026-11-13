@@ -326,7 +326,11 @@
       "src/ui/stores/live.js",
       "src/ui/views/panels/LivePanel.vue",
       "src/ui/views/panels/CockpitLivePage.vue",
-      "src/ui/liveScreen.js"
+      "src/ui/liveScreen.js",
+      "src/ui/stores/navControl.js",
+      "src/ui/views/panels/NavControl.vue",
+      "src/ui/views/panels/NavControlButton.vue",
+      "src/ui/navControl/navMath.js"
     ],
     "external": [
       "vue",
@@ -1884,7 +1888,8 @@
       "src/data/liveStreams.js",
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
-      "src/ui/liveControls.js"
+      "src/ui/liveControls.js",
+      "src/ui/stores/navControl.js"
     ],
     "external": [
       "cesium",
@@ -5901,7 +5906,8 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/layers/satellites/tiangongJoints.js",
-      "src/layers/satellites/tiangongArticulation.js"
+      "src/layers/satellites/tiangongArticulation.js",
+      "src/ui/stores/navControl.js"
     ],
     "external": [
       "hls.js",
