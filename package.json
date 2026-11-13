@@ -38,6 +38,10 @@
     "i18n": "node scripts/i18n.mjs",
     "layer-token:next": "node scripts/next-layer-state-token.mjs",
     "layer-token:check": "node scripts/check-layer-state-tokens.mjs",
+    "library:check": "node scripts/library.mjs check",
+    "library:next": "node scripts/library.mjs next",
+    "library:docs": "node scripts/library.mjs docs",
+    "library:probe": "node scripts/library.mjs probe",
     "changelog": "node scripts/assemble-changelog.mjs --write",
     "changelog:check": "node scripts/assemble-changelog.mjs --check",
     "dev": "vite",
@@ -54,6 +58,7 @@
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
+    "qa:data-library": "node scripts/qa-data-library.mjs",
     "mcp": "node server/mcp/stdio.js"
   },
   "dependencies": {
@@ -63,7 +68,9 @@
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
+    "fzstd": "0.1.1",
     "hls.js": "^1.7.3",
+    "hyparquet": "1.31.2",
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
@@ -92,6 +99,7 @@
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/app/viewer.js",
     "./time": "./src/time/worldClock.js",
+    "./i18n": "./src/i18n/page.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },

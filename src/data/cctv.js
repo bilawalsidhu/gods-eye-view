@@ -29,6 +29,7 @@ export const writeCalibrationStoreV2 = layer.writeCalibrationStoreV2;
 export const deriveCalBadge = layer.deriveCalBadge;
 export const computeFrustumGeometry = layer.computeFrustumGeometry;
 export const activationProbeClampRange = layer.activationProbeClampRange;
+export const flatGroundAxisDistance = layer.flatGroundAxisDistance;
 export const frameSignatureFromPixels = layer.frameSignatureFromPixels;
 export const _createCctvProjectionPlaneForTest =
   layer._createCctvProjectionPlaneForTest;

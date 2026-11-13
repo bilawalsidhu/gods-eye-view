@@ -1,0 +1,35 @@
+{
+  "id": "usgs-hydrography",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "US rivers and lakes (USGS)",
+  "provider": "USGS",
+  "description": "The National Hydrography Dataset's rivers, streams and water bodies, drawn over any map.",
+  "icon": "≋",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-180, 13, -64, 72]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 16
+  },
+  "display": {
+    "opacity": 1
+  },
+  "licence": {
+    "name": "USGS The National Map: U.S. public domain",
+    "url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
+  },
+  "attribution": {
+    "text": "USGS The National Map — National Hydrography Dataset",
+    "url": "https://www.usgs.gov/national-hydrography"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

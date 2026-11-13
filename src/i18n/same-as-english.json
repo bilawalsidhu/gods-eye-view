@@ -244,7 +244,10 @@
     "▲ {frp} MW",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "COMMUNITY",
+    "Regional",
+    "OPT-IN"
   ],
   "es": [
     "1 min/s",
@@ -404,7 +407,9 @@
     "iNaturalist",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "Regional",
+    "{datasets} · {tiles} · {packs}"
   ],
   "fr": [
     "1 min/s",
@@ -619,7 +624,13 @@
     "≥ {value} MW",
     "▲ {frp} MW",
     "SATELLITE",
-    "Photo © {photographer}"
+    "Photo © {photographer}",
+    "Photo · {licence}",
+    "PACK",
+    "{count} packs",
+    "Orthophoto",
+    "Oblique",
+    "Type"
   ],
   "it": [
     "1 min/s",
@@ -822,7 +833,10 @@
     "SATELLITE",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "DATASET",
+    "{count} datasets",
+    "ZOOM"
   ],
   "ja": [
     "1090 MHz",
@@ -1049,7 +1063,8 @@
     "iNaturalist",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "Regional"
   ],
   "ru": [
     "1900–1945",
@@ -1085,7 +1100,8 @@
     "{division}, {country}",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "{datasets} · {tiles} · {packs}"
   ],
   "sv": [
     "STATION",

@@ -33,6 +33,7 @@ defineProps({
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
+      :data-library-entry="item.libraryEntry || undefined"
       ><div class="data-toggle-top"
         ><div class="data-toggle-left"
           ><span class="data-icon" aria-hidden="true">{{ item.icon }}</span

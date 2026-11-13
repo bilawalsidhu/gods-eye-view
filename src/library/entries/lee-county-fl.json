@@ -1,0 +1,48 @@
+{
+  "id": "lee-county-fl",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Lee County, Florida Aerial Imagery",
+  "provider": "Lee County GIS",
+  "description": "Aerial orthophotos: Lee County, Florida jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-82.3101, 26.3138, -81.5591, 26.796]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://gisimageserver.leegov.com/imageserver/rest/services/Aerials/Aerials2025/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2025–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.leegov.com/gis",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Eagle View, Lee County Property Appraiser, Lee County GIS",
+    "url": "https://www.leegov.com/gis"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

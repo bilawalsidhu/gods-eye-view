@@ -1,0 +1,47 @@
+{
+  "id": "nsw-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "NSW Imagery (Six Maps)",
+  "provider": "Spatial Services NSW (DCS)",
+  "description": "Aerial orthophotos: New South Wales (~801,000 km²).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["AU"],
+    "bbox": [140.9, -37.6, 153.7, -28.1]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 4,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "7.5 cm (metro) – 50 cm",
+    "resolutionM": 0.075,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Rolling (metro yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "CC BY 4.0",
+    "url": "https://www.spatial.nsw.gov.au/products_and_services/web_services"
+  },
+  "attribution": {
+    "text": "© Spatial Services NSW",
+    "url": "https://portal.spatial.nsw.gov.au/portal/home/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

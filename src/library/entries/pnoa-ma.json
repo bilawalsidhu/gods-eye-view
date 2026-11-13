@@ -1,0 +1,48 @@
+{
+  "id": "pnoa-ma",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "PNOA Máxima Actualidad",
+  "provider": "IGN España / CNIG",
+  "description": "Aerial orthophotos: Mainland Spain and Balearic Islands (Canary Islands served by a separate PNOA service).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["ES"],
+    "bbox": [-9.3, 36, 3.35, 43.8]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://www.ign.es/wms-inspire/pnoa-ma?service=WMS&request=GetMap&version=1.3.0&layers=OI.OrthoimageCoverage&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "15–25 cm",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2020–present",
+    "updateCycle": "2–3 year refresh per zone",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "CC BY 4.0 (compatible) — Orden FOM/2807/2015",
+    "url": "https://www.scne.es/productos.html"
+  },
+  "attribution": {
+    "text": "PNOA © Instituto Geográfico Nacional de España",
+    "url": "https://centrodedescargas.cnig.es/CentroDescargas/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
