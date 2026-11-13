@@ -176,9 +176,30 @@ export function createLibrarySource({
    * shared), else built here and kept in this browser for `cacheSeconds`.
    */
   function partitionIndex(entry, { signal } = {}) {
-    const memo = indexes.get(entry.id);
-    if (memo && (memo.retryAt === null || now() < memo.retryAt))
-      return memo.promise;
+    let memo = indexes.get(entry.id);
+    if (!memo || (memo.retryAt !== null && now() >= memo.retryAt))
+      memo = startPartitionIndex(entry);
+    return waitForIndex(entry, memo, signal);
+  }
+
+  /**
+   * One caller's wait on the shared index build. The build belongs to no
+   * view: a view that moves on stops waiting, while the build runs on for
+   * the next view (which a camera move starts right after cancelling the
+   * last) and is kept for every view after it.
+   */
+  function waitForIndex(entry, memo, signal) {
+    if (signal?.aborted) return Promise.reject(signal.reason);
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(signal.reason);
+      signal?.addEventListener?.('abort', onAbort, { once: true });
+      memo.promise
+        .then(resolve, reject)
+        .finally(() => signal?.removeEventListener?.('abort', onAbort));
+    });
+  }
+
+  function startPartitionIndex(entry) {
     const promise = (async () => {
       const key = `${INDEX_STORAGE_PREFIX}${entry.id}`;
       const stored = storedJson(storage, key);
@@ -190,7 +211,7 @@ export function createLibrarySource({
       try {
         const response = await fetchImpl(
           `${base}/index/${encodeURIComponent(entry.id)}`,
-          { signal, headers: { Accept: 'application/json' } },
+          { headers: { Accept: 'application/json' } },
         );
         if (response.ok) {
           const body = await response.json();
@@ -200,8 +221,8 @@ export function createLibrarySource({
             partial = body.partitions;
           }
         }
-      } catch (error) {
-        if (signal?.aborted) throw error;
+      } catch {
+        /* no server index: build one here */
       }
       if (
         storedComplete &&
@@ -210,7 +231,7 @@ export function createLibrarySource({
         return { partitions: storedComplete.partitions, complete: true };
       // The server's index is incomplete, or there is no server: build here.
       const { buildPartitionIndex } = await loadParquet();
-      const built = await buildPartitionIndex(entry, { fetchImpl, signal });
+      const built = await buildPartitionIndex(entry, { fetchImpl });
       if (built.complete) {
         storeJson(storage, key, {
           savedAt: now(),
@@ -244,8 +265,9 @@ export function createLibrarySource({
         throw error;
       },
     );
-    indexes.set(entry.id, { promise, retryAt: null });
-    return promise;
+    const memo = { promise, retryAt: null };
+    indexes.set(entry.id, memo);
+    return memo;
   }
 
   /** One partition's features, decoded once and kept for a few views. */

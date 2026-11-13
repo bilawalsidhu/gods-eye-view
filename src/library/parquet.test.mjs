@@ -211,6 +211,54 @@ test('a view over an incomplete index reads PARTIAL', async () => {
   assert.equal(partial.truncated, true);
 });
 
+test('a view that moves on does not cancel the index build the next view waits for', async () => {
+  const home = {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [-1.2, 53.3] },
+    properties: { CURRENT_ENERGY_RATING: 'C', UPRN: '1' },
+  };
+  let release;
+  let buildSignal = null;
+  let builds = 0;
+  const source = createLibrarySource({
+    entries: [epc],
+    fetchImpl: async () => ({ ok: false, status: 404 }),
+    storage: null,
+    loadParquet: async () => ({
+      ...(await import('./parquet.js')),
+      buildPartitionIndex: async (_entry, { signal }) => {
+        builds += 1;
+        buildSignal = signal;
+        await new Promise((resolve) => {
+          release = resolve;
+        });
+        signal?.throwIfAborted();
+        return {
+          partitions: [
+            { url: 'https://h/A.parquet', bbox: [-1.5, 53.2, -1.1, 53.5] },
+          ],
+          complete: true,
+        };
+      },
+      readGeoParquetFeatures: async () => [home],
+    }),
+  });
+  const box = [-1.21, 53.29, -1.19, 53.31];
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  const first = new AbortController();
+  const a = source.loadDataset(epc, { bbox: box, signal: first.signal });
+  await tick();
+  first.abort();
+  await assert.rejects(a);
+  const b = source.loadDataset(epc, { bbox: box, signal: new AbortController().signal });
+  await tick();
+  release();
+  const view = await b;
+  assert.equal(view.features.length, 1);
+  assert.equal(builds, 1, 'the second view reused the build');
+  assert.equal(buildSignal, undefined, 'no view owns the build');
+});
+
 test('a footer that keeps failing leaves the index incomplete, and a retry recovers', async () => {
   const { buildPartitionIndex } = await import('./parquet.js');
   const entry = {
