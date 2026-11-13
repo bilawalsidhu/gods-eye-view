@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   auroraProxy,
   AURORA_CACHE_TTL_MS,
+  AURORA_STALE_MAX_MS,
   OVATION_URL,
 } from '../../server/providers/aurora.js';
 
@@ -120,6 +121,38 @@ test('returns an explicit unavailable forecast while an initial failure cools do
     stale: true,
     reason: 'NOAA SWPC OVATION forecast unavailable',
   });
+});
+
+test('keeps the retry cooldown once the last good forecast is past its stale limit', async () => {
+  let now = 4_000_000;
+  let calls = 0;
+  let up = true;
+  const request = mount(
+    auroraProxy({
+      now: () => now,
+      fetchImpl: async () => {
+        calls += 1;
+        if (!up) throw new Error('offline');
+        return new Response(JSON.stringify(payload()), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    }),
+  );
+  assert.equal((await request()).status, 200);
+  up = false;
+  now += AURORA_STALE_MAX_MS + 1;
+  assert.equal((await request()).status, 503);
+  assert.equal(calls, 2);
+  const cooling = await request();
+  assert.equal(cooling.status, 503);
+  assert.equal(JSON.parse(cooling.body).unavailable, true);
+  assert.equal(calls, 2, 'no NOAA request while the failure cools down');
+  up = true;
+  now += AURORA_CACHE_TTL_MS;
+  const back = await request();
+  assert.equal(back.status, 200);
+  assert.equal(calls, 3);
 });
 
 test('rejects unsupported methods and unknown proxy paths without fetching upstream', async () => {
