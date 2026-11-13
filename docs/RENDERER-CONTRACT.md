@@ -138,6 +138,17 @@ The Cesium port lists `modelAtmosphere`: Cesium scatters drawn models
 through the atmosphere in the same stage as its distance fog, so models take
 it while `globe.sky`'s `fog` is on.
 
+`weather` adds `globe.weather`: clouds, fog, haze, rain and snow drawn
+around the view, each a strength from 0 to 1, with the wind they drift on.
+`src/render/weather.js` keeps and clamps them alike for the renderer
+(`mergeWeather`). The app's `src/viewWeather.js` sets the conditions observed
+under the camera (the weather service, through
+`deriveWeatherEffectProfile`), asking again after five minutes or 25 km,
+and none from orbit; the Display panel's Weather group turns live off and
+sets clouds, fog, rain and snow by hand, and shows only on a renderer that
+lists `weather`. The Cesium port does not list it. The checks
+`globe.weather` and `globe.weather.drawn` (a pixel check) pin it.
+
 The Cesium port lists `followAutodetect`: an `autodetect` follow is
 Cesium's own AUTODETECT tracking frame, east-north-up on a still or slow
 target and an orbit frame (x along the inertial motion, z up) on a fast
@@ -391,7 +402,7 @@ puts every member of `PORTS` in exactly one role. It changes no member.
 | `scene`   | Draws the application's data as keyed, retained sets                                                        | `draw`, `drawSet`                                                     |
 | `view`    | Places and moves the camera, hands pointer input to the application                                         | `camera`, `flight`, `input`, `lease`                                  |
 | `queries` | Picks, surface positions and heights, rays, projection, occlusion                                           | `query`                                                               |
-| `look`    | Sky and atmosphere, surface shading, per-layer lighting, styles and screen effects                          | `effects`, `globe.sky`, `globe.setSurfaceShading`, `imageryLayer.lit` |
+| `look`    | Sky and atmosphere, surface shading, per-layer lighting, styles and screen effects                          | `effects`, `globe.sky`, `globe.weather`, `globe.setSurfaceShading`, `imageryLayer.lit` |
 | `host`    | Canvas and life cycle, the frame loop and scene time, quality, capture, settling                            | `renderer`, `frame`, `quality`                                        |
 
 An entry is a port or a `port.member` prefix; the most specific one wins, so

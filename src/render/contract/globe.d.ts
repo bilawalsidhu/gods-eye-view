@@ -216,6 +216,36 @@ export interface SkySettings {
 }
 
 /**
+ * `weather`: the conditions drawn around the view. Each strength is 0..1,
+ * 0 drawing none of it; all are 0 at first. Clouds are a layer above the
+ * ground that the camera can fly into and above; fog and haze thin what is
+ * seen with distance, fog close in, haze far off; rain and snow fall around
+ * the eye below the clouds and are not drawn from above them. A renderer
+ * fades what makes no sense at the camera's height (rain from orbit) by
+ * itself. None of it is picked or answers height queries. The application sets the
+ * conditions observed at the view, which the user can override.
+ */
+export interface WeatherSettings {
+  /** Cloud cover. */
+  clouds: number;
+  /** Fog: 1 is about 500 m visibility or less. */
+  fog: number;
+  /** Haze. */
+  haze: number;
+  /** Rain. */
+  rain: number;
+  /** Snow. */
+  snow: number;
+  /** What the clouds and precipitation drift with. */
+  wind: {
+    /** Metres per second. */
+    speedMps: number;
+    /** Where the wind blows from, degrees clockwise from north. */
+    fromDeg: number;
+  };
+}
+
+/**
  * View-lit shading of the drawn terrain's own relief (the ellipsoid's
  * curvature where terrain has no normals); darkens only, at most
  * `strength` opacity.
@@ -294,6 +324,18 @@ export interface GlobePort {
   readonly sky: {
     get(): SkySettings;
     set(settings: Partial<SkySettings>): void;
+  };
+  /**
+   * `weather`. `set` keeps each strength it is not given or given as no
+   * number, clamps the others to 0..1, and asks for a frame. `wind` is taken
+   * whole: a speed below 0 or missing is 0, the direction is wrapped into
+   * [0, 360) and a missing one is 0. `get` answers a copy of what was set;
+   * at first every strength and the wind speed are 0 (`CLEAR_WEATHER` in
+   * `src/render/weather.js`, whose `mergeWeather` is these rules).
+   */
+  readonly weather?: {
+    get(): WeatherSettings;
+    set(settings: Partial<WeatherSettings>): void;
   };
   /** Whether that part of the base has finished loading what is in view. */
   isSettled(kind: SettleKind): boolean;

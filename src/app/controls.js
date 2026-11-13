@@ -2,6 +2,10 @@ import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { applyStartView, START_VIEW } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
+import { createViewWeather } from '../viewWeather.js';
+import { findGlobe } from '../render/rendererOf.js';
+import { useDisplayStore } from '../ui/stores/display.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { t } from '../i18n/index.js';
 
 /**
@@ -52,10 +56,20 @@ export function createApplicationControls({
   // clouds use a separate, capped low-resolution GPU pass that never attaches
   // Cesium fog or post-process stages and is fully stopped in map mode.
   const weatherEffects = null;
-  const cockpitCloudEffects = initCockpitCloudEffects(viewer, {
-    weatherService: operations.requests.weather,
-  });
+  // Where the renderer draws weather, it draws the cockpit's clouds too.
+  const cockpitCloudEffects = findGlobe(viewer)?.weather
+    ? null
+    : initCockpitCloudEffects(viewer, {
+        weatherService: operations.requests.weather,
+      });
   defer(() => cockpitCloudEffects?.destroy());
+  // Clouds, fog, rain and snow on a renderer that draws them: the conditions
+  // under the camera, or what the user sets in the Display panel.
+  const viewWeather = createViewWeather(viewer, {
+    weatherService: operations.requests.weather,
+    store: useDisplayStore(applicationPinia()),
+  });
+  defer(() => viewWeather.destroy());
 
   loaderStatus.textContent = styleManager.hasShareState
     ? t('Restoring shared view...')

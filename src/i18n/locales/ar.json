@@ -3812,5 +3812,11 @@
   "{source} imagery could not be opened": "تعذّر فتح صور {source}",
   "{place} has no position to look for imagery at": "لا يوجد لـ{place} موضع للبحث عن الصور فيه",
   "No {source} imagery near {place}": "لا توجد صور {source} قرب {place}",
-  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})"
+  "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})",
+  "Clouds": "السحب",
+  "Fog": "الضباب",
+  "Rain": "المطر",
+  "Snow": "الثلج",
+  "Live weather: the conditions under the camera": "الطقس المباشر: الأحوال تحت الكاميرا",
+  "No weather report here": "لا يوجد تقرير طقس هنا"
 }

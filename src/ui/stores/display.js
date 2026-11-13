@@ -28,6 +28,17 @@ export const useDisplayStore = defineStore('gev-display', () => {
     models3d.value = markRaw(next);
   }
 
+  /**
+   * The Weather group, `{live, status, values}` (values in percent by
+   * condition); null where the renderer draws no weather.
+   */
+  const weather = shallowRef(null);
+
+  /** @param {?object} next A fresh presentation of the Weather group. */
+  function publishWeather(next) {
+    weather.value = next && markRaw(next);
+  }
+
   /** The Draw controls; null until the draw tool first renders. */
   const draw = shallowRef(null);
 
@@ -108,6 +119,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publish,
     models3d,
     publishModels3d,
+    weather,
+    publishWeather,
     draw,
     publishDraw,
     geoImport,

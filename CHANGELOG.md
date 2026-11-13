@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- A renderer can draw weather: the `weather` capability adds `globe.weather`,
+  with clouds, fog, haze, rain and snow (each 0 to 1) and the wind they drift
+  on. Where the renderer lists it, the view shows the conditions observed
+  under the camera, asked again after five minutes or 25 km of movement, and
+  the Display panel's Weather group can turn live weather off and set
+  clouds, fog, rain and snow by hand. The Cesium renderer does not draw
+  weather, and shows no Weather group (samehkhamis).
 - The globe opens at planet level, the whole Earth in view, on every
   renderer, instead of flying in to Austin. A shared link still flies from
   there to its view. An application can start somewhere else, a city for

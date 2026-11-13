@@ -4642,6 +4642,71 @@ export function portChecks() {
       },
     ),
 
+    check(
+      'globe.weather',
+      'weather starts clear, keeps what a set leaves out, and clamps',
+      (h, r) => {
+        const first = r.globe.weather.get();
+        for (const key of ['clouds', 'fog', 'haze', 'rain', 'snow'])
+          equal(first[key], 0, `${key} clear at first`);
+        equal(first.wind.speedMps, 0, 'no wind at first');
+        r.globe.weather.set({ clouds: 0.6, rain: 2 });
+        r.globe.weather.set({
+          fog: -1,
+          wind: { speedMps: 8, fromDeg: -45 },
+        });
+        const after = r.globe.weather.get();
+        near(after.clouds, 0.6, 1e-9, 'clouds kept');
+        equal(after.rain, 1, 'rain clamped to 1');
+        equal(after.fog, 0, 'fog clamped to 0');
+        equal(after.snow, 0, 'snow untouched');
+        near(after.wind.speedMps, 8, 1e-9, 'wind speed');
+        near(after.wind.fromDeg, 315, 1e-9, 'wind direction wrapped');
+        after.clouds = 0;
+        near(r.globe.weather.get().clouds, 0.6, 1e-9, 'get hands out a copy');
+      },
+      { capability: 'weather' },
+    ),
+    check(
+      'globe.weather.drawn',
+      'clouds and fog change the drawn frame; clearing them brings it back',
+      async (h, r) => {
+        if (h.pixels === false) return { skip: 'reads pixels' };
+        // Low and looking toward the horizon, where fog and a cloud layer
+        // both show.
+        r.camera.setView({
+          destination: { ...AUSTIN, height: 600 },
+          orientation: { heading: 0, pitch: -0.12, roll: 0 },
+        });
+        const frame = async () => {
+          await drawn(h, r, 4);
+          await settled(r);
+          r.frame.renderNow();
+          return r.readPixels({ scale: 0.1 }).data;
+        };
+        const apart = (a, b) => {
+          let sum = 0;
+          for (let i = 0; i < a.length; i += 4)
+            for (let c = 0; c < 3; c++) sum += Math.abs(a[i + c] - b[i + c]);
+          return sum / ((a.length / 4) * 3);
+        };
+        const clear = await frame();
+        r.globe.weather.set({ clouds: 1, fog: 1 });
+        const weathered = await frame();
+        ok(
+          apart(clear, weathered) > 6,
+          `weather changes the frame (${apart(clear, weathered).toFixed(1)})`,
+        );
+        r.globe.weather.set({ clouds: 0, fog: 0 });
+        const again = await frame();
+        ok(
+          apart(clear, again) < 3,
+          `cleared, the frame is back (${apart(clear, again).toFixed(1)})`,
+        );
+      },
+      { capability: 'weather' },
+    ),
+
     // --- Effects, credits, quality ---------------------------------------
     check(
       'effects.styles',

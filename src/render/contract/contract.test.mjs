@@ -76,20 +76,26 @@ function nestedShape(type) {
   return null;
 }
 
-/** `[member, optional]` for every member, nested shapes dotted. */
-function members(type, prefix = '') {
+/**
+ * `[member, optional]` for every member, nested shapes dotted; a member of
+ * an optional shape is as optional as the shape.
+ */
+function members(type, prefix = '', inOptional = false) {
   const out = [];
   for (const property of checker.getPropertiesOfType(type)) {
     const name = `${prefix}${property.name}`;
-    const optional = Boolean(property.flags & ts.SymbolFlags.Optional);
+    const optional =
+      inOptional || Boolean(property.flags & ts.SymbolFlags.Optional);
     out.push([name, optional]);
     const declaration = property.valueDeclaration ?? property.declarations?.[0];
-    const propertyType = checker.getTypeOfSymbolAtLocation(
-      property,
-      declaration,
-    );
+    const declared = checker.getTypeOfSymbolAtLocation(property, declaration);
+    // An optional member's shape, without the `undefined` its `?` adds.
+    const propertyType =
+      property.flags & ts.SymbolFlags.Optional
+        ? checker.getNonNullableType(declared)
+        : declared;
     const nested = nestedShape(propertyType);
-    if (nested) out.push(...members(nested, `${name}.`));
+    if (nested) out.push(...members(nested, `${name}.`, optional));
   }
   return out;
 }

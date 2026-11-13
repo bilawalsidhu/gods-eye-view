@@ -17,7 +17,7 @@ import { StyleParameterRows } from '../../styleParameters.js';
 // and each publishes them; until they do, the panel shows its initial markup.
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, parameters, cockpitPortal } = storeToRefs(display);
+const { view, models3d, parameters, cockpitPortal, weather } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -35,6 +35,12 @@ const celestialTitle = computed(() =>
     ? t('Celestial ring — available in Normal style')
     : t('Celestial ring — reveal the full globe'),
 );
+const weatherRows = computed(() => [
+  { key: 'clouds', label: t('Clouds') },
+  { key: 'fog', label: t('Fog') },
+  { key: 'rain', label: t('Rain') },
+  { key: 'snow', label: t('Snow') },
+]);
 const models3dOn = computed(() => models3d.value?.pressed ?? true);
 const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
 const modelsOptions = computed(() => [
@@ -174,6 +180,22 @@ const allocationOptions = computed(() => [
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
       <span class="pp-label">{{ t('Celestial') }}</span>
     </UiButton>
+  </div>
+  <!-- Weather: only where the renderer draws it. -->
+  <div v-if="weather" class="pp-toggle-group" id="weather-group">
+    <label class="pp-toggle-btn pp-scope-toggle" :title="t('Live weather: the conditions under the camera')">
+      <span class="pp-icon material-symbols-outlined" aria-hidden="true">partly_cloudy_day</span>
+      <span class="pp-label">{{ t('Weather') }} · {{ t('Live') }}</span>
+      <input type="checkbox" id="weather-live-toggle" @change="act('setWeatherLive', $event.target.checked)" :checked="weather.live" />
+    </label>
+    <div v-if="weather.live && weather.status === 'unavailable'" class="pp-slider-row visible" id="weather-status">
+      <span class="pp-slider-mini-label">{{ t('No weather report here') }}</span>
+    </div>
+    <div v-for="row in weatherRows" :key="row.key" class="pp-slider-row visible" :id="`weather-${row.key}-row`">
+      <span class="pp-slider-mini-label">{{ row.label }}</span>
+      <UiSlider class="pp-slider" :id="`weather-${row.key}-slider`" @update:model-value="act('setWeatherValue', row.key, $event)" min="0" max="100" :model-value="weather.values[row.key] ?? 0" :aria-label="row.label" />
+      <span class="pp-slider-value">{{ pct(weather.values[row.key] ?? 0) }}</span>
+    </div>
   </div>
   <button class="pp-toggle-btn" id="clean-view-toggle" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
     <span class="pp-icon">&#x25A1;</span>

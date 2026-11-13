@@ -14,6 +14,7 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { createInputRouter } from '../input/router.js';
 import { cssColor } from '../color.js';
+import { CLEAR_WEATHER, mergeWeather } from '../weather.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
@@ -1659,6 +1660,16 @@ export function createStubRenderer(options = {}) {
       };
     },
   };
+  if (capabilities.has('weather')) {
+    let weather = CLEAR_WEATHER;
+    globe.weather = {
+      get: () => mergeWeather(weather),
+      set(patch) {
+        weather = mergeWeather(weather, patch);
+        requestRender('weather');
+      },
+    };
+  }
   if (capabilities.has('globeVisibility'))
     globe.isGlobeVisible = () => globeVisible;
   if (capabilities.has('surfaceIdentity'))

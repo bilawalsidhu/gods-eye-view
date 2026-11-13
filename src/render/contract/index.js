@@ -19,6 +19,7 @@ export const CAPABILITIES = Object.freeze([
   'finestHeights',
   'terrain',
   'modelAtmosphere',
+  'weather',
   'imageryOnTiles',
   'splitSwipe',
   'imageryFrames',
@@ -147,6 +148,9 @@ export const PORTS = deepFreeze({
     ['setSurfaceShading', 'surfaceShading'],
     ['imagery.getSplit', 'splitSwipe'],
     ['imagery.setSplit', 'splitSwipe'],
+    ['weather', 'weather'],
+    ['weather.get', 'weather'],
+    ['weather.set', 'weather'],
   ]),
   draw: Object.fromEntries([
     ...required(
@@ -353,6 +357,7 @@ export const ROLES = deepFreeze([
     members: [
       'effects',
       'globe.sky',
+      'globe.weather',
       'globe.setSurfaceShading',
       'imageryLayer.lit',
     ],
