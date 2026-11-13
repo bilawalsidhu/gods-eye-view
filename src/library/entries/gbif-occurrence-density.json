@@ -1,0 +1,60 @@
+{
+  "id": "gbif-occurrence-density",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Biodiversity records (GBIF)",
+  "provider": "GBIF",
+  "description": "Where more than two billion plant, animal and fungus observations have been recorded, as a hexagon density map.",
+  "icon": "❦",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png?style=classic.poly&bin=hex",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 14
+  },
+  "display": {
+    "opacity": 0.8,
+    "legend": [
+      {
+        "label": "≤ 10 records",
+        "color": "#ffff00"
+      },
+      {
+        "label": "11–100 records",
+        "color": "#ffcc00"
+      },
+      {
+        "label": "101–1,000 records",
+        "color": "#ff9900"
+      },
+      {
+        "label": "1,001–10,000 records",
+        "color": "#ff6600"
+      },
+      {
+        "label": "10,001–100,000 records",
+        "color": "#d60a00"
+      },
+      {
+        "label": "> 100,000 records",
+        "color": "#c2002d"
+      }
+    ]
+  },
+  "licence": {
+    "name": "GBIF data use agreement (records under CC0, CC BY or CC BY-NC)",
+    "url": "https://www.gbif.org/terms"
+  },
+  "attribution": {
+    "text": "GBIF.org — Global Biodiversity Information Facility",
+    "url": "https://www.gbif.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

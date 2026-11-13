@@ -1,6 +1,7 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
 import { worldClock } from '../time/worldClock.js';
+import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
@@ -18,6 +19,7 @@ import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
 import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
+import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
@@ -68,6 +70,7 @@ export function createApplicationCatalog({
   signal,
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
+  newsOptions,
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
@@ -106,6 +109,8 @@ export function createApplicationCatalog({
     const vessels = createApplicationVessels({
       source: sources.vessels,
       options: vesselOptions,
+      displayParams: () => flights.getParams(),
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const installations = createApplicationInstallations({
       surface,
@@ -142,7 +147,13 @@ export function createApplicationCatalog({
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
-        createApplicationNews({ source: sources.news }),
+        // Ages, the window and the counts read the world clock: a host that
+        // follows it for the layer shows the news at the time on the timeline.
+        createApplicationNews({
+          now: worldClock.timeFor(NEWS_LAYER_ID),
+          ...newsOptions,
+          source: sources.news,
+        }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
@@ -158,7 +169,12 @@ export function createApplicationCatalog({
         createApplicationTraffic({ source: sources.traffic, surface }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
-        createApplicationTransit({ surface, source: sources.transit }),
+        createApplicationTransit({
+          surface,
+          source: sources.transit,
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),
         createApplicationRecentImagery({ source: sources['recent-imagery'] }),
@@ -191,6 +207,12 @@ export function createApplicationCatalog({
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationRail({
+          surface,
+          source: sources.rail,
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationFirms({
           surface,
           id: 'local-firms',

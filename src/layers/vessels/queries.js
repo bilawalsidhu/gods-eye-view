@@ -664,7 +664,13 @@ export function createQueries({
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
         const visual = components.rendering.getVisual(record);
-        if (visual.billboard && !visual.billboard.show) continue;
+        // A vessel drawn as its model is present though its chevron is hidden.
+        if (
+          visual.billboard &&
+          !visual.billboard.show &&
+          !visual.modelOwnsVisual
+        )
+          continue;
         const position = visual.billboard?.position || visual.position;
         if (!position) continue;
         result.push({

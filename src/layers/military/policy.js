@@ -58,37 +58,24 @@ export const EMERGENCY_ICON_COLOR =
 export const GROUND_SCALE = 0.8;
 
 // --- 3D model rendering (mirrors flights.js) -----------------------------------------
-// When enabled, military aircraft render as 3D glTF jet models once the camera is below
+// When enabled, military aircraft render as 3D glTF models once the camera is below
 // MODEL_ALT_CEIL_M (zoomed in); higher up they stay flat billboards. Eligibility is
 // FRUSTUM-based (on-screen), and the slots go to either the nearest planes ('proximity')
 // or every in-view plane ('all'), each backed by a hard cap so a draw-call explosion
-// can't tank the frame (no instancing yet). Distinct asset + amber tint set this layer
-// apart from the commercial flights layer.
-
-export const JET_MODEL_URL = '/models/jet.glb';
+// can't tank the frame (no instancing yet). Each aircraft draws the fleet model of its
+// type, as the flights layer does; the amber tint sets this layer apart.
 
 export const MODEL_ALT_CEIL_M = 800000;
 // m: below this camera altitude, draw 3D models (raised so it's easy to trigger)
 
 export const MODEL_MIN_PX = 24;
-// floor so distant models stay visible without ballooning into a min-pixel blob (mirror of flights.js, whose models now share this layer's ~30 m world size)
+// floor so distant models stay visible without ballooning into a min-pixel blob (mirror of flights.js)
 
 export const TRACKED_MODEL_MIN_PX = 40;
 // keep the glTF silhouette comparable to the selected 2D glyph at handoff
 
 export const TRACKED_MODEL_MAX_PX = 200;
 // owner-selected close-range tracked-target feel
-
-export const MODEL_NATIVE_RADIUS_M = 29.83;
-
-// jet.glb is transform-applied at real-world scale — native bounding radius
-// 29.83 m at scale 1. ×1 → ~22–43 m aircraft across CLASS_SCALE_3D, matching
-// flights.js world sizes. At the old copied ×24, models rendered
-// 600–1000 m across (invisible at the ~6 km follow range where minimumPixelSize
-// dominates, but zoom under ~1 km put the camera INSIDE the plane). Locked by
-// modelScale.test.mjs.
-
-export const MODEL_SCALE = 1;
 
 // Per-mode caps + radii — mirror of flights.js. Modes differ by RADIUS (not just cap) so Proximity
 // and All aren't identical when few planes are in range; on-screen planes win the cap (see flights.js).
@@ -119,32 +106,11 @@ export const MODEL_ALL_KEEP_M = 450000;
 // all: KEEP modeled planes out to 450 km
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
-// every aircraft GLB is exported nose -X in the shared transform-applied convention
-// Preserve the layer's amber identity while reducing approved texture/livery
-// contribution to a weak diffuse hint, matching civilian launch presentation.
+// every fleet model is nose -X: opposite Cesium heading 0
+// Preserve the layer's amber identity while reducing the models' own colours
+// to a weak diffuse hint, matching civilian launch presentation.
 
 export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
-
-// airplane.glb (the shared 747) constants for this layer's heavy classes. The
-// asset has its former 24× runtime calibration baked into transform-applied
-// meter-scale geometry; these values mirror flights.js and are regression-pinned.
-
-export const PLANE_MODEL_URL = '/models/airplane.glb';
-
-export const PLANE_MODEL_SCALE = 1;
-
-export const PLANE_NATIVE_RADIUS_M = 34.41;
-
-export const PLANE_BELLY_OFFSET_NATIVE = 6.719;
-
-// Grounded-model belly offset: jet.glb's centred origin sits 5.631 native units (= meters — this
-// asset is real-world scale) ABOVE its lowest vertex (glTF Y-up scene AABB with node
-// transforms applied — same reader as modelScale.test.mjs, measured 2026-07-03).
-// × MODEL_SCALE(1) × class multiplier ≈ 4.4–8.6 m of lift, so a ground-snapped model
-// rests its lowest geometry (gear/belly) ON the sampled tile skin instead of sinking to
-// the fuselage-centerline origin. Locked against the GLB by modelScale.test.mjs.
-
-export const MODEL_BELLY_OFFSET_NATIVE = 5.631;
 
 /** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
 

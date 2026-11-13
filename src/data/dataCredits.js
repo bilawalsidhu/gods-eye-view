@@ -149,6 +149,13 @@ export const DATA_CREDITS = [
       '· each photo is © its photographer, credited beside it',
   },
   {
+    key: 'openvesselphotos',
+    html:
+      'Vessel photos: ' +
+      '<a href="https://openvesselphotos.org" target="_blank" rel="noopener">Open Vessel Photos</a> ' +
+      "· each photo keeps its author's open licence, credited beside it",
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
@@ -511,6 +518,10 @@ export const DATA_CREDITS = [
     html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
+    key: 'rail-gtfs-rt',
+    html: 'Trains: operator realtime feeds (each operator is credited below when its trains are shown)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -763,6 +774,20 @@ export function transitFeedCredit(feed, snapshot = null) {
     html:
       `Transit (${source}${date ? `, data of ${date}` : ''}): ` +
       `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
+
+/**
+ * Per-feed rail credit, registered the first time that feed's trains render
+ * (see `src/data/railFeeds.js` for the licence of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function railFeedCredit(feed) {
+  const transit = transitFeedCredit(feed);
+  return {
+    key: `rail-${feed.id}`,
+    html: transit.html.replace(/^Transit \(/, 'Trains ('),
   };
 }
 

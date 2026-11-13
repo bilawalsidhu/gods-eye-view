@@ -8,7 +8,7 @@ import {
   panelAwareVisibility,
 } from './embed.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
-import { createView } from '../view/index.js';
+import { createView, viewToParams } from '../view/index.js';
 
 const fakeViewer = () => {
   const flights = [];
@@ -32,14 +32,16 @@ const fakeLayers = (enabled) => ({
 });
 const recorder = (answers = {}) => {
   const calls = [];
-  const run = async (name, args) => {
+  const options = [];
+  const run = async (name, args, runOptions) => {
     calls.push([name, args]);
+    options.push([name, runOptions]);
     const answer = answers[name];
     return typeof answer === 'function'
       ? answer(calls)
       : (answer ?? { ok: true });
   };
-  return { calls, run };
+  return { calls, run, options };
 };
 
 test('embed mode is opt-in by query parameter', () => {
@@ -83,6 +85,19 @@ test('a view is applied through the app actions in order', async () => {
   assert.ok(steps.some((step) => step.step === 'camera'));
 });
 
+test("a view's street-level step replays the sender's view: nothing it switches is the visitor's choice", async () => {
+  const { options, run } = recorder();
+  await applyView(
+    createView({
+      camera: { lat: 48.86, lon: 2.29 },
+      street_level: { provider: 'panoramax', lat: 48.8584, lon: 2.2945 },
+    }),
+    { viewer: fakeViewer(), dataManager: fakeLayers(new Set()), run },
+  );
+  const [, runOptions] = options.find(([name]) => name === 'show_street_level');
+  assert.equal(runOptions?.origin, 'programmatic');
+});
+
 test('a followed entity is retried until its layer has it', async () => {
   let tries = 0;
   const { run } = recorder({
@@ -100,6 +115,65 @@ test('a followed entity is retried until its layer has it', async () => {
   });
   assert.equal(tries, 3);
   assert.deepEqual(steps.at(-1), { step: 'follow', ok: true });
+});
+
+test('a posted view without a photo point opens its photos where the camera looks over the ground', async () => {
+  const parent = { postMessage() {} };
+  const windowRef = new EventTarget();
+  windowRef.parent = parent;
+  windowRef.document = { body: { classList: new Set() } };
+  windowRef.document.body.classList.add = Set.prototype.add;
+  const shell = { initialRestorePromise: Promise.resolve(), setCleanView() {} };
+  const { calls, run } = recorder();
+  const asked = [];
+  // Denver: the ground is 1,590 m above the ellipsoid under a camera at 1,909 m.
+  const terrain = {
+    getHeights: async (points) => {
+      asked.push(points);
+      return points.map(() => ({ ellipsoid: 1590 }));
+    },
+  };
+  const remove = installViews({
+    shell,
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    terrain,
+    location: { search: '?embed=1', hash: '' },
+    windowRef,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const event = new Event('message');
+  Object.assign(event, {
+    source: parent,
+    origin: 'https://host.example',
+    data: {
+      type: 'gev:view',
+      id: 1,
+      view: {
+        camera: {
+          lat: 39.74,
+          lon: -104.99,
+          altitude_m: 1909,
+          pitch_deg: -30,
+          heading_deg: 0,
+        },
+        street_level: { provider: 'mapillary' },
+      },
+    },
+  });
+  windowRef.dispatchEvent(event);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  remove();
+  const [, args] = calls.find(([name]) => name === 'show_street_level');
+  // 319 m above the ground at -30° looks ~550 m ahead, not the ~3.3 km the
+  // ellipsoid altitude would give.
+  assert.deepEqual(asked, [[{ lat: 39.74, lon: -104.99 }]]);
+  assert.ok(
+    args.latitude > 39.744 && args.latitude < 39.746,
+    String(args.latitude),
+  );
+  assert.equal(args.longitude, -104.99);
 });
 
 test('an embedded page takes views only from its parent and answers it', async () => {
@@ -184,6 +258,59 @@ test('an embedded page takes views only from its parent and answers it', async (
     'https://host.example',
   ]);
   remove();
+});
+
+test('an inline panel opens a billed photo only for a view whose result is fresh', async () => {
+  const windowRef = new EventTarget();
+  windowRef.parent = windowRef;
+  windowRef.postMessage = () => {};
+  windowRef.document = { body: { classList: new Set() } };
+  windowRef.document.body.classList.add = Set.prototype.add;
+  Object.assign(windowRef, {
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame() {},
+    setInterval: () => 1,
+    clearInterval() {},
+  });
+  const { calls, run } = recorder();
+  globalThis.GEV_EMBED_INLINE = true;
+  try {
+    const remove = installViews({
+      shell: { initialRestorePromise: Promise.resolve() },
+      viewer: fakeViewer(),
+      dataManager: fakeLayers(new Set()),
+      run,
+      location: { search: '', hash: '' },
+      windowRef,
+    });
+    const view = {
+      camera: { lat: 48.8584, lon: 2.2945 },
+      map: 'photoreal',
+      street_level: { provider: 'google', lat: 48.8584, lon: 2.2945 },
+    };
+    for (const [id, fresh] of [
+      [1, true],
+      [2, false],
+      [3, undefined],
+    ]) {
+      const event = new Event('message');
+      Object.assign(event, {
+        source: windowRef,
+        data: { type: 'gev:view', id, view, fresh },
+      });
+      windowRef.dispatchEvent(event);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(
+      calls
+        .filter(([name]) => name === 'show_street_level')
+        .map(([, args]) => args.autoOpen ?? true),
+      [true, false, false],
+    );
+    remove();
+  } finally {
+    delete globalThis.GEV_EMBED_INLINE;
+  }
 });
 
 test('an app loaded inline into a panel page talks through its own window', async () => {
@@ -392,4 +519,775 @@ test('a followed aircraft owns the camera, and cockpit view is entered after it'
       }),
     /no cockpit view/,
   );
+});
+
+test('a view with street-level photos lets the action fly and open them', async () => {
+  const viewer = fakeViewer();
+  const { calls, run } = recorder();
+  const view = createView({
+    camera: { lat: 38.5799, lon: -121.4937, altitude_m: 500 },
+    street_level: { provider: 'google' },
+  });
+  const steps = await applyView(view, {
+    viewer,
+    dataManager: fakeLayers(new Set()),
+    run,
+  });
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    [
+      'set_map_stack',
+      'stop_tracking',
+      'clear_annotations',
+      'show_street_level',
+    ],
+  );
+  assert.deepEqual(calls.at(-1)[1], {
+    latitude: 38.5799,
+    longitude: -121.4937,
+    provider: 'google',
+    fly: true,
+  });
+  assert.equal(viewer.flights.length, 0, 'the action frames the camera');
+  assert.ok(steps.every((step) => step.ok));
+  assert.equal(steps.at(-1).step, 'show_street_level');
+});
+
+test('a link to street-level photos opens them after it restores', async () => {
+  const { calls, run } = recorder();
+  const toasts = [];
+  const panels = [];
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve(),
+      _showToast: (text) => toasts.push(text),
+      setPanelCollapsed: (...args) => panels.push(args),
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=mapillary,38.58000,-121.49000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [
+    [
+      'show_street_level',
+      {
+        latitude: 38.58,
+        longitude: -121.49,
+        provider: 'mapillary',
+        fly: true,
+        autoOpen: false,
+      },
+    ],
+  ]);
+  assert.deepEqual(
+    [toasts, panels],
+    [[], []],
+    'an opened photo needs no toast or panel nudge',
+  );
+  // A failure (no key) is not an armed state either: it says why instead.
+  const failed = recorder({
+    show_street_level: () => ({
+      ok: false,
+      stage: 'key',
+      error: 'needs its key',
+    }),
+  });
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve(),
+      _showToast: (text) => toasts.push(text),
+      setPanelCollapsed: (...args) => panels.push(args),
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run: failed.run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=google,1.00000,2.00000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    [toasts, panels],
+    [
+      [
+        "Street Level cannot open this link's street-level photo without a working key",
+      ],
+      [],
+    ],
+    'it says why, and nothing to press opens',
+  );
+});
+
+test('a link that follows an entity keeps the camera: its photos are not opened', async () => {
+  const { calls, run } = recorder();
+  const params = viewToParams(
+    createView({
+      camera: { lat: 1, lon: 2 },
+      follow: { kind: 'satellite', id: '25544' },
+    }),
+  );
+  params.set('sl', 'mapillary,1.00000,2.00000');
+  installViews({
+    shell: { initialRestorePromise: Promise.resolve() },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: { search: '', hash: `#${params}` },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, []);
+});
+
+test('a failing link step does not take the next one with it', async () => {
+  const calls = [];
+  const run = async (name, args) => {
+    calls.push(name);
+    if (name === 'annotate_map') throw new Error('marks failed');
+    return { ok: true, armed: false, ...args };
+  };
+  const an = encodeURIComponent(
+    JSON.stringify([{ type: 'pin', target: 'Austin' }]),
+  );
+  installViews({
+    shell: { initialRestorePromise: Promise.resolve() },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: `#v=2&lat=1&lon=2&an=${an}&sl=mapillary,1.00000,2.00000`,
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, ['annotate_map', 'show_street_level']);
+});
+
+test('a link whose source has no working key says why instead of doing nothing; a frame stays quiet', async () => {
+  for (const embed of [false, true]) {
+    const toasts = [];
+    const { calls, run } = recorder({
+      show_street_level: () => ({
+        ok: false,
+        stage: 'key',
+        provider: 'google',
+        providerName: 'Google Street View',
+        error: 'Google Street View needs its key',
+      }),
+    });
+    const windowRef = new EventTarget();
+    if (embed) {
+      windowRef.document = { body: { classList: { add() {} } } };
+      windowRef.parent = { postMessage() {} };
+    }
+    installViews({
+      shell: {
+        initialRestorePromise: Promise.resolve(),
+        setCleanView() {},
+        _showToast: (text) => toasts.push(text),
+        setPanelCollapsed() {
+          throw new Error('nothing to arm');
+        },
+      },
+      viewer: fakeViewer(),
+      dataManager: fakeLayers(new Set()),
+      run,
+      location: {
+        search: embed ? '?embed=1' : '',
+        hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
+      },
+      windowRef,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(calls[0][0], 'show_street_level');
+    assert.deepEqual(
+      toasts,
+      embed
+        ? []
+        : [
+            "Google Street View cannot open this link's street-level photo without a working key",
+          ],
+    );
+  }
+});
+
+test('a plain link never auto-loads a billed photo: it arms the panel and says so; an embedded view opens', async () => {
+  const toasts = [];
+  const panels = [];
+  const revealed = [];
+  const { calls, run } = recorder({
+    show_street_level: () => ({ ok: true, armed: true }),
+  });
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve(),
+      _showToast: (text) => toasts.push(text),
+      setPanelCollapsed: (id, collapsed, options) =>
+        panels.push([id, collapsed, options]),
+      revealPanel: (id) => revealed.push(id),
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls[0][1].autoOpen, false);
+  assert.deepEqual(toasts, [
+    'Street View is ready: press OPEN GOOGLE STREET VIEW to load it',
+  ]);
+  assert.deepEqual(
+    panels,
+    [['street-level-panel', false, { explicit: true, persist: false }]],
+    "the panel opens so OPEN is in view, without saving the layout as the recipient's",
+  );
+  assert.deepEqual(revealed, ['street-level-panel'], 'its phone sheet too');
+  // Adding ?embed=1 to a published link does not lift the gate: the page is
+  // still a plain top-level load.
+  const framedToasts = [];
+  const framedPanels = [];
+  const framed = recorder({
+    show_street_level: () => ({ ok: true, armed: true }),
+  });
+  const windowRef = new EventTarget();
+  windowRef.document = { body: { classList: { add() {} } } };
+  windowRef.parent = { postMessage() {} };
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve(),
+      setCleanView() {},
+      _showToast: (text) => framedToasts.push(text),
+      setPanelCollapsed: (...args) => framedPanels.push(args),
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run: framed.run,
+    location: {
+      search: '?embed=1',
+      hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
+    },
+    windowRef,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(framed.calls[0][1].autoOpen, false);
+  // In a frame the rail that holds OPEN is hidden: no nudge, no toast.
+  assert.deepEqual([framedToasts, framedPanels], [[], []]);
+  // Only the panel page's own link for a result issued just now is the
+  // client's request: a host that mounts the panel again hands back an old
+  // result, and that one only arms, like any link.
+  globalThis.GEV_EMBED_INLINE = true;
+  try {
+    for (const fresh of [true, false]) {
+      globalThis.GEV_EMBED_FRESH = fresh;
+      const inline = recorder({ show_street_level: () => ({ ok: true }) });
+      const inlineWindow = new EventTarget();
+      inlineWindow.document = { body: { classList: { add() {} } } };
+      inlineWindow.postMessage = () => {};
+      // The inline panel keeps rendering from a timer; give it inert clocks.
+      Object.assign(inlineWindow, {
+        requestAnimationFrame: () => 1,
+        cancelAnimationFrame() {},
+        setTimeout: () => 1,
+        clearTimeout() {},
+        setInterval: () => 1,
+        clearInterval() {},
+      });
+      const stop = installViews({
+        shell: { initialRestorePromise: Promise.resolve(), setCleanView() {} },
+        viewer: fakeViewer(),
+        dataManager: fakeLayers(new Set()),
+        run: inline.run,
+        location: {
+          search: '',
+          hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
+        },
+        windowRef: inlineWindow,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (fresh) assert.equal('autoOpen' in inline.calls[0][1], false);
+      else assert.equal(inline.calls[0][1].autoOpen, false, 'a remount arms');
+      stop();
+    }
+  } finally {
+    delete globalThis.GEV_EMBED_INLINE;
+    delete globalThis.GEV_EMBED_FRESH;
+  }
+  // applyView (a posted view) opens too.
+  const posted = recorder();
+  await applyView(
+    createView({
+      camera: { lat: 1, lon: 2 },
+      street_level: { provider: 'google' },
+    }),
+    {
+      viewer: fakeViewer(),
+      dataManager: fakeLayers(new Set()),
+      run: posted.run,
+    },
+  );
+  assert.equal('autoOpen' in posted.calls.at(-1)[1], false);
+});
+
+test('a view whose photos fail before any flight still gets its camera', async () => {
+  const viewer = fakeViewer();
+  const { calls, run } = recorder({
+    show_street_level: () => ({
+      ok: false,
+      stage: 'key',
+      error: 'needs its key',
+    }),
+  });
+  const view = createView({
+    camera: { lat: 1, lon: 2, altitude_m: 500 },
+    street_level: { provider: 'google' },
+  });
+  const steps = await applyView(view, {
+    viewer,
+    dataManager: fakeLayers(new Set()),
+    run,
+  });
+  assert.equal(viewer.flights.length, 1, 'the view flies itself');
+  assert.deepEqual(
+    steps.map((step) => [step.step, step.ok]),
+    [
+      ['set_map_stack', true],
+      ['stop_tracking', true],
+      ['clear_annotations', true],
+      ['show_street_level', false],
+      ['camera', true],
+    ],
+  );
+  assert.ok(calls.some(([name]) => name === 'show_street_level'));
+  // A flight that happened (the action reports where) is not repeated.
+  const flown = fakeViewer();
+  const { run: flownRun } = recorder({
+    show_street_level: () => ({
+      ok: false,
+      stage: 'imagery',
+      location: 'Somewhere',
+      error: 'no imagery',
+    }),
+  });
+  await applyView(view, {
+    viewer: flown,
+    dataManager: fakeLayers(new Set()),
+    run: flownRun,
+  });
+  assert.equal(flown.flights.length, 0);
+});
+
+test('a link runs its marks and photos in order, and posted views wait behind them', async () => {
+  const log = [];
+  let releaseStreetLevel = null;
+  let releaseMarks = null;
+  const run = async (name, args) => {
+    log.push(`start:${name}`);
+    if (name === 'annotate_map')
+      await new Promise((resolve) => {
+        releaseMarks = resolve;
+      });
+    if (name === 'show_street_level')
+      await new Promise((resolve) => {
+        releaseStreetLevel = resolve;
+      });
+    log.push(`end:${name}`);
+    return {
+      ok: true,
+      ...(name === 'show_street_level' ? { location: 'x' } : {}),
+    };
+  };
+  const windowRef = new EventTarget();
+  windowRef.document = { body: { classList: { add() {} } } };
+  // A framing page: answers go to it, not to the app's own window.
+  windowRef.parent = {
+    postMessage: (message) => log.push(`post:${message.type}`),
+  };
+  const an = encodeURIComponent(
+    JSON.stringify([{ type: 'pin', target: 'Austin' }]),
+  );
+  installViews({
+    shell: { initialRestorePromise: Promise.resolve(), setCleanView() {} },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '?embed=1',
+      hash: `#v=2&lat=1&lon=2&an=${an}&sl=mapillary,1.00000,2.00000`,
+    },
+    windowRef,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // A view arrives while the link's photos are still opening.
+  windowRef.dispatchEvent(
+    Object.assign(new Event('message'), {
+      source: windowRef.parent,
+      origin: 'null',
+      data: {
+        type: 'gev:view',
+        id: 'v1',
+        view: { camera: { lat: 3, lon: 4 } },
+      },
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const actions = () => log.filter((entry) => !entry.startsWith('post:'));
+  assert.deepEqual(
+    actions(),
+    ['start:annotate_map'],
+    'the photos wait for the marks',
+  );
+  releaseMarks();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(actions().slice(0, 3), [
+    'start:annotate_map',
+    'end:annotate_map',
+    'start:show_street_level',
+  ]);
+  assert.ok(
+    !log.includes('start:stop_tracking'),
+    'the posted view waits for the link',
+  );
+  releaseStreetLevel();
+  for (
+    let tick = 0;
+    tick < 20 && !log.includes('post:gev:view-applied');
+    tick++
+  )
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    log.indexOf('end:show_street_level') < log.indexOf('start:stop_tracking'),
+    true,
+  );
+  assert.ok(log.includes('post:gev:view-applied'), log.join(' '));
+});
+
+test('an aborted install never runs the link photos', async () => {
+  const { calls, run } = recorder();
+  const controller = new AbortController();
+  controller.abort();
+  installViews({
+    shell: { initialRestorePromise: Promise.resolve() },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    signal: controller.signal,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=google,1.00000,2.00000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, []);
+});
+
+test('a passive link stands down when someone navigated while it waited behind its marks', async () => {
+  const calls = [];
+  let releaseMarks = null;
+  const shell = {
+    initialRestorePromise: Promise.resolve(),
+    _navigationGeneration: 7,
+  };
+  const run = async (name) => {
+    calls.push(name);
+    if (name === 'annotate_map')
+      await new Promise((resolve) => {
+        releaseMarks = resolve;
+      });
+    return { ok: true };
+  };
+  const an = encodeURIComponent(
+    JSON.stringify([{ type: 'pin', target: 'Austin' }]),
+  );
+  installViews({
+    shell,
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: `#v=2&lat=1&lon=2&an=${an}&sl=mapillary,1.00000,2.00000`,
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, ['annotate_map']);
+  shell._navigationGeneration = 8; // the recipient searched, or the assistant flew
+  releaseMarks();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    calls,
+    ['annotate_map'],
+    'the link did not fly over the newer navigation',
+  );
+
+  // Unchanged navigation: the photos open as before.
+  const quiet = [];
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve(),
+      _navigationGeneration: 3,
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run: async (name) => {
+      quiet.push(name);
+      return { ok: true };
+    },
+    location: {
+      search: '',
+      hash: `#v=2&lat=1&lon=2&an=${an}&sl=mapillary,1.00000,2.00000`,
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(quiet, ['annotate_map', 'show_street_level']);
+});
+
+test('a link replays the sender’s view: its street-level step never writes the recipient’s preferences', async () => {
+  const { calls, run, options } = recorder();
+  installViews({
+    shell: { initialRestorePromise: Promise.resolve() },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=mapillary,38.58000,-121.49000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls.length, 1);
+  assert.deepEqual(options, [
+    ['show_street_level', { origin: 'programmatic' }],
+  ]);
+});
+
+test('a start link whose restore a newer link superseded opens nothing', async () => {
+  const { calls, run } = recorder();
+  installViews({
+    shell: {
+      initialRestorePromise: Promise.resolve({ status: 'superseded' }),
+      _navigationGeneration: 4,
+    },
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location: {
+      search: '',
+      hash: '#v=2&lat=1&lon=2&sl=mapillary,38.58000,-121.49000',
+    },
+    windowRef: new EventTarget(),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [], 'start link A does not pull the camera from B');
+});
+
+test('a start link whose restore flight the recipient interrupted leaves the camera with them', async () => {
+  for (const [camera, expected] of [
+    ['cancelled', 0],
+    ['skipped', 0],
+    ['applied', 1],
+  ]) {
+    const { calls, run } = recorder();
+    installViews({
+      shell: {
+        initialRestorePromise: Promise.resolve({
+          status: 'settled',
+          share: { camera },
+        }),
+        _navigationGeneration: 4,
+      },
+      viewer: fakeViewer(),
+      dataManager: fakeLayers(new Set()),
+      run,
+      location: {
+        search: '',
+        hash: '#v=2&lat=1&lon=2&sl=mapillary,38.58000,-121.49000',
+      },
+      windowRef: new EventTarget(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(calls.length, expected, camera);
+  }
+});
+
+test('a link pasted into the open tab opens or arms its photos once its restore settles', async () => {
+  const { calls, run, options } = recorder();
+  const windowRef = new EventTarget();
+  const location = { search: '', hash: '#v=2&lat=1&lon=2' };
+  const shell = {
+    initialRestorePromise: Promise.resolve(),
+    _navigationGeneration: 1,
+  };
+  const remove = installViews({
+    shell,
+    viewer: fakeViewer(),
+    dataManager: fakeLayers(new Set()),
+    run,
+    location,
+    windowRef,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [], 'the start link has no photos');
+  const settled = (status, camera = 'applied') =>
+    windowRef.dispatchEvent(
+      Object.assign(new Event('gev:share-navigation-restore-settled'), {
+        detail: { status, share: { camera } },
+      }),
+    );
+  location.hash = '#v=2&lat=3&lon=4&sl=mapillary,48.88740,2.34950';
+  shell._navigationGeneration = 2; // the restore's own flight
+  settled('failed');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [], 'a failed restore opens nothing');
+  // The recipient dragged or searched during the restore flight: the camera
+  // is theirs, and the link does not pull it back.
+  shell._navigationGeneration = 3;
+  for (const camera of ['cancelled', 'superseded']) {
+    settled('settled', camera);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(
+      calls,
+      [],
+      `an interrupted restore (${camera}) opens nothing`,
+    );
+  }
+  settled('settled');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [
+    [
+      'show_street_level',
+      {
+        latitude: 48.8874,
+        longitude: 2.3495,
+        provider: 'mapillary',
+        fly: true,
+        autoOpen: false,
+      },
+    ],
+  ]);
+  assert.deepEqual(options.at(-1), [
+    'show_street_level',
+    { origin: 'programmatic' },
+  ]);
+  remove();
+  location.hash = '#v=2&lat=5&lon=6&sl=mapillary,1.00000,2.00000';
+  settled('settled');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(calls.length, 1, 'removed with the install');
+});
+
+test('a view whose photo step the user overtook leaves their photo and camera alone', async () => {
+  // Photo B, opened by a click while the posted view looked up its photo.
+  const street = { open: false, imageId: null };
+  const dataManager = {
+    ...fakeLayers(new Set()),
+    layers: new Map([
+      [
+        'street-level',
+        {
+          module: {
+            closeViewer: () =>
+              Object.assign(street, { open: false, imageId: null }),
+          },
+        },
+      ],
+    ]),
+  };
+  const { run } = recorder({
+    show_street_level: () => {
+      Object.assign(street, { open: true, imageId: 'b' });
+      return {
+        ok: false,
+        stage: 'imagery',
+        cancelled: true,
+        superseded: true,
+        error: 'The camera moved on before the photo opened',
+      };
+    },
+  });
+  const view = createView({
+    camera: { lat: 1, lon: 2, altitude_m: 500 },
+    street_level: { provider: 'mapillary' },
+  });
+  const viewer = fakeViewer();
+  const steps = await applyView(view, { viewer, dataManager, run });
+  assert.deepEqual(street, { open: true, imageId: 'b' }, 'photo B stays');
+  assert.equal(viewer.flights.length, 0, 'the camera stays with the user');
+  assert.equal(steps.at(-1).ok, false, 'reported as not applied');
+});
+
+test('a view whose photo was found but could not load keeps its error in view', async () => {
+  const closed = [];
+  const dataManager = {
+    ...fakeLayers(new Set()),
+    layers: new Map([
+      ['street-level', { module: { closeViewer: () => closed.push(true) } }],
+    ]),
+  };
+  const { run } = recorder({
+    show_street_level: () => ({
+      ok: false,
+      stage: 'imagery',
+      imageryError: true,
+      location: '1.00000, 2.00000',
+      error: 'Image could not be opened',
+    }),
+  });
+  const view = createView({
+    camera: { lat: 1, lon: 2, altitude_m: 500 },
+    street_level: { provider: 'mapillary' },
+  });
+  await applyView(view, { viewer: fakeViewer(), dataManager, run });
+  assert.equal(closed.length, 0, 'the viewer keeps the new photo’s error');
+});
+
+test('a view whose photos fail closes the photo an earlier view opened', async () => {
+  const closed = [];
+  const dataManager = {
+    ...fakeLayers(new Set()),
+    layers: new Map([
+      ['street-level', { module: { closeViewer: () => closed.push(true) } }],
+    ]),
+  };
+  const { run } = recorder({
+    show_street_level: () => ({
+      ok: false,
+      stage: 'key',
+      error: 'needs its key',
+    }),
+  });
+  const view = createView({
+    camera: { lat: 1, lon: 2, altitude_m: 500 },
+    street_level: { provider: 'google' },
+  });
+  const viewer = fakeViewer();
+  await applyView(view, { viewer, dataManager, run });
+  assert.equal(closed.length, 1, 'closed before the view flies away');
+  assert.equal(viewer.flights.length, 1);
+  const opened = recorder({ show_street_level: () => ({ ok: true }) });
+  await applyView(view, { viewer, dataManager, run: opened.run });
+  assert.equal(closed.length, 1, 'an opened photo stays');
 });
