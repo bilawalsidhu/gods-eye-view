@@ -358,3 +358,130 @@ test('Vessels, Transit and Rail draw fleet models under the shared 3D toggle', (
     'Local ADS-B, Vessels, Transit and Rail follow the Flights 3D toggle',
   );
 });
+
+/** A layer whose models are all ready as soon as they are created. */
+function readyLayer({ display, waterline = false } = {}) {
+  const viewer = fakeViewer();
+  const created = [];
+  const layer = createFleetModelLayer({
+    viewer,
+    display: () => display,
+    policy: POLICY,
+    waterline,
+    createModel: async (spec, options) => {
+      const model = fakeModel(options);
+      model.ready = true;
+      created.push(model);
+      return model;
+    },
+  });
+  return { layer, created };
+}
+
+test('a model stands on the floor its icon is lifted above', async () => {
+  const { layer, created } = readyLayer({ display: { models3d: true } });
+  const tram = transitModelSpec(set, { mode: 'tram' });
+  const item = itemAt(10, tram, { pickId: 't', groundLiftM: 1.5 });
+  const items = new Map([['t', item]]);
+  layer.frame(items, 0);
+  await flush();
+  layer.frame(items, 100);
+  const origin = Cesium.Matrix4.getTranslation(
+    created[0].modelMatrix,
+    new Cesium.Cartesian3(),
+  );
+  const drop =
+    Cesium.Cartographic.fromCartesian(item.position).height -
+    Cesium.Cartographic.fromCartesian(origin).height;
+  assert.ok(Math.abs(drop - 1.5) < 1e-3, `dropped ${drop} m`);
+  layer.destroy();
+});
+
+test('under NVG/FLIR models are rebuilt unlit white, and rebuilt again on exit', async () => {
+  const display = { models3d: true, irBoost: false };
+  const { layer, created } = readyLayer({ display });
+  const tram = transitModelSpec(set, { mode: 'tram' });
+  const items = new Map([
+    ['t', itemAt(10, tram, { pickId: 't', tint: Cesium.Color.RED })],
+  ]);
+  layer.frame(items, 0);
+  await flush();
+  assert.equal(created[0].customShader, fleetTintShader(Cesium.Color.RED));
+  display.irBoost = true;
+  layer.frame(items, 100);
+  assert.ok(created[0].destroyed, 'the lit model is released');
+  await flush();
+  const boosted = created[1];
+  assert.equal(boosted.customShader.lightingModel, Cesium.LightingModel.UNLIT);
+  assert.ok(Cesium.Color.equals(boosted.color, Cesium.Color.WHITE));
+  assert.equal(boosted.colorBlendAmount, 1);
+  display.irBoost = false;
+  layer.frame(items, 200);
+  await flush();
+  assert.ok(boosted.destroyed);
+  assert.equal(created[2].customShader, fleetTintShader(Cesium.Color.RED));
+  layer.destroy();
+});
+
+test('a waterline layer clips each model at its origin, keeping the part above', async () => {
+  const { layer, created } = readyLayer({
+    display: { models3d: true },
+    waterline: true,
+  });
+  const ship = vesselModelSpec(set, { type: '70', length: 200, beam: 32 });
+  layer.frame(new Map([['s', itemAt(10, ship, { pickId: 's' })]]), 0);
+  await flush();
+  const planes = created[0].clippingPlanes;
+  assert.ok(planes instanceof Cesium.ClippingPlaneCollection);
+  assert.equal(planes.length, 1);
+  const plane = planes.get(0);
+  assert.equal(plane.distance, 0);
+  assert.ok(Cesium.Cartesian3.equals(plane.normal, Cesium.Cartesian3.UNIT_Z));
+  assert.equal(planes.unionClippingRegions, false);
+  // Cesium keeps a point where normal · p + distance >= 0: above the waterline.
+  const above = Cesium.Cartesian3.dot(
+    plane.normal,
+    new Cesium.Cartesian3(0, 0, 3),
+  );
+  const below = Cesium.Cartesian3.dot(
+    plane.normal,
+    new Cesium.Cartesian3(0, 0, -3),
+  );
+  assert.ok(above + plane.distance > 0 && below + plane.distance < 0);
+  layer.destroy();
+
+  const plain = readyLayer({ display: { models3d: true } });
+  plain.layer.frame(
+    new Map([['t', itemAt(10, transitModelSpec(set, { mode: 'tram' }))]]),
+    0,
+  );
+  await flush();
+  assert.equal(plain.created[0].clippingPlanes, undefined, 'others unclipped');
+  plain.layer.destroy();
+});
+
+test('a vehicle drawn as its model keeps its card and its detection entry', () => {
+  const read = (file) =>
+    fs.readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
+  assert.match(
+    read('src/layers/transit/selection.js'),
+    /marker\?\.show !== false \|\| entry\.modelOwnsVisual === true/,
+  );
+  assert.match(
+    read('src/layers/rail/selection.js'),
+    /entry\.marker\?\.show !== false \|\| entry\.modelOwnsVisual === true/,
+  );
+  assert.match(
+    read('src/layers/transit/queries.js'),
+    /marker\.show === false && entry\.modelOwnsVisual !== true/,
+  );
+  assert.match(
+    read('src/layers/vessels/queries.js'),
+    /!visual\.billboard\.show &&\s*!visual\.modelOwnsVisual/,
+  );
+  assert.match(
+    read('src/layers/transit/rendering.js'),
+    /entry\.mode === 'unknown'/,
+    'a vehicle of unknown mode keeps its icon',
+  );
+});

@@ -696,7 +696,9 @@ export function createRendering({ state, services, parts }) {
   // aircraft layers' icon-to-model rules (services.fleet). The fleet set
   // loads once, up front, when the layer starts.
   let fleetModels = null;
+  /** Items drawn last frame, and the map the next frame's are gathered into. */
   let modelItems = new Map();
+  let spareItems = new Map();
   let modelCandidatesAtMs = -Infinity;
 
   /** Load the fleet set and create the layer's models (on enable). */
@@ -724,7 +726,13 @@ export function createRendering({ state, services, parts }) {
   function modelItem(entry, set) {
     let item = modelItems.get(entry.key);
     if (!item || item.entry !== entry)
-      item = { entry, pickId: entry.key, modelOwnsVisual: false };
+      item = {
+        entry,
+        pickId: entry.key,
+        modelOwnsVisual: false,
+        // Markers are drawn this far above the track; a model stands on it.
+        groundLiftM: GROUND_FLOOR_LIFT_M,
+      };
     const specKey = `${entry.category}|${entry.railMode}`;
     if (item.specKey !== specKey) {
       item.specKey = specKey;
@@ -744,15 +752,16 @@ export function createRendering({ state, services, parts }) {
     if (!fleetModels) return;
     if (!fleetModels.active() || state._trains.size === 0) {
       if (modelItems.size) {
-        fleetModels.frame(new Map(), performance.now());
         for (const item of modelItems.values()) handBack(item.entry);
-        modelItems = new Map();
+        modelItems.clear();
+        fleetModels.frame(modelItems, performance.now());
       }
       return;
     }
     const set = fleetModelSet();
     const now = performance.now();
-    const next = new Map();
+    const next = spareItems;
+    next.clear();
     if (now - modelCandidatesAtMs >= MODEL_CANDIDATES_MS) {
       modelCandidatesAtMs = now;
       const camera = state._viewer?.camera;
@@ -781,6 +790,7 @@ export function createRendering({ state, services, parts }) {
     }
     for (const [key, item] of modelItems)
       if (next.get(key) !== item) handBack(item.entry);
+    spareItems = modelItems;
     modelItems = next;
     fleetModels.frame(modelItems, now);
     for (const item of modelItems.values()) {
@@ -796,7 +806,8 @@ export function createRendering({ state, services, parts }) {
   /** Drop every model (layer disabled); `destroy` also removes the collection. */
   function stopModels(destroy = false) {
     for (const item of modelItems.values()) item.entry.modelOwnsVisual = false;
-    modelItems = new Map();
+    modelItems.clear();
+    spareItems.clear();
     modelCandidatesAtMs = -Infinity;
     if (destroy) {
       fleetModels?.destroy();

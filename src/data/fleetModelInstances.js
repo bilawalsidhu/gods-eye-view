@@ -46,6 +46,11 @@ export function createFleetModel(
 
 const tintShaders = new Map();
 
+/** Models under the NVG/FLIR styles render unlit, as aircraft models do. */
+const IR_UNLIT_SHADER = new Cesium.CustomShader({
+  lightingModel: Cesium.LightingModel.UNLIT,
+});
+
 /**
  * The custom shader that paints a route colour where a transit model's
  * `_TINT` vertex attribute marks it: drawn colour = vertex colour ×
@@ -131,23 +136,34 @@ const scratchScale = new Cesium.Cartesian3();
  * `modelOwnsVisual` back from each item and hides that icon.
  *
  * Each frame the layer passes its vehicles as items:
- * `{position, headingDeg, spec, tint, pickId, show}`, `position` the point
- * the model's origin stands on (the waterline, the road or rail top; the
- * spec's `elevationM` is added here), `tint` a Cesium.Color for a tinted
- * model's route colour (or null), `show` false to keep it hidden.
+ * `{position, headingDeg, spec, tint, pickId, show, groundLiftM}`,
+ * `position` the point the model's origin stands on (the waterline, the road
+ * or rail top; the spec's `elevationM` is added here), `groundLiftM` any lift
+ * the layer's icon carries above that point (taken off again), `tint` a
+ * Cesium.Color for a tinted model's route colour (or null), `show` false to
+ * keep it hidden.
+ *
+ * Under the luminance-mapped NVG/FLIR styles (`irBoost`) models render
+ * unlit flat white, as aircraft models do. With `waterline`, each model is
+ * clipped at its origin's horizontal plane and only the part above it is
+ * drawn: a ship's hull below the waterline would otherwise show through a
+ * plain globe, which Cesium does not depth-test models against.
  * @param {object} options
  * @param {object} options.viewer Cesium viewer.
- * @param {() => object|null} [options.display] `{models3d, models3dMode}`.
+ * @param {() => object|null} [options.display] `{models3d, models3dMode,
+ *   irBoost}`.
  * @param {object} options.policy `{altitudeCeilingM, minimumPixelSize,
  *   cap, capAll, addM, addAllM, keepM, keepAllM, intervalMs}`.
  * @param {(url: string) => string} [options.resolveAsset]
  * @param {(spec: object, options: object) => Promise<object>} [options.createModel]
+ * @param {boolean} [options.waterline] Clip each model at its waterline.
  * @returns {object}
  */
 export function createFleetModelLayer({
   viewer,
   display = () => null,
   policy,
+  waterline = false,
   resolveAsset = (url) => url,
   createModel = (spec, options) =>
     createFleetModel(spec, options, { resolveAsset }),
@@ -163,6 +179,8 @@ export function createFleetModelLayer({
   let lastEligibilityAt = -Infinity;
   let eligible = new Set();
   let settling = 0;
+  /** Whether the models drawn now were built for the NVG/FLIR styles. */
+  let irBoost = false;
   const scratchHpr = new Cesium.HeadingPitchRoll();
   const scratchSphere = new Cesium.BoundingSphere(Cesium.Cartesian3.ZERO, 1);
   const scratchCarto = new Cesium.Cartographic();
@@ -177,7 +195,7 @@ export function createFleetModelLayer({
   }
 
   function releaseAll() {
-    for (const id of [...models.keys()]) release(id);
+    for (const id of models.keys()) release(id);
     pending.clear();
     generation += 1;
   }
@@ -193,9 +211,21 @@ export function createFleetModelLayer({
   }
 
   function shaderFor(item) {
+    if (irBoost) return IR_UNLIT_SHADER;
     return item.spec.tinted && item.tint
       ? fleetTintShader(item.tint)
       : undefined;
+  }
+
+  /** The clipping that keeps a model's part above its waterline. */
+  function waterlineClipping() {
+    return new Cesium.ClippingPlaneCollection({
+      // The planes sit in the model matrix's frame: its origin is the
+      // waterline and its Z axis the local vertical, so the plane z = 0 with
+      // its normal up keeps the hull above the water.
+      planes: [new Cesium.ClippingPlane(Cesium.Cartesian3.UNIT_Z, 0)],
+      edgeWidth: 0,
+    });
   }
 
   async function ensure(id, item, cap) {
@@ -213,6 +243,14 @@ export function createFleetModelLayer({
         minimumPixelSize: policy.minimumPixelSize,
         scale: item.spec.scale,
         customShader: shaderFor(item),
+        ...(irBoost
+          ? {
+              color: Cesium.Color.WHITE,
+              colorBlendMode: Cesium.ColorBlendMode.MIX,
+              colorBlendAmount: 1,
+            }
+          : {}),
+        ...(waterline ? { clippingPlanes: waterlineClipping() } : {}),
         id: item.pickId ?? id,
       });
     } catch {
@@ -232,7 +270,8 @@ export function createFleetModelLayer({
     }
     model.id = item.pickId ?? id;
     model._gevSpecKey = key;
-    model._gevTint = item.spec.tinted ? item.tint : null;
+    model._gevTint = item.spec.tinted && !irBoost ? item.tint : null;
+    model._gevIrBoost = irBoost;
     // Admitted, not yet the visual: placement turns it on.
     model.show = false;
     collection.add(model);
@@ -272,14 +311,14 @@ export function createFleetModelLayer({
       addDistSq: addM * addM,
       isModeled: (id) => models.has(id),
     });
-    for (const id of [...models.keys(), ...pending.keys()])
-      if (!eligible.has(id)) release(id);
+    for (const id of models.keys()) if (!eligible.has(id)) release(id);
+    for (const id of pending.keys()) if (!eligible.has(id)) release(id);
     for (const id of eligible) void ensure(id, items.get(id), cap);
   }
 
   /** Where the model's origin stands: the item's point raised by the spec's elevation. */
   function placement(item) {
-    const lift = item.spec.elevationM || 0;
+    const lift = (item.spec.elevationM || 0) - (item.groundLiftM || 0);
     if (!lift) return item.position;
     const carto = Cesium.Cartographic.fromCartesian(
       item.position,
@@ -320,6 +359,14 @@ export function createFleetModelLayer({
         for (const item of items.values()) item.modelOwnsVisual = false;
         return false;
       }
+      // A model's look under NVG/FLIR is set when it is built (a custom
+      // shader on a ready model does not take), so a style change rebuilds.
+      const boost = prefs.irBoost === true;
+      if (boost !== irBoost) {
+        releaseAll();
+        irBoost = boost;
+        lastEligibilityAt = -Infinity;
+      }
       if (nowMs - lastEligibilityAt >= policy.intervalMs) {
         lastEligibilityAt = nowMs;
         refreshEligibility(items, prefs);
@@ -345,7 +392,7 @@ export function createFleetModelLayer({
           lastEligibilityAt = -Infinity;
           continue;
         }
-        const tint = item.spec.tinted ? item.tint : null;
+        const tint = item.spec.tinted && !irBoost ? item.tint : null;
         if (tint && !Cesium.Color.equals(tint, model._gevTint)) {
           model.customShader = fleetTintShader(tint);
           model._gevTint = tint;
@@ -366,7 +413,7 @@ export function createFleetModelLayer({
         item.modelOwnsVisual = true;
         drawn = true;
       }
-      for (const id of [...models.keys()]) if (!items.has(id)) release(id);
+      for (const id of models.keys()) if (!items.has(id)) release(id);
       return drawn;
     },
 

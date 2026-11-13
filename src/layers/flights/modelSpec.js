@@ -37,16 +37,28 @@ export const UNLOADED_AIRCRAFT_MODEL_SPEC = Object.freeze({
  */
 export function aircraftLayerModelSpec(aircraft, set = fleetModelSet()) {
   if (!set) return UNLOADED_AIRCRAFT_MODEL_SPEC;
-  const spec = aircraftModelSpec(set, {
-    typeCode: aircraft?.typeCode ?? aircraft?.type ?? null,
-    category: aircraft?.category ?? null,
-  });
-  return Object.freeze({
-    ...spec,
-    bellyM: spec.clearanceM,
-    blendAmount: MODEL_COLOR_BLEND_AMOUNT,
-  });
+  // Layers ask on every tick; each type and category is resolved once per set.
+  let cache = specCaches.get(set);
+  if (!cache) specCaches.set(set, (cache = new Map()));
+  const key = aircraftModelSpecCacheKey(aircraft);
+  let layerSpec = cache.get(key);
+  if (!layerSpec) {
+    const spec = aircraftModelSpec(set, {
+      typeCode: aircraft?.typeCode ?? aircraft?.type ?? null,
+      category: aircraft?.category ?? null,
+    });
+    layerSpec = Object.freeze({
+      ...spec,
+      bellyM: spec.clearanceM,
+      blendAmount: MODEL_COLOR_BLEND_AMOUNT,
+    });
+    cache.set(key, layerSpec);
+  }
+  return layerSpec;
 }
+
+/** @type {WeakMap<object, Map<string, object>>} set -> cache key -> spec */
+const specCaches = new WeakMap();
 
 /**
  * Cache key of an aircraft's model spec: what selects its model.

@@ -288,3 +288,11 @@ test('civilian and military globe-view aircraft retain the established 3.0 near 
     );
   }
 });
+
+test('a layer asking every tick gets one cached spec per type and category', async () => {
+  const { aircraftLayerModelSpec } = await import('../layers/flights/modelSpec.js');
+  const a = aircraftLayerModelSpec({ typeCode: 'A320' }, set);
+  assert.equal(aircraftLayerModelSpec({ typeCode: 'A320' }, set), a);
+  assert.notEqual(aircraftLayerModelSpec({ typeCode: 'B744' }, set), a);
+  assert.ok(Object.isFrozen(a));
+});
