@@ -116,7 +116,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO 24-bit transponder address.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number|null, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -158,8 +158,10 @@ export function createQueries({
       longitude: Cesium.Math.toDegrees(carto.longitude),
       // The cockpit instrument reports aviation altitude, not the Cesium
       // ellipsoid height of the camera/ground-clamped render position. The
-      // latter can be slightly negative over terrain near the surface.
-      altitudeM: Number.isFinite(info?.altitude) ? info.altitude : carto.height,
+      // latter can be slightly negative over terrain near the surface. An
+      // altitude the aircraft never reported stays null (the cockpit shows it
+      // as unavailable) rather than borrowing the 10 km render default.
+      altitudeM: Number.isFinite(info?.altitude) ? info.altitude : null,
       renderAltitudeM: Number.isFinite(info?.renderAltitudeM)
         ? info.renderAltitudeM
         : carto.height,
@@ -535,7 +537,7 @@ export function createQueries({
      * Match priority: exact icao24 hex, exact callsign, callsign prefix,
      * then callsign substring (all case-insensitive, trimmed).
      * @param {string} query - ICAO24 hex or full/partial callsign.
-     * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number|null, velocityMps: number|null, track: number|null}|null}
      *   Best match with a cloned, dead-reckoned position, or null if none.
      */
     findByQuery(query) {
@@ -881,7 +883,7 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null, photo: {src: string, width: number|null, height: number|null, photographer: string, link: string}|null}|null}
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number|null, velocityMps: number|null, track: number|null, verticalRateMps: number|null, photo: {src: string, width: number|null, height: number|null, photographer: string, link: string}|null}|null}
      *   Tracked aircraft info, or null when nothing is tracked. `photo` is the
      *   airframe's credited Planespotters photo, or null.
      */

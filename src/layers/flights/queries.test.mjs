@@ -21,7 +21,7 @@ function fixture() {
   };
   let formats = 0;
   const services = {
-    aircraftPresentation: {},
+    aircraftPresentation: { tr3bTypeLabel: (_icao24, value) => value },
     militaryRegistry: {},
     camera: {},
     focus: {},
@@ -39,8 +39,17 @@ function fixture() {
     motion: { _trackedVisualCached: () => null },
   };
   parts.rendering = createRendering({ flightState, services, parts });
-  const queries = createQueries({ flightState, services, parts }).methods;
-  return { flightState, info, bb, parts, queries, formats: () => formats };
+  const owner = createQueries({ flightState, services, parts });
+  const queries = owner.methods;
+  return {
+    flightState,
+    info,
+    bb,
+    parts,
+    queries,
+    describe: owner._describeFlight,
+    formats: () => formats,
+  };
 }
 
 test('candidate text follows in-place enrichment without freezing identity or positions', () => {
@@ -146,4 +155,15 @@ test('tracked ownership and live anchors remain independent of fleet models', ()
   f.flightState._trackedModel = { ready: true, show: true };
   f.parts.tracking._trackedModelRegimeActive = () => false;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123', null), false);
+});
+
+test('the civil descriptor leaves an unreported altitude null, not the render height', () => {
+  const f = fixture();
+  f.bb.position = Cesium.Cartesian3.fromDegrees(-77, 39, 10000);
+  f.flightState._scratchCarto = new Cesium.Cartographic();
+  f.parts.motion._deadReckon = () => null;
+  f.flightState.records.missingPolls = new Map();
+  assert.equal(f.describe('abc123').altitudeM, 1000);
+  f.info.altitude = null;
+  assert.equal(f.describe('abc123').altitudeM, null);
 });

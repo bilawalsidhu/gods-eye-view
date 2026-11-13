@@ -102,8 +102,8 @@ export class FlightRecords {
     // The airframe's facts: this record's, or those kept across a reset.
     const airframe = prevMeta ?? this.airframes.get(icao24);
     this.airframes.delete(icao24);
-    // Grounded planes with no baro reading sit at 0 m, not the 10 km
-    // airborne default (a parked plane must never float).
+    // Grounded planes with no baro reading sit at 0 m (a parked plane must
+    // never float); airborne ones without baro have no aviation altitude.
     // NOTE (height-datum fix): `alt` stays the AVIATION field — the sticky
     // barometric/MSL altitude read by labels (FL/altitude readout),
     // route-plausibility, and follow-camera range heuristics. It is
@@ -112,12 +112,10 @@ export class FlightRecords {
     // below) — geo_altitude when OpenSky reports it (already WGS84
     // ellipsoidal), else baro+geoid as a visual fallback, else ground
     // surface when parked. `Cartesian3.fromDegrees` gets renderAltitudeM,
-    // never `alt` directly.
-    const alt = stickyNumber(
-      baro_alt,
-      prevMeta?.altitude,
-      onGround ? 0 : 10000,
-    );
+    // never `alt` directly. An airborne contact that has never reported baro
+    // keeps `alt` null (unknown); the 10 km default is a render height only,
+    // so labels never read it as FL328.
+    const alt = stickyNumber(baro_alt, prevMeta?.altitude, onGround ? 0 : null);
 
     // geoid undulation N: cached per-aircraft (negligible drift — see
     // task brief) once the geoid grid has loaded; unavailable pre-load
@@ -203,9 +201,9 @@ export class FlightRecords {
     //       undulation N (~46 m in London) and back up next poll. `alt` stays
     //       sticky for labels, so holding the last render height keeps the two
     //       layers consistent through the gap.
-    //   (2) otherwise the SAME default policy `alt` already uses, so the two
-    //       never disagree on the genuine "no data yet" case (a never-reported
-    //       aircraft has no prior render height, so it lands here unchanged).
+    //   (2) otherwise `alt` (a never-reported aircraft has no prior render
+    //       height, so it lands here), or the 10 km airborne default when
+    //       `alt` is unknown.
     // Neither altitude this poll nor a held render height: the height below
     // is the airborne default, invented. The tracked trail keeps no point there.
     const renderAltitudeInvented =
@@ -218,7 +216,7 @@ export class FlightRecords {
     } else if (Number.isFinite(prevMeta?.renderAltitudeM)) {
       renderAltitudeM = prevMeta.renderAltitudeM;
     } else {
-      renderAltitudeM = alt;
+      renderAltitudeM = alt ?? 10000;
     }
     // Field-test fix (WAKE01/RS46 class, 2026-07-06; widened round 3):
     // floor a low airborne contact's render height at the local coarse

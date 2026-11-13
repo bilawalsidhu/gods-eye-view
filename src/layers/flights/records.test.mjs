@@ -143,6 +143,19 @@ test('civil emergency status follows the latest poll instead of sticking', () =>
   assert.equal(next.meta.emergency, null);
 });
 
+test('an airborne contact with no reported altitude keeps it unknown and renders at the 10 km default', () => {
+  const store = records();
+  const { meta } = store.receive(observation({ baroAltitudeM: null }), view());
+  assert.equal(meta.altitude, null);
+  assert.equal(meta.renderAltitudeM, 10000);
+  const withGeo = records().receive(
+    observation({ baroAltitudeM: null, ellipsoidAltitudeM: 3048 }),
+    view(),
+  );
+  assert.equal(withGeo.meta.altitude, null);
+  assert.equal(withGeo.meta.renderAltitudeM, 3048);
+});
+
 test('a route belongs to its callsign: a new callsign drops it, a blank one keeps it', () => {
   const store = records();
   store.geoidReady = true;

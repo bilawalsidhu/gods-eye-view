@@ -749,6 +749,7 @@
   "src/layers/military/snapshotRenderer.js",
   "src/layers/military/records.test.mjs",
   "src/layers/military/ingestion.test.mjs",
+  "src/layers/military/queries.test.mjs",
   "src/layers/vessels/records.js",
   "src/layers/vessels/recordPolicy.js",
   "src/layers/vessels/snapshotRenderer.js",
