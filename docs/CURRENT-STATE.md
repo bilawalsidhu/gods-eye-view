@@ -22,6 +22,22 @@ repaints the last AI reply instead of asking for a new one. A host passing
 `cachedOnly` keeps reading every cached sample. Voice context lookups are
 unchanged.
 
+Selecting an aircraft in the flights or military layer shows its type card at
+the top right: a photo of the aircraft's type, its name, manufacturer, class,
+length, wingspan, engines and first flight, and live callsign, type code,
+altitude, speed, heading, position and route. The type data and photos are
+bundled (`src/data/aircraftTypes/`, `public/aircraft-types/`; see
+[AIRCRAFT-TYPE-LIBRARY.md](AIRCRAFT-TYPE-LIBRARY.md)), so the card needs no
+network. The photo shows the type, not the tracked airframe, with its author,
+licence and a link to the source beside it. A type the library lacks shows the
+live telemetry and says the type is not in the library yet. The card is cyan
+for a civil aircraft and amber for a military one, and hides when tracking
+clears. The tracked aircraft's model is drawn as a scanning hologram in the
+same colour. The hologram turns solid as the model shrinks below about 160
+screen pixels, so a distant plane stays readable. The shader is set when the
+model is created, and deselecting releases the model. Infrared boost keeps its
+flat white model.
+
 The HUD's LAT/LON degrees-minutes-seconds readout rounds the coordinate once, to
 hundredths of a second, and then splits it. A value within 0.005" of the next
 whole minute carries into the minutes and degrees, so `-122.35` reads
