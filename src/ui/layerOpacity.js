@@ -52,7 +52,21 @@ export class LayerOpacity {
     this._addressTimer = null;
     this._destroyed = false;
     this._navigationTarget = navigationTarget;
-    this._onNavigation = () => this.restore();
+    this._reconciling = false;
+    // The raw `lop` text the address last held, read or written by us. A
+    // hashchange/popstate that leaves it alone (a host page's routing, an
+    // in-page anchor, the same entry's second event) is not an incoming link
+    // and must not undo what the user set since.
+    this._knownLop = this._addressLop();
+    this._onNavigation = () => {
+      if (this._destroyed || this._addressLop() === this._knownLop) return;
+      this._reconciling = true;
+      try {
+        this.restore();
+      } finally {
+        this._reconciling = false;
+      }
+    };
     this._navigationTarget?.addEventListener?.('popstate', this._onNavigation);
     this._navigationTarget?.addEventListener?.(
       'hashchange',
@@ -108,6 +122,7 @@ export class LayerOpacity {
    */
   restore() {
     if (this._destroyed || !this._location) return;
+    this._knownLop = this._addressLop();
     const carried = readLayerOpacityFromUrl(this._location.href, (id) =>
       this.supports(id),
     );
@@ -142,12 +157,24 @@ export class LayerOpacity {
   // The address is a convenience; a slow drag or a browser that limits
   // history writes must not cost the slider anything.
   _scheduleAddress() {
+    // Applying an incoming link must not rewrite that link's own address.
+    if (this._reconciling) return;
     if (!this._location || !this._history?.replaceState) return;
     clearTimeout(this._addressTimer);
     this._addressTimer = setTimeout(
       () => this._writeAddress(),
       this._addressDelayMs,
     );
+  }
+
+  _addressLop() {
+    try {
+      return new URL(this._location?.href ?? '', 'http://x').searchParams
+        .getAll('lop')
+        .join('&');
+    } catch {
+      return '';
+    }
   }
 
   _writeAddress() {
@@ -157,6 +184,7 @@ export class LayerOpacity {
       const next = writeLayerOpacityToUrl(this._location.href, this._values);
       if (next !== this._location.href)
         this._history.replaceState(this._history.state, '', next);
+      this._knownLop = this._addressLop();
     } catch {
       console.warn('[Opacity] address update failed');
     }
