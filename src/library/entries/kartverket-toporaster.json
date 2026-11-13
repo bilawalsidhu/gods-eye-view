@@ -1,0 +1,36 @@
+{
+  "id": "kartverket-toporaster",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Norway topographic raster map (Kartverket)",
+  "provider": "Kartverket",
+  "description": "Kartverket's raster topographic map series of Norway, in the style of the printed maps.",
+  "icon": "⛰",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["NO"],
+    "bbox": [3.7, 57.6, 32, 71.6]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://cache.kartverket.no/v1/wmts/1.0.0/toporaster/default/webmercator/{z}/{y}/{x}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 3,
+    "maxZoom": 18,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1
+  },
+  "licence": {
+    "name": "CC BY 4.0 (Kartverket free products)",
+    "url": "https://www.kartverket.no/api-og-data/vilkar-for-bruk"
+  },
+  "attribution": {
+    "text": "© Kartverket",
+    "url": "https://www.kartverket.no/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

@@ -1,0 +1,47 @@
+{
+  "id": "vt-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Vermont Statewide Imagery",
+  "provider": "VCGI",
+  "description": "Aerial orthophotos: Statewide coverage of Vermont.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-73.5011, 42.6871, -71.4363, 45.0631]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://maps.vcgi.vermont.gov/arcgis/rest/services/EGC_services/IMG_VCGI_CIR_WM_CACHE/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "30 cm",
+    "resolutionM": 0.3,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Statewide roughly every 2 years",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — Vermont open data",
+    "url": "https://vcgi.vermont.gov/"
+  },
+  "attribution": {
+    "text": "Vermont Center for Geographic Information (VCGI)",
+    "url": "https://registry.opendata.aws/vt-opendata/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

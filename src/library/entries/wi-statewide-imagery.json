@@ -1,0 +1,48 @@
+{
+  "id": "wi-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Wisconsin Statewide Imagery (2020)",
+  "provider": "Wisconsin DOT / WisconsinView",
+  "description": "Aerial orthophotos: Statewide coverage of Wisconsin.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-93.0454, 42.3829, -86.6018, 47.1427]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://di-wisdot.img.arcgis.com/arcgis/rest/services/Statewide/WisconsinNAIP20/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "60 cm (NAIP)",
+    "resolutionM": 0.6,
+    "trueOrtho": false,
+    "vintage": "2020–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open — WisconsinView / state open data",
+    "url": "https://www.wisconsinview.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "WisDOT - NAIP 2020",
+    "url": "https://www.wisconsinview.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
