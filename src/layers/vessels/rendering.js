@@ -22,9 +22,18 @@ import {
   followsClock,
 } from './policy.js';
 import { vesselPositionAt } from './motion.js';
+import {
+  fleetModelSet,
+  loadFleetModelSet,
+  vesselModelSpec,
+} from '../../data/fleetModels.js';
+import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 
 /** How often vessels move on as the world clock plays (wall ms). */
 const FOLLOW_POSITION_MS = 250;
+
+/** How often the vessels near enough for a model are gathered again (wall ms). */
+const MODEL_CANDIDATES_MS = 500;
 
 export function createRendering({
   vesselState,
@@ -56,6 +65,12 @@ export function createRendering({
       VESSEL_LIFT_M,
     );
     visual.position = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
+    // A ship model's origin is its waterline: the sea surface, unlifted.
+    visual.waterline = Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      heightM - VESSEL_LIFT_M,
+    );
     visual.surfacePosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
     visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
       visual.position,
@@ -101,6 +116,7 @@ export function createRendering({
   }
 
   function ensureCollections(viewer) {
+    ensureModels(viewer);
     if (!viewer || state.billboardCollection) return;
     state.billboardCollection = new Cesium.BillboardCollection({
       blendOption: Cesium.BlendOption.TRANSLUCENT,
@@ -203,6 +219,126 @@ export function createRendering({
     return icon;
   }
 
+  // Under the DISPLAY rail's 3D toggle, vessels near the camera are drawn as
+  // the project's procedural fleet models at their reported length and beam,
+  // on the aircraft layers' icon-to-model rules (services.fleet). The fleet
+  // set loads once, up front, when the layer starts.
+  let fleetModels = null;
+  let modelItems = new Map();
+  let modelCandidatesAtMs = -Infinity;
+
+  function ensureModels(viewer) {
+    const fleet = services.fleet;
+    if (!viewer || fleetModels || !fleet?.policy) return;
+    loadFleetModelSet({ resolveAsset: fleet.resolveAsset }).catch(() => {
+      /* models stay off; vessels keep their icons */
+    });
+    fleetModels = createFleetModelLayer({
+      viewer,
+      display: fleet.display,
+      policy: fleet.policy,
+      resolveAsset: fleet.resolveAsset,
+    });
+  }
+
+  /** The model item for `record`, its spec rebuilt only when its type or size changes. */
+  function modelItem(record, set) {
+    let item = modelItems.get(record.id);
+    const specKey = `${record.type}|${record.length}|${record.beam}|${record.name}`;
+    if (!item) {
+      item = { pickId: record, tint: null, modelOwnsVisual: false };
+      modelItems.set(record.id, item);
+    }
+    if (item.specKey !== specKey) {
+      item.specKey = specKey;
+      item.spec = vesselModelSpec(set, record);
+    }
+    const visual = getVisual(record);
+    item.record = record;
+    item.position = visual.waterline;
+    item.headingDeg = vesselCourseDeg(record);
+    item.show = record.id !== state.cockpitSubjectId;
+    return item;
+  }
+
+  /** Gather the vessels within the models' keep radius of the camera. */
+  function gatherModelItems(set, prefs) {
+    const camera = state.viewer?.camera;
+    const policy = services.fleet.policy;
+    const keepM =
+      prefs?.models3dMode === 'all' ? policy.keepAllM : policy.keepM;
+    const next = new Map();
+    if (camera?.positionWC) {
+      const limitSq = keepM * keepM * 1.44;
+      for (const record of state.records.all) {
+        const visual = getVisual(record);
+        if (!visual.waterline) continue;
+        if (
+          Cesium.Cartesian3.distanceSquared(
+            camera.positionWC,
+            visual.waterline,
+          ) > limitSq
+        )
+          continue;
+        next.set(record.id, modelItem(record, set));
+      }
+    }
+    for (const [id, item] of modelItems)
+      if (!next.has(id)) handBackVisual(item);
+    modelItems = next;
+  }
+
+  /** Give a vessel's icon back when its model no longer draws it. */
+  function handBackVisual(item) {
+    if (!item.ownedBillboard) return;
+    item.ownedBillboard = false;
+    const billboard = getVisual(item.record).billboard;
+    if (billboard)
+      billboard.show =
+        isVisible(getVisual(item.record).surfacePosition, makeOccluder()) &&
+        item.record.id !== state.cockpitSubjectId;
+  }
+
+  function updateModels() {
+    if (!fleetModels) return;
+    if (!fleetModels.active()) {
+      if (modelItems.size) {
+        fleetModels.frame(modelItems, performance.now());
+        for (const item of modelItems.values()) handBackVisual(item);
+        modelItems = new Map();
+      }
+      return;
+    }
+    const set = fleetModelSet();
+    const now = performance.now();
+    if (now - modelCandidatesAtMs >= MODEL_CANDIDATES_MS) {
+      modelCandidatesAtMs = now;
+      gatherModelItems(set, services.fleet.display?.());
+    } else {
+      for (const [id, item] of modelItems) {
+        if (state.records.byId.get(id) === item.record)
+          modelItem(item.record, set);
+        else modelItems.delete(id);
+      }
+    }
+    fleetModels.frame(modelItems, now);
+    for (const item of modelItems.values()) {
+      const billboard = getVisual(item.record).billboard;
+      if (item.modelOwnsVisual) {
+        item.ownedBillboard = true;
+        if (billboard) billboard.show = false;
+      } else handBackVisual(item);
+    }
+    if (fleetModels.settling) governorRequestRender('ais-vessels-models');
+  }
+
+  function destroyModels() {
+    fleetModels?.destroy();
+    fleetModels = null;
+    modelItems = new Map();
+    modelCandidatesAtMs = -Infinity;
+  }
+
   // Vessels move only when a poll lands, so the layer does not hold the
   // continuous render loop. Its passes run in preRender, which idle mode fires
   // only for rendered frames: a forced pass (new data, selection) requests its
@@ -216,6 +352,7 @@ export function createRendering({
     state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
       if (followsClock(vesselState)) followClockPositions();
       updateVisibility();
+      if (state.feed.enabled) updateModels();
     });
   }
 
@@ -307,7 +444,9 @@ export function createRendering({
         if (visual.billboard) {
           // The bridge camera sits on this sprite; showing it would fill the view.
           visual.billboard.show =
-            visible && record.id !== state.cockpitSubjectId;
+            visible &&
+            record.id !== state.cockpitSubjectId &&
+            !modelItems.get(record.id)?.ownedBillboard;
           if (visible && doRotations && scene) {
             const rot = screenProjectedRotation(
               scene,
@@ -582,6 +721,12 @@ export function createRendering({
     if (state.billboardCollection) {
       state.billboardCollection.show = show;
     }
+    fleetModels?.setVisible(show);
+    if (!show && fleetModels) {
+      fleetModels.clear();
+      for (const item of modelItems.values()) item.ownedBillboard = false;
+      modelItems = new Map();
+    }
     vesselState._vesselOverlayHost.setVisible(VESSEL_OVERLAY_SOURCE_ID, show);
   }
   return {
@@ -607,5 +752,7 @@ export function createRendering({
     labelPriority,
     hasUsefulName,
     setVisible,
+    updateModels,
+    destroyModels,
   };
 }

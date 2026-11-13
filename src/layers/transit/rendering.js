@@ -27,6 +27,12 @@ import {
   TRANSIT_MODE_COLORS,
   vehicleNearView,
 } from './policy.js';
+import {
+  fleetModelSet,
+  loadFleetModelSet,
+  transitModelSpec,
+} from '../../data/fleetModels.js';
+import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 
 export const MODE_CESIUM_COLORS = Object.fromEntries(
   Object.entries(TRANSIT_MODE_COLORS).map(([mode, css]) => [
@@ -100,7 +106,8 @@ export function createRendering({ state, services, parts }) {
     );
     entry.surfaceReady = !!known;
     entry.heightPending = !known;
-    entry.marker.show = !!known && vehicleInView(entry);
+    entry.marker.show =
+      !!known && vehicleInView(entry) && !entry.modelOwnsVisual;
     if (known) {
       entry.marker.position = state._scratchCartesian;
       entry.hasRendered = true;
@@ -403,6 +410,7 @@ export function createRendering({ state, services, parts }) {
     const now = state.now();
     if (state._vehicles.size === 0) {
       state._moving.clear();
+      updateModels();
       syncRenderHold();
       return;
     }
@@ -450,7 +458,95 @@ export function createRendering({ state, services, parts }) {
         : 0;
     }
     if (state._heightDirty.size) governorRequestRender('transit-height-batch');
+    updateModels();
     syncRenderHold();
+  }
+
+  // Under the DISPLAY rail's 3D toggle, vehicles in view near the camera are
+  // drawn as the project's procedural fleet models, chosen by mode, painted
+  // in their mode colour where the model marks it, on the aircraft layers'
+  // icon-to-model rules (services.fleet). The fleet set loads once, up front,
+  // when the layer starts.
+  let fleetModels = null;
+  let modelItems = new Map();
+
+  /** Load the fleet set and create the layer's models (on enable). */
+  function startModels() {
+    const fleet = services.fleet;
+    if (!fleet?.policy || !state._viewer) return;
+    loadFleetModelSet({ resolveAsset: fleet.resolveAsset }).catch(() => {
+      /* models stay off; vehicles keep their icons */
+    });
+    fleetModels ||= createFleetModelLayer({
+      viewer: state._viewer,
+      display: fleet.display,
+      policy: fleet.policy,
+      resolveAsset: fleet.resolveAsset,
+    });
+  }
+
+  /** Hand an entry's visual back to its icon. */
+  function handBack(entry) {
+    if (!entry.modelOwnsVisual) return;
+    entry.modelOwnsVisual = false;
+    if (entry.marker)
+      entry.marker.show =
+        vehicleInView(entry) &&
+        !entry.heightPending &&
+        entry.surfaceReady !== false;
+  }
+
+  function updateModels() {
+    if (!fleetModels) return;
+    if (!fleetModels.active() || state._vehicles.size === 0) {
+      if (modelItems.size) {
+        fleetModels.frame(new Map(), performance.now());
+        for (const item of modelItems.values()) handBack(item.entry);
+        modelItems = new Map();
+      }
+      return;
+    }
+    const set = fleetModelSet();
+    const next = new Map();
+    for (const entry of state._visible) {
+      if (!entry.marker || !entry.hasRendered) continue;
+      let item = modelItems.get(entry.key);
+      if (!item || item.entry !== entry) {
+        item = { entry, pickId: entry.key, modelOwnsVisual: false };
+      }
+      if (item.mode !== entry.mode) {
+        item.mode = entry.mode;
+        item.spec = transitModelSpec(set, { mode: entry.mode });
+        item.tint =
+          MODE_CESIUM_COLORS[entry.mode] || MODE_CESIUM_COLORS.unknown;
+      }
+      item.position = entry.marker.position;
+      item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
+      item.show = !entry.heightPending && entry.surfaceReady !== false;
+      next.set(entry.key, item);
+    }
+    for (const [key, item] of modelItems)
+      if (next.get(key) !== item) handBack(item.entry);
+    modelItems = next;
+    fleetModels.frame(modelItems, performance.now());
+    for (const item of modelItems.values()) {
+      const entry = item.entry;
+      if (item.modelOwnsVisual) {
+        entry.modelOwnsVisual = true;
+        entry.marker.show = false;
+      } else handBack(entry);
+    }
+    if (fleetModels.settling) governorRequestRender('transit-models');
+  }
+
+  /** Drop every model (layer disabled); `destroy` also removes the collection. */
+  function stopModels(destroy = false) {
+    for (const item of modelItems.values()) item.entry.modelOwnsVisual = false;
+    modelItems = new Map();
+    if (destroy) {
+      fleetModels?.destroy();
+      fleetModels = null;
+    } else fleetModels?.clear();
   }
 
   const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
@@ -556,7 +652,10 @@ export function createRendering({ state, services, parts }) {
         }
       }
       entry.marker.show =
-        visible && !entry.heightPending && entry.surfaceReady !== false;
+        visible &&
+        !entry.heightPending &&
+        entry.surfaceReady !== false &&
+        !entry.modelOwnsVisual;
       visibility.heightPending = !!entry.heightPending;
       visibility.surfaceReady = entry.surfaceReady ?? null;
       schedulePlayback(entry);
@@ -621,5 +720,7 @@ export function createRendering({ state, services, parts }) {
     setStylePreset,
     onPreRender,
     syncRenderHold,
+    startModels,
+    stopModels,
   };
 }
