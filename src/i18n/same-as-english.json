@@ -244,7 +244,12 @@
     "▲ {frp} MW",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "COMMUNITY",
+    "Regional",
+    "OPT-IN",
+    "{minutes} min",
+    "1 min/s"
   ],
   "es": [
     "1 min/s",
@@ -405,6 +410,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
+    "Regional",
+    "{datasets} · {tiles} · {packs}",
     "15–29 min",
     "30–59 min"
   ],
@@ -622,6 +629,13 @@
     "▲ {frp} MW",
     "SATELLITE",
     "Photo © {photographer}",
+    "Photo · {licence}",
+    "PACK",
+    "{count} packs",
+    "Orthophoto",
+    "Oblique",
+    "Type",
+    "{range} NM",
     "15–29 min",
     "30–59 min"
   ],
@@ -827,6 +841,9 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
+    "DATASET",
+    "{count} datasets",
+    "ZOOM",
     "15–29 min",
     "30–59 min"
   ],
@@ -1056,6 +1073,7 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
+    "Regional",
     "15–29 min",
     "30–59 min"
   ],
@@ -1093,7 +1111,8 @@
     "{division}, {country}",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "{datasets} · {tiles} · {packs}"
   ],
   "sv": [
     "STATION",

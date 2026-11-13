@@ -37,6 +37,7 @@ import { acartiaProxy } from './acartia.js';
 import { borderWaitsProxy } from './borderWaits.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { libraryProxy } from './library.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -86,6 +87,7 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    libraryProxy(),
     ghostMapsProxy(),
     shipwrecksProxy(),
     droneAirspaceProxy(),

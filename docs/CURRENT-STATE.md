@@ -384,6 +384,229 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Data Library — October 21, 2026
+
+DATA LAYERS keeps its curated core layers; everything else lives in the Data
+Library, opened from **Browse data library** at the foot of the panel. An entry
+is a manifest in `src/library/entries/` that points at a live upstream its
+provider hosts — a query API, a provider-hosted static file or a tile endpoint.
+Nothing an entry describes is bundled, so a self-hosted instance serves every
+entry without hosting data. Manifests are validated strictly when
+`src/library/catalog.js` loads (unknown fields are errors), so an invalid entry
+fails the unit suite. Authoring guide: [DATA-LIBRARY.md](DATA-LIBRARY.md).
+
+Three kinds ship. A `dataset` (GeoJSON, GeoJSON Lines, CSV with lat/lon
+columns, a JSON record list read from `source.records` with named or guessed
+lat/lon fields, or a paged ArcGIS FeatureServer query) renders through the same
+GeoJSON layer as Datacenters and Dams, with the manifest's label, up to two
+card fields and an optional `rank` field that orders a capped set and feeds the
+layer's level-of-detail priority (0–600, below the named/unnamed gap). A capped
+dataset reads PARTIAL. A dataset with `source.view` is view-bounded,
+for layers too large to load whole (FEMA USA Structures: ~135 million
+footprints): below `view.maxAltitudeM` it queries ArcGIS for what intersects a
+window around the point the camera looks at (half the camera height each way,
+330 m – 5.5 km, clipped to the visible rectangle), one page per view after the
+camera settles, replacing the previous set only when the new one is ready and
+aborting a superseded request; above it the row reads "zoom in to load this
+layer" and nothing is fetched. Footprints are ground-clamped polygons (draped on
+Google 3D tiles too), without outlines. Zoom to layer lands straight above the
+manifest's `view.sample` area at 60 % of the altitude limit. View-bounded
+entries are ArcGIS or GeoParquet, and browser-direct, in this build.
+
+`geoparquet` datasets are read in the browser with `hyparquet` (with `fzstd`
+for ZSTD), imported lazily on first use; only the columns an entry uses are
+decoded, and WKB geometry arrives as GeoJSON. A partitioned set
+(`source.partitions`: an S3 ListObjectsV2 `listUrl` and a `keyBase`, both on the
+source host) must be view-bounded. Its index — each file's GeoParquet footer
+bbox, read with one range request per file — comes from `/api/library/index/<id>`
+(built once per `cacheSeconds` and shared), or is built in the browser and kept
+in `gev:library:index:<id>` on a static build. Footer bboxes can be stretched
+by stray geocodes, so candidates are ranked by how much of each file's bbox
+the view covers, read in parallel batches of four (up to eight per view)
+until a batch has features in view, and each file read once teaches its real
+extent (the box holding 98 % of its points, `gev:library:extent:<id>`), so
+later views skip files that do not cover them. The last four decoded files
+stay in memory. `display.colorBy` colours each feature by a field's value (a
+dotted path such as `categories.0.title` is flattened into the feature's
+`__gevColorKey`): view-bounded layers draw 6 px dots or filled polygons, other
+datasets keep the GeoJSON layer's stems, cards and level of detail with a
+per-feature colour (`featureColor` in `localGeojsonCore.js`). Values sharing a
+`colorBy.labels` label form one legend group (coal, gas and oil are "Fossil");
+values the manifest does not colour draw in `display.color` and count as
+Other. The row legend lists each group with its count (in view, or in the
+loaded set), one item per line as Fire Perimeters' does. Status-like fields
+(GDACS and PortWatch alert levels, NWS severity, bridge condition) use the
+fixed status palette (good #0ca30c, warning #fab219, serious #ec835a,
+critical #d03b3b); categorical ones (fuel, EONET category, building
+occupancy) use at most four hues that pass all-pairs colour-vision checks on
+the dark globe, plus a neutral Other. Tile layers carry a static
+`display.legend` copied from the provider's own scale (GBIF classic.poly,
+JRC occurrence, Macrostrat's ICS period colours). Aerial photo layers (IGN, GSI
+photos, swisstopo SWISSIMAGE) set `display.outline`: their covered countries'
+borders draw as a thin white ground-clamped line, so the imagery's edge is
+plain, with a "Coverage outline" legend item. Borders come from Natural
+Earth's 1:50m admin-0 countries (public domain, fetched live once per page and
+credited); `countries` draws every part (Japan's islands, Liechtenstein beside
+Switzerland), `coverage` only the parts inside `coverage.bbox` (metropolitan
+France). A failed border fetch costs only the
+outline. The same layers set `display.aerial`: they drape above every other
+imagery layer and raise themselves again whenever another drape is added, so a
+basemap or weather overlay switched on later goes underneath. Each is
+`source.bounded` (tiles requested inside `coverage.bbox` only) and names its
+provider's no-imagery fill in `display.noDataColor`, drawn transparent through
+Cesium's colour-to-alpha (max channel distance 0.02): measured fills are
+swisstopo white, IGN's flat ocean blue (#0a3b59) and GSI's ocean grey
+(#343434). Without both, a white fill covered the whole globe. A 4xx tile
+answer counts as "no imagery here", never as a tile error. IGN's overseas
+departments are outside its single bbox and are not shown. The aerial set now holds 60
+entries: 57 imported from the Open Imagery Register (national programmes in
+Belgium (Wallonia), Germany, Estonia, Spain, Poland, Portugal, Australia's
+NSW, and 49 US services: NAIP plus state, county and city programmes) plus
+IGN, GSI and SWISSIMAGE, each with an `imagery`
+block (type, published resolution, true ortho, years flown, refresh) that
+Browse shows as a spec list. Tiles take `xyz` (with `{reverseY}` for TMS) or
+`bbox` templates (`{bbox-epsg-3857}`: WMS GetMap and ArcGIS export, filled
+by Cesium in the browser and by the proxy from z/x/y). Sub-national entries
+draw a `bbox` rectangle outline without fetching the country borders. 35
+entries whose licence the register gives only as "see publisher terms" are
+operator opt-in. Norway comes from Kartverket's open
+services (CC BY 4.0, "© Kartverket"; its zoom 12–20 Geovekst data may be shown
+in live services but not copied): the topographic, greyscale, raster-topo and
+nautical-chart caches (`xyz`), and WMS hillshade, DTM colour relief, sea depths
+(from zoom 11, Kartverket's 16-class depth legend), county and municipality
+boundaries, and the cadastre (from zoom 14). Norge i bilder needs
+authentication and is not included. `mapterhorn-terrain` is the first
+`source.encoding: terrarium` entry: Mapterhorn's global 512 px terrain-RGB
+tiles are decoded per tile in the browser (`src/library/relief.js`) into
+shaded relief with a six-class elevation legend in metres. A `tiles` entry (`{z}/{x}/{y}` template) drapes on the
+active imagery host — the globe, or the Google 3D tileset — and follows map
+stack switches; with no host it shows the existing "choose a globe map"
+guidance, and its row reads DRAPED rather than a count. A `pack` describes an
+existing host-layer source pack (today the opt-in CCTV packs): it is
+informational in Browse, names the host's own switch (`CCTV_NYC_ENABLED=1` and
+so on) and offers no Add. The `provider` kind from the RFC is refused by the
+validator until it ships.
+
+Entries register their layer only when a viewer adds them, after the core
+catalog is sealed: `LayerLifecycle.registerLibraryLayer` accepts only ids in
+the `lib-<entry id>` namespace and only after `finalizeRegistrations`, and
+`unregisterLibraryLayer` destroys them. Library layers never enter
+`LAYER_STATE_REGISTRY` or the core token ledger. The panel groups them under a
+**Library** heading after every core group and rebuilds its rows on a
+`registrations` activity. Add switches the layer on; Remove destroys it.
+A library layer's row carries two icon chips, on or off (the panel shows
+row controls for an off layer only for Data Library rows, whose chips are
+marked `whileOff`): **Zoom to layer**
+(`zoom_in_map`) flies to the extent of the loaded features, or a tiles entry's
+declared coverage, taking the shorter way round the antimeridian and showing the
+whole globe for world-scale sets; **Remove from Data Layers** (`delete`)
+removes the entry. Zoom on a layer that is off switches it on first (a
+dataset only knows its extent once loaded). Zoom runs as an immediate
+navigation (`layer`), so Cockpit
+refuses it with its own message and the current follow owner is released first;
+reduced motion flies instantly. Icon chips (`chipGroup.js` `icon`/`action`) use
+their label as accessible name and tooltip and carry no `aria-pressed`.
+
+This browser's selection persists in `gev:library:v1` (`{ added, on }`), written
+only for explicit (user, voice, tool) changes, like core layer state, so a
+Context session's temporary changes are not remembered. Share links carry the
+switched-on entries as `lib=<t>.<t>` with the permanent two-character tokens in
+`src/library/ledger.json` (append-only; packs take none). A link's entries join
+the viewer's library and, as for core layers, the link alone decides what is
+on. Unknown tokens are skipped. The live hash follows the existing
+initial-restore suppression.
+
+Browser-direct entries are fetched without cookies or a referrer, redirects
+refused, bodies capped while streaming. Proxied entries go through
+`/api/library` (`server/providers/library.js`): `/catalog` reports each entry's
+availability and reason (`operator-opt-in`, `operator-disabled`, `key-missing`)
+without secrets; `/data/<id>` and `/tile/<id>/<z>/<x>/<y>` reach only the
+manifest's fixed upstream (the browser names an id, never a URL), refuse
+redirects and off-manifest hosts, cap dataset bodies at the manifest's
+`maxBytes` (≤ 32 MiB) and tiles at 2 MiB of `image/png|jpeg|webp`, cache per the
+manifest's `cacheSeconds` (60 s – 24 h; at most 512 tiles), serve the last good
+dataset as stale on failure, rate-limit per client, and never return upstream
+text. A keyed entry must be proxied; its key comes from the server environment
+through the key registry and its routes use the strict cross-site gate, while
+keyless routes use the keyless gate so they work behind a reverse proxy.
+Operators opt entries in with `GEV_LIBRARY_ENABLE` and remove them with
+`GEV_LIBRARY_DISABLE`. A static build with no server still serves every
+browser-direct, non-opt-in entry; proxied ones say they need the app's server.
+
+The Browse dialog is a `dialog[data-panel-surface]`: modal, labelled, search
+focused on open, Escape and backdrop dismiss and return focus to Browse, and it
+closes when clean view, recording or Cockpit hides the panels. Its surface is
+frosted glass (a lighter `--glass-bg` than the rails, a 22 px backdrop blur
+clipped to the theme's frame, a barely dimmed backdrop), so the globe shows
+through without the HUD text behind it competing. An added entry that is on
+offers ZOOM, which closes the dialog and flies to it. Above the intro, four
+stat tiles summarise the library: Datasets (every entry, broken down by kind),
+Themes (how many distinct themes the entries cover), Added (and how many are on
+the map), and Map features (features loaded by dataset layers that are on;
+tiles have no count).
+They refresh with the dialog and once a second while it is open, so counts
+land as datasets finish loading. The line beside **REMOVE ALL** answers the
+filter ("Showing 2 of 8"). **REMOVE ALL** removes every added entry; its first
+press arms a confirm for four seconds. It lists
+addable entries first, then entries this instance would need to switch on, then
+packs, with kind, status, opt-in or key badges, provider, coverage and a licence
+link, and filters by text, theme and "only what this instance serves".
+Archived entries are hidden unless added. An entry's attribution and licence are
+registered in the Data attribution popover while it is in use.
+
+Seeds: NASA EONET open events (GeoJSON, browser-direct), EIA US power plants
+≥ 100 MW (ArcGIS, browser-direct, ranked by capacity), Smithsonian GVP Holocene
+volcanoes (WFS GeoJSON, proxied — the upstream sends no CORS headers), NASA
+Black Marble 2016 night lights (tiles), and the NYC,
+Lithuania and FL511 CCTV packs. Added from the Ask dataset registry (its live,
+mappable sources that are not core layers): the WRI Global Power Plant Database
+(provider-hosted CSV, the 10,000 largest of ~35,000 by capacity, so it reads
+PARTIAL), NWS active alerts that carry their own polygon (zone-wide alerts have
+no geometry and are dropped), NOAA CO-OPS tide stations (JSON records), and IMF
+PortWatch chokepoints and port disruptions (ArcGIS, operator opt-in until the
+reuse terms are confirmed, as Ask holds them in hosted mode). FEMA/ORNL USA
+Structures (CC BY 4.0) is the first view-bounded entry; its service refuses a
+query page smaller than its own 2,000 records, so the probe asks for a full
+page. Addresscloud's EPC ratings for England and Wales (Source Cooperative,
+read from `s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop`, 344
+local-authority GeoParquet files, OGL v3.0) are the first partitioned
+GeoParquet entry, coloured by band A–G with the official EPC colours. From an
+open/freemium registry review (commercial sources excluded): GDACS disaster
+alerts; the National Bridge Inventory (view-bounded, coloured Good/Fair/Poor);
+EPA Superfund sites and Toxics Release Inventory facilities (view-bounded); and
+tile overlays for Macrostrat geology, GBIF biodiversity density, USGS
+topographic and hydrography maps, IGN (France) aerial photos, BKG
+TopPlusOpen, GSI Japan map and photos and JRC surface water occurrence.
+Entries whose licence or provider pages no longer resolve (404 or unreachable
+host, checked 2026-11-12) were removed: OpenSeaMap seamarks, EMODnet
+bathymetry, SEDAC GPW population density, PDOK, basemap.at, Geneva SITG,
+ICGC Catalunya, Luxembourg, Vlaanderen, Minnesota and Bangor aerial photos. `npm run library:check` validates manifests,
+the ledger (append-only with `--base-ref`, run in CI on pull requests) and the
+generated DATA_SOURCES.md section; `npm run library:probe` hits every upstream
+once; `npm run qa:data-library` is the browser gate (fixture-backed).
+
+Shares: the compact `/share/<code>` link carries the switched-on entries in
+field 29 (docs/SHARE-LINK-FORMAT.md), so Copy Link keeps them, and a share
+opened later in the same tab (pasted address, Back/Forward) restores them too.
+Any share decides what is on, as for core layers: one with no library entry
+on switches the recipient's stored ones off and leaves them listed. A tile
+entry whose coverage needs more than 256 tiles at its minimum zoom (Norway's
+cadastre from z14, sea depths from z11) is hidden below that scale through
+Cesium's `minimumTerrainLevel`, so zoomed out it requests nothing. EPC
+partitions learn two extents (`gev:library:extent:v2:`): every point's box
+rules a partition out, the 98 % box only ranks it, so homes at a partition's
+edge are found on later visits; the v1 trimmed-only key is dropped. A
+partition index whose footers keep failing after two retries is
+`complete: false`: neither the server nor the browser keeps it as whole, a
+complete earlier index is served instead, and it is rebuilt after five
+minutes. A view that leaves partitions touching it unread is PARTIAL. Listing
+pages and footer reads are size-capped and ranges are validated. The Browse dialog is a Vue view (src/ui/views/panels/DataLibraryDialog.vue
+and DataLibraryCard.vue, teleported to the body from LayerPanelsView) over the
+`gev-data-library` Pinia store; src/ui/libraryBrowser.js is its framework-free
+owner (open state, filters, the rows they show, Remove all) and the text
+helpers the view renders, so every label follows the locale. Only the modal
+open/close and focus moves are imperative.
+
 ## Utilities panel — October 29, 2026
 
 UTILITIES is its own left-side panel, between Data Layers and Scenes, with
@@ -1483,7 +1706,7 @@ Applications supply the existing floor/snap, geoid, picking, sprite, camera,
 trail, focus, readout, context, aircraft presentation and render services.
 The factory never constructs a second application registry. Configure a source
 before initialization; replacing it while initialized is rejected. Model loads
-use the supplied asset resolver, including the preload path. Enrichment receives
+use the supplied asset resolver, including the up-front fleet set load. Enrichment receives
 an abort signal and cannot update a later lifecycle after destruction. Existing
 camera, terrain floor, trail, selection and measured model-size policies remain.
 
@@ -2001,7 +2224,9 @@ Frame loading, calibration editing and status display have separate modules;
 providers, camera placement and navigation policy retain their existing owners.
 Changing cameras invalidates old image callbacks and cancels an unfinished
 calibration edit. Failed refreshes preserve settled pixels for the same camera,
-while a newly selected camera never shows the prior camera's image. Disposal
+while a newly selected camera never shows the prior camera's image. A frame is
+shown without a fade once it is decoded (or after one second if its decode never
+settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
 ## UI disposal
@@ -2195,8 +2420,9 @@ is validated against Cesium 1.138.0 and must be revalidated on upgrades.
 
 `scripts/qa-anime-sky.mjs` checks asset readiness, visible Normal sky and
 Anime band coverage against a Vite dev server.
-`scripts/qa-sky-model-lighting.mjs` compares a lit `airplane.glb` against
-black and white environment maps in isolated scenes.
+`scripts/qa-sky-model-lighting.mjs` compares a lit fleet airliner
+(`public/models/fleet/aircraft/a320.glb`) against black and white environment
+maps in isolated scenes.
 
 ## Model atmosphere on Apple Metal
 
@@ -2325,8 +2551,13 @@ Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4173 node scripts/qa-segmented
 
 `ui/input` supplies the bubbling application shortcut listener and generated
 shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-control
-typing and Escape behavior retain their existing mappings. Capture-phase
-surfaces continue to arbitrate their own keyboard events first.
+typing and Escape behavior retain their existing mappings. A shortcut key held
+with Cmd, Ctrl or Alt runs no shortcut, so the browser's own chord (Cmd+C to
+copy, Cmd+F to find, Cmd+1 to switch tab) does not also toggle CCTV, the layers
+panel or a style; Shift does not count, and Escape dismisses search either way.
+The Q/W/E/R/T keys of an expanded city's points of interest follow the same
+rule.
+Capture-phase surfaces continue to arbitrate their own keyboard events first.
 
 The UI facade retains shader values, share-restore authority, render requests,
 search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
@@ -2971,6 +3202,15 @@ stays in view or tracked; an answer, found or not, and a permanent refusal
 stay final for the session. A route belongs to the callsign it was looked up
 for, so a callsign change drops the old route. See `DATA_SOURCES.md`.
 
+A selected vessel gets a photo the same way. The browser asks Open Vessel
+Photos for it by MMSI (`fetchOpenVesselPhoto` in
+`src/sources/live/standalone.js`, read by `src/data/openVesselPhoto.js`), once
+per MMSI (`src/layers/vessels/photos.js`), and the CONTACTS view shows it under
+the vessel's name and MMSI ("NAME · MMSI 366999709") with the photographer,
+the photo's open licence and a link to the vessel's page. A vessel without an
+MMSI is never looked up; a miss stays final for the session, and a failed
+lookup is asked again after five minutes.
+
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
 plugins and shared request helpers. Importing it starts no sockets or timers.
 The existing aircraft normalizer is separately available through the portable
@@ -3367,20 +3607,22 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   24.09 m aft (70 % of the model's rendered envelope, so inside it), 2.22 m
 >   below centre (6 %), and 2e-9 m off the centreline.
 > - **The tracked trail attaches to REAL HULL, aft and below (2026-08-23):**
->   `MODEL_TRAIL_ANCHOR_NATIVE` (`src/data/modelVisualAnchor.js`) holds, per GLB
->   and in RAW glTF coordinates (see the transform-chain entry below), the point
->   of the hull's CENTRELINE PROFILE (its y = 0 slice) closest to the aft-belly
->   AABB corner. It is NOT the corner: a bounding-box corner is empty
->   space, 4.80 m off the nearest triangle on `airplane.glb` and 6.14 m on
->   `jet.glb`, so the trail ended in mid air beside the aircraft. The head segment
+>   `FLEET_TRAIL_ANCHORS` (`src/data/fleetTrailAnchors.js`, generated by
+>   `scripts/measure-fleet-trail-anchors.mjs`) holds, per fleet aircraft and
+>   helicopter model and in RAW glTF coordinates (see the transform-chain entry
+>   below), the point of the hull's CENTRELINE PROFILE (its centreline slice)
+>   closest to the aft-belly AABB corner. It is NOT the corner: a bounding-box
+>   corner is empty space (4.80 m off the nearest triangle on the airliner
+>   asset this was first measured on, 6.14 m on the jet), so the trail ended in
+>   mid air beside the aircraft. The head segment
 >   is drawn from a point behind the aircraft to this anchor, so the anchor must
 >   stay aft (83–96 % of each aft extreme) or the segment enters at the tail and
->   stops inside the fuselage. `modelScale.test.mjs` reads the POSITION BUFFERS —
+>   stops inside the fuselage. `fleetModels.test.mjs` reads the POSITION BUFFERS —
 >   real vertices and triangles, because accessor min/max cannot tell a corner
 >   from a surface — and re-derives on-hull, aft, lowest-at-its-station,
 >   on-centreline, and the construction itself. Re-measure, never re-guess.
 > - **The trail anchor rides CESIUM'S transform chain, not a hand-rolled one
->   (2026-08-23 regression fix):** `MODEL_TRAIL_ANCHOR_NATIVE` stores RAW
+>   (2026-08-23 regression fix):** `FLEET_TRAIL_ANCHORS` stores RAW
 >   glTF coordinates and `modelAnchorWorld()` assembles
 >   `modelMatrix × components.transform × axisCorrection` — the same chain
 >   `ModelSceneGraph` renders with, built from Cesium's own exported
@@ -3415,7 +3657,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   ENVELOPE, and between them the drawn start slides along the segment so the
 >   visible length grows CONTINUOUSLY from zero. Three earlier cuts are recorded
 >   because their shape matters: testing segment LENGTH against the radius HID
->   real trail (58 m aft of `airplane.glb`'s 34.41 m envelope gives a 33.98 m
+>   real trail (58 m aft of an airliner's 34.41 m envelope gives a 33.98 m
 >   segment, suppressed, though ~23.6 m of it is open air); CLIPPING at the
 >   envelope and keeping only what lay outside stopped a moving trail visibly
 >   SHORT of the aircraft, since a bounding sphere encloses a lot of empty space
@@ -4591,8 +4833,9 @@ activeCameraCardEnabled: true })` may publish it through the retained
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`
->   across the cockpit. The grounded `airplane.glb` belly offset is calibrated
->   to the current asset's measured Y-up bounds (`0.063` native units).
+>   across the cockpit. A grounded aircraft stands its fleet model's scaled
+>   clearance (the catalog's `clearance`, measured below the model's origin)
+>   above the ground.
 >   Contact Previous/Next and Live Signals aircraft handoffs now
 >   re-seed the first-person camera anchor at the selected flight immediately;
 >   bounded feed-correction smoothing remains scoped to the same aircraft.
@@ -4841,6 +5084,10 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   views re-render, code that published translated text words it again through
   `onLocaleChange`, and `<html lang>`/`dir` and the page's `data-i18n` markup
   follow. Nothing is lost; a toast already on screen keeps its words.
+  An application that offers the language elsewhere (a menu) uses the
+  `./i18n` entry (`src/i18n/page.js`): `startPageLocale` at boot,
+  `followPageLocale` for the markup and `switchLocale`, which does what a
+  picker choice does, with `localePicker: false`.
 - **Right to left.** Arabic (`ar`) and Hebrew (`he`) are in `RTL_LOCALES`, so
   `<html dir="rtl">`: the title, style indicator, both panel stacks and their
   icon rails swap sides through logical properties (`inset-inline-*`,
@@ -6345,6 +6592,10 @@ silently demoting every later lookup for the session.
   far cap, retargeting the existing video/canvas texture pipeline. Stills are drawn at their source aspect, centered on the placeholder dark (`#01070c`), instead of being stretched to the 16:9 canvas. Manual calibration only —
   auto-calibration and the drape mesh pipeline are deleted. A one-shot activation obstruction
   probe (`pickFromRay` on camera activation, clamping the plane short of the first hit) remains;
+  a hit at or beyond the camera's range counts as a miss, and on a globe map the plane also clamps
+  short of the globe's terrain along the axis (flat ground at the mount's ground when terrain is
+  missed or met beyond the range), whichever is nearer, so it never stands at the full range there
+  (about a kilometre wide and hundreds of metres up);
   ground placement is superseded by the shared-floor v3 behavior below. Calibration persists to
   `godsEyeView.cctv.calibration.v2` (wiped clean, no v1 import); a panel-only CAL badge shows
   `CALIBRATED`/`CURATED`/`RAW PRIOR` (no in-world tint). Panel is titled "CCTV" (not "CCTV
@@ -7046,8 +7297,9 @@ pins and share links already supply complete boxes.
   normal four-samples-per-250-ms budget. Retry timestamps more than the maximum
   30-second backoff ahead of the current clock are ignored. A smaller rollback
   can retain a bounded retry delay of up to 30 seconds.
-- Commercial and military aircraft use the same high-level FLEET model regime: 2D billboards when zoomed out, optional glTF models when closer, controlled by the DISPLAY rail `3D` toggle and `Proximity` / `All` modes. Since 2026-08-16 (Hangar fleet) models are PER-CLASS: real CC-BY GLBs for light/bizjet/turboprop/widebody/helicopter/uav (`CLASS_MODEL_REAL` in `src/data/aircraftClass.js` — meters-baked, scale 1, per-model belly/radius; provenance in `public/models/README.md`), the shared `airplane.glb` for the remaining civilian classes, and the military layer maps weight classes (real GLBs / 747 heavies / `jet.glb` fastjets, per-model heading offsets, flat amber or emergency red). Textured civilians carry a HEAVY tint, not a light one: `MODEL_COLOR_BLEND_AMOUNT` is `0.94` in BOTH layers under Cesium's `ColorBlendMode.MIX`, so the class colour supplies 94% of the surface and the asset's own texture ~6%. The visual direction is clean light silhouettes with only a weak diffuse contribution from the approved textures, so liveries deliberately do NOT read. IR boost raises the blend to a full `1.0`. Under NVG/FLIR (map preset or Cockpit vision) models render unlit flat-white at full alpha and scene fog is disabled (fog otherwise blacks out distant models with the globe hidden); state restores on exit.
-- **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). With the class colour supplying 94% of the surface, the models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; the two preload calls only warm the glTF cache and are never drawn.
+- Commercial and military aircraft use the same high-level FLEET model regime: 2D billboards when zoomed out, optional glTF models when closer, controlled by the DISPLAY rail `3D` toggle and `Proximity` / `All` modes. Every model is one of the project's procedural fleet models (`public/models/fleet/`, MIT, 121 GLBs, about 2 MB in all; `public/models/README.md`), chosen per aircraft by `aircraftModelSpec` (`src/data/fleetModels.js`): its ICAO type's entry in `types.json`, else the model of its `classifyAircraft` class for a type the map lacks, else its ADS-B emitter category's, else the default airliner. It is drawn LIFE SIZE: the type's published length over the model's built length (`src/layers/flights/modelSpec.js`, shared by Flights, Military Flights and Local ADS-B), and a grounded aircraft stands the model's scaled clearance above the ground. `classifyAircraft` still picks the 2D icons. The whole set loads once, up front, when a layer that draws it starts (`loadFleetModelSet`, which logs `[Fleet] N/121 models (X MB) loaded in N ms`); models are built from those bytes, never fetched mid-session, and an aircraft stays its billboard until the set has loaded. Textured civilians carry a HEAVY tint, not a light one: `MODEL_COLOR_BLEND_AMOUNT` is `0.94` in BOTH layers under Cesium's `ColorBlendMode.MIX`, so the class colour supplies 94% of the surface and the model's own vertex colour ~6%; military models are flat amber, or emergency red. IR boost raises the blend to a full `1.0`. Under NVG/FLIR (map preset or Cockpit vision) models render unlit flat-white at full alpha and scene fog is disabled (fog otherwise blacks out distant models with the globe hidden); state restores on exit.
+- Vessels, Transit and Rail draw fleet models under the same DISPLAY rail `3D` toggle, at the same altitude ceiling, caps and add/keep radii as the aircraft (`FLEET_MODEL_POLICY`, `src/layers/flights/policy.js`; `createFleetModelLayer`, `src/data/fleetModelInstances.js`). A vessel's model follows its AIS ship type and is drawn at its reported length and beam (AIS static dimensions A+B and C+D, now carried on vessel rows as `length` and `beam`), standing at the sea surface, heading by true heading then course. A transit vehicle's model follows its layer mode (bus, tram, subway, rail or ferry; a vehicle of `unknown` mode keeps its icon), a train's its rail category and mode (rail, metro or tram). Neither the transit nor the rail sources carry a GTFS `route_type` or a finer mode (monorail, gondola, funicular, cable car), so the set's models for those and their `transit.elevation` lifts are not reached by any live source today. Both stand on the road or rail top they are drawn on, without the 1.5 m `GROUND_FLOOR_LIFT_M` their icons carry, and are painted in their mode or category colour where the model's `_TINT` attribute marks it. A vessel model is clipped at its waterline (one clipping plane per model, at the model origin's horizontal plane), so its hull below the water never shows through a plain globe, which Cesium does not depth-test models against. Under the NVG/FLIR styles (the Flights `irBoost` parameter) these models render unlit flat white, as aircraft models do. Each vehicle's icon stays the visual until its model is loaded, ready and placed; a model is picked as its icon is, and a vehicle drawn as its model keeps its selection card and its place in the detection overlay.
+- **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). With the class colour supplying 94% of the surface, the models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; every model is built from the fleet set loaded up front, so there is no separate preload.
 - The DISPLAY-rail `3D` toggle is the user-facing activation path for both aircraft layers. Their small approved GLBs build their render resources without Cesium's frame-spread job queue, preventing continuous Photorealistic 3D Tiles streaming from starving model readiness; model caps, tracking, camera, and fallback billboards are unchanged.
 - **The `3D` toggle DEFAULTS ON in `proximity` on a first run.** Proximity is itself the budget — models appear only below `MODEL_ALT_CEIL_M` and only for the nearest `MODEL_MAX` in view — so the default costs nothing at globe scale, and `all` remains a deliberate opt-in. A fresh boot runs NO layer-state restoration (`LayerStateCoordinator.start()` returns early with neither a share payload nor stored state), so four independent initializers decide what a first-run operator sees and must agree: `booleanOption('models3d', 'e', true)` in `src/data/layerState.js`, `_models3dEnabled = true` in BOTH flight layers, `this._models3dEnabled = true` in `src/ui/aircraftDisplay.js`, and the `active` / `visible` classes on `#models3d-toggle` / `#models3d-mode-row` in `index.html`. All four are pinned together in `src/data/layerState.test.mjs`. Explicit state still wins: because the codec omits default-valued options, `models3d: false` is now what travels in a link (`lo=…f.e.0`) and restores OFF at both aircraft layers. **Consequence for returning users:** a stored `gev:layer-state:v2` blob is a FULL options snapshot, so a session that wrote one before this change carries `models3d:false` and keeps 3D off until the operator flips it (or clears the key) — the durable snapshot is treated as the recipient's own state, by design.
 - **Consequence of the flip on the recorded tracked/fleet inversion:** the 150–800 km band where surrounding contacts draw as models while the SELECTED one is still a glyph is now what an operator sees WITHOUT arming anything. The inversion itself is unchanged and still deliberate (see `src/data/trackedModelRegime.js`); only its reachability changed.

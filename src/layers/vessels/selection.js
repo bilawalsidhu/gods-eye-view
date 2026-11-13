@@ -186,6 +186,7 @@ export function createSelection({
     // click, not up to VISIBILITY_UPDATE_MS later.
     components.rendering.updateVisibility(true);
     components.cards.updateSelectedVesselHud(record);
+    components.photos.requestVesselPhoto(record);
     if (registerSelectedContext(record)) {
       selectEntityContext(record);
     }
