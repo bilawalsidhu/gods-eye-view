@@ -50,6 +50,13 @@ export const MAX_TARGET_HEIGHT_M = 25_000;
 const STEP_ANIMATION_MS = 220;
 const FIRST_REPEAT_MS = 380;
 const REPEAT_MS = 130;
+/**
+ * How long the camera must stay still after a move before the tilt is read
+ * exactly. The exact read picks the globe at the screen centre, which can read
+ * the depth buffer and force a frame, so it waits out the arrival work other
+ * camera observers do right after `moveEnd`.
+ */
+export const TILT_IDLE_MS = 1500;
 const mounted = new WeakMap();
 
 const REPEATING = new Set([
@@ -547,14 +554,16 @@ export function mountNavControl({
     sliderEnd,
   });
   subscribe(viewer.scene.preRender, refreshHeading);
-  // A target pick may synchronously read the depth buffer. Let other moveEnd
-  // observers run first, and coalesce repeated camera events into one read.
+  // The exact tilt costs a target pick, which may read the depth buffer. Do not
+  // spend it inside `moveEnd`, nor in the frames that follow while other
+  // observers re-aim: wait until the camera has been still for TILT_IDLE_MS,
+  // and restart the wait on every further camera move.
   subscribe(camera.moveEnd, () => {
-    if (deferredTilt !== null) return;
+    if (deferredTilt !== null) timers.clearTimeout(deferredTilt);
     deferredTilt = timers.setTimeout(() => {
       deferredTilt = null;
       refreshTilt();
-    }, 0);
+    }, TILT_IDLE_MS);
   });
   subscribe(viewer.trackedEntityChanged, () => {
     animator.cancel();

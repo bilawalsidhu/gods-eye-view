@@ -242,7 +242,7 @@ a feature supplying only its accent.
    `UiButton`s and the tilt a `UiSlider`; presses, compass-ring drags, keys
    and slider changes go back through the store, and the owner keeps the
    camera subscriptions, the easing, the press-and-hold repeat and the tilt
-   read it defers past `moveEnd`), the recording safe frame (the scene chrome renders
+   read it defers until the camera is still), the recording safe frame (the scene chrome renders
    the frame `RecordingControls` publishes to the `gev-recording` store),
    the Scene actions panel (`SceneInteractions`
    teleports what the scene interactions owner publishes to the

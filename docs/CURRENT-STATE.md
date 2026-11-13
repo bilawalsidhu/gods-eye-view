@@ -2630,9 +2630,11 @@ up/down buttons and a top-down button, zoom in/out with press-and-hold repeat,
 and a four-way look-around pad. Steps ease over about 220 ms; a step that is
 still easing stops as soon as anything else moves the camera (a drag or wheel
 on the globe, a flight) or the followed entity changes. The tilt shown is read
-from the camera's target one task after a camera move ends, never inside the
-`moveEnd` event, so the depth read cannot delay other `moveEnd` observers
-(the arrival timing in `npm run test:track`).
+from the camera's target once the camera has been still for 1.5 s after a
+move, never inside `moveEnd` or the frames after it, so the depth read cannot
+delay the arrival work other `moveEnd` observers do (the 500 ms arrival check
+in `npm run test:track`); a button, ring or slider gesture reads it as soon as
+it ends.
 
 The control orbits the camera around the point under the centre of the view
 through the same `readCameraTargetFrame` / `setCameraTargetFrame` helpers as
