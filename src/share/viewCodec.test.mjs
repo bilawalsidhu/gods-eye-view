@@ -58,6 +58,7 @@ import {
   followOffsetToEnu,
   layerTokenFromNumber,
   layerTokenNumber,
+  normalizeLibraryTokens,
   normalizeShareViewState,
 } from './viewCodec.js';
 
@@ -507,6 +508,7 @@ test('the field registry is well formed and permanent', () => {
       [26, 'scopeTerminusPct', null],
       [27, 'styleParams', BY_STYLE],
       [28, 'worldTime', null],
+      [29, 'library', null],
     ],
   );
   assert.deepEqual(
@@ -1570,4 +1572,17 @@ test('the follow offset for a camera is the inverse of followCameraFor', () => {
     followOffsetFor(fix, { lat: 53.9, lon: 4.0512, alt: 1000 }),
     null,
   );
+});
+
+test('Data Library tokens round-trip and malformed ones are skipped', () => {
+  const state = { lat: 1, lon: 2, library: ['00', '1z', '0a'] };
+  const decoded = decodeShareView(encodeShareView(state));
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(decoded.state.library, ['00', '1z', '0a']);
+  // None on: no field, and the decoder reads no tokens.
+  const none = decodeShareView(encodeShareView({ lat: 1, lon: 2 }));
+  assert.equal(none.state.library, null);
+  assert.deepEqual(normalizeLibraryTokens('01.!!.01.zz'), ['01', 'zz']);
+  assert.equal(normalizeLibraryTokens(null), null);
+  assert.deepEqual(normalizeLibraryTokens('x'.repeat(500)), []);
 });

@@ -261,6 +261,21 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * Distance along a pitched-down view axis to flat ground at the mount's own
+   * ground height, or null for an axis at or above the horizon.
+   * @param {number} mountHeightM Mount height above its ground.
+   * @param {number} pitchDeg Axis pitch (negative looks down).
+   * @returns {number|null}
+   */
+
+  function flatGroundAxisDistance(mountHeightM, pitchDeg) {
+    const height = Number(mountHeightM);
+    const pitch = Number(pitchDeg);
+    if (!Number.isFinite(height) || height <= 0 || !(pitch < 0)) return null;
+    return height / Math.sin(Cesium.Math.toRadians(Math.min(89, -pitch)));
+  }
+
+  /**
    * Converts a computeFrustumGeometry result into the Cartesian3 positions the
    * entities consume. Fresh objects per call (geometry updates are rare —
    * slider/save/activation — and entities must never share scratch objects).
@@ -616,10 +631,14 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * range, clamp the plane's effective range just short of the first hit so the
    * "big and dramatic" true end cap never clips into downtown buildings.
    *
-   * This is the ONLY raycast in the whole CCTV subsystem — once per activation,
-   * never per-frame (the zero-raycast invariant applies to steady state). The
-   * per-camera range slider overrides the clamp: a user-set rangeScale skips the
-   * probe entirely. Probe failure/miss keeps the unclamped range.
+   * On a globe map it also picks the globe's terrain along the same axis
+   * (flat ground at the mount's ground when terrain is missed or met beyond
+   * the range) and clamps at the nearer end. These are the ONLY raycasts in the
+   * whole CCTV subsystem — once per activation, never per-frame (the
+   * zero-raycast invariant applies to steady state). The per-camera range
+   * slider overrides the clamp: a user-set rangeScale skips the probe
+   * entirely. A miss on the photoreal stack or a probe failure keeps the
+   * unclamped range.
    * @param {Object} record - Camera record being activated.
    */
 
@@ -646,9 +665,33 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       for (const runtime of layerState._projectionEntities) {
         if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
       }
-      const hit = scene.pickFromRay(new Cesium.Ray(mountPos, dir), exclude);
-      if (!hit?.position) return;
-      const dist = Cesium.Cartesian3.distance(mountPos, hit.position);
+      const ray = new Cesium.Ray(mountPos, dir);
+      // pickFromRay hits only primitives (the photoreal tiles), never the
+      // globe: on a globe map the ray runs on through the Earth and can meet
+      // a primitive thousands of kilometres away, which blocks nothing. Such
+      // a hit or none left the plane at the full nominal range, about a
+      // kilometre wide and hundreds of metres up. A hit at or beyond the range
+      // counts as none. On a globe map the axis also ends on the globe's
+      // terrain, the nearer of that and any primitive hit (a primitive behind
+      // a hill the axis has already entered blocks nothing). Terrain still
+      // loading at a coarse level can be missed or met beyond the range; then
+      // flat ground at the mount's own ground stands in for it.
+      const inRange = (distance) =>
+        Number.isFinite(distance) && distance > 0 && distance < camera.rangeM;
+      const hit = scene.pickFromRay(ray, exclude)?.position;
+      const hitDist = hit ? Cesium.Cartesian3.distance(mountPos, hit) : NaN;
+      const distances = inRange(hitDist) ? [hitDist] : [];
+      if (scene.globe?.show) {
+        const terrain = scene.globe.pick(ray, scene);
+        const terrainDist = terrain
+          ? Cesium.Cartesian3.distance(mountPos, terrain)
+          : NaN;
+        const ground = inRange(terrainDist)
+          ? terrainDist
+          : flatGroundAxisDistance(camera.mountHeightM, camera.pitchDeg);
+        if (Number.isFinite(ground) && ground > 0) distances.push(ground);
+      }
+      const dist = distances.length ? Math.min(...distances) : null;
       record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
     } catch {
       // probe failure → keep the unclamped range
@@ -831,6 +874,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     hasShippedFootprint,
     footprintPose,
     activationProbeClampRange,
+    flatGroundAxisDistance,
     frustumCartesians,
     frustumFrameEcef,
     applyFrustumGeometry,

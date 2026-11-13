@@ -4,7 +4,7 @@ Catalog: `src/i18n/locales/zh-Hant.json`. General rules: [TRANSLATORS.md](../TRA
 
 `zh-Hant` is the Simplified Chinese catalog (`zh-CN`, credited to abiyeenzo, #914, and EDIT-Aeterna, #979) written in Traditional characters with OpenCC character conversion. Wording and terminology are the same as in `zh-CN`: change a term in [zh-CN.md](./zh-CN.md) and the `zh-CN` catalog first, then convert. Only the script differs.
 
-After `s2tw` conversion, fix the characters OpenCC picks wrongly: 年曆史 → 年歷史, 下遊 → 下游, 並道 → 併道, 發佈 → 發布, 公佈 → 公布.
+After `s2tw` conversion, fix the characters OpenCC picks wrongly: 年曆史 → 年歷史, 下遊 → 下游, 並道 → 併道, 發佈 → 發布, 公佈 → 公布, 控制檯 → 控制台, and 周 → 週 where it means a week (1 週/秒).
 
 ## Style
 

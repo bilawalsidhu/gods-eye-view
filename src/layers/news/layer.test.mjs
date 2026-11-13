@@ -46,6 +46,7 @@ function fixture(
     centre = () => ({ lat: 49, lon: 36 }),
     credits = [],
     now = () => NOW,
+    pictureCards,
   } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
@@ -118,6 +119,7 @@ function fixture(
       credits.push(credit.key);
       return true;
     },
+    ...(pictureCards ? { pictureCards } : {}),
   });
   // The context store announces selections on `window`, which Node lacks.
   const originalWindow = globalThis.window;
@@ -224,6 +226,113 @@ test('the severity floor changes what is shown, not what is read', async (t) => 
   assert.deepEqual(
     layer.getRowControls().feed.items.map((item) => item.id),
     ['major', 'minor', 'far'],
+  );
+});
+
+test('a host that draws the picture cards is handed one card per pictured event on the map, most severe first', async (t) => {
+  const picture = (url, extra = {}) => ({
+    size: 1,
+    lastAt: '2026-10-28T09:00:00.000Z',
+    sides: [],
+    image: { url, publisher: 'Example', ...extra },
+  });
+  const reports = [
+    report('single', {
+      severity: 1,
+      event: picture('https://example.com/single.jpg', {
+        video: 'https://example.com/single.mp4',
+      }),
+    }),
+    report('major', {
+      severity: 3,
+      event: {
+        ...picture('https://example.com/major.jpg'),
+        id: 'event-major',
+        size: 3,
+      },
+    }),
+    // Another report of the same event: its picture stands once.
+    report('repeat', {
+      severity: 2,
+      event: {
+        ...picture('https://example.com/major.jpg'),
+        id: 'event-major',
+        size: 3,
+      },
+    }),
+    report('bare', { severity: 2 }),
+  ];
+  const handed = [];
+  const { layer, entries } = fixture(t, {
+    height: 500_000,
+    source: { getFeed: async () => ({ reports, nextBefore: null }) },
+    pictureCards: (cards, state) => handed.push({ cards, ...state }),
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { minSeverity: 0 } });
+  const { cards, selectedId } = handed.at(-1);
+  assert.equal(selectedId, null);
+  // A single source is enough; a report without a picture has none.
+  assert.deepEqual(
+    cards.map((card) => card.id),
+    ['major', 'single'],
+  );
+  assert.equal(cards[1].image, 'https://example.com/single.jpg');
+  assert.equal(cards[1].video, 'https://example.com/single.mp4');
+  assert.equal(cards[0].video, null);
+  assert.equal(cards[0].credit, 'Example');
+  assert.ok(
+    Math.abs(cards[0].lat - 50) < 0.5 && Math.abs(cards[0].lon - 36) < 0.5,
+  );
+  // The layer paints none of its own.
+  assert.ok(
+    entries.flat().every((entry) => !entry.id.startsWith('event-card:')),
+  );
+  // The selected report is named, pictured or not.
+  layer.setParams({ reportId: 'bare' });
+  assert.equal(handed.at(-1).selectedId, 'bare');
+  layer.disable();
+  assert.deepEqual(handed.at(-1), { cards: [], selectedId: null });
+});
+
+test("a host's picture cards stay at every height, beacons or markers", async (t) => {
+  const reports = [
+    report('major', {
+      severity: 3,
+      event: {
+        size: 1,
+        lastAt: '2026-10-28T09:00:00.000Z',
+        sides: [],
+        image: { url: 'https://example.com/major.jpg', publisher: 'Example' },
+      },
+    }),
+  ];
+  const handed = [];
+  const { layer } = fixture(t, {
+    // The whole globe: the hotspot stands as one beacon, its reports unmarked.
+    height: 20_000_000,
+    source: { getFeed: async () => ({ reports, nextBefore: null }) },
+    pictureCards: (cards) => handed.push(cards),
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { minSeverity: 0 } });
+  assert.deepEqual(
+    handed.at(-1).map((card) => card.id),
+    ['major'],
+  );
+});
+
+test('picture cards must be drawn by a function', () => {
+  assert.throws(
+    () =>
+      createNewsLayer({
+        source: { getHotspots() {}, getFeed() {} },
+        overlayHost: {},
+        pictureCards: 'yes',
+      }),
+    TypeError,
   );
 });
 

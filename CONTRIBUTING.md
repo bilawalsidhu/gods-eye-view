@@ -129,6 +129,7 @@ prints anything; never fix that by renaming or deleting PR A's published token.
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Follow the [CCTV integration workflow](docs/CCTV_INTEGRATION.md) for source review, provider registration, proxy security, tests, and attribution. The proxy only fetches server-registered URLs — never client-supplied ones; see [SECURITY.md](SECURITY.md).
+- **📚 Add a Data Library entry.** A regional or niche source that is not a core layer belongs in the Data Library: one JSON manifest pointing at a live API, provider-hosted file or tile endpoint, with its licence and attribution, and no JavaScript. See [docs/DATA-LIBRARY.md](docs/DATA-LIBRARY.md). Library entries use their own share-token ledger, not the layer tokens below.
 - **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template, and see [Adding a new layer](#adding-a-new-layer) for what the PR needs.
 - **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
@@ -228,7 +229,7 @@ ownership and adoption process.
 1. Branch off `main`.
 2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` — see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
-4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
+4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution (for a Data Library entry, `npm run library:docs` writes its row). **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
 6. If you add a new layer, fill in the new-layer section of the PR template. See [Adding a new layer](#adding-a-new-layer).
 

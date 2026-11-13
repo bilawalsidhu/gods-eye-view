@@ -1,0 +1,49 @@
+{
+  "id": "swisstopo-swissimage",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Switzerland aerial photos (SWISSIMAGE 10 cm)",
+  "provider": "swisstopo",
+  "description": "swisstopo's orthophoto mosaic of Switzerland and Liechtenstein: 10 cm in the lowlands and main Alpine valleys, 25 cm over the Alps, renewed every three years.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["CH", "LI"],
+    "bbox": [5.9, 45.8, 10.5, 47.9]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 7,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "countries",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "10 cm (plains) / 25 cm (Alps)",
+    "resolutionM": 0.1,
+    "trueOrtho": false,
+    "vintage": "2021–present",
+    "updateCycle": "3-year rolling refresh",
+    "orthoQuality": "±0.15 m (1σ) plains / ±0.25 m Alps, DTM-orthorectified",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "swisstopo free geodata (OGD): free use, including commercial, with source credit",
+    "url": "https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices"
+  },
+  "attribution": {
+    "text": "©swisstopo — SWISSIMAGE 10 cm",
+    "url": "https://www.swisstopo.admin.ch/en/orthoimage-swissimage-10"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
