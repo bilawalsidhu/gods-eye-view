@@ -1,0 +1,48 @@
+{
+  "id": "lawrence-ks",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Lawrence, Kansas Aerial Photos",
+  "provider": "City of Lawrence GIS",
+  "description": "Aerial orthophotos: Lawrence, Kansas jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-95.3997, 38.8881, -95.113, 39.0507]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/8O9UlSTnqjKptoda/arcgis/rest/services/LAWRENCE_KS_AERIAL_2022/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2022–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://gis-lawrenceks.opendata.arcgis.com/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "City of Lawrence GIS",
+    "url": "https://gis-lawrenceks.opendata.arcgis.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

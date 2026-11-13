@@ -3,9 +3,10 @@
 Offline polygons with no network dependency. The voice-annotation resolver
 (`src/data/naturalEarthRegions.js`) reads the named regions, so "outline the
 Alps" resolves to the real range geometry; area annotations read the
-countries, states and provinces (`src/data/adminBoundaries.js`); and the News
+countries, states and provinces (`src/data/adminBoundaries.js`); the News
 layer reads the countries and the disputed areas
-(`server/providers/news/areas.js`).
+(`server/providers/news/areas.js`); and Data Library imagery draws its
+coverage outlines from the countries (`src/library/outlines.js`).
 
 | File | Source dataset | Features |
 |------|----------------|----------|

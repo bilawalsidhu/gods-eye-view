@@ -1,0 +1,48 @@
+{
+  "id": "pl-ortofotomapa",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Ortofotomapa Polski (GUGiK)",
+  "provider": "GUGiK / geoportal.gov.pl",
+  "description": "Aerial orthophotos: 100% of Poland (rolling; cities at 5 cm).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["PL"],
+    "bbox": [14.12, 49, 24.15, 54.84]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution?service=WMS&request=GetMap&version=1.3.0&layers=Raster&styles=default&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 7,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "5–25 cm",
+    "resolutionM": 0.05,
+    "trueOrtho": false,
+    "vintage": "2019–present",
+    "updateCycle": "Rolling (1–3 years per zone)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Polish open geodata (free reuse, Prawo geodezyjne art. 40a)",
+    "url": "https://www.geoportal.gov.pl/"
+  },
+  "attribution": {
+    "text": "© GUGiK / geoportal.gov.pl",
+    "url": "https://mapy.geoportal.gov.pl/imap/Imgp_2.html"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}
