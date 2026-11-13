@@ -99,6 +99,7 @@
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/app/viewer.js",
     "./time": "./src/time/worldClock.js",
+    "./i18n": "./src/i18n/page.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },

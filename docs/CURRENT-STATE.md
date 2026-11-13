@@ -5080,6 +5080,10 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   views re-render, code that published translated text words it again through
   `onLocaleChange`, and `<html lang>`/`dir` and the page's `data-i18n` markup
   follow. Nothing is lost; a toast already on screen keeps its words.
+  An application that offers the language elsewhere (a menu) uses the
+  `./i18n` entry (`src/i18n/page.js`): `startPageLocale` at boot,
+  `followPageLocale` for the markup and `switchLocale`, which does what a
+  picker choice does, with `localePicker: false`.
 - **Right to left.** Arabic (`ar`) and Hebrew (`he`) are in `RTL_LOCALES`, so
   `<html dir="rtl">`: the title, style indicator, both panel stacks and their
   icon rails swap sides through logical properties (`inset-inline-*`,
