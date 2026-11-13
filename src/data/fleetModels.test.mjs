@@ -57,6 +57,7 @@ const sliceTypes = {
   vessels: [
     {
       types: [70, 79],
+      typical_len: 300,
       rules: [
         { min_len: 70, max_len: 140, max_bl: 0.12, model: 'inland_cargo' },
         {
@@ -131,6 +132,29 @@ test('vessels: the first matching rule of the first type range with one, else th
     model: 'generic_vessel',
     length: null,
   });
+});
+
+test("vessels of unknown length are chosen and drawn at their range's typical length", () => {
+  assert.deepEqual(resolveVessel(sliceTypes, 70), {
+    model: 'container_ship',
+    length: 300,
+  });
+  assert.deepEqual(resolveVessel(sliceTypes, 70, 511, 126), {
+    model: 'container_ship',
+    length: 300,
+  });
+  assert.deepEqual(resolveVessel(sliceTypes, 70, 90, 15), {
+    model: 'general_cargo',
+    length: 90,
+  });
+  assert.deepEqual(resolveVessel(sliceTypes, 31), {
+    model: 'tug',
+    length: null,
+  });
+  // Every passenger, cargo and tanker range of the set has one.
+  for (const code of [60, 70, 80]) {
+    assert.ok(resolveVessel(types, code).length > 100, String(code));
+  }
 });
 
 test("vessels: AIS's out-of-range sizes (511 m long, 126 m abeam) are unknown, drawn as built", () => {

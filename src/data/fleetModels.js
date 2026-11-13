@@ -133,8 +133,9 @@ export function hullBeam(beam) {
 /**
  * The model for a vessel of AIS ship type `shipType` and the reported length
  * and beam (metres) and name: the first rule that matches in the first type
- * range that has one, else `default_vessel`. Drawn at the reported length, as
- * built when it is unknown.
+ * range that has one, else `default_vessel`. Drawn at the reported length;
+ * when it is unknown (most live feeds send none), chosen and drawn at the
+ * range's `typical_len`, else as built.
  * @param {object} types Parsed `types.json`.
  * @param {number} [shipType]
  * @param {number} [length]
@@ -145,13 +146,14 @@ export function hullBeam(beam) {
 export function resolveVessel(types, shipType, length, beam, name) {
   const L = hullLength(length) ?? 0;
   const B = hullBeam(beam) ?? 0;
-  const drawn = L > 0 ? L : null;
   if (shipType !== undefined && shipType !== null) {
     for (const group of types.vessels) {
       if (!(shipType >= group.types[0] && shipType <= group.types[1])) continue;
+      const len = L > 0 ? L : (group.typical_len ?? 0);
+      const drawn = len > 0 ? len : null;
       for (const rule of group.rules) {
-        if (rule.min_len && L < rule.min_len) continue;
-        if (rule.max_len && L > rule.max_len) continue;
+        if (rule.min_len && len < rule.min_len) continue;
+        if (rule.max_len && len > rule.max_len) continue;
         if (rule.name_re && !new RegExp(rule.name_re).test(name ?? ''))
           continue;
         if (rule.max_bl && !(B > 0 && L > 0 && B / L <= rule.max_bl)) continue;
@@ -159,7 +161,7 @@ export function resolveVessel(types, shipType, length, beam, name) {
       }
     }
   }
-  return { model: types.default_vessel, length: drawn };
+  return { model: types.default_vessel, length: L > 0 ? L : null };
 }
 
 /**
