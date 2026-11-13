@@ -159,6 +159,22 @@ body.cockpit-mode
   border-radius: 14px;
 }
 
+/* In cockpit, Visual keeps only what the cockpit's own Display panel does
+   not already offer: the HUD, detection, parameters and 3D-model groups live
+   there (its portal moves them while it shows; hidden here otherwise, so they
+   never appear twice), and the celestial ring has no place in first person. */
+body.cockpit-mode
+  #pp-toggles
+  :is(
+    .pp-toggle-group:has(#hud-toggle),
+    .pp-toggle-group:has(#detection-toggle),
+    .pp-toggle-group:has(#models3d-toggle),
+    .pp-toggle-group:has(#celestial-toggle),
+    #param-slider-panel
+  ) {
+  display: none !important;
+}
+
 /* Authoring or Utilities may still be open underneath; its hidden icon must
    not split the rail into islands. */
 body.cockpit-mode
