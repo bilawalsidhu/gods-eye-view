@@ -1411,7 +1411,6 @@ test('a box dragged across the dateline is searched, listed and draped as one bo
   assert.equal(f.snap().boxSizeKm.width < 100, true, 'the short arc, not 360°');
 });
 
-
 test('thumbnail availability changes refresh an already shown day', async () => {
   const f = fixture();
   const priorGet = f.thumbnails.get;
