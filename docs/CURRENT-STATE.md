@@ -213,7 +213,7 @@ not toggle this layer yet (prompt budget, as for the airspace layer).
 ## Air accidents — Wikidata
 
 The Events group includes **Air accidents** (`air-accidents`, share-link token
-`02`), off by default: notable aviation accidents worldwide from Wikidata
+`03`), off by default: notable aviation accidents worldwide from Wikidata
 (CC0). `/api/air-accidents` runs two SPARQL queries at most once a day and
 serves the last good snapshot as stale for up to seven days when a refresh
 fails. The first reads items of class Q744913 (and subclasses) with their own
@@ -422,6 +422,229 @@ The custom switch field is bounded to 256 characters;
 provider registration rejects compositions that cannot fit rather than truncating
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
+
+## Data Library — October 21, 2026
+
+DATA LAYERS keeps its curated core layers; everything else lives in the Data
+Library, opened from **Browse data library** at the foot of the panel. An entry
+is a manifest in `src/library/entries/` that points at a live upstream its
+provider hosts — a query API, a provider-hosted static file or a tile endpoint.
+Nothing an entry describes is bundled, so a self-hosted instance serves every
+entry without hosting data. Manifests are validated strictly when
+`src/library/catalog.js` loads (unknown fields are errors), so an invalid entry
+fails the unit suite. Authoring guide: [DATA-LIBRARY.md](DATA-LIBRARY.md).
+
+Three kinds ship. A `dataset` (GeoJSON, GeoJSON Lines, CSV with lat/lon
+columns, a JSON record list read from `source.records` with named or guessed
+lat/lon fields, or a paged ArcGIS FeatureServer query) renders through the same
+GeoJSON layer as Datacenters and Dams, with the manifest's label, up to two
+card fields and an optional `rank` field that orders a capped set and feeds the
+layer's level-of-detail priority (0–600, below the named/unnamed gap). A capped
+dataset reads PARTIAL. A dataset with `source.view` is view-bounded,
+for layers too large to load whole (FEMA USA Structures: ~135 million
+footprints): below `view.maxAltitudeM` it queries ArcGIS for what intersects a
+window around the point the camera looks at (half the camera height each way,
+330 m – 5.5 km, clipped to the visible rectangle), one page per view after the
+camera settles, replacing the previous set only when the new one is ready and
+aborting a superseded request; above it the row reads "zoom in to load this
+layer" and nothing is fetched. Footprints are ground-clamped polygons (draped on
+Google 3D tiles too), without outlines. Zoom to layer lands straight above the
+manifest's `view.sample` area at 60 % of the altitude limit. View-bounded
+entries are ArcGIS or GeoParquet, and browser-direct, in this build.
+
+`geoparquet` datasets are read in the browser with `hyparquet` (with `fzstd`
+for ZSTD), imported lazily on first use; only the columns an entry uses are
+decoded, and WKB geometry arrives as GeoJSON. A partitioned set
+(`source.partitions`: an S3 ListObjectsV2 `listUrl` and a `keyBase`, both on the
+source host) must be view-bounded. Its index — each file's GeoParquet footer
+bbox, read with one range request per file — comes from `/api/library/index/<id>`
+(built once per `cacheSeconds` and shared), or is built in the browser and kept
+in `gev:library:index:<id>` on a static build. Footer bboxes can be stretched
+by stray geocodes, so candidates are ranked by how much of each file's bbox
+the view covers, read in parallel batches of four (up to eight per view)
+until a batch has features in view, and each file read once teaches its real
+extent (the box holding 98 % of its points, `gev:library:extent:<id>`), so
+later views skip files that do not cover them. The last four decoded files
+stay in memory. `display.colorBy` colours each feature by a field's value (a
+dotted path such as `categories.0.title` is flattened into the feature's
+`__gevColorKey`): view-bounded layers draw 6 px dots or filled polygons, other
+datasets keep the GeoJSON layer's stems, cards and level of detail with a
+per-feature colour (`featureColor` in `localGeojsonCore.js`). Values sharing a
+`colorBy.labels` label form one legend group (coal, gas and oil are "Fossil");
+values the manifest does not colour draw in `display.color` and count as
+Other. The row legend lists each group with its count (in view, or in the
+loaded set), one item per line as Fire Perimeters' does. Status-like fields
+(GDACS and PortWatch alert levels, NWS severity, bridge condition) use the
+fixed status palette (good #0ca30c, warning #fab219, serious #ec835a,
+critical #d03b3b); categorical ones (fuel, EONET category, building
+occupancy) use at most four hues that pass all-pairs colour-vision checks on
+the dark globe, plus a neutral Other. Tile layers carry a static
+`display.legend` copied from the provider's own scale (GBIF classic.poly,
+JRC occurrence, Macrostrat's ICS period colours). Aerial photo layers (IGN, GSI
+photos, swisstopo SWISSIMAGE) set `display.outline`: their covered countries'
+borders draw as a thin white ground-clamped line, so the imagery's edge is
+plain, with a "Coverage outline" legend item. Borders come from Natural
+Earth's 1:50m admin-0 countries (public domain, fetched live once per page and
+credited); `countries` draws every part (Japan's islands, Liechtenstein beside
+Switzerland), `coverage` only the parts inside `coverage.bbox` (metropolitan
+France). A failed border fetch costs only the
+outline. The same layers set `display.aerial`: they drape above every other
+imagery layer and raise themselves again whenever another drape is added, so a
+basemap or weather overlay switched on later goes underneath. Each is
+`source.bounded` (tiles requested inside `coverage.bbox` only) and names its
+provider's no-imagery fill in `display.noDataColor`, drawn transparent through
+Cesium's colour-to-alpha (max channel distance 0.02): measured fills are
+swisstopo white, IGN's flat ocean blue (#0a3b59) and GSI's ocean grey
+(#343434). Without both, a white fill covered the whole globe. A 4xx tile
+answer counts as "no imagery here", never as a tile error. IGN's overseas
+departments are outside its single bbox and are not shown. The aerial set now holds 60
+entries: 57 imported from the Open Imagery Register (national programmes in
+Belgium (Wallonia), Germany, Estonia, Spain, Poland, Portugal, Australia's
+NSW, and 49 US services: NAIP plus state, county and city programmes) plus
+IGN, GSI and SWISSIMAGE, each with an `imagery`
+block (type, published resolution, true ortho, years flown, refresh) that
+Browse shows as a spec list. Tiles take `xyz` (with `{reverseY}` for TMS) or
+`bbox` templates (`{bbox-epsg-3857}`: WMS GetMap and ArcGIS export, filled
+by Cesium in the browser and by the proxy from z/x/y). Sub-national entries
+draw a `bbox` rectangle outline without fetching the country borders. 35
+entries whose licence the register gives only as "see publisher terms" are
+operator opt-in. Norway comes from Kartverket's open
+services (CC BY 4.0, "© Kartverket"; its zoom 12–20 Geovekst data may be shown
+in live services but not copied): the topographic, greyscale, raster-topo and
+nautical-chart caches (`xyz`), and WMS hillshade, DTM colour relief, sea depths
+(from zoom 11, Kartverket's 16-class depth legend), county and municipality
+boundaries, and the cadastre (from zoom 14). Norge i bilder needs
+authentication and is not included. `mapterhorn-terrain` is the first
+`source.encoding: terrarium` entry: Mapterhorn's global 512 px terrain-RGB
+tiles are decoded per tile in the browser (`src/library/relief.js`) into
+shaded relief with a six-class elevation legend in metres. A `tiles` entry (`{z}/{x}/{y}` template) drapes on the
+active imagery host — the globe, or the Google 3D tileset — and follows map
+stack switches; with no host it shows the existing "choose a globe map"
+guidance, and its row reads DRAPED rather than a count. A `pack` describes an
+existing host-layer source pack (today the opt-in CCTV packs): it is
+informational in Browse, names the host's own switch (`CCTV_NYC_ENABLED=1` and
+so on) and offers no Add. The `provider` kind from the RFC is refused by the
+validator until it ships.
+
+Entries register their layer only when a viewer adds them, after the core
+catalog is sealed: `LayerLifecycle.registerLibraryLayer` accepts only ids in
+the `lib-<entry id>` namespace and only after `finalizeRegistrations`, and
+`unregisterLibraryLayer` destroys them. Library layers never enter
+`LAYER_STATE_REGISTRY` or the core token ledger. The panel groups them under a
+**Library** heading after every core group and rebuilds its rows on a
+`registrations` activity. Add switches the layer on; Remove destroys it.
+A library layer's row carries two icon chips, on or off (the panel shows
+row controls for an off layer only for Data Library rows, whose chips are
+marked `whileOff`): **Zoom to layer**
+(`zoom_in_map`) flies to the extent of the loaded features, or a tiles entry's
+declared coverage, taking the shorter way round the antimeridian and showing the
+whole globe for world-scale sets; **Remove from Data Layers** (`delete`)
+removes the entry. Zoom on a layer that is off switches it on first (a
+dataset only knows its extent once loaded). Zoom runs as an immediate
+navigation (`layer`), so Cockpit
+refuses it with its own message and the current follow owner is released first;
+reduced motion flies instantly. Icon chips (`chipGroup.js` `icon`/`action`) use
+their label as accessible name and tooltip and carry no `aria-pressed`.
+
+This browser's selection persists in `gev:library:v1` (`{ added, on }`), written
+only for explicit (user, voice, tool) changes, like core layer state, so a
+Context session's temporary changes are not remembered. Share links carry the
+switched-on entries as `lib=<t>.<t>` with the permanent two-character tokens in
+`src/library/ledger.json` (append-only; packs take none). A link's entries join
+the viewer's library and, as for core layers, the link alone decides what is
+on. Unknown tokens are skipped. The live hash follows the existing
+initial-restore suppression.
+
+Browser-direct entries are fetched without cookies or a referrer, redirects
+refused, bodies capped while streaming. Proxied entries go through
+`/api/library` (`server/providers/library.js`): `/catalog` reports each entry's
+availability and reason (`operator-opt-in`, `operator-disabled`, `key-missing`)
+without secrets; `/data/<id>` and `/tile/<id>/<z>/<x>/<y>` reach only the
+manifest's fixed upstream (the browser names an id, never a URL), refuse
+redirects and off-manifest hosts, cap dataset bodies at the manifest's
+`maxBytes` (≤ 32 MiB) and tiles at 2 MiB of `image/png|jpeg|webp`, cache per the
+manifest's `cacheSeconds` (60 s – 24 h; at most 512 tiles), serve the last good
+dataset as stale on failure, rate-limit per client, and never return upstream
+text. A keyed entry must be proxied; its key comes from the server environment
+through the key registry and its routes use the strict cross-site gate, while
+keyless routes use the keyless gate so they work behind a reverse proxy.
+Operators opt entries in with `GEV_LIBRARY_ENABLE` and remove them with
+`GEV_LIBRARY_DISABLE`. A static build with no server still serves every
+browser-direct, non-opt-in entry; proxied ones say they need the app's server.
+
+The Browse dialog is a `dialog[data-panel-surface]`: modal, labelled, search
+focused on open, Escape and backdrop dismiss and return focus to Browse, and it
+closes when clean view, recording or Cockpit hides the panels. Its surface is
+frosted glass (a lighter `--glass-bg` than the rails, a 22 px backdrop blur
+clipped to the theme's frame, a barely dimmed backdrop), so the globe shows
+through without the HUD text behind it competing. An added entry that is on
+offers ZOOM, which closes the dialog and flies to it. Above the intro, four
+stat tiles summarise the library: Datasets (every entry, broken down by kind),
+Themes (how many distinct themes the entries cover), Added (and how many are on
+the map), and Map features (features loaded by dataset layers that are on;
+tiles have no count).
+They refresh with the dialog and once a second while it is open, so counts
+land as datasets finish loading. The line beside **REMOVE ALL** answers the
+filter ("Showing 2 of 8"). **REMOVE ALL** removes every added entry; its first
+press arms a confirm for four seconds. It lists
+addable entries first, then entries this instance would need to switch on, then
+packs, with kind, status, opt-in or key badges, provider, coverage and a licence
+link, and filters by text, theme and "only what this instance serves".
+Archived entries are hidden unless added. An entry's attribution and licence are
+registered in the Data attribution popover while it is in use.
+
+Seeds: NASA EONET open events (GeoJSON, browser-direct), EIA US power plants
+≥ 100 MW (ArcGIS, browser-direct, ranked by capacity), Smithsonian GVP Holocene
+volcanoes (WFS GeoJSON, proxied — the upstream sends no CORS headers), NASA
+Black Marble 2016 night lights (tiles), and the NYC,
+Lithuania and FL511 CCTV packs. Added from the Ask dataset registry (its live,
+mappable sources that are not core layers): the WRI Global Power Plant Database
+(provider-hosted CSV, the 10,000 largest of ~35,000 by capacity, so it reads
+PARTIAL), NWS active alerts that carry their own polygon (zone-wide alerts have
+no geometry and are dropped), NOAA CO-OPS tide stations (JSON records), and IMF
+PortWatch chokepoints and port disruptions (ArcGIS, operator opt-in until the
+reuse terms are confirmed, as Ask holds them in hosted mode). FEMA/ORNL USA
+Structures (CC BY 4.0) is the first view-bounded entry; its service refuses a
+query page smaller than its own 2,000 records, so the probe asks for a full
+page. Addresscloud's EPC ratings for England and Wales (Source Cooperative,
+read from `s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop`, 344
+local-authority GeoParquet files, OGL v3.0) are the first partitioned
+GeoParquet entry, coloured by band A–G with the official EPC colours. From an
+open/freemium registry review (commercial sources excluded): GDACS disaster
+alerts; the National Bridge Inventory (view-bounded, coloured Good/Fair/Poor);
+EPA Superfund sites and Toxics Release Inventory facilities (view-bounded); and
+tile overlays for Macrostrat geology, GBIF biodiversity density, USGS
+topographic and hydrography maps, IGN (France) aerial photos, BKG
+TopPlusOpen, GSI Japan map and photos and JRC surface water occurrence.
+Entries whose licence or provider pages no longer resolve (404 or unreachable
+host, checked 2026-11-12) were removed: OpenSeaMap seamarks, EMODnet
+bathymetry, SEDAC GPW population density, PDOK, basemap.at, Geneva SITG,
+ICGC Catalunya, Luxembourg, Vlaanderen, Minnesota and Bangor aerial photos. `npm run library:check` validates manifests,
+the ledger (append-only with `--base-ref`, run in CI on pull requests) and the
+generated DATA_SOURCES.md section; `npm run library:probe` hits every upstream
+once; `npm run qa:data-library` is the browser gate (fixture-backed).
+
+Shares: the compact `/share/<code>` link carries the switched-on entries in
+field 29 (docs/SHARE-LINK-FORMAT.md), so Copy Link keeps them, and a share
+opened later in the same tab (pasted address, Back/Forward) restores them too.
+Any share decides what is on, as for core layers: one with no library entry
+on switches the recipient's stored ones off and leaves them listed. A tile
+entry whose coverage needs more than 256 tiles at its minimum zoom (Norway's
+cadastre from z14, sea depths from z11) is hidden below that scale through
+Cesium's `minimumTerrainLevel`, so zoomed out it requests nothing. EPC
+partitions learn two extents (`gev:library:extent:v2:`): every point's box
+rules a partition out, the 98 % box only ranks it, so homes at a partition's
+edge are found on later visits; the v1 trimmed-only key is dropped. A
+partition index whose footers keep failing after two retries is
+`complete: false`: neither the server nor the browser keeps it as whole, a
+complete earlier index is served instead, and it is rebuilt after five
+minutes. A view that leaves partitions touching it unread is PARTIAL. Listing
+pages and footer reads are size-capped and ranges are validated. The Browse dialog is a Vue view (src/ui/views/panels/DataLibraryDialog.vue
+and DataLibraryCard.vue, teleported to the body from LayerPanelsView) over the
+`gev-data-library` Pinia store; src/ui/libraryBrowser.js is its framework-free
+owner (open state, filters, the rows they show, Remove all) and the text
+helpers the view renders, so every label follows the locale. Only the modal
+open/close and focus moves are imperative.
 
 ## Utilities panel — October 29, 2026
 
@@ -4951,6 +5174,7 @@ its criteria cannot be silently ignored.
 | CCTV                                 | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Iceland (Vegagerðin / IRCA) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                                                                                                                        | `/api/cctv`                                                                                                                  | 10s (active)                                                                                                                |
 | Radio                                | Radio Browser (public-domain station directory)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `src/data/radio.js`                                                                                                                                       | `/api/radio/stations`, `/api/radio/click/:uuid`                                                                              | 45 min directory refresh                                                                                                    |
 | Transit 🚌                           | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/layers/transit/` via `src/app/layers/transit.js`                                                                                                     | `/api/transit`                                                                                                               | 15s (poll + delayed playback)                                                                                               |
+| Rail 🚆                              | Live operator train positions (GPS, or station reports for Irish Rail) and trip updates, trains only, with opt-in route packs built from static GTFS (30 keyless feeds, all on, 28 out of the box; `src/data/railFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/rail/` via `src/app/layers/rail.js`                                                                                                           | `/api/rail`                                                                                                                  | 15s (poll + delayed playback)                                                                                               |
 | Bikeshare 🚲                         | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                                                                                                                                                                                                                                                         | `src/data/bikeshare.js`                                                                                                                                   | `/api/gbfs`                                                                                                                  | 60s                                                                                                                         |
 | Directions 🧭                        | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/directions.js`                                                                                                                                  | `/api/route` (`steps=1`)                                                                                                     | on placement / mode change                                                                                                  |
 | Datacenters ▣                        | OSM extract (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/data/infrastructure.js`                                                                                                                              | —                                                                                                                            | static                                                                                                                      |
@@ -5517,7 +5741,14 @@ service's usage policy states; past a bounded queue the answer is a 429 with a
 `Retry-After` rather than a queue that grows until everything times out. The
 upstream host is pinned and a redirect is refused rather than followed, and a
 rate limit from the routing service is reported as one instead of as "no route
-found". `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
+found". Upstream failure statuses except 400 and 429, network failures, and
+unreadable, oversized or non-JSON bodies return `502 routing service unavailable`.
+Voice hears `Routing service unavailable (HTTP 502)`; Directions shows
+`Routing unavailable (HTTP 502)`. OSRM 400 responses or successful responses
+without a usable route return "no route found". The 12 s upstream budget includes
+queue time: expiry before dispatch returns 429 "routing busy" when the queue slot
+opens; expiry during the upstream request returns 502.
+`src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
 road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at
 200 maneuvers — a route with more is reported as cut off, in the row summary
@@ -5539,7 +5770,7 @@ answered yet opens nothing rather than a card hanging at sea level. The cells
 are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
 reroute, CLEAR and disable cancel that.
 Transit is off by default, and share links use token `j`. The movement panel order
-places Transit directly after Street Traffic and before Bike Share. Cameras and
+places Transit directly after Street Traffic and before Rail. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
 gate. Forty-nine keyless regions are available: Boston, Austin, Minneapolis–St Paul,
@@ -5763,6 +5994,279 @@ responses and decoding, caches successful snapshots, and backs off after failed
 refreshes. A 304 confirms contact without appending history. Missing vehicles
 are removed after two missed polls; reports older than ten minutes and feeds
 silent for five minutes are removed. Credits appear when the feed is used.
+
+**Rail.** Rail is off by default, and share links use token `02`, with five
+boolean options for its categories: `t` (urban), `l` (local), `r`
+(regional), `n` (national) and `i` (international), all on by default. It sits
+in the Movement panel directly after Transit and before Bike Share. The layer
+lives in `src/layers/rail/` and is built by `src/app/layers/rail.js`; feeds are
+registered in `src/data/railFeeds.js`.
+
+Every train shown is live: it is where its operator last reported it, by GPS
+or, for Irish Rail, by the station or timing point the signalling last
+reported. No train is placed or moved from a timetable, and a feed whose live
+positions fail shows as unavailable while its trains age out as any quiet
+train does. Below a 3,000 km altitude gate (with 150 km hysteresis), the layer
+polls every 15 seconds each listed feed whose coverage circle contains the
+centre of the view; a feed already polled stays active 40 km past its edge. A
+feed's trip updates are polled every 30 seconds while one of its trains is
+selected and its schedule pack is loaded. The registry lists 30 feeds, all
+switched on and all keyless: every realtime feed and every static timetable
+is published for anyone to fetch, so no feed needs a key, an account or a
+registration, and no rail request carries a credential.
+
+**Opt-in packs.** Live feeds work out of the box, and nothing is downloaded
+when the app starts. A path pack and a schedule pack, built only when someone
+runs `scripts/build-rail-paths.mjs` for a feed (Packs below), are an extra for
+its live trains: the operator's own route lines, stop names, the next stop
+and, from the trip updates, the delays at each stop. Renfe long and medium
+distance and KTMB, whose vehicles name no route, are classified from the
+pack's routes (`railFeedNeedsSchedulePack`), so `/api/rail/feeds` lists them
+only once `<id>.schedule.json` is in the pack directory (`publicRailCatalog`).
+The server checks that the file exists, never reading it for this, and keeps
+each answer for 60 seconds; the catalog itself is sent with `max-age=300`. So
+a host that has built nothing shows 28 feeds, in 22 regions, and the other two
+appear as their packs are built. The browser reads the catalog once per layer
+instance; until it answers, or while it fails (asked again after 30 s,
+doubling to 10 minutes), only the feeds that need no pack are polled. A feed
+the catalog lists without live positions is never polled.
+
+Five enabled feeds publish no licence for their train positions and are used
+on the basis their entries record, which is never a licence and never
+credited as one: MARC on what its publication says, and METRO light rail on
+the basis the Transit layer uses for the same file. Tri-Rail and Charlotte's
+LYNX are used without a published licence by project owner decision of
+2026-11-10. The fifth is Irish Rail, whose train positions publish no licence
+while its NTA timetable is CC BY 4.0. The
+Montpellier tram's GTFS is ODbL, so the packs built from it are ODbL too: a
+deployer who serves them publicly makes them subject to the same licence,
+offered under it with the attribution kept, and France's national access
+point adds that a re-shared derived database must be published on
+transport.data.gouv.fr in its original format.
+
+By position source, 29 feeds publish live GPS. 13 are in the US: Metro-North,
+LIRR, MBTA, SEPTA Regional Rail and trolleys, MARC, Tri-Rail, RTD, CapMetro,
+METRO, Charlotte's LYNX, the Seattle Streetcar and Cincinnati's Connector. Three are in Australia: Citytrain, G:link and Adelaide Metro. The
+remaining 13 are GRT ION in Canada, VR in Finland, Renfe long and medium
+distance and Cercanías in Spain, the four Entur operators in Norway (SJ Nord
+through SIRI VM), KTMB in Malaysia, the Bordeaux and Montpellier trams in
+France, and the Manyōsen and Toyama trams in Japan. Irish Rail publishes the
+station or timing point the signalling last reported.
+
+22 feeds register trip updates; on a feed whose pack is built their delays
+reach the selected train's stops. Irish Rail and SJ Nord publish none, but
+each train's report states its delay: with the pack built, that delay moves
+the train's stops and the run its report is matched to, in the browser and,
+for Irish Rail's train codes, on the server, so a late train is not shown
+past a stop it has not reached. `DATA_SOURCES.md` lists every feed, one row
+each, with its licence, terms and attribution.
+
+**Proxy.** `GET /api/rail/feeds` returns the public catalog of listed feeds,
+`GET /api/rail/trains/<feedId>` one feed's snapshot,
+`GET /api/rail/updates/<feedId>` its trip updates, and
+`GET /api/rail/paths/<feedId>` and `GET /api/rail/schedule/<feedId>` its path
+and schedule packs once built (`src/sources/railService.js`,
+`src/data/railProxy.js`, served in development and preview by
+`server/providers/rail.js`, which reads the packs from `.cache/rail-paths/` or
+`RAIL_PATHS_DIR`). The request policy is the Transit proxy's: a memory cache
+with single-flight refresh (15 s, or the feed's own poll interval; 30 s for
+trip updates, or the feed's own), serve-stale for up to 10 minutes after a
+failure (an empty or header-less GTFS-Realtime reply is refused as unreadable
+and counts as one: stale, or 502 without a snapshot), per-feed and global
+admission limits, the failure cooldown ladder, redirects followed hop by hop
+only on the feed's own https origin, and an 8 MiB body cap unless a feed sets
+its own, at most 64 MiB. A feed whose positions or trip updates can be read
+only with its schedule pack (routes taken from the pack) answers
+503 "Rail schedule unavailable" (`X-Rail-Backoff: schedule`, never cached)
+whenever every record it sent was dropped, rather than an empty list: the
+pack is missing or refused, or names none of the trips the feed runs now (a
+stale pack: Renfe's trip ids carry their date). The server refuses a schedule
+pack, as it does one it cannot read, when it is of another format version or
+another feed, or once the last run it holds has arrived (its window has
+ended), and reads it again after five minutes. A feed that needs
+its pack to be listed is served only once that pack is built: until then
+`/trains` and `/updates` answer 503 "Rail schedule unavailable"
+(`X-Rail-Backoff: schedule`) without contacting the operator. Without a
+`hasSchedulePack` probe, the server asks `schedulePackVersion` or
+`readSchedulePack` (null: not built); with neither, no such feed is listed.
+Only a missing pack is 404: a pack that cannot be read answers 503 with
+`Retry-After: 60`. A pack is sent `no-cache` with an ETag from its file's
+modification time and size, and a request whose If-None-Match names it is
+answered 304 without reading the file: a feed's path and schedule packs pair
+by `builtAt`, so a browser never keeps one of them past a rebuild. The browser asks again for a path or schedule pack after
+30 s, doubling to 10 minutes. LIRR and Metro-North, whose positions and trip
+updates are one document, are fetched once per freshness window for both.
+Each feed's classifier runs on every decoded vehicle; only trains leave the
+server, each tagged with a `category` (`transit`, `local`, `regional`,
+`national`, `international`) and a `mode` (`rail`, `metro`, `tram`).
+Everything else, buses in a mixed feed included, is dropped and counted as
+`dropped`. There is no disk cache and no history.
+
+**Packs.** `scripts/build-rail-paths.mjs` builds, for each feed it is given
+that has a static GTFS (29 of the 30), a path pack (`<id>.json`: the
+operator's track shapes) and a schedule pack (`<id>.schedule.json`: routes,
+stops, stop patterns, run-time profiles and the service dates of a window) into `--out`, else `RAIL_PATHS_DIR` when the build's own environment sets it (the folder the server reads), else `.cache/rail-paths/`, which is gitignored. A
+build names its feeds (`--feed <id>`, repeatable) or passes `--all` for every
+enabled feed (many downloads and a long run); a bare run exits 1, and
+`--help` prints the usage. A build in which any feed fails exits 2 once the
+others are built (1 stays for a build that cannot start: a bad argument, or
+another build holding the lock). `--out` may not be `src/` or `public/` or a
+folder inside them. The window is four service dates by default (yesterday,
+today and the next two days), 1 to 14 with `--days`, starting at `--from`.
+`--local-gtfs <id>=<zip>` builds a feed from a zip already on disk instead of
+downloading it, a copy of the GTFS the feed publishes; the zip is only read,
+and the packs record its file name, not its path. The server serves a pack of
+up to 24 MiB, passed through as bytes from a 64 MiB in-memory read cache keyed
+by the file's modification time and size (`server/providers/rail.js`), and
+answers a larger one with 503 "Rail paths too large" or "Rail schedule too
+large". The build refuses to write a pack over that cap (the feed counts as
+failed and its previous packs stay), and a pack whose trips fall under a fifth
+of the pack it would replace, or to none, which reads as an upstream fault,
+unless `--force` is given. A feed's two packs are written together: to
+temporary names, then renamed into place, the path pack first, only once both
+are written; with `--no-schedule` the feed's old schedule pack, whose patterns
+index the old path pack, is deleted, and a feed named only through its
+schedule pack (Renfe long and medium distance, KTMB) is refused and counts
+as failed. A lock file in the `--out` folder
+(`.build-rail-paths.lock`) makes a second build there refuse to start. A
+schedule pack records the `builtAt` of the path pack its shape indices refer
+to (`pathsBuiltAt`); where the two no longer match, its shape indices are not
+used. Every download is open and made over https only (a redirect to plain
+http is refused), capped in size and time, with the script's User-Agent and
+any identifying header the operator asks for (`staticHeaders`). Shapes are
+taken at face value: the operator's `shapes.txt` as published; nothing is
+redrawn from other map data, and no line is drawn where the operator
+publishes none. A shape with a gap of more than 5 km between two points is a
+chord, not track, and is dropped; a trip without a usable shape gets none, and
+its train moves between reports in straight lines. A feed's
+`staticRouteTypes` lists the route types it keeps when its classifier accepts
+every route of a mode-specific feed. A frequency-based trip
+(`frequencies.txt`) becomes one run per departure, `<trip_id>@<HH:MM:SS>`, on
+its template's stops and run times. A stop the GTFS gives no coordinates,
+which some feeds write as (0, 0), is left out of the run with its times, so no
+line is drawn to it; a run needs two located stops. The Toyama tram has no
+static GTFS registered, so it has no packs and its trains move in straight
+lines between reports.
+
+**Duplicates across feeds.** Where loaded feeds carry the same train,
+`src/layers/rail/dedupe.js` draws it once. Copies from different feeds match
+by train number within 100 km of each other. A train number is three or more
+digits, or a shorter number after a long-distance product (EC, ECE, EN, ICE,
+NJ, RJ, RJX, TGV; not IC, where a short number names a line); a trip id that
+is an operator prefix and a number, or a headsign that is a bare number, is
+read too, and numbers that differ are different trains. A short line name
+(S1, RB 1, U6) names a line many trains run: copies on different lines are
+different trains, and copies on one line match only in the same category
+within 15 km, the nearest pairs first. The copy drawn is scored by its
+position source (live GPS, then station reports), then by its line (bound to
+its operator's shape in a built pack, then without one). A drawn copy stays
+until another scores strictly higher, and the comparison runs once per poll,
+never per frame.
+
+**Ukraine.** No train is placed in Ukraine, a safety rule
+(`src/data/railNoPositions.js`: its recognised borders as mapped in
+OpenStreetMap, via geoBoundaries, simplified to about 50 m, and stop ids that
+name the country). The path build leaves out every run with a stop there: a
+stop whose id names Ukraine or whose position is inside its borders, either
+being enough, so an id naming another country does not keep a stop that
+lies inside. The proxy drops every live position inside it, for every feed.
+
+**Categories and markers.** Each train is a disc in its category colour (urban
+`#FF7A59`, local `#F2D04B`, regional `#7BE495`, national `#5AB8FF`,
+international `#C58BFF`) with a white glyph for its mode: a train front, a tram
+with a pantograph, or an "M" for metro. The layer row shows one chip per
+category, which hides or shows that category, and a colour legend with live
+counts for the categories present. On photorealistic tiles a train's height
+is sampled from the rendered mesh at points on its own line
+(about every 55 m, for trains within 8 km of a camera at most 5 km above the
+ground there, and only once the tiles in view have loaded), where the draped
+line is the track bed or the deck. A reading more than 25 m under or 80 m over
+the floor there is a coarse tile and is dropped; a kept one is read again
+after 30 s, and the new reading replaces it when the camera is no higher than
+it was, or once the old one is five minutes old. Elsewhere it stands on the
+shared ground floor that Transit and aircraft use, and on a floor cell not
+sampled yet it keeps a neighbouring cell's floor or its last one. Only a train
+with no floor yet, or a stop of the selected trip, stands on the ellipsoid,
+and only until its cell is warm: the stops are read again every second until
+they stand on a floor. Rail warms those floor cells on one shared budget that
+refills at 1,200 cells a minute and holds at most 320, so no minute spends
+more than 1,520 cells (about 24 of the 90 requests of 64 points that
+`/api/terrain/heights` allows a client each minute), and only under trains
+within 30 km of the camera and at the selected trip's stops, the selected
+train and its stops first and then the nearest, in one batch a second, so a
+view full of trains cannot use up the limit every layer shares. Its drawn
+height changes no faster than 5% of the distance it moves (plus 0.5 m/s while
+it stands), so a roof or overpass sampled under it is a bump, not a jump, and
+a followed train rides smoothly; it snaps when a better height replaces a
+fallback (a real floor, or any floor replacing the ellipsoid) and after a jump
+of more than 2 km.
+
+**Playback, lines and cards.** Trains use the Transit layer's delayed
+playback between reports, so a train glides at 1× behind real time rather
+than jumping. Between reports they move along the line in the feed's path
+pack where there is one, else in straight lines. A loaded feed's faint
+network is drawn in full below 150 km and not at all above 200 km. A feed
+out of use for ten minutes gives back its network, path pack and schedule
+pack; they load again when it is next used. The selected train's line, its
+operator's shape from the path pack, is drawn ahead of it and, fainter,
+behind it. Clicking a train opens a card titled with its route or headsign,
+with at most six lines under it: category, mode, feed and region; displayed
+motion and position source ("Live GPS" or "Estimated from station reports");
+the next and previous stops with their times and delays where the schedule
+pack gives them; report age (marked "feed time" when the feed stamps the
+header rather than the train) and display delay; reported speed and heading;
+the last reported stop status where no stops are known; and the vehicle id.
+Metro trains are shown at street level, as in Transit, and the card says so.
+
+**Camera.** Selecting a moving train gives it the camera as selecting an
+aircraft does: Cesium's tracked entity rides on the train's marker, framed
+2.5 km out and 35° down along the camera's heading (`WORLD_FOCUS_FRAMING.train`),
+and a drag or a zoom orbits or zooms around the train. A train counts as
+moving while it glides between reports, waits at a stop with its departure
+already reported, or waits for its next report after its last two moved it
+at least 15 m. Any other train (parked, known from one report, or not heard
+from for 90 seconds) gets one fly-to with the same framing, as a vessel does;
+in the Cockpit that fly-to is refused with "Exit cockpit to fly to a train".
+The follow lets go, leaving the camera where it is, when the train is
+deselected (a click on anything else, Escape, its category hidden, the train
+leaving its feed, the layer turned off) or another train is selected, which
+takes the camera in turn. An aircraft or satellite tracked by another layer
+clears the selection too; a navigation that only releases the follow camera
+(a search, a fly-to) keeps the train selected. When the duplicate filter moves
+the selection to another feed's copy of the train, the follow stays and
+glides to the new copy over 1.2 seconds.
+
+**The selected train from far out.** While a train is selected its feed stays
+polled at any altitude and wherever the camera looks, so the train, its line
+and its stops stay on the map from orbit. While nothing else would keep that
+feed loaded, it carries the selected train alone: its other trains and its
+faint network go as they would with the feed. On the far side of the globe
+the selected train and its stop dots are hidden. Deselecting returns the feed
+to the usual rules.
+
+**Limits.** A train a feed stops listing for two polls is removed, as is any
+report older than ten minutes; a train without its own timestamp is aged from
+the snapshot's fetch time, so a frozen feed empties rather than showing old
+trains as live. A feed whose operator has not answered for 90 seconds reads as
+stale, and its trains are removed after five minutes. The layer holds at most
+5,000 trains drawn (a copy hidden as another feed's does not count); past that
+the layer row reads PARTIAL. Rail is not voice-controllable yet: it is listed in
+`VOICE_OFF_LAYERS` for prompt budget, and the "trains" alias still names
+Transit. Credits appear when a feed's trains are shown.
+
+**Upkeep.**
+
+- Packs cover a fixed window of service dates, so they are rebuilt before it
+  runs out: daily at the default four days, or weekly with `--all --days 7`
+  from a `--from` date that starts the coming week. The window and build time
+  of a pack are in its `window` and `builtAt` fields.
+- After a rebuild, the server picks up the new pack within a minute: it
+  checks each schedule pack's file time and size once a minute and rebuilds
+  what it reads from a changed pack (a host with its own `readSchedulePack`
+  and no `schedulePackVersion` keeps it up to an hour). A feed whose
+  first pack was just built is listed within a minute; a browser that has
+  read the catalog sees it after a reload, once its five-minute cache has
+  passed.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
@@ -6761,7 +7265,8 @@ request viewbox and continues searching without that geographic preference.
 
 ### News (November 2026)
 
-- **What it shows.** Events ▸ **News**: the last 24 hours only, or the fewer hours a server names. Zoomed out, one beacon per hotspot with its count for the window and its trend, and a breathing beacon per developing situation (still under reduced motion). Below 2,500 km (7,500 km with a hotspot chosen), the hotspot outlines with disputed areas dotted and named, and every placed report as a ground-clamped marker: fill is severity (0 grey no physical event, 1 yellow minor, 2 orange significant, 3 red major), the icon is the category, the rim is attestation (solid confirmed, dashed claim, thin single), size grows with sources and the marker fades over the day. Colour never marks a side. Up to ten picture cards (physical events with two or more sources, major or pressing) stand over their markers without overlapping. A selected report's card reads "Source: host ↗" and opens the article.
+- **What it shows.** Events ▸ **News**: the last 24 hours only, or the fewer hours a server names. Zoomed out, one beacon per hotspot with its count for the window and its trend, and a breathing beacon per developing situation (still under reduced motion). Below 2,500 km (7,500 km with a hotspot chosen), the hotspot outlines with disputed areas dotted and named, and every placed report as a ground-clamped marker: fill is severity (0 grey no physical event, 1 yellow minor, 2 orange significant, 3 red major), the icon is the category, the rim is attestation (solid confirmed, dashed claim, thin single), size grows with sources and the marker fades over the day. Colour never marks a side. Up to ten picture cards (physical events with two or more sources, major or pressing) stand over their markers without overlapping. An app built on Core may draw the picture cards itself: `createApplicationCatalog({ newsOptions: { pictureCards } })` calls `pictureCards(cards, { selectedId })` on each redraw with one card per event on the map that has a picture, single source or not, at every height (zoomed out, where a hotspot stands as one beacon, its reports' pictures still come), most severe then newest first (`{ id, title, lat, lon, publishedAt, severity, color, image, video, credit }`, at the marker), and the selected report's id or null (its own card still stands at its marker); with no cards when the layer turns off; the layer then paints none of its own, and a click on one is `setParams({ reportId, focus: true })`. A selected report's card reads "Source: host ↗" and opens the article.
+- **Time.** The layer reads its time from the world clock (`worldClock.timeFor('news')`, passed as `now` in `src/app/constructCatalog.js`): report ages, the 24-hour window, "today", fading and the pressing and card rules all count from it. Core does not follow the clock for the layer, so this is the wall clock and nothing changes. A host whose news source can answer a past time may follow it for `news`; the layer then shows that time's news as it was then, with ages counted from the timeline.
 - **Panel.** The right-rail NEWS panel (`src/ui/newsPanel.js`, `src/ui/news/`) has a time window at the top (the server's 24 h, or 12, 6, 3 or 1 h; the hotspot counts are read for the chosen window) and two sections. **Conflicts**: hotspot chips with counts, a severity floor (significant and above by default), a category filter, the chosen event, and a continuous feed, newest first. **Local**, while the camera is below 3,000 km: every report in the area at the view centre, newest first, named at the top ("News from …") and outlined on the globe, which then shows those reports instead of the hotspots' news; at sea, reports within 500 km. A disputed area of the bundled list (11, see `src/data/local_data/natural_earth/README.md`), or a territory Natural Earth gives no country code (Somaliland, Northern Cyprus and others), is named as itself and read from no country's outlets; elsewhere Natural Earth's default country lines apply. Each card shows the publisher's picture when the event has one (hotlinked, no referrer, publisher credited), the headline (a model's English headline marked as such), a mono meta line (severity marker, category, place, sources, age), who reported it, attestation and media chips, and the service it came through ("via GDELT Project"). Open, a card plays the post's clip on request. A click flies the camera straight down from 150 km and selects the report.
 - **Notices.** A section whose key the server lacks says "{provider} key required" and names the variable; a refused key says "{provider} refused its key"; a spent daily allowance says "{provider} limit reached for today". The other section keeps working.
 - **Source.** `sources.news` (`createNewsSource`, export `./layers/news/source`) reads same-origin `/api/news/*` with a 15 s timeout, a 4 MiB cap and record-by-record validation; `newsQueryAllowed` lets a host admit exactly the client's requests. Core's local server (`server/providers/news.js`) forwards only those GET requests to `GEV_NEWS_ORIGIN` when it is set.
@@ -6927,7 +7432,7 @@ apply to `public/` assets or built-preview serving.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
-- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
+- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; routing outages return 502.
 - `/api/flights`, `/api/military`, and `/api/route` answer `405 Method Not Allowed` with `Allow: GET` to anything but `GET`, before rate limiting and any upstream call.
 - `/api/flights` negotiates gzip. The cached global snapshot and the regional adsb.lol fallback are each gzipped once per refresh (about 860 KB becomes about 250 KB). Clients that offer gzip get that frame; other clients, and bodies under 1 KiB or that gzip cannot shrink, get identity bytes. Both answers carry `Vary: Accept-Encoding`. Uncached bodies, such as auth failures, are never sent under a cached frame's encoding.
 - Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (400 for an invalid hex, otherwise `503 history_unavailable` with `Retry-After: 1800` and `Cache-Control: no-store`, no upstream request; military tracking uses its locally accumulated trail).

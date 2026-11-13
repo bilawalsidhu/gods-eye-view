@@ -16,6 +16,7 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import { railProxy } from './rail.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
@@ -36,6 +37,7 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { libraryProxy } from './library.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -72,6 +74,7 @@ function localProviderPlugins({
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
+    railProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),
@@ -84,6 +87,7 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    libraryProxy(),
     ghostMapsProxy(),
     shipwrecksProxy(),
     airAccidentsProxy(),

@@ -1,5 +1,5 @@
 [
-  ["air-accidents", "02"],
+  ["air-accidents", "03"],
   ["air-quality", "4"],
   ["ais-live-vessels", "a"],
   ["alpr-cameras", "p"],
@@ -21,6 +21,7 @@
   ["military-installations", "i"],
   ["news", "00"],
   ["radio", "r"],
+  ["rail", "02"],
   ["recent-imagery", "1"],
   ["rocket-launches", "x"],
   ["s2-ghostmaps", "5"],
