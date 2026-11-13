@@ -1342,6 +1342,8 @@
   "src/data/layerState.js",
   "src/data/layerState.test.mjs",
   "src/data/spriteOrder.js",
+  "src/i18n/page.js",
+  "src/i18n/page.test.mjs",
   "src/i18n/locales/ar.json",
   "src/i18n/locales/de.json",
   "src/i18n/locales/es.json",

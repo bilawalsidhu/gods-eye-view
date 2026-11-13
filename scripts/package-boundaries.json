@@ -175,6 +175,28 @@
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
+  "i18n": {
+    "exports": ["./i18n"],
+    "modules": [
+      "src/i18n/page.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/ar.json",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/he.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/sv.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json"
+    ],
+    "external": []
+  },
   "time": {
     "exports": ["./time"],
     "modules": ["src/time/worldClock.js"],
