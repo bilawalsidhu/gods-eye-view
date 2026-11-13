@@ -1,8 +1,13 @@
 /**
- * On-screen map navigation control (Google Earth style): a compass ring that
- * shows and drags the heading, a north-up button, a tilt slider with up/down
- * and top-down buttons, zoom in/out with press-and-hold repeat, and a small
- * look-around pad.
+ * Owner of the on-screen map navigation control (Google Earth style): a
+ * compass ring that shows and drags the heading, a north-up button, a tilt
+ * slider with up/down and top-down buttons, zoom in/out with press-and-hold
+ * repeat, and a small look-around pad.
+ *
+ * The control itself is the `NavControl` view (src/ui/views/panels) over the
+ * `gev-nav-control` store. This module owns no DOM: it subscribes to the
+ * camera, publishes the heading, tilt and follow state to the store, and
+ * answers the view's actions through the store.
  *
  * The control orbits the camera around the point under the middle of the
  * screen. It reuses the orbit-frame helpers of the existing tilt/north buttons
@@ -12,13 +17,11 @@
  * the cockpit owns the camera and releases follow/orbit motion first.
  */
 import * as Cesium from 'cesium';
-import { msg, t } from '../../i18n/index.js';
 import {
   readCameraTargetFrame,
   setCameraTargetFrame,
 } from '../cameraOrientationControls.js';
 import {
-  TILT_SPAN_DEG,
   clampPitch,
   easeInOut,
   headingDegrees,
@@ -44,7 +47,6 @@ import {
 export const MIN_TARGET_HEIGHT_M = -1500;
 export const MAX_TARGET_HEIGHT_M = 25_000;
 
-const ROOT_ATTRIBUTE = 'data-gev-nav-control';
 const STEP_ANIMATION_MS = 220;
 const FIRST_REPEAT_MS = 380;
 const REPEAT_MS = 130;
@@ -60,35 +62,19 @@ const REPEATING = new Set([
   'look-up',
   'look-down',
 ]);
+const RING_KEYS = {
+  ArrowLeft: 'rotate-left',
+  ArrowDown: 'rotate-left',
+  ArrowRight: 'rotate-right',
+  ArrowUp: 'rotate-right',
+  Home: 'north',
+};
 const LOOK_ACTIONS = new Set([
   'look-left',
   'look-right',
   'look-up',
   'look-down',
 ]);
-
-const LABELS = {
-  'zoom-in': msg('Zoom in'),
-  'zoom-out': msg('Zoom out'),
-  'tilt-up': msg('Tilt up toward the horizon'),
-  'tilt-down': msg('Tilt down toward top-down view'),
-  'top-down': msg('Top-down view'),
-  'look-left': msg('Look left'),
-  'look-right': msg('Look right'),
-  'look-up': msg('Look up'),
-  'look-down': msg('Look down'),
-};
-const GLYPHS = {
-  'zoom-in': '+',
-  'zoom-out': '\u2212',
-  'tilt-up': '\u25B2',
-  'tilt-down': '\u25BC',
-  'top-down': 'TOP',
-  'look-left': '\u25C0',
-  'look-right': '\u25B6',
-  'look-up': '\u25B2',
-  'look-down': '\u25BC',
-};
 
 /** Where the camera sits for an orbit view of `target`. */
 export function orbitCameraPosition(target, { heading, pitch, range }) {
@@ -243,143 +229,48 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
   };
 }
 
-function build(doc) {
-  const make = (tag, className, attributes = {}, text) => {
-    const node = doc.createElement(tag);
-    if (className) node.className = className;
-    for (const [name, value] of Object.entries(attributes))
-      node.setAttribute(name, String(value));
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
-  const button = (action, className) =>
-    make(
-      'button',
-      `gev-nav-btn ${className}`,
-      {
-        type: 'button',
-        'data-nav': action,
-        'aria-label': t(LABELS[action]),
-        title: t(LABELS[action]),
-      },
-      GLYPHS[action],
-    );
-
-  const root = make('section', 'gev-nav', {
-    [ROOT_ATTRIBUTE]: '',
-    id: 'gev-nav-control',
-    role: 'group',
-    'aria-label': t('Map navigation'),
-  });
-
-  const tilt = make('div', 'gev-nav-tilt');
-  const tiltUp = button('tilt-up', 'gev-nav-tilt-up');
-  const slider = make('input', 'gev-nav-slider', {
-    type: 'range',
-    min: 0,
-    max: TILT_SPAN_DEG,
-    step: 1,
-    value: 0,
-    'data-nav': 'tilt-slider',
-    'aria-label': t('Tilt'),
-    'aria-orientation': 'vertical',
-    title: t('Tilt: top-down (bottom) to near horizon (top)'),
-  });
-  const tiltDown = button('tilt-down', 'gev-nav-tilt-down');
-  tilt.append(tiltUp, slider, tiltDown);
-
-  const compass = make('div', 'gev-nav-compass');
-  const dial = make('div', 'gev-nav-dial', {
-    'data-nav': 'ring',
-    role: 'slider',
-    tabindex: 0,
-    'aria-label': t(
-      'Map heading. Drag to rotate, arrow keys turn, Home for north',
-    ),
-    'aria-valuemin': 0,
-    'aria-valuemax': 359,
-    'aria-valuenow': 0,
-    'aria-valuetext': t('North, 0 degrees'),
-  });
-  const mark = make('span', 'gev-nav-dial-mark', { 'aria-hidden': 'true' });
-  dial.append(mark);
-  const north = make(
-    'button',
-    'gev-nav-btn gev-nav-north',
-    {
-      type: 'button',
-      'data-nav': 'north',
-      'aria-label': t(
-        'Reset map to north up. Current heading {heading} degrees',
-        {
-          heading: 0,
-        },
-      ),
-      title: t('North up'),
-    },
-    'N',
-  );
-  const look = make('div', 'gev-nav-look', {
-    role: 'group',
-    'aria-label': t('Look around'),
-  });
-  look.append(
-    button('look-up', 'gev-nav-look-up'),
-    button('look-left', 'gev-nav-look-left'),
-    button('look-right', 'gev-nav-look-right'),
-    button('look-down', 'gev-nav-look-down'),
-  );
-  compass.append(dial, look, north);
-
-  const zoom = make('div', 'gev-nav-zoom');
-  zoom.append(
-    button('zoom-in', 'gev-nav-zoom-in'),
-    button('zoom-out', 'gev-nav-zoom-out'),
-    button('top-down', 'gev-nav-top-down'),
-  );
-
-  root.append(tilt, compass, zoom);
-  return { root, dial, north, slider, look };
-}
-
 /**
- * Mount the control once per viewer.
+ * Answer the navigation control's actions for one viewer.
  * @param {Object} options
  * @param {Cesium.Viewer} options.viewer Live viewer.
- * @param {HTMLElement} [options.parent] Mount point (default `document.body`).
- * @param {Document} [options.document] Document used to build the DOM.
+ * @param {{connect: Function, detach: Function, publish: Function}} options.store
+ *   The `gev-nav-control` store the view renders and calls.
  * @param {Function} [options.runNavigation] `(noun, navigate) => result`; the
  *   shell's explicit-navigation policy. Defaults to calling `navigate()`.
  * @param {Function} [options.showToast] Operator-visible message.
  * @param {Function} [options.now] Millisecond clock (tests inject one).
  * @param {Object} [options.timers] `{setTimeout, clearTimeout}` (tests inject).
+ * @returns {{perform: Function, refresh: Function, destroy: Function, destroyed: boolean}}
  */
 export function mountNavControl({
   viewer,
-  parent,
-  document: doc = globalThis.document,
+  store,
   runNavigation = (_noun, navigate) => navigate(),
-  showToast,
   now = () => globalThis.performance?.now?.() ?? Date.now(),
   timers = globalThis,
 } = {}) {
   if (!viewer?.camera || !viewer?.scene)
     throw new TypeError('A viewer with a camera and scene is required');
+  if (!store?.connect || !store?.publish)
+    throw new TypeError('The navigation control store is required');
   const existing = mounted.get(viewer);
   if (existing && !existing.destroyed) return existing;
 
-  const host = parent || doc?.body;
-  if (!host || !doc) throw new TypeError('A document and parent are required');
-  const { root, dial, north, slider } = build(doc);
-  host.append(root);
-
   const removers = [];
   let destroyed = false;
-  let applied = null;
+  // What the view shows; `sent` is false until the first publish.
+  let published = {
+    heading: 0,
+    tilt: 0,
+    following: false,
+    dragging: false,
+    sent: false,
+  };
   let sliderDragging = false;
   let deferredTilt = null;
   let hold = null;
   let drag = null;
+  let token = null;
 
   const camera = viewer.camera;
   const animator = createOrbitAnimator(viewer, {
@@ -387,11 +278,6 @@ export function mountNavControl({
     onSettled: () => refreshTilt(),
   });
 
-  const listen = (target, type, handler, options) => {
-    if (!target?.addEventListener) return;
-    target.addEventListener(type, handler, options);
-    removers.push(() => target.removeEventListener(type, handler, options));
-  };
   const subscribe = (event, handler) => {
     const remove = event?.addEventListener?.(handler);
     if (typeof remove === 'function') removers.push(remove);
@@ -536,104 +422,85 @@ export function mountNavControl({
     }, FIRST_REPEAT_MS);
   }
 
-  for (const node of root.querySelectorAll?.('[data-nav]') || []) {
-    const action = node.getAttribute('data-nav');
-    if (action === 'ring' || action === 'tilt-slider') continue;
-    const act = action === 'north' ? 'north' : action;
-    listen(node, 'pointerdown', (event) => {
-      if (event.button > 0) return;
-      startHold(act);
-    });
-    for (const type of ['pointerup', 'pointercancel', 'pointerleave'])
-      listen(node, type, stopHold);
-    // Keyboard activation arrives as a click with no pointer (detail 0).
-    // Pointer clicks were already handled on pointerdown.
-    listen(node, 'click', (event) => {
-      if (event.detail) return;
-      perform(act);
+  /** Show the view the control renders; an unchanged view sends nothing. */
+  function present(change) {
+    if (destroyed) return;
+    const next = { ...published, ...change, sent: true };
+    if (
+      published.sent &&
+      next.heading === published.heading &&
+      next.tilt === published.tilt &&
+      next.following === published.following &&
+      next.dragging === published.dragging
+    )
+      return;
+    published = next;
+    store.publish(token, {
+      heading: next.heading,
+      tilt: next.tilt,
+      following: next.following,
+      dragging: next.dragging,
     });
   }
-  listen(globalThis, 'blur', stopHold);
 
-  // ── compass ring: drag to rotate, arrows turn, Home is north ───────────
-  listen(dial, 'pointerdown', (event) => {
-    if (event.button > 0) return;
-    const rect = dial.getBoundingClientRect?.();
-    if (!rect || !rect.width) return;
+  // ── actions the view calls through the store ──────────────────────────
+  /** A pointer press on a button: act now, and repeat while it is held. */
+  const press = (action) => startHold(action);
+  /** Keyboard activation (a click with no pointer); pointer clicks acted on press. */
+  const activate = (action) => perform(action);
+
+  /** Begin dragging the compass ring; false when the camera refuses. */
+  function ringStart({ centerX, centerY, clientX, clientY }) {
     const result = runNavigation('camera', () => {
       animator.cancel();
       return readFrame() || { fallback: true, heading: camera.heading };
     });
-    if (!result) return;
+    if (!result) return false;
     drag = {
       frame: result.fallback ? null : result,
-      centerX: rect.left + rect.width / 2,
-      centerY: rect.top + rect.height / 2,
+      centerX,
+      centerY,
       startHeading: result.heading,
       pitch: result.fallback ? camera.pitch : result.pitch,
-      startAngle: pointerAngle(
-        rect.left + rect.width / 2,
-        rect.top + rect.height / 2,
-        event.clientX,
-        event.clientY,
-      ),
+      startAngle: pointerAngle(centerX, centerY, clientX, clientY),
     };
-    try {
-      dial.setPointerCapture?.(event.pointerId);
-    } catch {
-      /* synthetic pointer */
-    }
-    root.setAttribute('data-dragging', 'ring');
-  });
-  listen(dial, 'pointermove', (event) => {
+    present({ dragging: true });
+    return true;
+  }
+  function ringMove({ clientX, clientY }) {
     if (!drag) return;
     const heading = headingFromDrag({
       startHeading: drag.startHeading,
       startAngle: drag.startAngle,
-      angle: pointerAngle(
-        drag.centerX,
-        drag.centerY,
-        event.clientX,
-        event.clientY,
-      ),
+      angle: pointerAngle(drag.centerX, drag.centerY, clientX, clientY),
     });
     if (drag.frame) setCameraTargetFrame(viewer, { ...drag.frame, heading });
     else lookInPlace(heading, drag.pitch);
     refreshHeading();
-  });
-  const endDrag = () => {
+  }
+  function ringEnd() {
     if (!drag) return;
     drag = null;
-    root.removeAttribute('data-dragging');
+    present({ dragging: false });
     refreshTilt();
-  };
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
-    listen(dial, type, endDrag);
-  listen(dial, 'keydown', (event) => {
-    const map = {
-      ArrowLeft: 'rotate-left',
-      ArrowDown: 'rotate-left',
-      ArrowRight: 'rotate-right',
-      ArrowUp: 'rotate-right',
-      Home: 'north',
-    };
-    const action = map[event.key];
-    if (!action) return;
-    event.preventDefault?.();
+  }
+  /** @returns {boolean} Whether the key was one the ring answers. */
+  function ringKey(key) {
+    const action = RING_KEYS[key];
+    if (!action) return false;
     perform(action);
-  });
+    return true;
+  }
 
-  // ── tilt slider ──────────────────────────────────────────────────────
-  listen(slider, 'pointerdown', () => {
+  function sliderStart() {
     sliderDragging = true;
-  });
-  for (const type of ['pointerup', 'pointercancel', 'blur'])
-    listen(slider, type, () => {
-      sliderDragging = false;
-      refreshTilt();
-    });
-  listen(slider, 'input', () => {
-    const pitchWanted = tiltDegToPitch(Number(slider.value));
+  }
+  function sliderEnd() {
+    sliderDragging = false;
+    refreshTilt();
+  }
+  function sliderInput(value) {
+    const pitchWanted = tiltDegToPitch(Number(value));
     runNavigation('camera', () => {
       const frame = animator.active ? animator.frame : readFrame();
       if (!frame) return lookInPlace(camera.heading, pitchWanted);
@@ -648,55 +515,38 @@ export function mountNavControl({
         );
       return setCameraTargetFrame(viewer, { ...frame, heading, range, pitch });
     });
+    // The handle shows what the person asked for until the gesture ends.
+    present({ tilt: Math.round(Number(value)) });
     refreshHeading();
-  });
+  }
 
   // ── state shown on the control ───────────────────────────────────────
   function refreshHeading() {
-    if (destroyed) return;
-    const heading = headingDegrees(camera.heading);
-    if (applied?.heading === heading) return;
-    applied = { ...applied, heading };
-    root.style.setProperty('--gev-nav-heading', `${heading}deg`);
-    root.setAttribute('data-north-up', String(heading === 0));
-    dial.setAttribute('aria-valuenow', String(heading));
-    dial.setAttribute(
-      'aria-valuetext',
-      heading === 0
-        ? t('North, 0 degrees')
-        : t('{heading} degrees from north', { heading }),
-    );
-    north.setAttribute(
-      'aria-label',
-      t('Reset map to north up. Current heading {heading} degrees', {
-        heading,
-      }),
-    );
+    present({ heading: headingDegrees(camera.heading) });
   }
   /** Exact tilt costs one depth read, so it refreshes once per gesture. */
   function refreshTilt() {
     if (destroyed || sliderDragging) return;
     const frame = animator.active ? null : readFrame();
     const pitch = frame ? frame.pitch : camera.pitch;
-    const tilt = pitchToTiltDeg(pitch);
-    if (applied?.tilt !== tilt) {
-      applied = { ...applied, tilt };
-      slider.value = String(tilt);
-      slider.setAttribute(
-        'aria-valuetext',
-        t('{tilt} degrees from top-down', { tilt }),
-      );
-    }
-    const following = Boolean(viewer.trackedEntity);
-    if (applied.following !== following) {
-      applied = { ...applied, following };
-      root.setAttribute('data-following', String(following));
-      for (const node of root.querySelectorAll?.('[data-nav^="look-"]') || []) {
-        if (following) node.setAttribute('disabled', '');
-        else node.removeAttribute('disabled');
-      }
-    }
+    present({
+      tilt: pitchToTiltDeg(pitch),
+      following: Boolean(viewer.trackedEntity),
+    });
   }
+
+  token = store.connect({
+    press,
+    release: stopHold,
+    activate,
+    ringStart,
+    ringMove,
+    ringEnd,
+    ringKey,
+    sliderStart,
+    sliderInput,
+    sliderEnd,
+  });
   subscribe(viewer.scene.preRender, refreshHeading);
   // A target pick may synchronously read the depth buffer. Let other moveEnd
   // observers run first, and coalesce repeated camera events into one read.
@@ -711,14 +561,12 @@ export function mountNavControl({
     animator.cancel();
     refreshTilt();
   });
-  // A physical gesture on the globe supersedes any step still easing.
-  for (const type of ['pointerdown', 'wheel'])
-    listen(viewer.scene.canvas, type, animator.cancel, { passive: true });
-  refreshHeading();
-  refreshTilt();
+  // A gesture on the globe supersedes a step still easing: the animator
+  // stops as soon as the camera has been moved by anything but itself.
+  published.heading = headingDegrees(camera.heading);
+  refreshTilt(); // the first publish
 
   const handle = {
-    root,
     perform,
     refresh() {
       refreshHeading();
@@ -735,7 +583,7 @@ export function mountNavControl({
       stopHold();
       animator.cancel();
       for (const remove of removers.splice(0)) remove();
-      root.remove?.();
+      store.detach(token);
       mounted.delete(viewer);
     },
   };
