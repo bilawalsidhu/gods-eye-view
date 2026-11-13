@@ -634,7 +634,8 @@ const ZH_HANT_COMMAND = 'npm run i18n -- --zh-hant';
 const ZH_HANT_CORRECTIONS = [
   ['年曆史', '年歷史'],
   ['下遊', '下游'],
-  ['並道', '併道'],
+  // 併道 is merging lanes; 並 stays when 道 starts 道路, 道歉 or 道理.
+  [/並道(?![路歉理])/g, '併道'],
   ['發佈', '發布'],
   ['公佈', '公布'],
   ['控制檯', '控制台'],

@@ -54,6 +54,12 @@ test('toZhHant converts characters, not vocabulary, and fixes what s2tw picks wr
   assert.equal(toZhHant('50 年历史'), '50 年歷史');
   assert.equal(toZhHant('发布于 {date}'), '發布於 {date}');
   assert.equal(toZhHant('1 周/秒'), '1 週/秒');
+  assert.equal(
+    toZhHant('{direction}并道，进入 {road}'),
+    '{direction}併道，進入 {road}',
+  );
+  assert.equal(toZhHant('事故并道路封闭'), '事故並道路封閉');
+  assert.equal(toZhHant('已关闭并道歉'), '已關閉並道歉');
 });
 
 test('checkZhHant names each entry that is not the conversion of zh-CN', () => {
