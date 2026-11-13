@@ -1,0 +1,50 @@
+/* ── Map attribution ───────────────────────────────────────────────────
+   The required Cesium / imagery credits sit in a small glass pill. On wide
+   screens it drops to the bottom-left corner, clear of the HUD's coordinate
+   readout and left of the command dock; narrower screens keep the raised
+   position the dock rules give it. Attribution must stay visible. */
+body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+body.ui-clean-view #cesium-credits,
+body.recording-mode #cesium-credits {
+  display: inline-flex;
+  align-items: center;
+  height: auto !important;
+  padding: 0.3rem 0.75rem 0.3rem 0.45rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  text-shadow: none;
+}
+
+#cesium-credits .cesium-widget-credits {
+  position: static !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+
+#cesium-credits img {
+  height: 18px;
+  vertical-align: middle !important;
+}
+
+@media (min-width: 1200px) {
+  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+  body:not(.ui-clean-view):not(.recording-mode):has(
+      #intel-hud[data-variant='minimal'].active
+    )
+    #cesium-credits {
+    right: auto;
+    bottom: 1.1rem;
+    left: 1.5rem;
+    /* Never reach under the centred command dock (about 30rem wide). */
+    max-width: calc(50vw - 17rem);
+    overflow: hidden;
+  }
+}

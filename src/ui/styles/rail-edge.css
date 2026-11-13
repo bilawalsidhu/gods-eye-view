@@ -1,0 +1,102 @@
+/* ── Side rails: sliding highlight and edge scrolling ──────────────────
+   The open item's highlight is drawn once per rail, under the icons, and
+   slides from item to item when the panel changes. With the pointer in a
+   screen edge's strip, the rail's border lights up a little to say the wheel
+   now steps through its panels; the panel that opens slides in from the
+   direction of travel. */
+.ui-rail {
+  position: relative;
+  transition:
+    border-color 240ms ease,
+    border-radius var(--transition-fast);
+}
+
+.ui-rail.ui-rail--edge-hot {
+  border-color: rgba(48, 194, 224, 0.4);
+}
+
+/* The highlight itself, matching an open item's own look. */
+.ui-rail::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: var(--rail-glide-w, 32px);
+  height: var(--rail-glide-h, 32px);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--btn-radius);
+  box-sizing: border-box;
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(var(--rail-glide-x, 0), var(--rail-glide-y, 0));
+  transition:
+    transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius var(--transition-fast),
+    opacity 200ms ease;
+}
+
+.ui-rail--expanded::before {
+  border-radius: 16px;
+}
+
+.ui-rail.ui-rail--glide::before {
+  opacity: 1;
+}
+
+.ui-rail.ui-rail--glide-jump::before {
+  transition: opacity 200ms ease;
+}
+
+/* While the shared highlight shows, the items stay clear and sit above it;
+   the open item keeps its accent colour, which eases in as it arrives. */
+.ui-rail--glide .ui-rail__item {
+  z-index: 1;
+  transition:
+    color 300ms ease,
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    border-radius var(--transition-fast);
+}
+
+.ui-rail--glide .ui-rail__item--on,
+.ui-rail--glide .ui-rail__item--on:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.rail-switch-down {
+  animation: rail-switch-down 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.rail-switch-up {
+  animation: rail-switch-up 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes rail-switch-down {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+}
+
+@keyframes rail-switch-up {
+  from {
+    opacity: 0;
+    translate: 0 -16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-rail::before {
+    transition: opacity 200ms ease;
+  }
+
+  .rail-switch-down,
+  .rail-switch-up {
+    animation: none;
+  }
+}

@@ -1,0 +1,92 @@
+/* ── Panels over the rail ───────────────────────────────────────────────
+   Each panel header's edge switch (UiPanelEdge) slides that side's open
+   panels over their rail to the screen edge; the rail stays underneath. */
+.ui-panel-edge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: rgba(206, 232, 239, 0.6);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ui-panel-edge .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.ui-panel-edge:hover,
+.ui-panel-edge:focus-visible {
+  color: var(--text-primary, #e8eaed);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.ui-panel-edge[aria-pressed='true'] {
+  color: #36dcff;
+  background: rgba(54, 220, 255, 0.12);
+  border-color: rgba(54, 220, 255, 0.45);
+}
+
+/* Collapsed panels hide the switch; it only means something once open. */
+.panel-collapsible.collapsed .ui-panel-edge {
+  display: none;
+}
+
+/* Right: open panels move right by the rail's width and sit over it. */
+body.panels-edge-right:not(.context-docked) #right-context-rail > :not(.gev-panel-rail) {
+  z-index: 2;
+  transform: translateX(var(--panel-rail-clearance, 48px));
+}
+
+/* Left: the same, moving left. */
+body.panels-edge-left #left-panel-stack > :not(.gev-panel-rail) {
+  z-index: 2;
+  transform: translateX(calc(-1 * var(--panel-rail-clearance, 48px)));
+}
+
+body.mobile-shell .ui-panel-edge {
+  display: none;
+}
+
+/* ── Edge mode with a panel open: the rail's icons move to a row along the
+   top of the panel, and the panel steps down to make room. ── */
+:root {
+  --edge-rail-row: 50px;
+}
+
+body.panels-edge-left .gev-panel-rail--left:has(.ui-rail--collapsible:not(.ui-rail--expanded)),
+body.panels-edge-right:not(.context-docked) .gev-panel-rail--right:has(.ui-rail--collapsible:not(.ui-rail--expanded)) {
+  top: 0 !important;
+  z-index: 3;
+}
+
+body.panels-edge-left .gev-panel-rail--left .ui-rail--collapsible:not(.ui-rail--expanded),
+body.panels-edge-right:not(.context-docked) .gev-panel-rail--right .ui-rail--collapsible:not(.ui-rail--expanded) {
+  flex-direction: row;
+  width: max-content;
+  gap: 4px;
+}
+
+/* The open panel's icon joins the row instead of floating above it. */
+body.panels-edge-left .gev-panel-rail--left .ui-rail--collapsible:not(.ui-rail--expanded) .ui-tooltip {
+  position: static !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panels-edge-left #left-panel-stack > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translate(calc(-1 * var(--panel-rail-clearance, 48px)), var(--edge-rail-row));
+  max-height: calc(100% - var(--edge-rail-row)) !important;
+}
+
+body.panels-edge-right:not(.context-docked) #right-context-rail > :not(.gev-panel-rail) {
+  transform: translate(var(--panel-rail-clearance, 48px), var(--edge-rail-row));
+  max-height: calc(100% - var(--edge-rail-row)) !important;
+}

@@ -19,7 +19,7 @@ export const PANEL_RAIL_ITEMS = Object.freeze({
   },
   'utilities-panel': { icon: 'handyman', label: msg('UTILITIES') },
   'scene-panel': { icon: 'movie', label: msg('AUTHORING') },
-  'pp-toggles': { icon: 'tune', label: msg('DISPLAY') },
+  'pp-toggles': { icon: 'palette', label: msg('VISUAL') },
   'cctv-panel': { icon: 'videocam', label: msg('CCTV') },
   'weather-panel': { icon: 'partly_cloudy_day', label: msg('WEATHER') },
   'news-panel': { icon: 'public', label: msg('NEWS') },

@@ -60,6 +60,7 @@ export function layoutLeftPanelRail({
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');
     stack.style.removeProperty('--panel-rail-offset');
+    stack.style.removeProperty('--panel-rail-lift');
     stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
     settleSideAccordion({ panels, enabled: false, onCollapse });
@@ -285,6 +286,12 @@ export function layoutLeftPanelRail({
   const railOffset = `${(topPinned ? 0 : safeTop - layoutTop).toFixed(1)}px`;
   if (stack.style.getPropertyValue('--panel-rail-offset') !== railOffset) {
     stack.style.setProperty('--panel-rail-offset', railOffset);
+  }
+  // How far the column can rise before it meets the HUD readout, so the rail
+  // and any open panel sit just under it, whether or not a panel is open.
+  const railLift = `${(topPinned ? 0 : Math.min(0, obstacleSafeTop - layoutTop)).toFixed(1)}px`;
+  if (stack.style.getPropertyValue('--panel-rail-lift') !== railLift) {
+    stack.style.setProperty('--panel-rail-lift', railLift);
   }
   stack.style.removeProperty('--left-stack-centered-height');
   for (const panel of panels)

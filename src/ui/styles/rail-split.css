@@ -1,0 +1,192 @@
+/* Experiment: with a left panel open, its rail icon leaves the rail and sits
+   level with the panel's title, as the panel's own tab. The other icons stay
+   in the rail underneath it and close the gap. With nothing open the rail keeps its
+   labelled pills. */
+.gev-panel-rail--left:has(.ui-rail--collapsible:not(.ui-rail--expanded) .ui-rail__item--on) {
+  /* The lifted chip (42px) centres on the panel title (26px into the
+     stack); the rail starts 6px below the chip. */
+  top: 53px;
+}
+
+.gev-panel-rail--left .ui-rail--collapsible:not(.ui-rail--expanded) {
+  position: relative;
+}
+
+.gev-panel-rail--left
+  .ui-rail--collapsible:not(.ui-rail--expanded)
+  .ui-tooltip:has(> .ui-rail__item--on) {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: -1px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.gev-panel-rail--left
+  .ui-rail--collapsible:not(.ui-rail--expanded)
+  .ui-tooltip:has(> .ui-rail__item--on)
+  .ui-rail__item {
+  width: 32px;
+}
+
+/* With nothing open, the icons and their names split into two glass panels
+   side by side: the plain icon rail, and a name panel beside it with one row
+   per icon. A name is part of its button, so clicking it opens that panel. */
+.gev-panel-rail--left .ui-rail--expanded {
+  position: relative;
+  border-radius: calc(var(--btn-radius) + 4px);
+}
+
+.gev-panel-rail--left .ui-rail--expanded .ui-rail__item {
+  width: 32px;
+  border-radius: var(--btn-radius);
+}
+
+.gev-panel-rail--left .ui-rail--expanded::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: calc(100% + 6px);
+  width: 170px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+.gev-panel-rail--left .ui-rail--expanded .ui-rail__label {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  /* Past the rail's padding and border, the 6px gap, and the name panel's
+     border and inner padding. */
+  left: calc(100% + 24px);
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+  margin: 0;
+}
+
+.gev-panel-rail--left .ui-rail--expanded .ui-rail__item:hover .ui-rail__label {
+  color: var(--text-primary);
+}
+
+/* The column rises to sit just under the HUD readout instead of leaving a
+   gap above it, with or without a panel open, so opening one doesn't move
+   the rail down. */
+#left-panel-stack {
+  top: calc(var(--left-stack-safe-top, var(--left-stack-top)) + var(--panel-rail-lift, 0px));
+}
+
+/* The right rail splits the same way with nothing open, mirrored: the icon
+   rail stays on the screen edge and the name panel sits to its left. */
+.gev-panel-rail--right .ui-rail--expanded {
+  position: relative;
+  border-radius: calc(var(--btn-radius) + 4px);
+}
+
+.gev-panel-rail--right .ui-rail--expanded .ui-rail__item {
+  width: 32px;
+  border-radius: var(--btn-radius);
+}
+
+.gev-panel-rail--right .ui-rail--expanded::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  right: calc(100% + 6px);
+  width: 170px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+.gev-panel-rail--right .ui-rail--expanded .ui-rail__label {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  /* From the button's left edge back past the rail's padding and border,
+     the 6px gap and the 170px name panel, to the panel's inner padding. */
+  left: -168px;
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+  margin: 0;
+}
+
+.gev-panel-rail--right .ui-rail--expanded .ui-rail__item:hover .ui-rail__label {
+  color: var(--text-primary);
+}
+
+/* In clean view the screen-edge gutters stay empty: the HUD's vertical edge
+   readouts (ONA / COLL on the left, BAND / BITS / LVL on the right) are not
+   shown. Cyber lays its HUD out differently and keeps them. */
+:root:not([data-ui-theme='cyber']) body.ui-clean-view #intel-hud .hud-edge {
+  display: none !important;
+}
+
+/* The bottom-right readout (GSD / ALT / AIS) has one more line than the
+   bottom-left one (MGRS / coordinates); it drops by that line so the two
+   corners start level. */
+#intel-hud[data-variant='tactical'] .hud-bottom-right {
+  bottom: calc(2vh + 6.5rem - 26px);
+}
+
+@media (min-width: 1200px) {
+  #intel-hud[data-variant='tactical'] .hud-bottom-right {
+    bottom: calc(4.2rem - 26px);
+  }
+}
+
+/* ── Contrast: rails and name panels read clearly over dark space as well
+   as bright imagery. ── */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail {
+  background: rgba(16, 20, 28, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail--expanded::after {
+  background: rgba(16, 20, 28, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item {
+  color: rgba(225, 236, 242, 0.88);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__label {
+  color: rgba(225, 236, 242, 0.82) !important;
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item:hover {
+  color: #fff;
+}
+
+/* The open item's highlight sits on the button itself, so it shows wherever
+   the button is (the lifted chip, the edge row). */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item.ui-rail__item--on {
+  color: #00d4ff !important;
+  background: rgba(0, 212, 255, 0.15) !important;
+  border-color: rgba(0, 212, 255, 0.15) !important;
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail.ui-rail--glide::before {
+  display: none !important;
+}
