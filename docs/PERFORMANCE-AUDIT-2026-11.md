@@ -34,11 +34,11 @@ Worst first. "Fix" names the pull request; a dash means none is open yet.
 | # | Where | What happens | Fix |
 | ---: | --- | --- | --- |
 | 1 | Bike Share, local data layers, Transit, Rail | 18 s freeze switching Bike Share on over New York (2,519 stations); 2.7 s on Data Centers; multi-second freezes with Transit while zooming | #1688, #1689 |
-| 2 | Shipwrecks | 4.6 to 5.1 s freeze when the markers are first built; a share link with the layer on holds the loading screen for 22.9 s | — |
+| 2 | Shipwrecks | 3 to 5 s freeze when the markers are built over loaded terrain; a share link with the layer on held the loading screen for 22.9 s in one run | — |
 | 3 | Camera | Rendering stops until reload: at a whole-globe view looking straight down, pan a few times, then scroll one notch | — |
 | 4 | Street Traffic | Zooming at 250 m over Manhattan: 25 long tasks in 24 s, longest 746 ms, 6.6 s in total | — |
 | 5 | ALPR cameras | Up to a 1.9 s long task on load; eight off/on toggles cost 512 depth samples and 6.3 s | — |
-| 6 | Wind | 14 long tasks while zooming (longest 414 ms), 3.2 s of long tasks on load, about 32 renders a second for as long as it is on | — |
+| 6 | Wind | First zoom after load: up to 14 long tasks (longest 414 ms). Re-measured as one-off shader links, not a standing cost: see below | none proposed |
 | 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | — |
 | 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | — |
 | 9 | Radio | 7 to 10 long tasks when the directory loads, longest 447 ms | — |
@@ -71,7 +71,9 @@ go. The fix keeps heights per point in one shared reader with a read budget
 `rebuild()` in `src/layers/shipwrecks/index.js` adds 7,958 billboards with
 `heightReference: CLAMP_TO_GROUND`. Each constructor runs
 `Billboard._updateClamping`, which intersects a ray with the terrain mesh,
-synchronously: 4.8 of the 4.9 s.
+synchronously: 4.8 of the 4.9 s. The cost is only paid when terrain is loaded
+at the time the markers are built, so a cold start with the layer in the URL
+sometimes escapes it.
 
 Fix: do not clamp. Wrecks are at sea and the markers already ignore the depth
 test, so place them on the ellipsoid with `HeightReference.NONE`.
@@ -124,24 +126,36 @@ frame.
 
 ### 6. Wind
 
-The layer draws 7,184 paths as 916,476 vertices in 73 primitives. Cesium's
-zoom-to-cursor reads the depth buffer back, which has to flush that draw: 1.9 s
-of `readPixels` in a zoom against 0.2 s without Wind. A frame loop in
-`src/layers/wind/rendering.js` requests a render about 32 times a second to
-advance one uniform, and `disable()` throws the baked geometry away.
+The first reading blamed the layer's 916,476 vertices for slow depth reads
+during zoom. Measuring again did not support that: depth reads cost the same
+with and without Wind, hiding every wind primitive left pick time unchanged, and
+the stalls appear on the first zoom only, as shader programs link (seven
+programs, about 0.5 s, long tasks up to 166 ms). Later zooms had none.
 
-Fix: fewer vertices (merged typed-array geometry, shorter or fewer paths), keep
-the bake across disable and enable, register the animation with the render
-governor at a lower rate, and keep wind out of the depth and pick passes.
+The roughly 30 renders a second are the animation itself. It is already capped
+at 30 Hz and stops when paused, hidden, out of view or under reduced motion;
+lowering the rate would change how the layer looks. `disable()` releases the
+baked geometry on purpose, at the price of one task of about 130 ms on
+re-enable.
+
+No fix is proposed. Warming the shader programs before the first zoom is the
+one thing left to try.
 
 ### 7. Submarine cables
 
 `src/layers/submarineCables/ingestion.js` loads both collections through
-`Cesium.GeoJsonDataSource` with `clampToGround`. That is one entity per cable
-part, and the entity visualisers walk all of them on every update.
+`Cesium.GeoJsonDataSource` with `clampToGround`. Switching the layer on is one
+task of about 1.4 s, and 1.2 s of it is Cesium reading the terrain height for
+the 1,917 ground-clamped landing markers, all created in the first frame,
+including the ones behind the globe.
 
-Fix: build one batched `GroundPolylinePrimitive` and one
-`PointPrimitiveCollection` directly, and keep them across disable and enable.
+Fix, first step: start the landing markers hidden and let the existing horizon
+sweep show the visible ones a few dozen per frame.
+
+Follow-up: one batched `GroundPolylinePrimitive` and one
+`PointPrimitiveCollection` in place of the entity data sources would also remove
+the transient 1 GB heap and the visualiser tasks of 100 to 250 ms. It needs a
+decision on how unclamped landing points are hidden behind the globe.
 
 ### 8. Live Flights at whole-globe view
 
