@@ -162,3 +162,84 @@
   background: rgba(0, 212, 255, 0.15);
   border-color: rgba(0, 212, 255, 0.28);
 }
+
+/* ── The open icon is its own island ──
+   With a panel open, the rail's glass is drawn in pieces behind its icons:
+   one piece for the open icon, and one for each run of icons above and below
+   it. The icons keep their places, open or not; the spacing between them is
+   what leaves room for the break. */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail {
+  gap: 12px;
+}
+
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on) {
+  background: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip::before {
+  position: absolute;
+  inset: -6px -5px;
+  z-index: -1;
+  background: rgba(16, 20, 28, 0.82);
+  border: solid rgba(255, 255, 255, 0.14);
+  border-width: 0 1px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  content: '';
+  pointer-events: none;
+}
+
+/* The ends of the rail. */
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:first-child::before {
+  top: -5px;
+  border-top-width: 1px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:last-child::before {
+  bottom: -5px;
+  border-bottom-width: 1px;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+/* The runs stop short of the open icon. */
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:has(+ .ui-tooltip > .ui-rail__item--on)::before {
+  bottom: -1px;
+  border-bottom-width: 1px;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:has(> .ui-rail__item--on) + .ui-tooltip::before {
+  top: -1px;
+  border-top-width: 1px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+
+/* The open icon's own piece. */
+:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:has(> .ui-rail__item--on)::before {
+  inset: -4px -5px;
+  border-width: 1px;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
