@@ -5,3 +5,6 @@
   Wikipedia article or the Aviation Safety Network record. Markers grow with
   fatalities, and a start and end year picker filters by period (IMBrandao,
   #1682).
+- Treat malformed 200-OK Wikidata SPARQL envelopes as failed queries so
+  missing placed-accident data is reported as incomplete rather than complete
+  (IMBrandao feature; follow-up regression).

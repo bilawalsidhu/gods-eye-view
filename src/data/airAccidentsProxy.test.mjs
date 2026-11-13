@@ -106,6 +106,28 @@ test('the placed query failing still serves the own-coordinate accidents', async
   );
 });
 
+test('a malformed 200 from the placed query reports an incomplete snapshot', async () => {
+  const { fetchImpl: good } = fakeFetch();
+  let placedCalls = 0;
+  const fetchImpl = async (url, options) => {
+    if (isPlaced(url)) {
+      placedCalls++;
+      // An HTTP success with no bindings array is not a completed SPARQL query.
+      return Response.json({ results: { bindings: null } });
+    }
+    return good(url, options);
+  };
+  const handler = handlerOf(airAccidentsProxy({ fetchImpl, now: () => 1000 }));
+  const { status, body } = await request(handler);
+  assert.equal(status, 200);
+  assert.equal(body.complete, false);
+  assert.deepEqual(
+    body.records.map(({ id }) => id),
+    ['wikidata:Q1'],
+  );
+  assert.equal(placedCalls, 2, 'invalid envelopes are retried once');
+});
+
 test('the own-coordinate query failing is a 502', async () => {
   const { fetchImpl } = fakeFetch({ ownFails: true });
   const handler = handlerOf(airAccidentsProxy({ fetchImpl }));

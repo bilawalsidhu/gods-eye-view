@@ -43,7 +43,10 @@ export function airAccidentsProxy({
       await response.body?.cancel();
       throw new Error('upstream_unavailable');
     }
-    return readResponseJsonCapped(response, 32 * MIB, signal);
+    const payload = await readResponseJsonCapped(response, 32 * MIB, signal);
+    if (!Array.isArray(payload?.results?.bindings))
+      throw new Error('invalid_wikidata_results');
+    return payload;
   }
 
   /**
