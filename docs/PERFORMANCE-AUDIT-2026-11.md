@@ -39,7 +39,7 @@ Worst first. "Fix" names the pull request that carries the fix.
 | 4 | Street Traffic | Zooming at 250 m over Manhattan: 25 long tasks in 24 s, longest 746 ms, 6.6 s in total | #1705 |
 | 5 | ALPR cameras | Depth samples inside the overlay paint, repeated on every re-enable: 240 samples and about 1 s across eight toggles. A first-sample freeze of up to 1.9 s was seen in the sweep but not on a second day | #1706 |
 | 6 | Wind | First zoom after load: up to 14 long tasks (longest 414 ms). Re-measured as one-off shader links, not a standing cost: see below | none proposed |
-| 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | #1707 (first step) |
+| 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | #1707 (first step), #1722 (batched primitives) |
 | 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | #1708 (fleet pass), #1719 (overlay) |
 | 9 | Radio | 7 to 10 long tasks when the directory loads, longest 447 ms | #1709 |
 | 10 | Pointer pick | Not reproduced on a second look: see below | none needed |
@@ -51,7 +51,7 @@ Worst first. "Fix" names the pull request that carries the fix.
 | ---: | --- | --- | --- |
 | 12 | `/api/firms` | The whole fire set is filtered, serialised and sent uncompressed on every request; 15 to 55 MB estimated in a heavy season | #1711 |
 | 13 | AIS store | Both vessel maps are walked on every position message, and sorted whole once past the cap | #1712 |
-| 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | #1713 (canvas path) |
+| 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | #1713 (canvas path), #1721 (shader) |
 | 15 | NVG and FLIR styles | Over 100 texture reads per pixel, and 60 renders a second while the style is on. Measured afterwards: the reads cost 0.4 ms a frame at 1440 x 900 and 1.2 ms at 2560 x 1440 | #1718 |
 | 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop. Measured afterwards: 68 ms blocked per warm refresh, about 250 ms on the first, about 400 ms when all six keys refresh together | #1717 |
 | 17 | Imported geo files and other per-feature ground clamps | Measured afterwards: imported files do not freeze; see below | none needed |
@@ -160,10 +160,13 @@ including the ones behind the globe.
 Fix, first step: start the landing markers hidden and let the existing horizon
 sweep show the visible ones a few dozen per frame.
 
-Follow-up: one batched `GroundPolylinePrimitive` and one
-`PointPrimitiveCollection` in place of the entity data sources would also remove
-the transient 1 GB heap and the visualiser tasks of 100 to 250 ms. It needs a
-decision on how unclamped landing points are hidden behind the globe.
+Fix, second step: draw from batched primitives in place of the entity data
+sources: one ground polyline primitive for the lines, one billboard collection
+for the landing markers, one point collection and one static polyline primitive
+for the reference stems, all kept while the layer is off. That removes the
+visualiser tasks, the stall on switch-off and on re-enable, and about 900 MB of
+heap. The first switch-on still links shaders and builds the ground-line
+geometry once.
 
 ### 8. Live Flights at whole-globe view
 
@@ -248,8 +251,10 @@ entry with the vessel.
 `src/layers/weather/infraredImage.js` runs `getImageData`, a per-pixel power
 curve and `putImageData` over the whole canvas.
 
-Fix: a 256-entry lookup table applied in place for the canvas path; for the
-shell, do the transfer in its fragment shader.
+Fix: a 256-entry lookup table applied in place for the canvas path, which
+halves it; then, for the shell on the 3D Tiles map, the same curve in its
+fragment shader from a strength uniform, so the image is never read back and a
+strength change builds no new image.
 
 ### 15. NVG and FLIR styles
 
