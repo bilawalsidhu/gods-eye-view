@@ -254,7 +254,10 @@ test('a failed CBSA fetch backs off for five minutes without hiding CBP', async 
   const failed = await request();
   assert.equal(failed.status, 200);
   assert.deepEqual(failed.body.canada, { available: false });
-  assert.deepEqual(failed.body.rows.map(({ id }) => id), ['380001']);
+  assert.deepEqual(
+    failed.body.rows.map(({ id }) => id),
+    ['380001'],
+  );
 
   clock = 1;
   assert.deepEqual((await request()).body.canada, { available: false });
