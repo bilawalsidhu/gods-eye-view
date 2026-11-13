@@ -1197,8 +1197,11 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
-        preservePanelStateDuringClear: () =>
-          this._preservePanelStateDuringLayerClear,
+        // Clear selected data layers and Context isolation switch the layer
+        // off without the user asking: the panel keeps its state for both.
+        preservePanelState: () =>
+          this._preservePanelStateDuringLayerClear ||
+          this._contextSuspendsLayer('cctv'),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
       },

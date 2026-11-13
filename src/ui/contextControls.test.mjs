@@ -153,3 +153,39 @@ test('a rejected tracked reaction settles without an unhandled rejection', async
   await controls._waitForContextLayerSettlement();
   assert.equal(controls._contextLayerReactionPromises.size, 0);
 });
+
+test('a layer Context isolation switches off is suspended until the mode is left', async (t) => {
+  const { controls } = fixture(t);
+  const enabled = new Set(['cctv']);
+  // What the CCTV panel is told at each visibility change of its layer.
+  const seen = [];
+  controls._dataManager = {
+    layers: new Map([['cctv', {}]]),
+    getEnabledLayerIds: () => [...enabled],
+    getLayerParams: () => null,
+    setLayerParams() {},
+    isEnabled: (layerId) => enabled.has(layerId),
+    isEffectivelyEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, next) {
+      if (next) enabled.add(layerId);
+      else enabled.delete(layerId);
+      seen.push([layerId, next, controls.suspendsLayer(layerId)]);
+      return true;
+    },
+    async restoreEnabledLayerIds(layerIds) {
+      for (const layerId of layerIds) await this.setEnabled(layerId, true);
+    },
+  };
+  assert.equal(controls.suspendsLayer('cctv'), false);
+  controls._captureContextSessionSnapshot();
+  await controls._clearLayersOutsideContextMode('flights');
+  assert.deepEqual(seen, [['cctv', false, true]]);
+  assert.equal(controls.suspendsLayer('cctv'), true);
+  assert.equal(controls.suspendsLayer('street-level'), false);
+  await controls._restoreContextSession();
+  assert.equal(enabled.has('cctv'), true);
+  assert.equal(controls.suspendsLayer('cctv'), false);
+  // A switch-off after the mode is left is the user's own.
+  await controls._dataManager.setEnabled('cctv', false);
+  assert.deepEqual(seen.at(-1), ['cctv', false, false]);
+});

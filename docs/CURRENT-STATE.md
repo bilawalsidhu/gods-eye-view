@@ -2230,9 +2230,13 @@ settles), so a new camera's preview is blank only while its frame loads. Disposa
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
 The panel opens when a camera becomes active and collapses when the layer is
-switched off, from its own switch or anywhere else; a context-mode layer clear
-keeps it as it is. A panel opened by hand while the layer is off stays open,
-and its meta line reads the catalog count, not the last active camera.
+switched off, from its own switch or anywhere else. The panel chrome applies
+the collapse, so a panel the desktop accordion only folded has its saved and
+shared state closed too. Clear selected data layers and Context isolation
+(Contacts, Space Missions) switch the layer off without the user asking: the
+panel and its share preference stay as they are, and the layer comes back to an
+open panel. A panel opened by hand while the layer is off stays open, and its
+meta line reads the catalog count, not the last active camera.
 
 ## UI disposal
 

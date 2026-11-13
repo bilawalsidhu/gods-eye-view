@@ -192,13 +192,14 @@ export function _renderCctvState(state) {
   this._lastSeenCctvActiveId = effectiveActiveId;
   // Switching the layer off closes the panel it opened: nothing is left to
   // show. Only the on → off change collapses, so a panel the user opens
-  // while the layer is off stays open, and a context-mode layer clear keeps
-  // the panel for the layers it restores.
+  // while the layer is off stays open. Clear selected data layers and
+  // Context isolation keep the panel: the layer comes back with it. The
+  // panel chrome decides whether anything changes: a panel the desktop
+  // accordion only folded still has an open saved state to close.
   if (
     this._wasCctvEnabled &&
     !enabled &&
-    !this.actions.preservePanelStateDuringClear?.() &&
-    !this._cctvPanel?.classList?.contains('collapsed')
+    !this.actions.preservePanelState?.()
   ) {
     this.actions.setPanelCollapsed('cctv-panel', true);
   }

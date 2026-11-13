@@ -59,6 +59,15 @@ export class ContextControls {
   showToast(...args) {
     if (!this.destroyed) this.actions.showToast(...args);
   }
+  /**
+   * Whether Context isolation switched this layer off and leaving the mode
+   * restores it. Such a layer is suspended, not switched off by the user.
+   * @param {string} layerId Layer id.
+   * @returns {boolean}
+   */
+  suspendsLayer(layerId) {
+    return Boolean(this._contextSessionSnapshot?.enabledLayerIds?.has(layerId));
+  }
   setClearBusy(...args) {
     if (!this.destroyed) this.actions.setClearBusy(...args);
   }

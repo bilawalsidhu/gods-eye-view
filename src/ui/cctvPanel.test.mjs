@@ -541,9 +541,12 @@ test('switching the layer off collapses the panel it opened', (t) => {
   // The layer keeps its active camera while off.
   controls._renderCctvState({ ...activeState, enabled: false });
   assert.deepEqual(calls.at(-1), ['cctv-panel', true]);
-  // Later notifications while off leave a panel the user reopened alone.
+  // A panel reopened by hand stays open through later notifications while
+  // the layer is off: only the on → off change collapses.
+  controls._cctvPanel.classList.remove('collapsed');
   controls._renderCctvState({ ...activeState, enabled: false });
   assert.equal(calls.length, 2);
+  assert.equal(controls._cctvPanel.classList.contains('collapsed'), false);
 });
 
 test('a layer that was never on leaves an open panel alone', (t) => {
@@ -565,22 +568,34 @@ test('the data manager switching the layer off collapses the panel too', (t) => 
   assert.deepEqual(calls.at(-1), ['cctv-panel', true]);
 });
 
-test('a context-mode layer clear keeps the panel open', (t) => {
+test('a layer the application suspends keeps its panel through the round trip', (t) => {
   const { controls } = panel(t);
   const calls = collapseCalls(controls);
-  controls.actions.preservePanelStateDuringClear = () => true;
+  // Clear selected data layers and Context isolation both answer true.
+  let suspended = true;
+  controls.actions.preservePanelState = () => suspended;
   controls._renderCctvState(activeState);
   controls._renderCctvState({ ...activeState, enabled: false });
-  assert.deepEqual(calls, [['cctv-panel', false]]);
+  assert.equal(controls._cctvPanel.classList.contains('collapsed'), false);
+  suspended = false;
+  controls._renderCctvState(activeState);
+  assert.equal(controls._cctvPanel.classList.contains('collapsed'), false);
+  assert.ok(calls.every(([, collapsed]) => collapsed === false));
+  // The next switch-off is the user's again.
+  controls._renderCctvState({ ...activeState, enabled: false });
+  assert.deepEqual(calls.at(-1), ['cctv-panel', true]);
 });
 
-test('an already collapsed panel is not collapsed again', (t) => {
+test('a panel the accordion folded still has its saved state closed', (t) => {
   const { controls } = panel(t);
   controls._renderCctvState(activeState);
-  const calls = collapseCalls(controls);
+  const calls = [];
+  controls.actions.setPanelCollapsed = (...args) => calls.push(args);
+  // Folded for layout only: the class is there, the saved state is open. The
+  // panel chrome tells the two apart, so the controls always ask it.
   controls._cctvPanel.classList.add('collapsed');
   controls._renderCctvState({ ...activeState, enabled: false });
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, [['cctv-panel', true]]);
 });
 
 test('the meta line of a disabled layer does not describe its last camera', () => {
