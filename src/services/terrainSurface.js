@@ -75,7 +75,9 @@ export function createTerrainSurface() {
   const heights = new Map();
   /** Floor-cell key → the last height read anywhere in that cell. */
   const cells = new Map();
+  /** The globe and terrain provider the kept heights were read from. */
   let globeRead = null;
+  let providerRead = null;
   let windowAt = -Infinity;
   let readMs = 0;
   let refreshMs = 0;
@@ -94,7 +96,7 @@ export function createTerrainSurface() {
   function clear() {
     heights.clear();
     cells.clear();
-    globeRead = null;
+    globeRead = providerRead = null;
     windowAt = -Infinity;
     readMs = refreshMs = 0;
     deferredAt.fill(Infinity);
@@ -127,10 +129,13 @@ export function createTerrainSurface() {
     const globe = viewer?.scene?.globe;
     if (globe?.show !== true || typeof globe.getHeight !== 'function')
       return null;
-    // Another globe's surface is another surface.
-    if (globe !== globeRead) {
+    // A height belongs to the terrain it was read from: another globe or
+    // another terrain provider is another surface, however settled the camera.
+    const provider = viewer.terrainProvider;
+    if (globe !== globeRead || provider !== providerRead) {
       clear();
       globeRead = globe;
+      providerRead = provider;
     }
     return globe;
   }

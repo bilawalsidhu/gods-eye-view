@@ -79,8 +79,13 @@ export function createHeight({ state, services, parts }) {
       if (
         state._viewer?.terrainProvider instanceof
         Cesium.EllipsoidTerrainProvider
-      )
+      ) {
+        // Nothing is asked of the terrain while the globe is flat: show the
+        // reader the flat provider, so the heights kept from the terrain
+        // before it do not come back with the terrain after it.
+        terrainSurface.observe(state._viewer);
         return { cell, height: GROUND_FLOOR_LIFT_M, prior: null };
+      }
       const rendered = terrainSurface.height(state._viewer, lat, lon, need);
       if (Number.isFinite(rendered))
         return { cell, height: rendered + GROUND_FLOOR_LIFT_M, prior: null };

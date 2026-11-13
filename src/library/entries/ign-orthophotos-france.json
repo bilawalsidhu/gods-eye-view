@@ -1,0 +1,48 @@
+{
+  "id": "ign-orthophotos-france",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "France aerial photos (IGN)",
+  "provider": "IGN",
+  "description": "IGN's national orthophotography of metropolitan France and Corsica.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["FR"],
+    "bbox": [-5.5, 41.2, 9.8, 51.2]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true,
+    "noDataColor": "#0a3b59"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "20 cm",
+    "resolutionM": 0.2,
+    "trueOrtho": false,
+    "vintage": "2018–present",
+    "updateCycle": "3-year rolling refresh",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Licence Ouverte / Etalab 2.0",
+    "url": "https://www.etalab.gouv.fr/licence-ouverte-open-licence/"
+  },
+  "attribution": {
+    "text": "© IGN — Géoplateforme",
+    "url": "https://geoservices.ign.fr/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

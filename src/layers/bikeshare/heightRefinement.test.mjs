@@ -57,12 +57,14 @@ function makeLayer({
   unloaded = () => false,
 } = {}) {
   const calls = { sampleHeight: 0, getHeight: 0, sharedHeight: 0, render: 0 };
-  /** sampleHeight calls per turn of the event loop. */
-  const perTurn = [0];
+  // sampleHeight calls in this turn of the event loop, and the most in any
+  // turn so far. Two numbers, not a list: a slow run has a great many turns.
+  let thisTurn = 0;
+  let mostInATurn = 0;
   let ticking = true;
   const tick = () => {
     if (!ticking) return;
-    perTurn.push(0);
+    thisTurn = 0;
     setImmediate(tick);
   };
   setImmediate(tick);
@@ -80,7 +82,8 @@ function makeLayer({
       sampleHeightSupported: true,
       sampleHeight(carto) {
         calls.sampleHeight += 1;
-        perTurn[perTurn.length - 1] += 1;
+        thisTurn += 1;
+        if (thisTurn > mostInATurn) mostInATurn = thisTurn;
         busyWait(SAMPLE_COST_MS);
         return groundAt(...degrees(carto));
       },
@@ -176,7 +179,7 @@ function makeLayer({
     },
     /** The most sampleHeight calls made without yielding to the loop. */
     longestBurst() {
-      return Math.max(...perTurn);
+      return mostInATurn;
     },
     done() {
       ticking = false;

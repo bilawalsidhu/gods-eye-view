@@ -97,6 +97,35 @@ test("another globe's surface is read afresh", (t) => {
   assert.equal(surface.stats().held, 1);
 });
 
+test('another terrain provider is read afresh, however settled the old heights were', (t) => {
+  const { viewer, reads, model, clock } = world(t);
+  const surface = createTerrainSurface();
+  viewer.terrainProvider = {};
+  const at = () => surface.height(viewer, 42.36, -71.06);
+  // Read once the camera and tiles have long settled: kept indefinitely.
+  surface.height(viewer, 10, 10);
+  clock.now += TERRAIN_SETTLE_MS * 2;
+  reads.length = 0;
+  assert.equal(at(), 100);
+  clock.now += TERRAIN_SETTLE_MS * 10;
+  model.surface = () => 250;
+  assert.equal(at(), 100, 'same terrain: the kept height stands');
+  assert.equal(reads.length, 1);
+
+  const real = (viewer.terrainProvider = {});
+  assert.equal(at(), 250, 'a new provider is a new surface');
+  assert.equal(reads.length, 2);
+
+  // Terrain → flat → the same provider. A caller answers a flat globe
+  // itself and asks nothing, so it shows the flat provider with observe().
+  viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  surface.observe(viewer);
+  model.surface = () => 30;
+  viewer.terrainProvider = real;
+  assert.equal(at(), 30);
+  assert.equal(reads.length, 3);
+});
+
 test('observe() lets a caller that asks nothing while tiles load report the load', (t) => {
   const { viewer, reads, clock, model } = world(t, { surface: () => 10 });
   const surface = createTerrainSurface();
