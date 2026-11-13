@@ -322,6 +322,57 @@ test('a refused ring drag never starts and moves nothing', () => {
   );
 });
 
+test('a ring drag stops when the camera policy refuses a move, and stays stopped', () => {
+  let allowed = true;
+  let asked = 0;
+  const { nav, frame } = setup({
+    view: { heading: 0, pitch: -45, range: 1_000 },
+    runNavigation: (_noun, navigate) => {
+      asked += 1;
+      return allowed ? navigate() : false;
+    },
+  });
+  const at = (clientX, clientY) => ({
+    centerX: 140,
+    centerY: 140,
+    clientX,
+    clientY,
+  });
+  assert.equal(nav.act('ringStart', at(180, 140)), true);
+  nav.act('ringMove', { clientX: 170, clientY: 168 });
+  const accepted = frame().heading;
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(accepted)) > 0.01,
+    'a permitted move turns the camera',
+  );
+
+  // The pointer is still captured, but something else (the Cockpit) now owns
+  // the camera.
+  allowed = false;
+  nav.act('ringMove', { clientX: 140, clientY: 180 });
+  assert.ok(
+    Math.abs(frame().heading - accepted) < 1e-8,
+    'a refused move must not turn the camera',
+  );
+  assert.equal(nav.view.dragging, false, 'the refusal ends the drag');
+  assert.equal(asked, 3, 'press, one allowed move and the one refused move');
+
+  // Permission returns, but only a new press may resume turning.
+  allowed = true;
+  nav.act('ringMove', { clientX: 140, clientY: 180 });
+  assert.equal(asked, 3, 'an ended drag asks the policy nothing more');
+  assert.ok(
+    Math.abs(frame().heading - accepted) < 1e-8,
+    'a refused drag does not resume without a new press',
+  );
+  assert.equal(nav.act('ringStart', at(180, 140)), true);
+  nav.act('ringMove', { clientX: 140, clientY: 180 });
+  assert.ok(
+    Math.abs(frame().heading - accepted) > 0.1,
+    'a new press starts a new drag',
+  );
+});
+
 test('ring arrow keys turn the view and Home faces north', () => {
   const { nav, frame, settle } = setup({ view: { heading: 40 } });
   assert.equal(nav.act('ringKey', 'ArrowRight'), true);

@@ -2625,7 +2625,9 @@ kit) renders the `gev-nav-control` store, and the framework-free owner in
 `src/ui/navControl/` publishes the heading, tilt and follow state to it and
 answers the view's actions through the store. The control has
 a compass ring that shows the heading and turns the map when dragged (arrow
-keys turn it, Home returns to north), a north-up button, a tilt slider with
+keys turn it, Home returns to north; every drag move asks the navigation
+policy again, so a drag ends when the Cockpit takes the camera and only a new
+press starts another), a north-up button, a tilt slider with
 up/down buttons and a top-down button, zoom in/out with press-and-hold repeat,
 and a four-way look-around pad. Steps ease over about 220 ms; a step that is
 still easing stops as soon as anything else moves the camera (a drag or wheel
