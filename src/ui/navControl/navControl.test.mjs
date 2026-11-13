@@ -453,3 +453,33 @@ test('on wide screens the control sits above the bottom-right corner row', async
   assert.ok(rule, 'a wide-screen rule lifts the control');
   assert.match(rule[1], /bottom:\s*calc\(\s*max\(58px/);
 });
+
+test('the application shell mounts the owner on the page store and releases it', async () => {
+  const { StyleManager } = await import('../applicationShell.js');
+  const { applicationPinia } = await import('../vueRuntime.js');
+  const nav = useNavControlStore(applicationPinia());
+  const viewer = createViewer();
+  orbit(viewer);
+  const runs = [];
+  const shell = {
+    viewer,
+    _navigation: {
+      runOrientation: (noun, navigate) => {
+        runs.push(noun);
+        return navigate();
+      },
+    },
+  };
+  StyleManager.prototype._initNavControl.call(shell);
+  assert.ok(nav.view, 'the page store shows the control');
+  assert.equal(nav.view.heading, 30);
+  assert.equal(nav.act('activate', 'north'), true);
+  assert.deepEqual(runs, ['camera'], 'actions use the shell navigation policy');
+  // Mounting again replaces the first owner and keeps one control.
+  const first = shell._navControl;
+  StyleManager.prototype._initNavControl.call(shell);
+  assert.equal(first.destroyed, true);
+  assert.ok(nav.view);
+  shell._navControl.destroy();
+  assert.equal(nav.view, null);
+});
