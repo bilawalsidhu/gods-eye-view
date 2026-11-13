@@ -464,6 +464,23 @@
   white-space: nowrap;
 }
 
+/* A moving item's state on its row: green moving, amber stopped, grey
+   while its feed has nothing new. */
+.view-context__row-motion {
+  flex: none;
+  margin-right: 6px;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 14px;
+}
+
+.view-context__row-motion[data-motion='moving'] {
+  color: #5dff9f;
+}
+
+.view-context__row-motion[data-motion='stopped'] {
+  color: #ffb86b;
+}
+
 .view-context__row-meta {
   flex: none;
   color: rgba(199, 214, 222, 0.55);
@@ -1144,7 +1161,8 @@
   border-radius: 8px;
 }
 
-.cctv-preview__frame img {
+.cctv-preview__frame img,
+.cctv-preview__live {
   width: 100%;
   height: 100%;
   object-fit: cover;

@@ -53,7 +53,9 @@ const TITLE_FIELDS = [
   'registration',
 ];
 /** Fields that identify an item, for matching a click or a search. */
-const KEY_FIELDS = ['icao24', 'mmsi', 'noradId', 'usgsId', 'id'];
+// `key` is a layer's own key where it differs from the record's id (a
+// transit vehicle is keyed by feed and vehicle, and named by its fleet number).
+const KEY_FIELDS = ['icao24', 'mmsi', 'noradId', 'usgsId', 'id', 'key'];
 /**
  * How many records to ask a layer for when all are wanted. Layers read a
  * missing or unbounded count as their own small default, so this is a number
@@ -103,6 +105,7 @@ const HIDDEN_FACTS = new Set([
   'scale',
   'routeId',
   'building',
+  'key',
 ]);
 
 /** Facts that lead the list when a record has them, in this order. */
@@ -318,6 +321,27 @@ const isEpochMs = (value) =>
  */
 /** Codes the feeds use, in words. */
 const CODE_WORDS = Object.freeze({
+  motion: {
+    moving: 'Moving',
+    stopped: 'Stopped',
+    waiting: 'Waiting for update',
+    'no-fix': 'No recent fix',
+  },
+  // GTFS-RT vehicle states, as the operator last reported them.
+  status: {
+    IN_TRANSIT_TO: 'Heading to next stop',
+    INCOMING_AT: 'Arriving at a stop',
+    STOPPED_AT: 'Stopped at a stop',
+  },
+  occupancy: {
+    EMPTY: 'Empty',
+    MANY_SEATS_AVAILABLE: 'Many seats free',
+    FEW_SEATS_AVAILABLE: 'Few seats free',
+    STANDING_ROOM_ONLY: 'Standing room only',
+    CRUSHED_STANDING_ROOM_ONLY: 'Crowded',
+    FULL: 'Full',
+    NOT_ACCEPTING_PASSENGERS: 'Not taking passengers',
+  },
   classification: {
     TD: 'Tropical depression',
     TS: 'Tropical storm',
@@ -995,7 +1019,7 @@ const AIRCRAFT_CLASS_NAMES = {
  */
 export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
   const kind = entityKind(layerId).kind;
-  if (!['aircraft', 'vessel', 'satellite', 'earthquake'].includes(kind)) return null;
+  if (!['aircraft', 'vessel', 'satellite', 'earthquake', 'vehicle'].includes(kind)) return null;
   let records = layerRecords(dataManager, layerId);
   if (rect) {
     const wraps = rect.west > rect.east;
@@ -1024,6 +1048,22 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     splits.push({ title: 'Type', parts: tallyBy(records, (record) => AIRCRAFT_CLASS_NAMES[record.aircraftClass] || plainWord(text(record.aircraftClass))) });
   } else if (kind === 'vessel') {
     splits.push({ title: 'Type', parts: tallyBy(records, (record) => shipTypeName(record.shipType)) });
+  } else if (kind === 'vehicle') {
+    // What the display shows each vehicle doing, then what kind it is, who
+    // runs it, the operator's own report and crowding where the feed has it.
+    // Feeds of vehicle positions carry no timetable, so early or late is not
+    // something these records can say.
+    const word = (field) => (record) => CODE_WORDS[field][record[field]] || '';
+    splits.push({ title: 'Motion', parts: tallyBy(records, word('motion')) });
+    splits.push({ title: 'Mode', parts: tallyBy(records, (record) => plainWord(text(record.mode))) });
+    const operators = tallyBy(records, (record) => text(record.operator));
+    if (operators.length > 1) splits.push({ title: 'Operator', parts: operators });
+    const reported = records.filter((record) => CODE_WORDS.status[record.status]);
+    if (reported.length)
+      splits.push({ title: 'Last reported', parts: tallyBy(reported, word('status')) });
+    const crowded = records.filter((record) => CODE_WORDS.occupancy[record.occupancy]);
+    if (crowded.length)
+      splits.push({ title: 'Crowding', parts: tallyBy(crowded, word('occupancy')) });
   } else if (kind === 'satellite') {
     splits.push({ title: 'Class', parts: tallyBy(records, (record) => plainWord(text(record.satelliteClass || record.group))) });
   } else {

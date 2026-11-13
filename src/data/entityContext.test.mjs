@@ -50,6 +50,58 @@ test('a click identity finds its record by key, past the first 2000 records', ()
   assert.equal(record?.callsign, 'FLT2400');
 });
 
+test('a transit click finds its vehicle by the layer key and reads its state', () => {
+  const buses = manager({
+    transit: {
+      name: 'Transit',
+      records: [
+        {
+          id: 'M634',
+          key: 'capmetro-austin:M634',
+          route: '801',
+          operator: 'CapMetro',
+          status: 'IN_TRANSIT_TO',
+          lat: 30.2,
+          lon: -97.7,
+        },
+      ],
+    },
+  });
+  const card = describeEntity(buses, {
+    layerId: 'transit',
+    id: 'capmetro-austin:M634',
+    lat: 30.21,
+    lon: -97.71,
+  });
+  assert.equal(card?.title, 'M634');
+  const facts = Object.fromEntries(card.facts.map((fact) => [fact.label, fact.value]));
+  assert.equal(facts.Operator, 'CapMetro');
+  assert.equal(facts.Status, 'Heading to next stop');
+  assert.equal(facts.Key, undefined, 'the layer key is not shown');
+});
+
+test('transit vehicles break down by motion, mode and reported state', () => {
+  const at = { lat: 30.2, lon: -97.7 };
+  const buses = manager({
+    transit: {
+      name: 'Transit',
+      records: [
+        { id: '1', mode: 'bus', motion: 'moving', status: 'IN_TRANSIT_TO', ...at },
+        { id: '2', mode: 'bus', motion: 'stopped', status: 'STOPPED_AT', ...at },
+        { id: '3', mode: 'rail', motion: 'moving', occupancy: 'FULL', ...at },
+      ],
+    },
+  });
+  const breakdown = layerBreakdown(buses, 'transit');
+  assert.equal(breakdown.total, 3);
+  const split = (title) =>
+    Object.fromEntries(breakdown.splits.find((item) => item.title === title).parts.map((part) => [part.label, part.count]));
+  assert.deepEqual(split('Motion'), { Moving: 2, Stopped: 1 });
+  assert.deepEqual(split('Mode'), { Bus: 2, Rail: 1 });
+  assert.deepEqual(split('Last reported'), { 'Heading to next stop': 1, 'Stopped at a stop': 1 });
+  assert.deepEqual(split('Crowding'), { Full: 1 });
+});
+
 test('a moving item never borrows a nearby craft when its key is unknown', () => {
   const record = findRecord(dm, { layerId: 'flights', id: 'zzzzzz', label: 'NOPE', lat: 34.0004, lon: -118.05 });
   assert.equal(record, null);

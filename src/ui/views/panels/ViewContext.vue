@@ -19,6 +19,16 @@ import AltitudeGraph from './AltitudeGraph.vue';
 // that item's card. It reads again when the camera settles, and every few
 // seconds so moving things stay current.
 const store = useEntityCardStore();
+
+// What a moving item is doing, as the layer's own display shows it (transit
+// vehicles report it): an icon on its row, its words on hover.
+const MOTION_STATES = {
+  moving: { icon: 'play_arrow', label: () => t('Moving') },
+  stopped: { icon: 'pause', label: () => t('Stopped', { context: 'vehicle motion' }) },
+  waiting: { icon: 'schedule', label: () => t('Waiting for update') },
+  'no-fix': { icon: 'location_off', label: () => t('No recent fix') },
+};
+const motionOf = (item) => MOTION_STATES[item.identity?.record?.motion] || null;
 const { view } = storeToRefs(store);
 const tick = ref(0);
 let timer = null;
@@ -348,6 +358,14 @@ const distance = (km) =>
           <ul>
             <li v-for="item in group.items" :key="item.key">
               <button type="button" @click="store.select(item.identity, { fly: true })">
+                <span
+                  v-if="motionOf(item)"
+                  class="material-symbols-outlined view-context__row-motion"
+                  :data-motion="item.identity.record.motion"
+                  :title="motionOf(item).label()"
+                  role="img"
+                  :aria-label="motionOf(item).label()"
+                >{{ motionOf(item).icon }}</span>
                 <span class="view-context__row-title">{{ item.title }}</span>
                 <span class="view-context__row-meta">{{ distance(item.distanceKm) }}</span>
               </button>
