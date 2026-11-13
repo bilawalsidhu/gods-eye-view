@@ -4,10 +4,10 @@ import {
   MARKER_ICON_SIZE,
   SELECTED_MARKER_ICON_SIZE,
   MARKER_FLOOR_LIFT_M,
-  ANCHOR_SAMPLES_PER_PAINT,
+  REMEMBERED_ANCHORS,
   SURFACE_BELOW_FLOOR_M,
   SURFACE_ABOVE_FLOOR_M,
-  SURFACE_SAMPLES_PER_PAINT,
+  SURFACE_SAMPLES_PER_FRAME,
 } from './policy.js';
 import {
   MARKER_IMAGE,
@@ -19,11 +19,17 @@ import {
   validAlprGroundHeight,
 } from './visuals.js';
 
+const nextAnimationFrame = (step) =>
+  typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame(step)
+    : setTimeout(step, 16);
+
 /** Per-layer presentation on a caller-owned overlay; Cesium remains the fallback. */
 export function createAlprOverlay({
   state,
   services,
   onSurfaceChange = () => {},
+  requestFrame = nextAnimationFrame,
 }) {
   let lane,
     removeMapListener,
@@ -33,7 +39,12 @@ export function createAlprOverlay({
     hits = [],
     images = [],
     destroyed = false,
-    lastCamera = null;
+    lastCamera = null,
+    sampling = false;
+  // Rendered-surface answers by camera id. Entities are rebuilt by a refresh
+  // and by turning the layer off and on; keeping the answers on them meant
+  // every rebuild sampled the same cameras again.
+  const surfaceAnswers = new Map();
   const requestPaint = () => {
     if (!destroyed && state.enabled) lane?.requestPaint();
   };
@@ -92,38 +103,72 @@ export function createAlprOverlay({
       entity.gevAlprDisplayPosition = null;
       nativeVisible(entity, true);
     }
+    surfaceAnswers.clear();
     state.lastAnchorSampleAt = 0;
     retryUntil = Date.now() + 15000;
     requestPaint();
   }
 
-  function anchorFor(record, entity, budget) {
-    if (entity.gevAlprCanvasPosition) return entity.gevAlprCanvasPosition;
+  function rememberSurface(record, height, checked) {
+    surfaceAnswers.delete(record.id);
+    surfaceAnswers.set(record.id, {
+      latitude: record.latitude,
+      longitude: record.longitude,
+      height,
+      checked,
+    });
+    if (surfaceAnswers.size > REMEMBERED_ANCHORS)
+      surfaceAnswers.delete(surfaceAnswers.keys().next().value);
+  }
+
+  /**
+   * Rendered surface height under a camera. A terrain globe answers from its
+   * loaded mesh; only photoreal tiles need `sampleHeight`, which renders depth
+   * and compiles its shaders on first use (a freeze of up to 1.9 s at load).
+   */
+  function surfaceHeight(record, entity) {
     const scene = state.viewer.scene;
     const location = Cesium.Cartographic.fromDegrees(
       record.longitude,
       record.latitude,
     );
-    // A floor-placed marker anchors where its native badge sits; only a
-    // marker still waiting for its floor samples the rendered surface, and
-    // each paint samples a few at most (each sample is a depth render).
+    if (scene.globe?.show) return scene.globe.getHeight?.(location);
+    if (!scene.sampleHeightSupported) return undefined;
+    try {
+      return scene.sampleHeight(location, [entity]);
+    } catch {
+      /* streaming tiles */
+      return undefined;
+    }
+  }
+
+  /** The anchor a paint can have without sampling, or null while it waits for one. */
+  function anchorFor(record, entity) {
+    if (entity.gevAlprCanvasPosition) return entity.gevAlprCanvasPosition;
+    const scene = state.viewer.scene;
+    const answer = surfaceAnswers.get(record.id);
+    if (
+      answer?.latitude === record.latitude &&
+      answer.longitude === record.longitude
+    ) {
+      setAnchor(record, entity, answer.height);
+      if (answer.checked)
+        entity.gevAlprSurfaceCheckedFor = entity.gevAlprCanvasPosition;
+      return entity.gevAlprCanvasPosition;
+    }
+    // A floor-placed marker anchors where its native badge sits. A marker
+    // still waiting for its floor reads the terrain globe, or on photoreal
+    // tiles waits for sampleAnchors().
     let height;
     const floor = services.groundFloor.cachedGroundFloor(
       record.latitude,
       record.longitude,
     );
     if (validAlprGroundHeight(floor)) height = floor + MARKER_FLOOR_LIFT_M;
-    else if (scene.sampleHeightSupported) {
-      if (budget.samples <= 0) return null;
-      budget.samples -= 1;
-      try {
-        height = scene.sampleHeight(location, [entity]);
-      } catch {
-        /* streaming tiles */
-      }
-    }
-    if (!validAlprGroundHeight(height) && scene.globe.show)
-      height = scene.globe.getHeight?.(location);
+    else if (scene.globe.show)
+      height = scene.globe.getHeight?.(
+        Cesium.Cartographic.fromDegrees(record.longitude, record.latitude),
+      );
     if (!validAlprGroundHeight(height)) return null;
     setAnchor(record, entity, height);
     return entity.gevAlprCanvasPosition;
@@ -158,14 +203,19 @@ export function createAlprOverlay({
   }
 
   /**
-   * Replace floor anchors with the rendered surface under each overlay camera.
-   * Floors come from ~111 m cells, so on a slope a badge could float or sink
-   * by tens of metres. Runs only while the camera is still and tiles have
-   * settled, a few depth samples per paint, and each anchor at most once;
-   * samples far outside the floor prior (a roof or a streaming tile) are
-   * rejected. Returns whether anchors remain to check.
+   * Sample the rendered surface for the overlay cameras, outside the paint.
+   *
+   * A camera with no floor yet gets its anchor from a sample. An anchored one
+   * is checked against the surface once: floors come from ~111 m cells, so on
+   * a slope a badge could float or sink by tens of metres. Checks run only
+   * while the camera is still and tiles have settled, and samples far outside
+   * the floor prior (a roof or a streaming tile) are rejected. Each frame
+   * takes SURFACE_SAMPLES_PER_FRAME samples, so no frame carries the whole
+   * cohort; sampling inside paint() put up to six depth renders in one frame.
    */
-  function refineAnchors(budget) {
+  function sampleAnchors() {
+    sampling = false;
+    if (destroyed || !state.enabled) return;
     const camera = state.viewer.camera;
     const scene = state.viewer.scene;
     const still =
@@ -188,27 +238,41 @@ export function createAlprOverlay({
         position: Cesium.Cartesian3.clone(camera.positionWC),
         direction: Cesium.Cartesian3.clone(camera.directionWC),
       };
-    if (!scene.sampleHeightSupported) return false;
-    let pending = false;
+    const canSample = scene.globe?.show || scene.sampleHeightSupported;
+    let samples = SURFACE_SAMPLES_PER_FRAME,
+      pending = false,
+      progressed = false,
+      moved = false;
+    // Cameras with no anchor come first: they are not on the overlay yet.
+    for (const record of records) {
+      const entity = state.dataSource.entities.getById(record.id);
+      if (!entity || entity.gevAlprCanvasPosition) continue;
+      // The floor may have resolved since the paint that found none.
+      if (anchorFor(record, entity)) moved = true;
+      else if (!canSample || samples <= 0) pending = true;
+      else {
+        samples -= 1;
+        const sample = surfaceHeight(record, entity);
+        if (validAlprGroundHeight(sample)) {
+          setAnchor(record, entity, sample);
+          rememberSurface(record, sample, false);
+          moved = progressed = true;
+        } else pending = true;
+      }
+    }
     for (const record of records) {
       const entity = state.dataSource.entities.getById(record.id);
       const anchor = entity?.gevAlprCanvasPosition;
-      if (!anchor || entity.gevAlprSurfaceCheckedFor === anchor) continue;
-      if (!still || !surfaceSettled(scene) || budget.samples <= 0) {
+      if (!anchor || !canSample || entity.gevAlprSurfaceCheckedFor === anchor)
+        continue;
+      if (!still || !surfaceSettled(scene) || samples <= 0) {
         pending = true;
         continue;
       }
-      budget.samples -= 1;
-      let sample;
-      try {
-        sample = scene.sampleHeight(
-          Cesium.Cartographic.fromDegrees(record.longitude, record.latitude),
-          [entity],
-        );
-      } catch {
-        /* streaming tiles */
-      }
-      const current = Cesium.Cartographic.fromCartesian(anchor).height;
+      samples -= 1;
+      progressed = true;
+      const sample = surfaceHeight(record, entity);
+      let height = Cesium.Cartographic.fromCartesian(anchor).height;
       const floor = services.groundFloor.cachedGroundFloor(
         record.latitude,
         record.longitude,
@@ -218,21 +282,43 @@ export function createAlprOverlay({
         (!validAlprGroundHeight(floor) ||
           (sample >= floor - SURFACE_BELOW_FLOOR_M &&
             sample <= floor + SURFACE_ABOVE_FLOOR_M));
-      if (accepted && Math.abs(sample + MARKER_FLOOR_LIFT_M - current) > 1)
-        setAnchor(record, entity, sample + MARKER_FLOOR_LIFT_M);
+      if (accepted && Math.abs(sample + MARKER_FLOOR_LIFT_M - height) > 1) {
+        height = sample + MARKER_FLOOR_LIFT_M;
+        setAnchor(record, entity, height);
+        moved = true;
+      }
       entity.gevAlprSurfaceCheckedFor = entity.gevAlprCanvasPosition;
+      // A surface that did not answer is asked again after a rebuild.
+      if (validAlprGroundHeight(sample)) rememberSurface(record, height, true);
       if (entity.id === state.selectedId)
         entity.gevAlprDisplayPosition = entity.gevAlprCanvasPosition;
     }
-    return pending;
+    if (moved) requestPaint();
+    if (!pending || Date.now() >= retryUntil) return;
+    // Take the next ration on the next frame; when nothing could be sampled
+    // (camera moving, tiles streaming, no floor yet) look again in 250 ms.
+    if (progressed) scheduleSampling();
+    else if (!retryTimer)
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        scheduleSampling();
+      }, 250);
+  }
+
+  function scheduleSampling() {
+    if (sampling || destroyed) return;
+    sampling = true;
+    requestFrame(sampleAnchors);
   }
 
   function paint({ ctx, width, height, keyhole, occluder }) {
     hits = [];
     if (!state.enabled || destroyed) return;
-    let unresolved = false;
+    let waiting = false;
     const painted = [];
-    const budget = { samples: ANCHOR_SAMPLES_PER_PAINT };
+    const canSample =
+      state.viewer.scene.globe?.show ||
+      state.viewer.scene.sampleHeightSupported;
     for (const record of records) {
       const entity = state.dataSource.entities.getById(record.id);
       if (!entity) continue;
@@ -246,12 +332,14 @@ export function createAlprOverlay({
         nativeVisible(entity, true);
         continue;
       }
-      const anchor = anchorFor(record, entity, budget);
+      const anchor = anchorFor(record, entity);
       if (!anchor) {
         nativeVisible(entity, true);
-        unresolved = true;
+        waiting = true;
         continue;
       }
+      if (canSample && entity.gevAlprSurfaceCheckedFor !== anchor)
+        waiting = true;
       canvasOwned(entity, true);
       if (occluder && !occluder.isPointVisible(anchor)) {
         setShown(entity, false);
@@ -335,15 +423,9 @@ export function createAlprOverlay({
       ctx.restore();
       hits.push({ id: record.id, x: origin.x, y: origin.y, radius: size / 2 });
     }
-    const refining = refineAnchors({
-      samples: Math.min(budget.samples, SURFACE_SAMPLES_PER_PAINT),
-    });
-    if ((unresolved || refining) && !retryTimer && Date.now() < retryUntil) {
-      retryTimer = setTimeout(() => {
-        retryTimer = null;
-        requestPaint();
-      }, 250);
-    }
+    // Anchors still to find or to check are sampled after this paint, a few
+    // per frame, never inside it.
+    if (waiting && !retryTimer && Date.now() < retryUntil) scheduleSampling();
   }
 
   return {
