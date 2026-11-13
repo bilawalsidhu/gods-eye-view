@@ -62,7 +62,9 @@ import {
 export {
   SHARE_VIEW_ENTITY_KINDS,
   SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
+  SHARE_VIEW_FOLLOW_RANGE_MAX_M,
   followCameraFor,
+  followOffsetFor,
   followOffsetFromEnu,
   followOffsetToEnu,
 } from './follow.js';
@@ -302,6 +304,13 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     sinceDays: 0,
   }),
   radio: Object.freeze({ filter: 'all', volume: 0.8 }),
+  rail: Object.freeze({
+    transit: true,
+    local: true,
+    regional: true,
+    national: true,
+    international: true,
+  }),
   'wildlife-sightings': Object.freeze({ confirmed: false, taxa: 'all' }),
 });
 
@@ -381,14 +390,18 @@ export const SHARE_VIEW_FIELDS = freezeAll([
   { number: 26, key: 'scopeTerminusPct', type: 'uint', default: null },
   { number: 27, key: 'styleParams', type: 'bytes', default: BY_STYLE },
   { number: 28, key: 'worldTime', type: 'epoch', default: null },
+  // Data Library entries switched on, as their two-character ledger tokens
+  // concatenated (src/library/ledger.json). Absent means none.
+  { number: 29, key: 'library', type: 'bytes', default: null },
 ]);
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
 
 /**
  * Fields inside the thing message (top-level field 13). Permanent. Fields 1–4
- * are the entity ids, one per SHARE_VIEW_ENTITY_KINDS code; exactly one is
- * present. The follow offset and the last-known fix are flat fields here, not
+ * are the entity ids, one per SHARE_VIEW_ENTITY_KINDS code, and field 13 is a
+ * vessel id that is a UUID, as its 16 bytes; exactly one of them is present.
+ * The follow offset and the last-known fix are flat fields here, not
  * sub-messages, to save their tag and length bytes.
  */
 export const SHARE_VIEW_THING_FIELDS = Object.freeze({
@@ -400,7 +413,16 @@ export const SHARE_VIEW_THING_FIELDS = Object.freeze({
   alt: 10, // sint metres, its last-known altitude
   ageS: 11, // sint, seconds the fix predates the created-at time (field 8)
   observedAt: 12, // epoch, when the fix was taken; only without a created-at
+  vesselUuid: 13, // LEN, 16 bytes: a vessel id that is a UUID
 });
+
+/**
+ * A vessel id that is a UUID, as a source's stable id may be: lowercase,
+ * dashed. It travels as its 16 bytes (thing field 13), not as text.
+ */
+export const SHARE_VIEW_UUID_GRAMMAR =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID_BYTES = 16;
 
 /** The default of a field or flag for a view in `style`. */
 function defaultOf(entry, style) {
@@ -430,6 +452,33 @@ export function createDefaultShareViewState(requested = 'normal') {
 /* ------------------------------------------------------------------ */
 /* Normalization: the one canonical state both directions agree on.    */
 /* ------------------------------------------------------------------ */
+
+/** The most Data Library tokens a share carries (the library's own cap). */
+export const SHARE_LIBRARY_MAX_TOKENS = 64;
+const LIBRARY_TOKEN = /^[0-9a-z]{2}$/;
+
+/**
+ * Data Library share tokens from a `lib=` value (`ab.cd`) or a token list:
+ * unique, two base-36 characters each, at most SHARE_LIBRARY_MAX_TOKENS.
+ * Malformed tokens are skipped. Null or undefined stays null (no field).
+ * @param {string|string[]|null|undefined} value
+ * @returns {string[]|null}
+ */
+export function normalizeLibraryTokens(value) {
+  if (value === null || value === undefined) return null;
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'string' && value.length <= 3 * SHARE_LIBRARY_MAX_TOKENS
+      ? value.split('.')
+      : [];
+  const tokens = [];
+  for (const token of list) {
+    if (typeof token !== 'string' || !LIBRARY_TOKEN.test(token)) continue;
+    if (!tokens.includes(token)) tokens.push(token);
+    if (tokens.length === SHARE_LIBRARY_MAX_TOKENS) break;
+  }
+  return tokens;
+}
 
 const finite = (value) =>
   typeof value === 'number'
@@ -490,7 +539,10 @@ function normalizeEntityId(entry, value) {
       : typeof value === 'string'
         ? value.trim().toLowerCase()
         : null;
-  if (raw === null || !TRACKING_ID_GRAMMAR.test(raw)) return null;
+  if (raw === null) return null;
+  // A vessel's source may key it by a UUID, longer than the id grammar.
+  if (entry.kind === 'vessel' && SHARE_VIEW_UUID_GRAMMAR.test(raw)) return raw;
+  if (!TRACKING_ID_GRAMMAR.test(raw)) return null;
   if (entry.kind === 'satellite' && !/^[1-9]\d{0,14}$/.test(raw)) return null;
   return raw;
 }
@@ -739,6 +791,7 @@ export function normalizeShareViewState(input = {}) {
     ? normalizeLayerState(source.layerState)
     : null;
   state.panelState = normalizePanelState(source.panelState);
+  state.library = normalizeLibraryTokens(source.library);
   state.sharedAtMs = epochMsOr(source.sharedAtMs);
   state.worldTime = isWorldTime(source.worldTime)
     ? Math.floor(source.worldTime / 1000) * 1000
@@ -794,6 +847,31 @@ const REGISTRY_BY_TOKEN = new Map(
 );
 const charNumber = (char) => LAYER_STATE_TOKEN_ALPHABET.indexOf(char);
 const CANONICAL_INTEGER = /^(0|-?[1-9]\d{0,14})$/;
+
+/** The 16 bytes of a UUID in SHARE_VIEW_UUID_GRAMMAR. */
+function uuidBytes(id) {
+  const hex = id.replaceAll('-', '');
+  return Array.from({ length: UUID_BYTES }, (_, i) =>
+    Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16),
+  );
+}
+
+/** The lowercase dashed UUID that `bytes` spell. */
+function uuidText(bytes) {
+  const hex = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-');
+}
+
+const isVesselUuid = (entry, id) =>
+  entry.kind === 'vessel' && SHARE_VIEW_UUID_GRAMMAR.test(id);
 
 function writeEntityId(writer, entry, id) {
   const field = entry.code;
@@ -895,7 +973,8 @@ function encodeThing(writer, view, state) {
   const f = SHARE_VIEW_THING_FIELDS;
   const d = SHARE_VIEW_FOLLOW_OFFSET_DEFAULT;
   const thing = new WireWriter();
-  writeEntityId(thing, entry, view.entity.id);
+  const uuid = isVesselUuid(entry, view.entity.id);
+  if (!uuid) writeEntityId(thing, entry, view.entity.id);
   const { range, heading, pitch } = view.offset;
   if (range !== d.range) thing.uintField(f.range, range);
   if (heading !== d.heading) thing.sintField(f.heading, signedAngle(heading));
@@ -914,6 +993,8 @@ function encodeThing(writer, view, state) {
     } else if (observed !== null)
       thing.sintField(f.observedAt, epochSeconds(observed));
   }
+  // Fields go in ascending order, so the UUID id (field 13) comes last.
+  if (uuid) thing.bytesField(f.vesselUuid, uuidBytes(view.entity.id));
   writer.bytesField(fieldNumber('thing'), thing.finish());
 }
 
@@ -979,6 +1060,10 @@ export function encodeShareView(input) {
         break; // written together with layerState
       case 'panelState':
         if (state.panelState) encodePanels(writer, state.panelState);
+        break;
+      case 'library':
+        if (state.library?.length)
+          writer.textField(field.number, state.library.join(''));
         break;
       case 'thing':
         if (thing) encodeThing(writer, thing, state);
@@ -1063,7 +1148,9 @@ const TOP_LEVEL_WIRE_TYPES = new Map(
 const THING_WIRE_TYPES = new Map([
   ...SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, [WIRE_VARINT, WIRE_LEN]]),
   ...Object.values(SHARE_VIEW_THING_FIELDS).map((n) => [n, [WIRE_VARINT]]),
+  [SHARE_VIEW_THING_FIELDS.vesselUuid, [WIRE_LEN]],
 ]);
+const VESSEL_ENTRY = SHARE_VIEW_ENTITY_KINDS.find((e) => e.kind === 'vessel');
 
 const unz = unzigzag;
 const CLOSED_ENUMS = new Set(['detectionMode', 'detectionAllocation']);
@@ -1258,8 +1345,18 @@ function decodeThing(reader, createdAtS, unknown) {
     ? followCameraFor(lastKnown, normalizeFollowOffset(offset))
     : null;
   const present = SHARE_VIEW_ENTITY_KINDS.filter((e) => fields.has(e.code));
-  if (present.length > 1)
+  const uuid = fields.get(F.vesselUuid);
+  if (present.length + (uuid ? 1 : 0) > 1)
     throw new ShareWireError('duplicate-field', 'thing entity id');
+  if (uuid) {
+    const bytes = uuid.len.rest();
+    if (bytes.length !== UUID_BYTES)
+      throw new ShareWireError('bad-length', 'thing vessel id');
+    return {
+      camera,
+      view: thingView(VESSEL_ENTRY.kind, uuidText(bytes), offset, lastKnown),
+    };
+  }
   const entry = present[0];
   if (!entry) {
     // A newer app's entity kind uses a thing field this decoder skipped.
@@ -1376,6 +1473,13 @@ export function decodeShareView(code, { nowMs = Date.now() } = {}) {
       unknown.code('layer-option', 'without-layers');
     if (get('panelState'))
       raw.panelState = decodePanels(get('panelState').len, unknown);
+    if (get('library')) {
+      const text = asciiText(get('library').len.rest());
+      const tokens = text.match(/.{1,2}/g) || [];
+      for (const token of tokens)
+        if (!LIBRARY_TOKEN.test(token)) unknown.code('library', token);
+      raw.library = normalizeLibraryTokens(tokens);
+    }
     if (get('styleParams') && !retiredStyle)
       raw.styleParams = decodeStyleParams(
         get('styleParams').len,

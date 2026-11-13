@@ -299,6 +299,9 @@ export function createControls({ state: layerState, services, parts, source }) {
           position: pos,
           id: `VEH-${String(layerState._dots[i].id).padStart(4, '0')}`,
           type: 'VEH',
+          // The dots are depth-tested, so the overlay hides a contact's
+          // bracket and callout wherever the scene hides its dot.
+          depthTested: true,
         };
         // Live mode: the detection bracket carries the congestion signal —
         // its canvas sits ABOVE the post-FX chain, so tier colors survive

@@ -132,7 +132,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -146,6 +146,15 @@ export const TRAIL_MAX_POINTS = 400;
 /** @constant {number} Display latency in seconds (= one poll interval). */
 
 export const RENDER_DELAY_SEC = 30;
+
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (state) => state.timeline?.active() === true;
+
+/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
+ *  following the clock, whose snapshots are loaded ahead of the time. */
+export const displayDelayMs = (state) =>
+  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 
@@ -471,3 +480,6 @@ export const FLOOR_SEED_GRACE_MS = 90_000;
  *  reloads synchronously. */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;

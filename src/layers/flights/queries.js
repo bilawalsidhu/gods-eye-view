@@ -14,6 +14,7 @@ import {
   LANDED_SPEED_MAX_MPS,
   FOCUS_EVIDENCE_DEV,
   FLEET_DR_INTERVAL_MS,
+  followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
@@ -986,6 +987,8 @@ export function createQueries({
         retryInSec,
         source: flightState.feed._lastSource,
         coverage: flightState.feed._lastCoverage,
+        // Following the world clock, the snapshot's age is told from its time.
+        ...(followsClock(flightState) && { atMs: flightState.now() }),
       };
     },
   };

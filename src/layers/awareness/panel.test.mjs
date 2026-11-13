@@ -87,6 +87,17 @@ test('the Contacts view carries the tracked flight’s photo with its credit', (
   });
 });
 
+test('the Contacts view shows an uncredited photo with no credit line', () => {
+  const view = photoView(FLIGHT, {
+    layerId: 'flights',
+    id: 'abc123',
+    photo: { ...PHOTO, photographer: '' },
+  });
+  assert.equal(view.photo.src, PHOTO.src);
+  assert.equal(view.photo.link, PHOTO.link);
+  assert.equal(view.photo.credit, '');
+});
+
 test('the Contacts view has no photo without one, or with another subject’s', () => {
   assert.equal(photoView(FLIGHT, null).photo, null);
   assert.equal(

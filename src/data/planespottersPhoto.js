@@ -1,11 +1,12 @@
 /**
  * @module planespottersPhoto
- * @description Reads a Planespotters photo answer into the one credited
- * thumbnail every surface shows. Planespotters lets the thumbnail be hotlinked
- * on the condition that the photographer is credited next to it and the image
- * links back to the photo's page, so a photo without a photographer, or whose
- * image or page is not on Planespotters' own hosts, is "no photo": nothing
- * arbitrary is ever shown or linked.
+ * @description Reads a Planespotters photo answer into the one thumbnail
+ * every surface shows. Planespotters lets the thumbnail be hotlinked on the
+ * condition that the photographer is credited next to it and the image links
+ * back to the photo's page. A photo whose answer names no photographer is
+ * still shown, linked to its page, with no credit line; a photo whose image or
+ * page is not on Planespotters' own hosts is "no photo": nothing arbitrary is
+ * ever shown or linked.
  *
  * Accepts the upstream answer (`GET https://api.planespotters.net/pub/photos/hex/{hex}`,
  * `{photos: [...]}`), the cached server shape
@@ -63,7 +64,7 @@ function checked({ src, width, height, photographer, link }) {
   const credit = typeof photographer === 'string' ? photographer.trim() : '';
   const image = imageSrc(src);
   const page = pageLink(link);
-  if (!credit || !image || !page) return null;
+  if (!image || !page) return null;
   return {
     found: true,
     src: image,
