@@ -182,7 +182,22 @@ export function createPanel({ state: layerState, parts }) {
       : null;
   }
 
-  /** The tracked airliner's photo with its credit, or null. The subject
+  /** The credit line: the photographer, and an open photo's licence. A
+   *  photo whose answer names no photographer shows no photographer. */
+  function photoCredit(photo) {
+    if (photo.licence)
+      return photo.photographer
+        ? t('Photo: {photographer} · {licence}', {
+            photographer: photo.photographer,
+            licence: photo.licence,
+          })
+        : t('Photo · {licence}', { licence: photo.licence });
+    return photo.photographer
+      ? t('Photo © {photographer}', { photographer: photo.photographer })
+      : '';
+  }
+
+  /** The subject's photo with its credit, or null. The subject
    *  refresh resolves it; only the subject it was resolved for shows it. */
   function presentPhoto(subject) {
     const held = layerState.subjectPhoto;
@@ -198,10 +213,7 @@ export function createPanel({ state: layerState, parts }) {
       width: photo.width ?? null,
       height: photo.height ?? null,
       link: photo.link,
-      // A photo whose answer names no photographer shows no credit line.
-      credit: photo.photographer
-        ? t('Photo © {photographer}', { photographer: photo.photographer })
-        : '',
+      credit: photoCredit(photo),
     };
   }
 

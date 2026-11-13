@@ -3561,6 +3561,8 @@
   "(+{minutes} min late)": "(+{minutes} min de retard)",
   "Exit cockpit to fly to a train": "Quittez le cockpit pour rejoindre un train",
   "Photo © {photographer}": "Photo © {photographer}",
+  "Photo: {photographer} · {licence}": "Photo : {photographer} · {licence}",
+  "Photo · {licence}": "Photo · {licence}",
   "The shared flight isn't reporting now — showing where it was last seen": "Le vol partagé n'émet pas actuellement — affichage de sa dernière position connue",
   "The shared flight isn't reporting now — showing where it was at {time}": "Le vol partagé n'émet pas actuellement — affichage de sa position à {time}",
   "The shared military flight isn't reporting now — showing where it was last seen": "Le vol militaire partagé n'émet pas actuellement — affichage de sa dernière position connue",

@@ -3199,6 +3199,15 @@ stays in view or tracked; an answer, found or not, and a permanent refusal
 stay final for the session. A route belongs to the callsign it was looked up
 for, so a callsign change drops the old route. See `DATA_SOURCES.md`.
 
+A selected vessel gets a photo the same way. The browser asks Open Vessel
+Photos for it by MMSI (`fetchOpenVesselPhoto` in
+`src/sources/live/standalone.js`, read by `src/data/openVesselPhoto.js`), once
+per MMSI (`src/layers/vessels/photos.js`), and the CONTACTS view shows it under
+the vessel's name and MMSI ("NAME · MMSI 366999709") with the photographer,
+the photo's open licence and a link to the vessel's page. A vessel without an
+MMSI is never looked up; a miss stays final for the session, and a failed
+lookup is asked again after five minutes.
+
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
 plugins and shared request helpers. Importing it starts no sockets or timers.
 The existing aircraft normalizer is separately available through the portable

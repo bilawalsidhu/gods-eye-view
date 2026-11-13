@@ -3399,6 +3399,8 @@
   "(+{minutes} min late)": "（晚点 {minutes} 分钟）",
   "Exit cockpit to fly to a train": "请先退出座舱，再飞往列车",
   "Photo © {photographer}": "照片 © {photographer}",
+  "Photo: {photographer} · {licence}": "照片：{photographer} · {licence}",
+  "Photo · {licence}": "照片 · {licence}",
   "The shared flight isn't reporting now — showing where it was last seen": "共享的航班目前没有发送信号——显示其最后出现的位置",
   "The shared flight isn't reporting now — showing where it was at {time}": "共享的航班目前没有发送信号——显示其在 {time} 的位置",
   "The shared military flight isn't reporting now — showing where it was last seen": "共享的军用航班目前没有发送信号——显示其最后出现的位置",
