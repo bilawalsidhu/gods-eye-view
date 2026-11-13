@@ -2,40 +2,47 @@
  * Coverage outlines for Data Library imagery: the borders of the countries an
  * entry covers, so the edge of an aerial photo layer is plain on the map.
  *
- * Borders come from Natural Earth's 1:50m admin-0 countries (public domain),
- * a provider-hosted file fetched live and kept for the session, so nothing is
- * bundled. Pure apart from `loadCountryOutlines`, which takes `fetchImpl`.
+ * Borders come from the bundled Natural Earth 1:10m admin-0 countries pack
+ * (public domain, pinned; see src/data/local_data/natural_earth/README.md),
+ * read once the first outline needs it. Pure apart from
+ * `loadCountryOutlines`.
  */
-import { readResponseTextCapped } from '../sources/httpBody.js';
+import { loadBundledJson } from '../data/bundledJson.js';
+import { decodeRing } from '../data/adminBoundaries.js';
 
-export const COUNTRY_OUTLINES_URL =
-  'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
-/** The 1:50m file is about 3 MB. */
-const OUTLINES_MAX_BYTES = 8 * 1024 * 1024;
+const COUNTRIES_PACK_URL = new URL(
+  '../data/local_data/natural_earth/countries.json',
+  import.meta.url,
+);
 /** Outline modes a manifest may ask for. */
 export const OUTLINE_MODES = Object.freeze(['coverage', 'countries', 'bbox']);
 
 let pending = null;
 
 /**
- * Natural Earth country features, fetched once per page.
- * @param {typeof fetch} fetchImpl
+ * Country features with closed outer rings, in the GeoJSON shape
+ * `outlineRings` reads, loaded once per page.
+ * @param {(url: URL) => Promise<object>} [loadPack]
  * @returns {Promise<object[]>}
  */
-export function loadCountryOutlines(
-  fetchImpl = (...args) => globalThis.fetch(...args),
-) {
+export function loadCountryOutlines(loadPack = loadBundledJson) {
   pending ||= (async () => {
-    const response = await fetchImpl(COUNTRY_OUTLINES_URL, {
-      credentials: 'omit',
-      referrerPolicy: 'no-referrer',
-      redirect: 'error',
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await readResponseTextCapped(response, OUTLINES_MAX_BYTES);
-    const features = JSON.parse(text)?.features;
-    if (!Array.isArray(features)) throw new Error('not a FeatureCollection');
-    return features;
+    const pack = await loadPack(COUNTRIES_PACK_URL);
+    if (!Array.isArray(pack?.features)) throw new Error('not a country pack');
+    const decimals = pack.meta?.decimals;
+    return pack.features.map((feature) => ({
+      type: 'Feature',
+      properties: { ISO_A2: feature.iso2 },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: (feature.polygons || []).map((polygon) =>
+          polygon.map((encoded) => {
+            const ring = decodeRing(encoded, feature.d ?? decimals);
+            return ring.length ? [...ring, ring[0]] : ring;
+          }),
+        ),
+      },
+    }));
   })().catch((error) => {
     pending = null;
     throw error;
