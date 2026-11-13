@@ -418,25 +418,92 @@ test('a full library refuses another entry before its layer exists', async (t) =
   assert.equal(manager.layers.size, 64);
   assert.equal(await library.add('entry-64'), false);
   assert.equal(manager.layers.size, 64, 'no layer outside the selection');
-  // A share into a full library adds no row the library cannot keep.
-  const shared = sealedManager(t);
-  const opened = createDataLibrary({
+  library.destroy();
+});
+
+test('a share opened into a full library still shows what it shares', async (t) => {
+  const many = validateLibraryCatalog(
+    Array.from({ length: 67 }, (_, index) => tiles(`entry-${index}`)),
+  ).entries;
+  const manyLedger = many.map(({ id }, index) => [
+    id,
+    index.toString(36).padStart(2, '0'),
+  ]);
+  const availability = {
+    async getAvailability() {
+      return {
+        server: true,
+        availability: new Map(
+          many.map(({ id }) => [id, { available: true, reason: null }]),
+        ),
+      };
+    },
+    tileTemplate: (entry) => entry.source.url,
+  };
+  const full = JSON.stringify({
+    added: many.slice(0, 64).map(({ id }) => id),
+    on: ['entry-0'],
+  });
+  const manager = sealedManager(t);
+  const shareLink = {
+    ...shareLinkDouble(),
+    initialLibraryTokens: [manyLedger[64][1]],
+    listener: null,
+    setLibraryShareListener(listener) {
+      this.listener = listener;
+    },
+  };
+  const library = createDataLibrary({
     entries: many,
     ledger: manyLedger,
-    dataManager: shared,
+    dataManager: manager,
     services: {},
     storage: memoryStorage(full),
-    shareLink: fakeShareLink([manyLedger[65][1]]),
+    shareLink,
     source: availability,
   });
-  await opened.start();
-  assert.equal(shared.layers.has('lib-entry-65'), false);
-  assert.equal(
-    opened.list().filter((row) => row.added).length,
-    shared.layers.size,
-  );
+  await library.start();
+  await manager.waitForLayerSettled?.('lib-entry-64');
+  assert.equal(manager.isEnabled('lib-entry-64'), true);
+  // The oldest entry the share leaves off made room.
+  assert.equal(manager.layers.has('lib-entry-0'), false);
+  assert.equal(manager.layers.size, 64);
+  assert.equal(shareLink.encode(), manyLedger[64][1]);
+  // A share navigated to in this tab makes room the same way, and the
+  // entry it evicts leaves with its layer.
+  shareLink.listener([manyLedger[65][1]]);
+  await manager.waitForLayerSettled?.('lib-entry-65');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(manager.isEnabled('lib-entry-65'), true);
+  assert.equal(manager.layers.has('lib-entry-1'), false);
+  assert.equal(manager.layers.size, 64);
   library.destroy();
-  opened.destroy();
+});
+
+test('entries this instance cannot serve still show as added and can be removed', async (t) => {
+  const manager = sealedManager(t);
+  const storage = memoryStorage(
+    JSON.stringify({ added: ['night-lights'], on: ['night-lights'] }),
+  );
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage,
+    shareLink: fakeShareLink(null),
+    source: source({
+      'night-lights': { available: false, reason: 'disabled' },
+    }),
+  });
+  await library.start();
+  assert.equal(manager.layers.size, 0);
+  const row = library.list().find(({ entry }) => entry.id === 'night-lights');
+  assert.equal(row.added, true);
+  assert.equal(library.summary().added, 1);
+  assert.equal(await library.remove('night-lights'), true);
+  assert.deepEqual(JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).added, []);
+  library.destroy();
 });
 
 test('a layer that fails to tear down stays in the library', async (t) => {

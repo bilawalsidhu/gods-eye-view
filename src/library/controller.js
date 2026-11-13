@@ -184,6 +184,28 @@ export function createDataLibrary({
     persist();
   });
 
+  /**
+   * The library after a share's entries join it. A share always fits: in a
+   * full library the oldest entries it leaves off make room for it, so a
+   * link opened into a full library still shows what it shares.
+   */
+  function withShared(added, linked) {
+    const kept = [...new Set(added)].filter((id) => switchable.has(id));
+    const incoming = [...new Set(linked)].filter(
+      (id) => switchable.has(id) && !kept.includes(id),
+    );
+    let room = MAX_SELECTED - kept.length - incoming.length;
+    const result = [];
+    for (const id of kept) {
+      if (room < 0 && !linked.includes(id)) {
+        room += 1;
+        continue;
+      }
+      result.push(id);
+    }
+    return [...result, ...incoming];
+  }
+
   /** Entry ids for share tokens; unknown tokens are skipped. */
   const idsForTokens = (list) =>
     (list || []).map((token) => tokens.idByToken.get(token)).filter(Boolean);
@@ -212,7 +234,17 @@ export function createDataLibrary({
    * is never remembered as the viewer's own choice.
    */
   function applySelection(next, origin) {
+    const before = selection.added;
     selection = normalizeLibrarySelection(next, switchable);
+    // Entries a share made room for leave with their layers.
+    for (const id of before) {
+      if (selection.added.includes(id) || !isRegistered(id)) continue;
+      dataManager
+        .unregisterLibraryLayer(libraryLayerId(id))
+        .catch((error) =>
+          console.warn(`[Library] ${id} could not be removed:`, error),
+        );
+    }
     for (const id of selection.added) {
       const entry = byId.get(id);
       if (!entry || !addable(id)) continue;
@@ -251,7 +283,7 @@ export function createDataLibrary({
     }
     const linked = idsForTokens(shareTokens);
     applySelection(
-      { added: [...selection.added, ...linked], on: linked },
+      { added: withShared(selection.added, linked), on: linked },
       'share-restore',
     );
   }
@@ -297,7 +329,10 @@ export function createDataLibrary({
     // Only what the selection keeps registers: past its cap an entry would
     // be a row the library no longer knows.
     const next = normalizeLibrarySelection(
-      { added: [...stored.added, ...(linked || [])], on: linked ?? stored.on },
+      {
+        added: linked ? withShared(stored.added, linked) : stored.added,
+        on: linked ?? stored.on,
+      },
       switchable,
     );
     for (const id of next.added) {
@@ -423,7 +458,9 @@ export function createDataLibrary({
         entry,
         available: state.available,
         reason: state.reason,
-        added: selection.added.includes(entry.id) && isRegistered(entry.id),
+        // An entry this instance cannot serve now stays added (and can be
+        // removed) without a layer: it still holds a place in the library.
+        added: selection.added.includes(entry.id),
         on: dataManager.isEnabled?.(libraryLayerId(entry.id)) === true,
         busy: pending.has(entry.id),
         canZoom: typeof zoomTo === 'function' && isRegistered(entry.id),
