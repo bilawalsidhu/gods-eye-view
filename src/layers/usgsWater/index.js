@@ -88,9 +88,7 @@ export function viewBoxDegrees(viewer) {
 export function selectStreamTiles(tiles, box) {
   if (!box || box.east === box.west) return { status: 'zoom-in', tiles: [] };
   const longitudeSpan =
-    box.east >= box.west
-      ? box.east - box.west
-      : box.east + 360 - box.west;
+    box.east >= box.west ? box.east - box.west : box.east + 360 - box.west;
   if (
     longitudeSpan > STREAM_MAX_VIEW_DEG ||
     box.north - box.south > STREAM_MAX_VIEW_DEG
@@ -99,7 +97,10 @@ export function selectStreamTiles(tiles, box) {
   // A narrow view crossing +180/-180 has two longitude intervals.
   const longitudeSpans =
     box.east < box.west
-      ? [[box.west, 180], [-180, box.east]]
+      ? [
+          [box.west, 180],
+          [-180, box.east],
+        ]
       : [[box.west, box.east]];
   const picked = [];
   // Degrees round-trip through radians (Cesium rectangles), so a view that
@@ -111,9 +112,7 @@ export function selectStreamTiles(tiles, box) {
     if (
       n <= box.south + EPS ||
       s >= box.north - EPS ||
-      !longitudeSpans.some(
-        ([west, east]) => e > west + EPS && w < east - EPS,
-      )
+      !longitudeSpans.some(([west, east]) => e > west + EPS && w < east - EPS)
     )
       continue;
     picked.push({ key, file: tile.file, count: tile.count });
