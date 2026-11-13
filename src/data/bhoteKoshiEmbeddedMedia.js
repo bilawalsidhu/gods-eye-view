@@ -636,6 +636,8 @@ export function placeCard(card, leader, anchor) {
 function createRoot(documentRef, viewer) {
   const root = documentRef.createElement('div');
   root.id = 'bhote-koshi-embedded-media-root';
+  // Drawn over the globe for the scene: Stories keeps it while one plays.
+  root.setAttribute('data-globe-overlay', '');
   root.setAttribute('aria-live', 'polite');
   (viewer?.container || documentRef.body)?.append(root);
   return root;
@@ -1115,6 +1117,8 @@ export function createBhoteKoshiEmbeddedMedia({
     footer.append(title, status, link);
     const body = documentRef.createElement('div');
     body.className = 'bhote-embedded-callout-body';
+    // The card takes taps (its container and leader do not); Stories keeps that.
+    body.setAttribute('data-overlay-input', '');
     body.append(player, footer);
     card.append(leader, body);
     root.append(card);

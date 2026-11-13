@@ -428,6 +428,17 @@ export function createGevActionRunner({
     runOptions = {},
   ) {
     const args = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+    // Stories covers GEV and owns its camera and scenes: an open-mic session
+    // must not fly, load or change what is behind it.
+    if (globalThis.document?.body?.classList?.contains?.('stories-mode'))
+      return {
+        ok: false,
+        action: name,
+        applied: false,
+        refused: 'stories-open',
+        error: 'Stories is open. Close Stories first.',
+        say: 'Stories is open. Close Stories first to control the globe.',
+      };
     const current = () =>
       !runOptions.signal?.aborted &&
       (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());

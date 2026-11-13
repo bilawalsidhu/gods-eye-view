@@ -1,3 +1,6 @@
+import { bootStories } from '../stories/boot.js';
+import { t } from '../i18n/index.js';
+import { useStoriesStore } from '../ui/stores/stories.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -70,6 +73,20 @@ export function createApplicationTools({
     }),
   );
   onSceneDirector?.(sceneDirector);
+  // Stories: GEV scenes on this globe, from a Stories button. Its screens,
+  // styles, story data and controller load on first use.
+  const stories = bootStories({
+    // Inline in a host page, the URL and history are the host's.
+    available: !isEmbeddedInline(),
+    viewer,
+    director: sceneDirector,
+    store: useStoriesStore(applicationPinia()),
+    onLoadFailed: () =>
+      styleManager._showToast?.(
+        t('Stories could not load. Check the connection and try again.'),
+      ),
+  });
+  defer(() => stories.destroy());
   const annotations = initAnnotations({
     viewer,
     tileset,

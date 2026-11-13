@@ -249,7 +249,13 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "Status",
+    "Region",
+    "Wind (km/h)",
+    "Story",
+    "STORY",
+    "Japan"
   ],
   "es": [
     "1 min/s",
@@ -411,7 +417,10 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "Sensor",
+    "{count} acres",
+    "California"
   ],
   "fr": [
     "1 min/s",
@@ -501,6 +510,7 @@
     "MISSION",
     "MM",
     "MSG/S",
+    "Maritime",
     "Metal",
     "Minimal",
     "Minutes",
@@ -633,7 +643,10 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "Europe",
+    "Globe",
+    "Sources"
   ],
   "it": [
     "1 min/s",
@@ -839,7 +852,9 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "followers",
+    "California"
   ],
   "ja": [
     "1090 MHz",
@@ -1067,7 +1082,9 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "Sensor",
+    "{count} acres"
   ],
   "ru": [
     "1900–1945",
@@ -1264,7 +1281,10 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "Status",
+    "Region",
+    "Japan"
   ],
   "uk": [
     "1900–1945",

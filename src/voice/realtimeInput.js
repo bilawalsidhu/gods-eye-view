@@ -55,9 +55,11 @@ export class RealtimeInput {
   bindPushToTalkShortcut() {
     if (this.shortcutKeyDownHandler) return;
     this.shortcutKeyDownHandler = (event) => {
-      // Space types in chat; it never talks while chat is open.
+      // Space types in chat; it never talks while chat is open, nor while
+      // Stories owns the keyboard (body.stories-mode).
       if (
         this.ui.state?.chat?.open === true ||
+        globalThis.document?.body?.classList?.contains?.('stories-mode') ||
         !shouldHandlePushToTalkKeyDown(event)
       )
         return;

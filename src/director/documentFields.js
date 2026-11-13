@@ -71,7 +71,10 @@ export function jsonTree(value, path, budget, depth = 0) {
     fail(path, 'project complexity limit exceeded');
   if (value === null || typeof value === 'boolean') return;
   if (typeof value === 'string') {
-    if (value.length > SCENE_DOCUMENT_LIMITS.string)
+    if (
+      value.length > SCENE_DOCUMENT_LIMITS.string &&
+      value.length > (budget.longText?.(path) ?? 0)
+    )
       fail(path, 'text is too long');
     return;
   }

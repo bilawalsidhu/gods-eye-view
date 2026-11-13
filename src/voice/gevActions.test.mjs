@@ -251,6 +251,48 @@ test('zoom to globe adopts the shared visible reset route and returns its result
   assert.equal(calls, 1);
 });
 
+test('voice changes nothing behind Stories while it is open', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  let calls = 0;
+  const styleManager = {
+    async resetToGlobeView() {
+      calls += 1;
+      return { ok: true };
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  const classes = new Set(['stories-mode']);
+  const priorDocument = globalThis.document;
+  globalThis.document = {
+    ...(priorDocument ?? {}),
+    body: { classList: { contains: (c) => classes.has(c) } },
+  };
+  try {
+    const refused = await runner('zoom_to_globe');
+    assert.equal(refused.ok, false);
+    assert.equal(refused.refused, 'stories-open');
+    assert.equal(calls, 0);
+    classes.clear();
+    await runner('zoom_to_globe');
+    assert.equal(calls, 1, 'works again once Stories has closed');
+  } finally {
+    globalThis.document = priorDocument;
+  }
+});
+
 test('dependent voice navigation waits for the destination viewport to arrive', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,

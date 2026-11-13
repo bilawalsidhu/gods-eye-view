@@ -5,15 +5,14 @@ import UiButton from '../kit/UiButton.vue';
 import RailPanel from '../rail/RailPanel.vue';
 import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
+import { STORY_TAG_LIMIT, STORY_TAGS } from '../../scenes/storyTags.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import SceneDialog from './panels/SceneDialog.vue';
-import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
 import CctvPanel from './panels/CctvPanel.vue';
 import StreetLevelPanel from './panels/StreetLevelPanel.vue';
 import DrawControls from './panels/DrawControls.vue';
 import GeoImport from './panels/GeoImport.vue';
-import UiSelect from '../kit/UiSelect.js';
 import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
@@ -22,8 +21,14 @@ const { toolbar, dialog } = storeToRefs(useSceneSharingStore());
 // SceneControls presents the Scene panel's buttons, status and progress and
 // answers the buttons through the store.
 const scenes = useSceneStore();
-const { panel: scene } = storeToRefs(scenes);
+const { panel: scene, currentScene } = storeToRefs(scenes);
 const off = (name) => scene.value?.disabled[name] ?? false;
+// The current scene's Stories tags; a chip not yet on is off at the limit.
+const tagOn = (tag) => currentScene.value?.storyTags?.includes(tag) ?? false;
+const tagOff = (tag) =>
+  off('tags') ||
+  (!tagOn(tag) &&
+    (currentScene.value?.storyTags?.length ?? 0) >= STORY_TAG_LIMIT);
 // The hidden file input is the IMPORT button's chooser, open only while an
 // owner presents the panel. It is cleared once the import settles, so the same
 // file can be chosen again, unless the owner went away meanwhile.
@@ -64,7 +69,7 @@ async function importChosen(event) {
   <RailPanel id="scene-panel" start-collapsed v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" :title="t('AUTHORING')" :hint="t('Create and edit scenes')" scroll>
       <p class="scene-step-heading">{{ t('SCENE') }}</p>
       <div class="scene-controls">
-        <UiSelect class="gev-field" id="scene-select" :aria-label="t('Scene')" :disabled="off('select')" @update:model-value="scenes.act('selectScene', $event)"><SceneOptions /></UiSelect>
+        <p id="scene-name" :class="{ 'scene-name-empty': !currentScene }">{{ currentScene?.title ?? t('No scene yet') }}</p>
         <UiButton id="scene-new-btn" type="button" :disabled="off('new')" @click="scenes.act('create')" class="gev-action-button scene-btn" :title="t('Start a new, empty scene')">{{ t('NEW SCENE') }}</UiButton>
         <UiButton tone="alert" id="scene-delete-btn" type="button" :disabled="off('delete')" @click="scenes.act('deleteScene')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" :title="t('Delete this scene and all of its shots')">{{ t('DELETE') }}</UiButton>
       </div>
@@ -82,6 +87,15 @@ async function importChosen(event) {
         <UiButton id="scene-next-btn" type="button" :disabled="off('next')" @click="scenes.act('next')" class="gev-action-button scene-btn" :title="t('Play the shot after the selected one, moving on to the next scene when needed')">{{ t('NEXT') }}</UiButton>
       </div>
       <p class="scene-step-heading">{{ t('SAVE & SHARE') }}</p>
+      <div class="scene-controls scene-tag-chips" role="group" :aria-label="t('Stories tags')">
+        <UiButton v-for="tag in STORY_TAGS" :key="tag" type="button" class="scene-tag-chip" :pressed="tagOn(tag)" pressed-class="active" :disabled="tagOff(tag)" @click="scenes.act('tag', tag)">{{ t(tag) }}</UiButton>
+      </div>
+      <div class="scene-controls scene-story-controls">
+        <img v-if="currentScene?.storyThumb" id="scene-thumb-preview" class="scene-thumb-preview" :src="currentScene.storyThumb" :alt="t('Story thumbnail')" width="64" height="36" />
+        <span v-else class="scene-thumb-preview scene-thumb-empty" aria-hidden="true"></span>
+        <UiButton id="scene-thumb-btn" type="button" :disabled="off('thumb')" @click="scenes.act('thumb')" class="gev-action-button scene-btn" :title="t('Use the current view as the Stories card image')">{{ t('THUMBNAIL') }}</UiButton>
+        <UiButton id="scene-stories-btn" type="button" :disabled="off('stories')" @click="scenes.act('stories')" class="gev-action-button scene-btn" :title="scene?.inStories ? t('Take this scene off the Stories page') : t('Show this scene on the Stories page')">{{ scene?.inStories ? t('REMOVE FROM STORIES') : t('SAVE TO STORIES') }}</UiButton>
+      </div>
       <div class="scene-controls scene-file-controls">
         <UiButton id="scene-export-btn" type="button" :disabled="off('export')" @click="scenes.act('export')" class="gev-action-button scene-btn" :title="t('Download every scene as a JSON file you can import later')">{{ t('EXPORT') }}</UiButton>
         <UiButton id="scene-import-btn" type="button" :disabled="off('import')" @click="chooseImport($refs.sceneFile)" class="gev-action-button scene-btn" :title="t('Load scenes from an exported JSON file')">{{ t('IMPORT') }}</UiButton>
@@ -89,8 +103,8 @@ async function importChosen(event) {
         <input ref="sceneFile" type="file" id="scene-import-file" accept="application/json,.json" hidden @change="importChosen" />
       </div>
       <div v-if="toolbar" data-director-authoring class="scene-controls">
-        <UiButton type="button" class="gev-action-button scene-btn" :title="t('Edit anchors, data packs and shot details')" @click="toolbar.edit()">{{ t('EDIT DETAILS') }}</UiButton>
-        <UiButton type="button" class="gev-action-button scene-btn" :title="t('Download this scene as JSON or an asset bundle')" @click="toolbar.share()">{{ t('SHARE SCENE') }}</UiButton>
+        <UiButton type="button" class="gev-action-button scene-btn" :disabled="off('details')" :title="t('Edit anchors, data packs and shot details')" @click="toolbar.edit()">{{ t('EDIT DETAILS') }}</UiButton>
+        <UiButton type="button" class="gev-action-button scene-btn" :disabled="off('share')" :title="t('Download this scene as JSON or an asset bundle')" @click="toolbar.share()">{{ t('SHARE SCENE') }}</UiButton>
       </div>
       <div class="scene-progress">
         <div id="scene-progress-fill" :style="scene ? { width: `${scene.progress}%` } : undefined">{{ scene?.progress ?? 0 }}%</div>

@@ -162,21 +162,19 @@
   flex-wrap: wrap;
 }
 
-/* The scene's name takes its own row; NEW SCENE / DELETE share the next. */
-#scene-select {
+/* The scene being edited, read-only, takes its own row; NEW SCENE / DELETE
+   share the next. A long name wraps. */
+#scene-name {
   flex: 1 1 100%;
   min-width: 0;
-  min-height: 32px;
+  margin: 0;
   font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
-html:not([lang='en']) #scene-select {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
+#scene-name.scene-name-empty {
+  color: var(--scene-quiet);
 }
 
 /* A translated action longer than its button wraps inside the button instead
@@ -242,6 +240,63 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   color: var(--accent);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* Stories tags: small toggle chips that wrap; a pressed chip takes the
+   accent. */
+#scene-panel .scene-tag-chips {
+  gap: 4px;
+}
+
+#scene-panel .scene-tag-chip {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--scene-quiet);
+  font-size: 10px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+#scene-panel .scene-tag-chip.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+#scene-panel .scene-tag-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The Stories card thumbnail, CAPTURE THUMBNAIL and SAVE TO STORIES share a
+   row; the preview keeps the card's 16:9. */
+#scene-panel .scene-story-controls {
+  align-items: center;
+}
+
+/* Two buttons beside the preview: a label that does not fit (REMOVE FROM
+   STORIES) wraps inside its button, in English too. */
+#scene-panel .scene-story-controls .scene-btn {
+  align-self: stretch;
+  padding: 8px 6px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.scene-thumb-preview {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 36px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.scene-thumb-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  box-sizing: border-box;
 }
 
 .scene-shot-hint {
