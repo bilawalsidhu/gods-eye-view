@@ -104,7 +104,7 @@ export function parseHlsMedia(text, base, limit = HLS_LIMITS.segments) {
       const value = /^#EXT-X-MAP:URI="([^"]+)"$/.exec(line)?.[1];
       if (!value || segments.length) throw new Error('Unsupported HLS map');
       initUri = sameOriginHlsUrl(value, base);
-      if (!new URL(initUri).pathname.endsWith('.mp4'))
+      if (!/\.(?:mp4|m4s)$/.test(new URL(initUri).pathname))
         throw new Error('Unsupported HLS initialization segment');
     } else if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
       seq = Number(line.slice(22));

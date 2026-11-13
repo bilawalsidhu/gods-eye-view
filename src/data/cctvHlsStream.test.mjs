@@ -135,6 +135,50 @@ test('fragmented MP4 keeps its same-origin initialization segment and refuses ex
   }
 });
 
+test('fMP4 HLS accepts a same-origin .m4s initialization segment', async () => {
+  const media =
+    '#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-MEDIA-SEQUENCE:8\n' +
+    '#EXT-X-MAP:URI="init.m4s"\n#EXTINF:2,\na.m4s\n#EXTINF:2,\nb.m4s\n';
+  const initUrl = new URL('init.m4s', base).href;
+  // This must fail on the author's original PR head, which allows .mp4 only.
+  assert.equal(parseHlsMedia(media, base)[0].initUri, initUrl);
+  const requested = [];
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 100000, readyMs: 500 },
+    fetchImpl: async (url) => {
+      requested.push(url);
+      if (url === base) return new Response(media);
+      if (url === initUrl) return new Response('init bytes');
+      if (url === new URL('a.m4s', base).href) return new Response('segment a');
+      if (url === new URL('b.m4s', base).href) return new Response('segment b');
+      throw new Error('Unexpected HLS upstream URL');
+    },
+  });
+  try {
+    const entry = await manager.ensure('m4s-init', base);
+    assert.equal(await manager.waitReady(entry), true);
+    const playlist = await manager.buildPlaylist(entry, 'm4s-init');
+    assert.match(
+      playlist,
+      /#EXT-X-MAP:URI="\/api\/cctv\/media\/m4s-init\/init\.mp4\?session=/,
+    );
+    assert.match(playlist, /seg_0\.m4s\?session=/);
+    assert.deepEqual(requested, [
+      base,
+      initUrl,
+      new URL('a.m4s', base).href,
+      new URL('b.m4s', base).href,
+    ]);
+    assert.equal(manager.getInit('m4s-init', entry.token).toString(), 'init bytes');
+    assert.equal(
+      manager.getSegment('m4s-init', entry.token, 0).toString(),
+      'segment a',
+    );
+  } finally {
+    await manager.shutdown();
+  }
+});
+
 test('downloads reject redirect responses, oversized declared and chunked bodies', async () => {
   let init;
   await assert.rejects(

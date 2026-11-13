@@ -3,3 +3,7 @@
   CCTV playback with clear fMP4 HLS and camera-pinned public stream resolvers
   for Exdesign, anonymous Ivideon and unrestricted RTSP.ME players
   (Re-silic, #1673).
+
+- Also accept same-origin `.m4s` HLS initialization objects as fMP4 maps,
+  keeping Re-silic's public-stream scope and camera pinning (review follow-up
+  to #1673).
