@@ -1134,6 +1134,7 @@ export class StyleManager extends ShellFacade {
     const { flightsLayer, militaryFlightsLayer } = this.services;
     if (!flightsLayer) return;
     this._aircraftTypeCard = createAircraftTypeCard({
+      ui: this._ui,
       getTracked: () =>
         militaryFlightsLayer?.getTrackedInfo?.() ??
         flightsLayer.getTrackedInfo?.() ??
