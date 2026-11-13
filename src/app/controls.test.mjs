@@ -2,6 +2,7 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import '../testSupport/stubMgrs.mjs';
 import { installVueDom } from '../testSupport/vueDom.mjs';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 const { createApplicationControls } = await import('./controls.js');
 
@@ -21,7 +22,10 @@ test('the application controls start and stop', () => {
   const cleanups = [];
   createApplicationControls({
     scene: {
-      viewer: {},
+      viewer: bindFakeCesiumCamera({
+        isDestroyed: () => false,
+        camera: { setView() {} },
+      }),
       mapStackController: {},
       operations: {
         surface: { controlServices: {} },

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- The globe opens at planet level, the whole Earth in view, on every
+  renderer, instead of flying in to Austin. A shared link still flies from
+  there to its view. An application can start somewhere else, a city for
+  instance, with the `startView` option of `createApplicationControls`
+  (longitude, latitude and height, and heading and pitch in degrees)
+  (samehkhamis).
 - An application's own tool can take the pointer as Draw does, and its click
   handlers can yield while a tool holds it, as the layers' do (`pointer` from
   `createApplicationTools`) (samehkhamis, #1641).

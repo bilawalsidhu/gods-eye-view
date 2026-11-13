@@ -100,7 +100,6 @@
   "Board cleared.": "ボードを消去しました。",
   "{owner} is using the pointer — close it first.": "{owner}がポインターを使用中です。先に閉じてください。",
   "{label} · Detailed outline unavailable": "{label} · 詳細な輪郭を取得できません",
-  "Flying to Austin, TX...": "テキサス州オースティンへ移動中…",
   "Restoring shared view...": "共有ビューを復元中…",
   "Configuring viewer...": "ビューアーを設定中…",
   "Loading Google 3D Tiles...": "Google 3D Tilesを読み込み中…",
