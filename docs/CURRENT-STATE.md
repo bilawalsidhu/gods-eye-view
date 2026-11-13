@@ -2325,8 +2325,11 @@ Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4173 node scripts/qa-segmented
 
 `ui/input` supplies the bubbling application shortcut listener and generated
 shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-control
-typing and Escape behavior retain their existing mappings. Capture-phase
-surfaces continue to arbitrate their own keyboard events first.
+typing and Escape behavior retain their existing mappings. A shortcut key held
+with Cmd, Ctrl or Alt runs no shortcut, so the browser's own chord (Cmd+C to
+copy, Cmd+F to find, Cmd+1 to switch tab) does not also toggle CCTV, the layers
+panel or a style; Shift does not count, and Escape dismisses search either way.
+Capture-phase surfaces continue to arbitrate their own keyboard events first.
 
 The UI facade retains shader values, share-restore authority, render requests,
 search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
