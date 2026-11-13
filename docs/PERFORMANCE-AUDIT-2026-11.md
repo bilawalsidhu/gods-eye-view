@@ -42,7 +42,7 @@ Worst first. "Fix" names the pull request; a dash means none is open yet.
 | 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | — |
 | 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | — |
 | 9 | Radio | 7 to 10 long tasks when the directory loads, longest 447 ms | — |
-| 10 | Pointer pick | One pick on a pointer gesture takes 207 to 342 ms with an entity-heavy layer on, against about 4 ms with none | — |
+| 10 | Pointer pick | Not reproduced on a second look: see below | none needed |
 | 11 | CCTV | A still-image camera holds continuous rendering at 60 frames a second although its picture changes about every 10 s | — |
 
 ### Read in code
@@ -54,7 +54,7 @@ Worst first. "Fix" names the pull request; a dash means none is open yet.
 | 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | — |
 | 15 | NVG and FLIR styles | Over 100 texture reads per pixel on every frame | — |
 | 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop, 200 to 600 ms estimated per refresh | — |
-| 17 | Imported geo files and other per-feature ground clamps | The Shipwrecks pattern (finding 2) at whatever size the data has | — |
+| 17 | Imported geo files and other per-feature ground clamps | Measured afterwards: imported files do not freeze; see below | none needed |
 
 ## Cause and fix, per finding
 
@@ -170,12 +170,17 @@ Fix: normalise once per station at ingest and count categories from that.
 
 ### 10. Pointer pick
 
-`pickPointer` in `src/voice/pointerPick.js` calls `scene.pick` on pointer
-gestures. A pick renders the scene's pickable primitives, so its cost follows
-the entity count of whatever layers are on.
+Three sessions saw a single `scene.pick` of 207 to 342 ms during a gesture and
+attributed it to `pickPointer` in `src/voice/pointerPick.js`. Timing every pick
+across pointer rests, drags and wheel bursts did not bear that out: of 78 picks
+with CCTV on over London all but two took 3 to 8 ms, and with five heavy layers
+on, 81 picks took 5 to 30 ms apart from the first (135 ms). `pickPointer` picks
+at most once per pointer rest.
 
-Fix: do not pick while a gesture is in progress; pick once when the pointer
-rests, or only when something consumes the answer.
+The slow pick is the first pick after a layer appears, once per page load, most
+likely the pick shader compiling, and its stack is CCTV's own hover pick
+(`src/layers/cctv/hover.js`). No fix is proposed: removing the dwell pick would
+only move the one-off cost to the next click.
 
 ### 11. CCTV still-image cameras
 
@@ -228,12 +233,15 @@ Fix: decode in a worker thread and keep the decoded U and V fields per cycle.
 
 `heightReference: CLAMP_TO_GROUND` per feature is also set in
 `installations/rendering.js`, `alpr/presentation.js`, `ghostMaps/index.js`,
-`earthquakes/index.js`, `airQuality/index.js`, `news/index.js`,
-`osmPlaces/index.js` and `src/data/geoFileImport.js`. Their counts were small in
-these runs (30 to 1,500), but an imported file sets its own size.
+`earthquakes/index.js`, `airQuality/index.js`, `news/index.js` and
+`osmPlaces/index.js`. Their counts were small in these runs (30 to 1,500) and
+none froze.
 
-Fix: where the count is not bounded, place through the shared terrain reader or
-add in slices across frames.
+Imported geo files were the one unbounded case, and measuring them cleared
+them: 20,000 generated points (the import cap) finish in about 1.5 s with a
+longest task near 0.5 s, because `settleGroundPins` in
+`src/data/geoFileImport.js` already places pins with `HeightReference.NONE` and
+resolves heights 256 at a time with a yield between batches. No fix is needed.
 
 ## Checked and fine
 
