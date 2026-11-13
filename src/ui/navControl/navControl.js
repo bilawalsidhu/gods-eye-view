@@ -480,8 +480,18 @@ export function mountNavControl({
       startAngle: drag.startAngle,
       angle: pointerAngle(drag.centerX, drag.centerY, clientX, clientY),
     });
-    if (drag.frame) setCameraTargetFrame(viewer, { ...drag.frame, heading });
-    else lookInPlace(heading, drag.pitch);
+    // Pointer capture can outlive the camera's owner (the Cockpit opening
+    // mid-drag), so every move asks the navigation policy again, as the tilt
+    // slider does. A refusal ends the drag; only a new press can start one.
+    const accepted = runNavigation('camera', () =>
+      drag.frame
+        ? setCameraTargetFrame(viewer, { ...drag.frame, heading })
+        : lookInPlace(heading, drag.pitch),
+    );
+    if (!accepted) {
+      ringEnd();
+      return;
+    }
     refreshHeading();
   }
   function ringEnd() {
