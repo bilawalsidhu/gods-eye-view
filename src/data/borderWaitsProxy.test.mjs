@@ -237,6 +237,49 @@ test('CBP waits are served when CBSA fails, and CBSA serves stale on its own', a
   assert.equal(res.body.rows[0].canada, null);
 });
 
+test('a failed CBSA fetch backs off for five minutes without hiding CBP', async () => {
+  let clock = 0;
+  let cbsaCalls = 0;
+  let cbsaUp = false;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async () => Response.json([cbpPort()]),
+    cbsaImpl: async () => {
+      cbsaCalls++;
+      if (!cbsaUp) throw new Error('CBSA connection timed out');
+      return new Response(cbsaCsv(AMBASSADOR_CBSA));
+    },
+  });
+
+  const failed = await request();
+  assert.equal(failed.status, 200);
+  assert.deepEqual(failed.body.canada, { available: false });
+  assert.deepEqual(failed.body.rows.map(({ id }) => id), ['380001']);
+
+  clock = 1;
+  assert.deepEqual((await request()).body.canada, { available: false });
+  assert.equal(cbsaCalls, 1, 'optional CBSA must not be retried per viewer');
+
+  clock = 300_000;
+  cbsaUp = true;
+  const recovered = await request();
+  assert.equal(cbsaCalls, 2, 'CBSA may retry after the cooldown');
+  assert.equal(recovered.body.canada.available, true);
+  assert.equal(recovered.body.rows[0].canada.office, 'Ambassador Bridge');
+
+  clock = 600_000;
+  cbsaUp = false;
+  const stale = await request();
+  assert.equal(stale.body.canada.stale, true);
+  assert.equal(cbsaCalls, 3);
+
+  clock = 600_001;
+  const repeated = await request();
+  assert.equal(repeated.body.canada.stale, true);
+  assert.equal(repeated.body.rows[0].canada.office, 'Ambassador Bridge');
+  assert.equal(cbsaCalls, 3, 'previous CBSA value stays stale, not refetched');
+});
+
 test('a CBSA office with no CBP crossing is logged once', async () => {
   let clock = 0;
   const warnings = [];

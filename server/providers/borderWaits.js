@@ -32,6 +32,7 @@ export function borderWaitsProxy({
   const cache = new Map();
   let reportedUnlocated = '';
   let reportedUnmatched = '';
+  let cbsaRetryAfter = 0;
   const inFlight = new Map();
   const allow = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 1200 });
 
@@ -77,6 +78,12 @@ export function borderWaitsProxy({
     const previous = cache.get(key);
     if (previous && now() - previous.savedAt < TTL_MS)
       return { value: previous.value, stale: false };
+    // CBSA is optional: don't make every viewer wait through another failed
+    // fetch. Keep the last snapshot stale, or omit Canada until a retry.
+    if (key === 'cbsa' && now() < cbsaRetryAfter) {
+      if (previous) return { value: previous.value, stale: true };
+      throw new Error('cbsa_retry_deferred');
+    }
     try {
       const { promise } = coalesceProxyRequest(inFlight, key, async () => {
         const value = await load();
@@ -85,6 +92,7 @@ export function borderWaitsProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
+      if (key === 'cbsa') cbsaRetryAfter = now() + TTL_MS;
       if (previous) return { value: previous.value, stale: true };
       throw error;
     }
