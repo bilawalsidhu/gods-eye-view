@@ -1,0 +1,2047 @@
+{
+  "source": "adsbdb aircraft cache (.gev-cache/adsbdb.json)",
+  "airframes": 21036,
+  "withTypeCode": 16411,
+  "types": [
+    {
+      "icao": "B738",
+      "count": 2322,
+      "typeName": "Boeing 737NG 800/W"
+    },
+    {
+      "icao": "A320",
+      "count": 1749,
+      "typeName": "Airbus A320 214"
+    },
+    {
+      "icao": "A321",
+      "count": 1004,
+      "typeName": "Airbus A321 231SL"
+    },
+    {
+      "icao": "B38M",
+      "count": 800,
+      "typeName": "Boeing 737MAX 8"
+    },
+    {
+      "icao": "A20N",
+      "count": 749,
+      "typeName": "Airbus A320 251NSL"
+    },
+    {
+      "icao": "A21N",
+      "count": 485,
+      "typeName": "Airbus A321 251NXSL"
+    },
+    {
+      "icao": "B77W",
+      "count": 461,
+      "typeName": "Boeing 777 300ER"
+    },
+    {
+      "icao": "B789",
+      "count": 408,
+      "typeName": "Boeing 787 9"
+    },
+    {
+      "icao": "B763",
+      "count": 369,
+      "typeName": "Boeing 767 300F"
+    },
+    {
+      "icao": "A319",
+      "count": 365,
+      "typeName": "Airbus A319 111"
+    },
+    {
+      "icao": "A359",
+      "count": 350,
+      "typeName": "Airbus A350 941"
+    },
+    {
+      "icao": "A333",
+      "count": 343,
+      "typeName": "Airbus A330 343E"
+    },
+    {
+      "icao": "B737",
+      "count": 318,
+      "typeName": "Boeing 737NG 7H4/W"
+    },
+    {
+      "icao": "C172",
+      "count": 295,
+      "typeName": "Cessna 172S"
+    },
+    {
+      "icao": "E75L",
+      "count": 295,
+      "typeName": "Embraer EMB-175 LR"
+    },
+    {
+      "icao": "B788",
+      "count": 223,
+      "typeName": "Boeing 787 8"
+    },
+    {
+      "icao": "B739",
+      "count": 217,
+      "typeName": "Boeing 737NG 900ER/W"
+    },
+    {
+      "icao": "B77L",
+      "count": 203,
+      "typeName": "Boeing 777 F"
+    },
+    {
+      "icao": "B752",
+      "count": 186,
+      "typeName": "Boeing 757 24APF"
+    },
+    {
+      "icao": "AT76",
+      "count": 172,
+      "typeName": "Avions de Transport Regional ATR 72 600"
+    },
+    {
+      "icao": "A332",
+      "count": 159,
+      "typeName": "Airbus A330 243"
+    },
+    {
+      "icao": "B39M",
+      "count": 150,
+      "typeName": "Boeing 737-9"
+    },
+    {
+      "icao": "B772",
+      "count": 149,
+      "typeName": "Boeing 777 223ER"
+    },
+    {
+      "icao": "P28A",
+      "count": 142,
+      "typeName": "Piper PA-28-181"
+    },
+    {
+      "icao": "E190",
+      "count": 136,
+      "typeName": "Embraer EMB-190 LR"
+    },
+    {
+      "icao": "B744",
+      "count": 129,
+      "typeName": "Boeing 747 47UF"
+    },
+    {
+      "icao": "CRJ9",
+      "count": 124,
+      "typeName": "Bombardier CRJ 900 LR NG"
+    },
+    {
+      "icao": "PC12",
+      "count": 118,
+      "typeName": "Pilatus PC-XII 47E"
+    },
+    {
+      "icao": "BCS3",
+      "count": 110,
+      "typeName": "Airbus A220 300"
+    },
+    {
+      "icao": "A388",
+      "count": 107,
+      "typeName": "Airbus A380 861"
+    },
+    {
+      "icao": "EC35",
+      "count": 105,
+      "typeName": "Eurocopter EC135 P2+"
+    },
+    {
+      "icao": "BE20",
+      "count": 101,
+      "typeName": "Beech King Air B200"
+    },
+    {
+      "icao": "DH8D",
+      "count": 90,
+      "typeName": "Bombardier DHC-8 402 NG"
+    },
+    {
+      "icao": "B407",
+      "count": 88,
+      "typeName": "Bell 407"
+    },
+    {
+      "icao": "AS50",
+      "count": 85,
+      "typeName": "Eurocopter Squirrel AS.350 B3"
+    },
+    {
+      "icao": "DA40",
+      "count": 85,
+      "typeName": "Diamond Aircraft Industries Inc. DA 40"
+    },
+    {
+      "icao": "B78X",
+      "count": 84,
+      "typeName": "Boeing 787 10"
+    },
+    {
+      "icao": "C208",
+      "count": 84,
+      "typeName": "Cessna 208 B"
+    },
+    {
+      "icao": "CRJ7",
+      "count": 83,
+      "typeName": "Bombardier CRJ 700"
+    },
+    {
+      "icao": "B748",
+      "count": 82,
+      "typeName": "Boeing 747 8F"
+    },
+    {
+      "icao": "EC45",
+      "count": 62,
+      "typeName": "Eurocopter MBB-BK 117 C-2 (EC145)"
+    },
+    {
+      "icao": "A139",
+      "count": 56,
+      "typeName": "AgustaWestland AW.139"
+    },
+    {
+      "icao": "A35K",
+      "count": 56,
+      "typeName": "Airbus A350 1041"
+    },
+    {
+      "icao": "E145",
+      "count": 56,
+      "typeName": "Embraer ERJ-145 LR"
+    },
+    {
+      "icao": "A306",
+      "count": 52,
+      "typeName": "Airbus A300 B4-622RF"
+    },
+    {
+      "icao": "E75S",
+      "count": 50,
+      "typeName": "Embraer EMB-175 LR"
+    },
+    {
+      "icao": "B712",
+      "count": 46,
+      "typeName": "Boeing 717 2BD"
+    },
+    {
+      "icao": "EC30",
+      "count": 46,
+      "typeName": "Eurocopter EC130 B4"
+    },
+    {
+      "icao": "E295",
+      "count": 44,
+      "typeName": "Embraer EMB-195 E2"
+    },
+    {
+      "icao": "C182",
+      "count": 43,
+      "typeName": "Cessna 182T"
+    },
+    {
+      "icao": "PA44",
+      "count": 41,
+      "typeName": "Piper PA-44-180"
+    },
+    {
+      "icao": "SF34",
+      "count": 41,
+      "typeName": "Saab 340 B"
+    },
+    {
+      "icao": "E55P",
+      "count": 39,
+      "typeName": "Embraer Phenom 300"
+    },
+    {
+      "icao": "AT75",
+      "count": 36,
+      "typeName": "Avions de Transport Regional ATR 72 500"
+    },
+    {
+      "icao": "A339",
+      "count": 35,
+      "typeName": "Airbus A330 941N"
+    },
+    {
+      "icao": "SR20",
+      "count": 35,
+      "typeName": "Cirrus SR20"
+    },
+    {
+      "icao": "B350",
+      "count": 34,
+      "typeName": "Textron Aviation King Air B350"
+    },
+    {
+      "icao": "DH8C",
+      "count": 34,
+      "typeName": "Bombardier DHC-8 311Q"
+    },
+    {
+      "icao": "SR22",
+      "count": 34,
+      "typeName": "Cirrus SR22"
+    },
+    {
+      "icao": "C152",
+      "count": 32,
+      "typeName": "Cessna 152"
+    },
+    {
+      "icao": "R44",
+      "count": 32,
+      "typeName": "Robinson R44 Raven II"
+    },
+    {
+      "icao": "B734",
+      "count": 30,
+      "typeName": "Boeing 737 490SF"
+    },
+    {
+      "icao": "G650",
+      "count": 30,
+      "typeName": "Gulfstream Aerospace G650 ER"
+    },
+    {
+      "icao": "B06",
+      "count": 28,
+      "typeName": "Bell 206L Long Ranger IV"
+    },
+    {
+      "icao": "CRJ2",
+      "count": 28,
+      "typeName": "Bombardier CRJ 200LR"
+    },
+    {
+      "icao": "F100",
+      "count": 27,
+      "typeName": "Fokker F100"
+    },
+    {
+      "icao": "BE9L",
+      "count": 26,
+      "typeName": "Raytheon Aircraft Company King Air C90B"
+    },
+    {
+      "icao": "GL6T",
+      "count": 26,
+      "typeName": "Bombardier Global 6000"
+    },
+    {
+      "icao": "C68A",
+      "count": 25,
+      "typeName": "Textron Aviation Citation Latitude"
+    },
+    {
+      "icao": "SW4",
+      "count": 25,
+      "typeName": "Swearingen Metro 23"
+    },
+    {
+      "icao": "B190",
+      "count": 24,
+      "typeName": "Beech 1900 D"
+    },
+    {
+      "icao": "BCS1",
+      "count": 24,
+      "typeName": "Airbus A220 100"
+    },
+    {
+      "icao": "C525",
+      "count": 24,
+      "typeName": "Cessna Citation CJ1"
+    },
+    {
+      "icao": "E170",
+      "count": 24,
+      "typeName": "Embraer EMB-170 STD"
+    },
+    {
+      "icao": "E195",
+      "count": 24,
+      "typeName": "Embraer EMB-195 LR"
+    },
+    {
+      "icao": "B733",
+      "count": 23,
+      "typeName": "Boeing 737 36N/W"
+    },
+    {
+      "icao": "C56X",
+      "count": 22,
+      "typeName": "Cessna Citation Excel"
+    },
+    {
+      "icao": "DA42",
+      "count": 22,
+      "typeName": "Diamond Aircraft Twin Star DA42 NG"
+    },
+    {
+      "icao": "B764",
+      "count": 21,
+      "typeName": "Boeing 767 424ER"
+    },
+    {
+      "icao": "B429",
+      "count": 20,
+      "typeName": "Bell 429 Global Ranger"
+    },
+    {
+      "icao": "GLF5",
+      "count": 20,
+      "typeName": "Gulfstream Aerospace GV"
+    },
+    {
+      "icao": "R22",
+      "count": 20,
+      "typeName": "Robinson R22 Beta II"
+    },
+    {
+      "icao": "B773",
+      "count": 19,
+      "typeName": "Boeing 777 367"
+    },
+    {
+      "icao": "CL35",
+      "count": 19,
+      "typeName": "Bombardier Challenger 350"
+    },
+    {
+      "icao": "GLEX",
+      "count": 19,
+      "typeName": "Bombardier Global Express"
+    },
+    {
+      "icao": "P28R",
+      "count": 19,
+      "typeName": "Piper Aircraft Corp PA-28R-201"
+    },
+    {
+      "icao": "B753",
+      "count": 18,
+      "typeName": "Boeing 757 351/W"
+    },
+    {
+      "icao": "CRJX",
+      "count": 18,
+      "typeName": "Bombardier CRJ 1000 NG"
+    },
+    {
+      "icao": "PC21",
+      "count": 18,
+      "typeName": "Pilatus PC-21"
+    },
+    {
+      "icao": "B762",
+      "count": 17,
+      "typeName": "Boeing 767 223BDSF"
+    },
+    {
+      "icao": "DH8A",
+      "count": 17,
+      "typeName": "Bombardier DHC-8 103B"
+    },
+    {
+      "icao": "G550",
+      "count": 17,
+      "typeName": "Gulfstream Aerospace G550"
+    },
+    {
+      "icao": "AJ27",
+      "count": 16,
+      "typeName": "Comac ARJ21-700"
+    },
+    {
+      "icao": "BE58",
+      "count": 16,
+      "typeName": "Beech Aircraft Corp 58"
+    },
+    {
+      "icao": "C210",
+      "count": 16,
+      "typeName": "Cessna 210M"
+    },
+    {
+      "icao": "EC75",
+      "count": 16,
+      "typeName": "Airbus Helicopters EC175 B (H175)"
+    },
+    {
+      "icao": "PA31",
+      "count": 16,
+      "typeName": "Piper Aircraft Corp PA-31-350"
+    },
+    {
+      "icao": "PC24",
+      "count": 16,
+      "typeName": "Pilatus PC-24"
+    },
+    {
+      "icao": "A343",
+      "count": 15,
+      "typeName": "Airbus A340 313X"
+    },
+    {
+      "icao": "C25B",
+      "count": 15,
+      "typeName": "Cessna Citation CJ3"
+    },
+    {
+      "icao": "C510",
+      "count": 15,
+      "typeName": "Cessna Citation Mustang"
+    },
+    {
+      "icao": "E45X",
+      "count": 15,
+      "typeName": "Embraer ERJ-145 XR"
+    },
+    {
+      "icao": "GLF4",
+      "count": 15,
+      "typeName": "Gulfstream Aerospace GIV SP"
+    },
+    {
+      "icao": "S22T",
+      "count": 15,
+      "typeName": "Cirrus SR22T"
+    },
+    {
+      "icao": "C310",
+      "count": 14,
+      "typeName": "Cessna 310R"
+    },
+    {
+      "icao": "CL65",
+      "count": 14,
+      "typeName": "Bombardier Challenger 605"
+    },
+    {
+      "icao": "DHC6",
+      "count": 14,
+      "typeName": "de Havilland Canada DHC-6 Twin Otter 300"
+    },
+    {
+      "icao": "E35L",
+      "count": 14,
+      "typeName": "Embraer Legacy 600"
+    },
+    {
+      "icao": "LJ45",
+      "count": 14,
+      "typeName": "Bombardier Learjet 45 XR"
+    },
+    {
+      "icao": "LJ60",
+      "count": 14,
+      "typeName": "Bombardier Learjet 60"
+    },
+    {
+      "icao": "C72R",
+      "count": 13,
+      "typeName": "Cessna 172R"
+    },
+    {
+      "icao": "DR40",
+      "count": 13,
+      "typeName": "Robin DR.400 120 Dauphin 2+2"
+    },
+    {
+      "icao": "H25B",
+      "count": 13,
+      "typeName": "Raytheon Aircraft Company 125 800XP"
+    },
+    {
+      "icao": "S92",
+      "count": 13,
+      "typeName": "Sikorsky S-92 A"
+    },
+    {
+      "icao": "AT46",
+      "count": 12,
+      "typeName": "Avions de Transport Regional ATR 42 600"
+    },
+    {
+      "icao": "BE36",
+      "count": 12,
+      "typeName": "Beech A36"
+    },
+    {
+      "icao": "C560",
+      "count": 12,
+      "typeName": "Cessna Citation Encore+"
+    },
+    {
+      "icao": "A169",
+      "count": 11,
+      "typeName": "Leonardo AW.169"
+    },
+    {
+      "icao": "B505",
+      "count": 11,
+      "typeName": "Bell 505 Jet Ranger X"
+    },
+    {
+      "icao": "B735",
+      "count": 11,
+      "typeName": "Boeing 737 524/W"
+    },
+    {
+      "icao": "C150",
+      "count": 11,
+      "typeName": "Cessna 150L"
+    },
+    {
+      "icao": "C25A",
+      "count": 11,
+      "typeName": "Cessna Citation CJ2+"
+    },
+    {
+      "icao": "C750",
+      "count": 11,
+      "typeName": "Cessna Citation X"
+    },
+    {
+      "icao": "CL30",
+      "count": 11,
+      "typeName": "Bombardier Challenger 300"
+    },
+    {
+      "icao": "G450",
+      "count": 11,
+      "typeName": "Gulfstream Aerospace G450"
+    },
+    {
+      "icao": "M20P",
+      "count": 11,
+      "typeName": "Mooney M20R"
+    },
+    {
+      "icao": "AT45",
+      "count": 10,
+      "typeName": "Avions de Transport Regional ATR 42 500"
+    },
+    {
+      "icao": "C17",
+      "count": 10,
+      "typeName": "Boeing C-17A Globemaster III"
+    },
+    {
+      "icao": "C680",
+      "count": 10,
+      "typeName": "Cessna Citation Sovereign"
+    },
+    {
+      "icao": "E120",
+      "count": 10,
+      "typeName": "Embraer EMB-120 ER"
+    },
+    {
+      "icao": "EC20",
+      "count": 10,
+      "typeName": "Eurocopter EC120B Colibri"
+    },
+    {
+      "icao": "FA7X",
+      "count": 10,
+      "typeName": "Dassault Falcon 7X"
+    },
+    {
+      "icao": "G115",
+      "count": 10,
+      "typeName": "Grob G-115 E Tutor"
+    },
+    {
+      "icao": "MD11",
+      "count": 10,
+      "typeName": "McDonnell Douglas MD-11 F"
+    },
+    {
+      "icao": "PIAT",
+      "count": 10,
+      "typeName": "Pipistrel ALPHA TRAINER"
+    },
+    {
+      "icao": "C402",
+      "count": 9,
+      "typeName": "Cessna 402C"
+    },
+    {
+      "icao": "G280",
+      "count": 9,
+      "typeName": "Gulfstream Aerospace G280"
+    },
+    {
+      "icao": "GA8",
+      "count": 9,
+      "typeName": "Gippsland Aeronautics Pty Ltd GA-8"
+    },
+    {
+      "icao": "A109",
+      "count": 8,
+      "typeName": "AgustaWestland AW.109 SP Grand New"
+    },
+    {
+      "icao": "C30J",
+      "count": 8,
+      "typeName": "Lockheed C-130J-30 Hercules"
+    },
+    {
+      "icao": "C441",
+      "count": 8,
+      "typeName": "Cessna 441 Conquest II"
+    },
+    {
+      "icao": "CL64",
+      "count": 8,
+      "typeName": "Bombardier Challenger 604"
+    },
+    {
+      "icao": "E50P",
+      "count": 8,
+      "typeName": "Embraer Phenom 100"
+    },
+    {
+      "icao": "F2LX",
+      "count": 8,
+      "typeName": "Dassault Falcon 2000LX"
+    },
+    {
+      "icao": "F70",
+      "count": 8,
+      "typeName": "Fokker F70"
+    },
+    {
+      "icao": "GL5T",
+      "count": 8,
+      "typeName": "Bombardier Global 5000"
+    },
+    {
+      "icao": "PA30",
+      "count": 8,
+      "typeName": "Piper Aircraft Corp PA-30"
+    },
+    {
+      "icao": "SLG2",
+      "count": 8,
+      "typeName": "Sling Aircraft SLING LSA"
+    },
+    {
+      "icao": "AC50",
+      "count": 7,
+      "typeName": "Aero Commander 500-S"
+    },
+    {
+      "icao": "AS32",
+      "count": 7,
+      "typeName": "Eurocopter Cougar AS.532 UL"
+    },
+    {
+      "icao": "BE40",
+      "count": 7,
+      "typeName": "Raytheon Aircraft Company 400 A"
+    },
+    {
+      "icao": "C25C",
+      "count": 7,
+      "typeName": "Cessna Citation CJ4"
+    },
+    {
+      "icao": "GL7T",
+      "count": 7,
+      "typeName": "Bombardier Global 7500"
+    },
+    {
+      "icao": "JS32",
+      "count": 7,
+      "typeName": "British Aerospace Jetstream 32-02"
+    },
+    {
+      "icao": "PA34",
+      "count": 7,
+      "typeName": "Piper Aircraft Corp PA-34-200T"
+    },
+    {
+      "icao": "S76",
+      "count": 7,
+      "typeName": "Keystone Helicopter S-76 C-2"
+    },
+    {
+      "icao": "AT72",
+      "count": 6,
+      "typeName": "Avions de Transport Regional ATR 72 202F"
+    },
+    {
+      "icao": "BE35",
+      "count": 6,
+      "typeName": "Beech V35B"
+    },
+    {
+      "icao": "C25M",
+      "count": 6,
+      "typeName": "Textron Aviation Citation M2"
+    },
+    {
+      "icao": "C55B",
+      "count": 6,
+      "typeName": "Cessna Citation Bravo"
+    },
+    {
+      "icao": "C700",
+      "count": 6,
+      "typeName": "Textron Aviation Citation Longitude"
+    },
+    {
+      "icao": "CL60",
+      "count": 6,
+      "typeName": "Bombardier CL-600-2C10"
+    },
+    {
+      "icao": "E290",
+      "count": 6,
+      "typeName": "Embraer EMB-190 E2"
+    },
+    {
+      "icao": "E550",
+      "count": 6,
+      "typeName": "Embraer Legacy 500"
+    },
+    {
+      "icao": "FA8X",
+      "count": 6,
+      "typeName": "Dassault Falcon 8X"
+    },
+    {
+      "icao": "G2CA",
+      "count": 6,
+      "typeName": "Helicopteres Guimbal CABRI G2"
+    },
+    {
+      "icao": "H500",
+      "count": 6,
+      "typeName": "MD Helicopters 369 E"
+    },
+    {
+      "icao": "LJ35",
+      "count": 6,
+      "typeName": "Gates Learjet 35 A"
+    },
+    {
+      "icao": "MD83",
+      "count": 6,
+      "typeName": "McDonnell Douglas DC-9 83SF"
+    },
+    {
+      "icao": "P208",
+      "count": 6,
+      "typeName": "Tecnam P.2008 JC"
+    },
+    {
+      "icao": "P32R",
+      "count": 6,
+      "typeName": "Piper Aircraft Corp PA-32R-300"
+    },
+    {
+      "icao": "PA46",
+      "count": 6,
+      "typeName": "Piper PA 46-350P"
+    },
+    {
+      "icao": "SH36",
+      "count": 6,
+      "typeName": "Short SD3-60 100"
+    },
+    {
+      "icao": "A210",
+      "count": 5,
+      "typeName": "Aquila A210"
+    },
+    {
+      "icao": "B412",
+      "count": 5,
+      "typeName": "Bell 412 EP"
+    },
+    {
+      "icao": "BE95",
+      "count": 5,
+      "typeName": "Beech Aircraft Corp E95"
+    },
+    {
+      "icao": "BK17",
+      "count": 5,
+      "typeName": "MBB-Kawasaki BK.117 C-1"
+    },
+    {
+      "icao": "BL8",
+      "count": 5,
+      "typeName": "American Champion Aircraft Corp 8GCBC"
+    },
+    {
+      "icao": "C206",
+      "count": 5,
+      "typeName": "Cessna U206G"
+    },
+    {
+      "icao": "C404",
+      "count": 5,
+      "typeName": "Cessna 404"
+    },
+    {
+      "icao": "C550",
+      "count": 5,
+      "typeName": "Cessna Citation II"
+    },
+    {
+      "icao": "F900",
+      "count": 5,
+      "typeName": "Dassault Falcon 900"
+    },
+    {
+      "icao": "G12T",
+      "count": 5,
+      "typeName": "Grob Prefect T.1"
+    },
+    {
+      "icao": "GA5C",
+      "count": 5,
+      "typeName": "Gulfstream Aerospace GVII-G500"
+    },
+    {
+      "icao": "H60",
+      "count": 5,
+      "typeName": "Sikorsky MH-60R Seahawk"
+    },
+    {
+      "icao": "H900",
+      "count": 5,
+      "typeName": "Hawker Beechcraft Corp Hawker 900XP"
+    },
+    {
+      "icao": "HDJT",
+      "count": 5,
+      "typeName": "Honda Aircraft Company Honda Jet HA-420"
+    },
+    {
+      "icao": "P28B",
+      "count": 5,
+      "typeName": "Piper PA-28-236"
+    },
+    {
+      "icao": "RV7",
+      "count": 5,
+      "typeName": "Vans RV-7"
+    },
+    {
+      "icao": "SIRA",
+      "count": 5,
+      "typeName": "Tecnam P-MENTOR"
+    },
+    {
+      "icao": "TB20",
+      "count": 5,
+      "typeName": "SOCATA TB20 Trinidad"
+    },
+    {
+      "icao": "TBM7",
+      "count": 5,
+      "typeName": "SOCATA TBM 700 A"
+    },
+    {
+      "icao": "TBM9",
+      "count": 5,
+      "typeName": "DAHER TBM 940"
+    },
+    {
+      "icao": "A346",
+      "count": 4,
+      "typeName": "Airbus A340 642"
+    },
+    {
+      "icao": "A400",
+      "count": 4,
+      "typeName": "Airbus Military A400M"
+    },
+    {
+      "icao": "AA5",
+      "count": 4,
+      "typeName": "American Aircraft Corp AA-5B"
+    },
+    {
+      "icao": "AT8T",
+      "count": 4,
+      "typeName": "Air Tractor AT-802A"
+    },
+    {
+      "icao": "BE76",
+      "count": 4,
+      "typeName": "Beech Aircraft Corp 76"
+    },
+    {
+      "icao": "C408",
+      "count": 4,
+      "typeName": "Cessna 408"
+    },
+    {
+      "icao": "C82R",
+      "count": 4,
+      "typeName": "Cessna R182"
+    },
+    {
+      "icao": "DA62",
+      "count": 4,
+      "typeName": "Diamond Aircraft DA62"
+    },
+    {
+      "icao": "FA20",
+      "count": 4,
+      "typeName": "Dassault Falcon 20 F"
+    },
+    {
+      "icao": "FA50",
+      "count": 4,
+      "typeName": "Dassault Falcon 50"
+    },
+    {
+      "icao": "P46T",
+      "count": 4,
+      "typeName": "Piper PA-46-500TP M500"
+    },
+    {
+      "icao": "P68",
+      "count": 4,
+      "typeName": "Partenavia Costruzioni Aeronautiche Spa P.68B"
+    },
+    {
+      "icao": "R66",
+      "count": 4,
+      "typeName": "Robinson R66"
+    },
+    {
+      "icao": "RV12",
+      "count": 4,
+      "typeName": "Amateur Built Aircraft VANS RV 12"
+    },
+    {
+      "icao": "SF50",
+      "count": 4,
+      "typeName": "Cirrus SF50"
+    },
+    {
+      "icao": "SLG4",
+      "count": 4,
+      "typeName": "Sling Aircraft SLING TSi"
+    },
+    {
+      "icao": "SU95",
+      "count": 4,
+      "typeName": "Sukhoi Superjet 100 95 LR-100"
+    },
+    {
+      "icao": "TBM8",
+      "count": 4,
+      "typeName": "DAHER-SOCATA TBM 850"
+    },
+    {
+      "icao": "A119",
+      "count": 3,
+      "typeName": "AgustaWestland AW.119 MkII"
+    },
+    {
+      "icao": "A189",
+      "count": 3,
+      "typeName": "AgustaWestland AW.189"
+    },
+    {
+      "icao": "A19N",
+      "count": 3,
+      "typeName": "Airbus A319 153NSL"
+    },
+    {
+      "icao": "A318",
+      "count": 3,
+      "typeName": "Airbus A318 111"
+    },
+    {
+      "icao": "AN12",
+      "count": 3,
+      "typeName": "Antonov An-12 BP"
+    },
+    {
+      "icao": "AS55",
+      "count": 3,
+      "typeName": "Aerospatiale Twin Squirrel AS.355 F"
+    },
+    {
+      "icao": "AS65",
+      "count": 3,
+      "typeName": "Aerospatiale MH-65E Dolphin"
+    },
+    {
+      "icao": "B736",
+      "count": 3,
+      "typeName": "Boeing 737NG 6CT"
+    },
+    {
+      "icao": "BE33",
+      "count": 3,
+      "typeName": "Beech Aircraft Corp F33A"
+    },
+    {
+      "icao": "BN2P",
+      "count": 3,
+      "typeName": "Britten-Norman Islander BN-2A"
+    },
+    {
+      "icao": "C130",
+      "count": 3,
+      "typeName": "Lockheed C-130A Hercules"
+    },
+    {
+      "icao": "C180",
+      "count": 3,
+      "typeName": "Cessna 182Q"
+    },
+    {
+      "icao": "C501",
+      "count": 3,
+      "typeName": "Cessna Citation I"
+    },
+    {
+      "icao": "C650",
+      "count": 3,
+      "typeName": "Cessna Citation III"
+    },
+    {
+      "icao": "CL61",
+      "count": 3,
+      "typeName": "Bombardier Challenger 601 3A"
+    },
+    {
+      "icao": "CN35",
+      "count": 3,
+      "typeName": "CASA CN-235 100M"
+    },
+    {
+      "icao": "CT4",
+      "count": 3,
+      "typeName": "Pacific Aerospace Corporation CT/4B"
+    },
+    {
+      "icao": "D228",
+      "count": 3,
+      "typeName": "RUAG Do 228 212 NG"
+    },
+    {
+      "icao": "DH8B",
+      "count": 3,
+      "typeName": "Bombardier DHC-8 202"
+    },
+    {
+      "icao": "DV20",
+      "count": 3,
+      "typeName": "Diamond Aircraft Industries DA 20-A1 KATANA"
+    },
+    {
+      "icao": "E545",
+      "count": 3,
+      "typeName": "Embraer EMB-545"
+    },
+    {
+      "icao": "G120",
+      "count": 3,
+      "typeName": "Grob G-120 A"
+    },
+    {
+      "icao": "G150",
+      "count": 3,
+      "typeName": "Gulfstream Aerospace G150"
+    },
+    {
+      "icao": "H47",
+      "count": 3,
+      "typeName": "Boeing-Vertol CH-47F Chinook"
+    },
+    {
+      "icao": "KT1",
+      "count": 3,
+      "typeName": "KAI KT-1B  Wong Bee"
+    },
+    {
+      "icao": "M20T",
+      "count": 3,
+      "typeName": "Mooney M20K"
+    },
+    {
+      "icao": "MD52",
+      "count": 3,
+      "typeName": "MD Helicopters MD 520N"
+    },
+    {
+      "icao": "MD88",
+      "count": 3,
+      "typeName": "McDonnell Douglas MD-88"
+    },
+    {
+      "icao": "P06T",
+      "count": 3,
+      "typeName": "Tecnam P.2006T"
+    },
+    {
+      "icao": "P210",
+      "count": 3,
+      "typeName": "Cessna P210N"
+    },
+    {
+      "icao": "PA32",
+      "count": 3,
+      "typeName": "Piper Aircraft Corp PA-32-300"
+    },
+    {
+      "icao": "RV6",
+      "count": 3,
+      "typeName": "Amateur Built Aircraft VAN'S RV-6"
+    },
+    {
+      "icao": "ST75",
+      "count": 3,
+      "typeName": "Boeing Stearman A75N1 N2S-1 Kaydet"
+    },
+    {
+      "icao": "T204",
+      "count": 3,
+      "typeName": "Tupolev Tu-204 100S"
+    },
+    {
+      "icao": "A337",
+      "count": 2,
+      "typeName": "Airbus A330 743L"
+    },
+    {
+      "icao": "A338",
+      "count": 2,
+      "typeName": "Airbus A330 841N"
+    },
+    {
+      "icao": "AS3B",
+      "count": 2,
+      "typeName": "Eurocopter Cougar AS.532 U2"
+    },
+    {
+      "icao": "AT43",
+      "count": 2,
+      "typeName": "Avions de Transport Regional ATR 42 300"
+    },
+    {
+      "icao": "AT73",
+      "count": 2,
+      "typeName": "Avions de Transport Regional ATR 72 212F"
+    },
+    {
+      "icao": "B463",
+      "count": 2,
+      "typeName": "BAe 146 300QT"
+    },
+    {
+      "icao": "BALL",
+      "count": 2,
+      "typeName": "Ballonbau Worner NL-1000/STU Gas Balloon"
+    },
+    {
+      "icao": "BE10",
+      "count": 2,
+      "typeName": "Beech King Air 100"
+    },
+    {
+      "icao": "BE23",
+      "count": 2,
+      "typeName": "Beech Aircraft Corp A23-24"
+    },
+    {
+      "icao": "BE30",
+      "count": 2,
+      "typeName": "Beech King Air 300"
+    },
+    {
+      "icao": "C06T",
+      "count": 2,
+      "typeName": "Cessna T206H"
+    },
+    {
+      "icao": "C185",
+      "count": 2,
+      "typeName": "Cessna A185F"
+    },
+    {
+      "icao": "C212",
+      "count": 2,
+      "typeName": "CASA C-212 Aviocar 300"
+    },
+    {
+      "icao": "C27J",
+      "count": 2,
+      "typeName": "Alenia C-27J"
+    },
+    {
+      "icao": "C77R",
+      "count": 2,
+      "typeName": "Cessna 177RG"
+    },
+    {
+      "icao": "DC10",
+      "count": 2,
+      "typeName": "Douglas DC-10 30F"
+    },
+    {
+      "icao": "E3TF",
+      "count": 2,
+      "typeName": "Boeing E-3A Sentry"
+    },
+    {
+      "icao": "EA50",
+      "count": 2,
+      "typeName": "Eclipse Aviation EA500"
+    },
+    {
+      "icao": "F2EX",
+      "count": 2,
+      "typeName": "Dassault Falcon 2000EX"
+    },
+    {
+      "icao": "F2TH",
+      "count": 2,
+      "typeName": "Dassault FALCON 2000EX FALCON 2000"
+    },
+    {
+      "icao": "F2TS",
+      "count": 2,
+      "typeName": "Dassault Falcon 2000S"
+    },
+    {
+      "icao": "F9LX",
+      "count": 2,
+      "typeName": "Dassault Falcon 900LX"
+    },
+    {
+      "icao": "FDCT",
+      "count": 2,
+      "typeName": "Flight Design CT LS LSA"
+    },
+    {
+      "icao": "G200",
+      "count": 2,
+      "typeName": "Gulfstream Aerospace G200"
+    },
+    {
+      "icao": "G400",
+      "count": 2,
+      "typeName": "Gulfstream Aerospace G400"
+    },
+    {
+      "icao": "GLID",
+      "count": 2,
+      "typeName": "DG Flugzeugbau DG-1000S"
+    },
+    {
+      "icao": "H160",
+      "count": 2,
+      "typeName": "Airbus Helicopters H160 B"
+    },
+    {
+      "icao": "H64",
+      "count": 2,
+      "typeName": "Boeing-McDonnell Douglas AH-64E Apache Guardian"
+    },
+    {
+      "icao": "LJ40",
+      "count": 2,
+      "typeName": "Bombardier Learjet 40"
+    },
+    {
+      "icao": "LJ75",
+      "count": 2,
+      "typeName": "Bombardier Learjet 75"
+    },
+    {
+      "icao": "M28",
+      "count": 2,
+      "typeName": "PZL M-28 Skytruck"
+    },
+    {
+      "icao": "MD60",
+      "count": 2,
+      "typeName": "MD Helicopters MD 600N"
+    },
+    {
+      "icao": "P180",
+      "count": 2,
+      "typeName": "Piaggio P.180 Avanti"
+    },
+    {
+      "icao": "P8",
+      "count": 2,
+      "typeName": "Boeing P-8A Poseidon"
+    },
+    {
+      "icao": "PA38",
+      "count": 2,
+      "typeName": "Piper Aircraft Corp PA-38-112"
+    },
+    {
+      "icao": "PAY3",
+      "count": 2,
+      "typeName": "Piper PA-42 Cheyenne III"
+    },
+    {
+      "icao": "PRM1",
+      "count": 2,
+      "typeName": "Hawker Beechcraft Corp Premier IA"
+    },
+    {
+      "icao": "T206",
+      "count": 2,
+      "typeName": "Cessna T206H"
+    },
+    {
+      "icao": "T6",
+      "count": 2,
+      "typeName": "North American SNJ-5 Texan"
+    },
+    {
+      "icao": "A345",
+      "count": 1,
+      "typeName": "Airbus A340 541"
+    },
+    {
+      "icao": "A4",
+      "count": 1,
+      "typeName": "Douglas A-4N Ayit"
+    },
+    {
+      "icao": "A5",
+      "count": 1,
+      "typeName": "Icon A5"
+    },
+    {
+      "icao": "AA1",
+      "count": 1,
+      "typeName": "Grumman American AA-1B"
+    },
+    {
+      "icao": "AC11",
+      "count": 1,
+      "typeName": "Rockwell Commander 114 A"
+    },
+    {
+      "icao": "AC90",
+      "count": 1,
+      "typeName": "Rockwell Turbo Commander 690A"
+    },
+    {
+      "icao": "AC95",
+      "count": 1,
+      "typeName": "Rockwell Turbo Commander 695A"
+    },
+    {
+      "icao": "AEST",
+      "count": 1,
+      "typeName": "Piper AEROSTAR 600"
+    },
+    {
+      "icao": "AN26",
+      "count": 1,
+      "typeName": "Antonov AN-26"
+    },
+    {
+      "icao": "AP32",
+      "count": 1,
+      "typeName": "Aeroprakt Ltd. AEROPRAKT-32"
+    },
+    {
+      "icao": "ARCP",
+      "count": 1,
+      "typeName": "Schempp-Hirth Arcus T"
+    },
+    {
+      "icao": "ASTR",
+      "count": 1,
+      "typeName": "Israel Aircraft Industries 1125 Astra SPX"
+    },
+    {
+      "icao": "AT5T",
+      "count": 1,
+      "typeName": "Air Tractor, Inc. AT-502B"
+    },
+    {
+      "icao": "B36T",
+      "count": 1,
+      "typeName": "Beech 36"
+    },
+    {
+      "icao": "B427",
+      "count": 1,
+      "typeName": "Bell 427"
+    },
+    {
+      "icao": "B430",
+      "count": 1,
+      "typeName": "Bell 430"
+    },
+    {
+      "icao": "B58T",
+      "count": 1,
+      "typeName": "Beech 58P"
+    },
+    {
+      "icao": "B722",
+      "count": 1,
+      "typeName": "Boeing 727 223F"
+    },
+    {
+      "icao": "B743",
+      "count": 1,
+      "typeName": "Boeing 747 329F"
+    },
+    {
+      "icao": "BE17",
+      "count": 1,
+      "typeName": "Beech Aircraft Corp D17-R(M)"
+    },
+    {
+      "icao": "BE55",
+      "count": 1,
+      "typeName": "Beech Aircraft Corp 95-B55"
+    },
+    {
+      "icao": "BE65",
+      "count": 1,
+      "typeName": "Beech 65 (LF-23F)"
+    },
+    {
+      "icao": "BE99",
+      "count": 1,
+      "typeName": "Beech 99 C"
+    },
+    {
+      "icao": "BE9T",
+      "count": 1,
+      "typeName": "Beech King Air F90-1"
+    },
+    {
+      "icao": "BL17",
+      "count": 1,
+      "typeName": "Bellanca 17-31ATC"
+    },
+    {
+      "icao": "BX2",
+      "count": 1,
+      "typeName": "Brandli BX-2 Cherry"
+    },
+    {
+      "icao": "C04T",
+      "count": 1,
+      "typeName": "Cessna 404"
+    },
+    {
+      "icao": "C170",
+      "count": 1,
+      "typeName": "Cessna 170A"
+    },
+    {
+      "icao": "C240",
+      "count": 1,
+      "typeName": "Cessna T240"
+    },
+    {
+      "icao": "C295",
+      "count": 1,
+      "typeName": "CASA C-295 W"
+    },
+    {
+      "icao": "C303",
+      "count": 1,
+      "typeName": "Cessna T303"
+    },
+    {
+      "icao": "C337",
+      "count": 1,
+      "typeName": "Cessna O-2A"
+    },
+    {
+      "icao": "C421",
+      "count": 1,
+      "typeName": "Cessna 421C"
+    },
+    {
+      "icao": "C425",
+      "count": 1,
+      "typeName": "Cessna 425"
+    },
+    {
+      "icao": "C500",
+      "count": 1,
+      "typeName": "Cessna Citation I"
+    },
+    {
+      "icao": "C551",
+      "count": 1,
+      "typeName": "Cessna Citation II"
+    },
+    {
+      "icao": "C919",
+      "count": 1,
+      "typeName": "Comac C919"
+    },
+    {
+      "icao": "CC11",
+      "count": 1,
+      "typeName": "Cub Crafters CC11-160"
+    },
+    {
+      "icao": "CDUS",
+      "count": 1,
+      "typeName": "RotorSport UK Calidus"
+    },
+    {
+      "icao": "CH7B",
+      "count": 1,
+      "typeName": "American Champion 7GCBC"
+    },
+    {
+      "icao": "CL85",
+      "count": 1,
+      "typeName": "Bombardier Challenger 850"
+    },
+    {
+      "icao": "COL4",
+      "count": 1,
+      "typeName": "Cessna LC41-550FG"
+    },
+    {
+      "icao": "COZY",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft COZY-3-160-CSEI"
+    },
+    {
+      "icao": "CRJ1",
+      "count": 1,
+      "typeName": "Bombardier CRJ 100LR"
+    },
+    {
+      "icao": "CRUZ",
+      "count": 1,
+      "typeName": "CZAW PS-28 Cruiser"
+    },
+    {
+      "icao": "D328",
+      "count": 1,
+      "typeName": "Dornier Do 328 110"
+    },
+    {
+      "icao": "DC93",
+      "count": 1,
+      "typeName": "Douglas DC-9 32F"
+    },
+    {
+      "icao": "DG80",
+      "count": 1,
+      "typeName": "Glaser-Dirks DG-800B"
+    },
+    {
+      "icao": "E135",
+      "count": 1,
+      "typeName": "Embraer ERJ-135 LR"
+    },
+    {
+      "icao": "E400",
+      "count": 1,
+      "typeName": "Extra EA.400"
+    },
+    {
+      "icao": "EA55",
+      "count": 1,
+      "typeName": "Eclipse Aviation EA550"
+    },
+    {
+      "icao": "EC25",
+      "count": 1,
+      "typeName": "Airbus Helicopters EC225 LP"
+    },
+    {
+      "icao": "EC55",
+      "count": 1,
+      "typeName": "Eurocopter EC155 B1"
+    },
+    {
+      "icao": "EFOX",
+      "count": 1,
+      "typeName": "Aeropro EuroFox"
+    },
+    {
+      "icao": "EVSS",
+      "count": 1,
+      "typeName": "Evektor-Aerotechnik EV-97 Sportstar RTC"
+    },
+    {
+      "icao": "EXPL",
+      "count": 1,
+      "typeName": "MD Helicopters MD 900 Explorer"
+    },
+    {
+      "icao": "F2DX",
+      "count": 1,
+      "typeName": "Dassault Falcon 2000DX"
+    },
+    {
+      "icao": "F406",
+      "count": 1,
+      "typeName": "Reims Aviation Sa CESSNA F406 CARAVAN II"
+    },
+    {
+      "icao": "F50",
+      "count": 1,
+      "typeName": "Fokker F50"
+    },
+    {
+      "icao": "F5EX",
+      "count": 1,
+      "typeName": "Dassault Falcon 50EX"
+    },
+    {
+      "icao": "F8L",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft F8L"
+    },
+    {
+      "icao": "F9DX",
+      "count": 1,
+      "typeName": "Dassault Falcon 900DX"
+    },
+    {
+      "icao": "F9EX",
+      "count": 1,
+      "typeName": "Dassault Falcon 900EX EASy"
+    },
+    {
+      "icao": "FA10",
+      "count": 1,
+      "typeName": "Dassault Falcon 10"
+    },
+    {
+      "icao": "FK9",
+      "count": 1,
+      "typeName": "B & F Funk FK-9 Mk.IV Executive"
+    },
+    {
+      "icao": "G100",
+      "count": 1,
+      "typeName": "Gulfstream Aerospace G100"
+    },
+    {
+      "icao": "G73T",
+      "count": 1,
+      "typeName": "Grumman Mallard G-73AT"
+    },
+    {
+      "icao": "GA6C",
+      "count": 1,
+      "typeName": "Gulfstream Aerospace GVII-G600"
+    },
+    {
+      "icao": "GAZL",
+      "count": 1,
+      "typeName": "Aerospatiale Gazelle SA.342 M"
+    },
+    {
+      "icao": "GLAS",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft GII-S-RG"
+    },
+    {
+      "icao": "GLF3",
+      "count": 1,
+      "typeName": "Grumman GIII"
+    },
+    {
+      "icao": "GLST",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft GLASAIR CARBON SPORTSMAN"
+    },
+    {
+      "icao": "H25C",
+      "count": 1,
+      "typeName": "British Aerospace 125 1000B"
+    },
+    {
+      "icao": "H269",
+      "count": 1,
+      "typeName": "Hughes 269 C"
+    },
+    {
+      "icao": "H53",
+      "count": 1,
+      "typeName": "Sikorsky CH-53E Sea Stallion"
+    },
+    {
+      "icao": "H750",
+      "count": 1,
+      "typeName": "Hawker Beechcraft Corp Hawker 750"
+    },
+    {
+      "icao": "HA4T",
+      "count": 1,
+      "typeName": "Hawker Beechcraft Corp Hawker 4000"
+    },
+    {
+      "icao": "IL76",
+      "count": 1,
+      "typeName": "Ilyushin IL-76 TD-90SW"
+    },
+    {
+      "icao": "IMPU",
+      "count": 1,
+      "typeName": "Impulse Aircraft Impulse 180 TD"
+    },
+    {
+      "icao": "J3",
+      "count": 1,
+      "typeName": "American Legend AL3"
+    },
+    {
+      "icao": "JS31",
+      "count": 1,
+      "typeName": "British Aerospace Jetstream 31-02"
+    },
+    {
+      "icao": "KC2",
+      "count": 1,
+      "typeName": "Kawasaki C-2"
+    },
+    {
+      "icao": "KC46",
+      "count": 1,
+      "typeName": "Boeing KC-46A Pegasus"
+    },
+    {
+      "icao": "KODI",
+      "count": 1,
+      "typeName": "Quest Aircraft Company Kodiak 100"
+    },
+    {
+      "icao": "L410",
+      "count": 1,
+      "typeName": "LET L-410 UVP-E3"
+    },
+    {
+      "icao": "LA4",
+      "count": 1,
+      "typeName": "Lake A/c Div. Of Consolidated Aeronautics Inc. LA-4-200"
+    },
+    {
+      "icao": "LJ36",
+      "count": 1,
+      "typeName": "Gates Learjet 36 A"
+    },
+    {
+      "icao": "LJ55",
+      "count": 1,
+      "typeName": "Gates Learjet 55"
+    },
+    {
+      "icao": "LNC2",
+      "count": 1,
+      "typeName": "Neico Lancair 360"
+    },
+    {
+      "icao": "LNC4",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft LANCAIR IV-P"
+    },
+    {
+      "icao": "M600",
+      "count": 1,
+      "typeName": "Piper PA-46-600TP"
+    },
+    {
+      "icao": "MJ10",
+      "count": 1,
+      "typeName": "Jurca MJ-10 Spitfire"
+    },
+    {
+      "icao": "MM24",
+      "count": 1,
+      "typeName": "Magni Gyro M-24 Orion"
+    },
+    {
+      "icao": "MU2",
+      "count": 1,
+      "typeName": "Mitsubishi MU-2B -36  (L)"
+    },
+    {
+      "icao": "MX2",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft MX2"
+    },
+    {
+      "icao": "NAVI",
+      "count": 1,
+      "typeName": "Ryan NAVION"
+    },
+    {
+      "icao": "NG5",
+      "count": 1,
+      "typeName": "Brm Aero BRISTELL LSA"
+    },
+    {
+      "icao": "NH90",
+      "count": 1,
+      "typeName": "NH Industries NH90 TTH"
+    },
+    {
+      "icao": "P51",
+      "count": 1,
+      "typeName": "North American P-51D Mustang"
+    },
+    {
+      "icao": "P750",
+      "count": 1,
+      "typeName": "Pacific Aerospace PAC750XL"
+    },
+    {
+      "icao": "PA18",
+      "count": 1,
+      "typeName": "Piper PA-18 150 Super Cub"
+    },
+    {
+      "icao": "PA24",
+      "count": 1,
+      "typeName": "Piper Aircraft Corp PA-24-260"
+    },
+    {
+      "icao": "PA39",
+      "count": 1,
+      "typeName": "Piper PA-39 Twin Comanche C/R"
+    },
+    {
+      "icao": "PC7",
+      "count": 1,
+      "typeName": "Pilatus PC-7"
+    },
+    {
+      "icao": "PC9",
+      "count": 1,
+      "typeName": "Pilatus PC-9 B"
+    },
+    {
+      "icao": "PIVI",
+      "count": 1,
+      "typeName": "Pipistrel Virus SW 80"
+    },
+    {
+      "icao": "PRIM",
+      "count": 1,
+      "typeName": "Blackshape BS100 Prime"
+    },
+    {
+      "icao": "R200",
+      "count": 1,
+      "typeName": "Robin R.2112 Alpha"
+    },
+    {
+      "icao": "RV10",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft VAN'S RV-10"
+    },
+    {
+      "icao": "RV14",
+      "count": 1,
+      "typeName": "Amateur Built Aircraft RV-14"
+    },
+    {
+      "icao": "S108",
+      "count": 1,
+      "typeName": "Stinson 108"
+    },
+    {
+      "icao": "SC7",
+      "count": 1,
+      "typeName": "Short Skyvan 3-100"
+    },
+    {
+      "icao": "SPIT",
+      "count": 1,
+      "typeName": "Vickers Supermarine Spitfire IIa"
+    },
+    {
+      "icao": "SV4",
+      "count": 1,
+      "typeName": "SNCAN Stampe SV-4 A"
+    },
+    {
+      "icao": "SW3",
+      "count": 1,
+      "typeName": "Swearingen Merlin IIIC"
+    },
+    {
+      "icao": "T210",
+      "count": 1,
+      "typeName": "Cessna T210M"
+    },
+    {
+      "icao": "TOBA",
+      "count": 1,
+      "typeName": "SOCATA TB10 Tobago"
+    },
+    {
+      "icao": "TOUR",
+      "count": 1,
+      "typeName": "Victa Ltd AIRTOURER 115"
+    },
+    {
+      "icao": "TWEN",
+      "count": 1,
+      "typeName": "Tecnam P.2010 TDI"
+    },
+    {
+      "icao": "U16",
+      "count": 1,
+      "typeName": "Grumman Albatross HU-16B"
+    },
+    {
+      "icao": "V22",
+      "count": 1,
+      "typeName": "Bell/Boeing MV-22B Osprey"
+    },
+    {
+      "icao": "VR7",
+      "count": 1,
+      "typeName": "Vashon RANGER R7"
+    },
+    {
+      "icao": "VTOR",
+      "count": 1,
+      "typeName": "Vulcanair AP.68TP 600 Viator"
+    },
+    {
+      "icao": "WB57",
+      "count": 1,
+      "typeName": "Martin WB-57F"
+    }
+  ]
+}

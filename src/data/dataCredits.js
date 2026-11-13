@@ -142,6 +142,13 @@ export const DATA_CREDITS = [
       '· each photo is © its photographer, credited beside it',
   },
   {
+    key: 'aircrafttypephotos',
+    html:
+      'Aircraft type photos: ' +
+      '<a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a> ' +
+      "· each photo keeps its author's open licence, credited beside it",
+  },
+  {
     key: 'openvesselphotos',
     html:
       'Vessel photos: ' +

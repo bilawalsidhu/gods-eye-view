@@ -426,6 +426,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **ESO Milky Way panorama** (eso0932a, blurred cube map, sky background)     | `sky/`                            | **CC BY 4.0**                                                                                             | ✅ (attribution; changes stated)                 | "ESO/S. Brunier"                                                            |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
 | **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
+| **Aircraft type library** (197 ICAO types: name, class, specs, one photo each) | `src/data/aircraftTypes/`, `public/aircraft-types/` | Photos: **public domain, CC0, CC BY or CC BY-SA** from Wikimedia Commons, per file ([credits](docs/AIRCRAFT-PHOTO-CREDITS.md)). Specs: Wikidata (**CC0**) and ICAO Doc 8643 (facts only) | ✅ (attribution and share-alike per photo) | "Aircraft type photos: Wikimedia Commons" in Data attribution; author, licence and source link beside every photo |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -464,6 +465,10 @@ module. Nothing is fetched at runtime. The MIC records keep their specification 
 titles are shortened to model codes and colour aliases are added. The records describe camera
 products (optics, resolution, night vision) only, never endpoints, stream paths or access data. CC0 requires no attribution; the CCTV HUD
 credits it anyway as `SPECS: CCTV-DATABASE.COM` beside any spec line it renders.
+
+### Aircraft type library (`src/data/aircraftTypes/`, `public/aircraft-types/`)
+
+One entry per ICAO type designator for the 150 most common types in the adsbdb cache plus a curated set, with name, manufacturer, class, specs and one photo. Specs come from Wikidata (length, wingspan, first flight) and ICAO Doc 8643 (engines); each entry's `specsSource` names the source item. Only photos licensed CC0, public domain, CC BY or CC BY-SA are kept, each scaled to at most 640 px and re-encoded as WebP. Author, licence and the Commons file page are stored with the entry and shown beside the photo on the selected-aircraft card. The photo shows the aircraft type, not the tracked airframe. [docs/AIRCRAFT-TYPE-LIBRARY.md](docs/AIRCRAFT-TYPE-LIBRARY.md) describes the data and the builder, and [docs/AIRCRAFT-PHOTO-CREDITS.md](docs/AIRCRAFT-PHOTO-CREDITS.md) credits every photo.
 
 ### Bundled OpenStreetMap data
 
