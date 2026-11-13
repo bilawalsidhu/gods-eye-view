@@ -1,5 +1,6 @@
 import {
   OPACITY_DEFAULT,
+  LAYER_OPACITY_PARAM,
   normalizeOpacity,
   readLayerOpacityFromUrl,
   writeLayerOpacityToUrl,
@@ -56,7 +57,9 @@ export class LayerOpacity {
     // The raw `lop` text the address last held, read or written by us. A
     // hashchange/popstate that leaves it alone (a host page's routing, an
     // in-page anchor, the same entry's second event) is not an incoming link
-    // and must not undo what the user set since.
+    // and must not undo what the user set since. Trade-off, deliberate: Back
+    // pressed inside the write delay on two entries with no lop looks the same
+    // as an anchor click, so the pending write lands on the entry navigated to.
     this._knownLop = this._addressLop();
     this._onNavigation = () => {
       if (this._destroyed || this._addressLop() === this._knownLop) return;
@@ -170,7 +173,7 @@ export class LayerOpacity {
   _addressLop() {
     try {
       return new URL(this._location?.href ?? '', 'http://x').searchParams
-        .getAll('lop')
+        .getAll(LAYER_OPACITY_PARAM)
         .join('&');
     } catch {
       return '';
