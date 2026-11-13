@@ -2251,7 +2251,7 @@ picture under the HUD (with passing light streaks, which stop under reduced
 motion), arrow-key look-around when the provider asks for it, and a progress
 line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
 labels never overlap). Core translates none of the provider's text: a host
-words it for the page's language (`@gods-eye-view/core/i18n/locale`:
+words it for the page's language (`@gods-eye-view/core/i18n`:
 `getLocale`, `onLocaleChange`). Its entry face, labels and look may be
 functions, read again when they are shown and on a change of language, as the
 HUD view is.
@@ -2267,9 +2267,8 @@ feed held, clicks and Escape left to the view; the held copy stays the one
 drawn of its train while held, another feed's copy hidden, and it keeps
 moving, still selected, when its category is turned off) and
 `focusTrain(key)` (false for a train the layer does not draw); its pure path
-module is exported as `@gods-eye-view/core/layers/rail/paths`. That export,
-`@gods-eye-view/core/i18n/locale` and these read APIs are experimental and may
-change without notice. A snapshot read again while nothing in it changed is
+module is exported as `@gods-eye-view/core/layers/rail/paths`. That export
+and these read APIs are experimental and may change without notice. A snapshot read again while nothing in it changed is
 the one read before, and its `path.line` is a frozen copy. Transit
 offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is

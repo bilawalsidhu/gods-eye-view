@@ -248,7 +248,7 @@ their `this`; one that throws or returns a promise is treated as having
 failed.
 
 ```js
-import { getLocale, onLocaleChange } from '@gods-eye-view/core/i18n/locale';
+import { getLocale, onLocaleChange } from '@gods-eye-view/core/i18n';
 import { pointAtS } from '@gods-eye-view/core/layers/rail/paths';
 
 const words = {
@@ -302,7 +302,7 @@ const ride = {
 createApplicationControls({ /* ... */ services: { cockpitSubjects: [ride] } });
 ```
 
-`@gods-eye-view/core/i18n/locale` gives `getLocale()` and `onLocaleChange()`:
+The `./i18n` entry gives `getLocale()` and `onLocaleChange()`:
 Core translates only its own strings, so a provider words its labels, entry
 face and HUD for the page's language (labels may be functions, as above; the
 HUD is read again on a change). `@gods-eye-view/core/layers/rail/paths` is the
@@ -313,7 +313,7 @@ and Transit read APIs in `src/layers/rail/cockpitSubject.js` and
 `src/layers/transit/cockpitSubject.js`. A snapshot read again while nothing in
 it changed is the one read before, so `read` may take one on every update; a
 train's `path.line` is a frozen copy of its line, for `pointAtS` and
-`projectOnPath`. The `i18n/locale` and `layers/rail/paths` exports and the
+`projectOnPath`. The `layers/rail/paths` export and the
 Rail and Transit read APIs (`getSelectedTrain`, `getSelectedVehicle`,
 `getCockpitSubject` and the snapshots they return, `path.line` among them)
 are experimental and may change without notice.

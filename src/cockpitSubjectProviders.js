@@ -167,7 +167,7 @@ function refusal(provider, kinds) {
  *   `entryFace`, `labels` and `look` may each be a function returning the
  *   object: it is called on the provider again whenever they are shown and
  *   when the page's language changes, so its words can follow it
- *   (`./i18n/locale`). A read that throws or is malformed keeps the last
+ *   (`./i18n`). A read that throws or is malformed keeps the last
  *   good one; `look` is on or off and `restPitchDeg` fixed as first read;
  * - `cameraIntervalMs` (optional): 0..1000, null for the Cockpit's default; 0
  *   updates the camera every rendered frame;

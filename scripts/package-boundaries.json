@@ -5898,29 +5898,6 @@
     ],
     "external": []
   },
-  "i18n-locale": {
-    "exports": ["./i18n/locale"],
-    "modules": [
-      "src/i18n/hostLocale.js",
-      "src/i18n/marker.js",
-      "src/i18n/index.js",
-      "src/i18n/locale.js",
-      "src/i18n/locales/ar.json",
-      "src/i18n/locales/de.json",
-      "src/i18n/locales/es.json",
-      "src/i18n/locales/fr.json",
-      "src/i18n/locales/he.json",
-      "src/i18n/locales/it.json",
-      "src/i18n/locales/ja.json",
-      "src/i18n/locales/pt.json",
-      "src/i18n/locales/ru.json",
-      "src/i18n/locales/sv.json",
-      "src/i18n/locales/uk.json",
-      "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
-    ],
-    "external": []
-  },
   "rail-paths": {
     "exports": ["./layers/rail/paths"],
     "modules": ["src/data/railPaths.js"],

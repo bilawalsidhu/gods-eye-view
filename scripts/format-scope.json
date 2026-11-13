@@ -1433,7 +1433,6 @@
   "src/cockpitSubjectProviders.test.mjs",
   "src/cockpitProgress.js",
   "src/cockpitProgress.test.mjs",
-  "src/i18n/hostLocale.js",
   "src/ui/cockpitSubjectView.test.mjs",
   "src/ui/styles/cockpitSubject.css",
   "src/layers/rail/cockpitSubject.js",
