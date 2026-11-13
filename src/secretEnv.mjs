@@ -194,6 +194,8 @@ function comparableValue(value) {
 }
 
 const MOVED_HEADER = '# Moved from .env by `npm run env:init`.';
+const DUPLICATE_NOTE =
+  '# env:init: .env set this name more than once; the last value is the live one, this earlier one is kept as a comment.';
 const CONFLICT_NOTE =
   '# env:init: .env held a different value; the line above stays live, the .env one is kept below as a comment.';
 
@@ -211,12 +213,16 @@ const CONFLICT_NOTE =
  * - a DIFFERENT value live in both → the .env.local value stays live (it is
  *   the one the app uses today) and the .env line moves beneath it as a
  *   comment, so no value is lost (named in `conflicts` for the operator);
+ * - a name assigned more than once in .env → its LAST value is the one that
+ *   moves live (dotenv uses the last assignment); earlier values are kept in
+ *   .env.local as comments (named in `duplicates`);
  * - a commented `# NAME=value` in .env moves as it is, still commented.
  *
  * @param {string} envText Current .env text.
  * @param {string} [localText] Current .env.local text ('' if none).
  * @returns {{env: string, local: string, moved: string[], alreadyThere: string[],
- *   conflicts: string[], dropped: string[], changed: boolean, localChanged: boolean}}
+ *   conflicts: string[], duplicates: string[], dropped: string[], changed: boolean,
+ *   localChanged: boolean}}
  *   `env` and `local` are the new texts; `moved` names lines that carried a
  *   value, `dropped` blank placeholders taken out of .env. The name lists never
  *   carry values.
@@ -249,6 +255,7 @@ export function planSecretMigration(envText, localText = '') {
   const moved = [];
   const alreadyThere = [];
   const conflicts = [];
+  const duplicates = [];
   const dropped = [];
   const note = (list, name) => {
     if (!list.includes(name)) list.push(name);
@@ -271,7 +278,9 @@ export function planSecretMigration(envText, localText = '') {
     if (!byName.has(entry.name)) byName.set(entry.name, []);
     byName.get(entry.name).push(entry);
   }
-  for (const entry of [...byName.values()].flatMap((group) => group.reverse())) {
+  for (const entry of [...byName.values()].flatMap((group) =>
+    group.reverse(),
+  )) {
     if (!isSecretEnvName(entry.name)) continue;
     const span = lines.slice(entry.start, entry.end + 1);
     const value = comparableValue(entry.value);
@@ -282,14 +291,20 @@ export function planSecretMigration(envText, localText = '') {
     } else if (!entry.commented && current?.value === value) {
       note(alreadyThere, entry.name);
     } else if (!entry.commented && current) {
-      const kept = [
-        CONFLICT_NOTE,
-        ...span.map((line) => `# ${line.trimStart()}`),
-      ];
-      if (current.end >= 0)
-        edits.push({ at: current.end + 1, remove: 0, lines: kept });
-      else append.push(...kept);
-      note(conflicts, entry.name);
+      const older = span.map((line) => `# ${line.trimStart()}`);
+      if (current.end >= 0) {
+        // A different value already live in .env.local: that one stays live.
+        edits.push({
+          at: current.end + 1,
+          remove: 0,
+          lines: [CONFLICT_NOTE, ...older],
+        });
+        note(conflicts, entry.name);
+      } else {
+        // The name is repeated in .env; its last value was moved above.
+        append.push(DUPLICATE_NOTE, ...older);
+        note(duplicates, entry.name);
+      }
     } else {
       place(entry.name, span);
       if (!entry.commented) live.set(entry.name, { value, end: -1 });
@@ -320,6 +335,7 @@ export function planSecretMigration(envText, localText = '') {
     moved,
     alreadyThere,
     conflicts,
+    duplicates,
     dropped,
     changed: remove.size > 0,
     localChanged: edits.length > 0 || append.length > 0,

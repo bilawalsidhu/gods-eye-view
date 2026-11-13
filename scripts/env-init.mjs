@@ -88,6 +88,12 @@ export function runEnvInit({ root, argv = [], log = console.log } = {}) {
     log(`${move} into ${SECRETS_FILE}: ${list(plan.moved)}`);
     log(`already in ${SECRETS_FILE}: ${list(plan.alreadyThere)}`);
     log(`blank placeholders: ${list(plan.dropped)}`);
+    if (plan.duplicates.length) {
+      log(
+        `repeated in ${SETTINGS_FILE}: ${list(plan.duplicates)} — the last value is live, ` +
+          'earlier ones are kept as comments.',
+      );
+    }
     if (plan.conflicts.length) {
       log(
         `CHECK ${list(plan.conflicts)}: a different value in each file. The ${SECRETS_FILE} ` +
