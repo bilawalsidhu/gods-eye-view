@@ -24,15 +24,41 @@ export function resampleWindGrid({
   dx = 1,
   dy = 1,
 }) {
+  return resampleFields({
+    fields: { u, v, ...(scalar === undefined ? {} : { scalar }) },
+    ni,
+    nj,
+    lo1,
+    la1,
+    di,
+    dj,
+    dx,
+    dy,
+    scalarScale,
+    scalarOffset,
+  });
+}
+
+function resampleFields({
+  fields,
+  ni,
+  nj,
+  lo1,
+  la1,
+  di,
+  dj,
+  dx,
+  dy,
+  scalarScale = 1,
+  scalarOffset = 0,
+}) {
   if (
     !Number.isInteger(ni) ||
     !Number.isInteger(nj) ||
     ni < 1 ||
     nj < 1 ||
     ni * nj > 2_000_000 ||
-    u?.length !== ni * nj ||
-    v?.length !== ni * nj ||
-    (scalar !== undefined && scalar?.length !== ni * nj) ||
+    Object.values(fields).some((values) => values?.length !== ni * nj) ||
     ![lo1, la1, di, dj, dx, dy, scalarScale, scalarOffset].every(
       Number.isFinite,
     ) ||
@@ -44,7 +70,7 @@ export function resampleWindGrid({
     dy > 180
   )
     throw new Error('Invalid wind grid geometry');
-  for (const values of [u, v, ...(scalar === undefined ? [] : [scalar])]) {
+  for (const values of Object.values(fields)) {
     if (!Array.prototype.every.call(values, Number.isFinite))
       throw new Error('Invalid wind grid values');
   }
@@ -52,9 +78,10 @@ export function resampleWindGrid({
   const ny = Math.round(180 / dy) + 1;
   if (nx * ny > 1_000_000)
     throw new Error('Resampled wind grid exceeds point budget');
-  const outU = new Float32Array(nx * ny);
-  const outV = new Float32Array(nx * ny);
-  const outScalar = scalar === undefined ? null : new Float32Array(nx * ny);
+  const keys = Object.keys(fields);
+  const outputs = Object.fromEntries(
+    keys.map((key) => [key, new Float32Array(nx * ny)]),
+  );
   const sample = (source, lon, lat) => {
     const x = ((lon - lo1) / di + ni) % ni;
     const y = Math.max(0, Math.min(nj - 1, (la1 - lat) / dj));
@@ -73,14 +100,14 @@ export function resampleWindGrid({
       const index = y * nx + x;
       const lon = x * dx;
       const lat = 90 - y * dy;
-      outU[index] = sample(u, lon, lat);
-      outV[index] = sample(v, lon, lat);
-      if (outScalar)
-        outScalar[index] =
-          sample(scalar, lon, lat) * scalarScale + scalarOffset;
+      for (const key of keys) {
+        const value = sample(fields[key], lon, lat);
+        outputs[key][index] =
+          key === 'scalar' ? value * scalarScale + scalarOffset : value;
+      }
     }
   }
-  for (const values of [outU, outV, ...(outScalar ? [outScalar] : [])]) {
+  for (const values of Object.values(outputs)) {
     if (!values.every(Number.isFinite))
       throw new Error('Invalid resampled wind values');
   }
@@ -91,10 +118,26 @@ export function resampleWindGrid({
     la1: 90,
     dx,
     dy,
-    u: outU,
-    v: outV,
-    ...(outScalar ? { scalar: outScalar } : {}),
+    ...outputs,
   };
+}
+
+/** Resample a Kelvin field without allocating unused wind components. */
+export function resampleTemperatureGrid({ field, targetDx = 1 }) {
+  if (field.units !== 'K') throw new Error('Unexpected temperature units');
+  const { ni, nj, lo1, la1, di, dj } = field;
+  return resampleFields({
+    fields: { scalar: field.values },
+    ni,
+    nj,
+    lo1,
+    la1,
+    di,
+    dj,
+    dx: targetDx,
+    dy: targetDx,
+    scalarOffset: -273.15,
+  });
 }
 
 /** Metadata for the two optional same-cycle weather fields. */

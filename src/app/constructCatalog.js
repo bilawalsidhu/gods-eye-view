@@ -5,6 +5,11 @@ import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
+import { createAirTemperatureLayer } from '../layers/airTemperature/index.js';
+import { createOceanTemperatureLayer } from '../layers/oceanTemperature/index.js';
+import { createTemperatureLayer } from '../layers/temperatureModes/index.js';
+import * as input from '../data/inputOwnership.js';
+import { overlayHost } from './layers/overlayHost.js';
 import { createLayerCatalog } from './catalog.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
@@ -21,6 +26,7 @@ import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
+import { createApplicationTemperature } from './layers/temperature.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
 import { createApplicationAlpr } from './layers/alprCameras.js';
@@ -181,6 +187,21 @@ export function createApplicationCatalog({
           installations,
         }),
         createWindLayer({ feed: sources.wind, clock: weatherClock }),
+        createTemperatureLayer({
+          land: createApplicationTemperature({
+            source: sources['land-temperature'],
+          }),
+          air: createAirTemperatureLayer({
+            feed: sources['air-temperature'],
+            clock: weatherClock,
+            input,
+          }),
+          ocean: createOceanTemperatureLayer({
+            source: sources['ocean-temperature'],
+            input,
+            overlayHost,
+          }),
+        }),
         createWeatherLayer({
           feed: sources.weather,
           id: 'weather-radar',

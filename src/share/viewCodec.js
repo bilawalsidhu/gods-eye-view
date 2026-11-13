@@ -270,6 +270,12 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     units: 'km/h',
     paused: false,
   }),
+  temperature: Object.freeze({
+    mode: 'land',
+    units: '°C',
+    showNino34: false,
+    date: null,
+  }),
   flights: Object.freeze({
     models3d: true,
     models3dMode: 'proximity',

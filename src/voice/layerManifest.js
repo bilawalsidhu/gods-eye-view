@@ -468,6 +468,7 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
   rail: 'train layer; no room in the prompt budget, and "trains" still names transit',
+  temperature: 'gridded temperature layer; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({
