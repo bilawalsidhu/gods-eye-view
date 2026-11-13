@@ -124,6 +124,9 @@ test('flights analyst record: full record maps every contract field', () => {
     lastContactAtMs: null,
     routeOrigin: 'AUS',
     routeDestination: 'LAX',
+    routeFrom: null,
+    routeTo: null,
+    routeScheduled: null,
   });
 });
 
