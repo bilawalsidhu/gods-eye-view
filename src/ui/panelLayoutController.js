@@ -1,6 +1,7 @@
 /** Own rail measurement, layout scheduling and dock tray observation. */
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
 import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
+import { isPanelRailMutation } from './panelRailCatalog.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
@@ -31,6 +32,7 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#gev-voice-control',
   '#pp-toggles',
   '#param-slider-panel',
+  '#world-timeline',
 ].join(', ');
 /**
  * Fixed UI regions that can occupy the right control lane. Runtime rectangle
@@ -58,17 +60,18 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#cesium-credits .cesium-credit-textContainer',
   '#command-dock',
   '#gev-voice-control',
+  '#world-timeline',
 ].join(', ');
 export class PanelLayoutController {
   constructor({
     readHud,
     scheduleCockpitLayout,
-    syncPanelCollapseButton,
+    presentPanel,
     readDisplayScrollTop,
   }) {
     this.readHud = readHud;
     this.scheduleCockpitLayout = scheduleCockpitLayout;
-    this._syncPanelCollapseButton = syncPanelCollapseButton;
+    this._presentPanel = presentPanel;
     this.readDisplayScrollTop = readDisplayScrollTop;
     this.destroyed = false;
     this._adaptivePanelSettleTimer = null;
@@ -94,10 +97,9 @@ export class PanelLayoutController {
     this._ppToggles = document.getElementById('pp-toggles');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._weatherPanel = document.getElementById('weather-panel');
+    this._newsPanel = document.getElementById('news-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
-    this._sliderPanel = document.getElementById('param-slider-panel');
-    this._detectionBtn = document.getElementById('detection-toggle');
   }
   _scheduleAdaptivePanelLayout({ settle = false } = {}) {
     if (this.destroyed) return;
@@ -192,22 +194,12 @@ export class PanelLayoutController {
     for (const panel of [
       this._cctvPanel,
       this._weatherPanel,
+      this._newsPanel,
       this._recentImageryPanel,
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
       stack.insertBefore(panel, globalContextPanel);
-      this._syncPanelCollapseButton(panel);
-    }
-    if (this._sliderPanel) {
-      this._sliderPanel.style.removeProperty('top');
-      this._sliderPanel.style.removeProperty('right');
-      this._sliderPanel.style.removeProperty('bottom');
-      this._sliderPanel.style.removeProperty('left');
-      this._sliderPanel.style.removeProperty('max-height');
-      const detectionGroup = this._detectionBtn?.closest('.pp-toggle-group');
-      if (detectionGroup) detectionGroup.after(this._sliderPanel);
-      else this._ppToggles.append(this._sliderPanel);
     }
     if (typeof ResizeObserver !== 'undefined') {
       this._rightStackResizeObserver = new ResizeObserver(() => {
@@ -218,6 +210,7 @@ export class PanelLayoutController {
         this._ppToggles,
         this._cctvPanel,
         this._weatherPanel,
+        this._newsPanel,
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,
@@ -233,7 +226,8 @@ export class PanelLayoutController {
     }
 
     if (typeof MutationObserver !== 'undefined') {
-      this._rightStackMutationObserver = new MutationObserver(() => {
+      this._rightStackMutationObserver = new MutationObserver((records) => {
+        if (records.every(isPanelRailMutation)) return;
         this._scheduleRightPanelLayout();
       });
       this._rightStackMutationObserver.observe(stack, {
@@ -284,8 +278,7 @@ export class PanelLayoutController {
         for (const panel of this._rightPanelStack.querySelectorAll(
           '.layout-auto-collapsed',
         )) {
-          panel.classList.remove('collapsed', 'layout-auto-collapsed');
-          this._syncPanelCollapseButton(panel);
+          this._presentPanel(panel, { collapsed: false, auto: null });
         }
       }
       this._syncRightPanelAdaptiveLayout();
@@ -301,7 +294,7 @@ export class PanelLayoutController {
       windowRef: window,
       hud: this.readHud(),
       preferredPanelId: this._rightStackPreferredPanelId,
-      onCollapse: (panel) => this._syncPanelCollapseButton(panel),
+      onCollapse: (panel, patch) => this._presentPanel(panel, patch),
       onRetry: () => this._scheduleRightPanelLayout(),
       leftStack: this._leftPanelStack,
       displayPanel: this._ppToggles,
@@ -334,7 +327,8 @@ export class PanelLayoutController {
     }
 
     if (typeof MutationObserver !== 'undefined') {
-      this._leftStackMutationObserver = new MutationObserver(() => {
+      this._leftStackMutationObserver = new MutationObserver((records) => {
+        if (records.every(isPanelRailMutation)) return;
         this._scheduleLeftPanelLayout();
       });
       this._leftStackMutationObserver.observe(stack, {
@@ -419,8 +413,7 @@ export class PanelLayoutController {
         for (const panel of this._leftPanelStack.querySelectorAll(
           '.layout-auto-collapsed',
         )) {
-          panel.classList.remove('collapsed', 'layout-auto-collapsed');
-          this._syncPanelCollapseButton(panel);
+          this._presentPanel(panel, { collapsed: false, auto: null });
         }
       }
       this._syncLeftPanelAdaptiveLayout();
@@ -435,7 +428,7 @@ export class PanelLayoutController {
       windowRef: window,
       hud: this.readHud(),
       preferredPanelId: this._leftStackPreferredPanelId,
-      onCollapse: (panel) => this._syncPanelCollapseButton(panel),
+      onCollapse: (panel, patch) => this._presentPanel(panel, patch),
       onRetry: () => this._scheduleLeftPanelLayout(),
       collapsedHeights: this._leftStackCollapsedHeights,
       onAligned: () => this._scheduleRightPanelLayout(),

@@ -3,13 +3,16 @@
  *
  * The credential panel has its own stricter gate (`admitKeySetupRequest` in
  * keySetupCore.mjs): loopback socket + local Host + exact Origin + JSON
- * Content-Type. The four endpoints here — `/api/realtime/token` (mints an
- * OpenAI Realtime token = spends money), `/api/openai/hud-summary` (OpenAI
- * spend), `/api/google/nearby-places` (Google spend), and
- * `/api/realtime/debug-log` (appends to a local JSONL) — were previously
- * ungated, so a hostile web page open in the same browser could reach them
- * cross-site: a `fetch` carries a foreign `Origin`, and an `<img>`/navigation
- * carries NO `Origin` at all but does carry `Sec-Fetch-Site: cross-site`.
+ * Content-Type. The endpoints behind this gate — `/api/realtime/token` (mints
+ * an OpenAI Realtime token = spends money), `/api/openai/hud-summary` (OpenAI
+ * spend), `/api/google/nearby-places` (Google spend),
+ * `/api/realtime/debug-log` (appends to a local JSONL) and the quota-bearing
+ * routes SECURITY.md lists with them — were previously ungated, so a hostile
+ * web page open in the same browser could reach them cross-site: a `fetch`
+ * carries a foreign `Origin`, and an `<img>`/navigation carries NO `Origin`
+ * at all but does carry `Sec-Fetch-Site: cross-site`. The keyless map routes
+ * (`/api/terrain/heights`, `/api/overpass`) reuse this core through
+ * `admitSameSiteKeyless` with the forwarding-header refusal switched off.
  *
  * This module is the pure core that refuses those shapes while keeping the
  * documented `HOST=0.0.0.0` LAN opt-in and non-browser loopback tools (the two

@@ -13,36 +13,33 @@ function listenerScope() {
   };
 }
 
-/** Bind collapse buttons and bubbling Escape to an existing panel. */
-export function bindPanelDisclosure({
-  panel,
-  buttons = [],
-  onChange,
-  onEscape,
-}) {
-  if (
-    !panel ||
-    typeof onChange !== 'function' ||
-    typeof onEscape !== 'function'
-  ) {
+/**
+ * Bind bubbling Escape to an existing panel. Its collapse buttons are views
+ * that ask the panel's owner to toggle it (PanelCollapseButton).
+ */
+export function bindPanelDisclosure({ panel, onEscape, ...retired }) {
+  if (!panel || typeof onEscape !== 'function') {
+    throw new TypeError('Panel disclosure requires a panel and onEscape');
+  }
+  // Buttons are views now; a caller still passing them would lose its clicks.
+  if ('buttons' in retired || 'onChange' in retired) {
     throw new TypeError(
-      'Panel disclosure requires a panel, onChange and onEscape',
+      'Panel disclosure binds Escape only; render the buttons as views',
     );
   }
   const scope = listenerScope();
-  for (const button of new Set(buttons)) {
-    scope.listen(button, 'click', () => {
-      onChange(!panel.classList.contains('collapsed'), { explicit: true });
-    });
-  }
   scope.listen(panel, 'keydown', onEscape);
   return { destroy: () => scope.destroy() };
 }
 
-/** Close the nearest expanded panel and return focus to its disclosure. */
+/**
+ * Close the nearest expanded panel and return focus to its disclosure, or to
+ * `returnFocusTo()` when that names a control (a rail item standing in for a
+ * panel that collapsing hid).
+ */
 export function collapsePanelOnEscape(
   event,
-  { panel, onChange, beforeCollapse },
+  { panel, onChange, beforeCollapse, returnFocusTo },
 ) {
   if (event.key !== 'Escape' || event.defaultPrevented) return false;
   if (
@@ -59,6 +56,11 @@ export function collapsePanelOnEscape(
   event.stopPropagation();
   beforeCollapse?.();
   onChange(true, { explicit: true });
+  const stand = returnFocusTo?.();
+  if (stand) {
+    stand.focus?.({ preventScroll: true });
+    return true;
+  }
   const disclosure =
     panel.querySelector(`[data-dock-toggle-target="${panel.id}"]`) ||
     panel.querySelector(`[data-collapse-target="${panel.id}"]`);

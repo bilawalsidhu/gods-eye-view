@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.3.0",
-  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -38,6 +38,10 @@
     "i18n": "node scripts/i18n.mjs",
     "layer-token:next": "node scripts/next-layer-state-token.mjs",
     "layer-token:check": "node scripts/check-layer-state-tokens.mjs",
+    "library:check": "node scripts/library.mjs check",
+    "library:next": "node scripts/library.mjs next",
+    "library:docs": "node scripts/library.mjs docs",
+    "library:probe": "node scripts/library.mjs probe",
     "changelog": "node scripts/assemble-changelog.mjs --write",
     "changelog:check": "node scripts/assemble-changelog.mjs --check",
     "dev": "vite",
@@ -47,12 +51,14 @@
     "build:panel": "node scripts/build-panel.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:perf": "node scripts/run-perf-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
+    "qa:data-library": "node scripts/qa-data-library.mjs",
     "mcp": "node server/mcp/stdio.js"
   },
   "dependencies": {
@@ -62,13 +68,23 @@
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
+    "fzstd": "0.1.1",
     "hls.js": "^1.7.3",
+    "hyparquet": "1.31.2",
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "pinia": "^2.3.1",
+    "satellite.js": "^6.0.2",
+    "vue": "^3.5.44",
+    "vue-i18n": "^11.4.15"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.14.6",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/test-utils": "^2.5.1",
+    "flag-icons": "7.5.0",
+    "happy-dom": "^20.14.6",
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
     "sharp": "^0.35.4",
@@ -82,6 +98,8 @@
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/app/viewer.js",
+    "./time": "./src/time/worldClock.js",
+    "./i18n": "./src/i18n/page.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },
@@ -89,6 +107,7 @@
       "node": "./server/providers/live.js"
     },
     "./sources/adsb-lol": "./src/data/adsbLolFallback.js",
+    "./sources/planespotters": "./src/data/planespottersPhoto.js",
     "./server/providers/places": {
       "node": "./server/providers/places.js"
     },
@@ -126,6 +145,9 @@
     },
     "./server/providers/regional": {
       "node": "./server/providers/regional.js"
+    },
+    "./server/providers/news": {
+      "node": "./server/providers/news.js"
     },
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
@@ -169,6 +191,7 @@
     "./layers/perimeters": "./src/layers/perimeters/index.js",
     "./layers/gnss": "./src/layers/gnss/index.js",
     "./layers/ghostmaps": "./src/layers/ghostMaps/index.js",
+    "./layers/drone-airspace": "./src/layers/droneAirspace/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",
@@ -213,8 +236,8 @@
     "./voice/actions": "./src/voice/gevActions.js",
     "./annotations": "./src/annotations/index.js",
     "./context": "./src/data/contextStore.js",
-    "./build/html": {
-      "node": "./build/application-html.js"
+    "./build/register-vue": {
+      "node": "./build/registerVue.js"
     },
     "./application/catalog": "./src/app/catalog.js",
     "./standalone/catalog": "./src/standalone/catalog.js",
@@ -248,6 +271,8 @@
     "./layers/perimeters/source": "./src/layers/perimeters/source.js",
     "./layers/gnss/source": "./src/layers/gnss/source.js",
     "./layers/ghostmaps/source": "./src/layers/ghostMaps/source.js",
+    "./layers/drone-airspace/source": "./src/layers/droneAirspace/source.js",
+    "./layers/news/source": "./src/layers/news/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",
@@ -268,6 +293,11 @@
     "./layers/transit/standalone": "./src/data/transit.js",
     "./layers/transit/source": "./src/layers/transit/source.js",
     "./sources/transit-service": "./src/sources/transitService.js",
+    "./server/providers/rail": {
+      "node": "./server/providers/rail.js"
+    },
+    "./sources/rail-service": "./src/sources/railService.js",
+    "./layers/rail/source": "./src/layers/rail/source.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js",
     "./server/providers/mapillary": {
       "node": "./server/providers/mapillary.js"
@@ -283,6 +313,8 @@
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
-    "./agent/world-packet": "./src/agent/worldPacket.js"
+    "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
+    "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
   }
 }

@@ -2,6 +2,7 @@
 
 import { msg, t } from '../i18n/index.js';
 import { UNNAMED_PLACE_NAMES } from './installationNames.js';
+import { formatDistanceText } from './distanceFormat.js';
 
 const UNNAMED_NAMES = new Set(UNNAMED_PLACE_NAMES);
 
@@ -46,10 +47,7 @@ export function findByDoublingRadius(
 
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  return meters < 1000
-    ? `${Math.round(meters)} m`
-    : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+  return formatDistanceText(meters) ?? '—';
 }
 
 /**
@@ -63,9 +61,9 @@ export function formatAwarenessLabel(value) {
       value.callsign,
       value.name,
       value.label,
+      value.mmsi,
       value.id,
       value.icao24,
-      value.mmsi,
     ]) {
       const label = formatAwarenessLabel(candidate);
       if (label !== '—') return label;
@@ -156,7 +154,7 @@ export function getAwarenessNavigationTargets(
         ? cohort.summary.nearest
         : [];
     for (const item of sourceItems) {
-      const id = item?.icao24 || item?.mmsi || item?.id;
+      const id = item?.icao24 || item?.id || item?.mmsi;
       if (!id) continue;
       const key = `${layerId}:${id}`;
       if (key === `${subject?.layerId}:${subject?.id}`) continue;

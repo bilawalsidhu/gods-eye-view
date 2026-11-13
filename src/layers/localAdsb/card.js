@@ -1,6 +1,7 @@
 import { AIRCRAFT_CLASS_LABELS } from '../../data/aircraftClass.js';
 import { formatNumber, t, tn } from '../../i18n/index.js';
 import { BAND_LABELS, LOCAL_ADSB_COLOR, SOURCE_LABELS } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const DASH = '—';
 
@@ -152,7 +153,7 @@ export function localAdsbCardModel(
       t('ALT {altitude} FT · GS {speed} KT · TRK {track}', {
         altitude: grouped(altitude),
         speed: speed === null ? DASH : speed,
-        track: track === null ? DASH : `${track % 360}°`,
+        track: track === null ? DASH : `${roundHeadingDegrees(track)}°`,
       }),
       vertical === null
         ? t('V/S {rate}', { rate: DASH })

@@ -135,10 +135,18 @@ try {
   assert.equal(input.value, '');
   await page.click('[data-key-setup-close]');
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView.dataManager.layers
-        .get('air-quality')
-        .module.getStats().count === 5,
+    () => {
+      const layer =
+        window.__godsEyeView.dataManager.layers.get('air-quality').module;
+      // Camera restoration can start a second view refresh after cached rows
+      // arrive. Guidance is intentionally hidden until that refresh completes.
+      const controls = layer.getRowControls();
+      return (
+        layer.getStats().count === 5 &&
+        controls.list.items.length > 0 &&
+        controls.summary.overview.some((line) => line.id === 'general-guidance')
+      );
+    },
     { timeout: 10000 },
   );
   let state = await page.evaluate(() => {

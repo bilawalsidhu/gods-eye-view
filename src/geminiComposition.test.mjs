@@ -2,22 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import { rm } from 'node:fs/promises';
 import { localProviderPlugins } from '../server/providers/local.js';
 import { standaloneVoiceTools } from '../server/standalone/voiceTools.js';
+import { offeredTools } from '../server/providers/openai/tools.js';
 import {
   KEY_SETUP_KEYS,
   keySetupStatus,
   validateKeySetupUpdates,
   upsertDotenvValues,
 } from './keySetupCore.mjs';
+import { makeFixtureRoot } from './tooling/fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot('gev-gemini-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
 
 test('local hosts opt into Gemini explicitly and retain the default plugin order', (t) => {
   t.mock.method(globalThis, 'fetch', () => {
     throw Error('construction must not fetch');
   });
-  const defaults = localProviderPlugins().map((plugin) => plugin.name);
+  const defaults = localProviderPlugins({ nominatimStorageDir }).map(
+    (plugin) => plugin.name,
+  );
   assert.ok(!defaults.includes('gemini-live-proxy'));
-  const enabled = localProviderPlugins({ gemini: {} }).map(
+  const enabled = localProviderPlugins({ gemini: {}, nominatimStorageDir }).map(
     (plugin) => plugin.name,
   );
   assert.equal(
@@ -35,6 +43,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     const tools = standaloneVoiceTools();
     const calls = [];
     const plugin = localProviderPlugins({
+      nominatimStorageDir,
       gemini: {
         tools,
         resolveApiKey: () => 'fixture-key',
@@ -52,8 +61,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     plugin[hook]({
       middlewares: {
         use(route, value) {
-          assert.equal(route, '/api/gemini/token');
-          handler = value;
+          if (route === '/api/gemini/token') handler = value;
         },
       },
     });
@@ -77,13 +85,15 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     assert.equal(calls.length, 1);
     const locked = JSON.parse(calls[0].options.body).bidiGenerateContentSetup
       .tools[0].functionDeclarations;
+    // Without an operator Overpass, osm_query is left out of the session.
+    const offered = offeredTools(tools);
     assert.deepEqual(
       locked.map(({ name }) => name),
-      tools.map(({ name }) => name),
+      offered.map(({ name }) => name),
     );
     assert.deepEqual(
       locked.map(({ parametersJsonSchema }) => parametersJsonSchema),
-      tools.map(({ parameters }) => parameters),
+      offered.map(({ parameters }) => parameters),
     );
     assert.ok(locked.every(({ behavior }) => behavior === 'BLOCKING'));
     assert.deepEqual(res.body.config.tools[0].functionDeclarations, locked);

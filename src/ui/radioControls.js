@@ -1,10 +1,28 @@
 import { bindRadioControls } from './radioBindings.js';
-import { renderRadioState } from './radioPresentation.js';
+import {
+  createRadioTunerState,
+  renderRadioState,
+  showRadioTuner,
+} from './radioPresentation.js';
+import { useRadioStore } from './stores/radio.js';
+import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange } from '../i18n/index.js';
 
-/** Own Radio DOM, tuner interaction and subscription; receive playback and application actions. */
+/**
+ * Own Radio interaction, the tuner and the subscription; receive playback and
+ * application actions. The panel view renders the rest of the Radio panel
+ * from what this publishes (`gev-radio` store).
+ */
 export class RadioControls {
-  constructor({ elements, radio, actions, canvas }) {
+  constructor({
+    elements,
+    radio,
+    actions,
+    canvas,
+    store = useRadioStore(applicationPinia()),
+  }) {
     Object.assign(this, elements);
+    this.store = store;
     this.radio = radio;
     this.actions = actions;
     this.canvas = canvas;
@@ -12,7 +30,12 @@ export class RadioControls {
     this.listeners = new AbortController();
     this._radioUnsubscribe = null;
     this._radioState = null;
+    this._radioView = null;
     this._radioCategorySignature = '';
+    this._radioFilterOptions = null;
+    this._radioVolumeShown = null;
+    this._cockpitDisclosure = { display: false, radio: false };
+    this._radioTunerView = createRadioTunerState();
     this._radioTunerStations = [];
     this._radioTunerPool = [];
     this._radioTunerDragging = false;
@@ -27,7 +50,16 @@ export class RadioControls {
     this._radioTunerSelectedId = null;
     this._radioTunerBandPinnedForNavigation = false;
     this._refreshRadioTunerBand = null;
+    this._refreshRadioTunerText = null;
     bindRadioControls.call(this);
+    // The panel carries translated text; present it again in a new locale,
+    // from a fresh layer state when there is one (its category labels are
+    // worded by the layer).
+    this._offLocale = onLocaleChange(() => {
+      const state = this.radio.getUIState?.() ?? this._radioState;
+      if (state) this._renderRadioState(state);
+      this._refreshRadioTunerText?.();
+    });
   }
 
   listen(target, type, handler, options = {}) {
@@ -111,7 +143,9 @@ export class RadioControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this.listeners.abort();
+    if (this._storeToken) this.store.detach(this._storeToken);
     this._radioUnsubscribe?.();
     this._radioUnsubscribe = null;
     const pointer = this._radioTunerPointerId;
@@ -128,7 +162,7 @@ export class RadioControls {
     } catch {
       /* capture already released */
     }
-    this._radioTuner?.classList.remove('is-dragging', 'is-static');
+    showRadioTuner.call(this, { dragging: false, static: false });
     document
       .getElementById('title-bar')
       ?.classList.remove('radio-broadcasting');

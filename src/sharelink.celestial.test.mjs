@@ -520,13 +520,13 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     ['toggleBloom:', 'setBloomIntensity:', 'this._setBloomEnabled(', 'toggleBloom control'],
     ['setBloomIntensity:', 'toggleSharpen:', 'this._setBloomIntensity(', 'setBloomIntensity control'],
     ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
-    ['setScopeEnabled:', 'setScopeFeather:', 'setScopeMaskEnabled(', 'setScopeEnabled control'],
-    ['setScopeFeather:', 'setSharpenIntensity:', 'setScopeMaskFeather(', 'setScopeFeather control'],
-    ['setSharpenIntensity:', 'setHudLayout:', 'this._applySharpenIntensity(', 'setSharpenIntensity control'],
+    ['setScopeEnabled:', 'setScopeFeather:', 'this._setScope(', 'setScopeEnabled control'],
+    ['setScopeFeather:', 'setSharpenIntensity:', 'this._setScope(', 'setScopeFeather control'],
+    ['setSharpenIntensity:', 'setHudLayout:', 'this._setSharpenIntensity(', 'setSharpenIntensity control'],
     ['setHudLayout:', 'toggleCleanView:', 'this._setHudVariant(', 'setHudLayout control'],
-    ['setDensity:', 'setAllocation:', 'this._applyDetectionDensityFromUi()', 'setDensity control'],
+    ['setDensity:', 'setAllocation:', 'this._setDetectionDensity(', 'setDensity control'],
     ['setAllocation:', 'setFade:', 'this._setDetectionAllocation(', 'setAllocation control'],
-    ['setFade:', 'toggleCelestial:', 'this._applyDetectionFadeFromUi()', 'setFade control'],
+    ['setFade:', 'toggleCelestial:', 'this._setDetectionFade(', 'setFade control'],
   ];
   for (const [start, end, mutation, label] of gestureRoutes) {
     const startIndex = initUi.indexOf(start);
@@ -535,7 +535,7 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     assertClaimsBefore(initUi.slice(startIndex, endIndex), mutation, label);
   }
 
-  const displayActions = initUi.slice(initUi.indexOf('this._displayControls ='));
+  const displayActions = initUi.slice(initUi.indexOf('const token = store.connect('));
   assertClaimsBefore(displayActions.slice(displayActions.indexOf('toggleHud:'), displayActions.indexOf('cycleDetection:')), 'this.hud.toggle()', 'HUD button');
   assertClaimsBefore(displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:')), 'cycleDetectionMode()', 'detection button');
 
@@ -632,7 +632,7 @@ test('every explicit visual control facade claims restore authority before mutat
     ['  setHudLayout(variantName) {', '  getDetectionState() {', 'this._setHudVariant(', 'setHudLayout'],
     ['  setDetection({ enabled, mode, densityPct, allocationStrategy, fadePct, outsideOpacityPct } = {}) {', '  async setMapStack(stackId) {', 'this._setDetectionAllocation(', 'setDetection'],
     ['  setBloom({ enabled, intensityPct } = {}) {', '  setSharpen({ enabled, intensityPct } = {}) {', 'this._setBloomIntensity(', 'setBloom'],
-    ['  setSharpen({ enabled, intensityPct } = {}) {', '  get celestialRingEnabled() {', 'this._applySharpenIntensity(', 'setSharpen'],
+    ['  setSharpen({ enabled, intensityPct } = {}) {', '  get celestialRingEnabled() {', 'this._setSharpenIntensity(', 'setSharpen'],
     ['  setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {', '  setOrbit(enabled) {', 'this.celestialRing?.setEnabled(', 'setCelestialRingEnabled'],
   ];
   for (const [start, end, mutation, label] of facadeRoutes) {
@@ -641,8 +641,8 @@ test('every explicit visual control facade claims restore authority before mutat
 
   const style = sourceBlock('  setStyle(styleName, {', '  _startTransition(styleName, fromValue, toValue) {');
   assertClaimsBefore(style, 'this.activeStyle = styleName', 'setStyle');
-  const sliders = sourceBlock('  _updateSliderPanel(styleName, { reveal = false } = {}) {', '  _revealStyleParameters() {');
-  assertClaimsBefore(sliders, 'this.stages[styleName].uniforms[uName] = val', 'style parameter slider');
+  const sliders = sourceBlock('  setStyleParameter(name, value) {', '  _revealStyleParameters() {');
+  assertClaimsBefore(sliders, 'this.stages[parameters.style].uniforms[name] = value', 'style parameter slider');
 });
 
 test('public visual facades reject the complete invalid request before authority or mutation', () => {
@@ -788,13 +788,13 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   assert.match(synchronous, /this\._displayBindings\.destroy\(\)/);
   assert.match(synchronous, /this\._visualSettings\.stop\(\)/);
   assert.match(synchronous, /this\._mapSourceControls\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._clearLayersControl\?\.destroy\(\)/);
+  assert.match(synchronous, /this\._releaseGlobeActions\(\)/);
   assert.match(synchronous, /this\._locationNavigation\.destroy\(\)/);
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationControls\?\.destroy\(\)/);
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);
-  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._displayControls\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._detachDisplayControls\?\.\(\)/);
   assert.match(DisplayBindings.prototype.destroy.toString(), /this\._applicationShortcuts\?\.destroy\(\)/);
-  assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
+  assert.match(VisualSettings.prototype.stop.toString(), /this\.store\.detach\(this\._parametersToken\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);
 });
 

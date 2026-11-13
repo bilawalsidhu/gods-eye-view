@@ -100,6 +100,26 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'liveuamap',
+    title: 'LIVEUAMAP', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Precise conflict points in the News layer, beside GDELT’s articles',
+    ),
+    getUrl: 'https://liveuamap.com/promo/api',
+    envVars: Object.freeze(['LIVEUAMAP_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'worldnewsapi',
+    title: 'WORLD NEWS API', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Local in the News layer: the day’s news from the outlets of the country in view',
+    ),
+    getUrl: 'https://worldnewsapi.com/console/',
+    envVars: Object.freeze(['WORLDNEWSAPI_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'tomtom',
     title: 'TOMTOM', // i18n-ignore: provider product name
     unlocks: msg('Real live traffic (keyless runs a simulation)'),

@@ -5,34 +5,27 @@ import { PointerReticle, RETICLE_LINGER_MS, RETICLE_MAX_MS } from './pointerReti
 
 const css = readStylesheet(new URL('../../style.css', import.meta.url));
 
-function fakeDoc() {
-  const appended = [];
+function fakeStore() {
   return {
-    appended,
-    body: { appendChild: (node) => appended.push(node) },
-    createElement: (tag) => ({
-      tag,
-      hidden: false,
-      style: {},
-      dataset: {},
-      attributes: {},
-      setAttribute(name, value) {
-        this.attributes[name] = value;
-      },
-      removed: false,
-      remove() {
-        this.removed = true;
-      },
-    }),
+    reticles: new Map(),
+    publishes: 0,
+    get reticle() {
+      return [...this.reticles.values()].at(-1) ?? null;
+    },
+    publish(owner, view) {
+      if (view) this.reticles.set(owner, view);
+      else this.reticles.delete(owner);
+      this.publishes += 1;
+    },
   };
 }
 
 function harness() {
-  const doc = fakeDoc();
+  const store = fakeStore();
   const timers = new Map();
   let next = 1;
   const reticle = new PointerReticle({
-    doc,
+    store,
     rectOf: () => ({ left: 10, top: 20 }),
     setTimer: (fn, ms) => {
       const id = next++;
@@ -46,31 +39,26 @@ function harness() {
     timers.delete(id);
     timer.fn();
   };
-  return { doc, timers, reticle, fire };
+  return { store, timers, reticle, fire };
 }
 
 const pointer = { kind: 'this', label: 'UPS793', screenPx: { x: 600, y: 200 } };
 
 test('reticle: shows at the pointed pixel and caps its lifetime', () => {
-  const { doc, timers, reticle, fire } = harness();
+  const { store, timers, reticle, fire } = harness();
+  assert.equal(store.reticle, null);
   reticle.handle({ type: 'pointer', pointer });
-  const node = doc.appended[0];
-  assert.equal(node.className, 'gev-pointer-reticle');
-  assert.equal(node.attributes['aria-hidden'], 'true');
-  assert.equal(node.hidden, false);
-  assert.equal(node.style.left, '610px');
-  assert.equal(node.style.top, '220px');
-  assert.equal(node.dataset.target, 'entity');
+  assert.deepEqual(store.reticle, { visible: true, left: 610, top: 220, target: 'entity' });
   assert.equal([...timers.values()][0].ms, RETICLE_MAX_MS);
   fire();
-  assert.equal(node.hidden, true);
+  assert.deepEqual(store.reticle, { visible: false, left: 610, top: 220, target: 'entity' });
 });
 
 test('reticle: leaves when a tool moves the camera, lingers after a reply', () => {
-  const { doc, timers, reticle, fire } = harness();
+  const { store, timers, reticle, fire } = harness();
   reticle.handle({ type: 'pointer', pointer: { ...pointer, kind: 'here' } });
-  const node = doc.appended[0];
-  assert.equal(node.dataset.target, 'ground');
+  const hidden = () => !store.reticle.visible;
+  assert.equal(store.reticle.target, 'ground');
   reticle.handle({ type: 'action-call', name: 'analyst_query', callId: 'c1' });
   reticle.handle({ type: 'action-call', name: 'analyst_query', callId: 'c2' });
   reticle.handle({ type: 'action-result', name: 'analyst_query', callId: 'c1' });
@@ -80,19 +68,36 @@ test('reticle: leaves when a tool moves the camera, lingers after a reply', () =
   reticle.handle({ type: 'completion' });
   assert.equal([...timers.values()][0].ms, RETICLE_LINGER_MS);
   fire();
-  assert.equal(node.hidden, true);
+  assert.equal(hidden(), true);
   reticle.handle({ type: 'pointer', pointer });
   reticle.handle({ type: 'action-call', name: 'track_entity' });
-  assert.equal(node.hidden, true, 'camera tools hide it at once');
+  assert.equal(hidden(), true, 'camera tools hide it at once');
   reticle.handle({ type: 'pointer', pointer });
   reticle.handle({ type: 'state', state: 'idle' });
-  assert.equal(node.hidden, true, 'session end hides it');
+  assert.equal(hidden(), true, 'session end hides it');
   assert.equal(timers.size, 0);
   reticle.destroy();
   reticle.destroy();
-  assert.equal(node.removed, true);
+  assert.equal(store.reticle, null, 'destroy withdraws the reticle');
+  const publishes = store.publishes;
   reticle.handle({ type: 'pointer', pointer });
-  assert.equal(doc.appended.length, 1, 'destroyed reticle ignores events');
+  assert.equal(store.publishes, publishes, 'destroyed reticle ignores events');
+});
+
+test('reticle: each reticle keeps its own point', () => {
+  const store = fakeStore();
+  const rectOf = () => ({ left: 0, top: 0 });
+  const older = new PointerReticle({ store, rectOf, setTimer: () => 1, clearTimer() {} });
+  const newer = new PointerReticle({ store, rectOf, setTimer: () => 2, clearTimer() {} });
+  older.handle({ type: 'pointer', pointer });
+  newer.handle({ type: 'pointer', pointer: { ...pointer, screenPx: { x: 5, y: 6 } } });
+  newer.handle({ type: 'state', state: 'idle' });
+  assert.equal(store.reticles.get(older).visible, true, 'hiding the newer one leaves the older one');
+  newer.destroy();
+  assert.deepEqual([...store.reticles.keys()], [older]);
+  assert.notEqual(older.key, newer.key);
+  older.destroy();
+  assert.equal(store.reticles.size, 0);
 });
 
 test('reticle css: overlay is inert and hidden in Clean-UI and recording', () => {

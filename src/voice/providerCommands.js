@@ -61,6 +61,11 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     const pushToTalk = Boolean(
       current.session.adapter.getStartOptions?.().pushToTalk,
     );
+    const textOnly = Boolean(
+      current.session.adapter.getStartOptions?.().textOnly,
+    );
+    // Settings opened from chat stay chat's Settings.
+    const presentation = current.chatPresentation?.() ?? null;
     const generation = ++mountGeneration;
     voiceEnabled = false;
     current.session.destroy();
@@ -77,10 +82,14 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     } catch {
       /* Storage is optional. */
     }
-    mount();
+    mount(presentation);
     if (resume && !disposed && provider === next)
-      void current.session.start({ pushToTalk });
-    globalThis.document?.getElementById('gev-voice-provider')?.focus();
+      void current.session.start({
+        pushToTalk,
+        ...(textOnly ? { textOnly } : {}),
+      });
+    // The new control renders first; focus stays on the provider choice.
+    void current.ui?.focus?.(['provider'], { anyVisibility: true });
     return true;
   };
 
@@ -135,7 +144,7 @@ export function createProviderCommands(options, { bind, factories, storage }) {
       return typeof value === 'function' ? value.bind(current) : value;
     },
   });
-  function mount() {
+  function mount(presentation = null) {
     voiceEnabled = false;
     const generation = ++mountGeneration;
     current = bind({
@@ -151,6 +160,7 @@ export function createProviderCommands(options, { bind, factories, storage }) {
           handleSessionEvent(event);
       },
       createSession: factories[provider],
+      presentation,
     });
     window.__gevVoiceCommands = facade;
   }

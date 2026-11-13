@@ -1,0 +1,30 @@
+{
+  "id": "nasa-black-marble",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Earth at night (NASA Black Marble 2016)",
+  "provider": "NASA GIBS",
+  "description": "VIIRS night lights composite: where people light the planet after dark. Drapes on globe maps and on Google 3D tiles.",
+  "icon": "☾",
+  "maintainer": "github:asturksever",
+  "coverage": { "global": true },
+  "source": {
+    "format": "xyz",
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 8
+  },
+  "display": { "opacity": 0.85 },
+  "licence": {
+    "name": "NASA data: U.S. public domain; no endorsement implied",
+    "url": "https://www.earthdata.nasa.gov/engage/open-data-services-software-policies"
+  },
+  "attribution": {
+    "text": "NASA Earth Observatory / GIBS — VIIRS Black Marble",
+    "url": "https://earthobservatory.nasa.gov/features/NightLights"
+  },
+  "status": "community",
+  "reviewed": "2026-10-21"
+}

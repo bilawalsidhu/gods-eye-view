@@ -9,6 +9,7 @@ import * as sprites from '../../data/spriteOrder.js';
 import * as focus from '../../data/focusDeemphasis.js';
 import * as worldFocus from '../../worldFocus.js';
 import * as render from '../../renderGovernor.js';
+import * as readouts from '../../hudReadouts.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationVessels({ source, options = {} }) {
@@ -26,6 +27,7 @@ export function createApplicationVessels({ source, options = {} }) {
       focus,
       worldFocus,
       render,
+      readouts,
     },
   });
 }

@@ -871,6 +871,9 @@ try {
       return originalSetStack(stackId);
     };
     const switchPromise = styleManager._setMapStack('osm', { syncShare: false });
+    // The dock renders the published row on Vue's next flush.
+    const rendered = () => new Promise((resolve) => setTimeout(resolve, 0));
+    await rendered();
     const during = {
       status: document.getElementById('map-stack-status').textContent,
       active: [...document.querySelectorAll('.map-stack-chip')]
@@ -879,6 +882,7 @@ try {
     };
     release();
     await switchPromise;
+    await rendered();
     const after = {
       status: document.getElementById('map-stack-status').textContent,
       active: [...document.querySelectorAll('.map-stack-chip')]

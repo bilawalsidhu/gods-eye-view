@@ -1,5 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { msg, t } from '../../i18n/index.js';
+import { isolate, msg, t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -97,6 +97,8 @@ export function createPresentation({
     const health = layerState._healthById.get(active.camera.id) || null;
     const calBadge = parts.calibration.deriveCalBadge(active.camera);
 
+    // Each part is isolated: in right-to-left text a code keeps its own value
+    // (FOV 44°) instead of trading it with its neighbour.
     return [
       t('{city} CCTV', {
         city: active.camera.city.toUpperCase(),
@@ -140,6 +142,7 @@ export function createPresentation({
         : null,
     ]
       .filter(Boolean)
+      .map(isolate)
       .join(' · ');
   }
 
@@ -157,9 +160,14 @@ export function createPresentation({
     const camera = record.camera;
     const health = layerState._healthById.get(camera.id) || null;
     const isActive = camera.id === resolvedActiveId;
-    const refreshMs = isActive
+    const defaultRefreshMs = isActive
       ? ACTIVE_FRAME_REFRESH_MS
       : IDLE_FRAME_REFRESH_MS;
+    const sourceRefreshMs = Number(camera.frameRefreshMs);
+    const refreshMs =
+      Number.isFinite(sourceRefreshMs) && sourceRefreshMs > 0
+        ? Math.max(defaultRefreshMs, sourceRefreshMs)
+        : defaultRefreshMs;
     return {
       id: camera.id,
       name: camera.name,
@@ -189,13 +197,18 @@ export function createPresentation({
       mountHeightM: camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      sourceUrl: camera.sourceUrl || '',
+      browserMediaUrl: camera.browserMediaUrl || '',
+      accuracyM: Number.isFinite(camera.accuracyM) ? camera.accuracyM : null,
+      positionSource: camera.positionSource || '',
       isVideo:
-        parts.model.isVideoFeedType(camera.feedType) &&
+        parts.model.isVideoFeedCamera(camera) &&
         record.projection?.mode !== 'image',
-      sourceKind:
-        health?.sourceKind ||
-        camera.sourceKind ||
-        (camera.feedConfigured ? 'configured' : 'seed'),
+      sourceKind: camera.sourceKind?.startsWith('quebec-')
+        ? camera.sourceKind
+        : health?.sourceKind ||
+          camera.sourceKind ||
+          (camera.feedConfigured ? 'configured' : 'seed'),
       sourceStatus: health?.status || 'unknown',
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
@@ -273,6 +286,7 @@ export function createPresentation({
         hoverId: layerState._hoverCardId,
       },
       activeCameraId: activeId,
+      activeCameraReselection: layerState._activeCameraReselection,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
       cameraIndex: cameraIndex(),
       summary: buildSummaryText(),

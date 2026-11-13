@@ -10,13 +10,16 @@ export const DEFAULT_LOCALE = 'en';
 /** Shipped locales; order does not matter. Adding one: docs/TRANSLATORS.md. */
 export const LOCALES = Object.freeze([
   'en',
+  'ar',
   'de',
   'es',
   'fr',
+  'he',
   'it',
   'ja',
   'pt',
   'ru',
+  'sv',
   'uk',
   'zh-CN',
   'zh-Hant',
@@ -25,23 +28,46 @@ export const LOCALES = Object.freeze([
 /** Each locale named in its own language, for the selector. */
 export const LOCALE_NAMES = Object.freeze({
   en: 'English',
+  ar: 'العربية',
   de: 'Deutsch',
   es: 'Español',
   fr: 'Français',
+  he: 'עברית',
   it: 'Italiano',
   ja: '日本語',
   pt: 'Português (Brasil)',
   ru: 'Русский',
+  sv: 'Svenska',
   uk: 'Українська',
   'zh-CN': '中文（简体）',
   'zh-Hant': '中文（繁體）',
 });
 
 /** Right-to-left locales. */
-const RTL_LOCALES = Object.freeze([]);
+const RTL_LOCALES = Object.freeze(['ar', 'he']);
+
+/** Whether a shipped locale reads right to left. */
+export function isRtlLocale(locale) {
+  return RTL_LOCALES.includes(normalizeLocale(locale));
+}
+
+/**
+ * Tags for Intl formatters where the locale code alone is not enough. Arabic
+ * keeps Western digits (0–9) like its catalog: ICU picks Arabic-Indic digits
+ * (٠–٩) for some Arabic regions and browsers, and a HUD that mixes both
+ * misreads.
+ */
+const INTL_TAGS = Object.freeze({ ar: 'ar-u-nu-latn' });
+
+/** The tag to hand Intl.NumberFormat, DateTimeFormat and the like. */
+export function intlLocale(locale) {
+  return INTL_TAGS[locale] ?? locale;
+}
 
 /**
  * Map any language tag to a shipped locale: 'ru-RU' and 'RU' → 'ru',
+ * 'ar-EG' and 'ar-SA' → 'ar', 'he-IL' and 'he' → 'he', and the
+ * legacy tag 'iw'/'iw-IL' → 'he',
  * 'de-AT' and 'de_CH' → 'de', 'ja-JP' → 'ja',
  * 'pt-BR' and 'pt-PT' → 'pt' (Brazilian Portuguese),
  * 'zh', 'zh-CN' and 'zh-Hans-SG' → 'zh-CN';
@@ -57,6 +83,7 @@ export function normalizeLocale(candidate) {
       ? 'zh-Hant'
       : 'zh-CN';
   }
+  if (primary === 'iw') return 'he';
   return LOCALES.includes(primary) ? primary : null;
 }
 

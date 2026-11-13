@@ -1,45 +1,20 @@
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import {
   internetRadioAudioActive,
   localSdrCardView,
   localSdrFeedLine,
   localSdrFmAudioActive,
-  localSdrGainOptionLabel,
 } from './localSdrPresentation.js';
-
-const ELEMENT_IDS = Object.freeze({
-  card: 'sdr-radio-card',
-  connectionState: 'sdr-connection-state',
-  connect: 'sdr-connect-btn',
-  locate: 'sdr-locate-btn',
-  changeDevice: 'sdr-change-device-btn',
-  modeFm: 'sdr-mode-fm-btn',
-  modeAdsb: 'sdr-mode-adsb-btn',
-  gain: 'sdr-gain-select',
-  stats: 'sdr-adsb-stats',
-  statRate: 'sdr-stat-rate',
-  statHeard: 'sdr-stat-heard',
-  statPositioned: 'sdr-stat-positioned',
-  statIq: 'sdr-stat-iq',
-  frequency: 'sdr-frequency-input',
-  tune: 'sdr-tune-btn',
-  seekBack: 'sdr-seek-back-btn',
-  seekForward: 'sdr-seek-forward-btn',
-  volume: 'sdr-volume',
-  volumeValue: 'sdr-volume-value',
-  status: 'sdr-status',
-  feedStatus: 'sdr-feed-status',
-});
-
-function setText(element, text) {
-  if (element && element.textContent !== text) element.textContent = text;
-}
+import { useRadioStore } from './stores/radio.js';
+import { applicationPinia } from './vueRuntime.js';
 
 /**
  * Local RTL-SDR card in the Radio panel.
  *
- * Owns the card's listeners and its receiver/radio subscriptions. The Radio
- * panel is one listening surface: starting local FM stops internet radio, and
+ * Answers the card's controls and owns its receiver/radio subscriptions; the
+ * Radio view renders the card from what this publishes (`gev-radio` store)
+ * and sends its controls here through the store's act(). The
+ * Radio panel is one listening surface: starting local FM stops internet radio, and
  * starting internet radio stops local FM.
  */
 export class LocalSdrControls {
@@ -53,6 +28,7 @@ export class LocalSdrControls {
    * @param {object} [options.radio] Internet-radio port (subscribe, stopPlayback).
    * @param {object} [options.actions] Application actions:
    *   setLocalAdsbEnabled(enabled), isLocalAdsbEnabled(), scheduleLayout().
+   * @param {object} [options.store] Store the card's view is published to.
    */
   constructor({
     document: doc,
@@ -60,27 +36,23 @@ export class LocalSdrControls {
     feeds = null,
     radio = null,
     actions = {},
+    store = useRadioStore(applicationPinia()),
   }) {
+    this.store = store;
     this.receiver = receiver;
     this.feeds = feeds;
     this.radio = radio;
     this.actions = actions;
-    this.elements = Object.fromEntries(
-      Object.entries(ELEMENT_IDS).map(([key, id]) => [
-        key,
-        doc?.getElementById?.(id) || null,
-      ]),
-    );
-    this._listeners = new AbortController();
     this._state = receiver.getState();
     this._radioState = null;
     this._fmAudioActive = localSdrFmAudioActive(this._state);
     this._radioAudioActive = false;
     this._renderFrame = null;
     this._destroyed = false;
-    if (!this.elements.card) return;
-    this._labelGainOptions();
-    this._bind();
+    this._view = null;
+    // A page without the card (the Radio view omitted) has no controls.
+    if (!doc?.getElementById?.('sdr-radio-card')) return;
+    this._storeToken = store.connect(this._actions());
     this._receiverUnsubscribe = receiver.subscribe((state) =>
       this._onReceiverState(state),
     );
@@ -90,26 +62,13 @@ export class LocalSdrControls {
       feeds?.subscribe?.(() => this._scheduleRender()) || null;
     // One request, no polling: learn whether the server has decoder feeds.
     void feeds?.probe?.()?.catch?.(() => {});
+    this._offLocale = onLocaleChange(() => this._scheduleRender());
     this._render();
   }
 
   /** Whether the receiver session is open (keeps the Radio panel expanded). */
   isActive() {
     return Boolean(this._state?.connected);
-  }
-
-  /** Numeric gain options read in the page language; values stay numeric. */
-  _labelGainOptions() {
-    for (const option of this.elements.gain?.options || []) {
-      if (option.value !== 'auto')
-        option.textContent = localSdrGainOptionLabel(option.value);
-    }
-  }
-
-  _listen(element, type, handler) {
-    element?.addEventListener(type, handler, {
-      signal: this._listeners.signal,
-    });
   }
 
   _stopInternetRadio() {
@@ -123,65 +82,56 @@ export class LocalSdrControls {
       await this.actions.setLocalAdsbEnabled?.(true);
   }
 
-  _bind() {
-    const el = this.elements;
-    this._listen(el.connect, 'click', async () => {
-      const before = this.receiver.getState();
-      if (before.connected) {
-        await this.receiver.stop();
-        return;
-      }
-      if (before.mode === 'fm') this._stopInternetRadio();
-      if (await this.receiver.connect(before.mode))
-        await this._enableLayerWhenReceiving();
-    });
-    this._listen(el.locate, 'click', () => {
-      void this.receiver.requestReceiverLocation();
-    });
-    this._listen(el.changeDevice, 'click', async () => {
-      if (this.receiver.getState().mode === 'fm') this._stopInternetRadio();
-      if (await this.receiver.changeDevice())
-        await this._enableLayerWhenReceiving();
-    });
-    this._listen(el.modeFm, 'click', async () => {
-      this._stopInternetRadio();
-      if (this.actions.isLocalAdsbEnabled?.())
-        await this.actions.setLocalAdsbEnabled?.(false);
-      await this.receiver.setMode('fm');
-    });
-    this._listen(el.modeAdsb, 'click', async () => {
-      if (await this.receiver.setMode('adsb'))
-        await this._enableLayerWhenReceiving();
-    });
-    this._listen(el.gain, 'change', () => {
-      void this.receiver.setGain(el.gain.value);
-    });
-    const tune = () => {
-      const mhz = Number(el.frequency?.value);
-      if (!Number.isFinite(mhz)) return;
-      this._stopInternetRadio();
-      void this.receiver.tuneFm(mhz * 1_000_000);
-    };
-    this._listen(el.tune, 'click', tune);
-    this._listen(el.frequency, 'keydown', (event) => {
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      tune();
-    });
-    for (const [button, direction] of [
-      [el.seekBack, -1],
-      [el.seekForward, 1],
-    ]) {
-      this._listen(button, 'click', () => {
+  /** What the card's controls ask for, by the names the view acts with. */
+  _actions() {
+    return {
+      toggleSdrConnection: async () => {
+        const before = this.receiver.getState();
+        if (before.connected) {
+          await this.receiver.stop();
+          return;
+        }
+        if (before.mode === 'fm') this._stopInternetRadio();
+        if (await this.receiver.connect(before.mode))
+          await this._enableLayerWhenReceiving();
+      },
+      locateSdr: () => {
+        void this.receiver.requestReceiverLocation();
+      },
+      changeSdrDevice: async () => {
+        if (this.receiver.getState().mode === 'fm') this._stopInternetRadio();
+        if (await this.receiver.changeDevice())
+          await this._enableLayerWhenReceiving();
+      },
+      setSdrMode: async (mode) => {
+        if (mode === 'fm') {
+          this._stopInternetRadio();
+          if (this.actions.isLocalAdsbEnabled?.())
+            await this.actions.setLocalAdsbEnabled?.(false);
+          await this.receiver.setMode('fm');
+        } else if (await this.receiver.setMode('adsb'))
+          await this._enableLayerWhenReceiving();
+      },
+      setSdrGain: (value) => {
+        void this.receiver.setGain(value);
+      },
+      tuneSdr: (value) => {
+        const mhz = Number(value);
+        if (!Number.isFinite(mhz)) return;
+        this._stopInternetRadio();
+        void this.receiver.tuneFm(mhz * 1_000_000);
+      },
+      seekSdr: (direction) => {
         this._stopInternetRadio();
         void this.receiver.seekFm(direction);
-      });
-    }
-    this._listen(el.volume, 'input', () => {
-      const value = Number(el.volume.value);
-      this.receiver.setVolume(value / 100);
-      setText(el.volumeValue, `${value}%`);
-    });
+      },
+      setSdrVolume: (percent) => {
+        const value = Number(percent);
+        this.receiver.setVolume(value / 100);
+        if (this._view)
+          this._publish({ ...this._view, volumeText: `${value}%` });
+      },
+    };
   }
 
   _onReceiverState(state) {
@@ -217,69 +167,24 @@ export class LocalSdrControls {
     });
   }
 
+  _publish(view) {
+    this._view = view;
+    this.store?.publishSdr(view);
+  }
+
   _render() {
-    const el = this.elements;
     const view = localSdrCardView(this._state);
-    const doc = el.card?.ownerDocument;
-    setText(el.connectionState, view.connectionLabel);
-    el.connectionState?.classList.toggle('active', view.connectionActive);
-    if (el.connect) {
-      setText(el.connect, view.connectLabel);
-      el.connect.disabled = view.connectDisabled;
-      el.connect.classList.toggle('active', view.connectPressed);
-      el.connect.setAttribute('aria-pressed', String(view.connectPressed));
-    }
-    for (const [button, active] of [
-      [el.modeFm, view.fmActive],
-      [el.modeAdsb, view.adsbActive],
-    ]) {
-      if (!button) continue;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
-      button.disabled = view.modeDisabled;
-    }
-    if (el.locate) {
-      setText(el.locate, view.locateLabel);
-      el.locate.disabled = view.locateDisabled;
-      el.locate.classList.toggle('active', view.locateActive);
-    }
-    if (el.changeDevice) el.changeDevice.disabled = view.changeDeviceDisabled;
-    if (el.gain) {
-      if (doc?.activeElement !== el.gain && el.gain.value !== view.gainValue)
-        el.gain.value = view.gainValue;
-      el.gain.disabled = view.gainDisabled;
-    }
-    if (el.stats) el.stats.hidden = view.statsHidden;
-    setText(el.statRate, view.stats.rate);
-    setText(el.statHeard, view.stats.heard);
-    setText(el.statPositioned, view.stats.positioned);
-    setText(el.statIq, view.stats.iq);
-    if (el.frequency) {
-      el.frequency.disabled = view.frequencyDisabled;
-      if (doc?.activeElement !== el.frequency && view.frequencyValue !== null)
-        el.frequency.value = view.frequencyValue;
-    }
-    if (el.tune) el.tune.disabled = view.tuneDisabled;
-    if (el.seekBack) el.seekBack.disabled = view.seekDisabled;
-    if (el.seekForward) el.seekForward.disabled = view.seekDisabled;
-    if (el.volume) {
-      if (doc?.activeElement !== el.volume)
-        el.volume.value = String(view.volumePercent);
-      el.volume.disabled = view.volumeDisabled;
-    }
-    setText(el.volumeValue, `${view.volumePercent}%`);
-    if (el.status) {
-      setText(el.status, view.statusText);
-      el.status.classList.toggle('error', view.statusError);
-    }
     const feedLine = localSdrFeedLine(this.feeds?.getState?.() || null);
-    if (el.feedStatus) {
-      el.feedStatus.hidden = feedLine === null;
-      setText(el.feedStatus, feedLine || '');
-    }
-    el.card
-      ?.closest?.('#radio-panel')
-      ?.classList.toggle('sdr-connected', view.connectionActive);
+    // The card leaves a focused field, and the FM frequency outside FM, as
+    // they are.
+    this._publish({
+      ...view,
+      gain: view.gainValue,
+      frequency: view.frequencyValue,
+      volume: view.volumePercent,
+      volumeText: `${view.volumePercent}%`,
+      feedLine,
+    });
     // Only structural changes move the rail; per-block text updates do not.
     const layoutKey = `${view.statsHidden}|${view.connectionActive}|${feedLine === null}`;
     if (layoutKey !== this._layoutKey) {
@@ -288,13 +193,15 @@ export class LocalSdrControls {
     }
   }
 
-  /** Release listeners and subscriptions; the receiver session is not closed. */
+  /** Release the controls and subscriptions; the receiver session is not closed. */
   destroy() {
     this._destroyed = true;
-    this._listeners.abort();
+    if (this._storeToken) this.store.detach(this._storeToken);
+    this._storeToken = null;
     this._receiverUnsubscribe?.();
     this._radioUnsubscribe?.();
     this._feedsUnsubscribe?.();
+    this._offLocale?.();
     this._feedsUnsubscribe = null;
     this._receiverUnsubscribe = null;
     this._radioUnsubscribe = null;

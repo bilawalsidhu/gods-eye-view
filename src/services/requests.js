@@ -151,12 +151,25 @@ export function createApplicationRequestServices({
         const query = points
           .map(({ lat, lon }) => `${lon.toFixed(5)},${lat.toFixed(5)}`)
           .join(';');
-        return requireOk(
-          await request(`${urls.terrain}?points=${encodeURIComponent(query)}`, {
-            signal,
-          }),
-          'Terrain heights',
-        )?.results;
+        const response = await request(
+          `${urls.terrain}?points=${encodeURIComponent(query)}`,
+          { signal },
+        );
+        // A failed request still carries the real heights the server had, so
+        // the caller can keep them; null marks a point without one.
+        const partial = response.data?.partial;
+        if (
+          !response.ok &&
+          Array.isArray(partial) &&
+          partial.length === points.length
+        ) {
+          const error = new Error(
+            `Terrain heights unavailable (${response.status})`,
+          );
+          error.partial = partial;
+          throw error;
+        }
+        return requireOk(response, 'Terrain heights')?.results;
       },
     },
     regional: {

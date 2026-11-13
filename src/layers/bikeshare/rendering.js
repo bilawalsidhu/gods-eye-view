@@ -185,6 +185,7 @@ export function createRendering({
         stationName: station.name,
         point,
         capacity: parts.model.toNonNegativeInteger(station.capacity),
+        publishedCapacity: parts.model.toNonNegativeInteger(station.capacity),
         bikesAvailable: null,
         docksAvailable: null,
         isInstalled: station.isInstalled,
@@ -245,7 +246,8 @@ export function createRendering({
       if (!record) continue;
 
       const status = statusMap.get(record.stationId) || null;
-      const capacity = resolveCapacity(record.capacity, status);
+      // Resolve from the published capacity, not last poll's derived value.
+      const capacity = resolveCapacity(record.publishedCapacity, status);
       record.capacity = capacity;
 
       record.bikesAvailable = parts.model.toNonNegativeInteger(
