@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import RailPanel from '../rail/RailPanel.vue';
@@ -7,14 +7,21 @@ import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
 import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
 import { useContextStore } from '../stores/context.js';
+import { usePanelChromeStore } from '../stores/panelChrome.js';
+import { useEntityCardStore } from '../stores/entityCard.js';
 import { useSceneStore } from '../stores/scenes.js';
 import AwarenessPanel from './panels/AwarenessPanel.vue';
 import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
+import EntityCard from './panels/EntityCard.vue';
+import ViewContext from './panels/ViewContext.vue';
 import MissionDetail from './panels/MissionDetail.vue';
 import MissionRoster from './panels/MissionRoster.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 import UiButton from '../kit/UiButton.vue';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
+import { LAYER_TABS, TAB_AFFECTS, activeTab, availableTabs, contextReady, enabledLayerIds, setEnabledLayers, tabTarget } from '../contextLayerTabs.js';
+import { shownLayerName } from '../layerNames.js';
+import { closeContextSearch, contextSearchOpen, contextSearchText } from '../contextSearch.js';
 
 // ContextControls presents the mode switch and the nearby sites search and
 // publishes them; until it does, the panel shows its initial markup.
@@ -29,6 +36,87 @@ const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
 // The Scene runtime chip SceneControls presents while a scene plays.
 const { panel: scenePanel } = storeToRefs(useSceneStore());
 const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
+// Context is one card for whatever was picked; until something is, it says how.
+const entityCards = useEntityCardStore();
+const { card: entityCard } = storeToRefs(entityCards);
+
+// Layer tabs: settings for the layers that are on, beside the card.
+let layerTimer = null;
+const readLayers = () => {
+  const rows = entityCards.liveLayers();
+  layerNames.value = Object.fromEntries(rows.map((row) => [row.id, shownLayerName(row.name, row.id)]));
+  setEnabledLayers(rows.map((row) => row.id));
+};
+const paneRefs = {};
+const setPane = (id) => (el) => {
+  if (el) {
+    paneRefs[id] = el;
+    const target = tabTarget(id);
+    if (target instanceof HTMLElement && target.parentElement !== el) el.appendChild(target);
+  }
+};
+onMounted(() => {
+  contextReady.value = true;
+  readLayers();
+  layerTimer = setInterval(readLayers, 1500);
+});
+onBeforeUnmount(() => {
+  clearInterval(layerTimer);
+  contextReady.value = false;
+});
+watch(availableTabs, (tabs) => {
+  for (const tab of LAYER_TABS)
+    globalThis.document?.body.classList.toggle(`ctx-tab-${tab.id}`, tabs.some((x) => x.id === tab.id));
+  if (activeTab.value === 'props' && !tabs.length) activeTab.value = 'view';
+});
+// Picking something shows its card.
+watch(entityCard, (next, prev) => {
+  if (next && next?.key !== prev?.key) activeTab.value = 'view';
+});
+const isShown = (id) => availableTabs.value.some((tab) => tab.id === id);
+// The names of the layers a section's settings act on.
+const layerNames = ref({});
+// Each layer gets a steady colour of its own for its dot.
+const DOT_COLORS = ['#36dcff', '#4be3a0', '#ffb547', '#c792ff', '#ff7a45', '#ff6b9a', '#9ad7ff', '#e6e36b'];
+const dotColor = (layer) => {
+  let h = 0;
+  for (const ch of layer) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return DOT_COLORS[h % DOT_COLORS.length];
+};
+const affects = (id) => {
+  void enabledLayerIds.value;
+  const ids = TAB_AFFECTS[id]?.(enabledLayerIds.value) ?? [];
+  return ids.map((layer) => ({ id: layer, name: layerNames.value[layer] || layer, color: dotColor(layer) }));
+};
+
+// Search in the header: a field that narrows what Context is showing, the
+// selected item's details and every list of what is nearby or in view.
+const searchInput = ref(null);
+function toggleSearch() {
+  if (contextSearchOpen.value) return closeContextSearch();
+  contextSearchOpen.value = true;
+  activeTab.value = 'view';
+  void nextTick(() => searchInput.value?.focus());
+}
+const searchHint = computed(() =>
+  entityCard.value ? t('Search {name} and nearby', { name: entityCard.value.title }) : t('Search what is in view'),
+);
+
+// Expanded, Context becomes a full-height column over the right edge of the
+// screen, with the globe left as it is underneath. It shrinks back when the
+// panel closes.
+const docked = ref(false);
+const { panels: chromePanels } = storeToRefs(usePanelChromeStore());
+function setDocked(next) {
+  docked.value = next;
+  globalThis.document?.body.classList.toggle('context-docked', next);
+}
+watch(
+  () => chromePanels.value['global-context-panel']?.collapsed,
+  (collapsed) => {
+    if (collapsed && docked.value) setDocked(false);
+  },
+);
 </script>
 
 <template>
@@ -47,7 +135,44 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :title="t('CONTEXT')" sideways scroll rail-scroller>
+        <template #actions>
+          <button type="button" class="context-dock-btn" :aria-pressed="String(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
+            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          </button>
+          <button type="button" class="context-dock-btn" :aria-pressed="String(docked)" :aria-label="docked ? t('Shrink Context back to a panel') : t('Expand Context to a full-height column')" :title="docked ? t('Shrink') : t('Expand')" @click="setDocked(!docked)">
+            <span class="material-symbols-outlined" aria-hidden="true">{{ docked ? 'close_fullscreen' : 'open_in_full' }}</span>
+          </button>
+        </template>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
+        <div v-if="contextSearchOpen" class="context-search" role="search">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          <input ref="searchInput" v-model="contextSearchText" type="search" class="context-search__input" :placeholder="searchHint" :aria-label="searchHint" autocomplete="off" spellcheck="false" @keydown.esc.stop="closeContextSearch" />
+          <button v-if="contextSearchText" type="button" class="context-search__clear" :aria-label="t('Clear search')" :title="t('Clear search')" @click="contextSearchText = ''; searchInput?.focus()">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+        <div v-if="availableTabs.length" class="context-tabs" role="tablist" :aria-label="t('Context tabs')">
+          <button type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'view' }" :aria-selected="String(activeTab === 'view')" @click="activeTab = 'view'">
+            <span class="material-symbols-outlined" aria-hidden="true">visibility</span><span class="context-tabs__label">{{ t('Inspector') }}</span>
+          </button>
+          <button type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'props' }" :aria-selected="String(activeTab === 'props')" @click="activeTab = 'props'">
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span><span class="context-tabs__label">{{ t('Properties') }}</span>
+          </button>
+        </div>
+        <!-- Properties: settings of the layers that are on, one section each. -->
+        <div class="context-props" :hidden="activeTab !== 'props'" role="tabpanel">
+          <section v-for="tab in LAYER_TABS" v-show="isShown(tab.id)" :key="tab.id" class="context-props__section">
+            <h4 class="context-props__heading"><span class="material-symbols-outlined" aria-hidden="true">{{ tab.icon }}</span>{{ t(tab.label) }}</h4>
+            <ul v-if="affects(tab.id).length" class="context-props__layers">
+              <li v-for="layer in affects(tab.id)" :key="layer.id"><i :style="{ background: layer.color }" aria-hidden="true"></i>{{ layer.name }}</li>
+            </ul>
+            <div :id="`context-tab-${tab.id}`" :ref="setPane(tab.id)" class="context-tab-pane"></div>
+          </section>
+        </div>
+        <div v-show="activeTab === 'view'" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
+        <EntityCard />
+        <ViewContext v-if="!entityCard" />
+        </div>
         <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">
           <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" :aria-label="t('CONTACTS')" :title="t('Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.')">
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>

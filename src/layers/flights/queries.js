@@ -246,6 +246,19 @@ export function createQueries({
    *   routeDestination: string|null}}
    */
 
+  /** An airport at one end of a route, when it has a position. */
+  function routeEnd(airport) {
+    const lat = Number(airport?.lat ?? airport?.latitude);
+    const lon = Number(airport?.lon ?? airport?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {
+      code: String(airport?.code ?? '').trim() || null,
+      name: String(airport?.name ?? airport?.municipality ?? '').trim() || null,
+      lat,
+      lon,
+    };
+  }
+
   function mapAnalystRecord(
     icao24,
     info,
@@ -293,6 +306,16 @@ export function createQueries({
       lastContactAtMs: num(info?.lastContactEpochMs),
       routeOrigin: routeOk ? text(info?.route?.origin?.code) : null,
       routeDestination: routeOk ? text(info?.route?.destination?.code) : null,
+      // The airports themselves, for the context card's route globe.
+      routeFrom: routeOk ? routeEnd(info?.route?.origin) : null,
+      routeTo: routeOk ? routeEnd(info?.route?.destination) : null,
+      // The scheduled route when it does not fit where the plane is (often
+      // another leg of the same flight number): the card shows it marked
+      // unverified, everything else still treats the flight as routeless.
+      routeScheduled:
+        !routeOk && info?.route?.origin?.code && info?.route?.destination?.code
+          ? { from: text(info.route.origin.code), to: text(info.route.destination.code) }
+          : null,
     };
   }
   const methods = {
@@ -746,6 +769,15 @@ export function createQueries({
         if (result.length >= limit) break;
       }
       return result;
+    },
+
+    /**
+     * Ask for an aircraft's scheduled route (origin and destination airports),
+     * as tracking does; it lands on the record when the lookup answers.
+     * @param {string} icao24
+     */
+    requestRoute(icao24) {
+      if (icao24) parts.enrichment._requestRouteEnrichment(String(icao24).trim().toLowerCase());
     },
 
     /**

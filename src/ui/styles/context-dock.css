@@ -1,0 +1,185 @@
+/* ── Context expanded ───────────────────────────────────────────────────
+   Expanded, Context becomes a full-height column over the right edge of the
+   screen. The globe and HUD stay where they are, under it. */
+:root {
+  --context-dock-width: clamp(360px, 30vw, 460px);
+}
+
+/* The column: edge to edge, top to bottom, no rail beside it. */
+body.context-docked #right-context-rail {
+  z-index: 170;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: var(--context-dock-width) !important;
+  max-height: none !important;
+  height: 100vh !important;
+}
+
+body.context-docked #right-context-rail > .gev-panel-rail {
+  display: none;
+}
+
+body.context-docked #right-context-rail > :not(#global-context-panel):not(.gev-panel-rail) {
+  display: none !important;
+}
+
+body.context-docked #right-context-rail > #global-context-panel {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+body.context-docked #global-context-panel .global-context-panel-inner {
+  height: 100%;
+  padding: 22px 24px 16px;
+  background: rgba(10, 11, 16, 0.94);
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
+}
+
+body.context-docked #global-context-panel .panel-glow {
+  display: none;
+}
+
+/* The expand button sits beside the collapse button in the header. */
+.context-dock-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-end: 6px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+}
+
+.context-dock-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.context-dock-btn:hover,
+.context-dock-btn:focus-visible,
+.context-dock-btn[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+}
+
+/* Phones keep their sheets; the dock is a desktop layout. */
+body.mobile-shell .context-dock-btn {
+  display: none;
+}
+
+/* Context's own search field, under the header: narrows what the panel shows.
+   Sized and framed like the tab bar beneath it. */
+.context-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex: none;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: 0 0 0.5rem;
+  padding: 0 6px 0 10px;
+  color: rgba(199, 214, 222, 0.65);
+  background: rgba(16, 22, 28, 0.94);
+  border: 1px solid rgba(54, 220, 255, 0.35);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.context-search:focus-within {
+  color: #7af0ff;
+  border-color: rgba(54, 220, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(54, 220, 255, 0.1);
+}
+
+.context-search .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.context-search__input::placeholder {
+  color: rgba(199, 214, 222, 0.45);
+}
+
+.context-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  color: var(--text-primary, #e8eaed);
+  font: inherit;
+  font-size: 0.74rem;
+  line-height: 32px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.context-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.context-search__clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: rgba(199, 214, 222, 0.65);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.context-search__clear:hover,
+.context-search__clear:focus-visible {
+  color: var(--accent);
+}
+
+.entity-card__no-match {
+  margin: 0 0 0.7rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.66rem;
+}
+
+.context-search__input:focus,
+.context-search__input:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+/* While a search is typed, what cannot match steps aside so the matches lead:
+   the weather, the view's own figures, the route and altitude graph, and the
+   layer switches. The radius stays: it sets how far the search looks. */
+.context-searching :is(
+    .spot-conditions__weather,
+    .spot-conditions__loading,
+    .spot-conditions__source,
+    .view-context__facts,
+    .view-context__live,
+    .view-context__total,
+    .view-context__actions,
+    .view-context__towns:has(.view-context__chip--layer),
+    .altitude-graph,
+    .entity-card__route,
+    .entity-card__route-stats,
+    .entity-card__route-places,
+    .entity-card__route-note,
+    .entity-card__links
+  ) {
+  display: none;
+}
