@@ -2916,8 +2916,9 @@ readings nationwide: **USGS Rivers & Streams** (`local-usgs-water`, share token
   (about 10,100 stream gauges in 102 tiles, 720 lakes and 45 springs on
   2026-10-21).
 - **Browser** (`src/layers/usgsWater/`): streams load only the tiles that
-  intersect the view and reload when the camera settles; wider than 24 degrees
-  (or more than 40 tiles) the layer loads nothing and asks to zoom in. Lakes and
+  intersect the view, including across the antimeridian, and reload when the
+  camera settles; wider than 24 degrees (or more than 40 tiles) the layer loads
+  nothing and asks to zoom in. Lakes and
   springs load whole and re-fetch on every enable. Cards show up to two
   readings and the newest observation time. The card words, numbers and time
   follow the active language: the five parameter names the server sends (a

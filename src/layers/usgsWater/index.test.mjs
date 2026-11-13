@@ -9,6 +9,7 @@ import {
   createUsgsWaterLayers,
   parseJsonl,
   selectStreamTiles,
+  viewBoxDegrees,
 } from './index.js';
 import {
   formatDate,
@@ -57,6 +58,34 @@ test('edge-touching tiles are excluded (no needless fetch)', () => {
   assert.deepEqual(
     r.tiles.map((t) => t.key),
     ['21_31'],
+  );
+});
+
+test('dateline-crossing viewport selects stream tiles on both sides', () => {
+  const viewer = {
+    camera: {
+      computeViewRectangle: () => Cesium.Rectangle.fromDegrees(178, 50, -178, 54),
+    },
+    scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
+  };
+  const box = viewBoxDegrees(viewer);
+  assert.ok(box, 'a narrow wrapped Cesium viewport must be valid');
+  const datelineTiles = {
+    '89_35': tile(89, 35),
+    '0_35': tile(0, 35),
+    '20_30': tile(20, 30),
+  };
+  const selected = selectStreamTiles(datelineTiles, box);
+  assert.equal(selected.status, 'ok');
+  assert.deepEqual(
+    selected.tiles.map((t) => t.key),
+    ['0_35', '89_35'],
+    'load tiles east and west of the dateline, not a distant tile',
+  );
+  assert.equal(
+    selectStreamTiles(datelineTiles, { ...box, west: 140 }).status,
+    'zoom-in',
+    'a wrapped view over 24 degrees must still be limited',
   );
 });
 
