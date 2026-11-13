@@ -689,11 +689,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
+        const sourceFeedType = normalizeFeedType(source?.feedType);
         const upstreamCandidate =
           source?.snapshotUrl ||
-          (!isVideoFeedType(normalizeFeedType(source?.feedType))
-            ? source?.url
-            : '');
+          (!isVideoFeedType(sourceFeedType) ? source?.url : '');
 
         const fetchOutcome = { transient: false };
         const upstreamImage =
@@ -765,7 +764,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           source &&
           upstreamCandidate &&
           source.pack !== 'world-cameras' &&
-          source.sourceKind !== 'ottawa-traffic'
+          source.sourceKind !== 'ottawa-traffic' &&
+          // A missing optional still preview cannot invalidate live video.
+          !isVideoFeedType(sourceFeedType) &&
+          sourceFeedType !== 'mjpeg'
         )
           feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok, {
             transient: fetchOutcome.transient,
