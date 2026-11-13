@@ -225,13 +225,11 @@ export function createAnacRab({
   /** @type {?{fetchedAt: number, updated: string|null, etag: string|null,
    *   lastModified: string|null, records: Map<string, object>}} */
   let index = null;
-  let diskChecked = false;
+  let diskRead = null;
   let inflight = null;
   let failedAt = 0;
 
-  async function readDisk() {
-    if (diskChecked) return;
-    diskChecked = true;
+  async function loadDisk() {
     try {
       const saved = JSON.parse(await fsp.readFile(cachePath, 'utf8'));
       if (saved?.v !== CACHE_VERSION || !Array.isArray(saved.records)) return;
@@ -245,6 +243,10 @@ export function createAnacRab({
     } catch {
       /* no cache yet */
     }
+  }
+
+  function readDisk() {
+    return (diskRead ??= loadDisk());
   }
 
   async function writeDisk() {

@@ -4,3 +4,6 @@
   matched on its callsign mark when the transponder is Brazilian. Only
   technical columns are read; owner and operator data never leave the file
   (IMBrandao, #1554).
+
+- Parallel lookups after restart now share the RAB disk-cache read before
+  deciding whether ANAC needs another download (IMBrandao, #1554).

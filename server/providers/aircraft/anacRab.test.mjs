@@ -242,6 +242,31 @@ test('the RAB index downloads once, is shared, and survives a restart from disk'
   assert.equal(stale.calls.length, 1, 'the 304 renewed the day');
 });
 
+test('concurrent RAB lookups wait for a fresh disk cache on restart', async (t) => {
+  const dir = await makeFixtureRoot('gev-anac-rab-');
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const cachePath = path.join(dir, 'anac-rab.json');
+  const now = Date.UTC(2026, 10, 4, 12);
+  const server = rabServer();
+  const config = {
+    fetchImpl: server.fetchImpl,
+    now: () => now,
+    cachePath,
+    log: { warn() {} },
+  };
+  await createAnacRab(config).ensureFresh();
+  assert.equal(server.calls.length, 1);
+
+  const restarted = createAnacRab(config);
+  await Promise.all([
+    restarted.ensureFresh(),
+    restarted.ensureFresh(),
+    restarted.ensureFresh(),
+  ]);
+  assert.equal(server.calls.length, 1, 'parallel readers must not redownload a fresh index');
+  assert.equal(restarted.lookup('PR-ABC').year, 1972);
+});
+
 test('a failed or foreign download keeps the old index and backs off', async (t) => {
   const dir = await makeFixtureRoot('gev-anac-rab-');
   t.after(() => fsp.rm(dir, { recursive: true, force: true }));
