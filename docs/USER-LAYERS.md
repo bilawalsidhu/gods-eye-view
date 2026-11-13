@@ -188,7 +188,8 @@ what your layer is actually allowed to reach.
 `src/data/lifecycle.js` isolates each layer, so a live source that fails does
 not take the application with it:
 
-- A `createLayer()` that throws at startup is caught, logged as
+- A `createLayer()` that throws at startup, returns no layer, or returns a
+  layer whose `id` differs from the descriptor's is caught, logged as
   `[UserLayers] <id> createLayer() failed; layer left out:`, and that layer is
   unregistered. The application and the other user layers start normally.
 - A throwing or rejecting `update()` is caught, logged as
