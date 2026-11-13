@@ -105,6 +105,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     win.cancelAnimationFrame(frame);
     let left = frames;
     const tick = () => {
+      watchRails();
       doc.querySelectorAll('.ui-rail').forEach(glide);
       if ((left -= 1) > 0) frame = win.requestAnimationFrame(tick);
     };
@@ -125,6 +126,23 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     attributes: true,
     attributeFilter: ['aria-pressed'],
   });
+
+  // A rail also changes shape with nothing pressed or released: hidden and
+  // shown again (Context docked and undocked), or turned from a column to a
+  // row (panels moved to the screen edge). Its highlight is placed again
+  // whenever its size changes, so it is never left where an icon was.
+  const sized =
+    typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => follow(2)) : null;
+  const watched = new WeakSet();
+  const watchRails = () => {
+    if (!sized) return;
+    doc.querySelectorAll('.ui-rail').forEach((rail) => {
+      if (watched.has(rail)) return;
+      watched.add(rail);
+      sized.observe(rail);
+    });
+  };
+  watchRails();
 
   // ── The edge strip ──
   /** The rail whose strip holds the point, unless a control there owns it. */
@@ -279,6 +297,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     win.clearTimeout(heldStep);
     setHot(null);
     observer?.disconnect();
+    sized?.disconnect();
     win.cancelAnimationFrame(frame);
     doc.removeEventListener('pointermove', onMove);
     doc.removeEventListener('pointerout', onLeave);
