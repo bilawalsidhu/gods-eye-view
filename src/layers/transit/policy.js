@@ -81,7 +81,6 @@ export const FLOOR_REREAD_ATTEMPTS = 6;
 // --- Rendering ---
 /** On-screen glyph size in CSS px at the near end of the distance ramp. */
 export const MARKER_PIXEL_SIZE = 20;
-export const SELECTED_PIXEL_SIZE = 30;
 /**
  * How often the fleet's screen-space rotations may be recomputed. Projecting a
  * course into screen space depends on the camera, so a moving camera would

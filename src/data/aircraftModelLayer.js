@@ -110,7 +110,6 @@ export function createAircraftModels({
   afterReplan = () => {},
 }) {
   const { isTr3b } = services.aircraftPresentation;
-  const { trackedModelScaleForPixelCap } = services.camera;
   const { focusNowMs, getFocusTarget } = services.focus;
   const writeEpsilon = DEFAULT_AIRCRAFT_RECESSION_PARAMS.writeEpsilon;
   let instances = 0;
@@ -228,9 +227,8 @@ export function createAircraftModels({
    *  budget: models only appear below MODEL_ALT_CEIL_M and only for the nearest MODEL_MAX in
    *  view. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
    *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
-   *  contact does not route through here: it is one model, it is what the camera is aimed at,
-   *  and it takes its own default-on, hysteretic zoom regime
-   *  (`_trackedModelRegimeActive`). */
+   *  contact routes through here too (`_trackedModelRegimeActive`), with its place in the
+   *  fleet's cap, so selecting a contact never changes its form. */
 
   function _modelRegimeActive(pose = _pose()) {
     if (!state._models3dEnabled) return false;
@@ -467,7 +465,8 @@ export function createAircraftModels({
    *    flip take effect on the same frame rather than waiting for
    *    `_updateTrackedModel` to clear `show`; the rendering test is what keeps a
    *    null or still-loading tracked model from claiming a visual it is not
-   *    drawing yet.
+   *    drawing yet. Until the tracked model draws, the fleet model the contact
+   *    had when it was selected still draws it, and owns the visual.
    * @param {string} icao24
    * @param {import('./modelRecord.js').ModelRecord|null} [record] Resolved
    *   fleet model record; null means absent.
@@ -476,9 +475,11 @@ export function createAircraftModels({
 
   function _modelOwnsVisual(icao24, record) {
     if (icao24 === state._trackedIcao) {
+      // Its fleet model draws it until the tracked model takes over.
       return (
         parts.tracking._trackedModelRegimeActive() &&
-        modelIsRendering(state._trackedModel)
+        (modelIsRendering(state._trackedModel) ||
+          modelIsRendering(state._models.get(icao24)))
       );
     }
     return modelIsRendering(
@@ -673,10 +674,24 @@ export function createAircraftModels({
     );
   }
 
+  /** A fleet model still drawing the tracked contact (it was a model when
+   *  it was selected) lets go once the tracked model draws, or once the
+   *  contact is no longer drawn as a model at all. */
+  function _releaseTrackedFleetModel() {
+    if (state._trackedIcao && state._models.has(state._trackedIcao))
+      _releaseModel(state._trackedIcao);
+  }
+
   /** Per-frame driver for the standalone tracked model. Runs every preUpdate (not the 80 ms fleet
    *  cadence) so the centered plane moves smoothly. The tracked entity stays a pure billboard, so the
    *  follow-camera's bounding sphere is ALWAYS ready — toggling 3D, or tracking while already zoomed
-   *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode). */
+   *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode).
+   *
+   *  The model draws exactly as the fleet would draw this contact: the same
+   *  asset at the same scale and `minPixelSize` (`MODEL_MIN_PX`), only its
+   *  tint the tracked colour; whether it draws at all is the fleet's rule too
+   *  (`_trackedModelRegimeActive`). Selecting a contact changes its colour,
+   *  never its size or form. */
 
   function _updateTrackedModel() {
     // A failed load is let go (the icon carries the contact); the budget
@@ -688,6 +703,7 @@ export function createAircraftModels({
       state._modelSets;
     if (!active) {
       _hideTrackedModel();
+      _releaseTrackedFleetModel();
       return;
     }
     // Ask the frame-cached source directly. If the entity callback already ran,
@@ -699,6 +715,7 @@ export function createAircraftModels({
       parts.icons._iconPosition(state._trackedIcao);
     if (!pos) {
       _hideTrackedModel();
+      _releaseTrackedFleetModel();
       return;
     }
     const icao24 = state._trackedIcao;
@@ -707,14 +724,17 @@ export function createAircraftModels({
     if (state._trackedModel && state._trackedModel.id !== icao24)
       _releaseTrackedModel();
     if (!state._trackedModel) {
-      if (!_trackedModelLoadAllowed()) return; // the icon carries it
-      // Until the fleet model set has loaded the icon carries it.
-      if (!spec.url) return;
+      // The icon carries it: after the load budget is spent, or until the
+      // fleet model set has loaded.
+      if (!_trackedModelLoadAllowed() || !spec.url) {
+        _releaseTrackedFleetModel();
+        return;
+      }
       const record = createModelRecord({
         specKey: _specKeyFor(meta), // type-change sync compares against this
         bellyM: spec.bellyM,
         scale: spec.scale,
-        minPixelSize: policy.TRACKED_MODEL_MIN_PX,
+        minPixelSize: policy.MODEL_MIN_PX,
       });
       record.id = icao24;
       record.url = resolveAsset(spec.url);
@@ -736,6 +756,7 @@ export function createAircraftModels({
     const displayPos = _modelDisplayPosition(icao24, pos);
     if (!displayPos) {
       _hideTrackedModel(); // no ground evidence → the icon carries it
+      _releaseTrackedFleetModel();
       return;
     }
     placeModel(
@@ -743,19 +764,9 @@ export function createAircraftModels({
       displayPos,
       _modelHeading(parts.motion._trackedDisplayCourse(), meta),
     );
-    if (record.ready) {
-      const pose = _pose();
-      record.scale = trackedModelScaleForPixelCap({
-        baseScale: spec.scale,
-        nativeRadiusM: spec.nativeRadiusM,
-        rangeM: pose?.position ? distance(pose.position, displayPos) : NaN,
-        viewportHeightPx: _viewport().height,
-        fovyRad: pose?.fovy,
-        maximumPixelSize: policy.TRACKED_MODEL_MAX_PX,
-      });
-    }
     showModel(record, record.ready);
     _send(state._modelSets.tracked, icao24, record, spec);
+    if (record.ready) _releaseTrackedFleetModel();
   }
 
   /**
@@ -830,7 +841,10 @@ export function createAircraftModels({
     // Drop all models the moment we leave it (toggled off / zoomed out) so icons resume.
     const useModels = _modelRegimeActive(pose);
     if (!useModels && state._models.size) _releaseModels();
-    if (!useModels) return;
+    if (!useModels) {
+      state._trackedModelEligible = false;
+      return;
+    }
 
     // 3D-model eligibility: by DISTANCE (the mode's add/keep band), with ON-SCREEN PRIORITY under the
     // cap. FOUR passes, visible-first, so the slots are spent on what you can see: (1) KEEP on-screen
@@ -850,7 +864,10 @@ export function createAircraftModels({
     // Candidates = planes within the KEEP radius, nearest first, each tagged with on-screen-ness.
     const cand = [];
     for (const icao of icons.ids()) {
-      if (icao === state._trackedIcao) continue;
+      // The tracked contact competes like any other (its model is drawn by
+      // `_updateTrackedModel`), so selecting it never changes its form; in
+      // cockpit it is the airframe you sit in, and takes no slot.
+      if (icao === state._trackedIcao && state._cockpitContactMode) continue;
       // A converted TR-3B renders as an icon and can never take a model, so
       // it must not occupy a CAP SLOT either — excluded here at selection time,
       // not just at the handoff below, or accumulated conversions would starve
@@ -876,8 +893,12 @@ export function createAircraftModels({
     const modelEligible = selectModelEligible(cand, {
       cap,
       addDistSq,
-      isModeled: (icao) => state._models.has(icao),
+      isModeled: (icao) =>
+        state._models.has(icao) ||
+        (icao === state._trackedIcao && state._trackedModelEligible),
     });
+    state._trackedModelEligible =
+      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao);
     const toRelease = [];
     for (const icao of state._models.keys()) {
       if (icao !== state._trackedIcao && !modelEligible.has(icao))
@@ -894,6 +915,8 @@ export function createAircraftModels({
     const items = pendingItems;
     for (const icao24 of modelEligible) {
       if (isTr3b(icao24)) continue;
+      // The tracked contact's model is `_updateTrackedModel`'s.
+      if (icao24 === state._trackedIcao) continue;
       if (!icons.has(icao24)) continue;
       const position = icons.position(icao24, t);
       if (!parts.icons._aboveHorizon(position, occluder)) {

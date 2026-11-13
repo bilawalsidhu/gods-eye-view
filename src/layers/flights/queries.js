@@ -317,8 +317,8 @@ export function createQueries({
      * Live layer params.
      * `models3d` toggles 3D glTF model rendering for the FLEET (altitude-gated): when on,
      * surrounding aircraft become 3D models once the camera is zoomed in past MODEL_ALT_CEIL_M.
-     * The TRACKED contact is NOT gated by this — it takes its 3D model by camera distance
-     * regardless (see `_trackedModelRegimeActive` / trackedModelRegime.js).
+     * The TRACKED contact follows the same rule (`_trackedModelRegimeActive`), so selecting
+     * a contact never turns its icon into a model or its model into an icon.
      * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedFlightsTrackingId?: string|null}} params
      */

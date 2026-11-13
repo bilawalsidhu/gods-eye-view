@@ -3269,23 +3269,18 @@ async function main() {
         walk(v.scene.primitives);
         return h;
       };
-      // Tracked-contact model regime (2026-08-20). The tracked contact's model
-      // is NOT governed by the DISPLAY-rail 3D toggle — that toggle owns the
-      // FLEET's draw-call budget. The tracked model is default-on and driven by
-      // camera distance, entering below TRACKED_MODEL_ENTER_ALT_M and handing
-      // back to the billboard only above TRACKED_MODEL_EXIT_ALT_M (the
-      // anti-flap band). The CAMERA is therefore what decides whether a model
-      // or a billboard is the visual for a tracked contact, which is exactly
-      // what the display floor stands aside for — so these pins drive the
-      // camera explicitly instead of the toggle.
+      // Tracked-contact model regime. The tracked contact draws as a model
+      // exactly when the fleet's rule would draw it so: 3D on, the camera
+      // below the fleet ceiling, and the contact inside the nearest-first
+      // add/keep band from the eye. These pins drive the camera across that
+      // band: a model inside the ADD radius, the billboard past the KEEP one.
       //
-      // Read the thresholds from the app's own policy module so a later retune
-      // of the swap distance moves these pins with it rather than stranding
-      // them on stale numbers.
-      const reg = await import(`${window.__gevQaSourceBase || '/src'}/data/trackedModelRegime.js`);
+      // Read the radii from the app's own policy module so a retune moves
+      // these pins with it rather than stranding them on stale numbers.
+      const reg = await import(`${window.__gevQaSourceBase || '/src'}/layers/flights/policy.js`);
       window.__dfRegime = {
-        enter: reg.TRACKED_MODEL_ENTER_ALT_M,
-        exit: reg.TRACKED_MODEL_EXIT_ALT_M,
+        enter: reg.MODEL_PROX_ADD_M,
+        exit: reg.MODEL_PROX_KEEP_M,
       };
       // Zooming while following is safe: the tracked-camera framer positions
       // the camera ONCE per selection and is deliberately read-only on normal

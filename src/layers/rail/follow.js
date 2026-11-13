@@ -1,5 +1,9 @@
 import { findCamera } from '../../render/rendererOf.js';
-import { FOLLOW_MIN_RANGE_M } from '../../data/trackedCamera.js';
+import {
+  FOLLOW_MIN_RANGE_M,
+  keptViewFrom,
+  SELECTION_FOLLOW_TRANSITION_S,
+} from '../../data/trackedCamera.js';
 import { copyInto, lerpInto } from '../../geo/vector.js';
 import {
   FOLLOW_HANDOVER_MS,
@@ -14,12 +18,14 @@ export const RAIL_FOCUS_KIND = 'train';
  * The selected train's camera.
  *
  * A moving train is followed as a tracked aircraft is: the layer hands the
- * camera port a follow target that stands on the train's marker, framed by
- * the shared world-focus framing for a train and never closer than the
- * aircraft's readable minimum, so the camera rides with the train and the
- * user still orbits and zooms around it. Any other train gets one fly-to
- * through the shared world-focus request, as a vessel does. Inside the
- * Cockpit that request is refused with its toast.
+ * camera port a follow target that stands on the train's marker, seen from
+ * where the camera is (its distance and angle kept, the train sliding to
+ * the centre) and never closer than the aircraft's readable minimum, so the
+ * camera rides with the train and the user still orbits and zooms around it.
+ * Any other train gets one fly-to through the shared world-focus request,
+ * keeping the view as a vessel's does. Inside the Cockpit that request is
+ * refused with its toast. Without a view to keep (no camera pose), the
+ * shared world-focus framing for a train frames it.
  *
  * The follow lets go when the train is deselected (an empty click, Escape, its
  * category hidden, the train leaving its feed, the layer turned off), when
@@ -106,7 +112,9 @@ export function createFollow({ state, services, parts }) {
   }
 
   function startFollow(entry, position, port) {
-    const offset = railFollowOffset(camera.framing, port.pose()?.heading);
+    const offset =
+      keptViewFrom(port.pose(), position) ??
+      railFollowOffset(camera.framing, port.pose()?.heading);
     const follow = {
       key: entry.key,
       target: null,
@@ -119,8 +127,9 @@ export function createFollow({ state, services, parts }) {
       position: () => followedPosition(follow),
       frame: 'enu',
       viewFrom: { x: offset.x, y: offset.y, z: offset.z },
-      // Framed exactly once, as a tracked aircraft is, and never closer.
+      // Framed once, as a tracked aircraft is, and never closer.
       minRange: FOLLOW_MIN_RANGE_M,
+      transitionS: SELECTION_FOLLOW_TRANSITION_S,
       selectionOrigin: 'user',
     };
     state._follow = follow;
@@ -158,6 +167,7 @@ export function createFollow({ state, services, parts }) {
         id: entry.key,
         label: label || entry.key,
         position: { x: position.x, y: position.y, z: position.z },
+        keepView: true,
       }) === true
     );
   }

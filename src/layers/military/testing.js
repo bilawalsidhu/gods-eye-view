@@ -71,6 +71,7 @@ export function createTesting({
     tracked = true,
     models = [],
     draw = null,
+    trackedModelEligible = true,
   }) {
     flightState._viewer = viewer;
     parts.rendering._disposeModelSets();
@@ -90,11 +91,17 @@ export function createTesting({
     flightState._trackedIcao = tracked ? icao24 : null;
     flightState._trackedEntity = tracked ? entity : null;
     flightState._trackedModel = null;
+    // Whether the fleet's model rule gives the tracked contact a model (the
+    // fleet pass keeps it): a model unless the test says otherwise.
+    flightState._trackedModelEligible = tracked && trackedModelEligible;
+    // `null`: as a selection seeds it (from the contact's fleet model).
+    if (trackedModelEligible === null)
+      parts.tracking._resetTrackedSelectionState();
     parts.tracking._cancelPendingTrackingRestore();
-    // NOTE: deliberately does NOT reset the per-selection latches. They are
-    // production state owned by the tracking lifecycle (_resetTrackedSelectionState),
-    // and clearing them here would mask exactly the deselect→re-track hole this
-    // seam is used to test.
+    // NOTE: deliberately does NOT reset the load-failure budget. It is
+    // production state owned by the tracking lifecycle
+    // (_resetTrackedSelectionState), and clearing it here would mask exactly
+    // the deselect→re-track hole this seam is used to test.
     flightState.feed._backoff = false;
     flightState.feed._retryAt = 0;
   }
@@ -146,9 +153,8 @@ export function createTesting({
     parts.tracking._applyCockpitState({ active, subjectId });
   }
 
-  /** Evaluate the TRACKED contact's zoom regime through the production predicate.
-   *  The decision is latch-bearing (default-on, hysteretic, cockpit/TR-3B-suppressed)
-   *  and otherwise only observable through a live scene, so tests drive it here. */
+  /** Evaluate whether the TRACKED contact draws as its model, through the
+   *  production predicate (the fleet's rule; cockpit/TR-3B-suppressed). */
 
   function _trackedModelRegimeActiveForTest() {
     return parts.tracking._trackedModelRegimeActive();
@@ -187,6 +193,19 @@ export function createTesting({
     return flightState._models.get(icao24) ?? null;
   }
 
+  /** How the tracked billboard is drawn (`_trackedBillboardLook`,
+   *  `_trackedSprite`) next to how the contact's fleet icon is (`_fleetLook`). */
+
+  function _trackedIconLookForTest(icao24) {
+    return {
+      tracked: {
+        ...parts.tracking._trackedBillboardLook(),
+        sprite: parts.tracking._trackedSprite(icao24),
+      },
+      fleet: parts.icons._fleetLook(icao24),
+    };
+  }
+
   /** The tracked model's record, or null. */
 
   function _trackedModelForTest() {
@@ -215,6 +234,7 @@ export function createTesting({
     _setIconForTest,
     _ensureFleetModelForTest,
     _trackedModelForTest,
+    _trackedIconLookForTest,
     _modelSetIdsForTest,
   };
 }

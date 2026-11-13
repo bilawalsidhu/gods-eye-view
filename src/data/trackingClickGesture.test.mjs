@@ -6,8 +6,6 @@ import {
   isTrackingSelectionGesture,
 } from './trackingClickGesture.js';
 import { FAKE_EVENT_TYPES as TYPES, fakeInput } from '../input/testDoubles.mjs';
-import { TRACKED_MODEL_MAX_PX as CIVIL_TRACKED_MODEL_MAX_PX } from './flights.js';
-import { TRACKED_MODEL_MAX_PX as MILITARY_TRACKED_MODEL_MAX_PX } from './militaryFlights.js';
 
 /** A dispatcher on a fake handler, with `onClick(click, gesture)` as the layers read it. */
 function gestureInput(now, onClick) {
@@ -111,7 +109,20 @@ test('civilian and military click handlers apply duration only at the deselect b
   );
 });
 
-test('civilian and military tracked model caps both expose the owner-selected 200 px feel', () => {
-  assert.equal(CIVIL_TRACKED_MODEL_MAX_PX, 200);
-  assert.equal(MILITARY_TRACKED_MODEL_MAX_PX, 200);
+test('a click on an aircraft follows it keeping the camera’s view; other selections frame it', () => {
+  const sources = [
+    readLayerSource(new URL('./flights.js', import.meta.url)),
+    readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
+  ];
+  for (const source of sources) {
+    assert.match(
+      source,
+      /_trackFlight\(pickedIcao, \{ origin: 'user', keepView: true \}\)/,
+    );
+    assert.match(
+      source,
+      /keepView\s*\?\s*keptViewFrom\(camera\.pose\(\), getTrackedPosition\(\)\)/,
+    );
+    assert.match(source, /transitionS: SELECTION_FOLLOW_TRANSITION_S/);
+  }
 });

@@ -71,12 +71,6 @@ export const MODEL_ALT_CEIL_M = 800000;
 export const MODEL_MIN_PX = 24;
 // floor so distant models stay visible without ballooning into a min-pixel blob (mirror of flights.js)
 
-export const TRACKED_MODEL_MIN_PX = 40;
-// keep the glTF silhouette comparable to the selected 2D glyph at handoff
-
-export const TRACKED_MODEL_MAX_PX = 200;
-// owner-selected close-range tracked-target feel
-
 // Per-mode caps + radii — mirror of flights.js. Modes differ by RADIUS (not just cap) so Proximity
 // and All aren't identical when few planes are in range; on-screen planes win the cap (see flights.js).
 

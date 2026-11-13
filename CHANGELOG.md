@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Selecting an aircraft, a vessel, a train or a transit vehicle no longer
+  makes it bigger: it keeps the size and form it had and changes colour (a
+  transit vehicle only widens its dark ring). A click on an aircraft, a
+  vessel or a train no longer moves the camera to a new framing either: the
+  camera keeps its distance and viewing angle, the contact slides to the
+  centre over one second, and the camera then follows it from there (a
+  vessel, which is never followed, is left centred). A
+  follow target asks for this glide with `transitionS` (renderer contract,
+  conformance check `camera.follow.transition`); without it a follow frames
+  at once, as before. An aircraft chosen by voice, search or a shared link
+  is still framed as before (samehkhamis).
 - The renderer contract's `models` capability draws the procedural fleet
   models: a model item can carry its glTF bytes (`gltf`, drawn without a
   fetch), a per-axis stretch (`axisScale`), a colour for its tinted parts

@@ -240,7 +240,7 @@ export function createLifecycle({
         ids: new Set(),
         source: flightState.feed._lastSource,
       };
-      parts.tracking._resetTrackedSelectionState(); // next lifecycle re-evaluates against the ENTER ceiling
+      parts.tracking._resetTrackedSelectionState(); // the next lifecycle starts a fresh selection
       flightState._viewer = null;
     },
   };

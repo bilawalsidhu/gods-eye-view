@@ -151,6 +151,7 @@ export function createCesiumCamera({
         camera,
         onChanged: () => cameraEvents.emit('followChanged'),
         itemPosition,
+        now,
       })
     : null;
 

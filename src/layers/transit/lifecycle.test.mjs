@@ -166,6 +166,14 @@ function colourOf(c) {
     : new Cesium.Color(c[0], c[1], c[2], c[3]);
 }
 
+// A marker's glyph size on screen, CSS pixels: its width less the halo the
+// raster pads it with (the SVG's viewBox is the padded frame at 96 units per
+// glyph).
+function glyphPx(marker) {
+  const svg = Buffer.from(marker.image.split(',')[1], 'base64').toString();
+  return (marker.width * 96) / Number(svg.match(/viewBox="-\d+ -\d+ (\d+)/)[1]);
+}
+
 // A camera `height` metres above a place, looking straight down at it or,
 // with `away`, straight out to space.
 function viewFrom(lon, lat, height, away = false) {
@@ -2365,15 +2373,17 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
     );
     assert.ok(entry.marker.width > plainWidth * 1.2, 'and larger');
   }
-  // Selecting under FLIR grows the sprite and keeps it white — cyan would dim it.
+  // Selecting under FLIR keeps the sprite white (cyan would dim it) and its
+  // size: a selected vehicle is drawn no bigger than its neighbours.
   app.layer._transitPartsForTest().selection.selectVehicle(bus.key);
   assert.ok(
     Cesium.Color.equals(colourOf(bus.marker.color), Cesium.Color.WHITE),
     'still white when selected',
   );
-  assert.ok(
-    bus.marker.width > byRoute.get('Red').marker.width,
-    'and bigger than its neighbours',
+  assert.equal(
+    Math.round(glyphPx(bus.marker) * 1e6),
+    Math.round(glyphPx(byRoute.get('Red').marker) * 1e6),
+    'and no bigger than its neighbours',
   );
   app.layer._transitPartsForTest().selection.clearSelection();
   assert.ok(
@@ -3019,21 +3029,22 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
     const width = Number(svg.match(/viewBox="-\d+ -\d+ (\d+)/)[1]);
     assert.ok(Math.abs((entry.marker.width * 96) / width - display) < 1e-9);
   };
+  // Selection never changes the drawn size.
   check('#5EF08A', 20);
   parts.selection.selectVehicle(entry.key);
-  check('#5EF08A', 30);
+  check('#5EF08A', 20);
   parts.rendering.paintMode(entry, 'subway');
-  check('#FF4538', 30);
+  check('#FF4538', 20);
   app.style('thermal');
-  check('#FFFFFF', 39);
+  check('#FFFFFF', 26);
   parts.selection.clearSelection();
   check('#FFFFFF', 26);
   app.vision('nvg', true);
   check('#FFFFFF', 26);
   parts.selection.selectVehicle(entry.key);
-  check('#FFFFFF', 39);
+  check('#FFFFFF', 26);
   app.vision('normal', false);
-  check('#FF4538', 30);
+  check('#FF4538', 20);
   parts.selection.clearSelection();
   check('#FF4538', 20);
 });

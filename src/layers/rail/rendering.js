@@ -34,7 +34,6 @@ import {
   FLOOR_WARM_MAX_DIST_KM,
   MARKER_PIXEL_SIZE,
   RAIL_CATEGORY_COLORS,
-  SELECTED_PIXEL_SIZE,
   UNSELECTED_TRAIN_ALPHA,
 } from './policy.js';
 import { placeOnPath } from './pathBinding.js';
@@ -736,11 +735,10 @@ export function createRendering({ state, services, parts }) {
 
   function paint(entry) {
     if (!entry.marker) return;
-    const selected = entry.key === state._selectedKey;
-    const size = selected ? SELECTED_PIXEL_SIZE : MARKER_PIXEL_SIZE;
+    // Selection dims the other trains; the selected one keeps its size.
     entry.marker.image = spriteFor(entry.category, entry.railMode);
-    entry.marker.width = size;
-    entry.marker.height = size;
+    entry.marker.width = MARKER_PIXEL_SIZE;
+    entry.marker.height = MARKER_PIXEL_SIZE;
     entry.marker.color = tintFor(entry);
     entry.marker.show = markerShown(entry);
     touch(entry);

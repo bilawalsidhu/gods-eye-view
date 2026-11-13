@@ -18,6 +18,10 @@
 import * as Cesium from 'cesium';
 import { toCartesian } from './common.js';
 import { trackedEntityViewEntity } from './internals.js';
+import {
+  followTransitionEye,
+  followTransitionFraction,
+} from '../camera/followTransition.js';
 
 /** Frames to wait for a target's first position before giving up framing. */
 const MAX_FRAME_ATTEMPTS = 120;
@@ -155,6 +159,9 @@ export function clampFollowEye(camera, previousPosition, minimumRangeM) {
   return false;
 }
 
+/** A Cartesian3 as a plain vector. */
+const plain = (c) => ({ x: c.x, y: c.y, z: c.z });
+
 const gregorianScratch = new Cesium.GregorianDate();
 /**
  * Scene time in epoch ms, sub-millisecond included: `JulianDate.toDate`
@@ -196,6 +203,8 @@ function startOffset(target, viewFrom, result) {
  *   `onChanged` runs on every change of what it tracks; `itemPosition`,
  *   where the draw port draws an item at a scene time (null when it does
  *   not), which a target naming a drawn `item` is followed at.
+ * @param {() => number} [options.now] Wall clock, ms, for a target's
+ *   `transitionS`.
  */
 export function createCesiumFollow({
   widget,
@@ -203,6 +212,7 @@ export function createCesiumFollow({
   camera,
   onChanged,
   itemPosition,
+  now = () => performance.now(),
 }) {
   /** Where a target is at a scene time: its drawn item, else `position`. */
   const positionOf = (target, time) =>
@@ -323,14 +333,43 @@ export function createCesiumFollow({
       giveUp(entry);
       return;
     }
-    camera.lookAtTransform(
-      Cesium.Transforms.eastNorthUpToFixedFrame(
-        toCartesian(at),
-        Cesium.Ellipsoid.WGS84,
-      ),
-      offset,
+    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+      toCartesian(at),
+      Cesium.Ellipsoid.WGS84,
     );
+    if (target.transitionS > 0 && transitionStep(entry, enu, offset)) return;
+    camera.lookAtTransform(enu, offset);
     entry.framed = true;
+  }
+
+  /**
+   * One frame of a target's `transitionS`: the eye on its way from where it
+   * stood to the framing at `offset`, in the target's frame `enu`.
+   * @returns {boolean} Whether the transition is still under way.
+   */
+  function transitionStep(entry, enu, offset) {
+    // Into the target's frame, keeping the world pose.
+    camera.lookAtTransform(enu);
+    entry.transition ??= {
+      startMs: now(),
+      eye: {
+        position: plain(camera.position),
+        direction: plain(camera.direction),
+        up: plain(camera.up),
+      },
+    };
+    const s = followTransitionFraction(
+      now() - entry.transition.startMs,
+      entry.target.transitionS * 1000,
+    );
+    if (s >= 1) return false;
+    const eye = followTransitionEye(entry.transition.eye, plain(offset), s);
+    Cesium.Cartesian3.clone(toCartesian(eye.position), camera.position);
+    Cesium.Cartesian3.clone(toCartesian(eye.direction), camera.direction);
+    Cesium.Cartesian3.clone(toCartesian(eye.up), camera.up);
+    Cesium.Cartesian3.clone(toCartesian(eye.right), camera.right);
+    scene.requestRender();
+    return true;
   }
 
   /**

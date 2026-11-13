@@ -1799,7 +1799,7 @@ export class StyleManager extends ShellFacade {
    * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
    * the default costs nothing at globe scale. `all` is the deliberate opt-in;
    * turning the toggle off returns the fleet to flat billboards. The TRACKED
-   * contact is independent of this toggle (see trackedModelRegime.js).
+   * contact follows the same rule: selecting a contact never changes its form.
    * @returns {void}
    */
 

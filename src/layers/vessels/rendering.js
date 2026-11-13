@@ -212,7 +212,8 @@ export function createRendering({
       pos: visual.position,
       image: shipIcon(record, selected),
       size: [SHIP_ICON_PX, SHIP_ICON_PX],
-      scale: shipScale(record) * (selected ? 1.2 : 1),
+      // Selection changes the colour only, never the size.
+      scale: shipScale(record),
       rotationMode: 'course',
       // Held on course; `course` for renderers without motion segments.
       course: courseDeg,

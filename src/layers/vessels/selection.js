@@ -125,6 +125,8 @@ export function createSelection({
       id: record.id,
       label: record.name || record.mmsi || record.id,
       position: components.rendering.iconPosition(record),
+      // The camera keeps its distance and angle; the vessel slides to the centre.
+      keepView: true,
     });
     return true;
   }

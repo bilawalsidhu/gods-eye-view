@@ -35,8 +35,7 @@ import {
 import {
   displayDelayMs,
   followsClock,
-  TRACKED_MODEL_MAX_PX,
-  TRACKED_MODEL_MIN_PX,
+  MODEL_MIN_PX,
   BILLBOARD_SCALE,
   TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
   DR_CORRECTION_MS,
@@ -70,7 +69,6 @@ export function createMotion({
   layer,
   resolveAsset,
 }) {
-  const { trackedModelScaleForPixelCap } = services.camera;
   const {
     nearFarScalarValueAtDistance,
     clearFocusTarget,
@@ -275,21 +273,11 @@ export function createMotion({
       const spec = parts.rendering._modelSpec(
         flightState.records.data.get(icao24),
       );
-      const scale = trackedModelScaleForPixelCap({
-        baseScale: spec.scale,
-        nativeRadiusM: spec.nativeRadiusM,
-        rangeM,
-        viewportHeightPx,
-        fovyRad: pose.fovy,
-        maximumPixelSize: TRACKED_MODEL_MAX_PX,
-      });
+      // Drawn as the fleet draws it: its own size, never under MODEL_MIN_PX.
       const focalLengthPx = viewportHeightPx / (2 * Math.tan(pose.fovy / 2));
       const projectedDiameterPx =
-        (2 * spec.nativeRadiusM * scale * focalLengthPx) / rangeM;
-      return Math.max(
-        TRACKED_MODEL_MIN_PX,
-        Math.min(TRACKED_MODEL_MAX_PX, projectedDiameterPx),
-      );
+        (2 * spec.nativeRadiusM * spec.scale * focalLengthPx) / rangeM;
+      return Math.max(MODEL_MIN_PX, projectedDiameterPx);
     }
 
     const sprite = readEntityRecord(flightState._trackedEntity)?.sprite;

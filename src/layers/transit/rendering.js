@@ -32,7 +32,6 @@ import {
   MARKER_PIXEL_SIZE,
   ROTATION_REFRESH_MS,
   VISIBILITY_REFRESH_MS,
-  SELECTED_PIXEL_SIZE,
   TRANSIT_MODE_COLORS,
   vehicleNearView,
 } from './policy.js';
@@ -595,7 +594,8 @@ export function createRendering({ state, services, parts }) {
    * Under a mono preset (NVG, FLIR, noir) the sprite is white-hot with a dark
    * halo sized in screen pixels; under CRT a saturated mode colour with a
    * thinner halo; otherwise the shipped mode colour and hairline. Selection
-   * grows the glyph and retains the mode colour; sensors use opaque white.
+   * keeps the glyph's size and mode colour, widening only its halo and
+   * drawing from a crisper raster; sensors use opaque white.
    * @param {object} entry
    */
   function applySpriteStyle(entry) {
@@ -603,7 +603,7 @@ export function createRendering({ state, services, parts }) {
     if (!marker) return;
     const style = state._stylePreset;
     const selected = state._selectedKey === entry.key;
-    const basePx = selected ? SELECTED_PIXEL_SIZE : MARKER_PIXEL_SIZE;
+    const basePx = MARKER_PIXEL_SIZE;
     const halo = presetSpriteOutlinePx(style, selected);
     const displayPx = basePx * presetSpriteScale(style, selected);
     const frame = haloFrame(halo, displayPx);

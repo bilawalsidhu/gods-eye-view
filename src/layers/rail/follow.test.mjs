@@ -4,7 +4,11 @@
 // distance while the rest of the network hides as before.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FOLLOW_MIN_RANGE_M } from '../../data/trackedCamera.js';
+import {
+  FOLLOW_MIN_RANGE_M,
+  keptViewFrom,
+  SELECTION_FOLLOW_TRANSITION_S,
+} from '../../data/trackedCamera.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
 import {
@@ -147,19 +151,24 @@ test('selecting a moving train hands the camera a follow target that rides on it
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.moveCameraQuietly({ heading: Math.PI / 4 });
   const cancelled = app.camera.flightsCancelled;
+  const pose = app.camera.pose();
+  const at = { ...app.entry(key).marker.position };
   app.parts().selection.selectAndFocusTrain(key);
 
   const target = app.camera.followed;
   assert.ok(target, 'the camera follows a target');
   assert.equal(app.focusRequests.length, 0, 'no one-shot fly-to');
   assert.equal(app.camera.flightsCancelled, cancelled + 1);
-  // Framed as the aircraft are (exactly once, never closer than their
-  // minimum), from the train's own framing seen along the camera's heading.
+  // Framed as the aircraft are (once, never closer than their minimum),
+  // from where the camera already is: its distance and angle kept, the train
+  // gliding to the centre.
   assert.equal(app.follows.length, 1);
   assert.equal(target.frame, 'enu');
   assert.equal(target.minRange, FOLLOW_MIN_RANGE_M);
-  const expected = railFollowOffset(WORLD_FOCUS_FRAMING.train, Math.PI / 4);
+  assert.equal(target.transitionS, SELECTION_FOLLOW_TRANSITION_S);
+  const expected = keptViewFrom(pose, at);
   assert.ok(Math.abs(target.viewFrom.x - expected.x) < 1e-6);
+  assert.ok(Math.abs(target.viewFrom.y - expected.y) < 1e-6);
   assert.ok(Math.abs(target.viewFrom.z - expected.z) < 1e-6);
 
   // The target stands where the marker is drawn, frame after frame.

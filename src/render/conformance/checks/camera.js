@@ -11,6 +11,14 @@ import {
 import { contractDriver, runCameraScript } from '../cameraRunner.js';
 import { deepEqual, equal, near, nearAngle, nearVec, ok } from '../expect.js';
 import { eyeMoved } from '../../../geo/eyeMoves.js';
+import {
+  cross,
+  eastNorthUp,
+  framePoint,
+  frameVector,
+  normalize,
+  scale,
+} from '../../../geo/index.js';
 
 const lonLatToEcef = (h) => h.toEcef;
 
@@ -469,6 +477,72 @@ export function cameraChecks() {
         equal(r.camera.followed, null, 'cleared');
         ok(r.camera.pose().frameIsIdentity, 'back in the world frame');
         deepEqual(changes, ['test:mover', null], 'followChanged');
+        r.destroy();
+      },
+    },
+    {
+      id: 'camera.follow.transition',
+      port: 'camera',
+      title:
+        'a follow with transitionS moves the eye from where it stood to viewFrom; a viewFrom along its own view keeps view and range',
+      async run(h) {
+        const r = await fresh(h);
+        const target = h.toEcef({ lon: -97.74, lat: 30.27, height: 1000 });
+        const enu = eastNorthUp(target);
+        // The eye 1.8 km off the target, looking a little beside it.
+        const local = { x: 400, y: -1500, z: 900 };
+        const range = Math.hypot(local.x, local.y, local.z);
+        const look = normalize({
+          x: -local.x + 150,
+          y: -local.y,
+          z: -local.z - 120,
+        });
+        const right = normalize(cross(look, { x: 0, y: 0, z: 1 }));
+        const lookUp = normalize(cross(right, look));
+        const eye = framePoint(enu, local);
+        const direction = normalize(frameVector(enu, look));
+        r.camera.setView({
+          destination: eye,
+          orientation: { direction, up: normalize(frameVector(enu, lookUp)) },
+        });
+        await h.frame(r);
+        const viewFrom = scale(look, -range);
+        r.camera.follow({
+          key: 'test:transition',
+          position: () => target,
+          frame: 'enu',
+          viewFrom,
+          transitionS: 1,
+        });
+        const startedAt = h.now(r);
+        await h.frame(r);
+        ok(!r.camera.followFramed, 'not framed on the first frame');
+        nearVec(
+          r.camera.pose().position,
+          eye,
+          1e-3,
+          'the eye starts where it stood',
+        );
+        let midway = false;
+        for (let i = 0; i < 600 && !r.camera.followFramed; i++) {
+          const pose = r.camera.pose();
+          near(dist(pose.position, target), range, 1e-6 * range, `range ${i}`);
+          nearVec(pose.direction, direction, 1e-6, `view ${i}`);
+          if (dist(pose.position, eye) > 1) midway = true;
+          await h.frame(r);
+        }
+        ok(midway, 'the eye moved before it arrived');
+        ok(r.camera.followFramed, 'framed on arrival');
+        ok(h.now(r) - startedAt >= 1000 - 1e-6, 'arrived after transitionS');
+        const pose = r.camera.pose();
+        nearVec(
+          pose.position,
+          framePoint(enu, viewFrom),
+          1e-3,
+          'the eye at viewFrom',
+        );
+        nearVec(pose.direction, direction, 1e-6, 'the same view');
+        r.camera.follow(null);
         r.destroy();
       },
     },

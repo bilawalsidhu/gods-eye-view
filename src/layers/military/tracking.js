@@ -7,8 +7,6 @@ import {
 import { formatNumber, t } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
-import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
-import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
 import {
   courseScreenRotation,
   stabilizeScreenRotation,
@@ -23,7 +21,6 @@ import { julianToEpochMs } from '../../geo/julian.js';
 import { renderedFrames } from '../../data/renderedFrames.js';
 import { clone, distance, distanceSquared, vec } from '../../geo/vector.js';
 import { trailHeadStart } from '../../data/modelVisualAnchor.js';
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   isTrackingSelectionGesture,
   isTrackingClickGesture,
@@ -36,10 +33,8 @@ import {
   followsClock,
   STALE_ALPHA,
   TRAIL_COLOR,
-  BILLBOARD_SCALE,
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
-  TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
 } from './policy.js';
 import {
   drawTrailSegments,
@@ -95,7 +90,8 @@ export function createTracking({
   const { createTrail } = services.trails;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
-  const { FOLLOW_MIN_RANGE_M } = services.camera;
+  const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, keptViewFrom } =
+    services.camera;
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
   /** The tracked contact's billboard (an icon set on the draw port). */
   const trackedIcon = createTrackedAircraftIcon({
@@ -394,22 +390,40 @@ export function createTracking({
     refreshTrackedSubjectContext(_contextSubjectMetadata(icao24));
   }
 
-  /** The tracked billboard's image, from the current class/conversion. */
-  function _trackedBillboardImage() {
-    return aircraftIcon(
-      parts.rendering._iconKind(
-        flightState._trackedIcao,
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
-      ),
-      TRACKED_ICON_PX,
-    );
+  /** The tracked billboard's images, from the current class/conversion: the
+   *  fleet icon's own (`_fleetLook`), so selecting it changes only its colour. */
+  function _trackedBillboardLook() {
+    return parts.icons._fleetLook(flightState._trackedIcao);
+  }
+
+  /**
+   * What the tracked billboard is drawn at: the size, scale and scale by
+   * distance its fleet icon has (the scale read live: a landing changes it).
+   * Kept in its entity record too, so the camera guard and screen
+   * annotations size it from the app's own state.
+   * @param {string} icao24
+   */
+  function _trackedSprite(icao24) {
+    const look = parts.icons._fleetLook(icao24);
+    return {
+      width: look.size[0],
+      height: look.size[1],
+      get scale() {
+        return parts.rendering._fleetBillboardScale(
+          icao24,
+          flightState.records.data.get(icao24)?.klass,
+        );
+      },
+      scaleByDistance: look.scaleByDistance,
+    };
   }
 
   /** Re-image the tracked billboard from the current class/conversion. */
 
   function _syncTrackedBillboardImage() {
     if (!flightState._trackedIcao || !flightState._trackedEntity) return;
-    trackedIcon.setImage(_trackedBillboardImage());
+    const look = _trackedBillboardLook();
+    trackedIcon.setImage(look.image, look.imageLod);
   }
 
   /**
@@ -453,60 +467,42 @@ export function createTracking({
     }
   }
 
-  /** Clear the per-SELECTION tracked-model latches: the zoom hysteresis band
-   *  and the load-failure budget.
-   *  Called from each path that changes which contact is
-   *  selected — deselect, re-track, cross-layer handoff, init, destroy.
-   *
-   *  This must live in the production lifecycle, not only in the predicate's
-   *  icao-change guard: a deselect followed by a same-turn re-track of the SAME
-   *  icao (Contacts re-entry, a cross-layer round trip back to this layer) never
-   *  makes `_trackedIcao` *observably* change, so the guard never fires. Without
-   *  the reset, a contact dropped inside the hysteresis band comes back as a
-   *  MODEL above the ENTER ceiling. Mirror of flights.js. */
+  /** Start a selection's tracked-model state afresh: the model it draws
+   *  with (whatever the fleet drew it with, a model or its icon) and the
+   *  load-failure budget. Called from each path that changes which contact
+   *  is selected — deselect, re-track, cross-layer handoff, init, destroy. */
 
   function _resetTrackedSelectionState() {
-    flightState._trackedZoomLatched = false;
-    flightState._trackedZoomLatchIcao = null;
+    flightState._trackedModelEligible = Boolean(
+      flightState._trackedIcao &&
+      flightState._models?.has(flightState._trackedIcao),
+    );
     flightState._trackedModelFailIcao = null;
     flightState._trackedModelFailCount = 0;
     flightState._trackedModelRetryAtMs = 0;
   }
 
   /**
-   * The TRACKED aircraft's own model regime — DEFAULT-ON, camera-distance driven
-   * (owner directive 2026-08-19). Mirror of flights.js: this does NOT consult the
-   * DISPLAY-rail `models3d` toggle, which keeps owning the FLEET
-   * (`_modelRegimeActive`) and its draw-call budget. Thresholds + hysteresis live
-   * in trackedModelRegime.js — enter at TRACKED_MODEL_ENTER_ALT_M (150_000 m, the
-   * owner's playtested swap distance, deliberately NEARER than the fleet's 800 km
-   * ceiling this used to inherit), hand back only above
-   * TRACKED_MODEL_EXIT_ALT_M so a boundary orbit cannot flap billboard↔model.
-   * First-person means your own airframe is not drawn in cockpit — the eye sits
-   * metres from its origin.
+   * Whether the TRACKED aircraft draws as its 3D model: exactly when the
+   * fleet's own rule would draw it so (`_modelRegimeActive` — 3D on and the
+   * camera below the ceiling — and a place in the nearest-first cap, which
+   * the fleet pass keeps in `_trackedModelEligible`). Selecting a contact
+   * therefore never turns its icon into a model or its model into an icon.
+   * A converted TR-3B has no 3D asset, and in cockpit you sit in your own
+   * airframe, so neither draws one.
    */
 
   function _trackedModelRegimeActive() {
-    if (flightState._trackedZoomLatchIcao !== flightState._trackedIcao) {
-      flightState._trackedZoomLatchIcao = flightState._trackedIcao;
-      flightState._trackedZoomLatched = false;
-    }
-    // A converted TR-3B has no 3D asset — suppressing the regime keeps its
-    // tracked billboard fully opaque (the colour callback reads this too), so
-    // the triangle stays the visual all the way in. Mirror of flights.js.
     if (
       !flightState._trackedIcao ||
       flightState._cockpitContactMode ||
       isTr3b(flightState._trackedIcao)
-    ) {
-      flightState._trackedZoomLatched = false;
+    )
       return false;
-    }
-    flightState._trackedZoomLatched = trackedModelZoomActive(
-      _pose()?.height,
-      flightState._trackedZoomLatched,
+    return (
+      flightState._trackedModelEligible === true &&
+      parts.rendering._modelRegimeActive()
     );
-    return flightState._trackedZoomLatched;
   }
 
   /** Seed the tracked billboard's 2D orientation before a 3D→2D handoff. */
@@ -1016,9 +1012,15 @@ export function createTracking({
    * smooth continuous motion, and sets the viewer's trackedEntity so the camera
    * follows.
    * @param {string} icao24 - ICAO hex identifier of the aircraft to track
+   * @param {{origin?: string, keepView?: boolean}} [options] `keepView` (a
+   *   click on the plane): follow from the camera's own distance and angle,
+   *   the plane sliding to the centre, rather than the calibrated framing.
    */
 
-  function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
+  function _trackFlight(
+    icao24,
+    { origin = 'programmatic', keepView = false } = {},
+  ) {
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const icons = flightState._icons;
@@ -1036,10 +1038,9 @@ export function createTracking({
     flightState._cachedDRFrame = -1;
     flightState._lastTrackedRotation =
       courseScreenRotation(_pose(), iconPosition, iconCourse, 0) ?? 0;
-    // Drop any fleet 3D model for this aircraft — the tracked entity now owns its visual (its
-    // own billboard + model graphic), and the fleet tick skips the tracked icao, so a leftover
-    // fleet model would be orphaned + double-rendered.
-    parts.rendering._releaseModel(icao24);
+    // A fleet 3D model this aircraft had keeps drawing it until the tracked
+    // model is ready (`_updateTrackedModel` lets it go then), so it never
+    // turns into its icon for the frames the tracked model takes to load.
 
     // Hide the icon -- the tracked entity replaces it visually
     icons.setShown(icao24, false);
@@ -1063,18 +1064,7 @@ export function createTracking({
     // billboard+model double-image nor a gap. The camera follows its own target through the camera
     // port, so nothing here frames the camera. The tracked plane's 3D model is a draw-set item
     // driven by _updateTrackedModel() (see _trackedModel).
-    // What the tracked billboard is drawn at, kept in its record so the
-    // camera guard and screen annotations size it from the app.
-    const sprite = {
-      width: 28,
-      height: 28,
-      scale:
-        BILLBOARD_SCALE *
-        (CLASS_SCALE_2D[
-          flightState.records.data.get(flightState._trackedIcao)?.klass
-        ] || 1),
-      scaleByDistance: TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
-    };
+    const sprite = _trackedSprite(icao24);
     // The tracked contact as its readers see it (the tracked card, Cockpit, share links): a
     // plain holder of its entity record, drawn while it is the one tracked.
     const holder = trackedContactHolder(
@@ -1093,7 +1083,8 @@ export function createTracking({
     };
     trackedIcon.show({
       id: icao24,
-      image: _trackedBillboardImage(),
+      image: _trackedBillboardLook().image,
+      imageLod: _trackedBillboardLook().imageLod,
       sprite,
       position: getTrackedPosition,
       // Solid amber when the billboard is the visual (zoomed out, 3D off, or model still loading);
@@ -1131,9 +1122,11 @@ export function createTracking({
     entityRecord(flightState._trackedEntity).labelModel =
       trackedLabelModelFromText(_buildTrackedLabel(info, icao24), '#ffd166');
 
-    // A billboard has a ~zero bounding sphere, so the renderer's default follow distance is
-    // far too tight (the user had to scroll out to read the plane). Give the target a
-    // calibrated viewFrom — behind + above, distance scaled to altitude — for a readable
+    // A click on the plane follows it from where the camera is (`keepView`,
+    // below). A selection from elsewhere (a search, voice, a share link) has no
+    // view of the plane to keep: a billboard has a ~zero bounding sphere, so the
+    // renderer's default follow distance is far too tight. It gets a calibrated
+    // viewFrom — behind + above, distance scaled to altitude — for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
     const altM = info?.altitudeFt ? info.altitudeFt * 0.3048 : 1500;
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
@@ -1157,11 +1150,17 @@ export function createTracking({
     // label, sprite, display position) reads the tracked entity's record.
     const camera = cameraOf(flightState._viewer);
     camera.cancelFlight();
+    const kept = keepView
+      ? keptViewFrom(camera.pose(), getTrackedPosition())
+      : null;
     flightState._followTarget = entityFollowTarget(flightState._trackedEntity, {
       position: getTrackedPosition,
       frame: 'enu',
-      viewFrom,
+      viewFrom: kept ?? viewFrom,
       minRange: FOLLOW_MIN_RANGE_M,
+      // A click keeps the camera's distance and angle: the plane slides to
+      // the centre from where the camera is, and is followed from there.
+      ...(kept ? { transitionS: SELECTION_FOLLOW_TRANSITION_S } : {}),
     });
     camera.follow(flightState._followTarget);
 
@@ -1249,7 +1248,7 @@ export function createTracking({
 
         if (pickedIcao && flightState._icons?.has(pickedIcao)) {
           _cancelPendingTrackingRestore();
-          _trackFlight(pickedIcao, { origin: 'user' });
+          _trackFlight(pickedIcao, { origin: 'user', keepView: true });
           return;
         }
       }
@@ -1293,6 +1292,8 @@ export function createTracking({
     _refreshTr3bForStyle,
     _resetTrackedSelectionState,
     _trackedModelRegimeActive,
+    _trackedBillboardLook,
+    _trackedSprite,
     _syncTracked2dRotation,
     _trailFloorPosition,
     _appendTrailFix,

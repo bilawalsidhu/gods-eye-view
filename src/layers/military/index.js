@@ -78,4 +78,3 @@ export function createMilitaryFlightLayer({
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
 }
-export { TRACKED_MODEL_MAX_PX } from './policy.js';

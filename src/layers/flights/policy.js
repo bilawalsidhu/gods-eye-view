@@ -52,12 +52,6 @@ export const MODEL_MIN_PX = 24;
 // min-pixel blob (was 54 — far planes at the All radius became white
 // star-bursts); ~matches the 2D icon size so the model↔billboard read is consistent
 
-export const TRACKED_MODEL_MIN_PX = 40;
-// keep the glTF silhouette comparable to the selected 2D glyph at handoff
-
-export const TRACKED_MODEL_MAX_PX = 200;
-// owner-selected close-range tracked-target feel
-
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
 
 export const MODEL_MAX = 150;

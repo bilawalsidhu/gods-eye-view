@@ -155,6 +155,17 @@ export interface FollowTarget {
   viewFrom: Vec3 | ((t: number) => Vec3);
   minRange?: number;
   boundingRadius?: number;
+  /**
+   * Seconds of wall time the first framing takes; without it the eye is
+   * placed at `viewFrom` on the first frame. With it the eye stays in the
+   * target's frame from the first frame (riding along with the target) and
+   * moves from where it stood to the framing, both its offset and its view
+   * turning, eased (`render/camera/followTransition.js`, the one rule every
+   * renderer follows); `followFramed` turns true on arrival. A `viewFrom`
+   * along the eye's own view at its own range keeps the view and the range
+   * throughout, so the target slides to the centre.
+   */
+  transitionS?: number;
 }
 
 /**

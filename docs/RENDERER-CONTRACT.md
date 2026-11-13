@@ -157,6 +157,18 @@ one. The stub's is a frame along the ground track, so an autodetect
 pins what both share (the range kept, north-up when still, the frame on the
 target standing up).
 
+A follow target's `transitionS` makes the first framing a move instead of a
+jump: from its first frame the eye is in the target's frame, and over
+`transitionS` seconds of wall time it goes from where it stood to
+`viewFrom`, by the one rule in `src/render/camera/followTransition.js`
+(its offset and its view each turned and eased with smoothstep, the view
+ending on the target with no roll). The Cesium port, the stub and a camera
+controller import that rule rather than restating it. The tracked aircraft
+aircraft and followed trains use it with a `viewFrom` taken from the camera
+at the click: the eye's own view direction at its own range from the target,
+so neither changes and only the eye's place moves, sliding the target to the
+centre. The check `camera.follow.transition` pins it.
+
 The Cesium port draws clamped shapes of every kind. A clamped outline is a
 draped line (a ground polyline a ring, under the shape's pick id; an outlined
 clamped shape is rebuilt on any change; a pulsing one pulses through its line's

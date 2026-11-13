@@ -31,6 +31,8 @@ import { cockpitContactDotImage } from './cockpitContactDot.js';
 /** Raster size of the cockpit contact pip (cockpitContactDot.js draws 16 px). */
 const COCKPIT_DOT_PX = 16;
 /** Fleet glyphs keep the established close-range 3× scale. */
+/** A contact icon's size before its scale, CSS px. */
+const FLEET_ICON_SIZE_PX = 20;
 const NORMAL_SCALE_BY_DISTANCE = Object.freeze({
   near: 1000,
   nearValue: 3.0,
@@ -670,6 +672,36 @@ export function createAircraftIcons({
     state._iconFocusActive = active;
   }
 
+  /**
+   * How a contact's icon is drawn outside Cockpit: its image (and the sharper
+   * one it switches to up close), size, scale and scale by distance. The
+   * tracked contact's own icon is drawn with this too, so selecting a contact
+   * changes its colour and nothing else.
+   * @param {string} icao24
+   * @param {object} [info] Its record.
+   * @returns {{image: string, imageLod: {near: string, switchPx: number},
+   *   size: [number, number], scale: number, scaleByDistance: object}}
+   */
+  function _fleetLook(icao24, info = state.records.data.get(icao24)) {
+    const rendering = parts.rendering;
+    return {
+      image: aircraftIcon(
+        rendering._iconKind(icao24, info?.klass),
+        FLEET_ICON_PX,
+      ),
+      imageLod: {
+        near: aircraftIcon(
+          rendering._iconKind(icao24, info?.klass),
+          TRACKED_ICON_PX,
+        ),
+        switchPx,
+      },
+      size: [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX],
+      scale: rendering._fleetBillboardScale(icao24, info?.klass),
+      scaleByDistance: NORMAL_SCALE_BY_DISTANCE,
+    };
+  }
+
   /** Image, size, scale, tint and freshness for one row under the current
    *  normal/cockpit contract. Motion and course stay with `_planIcon`. */
   function _applyIconPresentation(icao24) {
@@ -693,20 +725,7 @@ export function createAircraftIcons({
           rotationMode: 'screen',
         }
       : {
-          image: aircraftIcon(
-            rendering._iconKind(icao24, info?.klass),
-            FLEET_ICON_PX,
-          ),
-          imageLod: {
-            near: aircraftIcon(
-              rendering._iconKind(icao24, info?.klass),
-              TRACKED_ICON_PX,
-            ),
-            switchPx,
-          },
-          size: tracked ? [24, 24] : [20, 20],
-          scale: rendering._fleetBillboardScale(icao24, info?.klass),
-          scaleByDistance: NORMAL_SCALE_BY_DISTANCE,
+          ..._fleetLook(icao24, info),
           color: rgba(rendering._fleetBillboardColor(icao24, info)),
           rotationMode: 'course',
         };
@@ -777,6 +796,7 @@ export function createAircraftIcons({
     _replanExpired,
     _focusIcons,
     _applyIconPresentation,
+    _fleetLook,
     _addIcon,
     _forgetContact,
     _iconIds,
@@ -795,7 +815,7 @@ function baseContactItem(layerId, icao24, show) {
     pos: { x: 0, y: 0, z: 0 },
     motion: { kind: 'hold', courseDeg: 0 },
     course: 0,
-    size: [20, 20],
+    size: [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX],
     rotationMode: 'course',
     recede: true,
     disableDepthTest: Infinity,

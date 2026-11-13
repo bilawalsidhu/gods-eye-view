@@ -358,13 +358,13 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchTrailHead = { x: 0, y: 0, z: 0 };
 
-  /** Hysteresis latch for the tracked contact's zoom regime, plus the selection it
-   *  belongs to. Scoped per selection so a NEW target re-evaluates against the ENTER
-   *  ceiling instead of inheriting the previous target's looser EXIT band. */
+  /** Whether the fleet's model rule (3D on, below the ceiling, inside the
+   *  nearest-first cap) gives the tracked contact a model: the tracked model
+   *  draws only then, so selecting a contact never changes its form. Seeded
+   *  from the contact's fleet model when it is selected, then kept by the
+   *  fleet pass. */
 
-  flightState._trackedZoomLatched = false;
-
-  flightState._trackedZoomLatchIcao = null;
+  flightState._trackedModelEligible = false;
 
   /** The tracked-model load-failure budget: the selection it counts for,
    *  its failures, and when it may load again (`TRACKED_MODEL_*`). */

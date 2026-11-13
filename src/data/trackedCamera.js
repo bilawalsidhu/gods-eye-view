@@ -1,3 +1,11 @@
+import {
+  distance,
+  eastNorthUp,
+  inverseFrameVector,
+  normalize,
+  scale,
+} from '../geo/index.js';
+
 /**
  * Closest a follow camera comes to a tracked aircraft, metres: the camera
  * port's `minRange` for the aircraft layers' FollowTargets.
@@ -5,44 +13,26 @@
 export const FOLLOW_MIN_RANGE_M = 150;
 
 /**
- * Preserve real-world model scale except when a very close tracked camera
- * would make the selected aircraft dominate the viewport.
- *
- * @param {object} options
- * @param {number} options.baseScale Asset's calibrated real-world scale.
- * @param {number} options.nativeRadiusM Asset bounding radius before scale.
- * @param {number} options.rangeM Camera-to-aircraft range.
- * @param {number} options.viewportHeightPx Rendered viewport height.
- * @param {number} options.fovyRad Vertical field of view.
- * @param {number} options.maximumPixelSize Maximum selected-model diameter.
- * @returns {number} Scale to apply to the model.
+ * Seconds a follow started by a click on a target takes to slide the target
+ * to the centre: the FollowTarget's `transitionS`.
  */
-export function trackedModelScaleForPixelCap({
-  baseScale,
-  nativeRadiusM,
-  rangeM,
-  viewportHeightPx,
-  fovyRad,
-  maximumPixelSize,
-}) {
-  if (
-    !Number.isFinite(baseScale) ||
-    baseScale <= 0 ||
-    !Number.isFinite(nativeRadiusM) ||
-    nativeRadiusM <= 0 ||
-    !Number.isFinite(rangeM) ||
-    rangeM <= 0 ||
-    !Number.isFinite(viewportHeightPx) ||
-    viewportHeightPx <= 0 ||
-    !Number.isFinite(fovyRad) ||
-    fovyRad <= 0 ||
-    !Number.isFinite(maximumPixelSize) ||
-    maximumPixelSize <= 0
-  )
-    return baseScale;
-  const focalLengthPx = viewportHeightPx / (2 * Math.tan(fovyRad / 2));
-  const projectedDiameterPx =
-    (2 * nativeRadiusM * baseScale * focalLengthPx) / rangeM;
-  if (projectedDiameterPx <= maximumPixelSize) return baseScale;
-  return baseScale * (maximumPixelSize / projectedDiameterPx);
+export const SELECTION_FOLLOW_TRANSITION_S = 1;
+
+/**
+ * A follow offset that keeps the camera's view of a target it starts
+ * following: the eye's own view direction, at its own distance from `at`, in
+ * `at`'s east-north-up frame (an `enu` FollowTarget's `viewFrom`). Followed
+ * from there, the camera neither zooms nor turns; only the eye moves, so the
+ * target comes to the centre. Null without an eye, or with the eye at `at`.
+ * @param {{position: object, direction: object}|null|undefined} pose The
+ *   camera port's pose.
+ * @param {{x: number, y: number, z: number}|null|undefined} at The target.
+ * @returns {{x: number, y: number, z: number}|null}
+ */
+export function keptViewFrom(pose, at) {
+  if (!pose?.position || !pose?.direction || !at) return null;
+  const range = distance(pose.position, at);
+  if (!(range > 0) || !Number.isFinite(range)) return null;
+  const look = normalize(inverseFrameVector(eastNorthUp(at), pose.direction));
+  return scale(look, -range);
 }

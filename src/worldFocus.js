@@ -1,8 +1,12 @@
 /**
  * One-click camera transfer for layer-owned world targets.
  */
-import { WGS84, toRadians } from './geo/index.js';
+import { WGS84, eastNorthUp, framePoint, toRadians } from './geo/index.js';
 import { findCamera } from './render/rendererOf.js';
+import {
+  keptViewFrom,
+  SELECTION_FOLLOW_TRANSITION_S,
+} from './data/trackedCamera.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -76,18 +80,38 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
   return runExplicitFocus(detail, () => fly(detail));
 }
 
-/** Fly to a world target after ownership has been released. */
+/**
+ * Fly to a world target after ownership has been released. A target with
+ * `keepView` (a click on it) keeps the camera's distance and angle: the eye
+ * moves, on a straight path, to where it sees the target in the centre with
+ * the view it has now (`keptViewFrom`). Any other is framed by its kind
+ * (`WORLD_FOCUS_FRAMING`).
+ */
 export function flyToWorldTarget(viewer, target = {}) {
   const camera = findCamera(viewer);
   const framing = WORLD_FOCUS_FRAMING[target.kind];
   if (!camera || !framing || !isValidWorldFocusTarget(target)) return false;
-  const poseHeading = camera.pose().heading;
-  const heading = Number.isFinite(poseHeading) ? poseHeading : 0;
+  const pose = camera.pose();
+  const kept = target.keepView ? keptViewFrom(pose, target.position) : null;
+  camera.cancelFlight();
+  if (kept) {
+    camera.flyTo(framePoint(eastNorthUp(target.position), kept), {
+      orientation: { direction: pose.direction, up: pose.up },
+      durationS:
+        target.durationSec > 0
+          ? target.durationSec
+          : SELECTION_FOLLOW_TRANSITION_S,
+      easing: 'cubicInOut',
+      // Below both ends: no arc, so the camera does not climb on the way.
+      maxHeight: 0,
+    });
+    return true;
+  }
+  const heading = Number.isFinite(pose.heading) ? pose.heading : 0;
   const duration =
     target.durationSec > 0
       ? target.durationSec
       : WORLD_CLICK_FOCUS_DURATION_SEC;
-  camera.cancelFlight();
   camera.flyToBounds(
     { center: target.position, radius: framing.radiusM },
     {

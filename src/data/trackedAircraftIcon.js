@@ -83,6 +83,7 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
       pos: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: 0, y: 0, z: 0 },
       show: Boolean(pos) && visible,
       image: shown.image,
+      ...(shown.imageLod ? { imageLod: shown.imageLod } : {}),
       size: [shown.sprite.width, shown.sprite.height],
       scale: shown.sprite.scale,
       scaleByDistance: shown.sprite.scaleByDistance,
@@ -99,6 +100,10 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
       written.pos.y === item.pos.y &&
       written.pos.z === item.pos.z &&
       written.image === item.image &&
+      written.imageLod?.near === item.imageLod?.near &&
+      written.imageLod?.switchPx === item.imageLod?.switchPx &&
+      written.size[0] === item.size[0] &&
+      written.size[1] === item.size[1] &&
       written.scale === item.scale &&
       written.rotation === item.rotation &&
       sameColor(written.color, item.color)
@@ -115,8 +120,10 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
      * @param {object} target
      * @param {string} target.id The contact's id.
      * @param {string} target.image
+     * @param {{near: string, switchPx: number}} [target.imageLod] The
+     *   sharper image it switches to once drawn larger than `switchPx`.
      * @param {{width: number, height: number, scale: number,
-     *   scaleByDistance: object}} target.sprite
+     *   scaleByDistance: object}} target.sprite Read each frame.
      * @param {() => object|null} target.position ECEF this frame; none hides it.
      * @param {() => number} target.rotation Screen radians, counter-clockwise.
      * @param {() => object} target.color The tint this frame.
@@ -131,9 +138,10 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
     },
 
     /** Draw it from a new image (the class or conversion changed) next frame. */
-    setImage(image) {
+    setImage(image, imageLod) {
       if (!shown) return;
       shown.image = image;
+      shown.imageLod = imageLod;
       requestFrame('tracked icon image');
     },
 

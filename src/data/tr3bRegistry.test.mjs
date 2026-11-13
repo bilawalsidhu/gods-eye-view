@@ -235,11 +235,9 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     //    no TR-3B GLB, so the triangle icon stays the visual.
     assert.match(source, /for \(const icao24 of modelEligible\) \{\s*if \(isTr3b\(icao24\)\) continue;/,
       `${name}: fleet model handoff skips converted contacts`);
-    // The tracked regime became default-on and camera-distance driven
-    // (2026-08-19), so the suppression moved from a conjunct on
-    // `_modelRegimeActive()` to an explicit early return. The invariant is
-    // unchanged: a converted contact never reaches the model handoff.
-    assert.match(source, /if\s*\(\s*!(?:flightState\.)?_trackedIcao\s*\|\|\s*(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isTr3b\(\s*(?:flightState\.)?_trackedIcao,?\s*\),?\s*\)\s*\{/,
+    // The tracked regime's suppression is an explicit early return: a
+    // converted contact never reaches the model handoff.
+    assert.match(source, /if\s*\(\s*!(?:flightState\.)?_trackedIcao\s*\|\|\s*(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isTr3b\(\s*(?:flightState\.)?_trackedIcao,?\s*\),?\s*\)\s*(?:\{|return false;)/,
       `${name}: the standalone tracked model is suppressed for a converted contact`);
 
     // 2. The icon is never hidden by that suppression — it must keep

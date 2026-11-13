@@ -44,6 +44,10 @@ import {
   zeroToTwoPi,
 } from './math.js';
 import { createCameraEvents } from '../camera/events.js';
+import {
+  followTransitionEye,
+  followTransitionFraction,
+} from '../camera/followTransition.js';
 import { geodesicAt } from '../../geo/geodesic.js';
 
 const DEFAULT_FOV = Math.PI / 3;
@@ -116,6 +120,8 @@ export function createStubCamera({
   let flight = null;
   let followed = null;
   let followFramed = false;
+  /** A follow's transition under way: where the eye began, and when. */
+  let transition = null;
 
   let coast = Object.freeze({ drag: 0.4, zoom: 0.2 });
   const controls = {
@@ -666,6 +672,7 @@ export function createStubCamera({
     const changed = followed !== target;
     followed = target;
     followFramed = false;
+    transition = null;
     if (!target) setFrame(IDENTITY);
     if (changed) emit('followChanged');
     requestRender('follow');
@@ -689,6 +696,28 @@ export function createStubCamera({
       );
       if (range < minRange && range > 0)
         offset = scale(offset, minRange / range);
+      if (followed.transitionS > 0 && range > 0) {
+        // The eye moves from where it is to the framing (`transitionS`).
+        setFrame(targetFrame);
+        transition ??= {
+          startMs: now(),
+          eye: { position, direction, up },
+        };
+        const s = followTransitionFraction(
+          now() - transition.startMs,
+          followed.transitionS * 1000,
+        );
+        if (s < 1) {
+          const eye = followTransitionEye(transition.eye, offset, s);
+          position = eye.position;
+          direction = eye.direction;
+          up = eye.up;
+          right = eye.right;
+          requestRender('follow');
+          return;
+        }
+        transition = null;
+      }
       lookAtFrame(targetFrame, offset);
       followFramed = true;
       return;
