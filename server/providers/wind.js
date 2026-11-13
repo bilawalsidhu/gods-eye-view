@@ -1,6 +1,6 @@
 import { fetchGfsWind } from './wind/gfs.js';
 import { fetchIfsWind } from './wind/ifs.js';
-import { decodeWindGribMessage } from './wind/decode.js';
+import { decodeWindGribInWorker } from './wind/decoder.js';
 import { weatherScalarMetadata, weatherScalarError } from './wind/grid.js';
 
 // Data, not UI copy: the client (src/layers/wind/index.js) marks this exact
@@ -11,7 +11,7 @@ const UPSTREAM_UNAVAILABLE = 'Wind upstream unavailable';
 export function windProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
-  decodeImpl = decodeWindGribMessage,
+  decodeImpl = decodeWindGribInWorker,
   targetDx = 1,
   ttlMs = 3600_000,
   timeoutMs = 40_000,
@@ -22,6 +22,8 @@ export function windProxy({
   const loadings = new Map();
   const grids = new Map();
   const attempts = new Map();
+  // Sampled U/V of the last forecast object per model (see loadWeatherSnapshot).
+  const windCache = new Map();
   const unavailable = (model, overlay) => ({
     manifest: {
       model,
@@ -54,6 +56,7 @@ export function windProxy({
           targetDx,
           overlay,
           signal: controller.signal,
+          windCache,
         });
         controller.signal.throwIfAborted();
         const { grid, cycle } = value;
