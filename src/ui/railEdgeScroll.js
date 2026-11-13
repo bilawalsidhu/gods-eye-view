@@ -16,6 +16,12 @@ const STEP_DELTA = 40;
 const GESTURE_GAP_MS = 180;
 /** After a step, how long (ms) before the same motion can count as a new flick. */
 const STEP_COOLDOWN_MS = 220;
+/**
+ * The least time (ms) between two steps, whatever the wheel does. A motion
+ * that would step sooner is used up without stepping, so panels never switch
+ * back to back.
+ */
+const STEP_GAP_MS = 500;
 /** A wheel event this large (pixels) is a mouse wheel notch, not a trackpad. */
 const NOTCH_DELTA = 100;
 /** The widest the strip gets, measured from the screen edge, whatever shape the rail takes. */
@@ -227,6 +233,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     travel += event.deltaY;
     if (Math.abs(travel) < STEP_DELTA) return;
     stepped = true;
+    if (now - steppedAt < STEP_GAP_MS) return;
     steppedAt = now;
     step(Math.sign(travel));
   }
