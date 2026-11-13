@@ -2949,7 +2949,13 @@ visits to one place share a key but does not bound how many distinct places a
 session visits, and the cache previously had no eviction, so a long session
 retained every coordinate it ever resolved. Eviction is least-recently-used:
 a consumer read, including a warm hit in a batch lookup, promotes its entry, so
-the cell being watched is not dropped for having been resolved early. The bound sits far above a city-scale session, so
+the cell being watched is not dropped for having been resolved early. A
+synchronous read (`cachedEllipsoidalGround`, `cachedRealEllipsoidalGround`)
+promotes its entry only once half the bound's worth of stores and promotions
+have passed since the entry was last newest, so an entry read at least that
+often is still never evicted while the per-frame floor reads no longer rewrite
+the cache; those reads find entries through a numeric key and format no
+strings. The bound sits far above a city-scale session, so
 normal use never evicts and issues no additional proxy requests. A batch's
 results are assembled from what that call resolved or found warm, so eviction
 during a large batch cannot report one of its points as unresolved. Re:Earth and
