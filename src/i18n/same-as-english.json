@@ -245,6 +245,9 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
+    "COMMUNITY",
+    "Regional",
+    "OPT-IN",
     "ISS LIVE · NASA"
   ],
   "es": [
@@ -406,6 +409,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
+    "Regional",
+    "{datasets} · {tiles} · {packs}",
     "Manual"
   ],
   "fr": [
@@ -621,7 +626,12 @@
     "≥ {value} MW",
     "▲ {frp} MW",
     "SATELLITE",
-    "Photo © {photographer}"
+    "Photo © {photographer}",
+    "PACK",
+    "{count} packs",
+    "Orthophoto",
+    "Oblique",
+    "Type"
   ],
   "it": [
     "1 min/s",
@@ -824,7 +834,10 @@
     "SATELLITE",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "DATASET",
+    "{count} datasets",
+    "ZOOM"
   ],
   "ja": [
     "1090 MHz",
@@ -1052,6 +1065,7 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
+    "Regional",
     "Manual"
   ],
   "ru": [
@@ -1088,7 +1102,8 @@
     "{division}, {country}",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "{datasets} · {tiles} · {packs}"
   ],
   "sv": [
     "STATION",

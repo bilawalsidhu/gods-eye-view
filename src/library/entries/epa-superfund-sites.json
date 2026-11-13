@@ -1,0 +1,40 @@
+{
+  "id": "epa-superfund-sites",
+  "kind": "dataset",
+  "family": "environment",
+  "title": "Superfund sites (US EPA)",
+  "provider": "US EPA",
+  "description": "The about 1,400 hazardous waste sites on the EPA's Superfund list, from the Facility Registry Service.",
+  "icon": "☢",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-180, 13, -64, 72]
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://geopub.epa.gov/arcgis/rest/services/EMEF/efpoints/MapServer/0",
+    "query": {
+      "outFields": "primary_name,city_name,state_code"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxFeatures": 2000,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#d69e2e",
+    "label": "primary_name",
+    "fields": ["city_name", "state_code"]
+  },
+  "licence": {
+    "name": "U.S. EPA data: public domain",
+    "url": "https://www.epa.gov/web-policies-and-procedures/epa-disclaimers"
+  },
+  "attribution": {
+    "text": "U.S. Environmental Protection Agency — Facility Registry Service (EnviroMapper)",
+    "url": "https://www.epa.gov/frs"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

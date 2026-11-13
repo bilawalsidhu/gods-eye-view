@@ -1,0 +1,48 @@
+{
+  "id": "pt-dgt-ortos",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Ortofotos de Portugal Continental (DGT)",
+  "provider": "Direção-Geral do Território",
+  "description": "Aerial orthophotos: Portugal Continental.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["PT"],
+    "bbox": [-9.52, 36.96, -6.19, 42.15]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://ortos.dgterritorio.gov.pt/wms/ortosat2023?service=WMS&request=GetMap&version=1.3.0&layers=ortoSat2023-CorVerdadeira&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 7,
+    "maxZoom": 18,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "coverage",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "25–30 cm",
+    "resolutionM": 0.25,
+    "trueOrtho": false,
+    "vintage": "2021–present",
+    "updateCycle": "Multi-year campaigns",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "CC BY 4.0",
+    "url": "https://www.dgterritorio.gov.pt/"
+  },
+  "attribution": {
+    "text": "© Direção-Geral do Território",
+    "url": "https://snig.dgterritorio.gov.pt/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

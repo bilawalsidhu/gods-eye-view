@@ -1,0 +1,368 @@
+/* Data Library: the Browse button under DATA LAYERS and its dialog.
+   The dialog is a dialog[data-panel-surface] (docs/panel-surfaces.md): the
+   shared skin draws the surface; this file owns geometry and the list. */
+
+.data-library-footer {
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.data-library-browse {
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px dashed var(--glass-border-hover);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.data-library-browse:hover,
+.data-library-browse:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.data-library-browse:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.data-library-dialog {
+  /* Frosted rather than opaque: a lighter surface than the rail panels
+     (0.72) keeps the globe's colour visible, and the blur stops the HUD text
+     behind the dialog from competing with the dialog's own. */
+  --glass-bg: rgba(12, 12, 20, 0.55);
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - 48px));
+  margin: auto;
+  color: var(--text-primary);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  backdrop-filter: blur(22px) saturate(1.3);
+  /* The blur follows the surface's shape (Cyber's cut corners). The dialog
+     has no outward popups for a clip to hide. */
+  clip-path: var(--panel-surface-frame);
+}
+
+.data-library-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.data-library-close {
+  min-width: 30px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* At a glance: four stat tiles above the intro. Text tokens only. */
+.data-library-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.data-library-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(8, 10, 16, 0.38);
+}
+
+.data-library-stat-label {
+  color: var(--text-secondary);
+  font: 600 9px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.data-library-stat-value {
+  margin: 0;
+  color: var(--text-primary);
+  font: 600 20px/1.15 var(--font-sans);
+}
+
+.data-library-stat-detail {
+  margin: 0;
+  color: rgba(232, 234, 237, 0.68);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+:root[data-ui-theme='cyber'] .data-library-stat {
+  border-radius: 0;
+}
+
+:root[data-ui-theme='cyber'] .data-library-stat-value {
+  font-family: var(--font-mono);
+}
+
+.data-library-intro {
+  margin: 0 0 10px;
+  color: rgba(232, 234, 237, 0.72);
+}
+
+.data-library-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.data-library-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.data-library-field .panel-surface-control {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 12px;
+}
+
+.data-library-check {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.data-library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.data-library-status {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 10px/1.4 var(--font-mono);
+}
+
+.data-library-reset {
+  min-height: 26px;
+  padding: 3px 10px;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 1px;
+}
+
+.data-library-reset.is-armed {
+  border-color: var(--panel-surface-error);
+  color: var(--panel-surface-error);
+}
+
+.data-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.data-library-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(8, 10, 16, 0.38);
+}
+
+.data-library-item.is-on {
+  border-color: var(--accent-glow);
+}
+
+.data-library-item.is-unavailable .data-library-name,
+.data-library-item.is-unavailable .data-library-description {
+  color: var(--text-secondary);
+}
+
+.data-library-item > :not(.data-library-actions) {
+  grid-column: 1;
+}
+
+.data-library-actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.data-library-action {
+  min-width: 82px;
+  font: 600 10px/1.4 var(--font-mono);
+  letter-spacing: 1px;
+}
+
+.data-library-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.data-library-icon {
+  width: 14px;
+  color: var(--accent);
+  text-align: center;
+}
+
+.data-library-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.data-library-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.data-library-badge {
+  padding: 0 5px;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font: 600 9px/1.6 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.data-library-badge--good {
+  border-color: var(--accent-glow);
+  color: var(--accent);
+}
+
+.data-library-badge--warn {
+  border-color: rgba(255, 194, 61, 0.45);
+  color: #ffc23d;
+}
+
+.data-library-description,
+.data-library-meta,
+.data-library-reason {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.data-library-meta {
+  color: rgba(232, 234, 237, 0.68);
+  font-size: 11px;
+}
+
+.data-library-meta a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.data-library-meta a:hover,
+.data-library-meta a:focus-visible {
+  color: var(--text-primary);
+}
+
+/* Imagery specs: label over value, wrapping into as many columns as fit. */
+.data-library-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.data-library-spec {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.data-library-spec dt {
+  color: rgba(232, 234, 237, 0.56);
+  font: 9px/1.4 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.data-library-spec dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.data-library-reason {
+  color: #ffc23d;
+  font: 10px/1.5 var(--font-mono);
+}
+
+:root[data-ui-theme='cyber'] .data-library-dialog {
+  --glass-bg: rgba(18, 24, 27, 0.62);
+  width: min(600px, calc(100vw - 32px));
+}
+
+:root[data-ui-theme='cyber'] .data-library-item {
+  border-radius: 0;
+}
+
+:root[data-ui-theme='cyber']
+  :is(.data-library-icon, .data-library-badge--good) {
+  color: var(--cyber-red-bright);
+  border-color: var(--cyber-red-bright);
+}
+
+@media (max-width: 720px) {
+  .data-library-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .data-library-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .data-library-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .data-library-actions {
+    grid-column: 1;
+    grid-row: auto;
+    flex-direction: row;
+    justify-self: start;
+  }
+}
+
+body:is(.ui-clean-view, .recording-mode) .data-library-dialog {
+  display: none;
+}
+
+/* Library rows list their legend one item per line, as Fire Perimeters'
+   longer labels do, with the zoom and remove icons on their own line. */
+.data-toggle-row[data-library-entry] .data-toggle-legend-item {
+  flex-basis: 100%;
+}
