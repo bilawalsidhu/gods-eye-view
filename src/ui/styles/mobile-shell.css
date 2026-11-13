@@ -442,7 +442,7 @@ body.mobile-shell
 }
 
 /* Only sizing changes with height; eligibility remains in panelRailGeometry.js. */
-@media (max-height: 520px) {
+@media (max-height: 520px) and (orientation: landscape) {
   body.mobile-shell {
     --mobile-tab-height: 48px;
     --mobile-sheet-max-height: min(
@@ -496,7 +496,7 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
 /* Phone landscape has no height to spare for the voice bar: it collapses to
    the mic in the bottom-right corner, the provider chooser (and its gear)
    sits beside it as a pill, and its trays open above it, right-aligned. */
-@media (max-height: 520px) {
+@media (max-height: 520px) and (orientation: landscape) {
   body.mobile-shell #command-dock {
     align-items: flex-end;
   }

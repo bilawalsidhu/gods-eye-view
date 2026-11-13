@@ -1227,6 +1227,33 @@ for (const [width, height, phone] of [
   });
 }
 
+test('Voice Settings keeps the portrait sheet width on a short portrait phone (390x500)', async (t) => {
+  const f = mounted(t, { view: true });
+  const view = globalThis.document.defaultView;
+  for (const [key, value] of [
+    ['innerWidth', 390],
+    ['innerHeight', 500],
+  ]) {
+    const descriptor = Object.getOwnPropertyDescriptor(view, key);
+    Object.defineProperty(view, key, { configurable: true, value });
+    t.after(() =>
+      descriptor
+        ? Object.defineProperty(view, key, descriptor)
+        : delete view[key],
+    );
+  }
+  t.mock.method(view, 'matchMedia', (query) => ({
+    matches: query === MOBILE_SHELL_MEDIA_QUERY,
+  }));
+  await f.settle();
+  globalThis.document.body.style.setProperty('--mobile-left-inset', '0px');
+  globalThis.document.body.style.setProperty('--mobile-right-inset', '0px');
+  f.commands.voicePanel.select('settings');
+  await f.settle();
+  // Short but upright: the full-width sheet, not the landscape corner panel.
+  assert.equal($('#gev-voice-panel').style.width, `${390 - 16}px`);
+});
+
 test('reaching for a dock wing minimizes a centred chat or voice panel', async (t) => {
   const f = mounted(t, { view: true });
   await f.settle();

@@ -17,7 +17,13 @@ test('phone presentation follows shell state and accounts for both landscape not
     css,
     /body\.mobile-shell \{[^}]*--mobile-tab-space: calc\(var\(--mobile-tab-height\) \+ var\(--mobile-bottom-inset\)\)/,
   );
-  assert.match(css, /@media \(max-height: 520px\)/);
+  // Short phones get the landscape sizing only when they are landscape: a
+  // short portrait viewport (390x500) keeps the portrait shell.
+  assert.match(
+    css,
+    /@media \(max-height: 520px\) and \(orientation: landscape\)/,
+  );
+  assert.doesNotMatch(css, /@media \(max-height: 520px\) \{/);
   assert.match(css, /--mobile-tab-height: 48px/);
   assert.doesNotMatch(css, /@media \(max-width:/);
 });
