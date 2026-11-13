@@ -7,8 +7,9 @@
  * vendors the records for the models among them that the CCTV Camera Database
  * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) covers —
  * Motorola Solutions Vigilant, Genetec AutoVu, Axis, Verkada and Bosch MIC,
- * which resolve 459 of those cameras — and resolves a camera's `model` (with
- * its `manufacturer`) through the CCTV layer's matcher. The hourly extract the
+ * which resolve 408 of those cameras (excluding unversioned SharpV tags) —
+ * and resolves a camera's `model` (with its `manufacturer`) through the CCTV
+ * layer's matcher. The hourly extract the
  * layer reads by default does not publish `model` yet, so today only an
  * Overpass-backed source shows these specs. Flock Safety publishes no
  * datasheet resolution, so Flock models stay unresolved; an unknown model
@@ -254,4 +255,16 @@ const RECORDS = [
  * @param {string|null} [manufacturer] - The OSM `manufacturer` tag.
  * @returns {Object|null} The verbatim spec record, or null when unknown.
  */
-export const lookupAlprModelSpec = createModelSpecLookup(RECORDS);
+const lookupDatasheetSpec = createModelSpecLookup(RECORDS);
+
+export function lookupAlprModelSpec(model, manufacturer) {
+  const spec = lookupDatasheetSpec(model, manufacturer);
+  // The dataset's unversioned SharpV label is tied to G3 hardware, but OSM
+  // tags may name G1 or G2. Require an explicit G3 or a G3 part number.
+  if (
+    spec?.id === 'genetec-autovu-sharpv' &&
+    !/\bg3\b/i.test(String(model || ''))
+  )
+    return null;
+  return spec;
+}

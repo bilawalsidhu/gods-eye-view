@@ -16,7 +16,10 @@ test('the model tags mappers write resolve to their datasheet record', () => {
     ['L5F', 'Motorola Solutions', 'motorola-solutions-l5f'],
     ['L6D', 'Motorola Solutions', 'motorola-solutions-l6d'],
     ['L6Q', null, 'motorola-solutions-l6q'],
-    ['AutoVu SharpV', 'Genetec', 'genetec-autovu-sharpv'],
+    ['AutoVu SharpV G3', 'Genetec', 'genetec-autovu-sharpv'],
+    ['AU-V-WS850-LC-G3-000', 'Genetec', 'genetec-autovu-sharpv'],
+    ['AutoVu SharpV G2', 'Genetec', 'genetec-autovu-sharpv-g2'],
+    ['AutoVu SharpV G1', 'Genetec', 'genetec-autovu-sharpv-g2'],
     ['Q1700-LE', 'Axis Communications', 'axis-q1700-le'],
     ['Q1800-LE', 'Axis Communications', 'axis-q1800-le'],
     ['CP63-E', 'Verkada Inc.', 'verkada-cp63-e'],
@@ -42,6 +45,9 @@ test('unknown, mis-attributed or partial models stay unresolved', () => {
     ['Q1800', 'Axis Communications'],
     // Without a maker, a code-less product name is never trusted.
     ['AutoVu SharpV', null],
+    ['AutoVu SharpV', 'Genetec'],
+    ['AutoVu SharpV HD', 'Genetec'],
+    ['Genetec AutoVu SharpV', 'Genetec'],
     ['UnicamVELOCITY3', null],
     [null, 'Motorola Solutions'],
   ])
@@ -97,4 +103,18 @@ test('the card adds the datasheet line only for a resolved model', () => {
     OSM,
   );
   assert.ok(unknown.every((line) => !/FALCON|SYSTEM|SPEC/.test(line)));
+});
+
+test('unversioned SharpV does not display G3 specs on an ALPR card', () => {
+  const ambiguous = alprLabelDetails(
+    { manufacturer: 'Genetec', model: 'AutoVu SharpV' },
+    OSM,
+  );
+  assert.deepEqual(ambiguous, ['OSM MAPPED', 'GENETEC', 'PUBLIC MAP DATA']);
+
+  const g3 = alprLabelDetails(
+    { manufacturer: 'Genetec', model: 'AutoVu SharpV G3' },
+    OSM,
+  );
+  assert.ok(g3.includes('SPEC GENETEC AUTOVU SHARPV · 1920X1200 · IR'));
 });
