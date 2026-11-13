@@ -205,6 +205,21 @@ test('no Sun direction means no re-trace rather than a wrong frame', async () =>
   assert.equal(await layer.retrace(), false);
 });
 
+test('the row keeps naming the internal field until a Sun frame lets T96 draw', async () => {
+  // The feed can name T96 before Cesium has a Sun direction. The filaments are
+  // still the IGRF-only ones from init, so the row must not claim T96 yet.
+  const { layer } = harness([t96State]);
+  await layer.init(null, { cesium });
+  await layer.update(null, {});
+  const waiting = layer.getStats();
+  assert.equal(waiting.externalModel, null);
+  assert.doesNotMatch(waiting.source, /T96/);
+  await layer.update(null, { sunDirection: SUN });
+  const traced = layer.getStats();
+  assert.equal(traced.externalModel, 't96');
+  assert.match(traced.source, /T96/);
+});
+
 /** Record what each re-trace returned, so a test can tell work from a no-op. */
 function recordRetraces(layer) {
   const results = [];
