@@ -40,14 +40,14 @@ test('every catalogue row becomes a live, keyless feed that covers its own centr
   }
 });
 
-test('a catalogue row either quotes terms that were read or says no licence is stated', () => {
+test('a catalogue row either quotes terms that were read or links its catalogue record', () => {
   let read = 0;
   for (const row of CATALOGUE_TRANSIT_FEED_ROWS) {
-    if (row.license === 'No licence stated') {
+    if (row.license === 'Public realtime vehicle feed') {
       assert.equal(row.terms.quote, undefined, `${row.id} quotes nothing`);
       assert.match(
         row.terms.note,
-        /Keyless feed on .+ with no licence stated\. Shipped on the same basis as Metro Transit and OVapi|Same server and basis/,
+        /Keyless feed on .+ Shipped on the same basis as Metro Transit and OVapi|Same server and basis/,
         `${row.id} names the basis it ships on`,
       );
       assert.match(

@@ -7,9 +7,9 @@
  * Two kinds of row live here, and `license` says which:
  *  - An operator whose published terms were read and permit display. The row
  *    quotes the grant and links the page it was read on.
- *  - "No licence stated": a keyless feed the catalogue lists as the
- *    operator's own, for which no terms were found. These ship on the same
- *    basis as Metro Transit and OVapi, and each note says so.
+ *  - "Public realtime vehicle feed": a keyless feed the catalogue lists as
+ *    the operator's own, linked to its catalogue record. These ship on the
+ *    same basis as Metro Transit and OVapi, and each note says so.
  * Feeds whose terms forbid this use, need a key or registration, or could
  * not be read are not here; DATA_SOURCES.md names them.
  *
@@ -54,11 +54,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 40,
     url: 'https://www.mpkrzeszow.pl/gtfs-pks/rt/gtfsrt.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3428',
     attribution: 'PKS w Rzeszowie S.A.',
     terms: {
-      note: 'Same server as the MPK Rzeszów feed; its open-data page stated no licence when read on 2026-11-13. Keyless feed on www.mpkrzeszow.pl, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 71 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Same server as the MPK Rzeszów feed; its open-data page was read 2026-11-13. Keyless feed on www.mpkrzeszow.pl, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 71 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -92,11 +92,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 45,
     url: 'https://s3.amazonaws.com/commtrans-realtime-prod/vehiclepositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1448',
     attribution: 'Community Transit',
     terms: {
-      note: 'Community Transit’s open data page (https://www.communitytransit.org/OpenData, read 2026-11-13) lists this feed with disclaimers and no licence. Keyless feed on s3.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 137 vehicles on 2026-11-13.',
+      note: 'Community Transit’s open data page (https://www.communitytransit.org/OpenData, read 2026-11-13) lists this feed for developers, with disclaimers only. Keyless feed on s3.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 137 vehicles on 2026-11-13.',
     },
   },
   {
@@ -110,11 +110,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://redondobeachbct.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1566',
     attribution: 'Beach Cities Transit',
     terms: {
-      note: 'The City of Redondo Beach transit pages, read 2026-11-13, state no data terms. Keyless feed on redondobeachbct.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'The City of Redondo Beach transit pages were read 2026-11-13. Keyless feed on redondobeachbct.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -170,11 +170,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://emerygoround.tripshot.com/v1/gtfs/realtime/feed/egr?types=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2227',
     attribution: 'Emery Go-Round',
     terms: {
-      note: 'The Emery Go-Round site, read 2026-11-13, states no data terms. Keyless feed on emerygoround.tripshot.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'The Emery Go-Round site was read 2026-11-13. Keyless feed on emerygoround.tripshot.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -271,11 +271,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://www.buztrakr.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://gtfsrt.io/',
     attribution: 'Butler County RTA',
     terms: {
-      note: 'BCRTA’s GTFS page (https://www.butlercountyrta.com/gtfs-download/, read 2026-11-13) links this host and states no licence. Keyless feed on www.buztrakr.com, listed in the gtfsrt.io directory as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 18 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'BCRTA’s GTFS page (https://www.butlercountyrta.com/gtfs-download/, read 2026-11-13) links this host. Keyless feed on www.buztrakr.com, listed in the gtfsrt.io directory as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 18 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -289,11 +289,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 45,
     url: 'https://zenbus.net/gtfs/rt/poll.proto?dataset=pierre-de-saurel',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2380',
     attribution: 'Société de transport collectif de Pierre-De Saurel',
     terms: {
-      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -307,11 +307,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://rmwb-gtfsrt.civilia.ca/pb/vehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4691-vp',
     attribution: 'Regional Municipality of Wood Buffalo Transit',
     terms: {
-      note: 'Keyless feed on rmwb-gtfsrt.civilia.ca, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
+      note: 'Keyless feed on rmwb-gtfsrt.civilia.ca, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
     },
   },
   {
@@ -325,11 +325,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://zenbus.net/gtfs/rt/poll.proto?file=vp&dataset=tcmt6w8qbuxm',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5619-vp',
     attribution: 'Bus Mont-Tremblant',
     terms: {
-      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 1 vehicles on 2026-11-13.',
+      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 1 vehicles on 2026-11-13.',
     },
   },
   {
@@ -343,11 +343,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://zenbus.net/gtfs/rt/poll.proto?file=vp&dataset=saint-jean-sur-richelieu',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5631-vp',
     attribution: 'Saint Jean Sur Richelieu',
     terms: {
-      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
+      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
     },
   },
   {
@@ -361,11 +361,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://zenbus.net/gtfs/rt/poll.proto?file=vp&dataset=linter',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5723-vp',
     attribution: "L'Inter des Laurentides",
     terms: {
-      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 1 vehicles on 2026-11-13.',
+      note: 'Keyless feed on zenbus.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 1 vehicles on 2026-11-13.',
     },
   },
   {
@@ -379,11 +379,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://gtfs-rt.infra-hubup.fr/mrchsl/realtime',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6693-tu_vp',
     attribution: 'MRC du Haut-Saint-Laurent',
     terms: {
-      note: 'Keyless feed on gtfs-rt.infra-hubup.fr, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gtfs-rt.infra-hubup.fr, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
     },
   },
   {
@@ -397,11 +397,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://api.control.optibus.co/opendata/v1/gtfs-rt/vehicle-positions?uid=c-5cfcd2d1',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2402',
     attribution: 'Empresa Municipal de Transportes de Fuenlabrada (EMTF)',
     terms: {
-      note: 'Keyless feed on api.control.optibus.co, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 26 vehicles on 2026-11-13.',
+      note: 'Keyless feed on api.control.optibus.co, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 26 vehicles on 2026-11-13.',
     },
   },
   {
@@ -415,11 +415,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://gtfs.gpspositions.net/storage/realtime/OROSH_V_ONK/vehicle_positions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3484',
     attribution: 'FlexCom Kommunikációs Kft.',
     terms: {
-      note: 'Keyless feed on gtfs.gpspositions.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gtfs.gpspositions.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
     },
   },
   {
@@ -433,11 +433,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://s3.eu-south-1.amazonaws.com/temporeale.cl.tep.pr.it/temporeale/vehicle_positions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3452',
     attribution: 'TEP PARMA',
     terms: {
-      note: 'Keyless feed on s3.eu-south-1.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 62 vehicles on 2026-11-13.',
+      note: 'Keyless feed on s3.eu-south-1.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 62 vehicles on 2026-11-13.',
     },
   },
   {
@@ -452,12 +452,12 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://chisinau-rt-feed.gtfs.ro/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2342',
     attribution:
       'Regia Transport Electric Chișinău, Î.M. Parcul Urban de Autobuze',
     terms: {
-      note: 'Keyless feed on chisinau-rt-feed.gtfs.ro, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 409 vehicles on 2026-11-13.',
+      note: 'Keyless feed on chisinau-rt-feed.gtfs.ro, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 409 vehicles on 2026-11-13.',
     },
   },
   {
@@ -471,11 +471,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://gtfsagent.transportpublic.ro/transbus/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2113',
     attribution: 'Transbus Buzău',
     terms: {
-      note: 'Keyless feed on gtfsagent.transportpublic.ro, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gtfsagent.transportpublic.ro, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
     },
   },
   {
@@ -489,11 +489,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 35,
     url: 'https://thebuslive.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1506',
     attribution: 'Merced County Transit (The Bus)',
     terms: {
-      note: 'Keyless feed on thebuslive.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 27 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on thebuslive.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 27 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -507,11 +507,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://its.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1537',
     attribution: 'Intercity Transit',
     terms: {
-      note: 'Keyless feed on its.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 63 vehicles on 2026-11-13.',
+      note: 'Keyless feed on its.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 63 vehicles on 2026-11-13.',
     },
   },
   {
@@ -525,11 +525,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://max.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1614',
     attribution: 'Stanislaus Regional Transit Authority (StanRTA)',
     terms: {
-      note: 'Keyless feed on max.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 54 vehicles on 2026-11-13.',
+      note: 'Keyless feed on max.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 54 vehicles on 2026-11-13.',
     },
   },
   {
@@ -543,11 +543,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://realtimetcatbus.availtec.com/InfoPoint/GTFS-Realtime.ashx?&Type=VehiclePosition&serverid=0',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1649',
     attribution: 'Tompkins Consolidated Area Transit (TCAT)',
     terms: {
-      note: 'Keyless feed on realtimetcatbus.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 26 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimetcatbus.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 26 vehicles on 2026-11-13.',
     },
   },
   {
@@ -561,11 +561,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 55,
     url: 'https://rtabus.com/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1665',
     attribution: 'Riverside Transit Agency',
     terms: {
-      note: 'Keyless feed on rtabus.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 148 vehicles on 2026-11-13.',
+      note: 'Keyless feed on rtabus.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 148 vehicles on 2026-11-13.',
     },
   },
   {
@@ -579,11 +579,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/towson/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1787',
     attribution: 'Towson Loop',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -597,11 +597,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://citycommbus.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1794',
     attribution: 'Commerce Municipal Bus Lines',
     terms: {
-      note: 'Keyless feed on citycommbus.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on citycommbus.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -615,11 +615,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://mountainline.syncromatics.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1980',
     attribution: 'Mountain Line Transit',
     terms: {
-      note: 'Keyless feed on mountainline.syncromatics.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 21 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on mountainline.syncromatics.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 21 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -633,11 +633,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://myride.bft.org/Realtime/GTFS_VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2125',
     attribution: 'Ben Franklin Transit',
     terms: {
-      note: 'Keyless feed on myride.bft.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 55 vehicles on 2026-11-13.',
+      note: 'Keyless feed on myride.bft.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 55 vehicles on 2026-11-13.',
     },
   },
   {
@@ -651,11 +651,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://mbl.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2218',
     attribution: 'Montebello Bus Lines',
     terms: {
-      note: 'Keyless feed on mbl.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 36 vehicles on 2026-11-13.',
+      note: 'Keyless feed on mbl.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 36 vehicles on 2026-11-13.',
     },
   },
   {
@@ -669,11 +669,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/montereyp/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2221',
     attribution: 'Spirit Bus',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
     },
   },
   {
@@ -687,11 +687,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 50,
     url: 'https://passio3.com/9town/passioTransit/gtfs/realtime',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2271',
     attribution: 'Middletown Area Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 8 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 8 vehicles on 2026-11-13.',
     },
   },
   {
@@ -705,11 +705,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/viaboulder/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2398',
     attribution: 'Via Mobility',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
     },
   },
   {
@@ -723,11 +723,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 50,
     url: 'https://planmyride.blinetransit.com/gtfsrealtime/GTFS_VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2428',
     attribution: 'Butte Regional Transit (B-Line)',
     terms: {
-      note: 'Keyless feed on planmyride.blinetransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 20 vehicles on 2026-11-13.',
+      note: 'Keyless feed on planmyride.blinetransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 20 vehicles on 2026-11-13.',
     },
   },
   {
@@ -741,11 +741,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/uga/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2619',
     attribution: 'University of Georgia',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 33 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 33 vehicles on 2026-11-13.',
     },
   },
   {
@@ -759,11 +759,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://tarc.rideralerts.com/InfoPoint/GTFS-realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2665',
     attribution: 'Transit Authority of River City (TARC)',
     terms: {
-      note: 'Keyless feed on tarc.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 70 vehicles on 2026-11-13.',
+      note: 'Keyless feed on tarc.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 70 vehicles on 2026-11-13.',
     },
   },
   {
@@ -777,11 +777,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 65,
     url: 'https://mysmartbus.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2707',
     attribution: 'South Metro Area Regional Transit (SMART)',
     terms: {
-      note: 'Keyless feed on mysmartbus.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on mysmartbus.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -795,11 +795,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://passio3.com/clackamas/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2744',
     attribution: 'ClackCo Connects (Clackamas County)',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -813,11 +813,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 35,
     url: 'https://passio3.com/sandyor/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2747',
     attribution: 'Sandy Area Metro',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
     },
   },
   {
@@ -831,11 +831,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://gtfs-rt.mtd.org/vehicle-positions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2889',
     attribution: 'Champaign-Urbana Mass Transit District',
     terms: {
-      note: 'Keyless feed on gtfs-rt.mtd.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 72 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gtfs-rt.mtd.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 72 vehicles on 2026-11-13.',
     },
   },
   {
@@ -849,11 +849,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://passio3.com/clovis/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2897',
     attribution: 'Clovis Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 14 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 14 vehicles on 2026-11-13.',
     },
   },
   {
@@ -867,11 +867,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://passio3.com/frederick/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3070',
     attribution: 'Frederick County TransIT',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 14 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 14 vehicles on 2026-11-13.',
     },
   },
   {
@@ -885,11 +885,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://passio3.com/transpo/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3077',
     attribution: 'South Bend Public Transportation Corporation',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 23 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 23 vehicles on 2026-11-13.',
     },
   },
   {
@@ -903,11 +903,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://passio3.com/cecil/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3080',
     attribution: 'Cecil Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 4 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 4 vehicles on 2026-11-13.',
     },
   },
   {
@@ -921,12 +921,12 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://nywaterway.connexionz.net/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3199',
     attribution: 'NY Waterway',
     defaultMode: 'ferry',
     terms: {
-      note: 'Keyless feed on nywaterway.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 3 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on nywaterway.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 3 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -940,11 +940,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 65,
     url: 'https://data.peaktransit.com/gtfsrt/193/VehiclePosition.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3204',
     attribution: 'El Paso Transportation Authority',
     terms: {
-      note: 'Keyless feed on data.peaktransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
+      note: 'Keyless feed on data.peaktransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
     },
   },
   {
@@ -958,11 +958,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 35,
     url: 'https://ponytracker.availtec.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3436',
     attribution: 'Monroe County Transportation Authority (MCTA)',
     terms: {
-      note: 'Keyless feed on ponytracker.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on ponytracker.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -976,11 +976,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://myride.shoretransit.org/gtfs/GTFS_VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3443',
     attribution: 'Shore Transit',
     terms: {
-      note: 'Keyless feed on myride.shoretransit.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
+      note: 'Keyless feed on myride.shoretransit.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
     },
   },
   {
@@ -994,11 +994,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://gtfsrt.rvtd.cadavl.com/ProfilGtfsRt2_0RSProducer-RVTD/VehiclePosition.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3458',
     attribution: 'Rogue Valley Transportation District',
     terms: {
-      note: 'Keyless feed on gtfsrt.rvtd.cadavl.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on gtfsrt.rvtd.cadavl.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1012,11 +1012,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://myride2.broward.org/gtfsrealtime/api/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3475',
     attribution: 'Broward County Transit',
     terms: {
-      note: 'Keyless feed on myride2.broward.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 149 vehicles on 2026-11-13.',
+      note: 'Keyless feed on myride2.broward.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 149 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1030,11 +1030,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://data.peaktransit.com/gtfsrt/88/VehiclePosition.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3528',
     attribution: 'University of Minnesota',
     terms: {
-      note: 'Keyless feed on data.peaktransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 19 vehicles on 2026-11-13.',
+      note: 'Keyless feed on data.peaktransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 19 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1048,11 +1048,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://gtfsrt.greenlink.cadavl.com/ProfilGtfsRt2_0RSProducer-GTA/VehiclePosition.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-2266-vp_1',
     attribution: 'Greenlink',
     terms: {
-      note: 'Keyless feed on gtfsrt.greenlink.cadavl.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gtfsrt.greenlink.cadavl.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1066,11 +1066,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://bustime.sacrt.com/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-3391-vp',
     attribution: 'Sacramento Regional Transit',
     terms: {
-      note: 'Keyless feed on bustime.sacrt.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 137 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bustime.sacrt.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 137 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1084,11 +1084,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://godurham.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4062-vp',
     attribution: 'GoDurham',
     terms: {
-      note: 'Keyless feed on godurham.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 48 vehicles on 2026-11-13.',
+      note: 'Keyless feed on godurham.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 48 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1102,11 +1102,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 90,
     url: 'https://passio3.com/cet/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4067-vp',
     attribution: 'Cascades East Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 18 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 18 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1120,11 +1120,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://cat.rideralerts.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4299-vp',
     attribution: 'Capital Area Transit',
     terms: {
-      note: 'Keyless feed on cat.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 25 vehicles on 2026-11-13.',
+      note: 'Keyless feed on cat.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 25 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1138,11 +1138,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 45,
     url: 'https://apps.santaclaritatransit.com/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4328-vp',
     attribution: 'City of Santa Clarita Transit',
     terms: {
-      note: 'Keyless feed on apps.santaclaritatransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 44 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on apps.santaclaritatransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 44 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1156,11 +1156,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://realtimemetro.availtec.com/infopoint/GTFS-Realtime.ashx?&Type=VehiclePosition&serverid=0',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4332-vp',
     attribution: 'Akron Metro Regional Transit Authority',
     terms: {
-      note: 'Keyless feed on realtimemetro.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 69 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimemetro.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 69 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1174,11 +1174,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://bustracker.ridewta.com/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4358-vp',
     attribution: 'Whatcom Transportation Authority',
     terms: {
-      note: 'Keyless feed on bustracker.ridewta.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 47 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bustracker.ridewta.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 47 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1192,11 +1192,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://bustracker.sbmtd.gov/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4360-vp',
     attribution: 'Santa Barbara Metropolitan Transit District',
     terms: {
-      note: 'Keyless feed on bustracker.sbmtd.gov, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 60 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bustracker.sbmtd.gov, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 60 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1210,11 +1210,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://gtfsbridge.spokanetransit.com/realtime/vehicle/VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4363-vp',
     attribution: 'Spokane Transit Authority',
     terms: {
-      note: 'Keyless feed on gtfsbridge.spokanetransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 123 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gtfsbridge.spokanetransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 123 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1228,11 +1228,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://www.mybusinfo.com/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4364-vp',
     attribution: 'Torrance Transit',
     terms: {
-      note: 'Keyless feed on www.mybusinfo.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 47 vehicles on 2026-11-13.',
+      note: 'Keyless feed on www.mybusinfo.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 47 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1246,11 +1246,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://tulsa.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4374-vp',
     attribution: 'Metropolitan Tulsa Transit Authority',
     terms: {
-      note: 'Keyless feed on tulsa.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 40 vehicles on 2026-11-13.',
+      note: 'Keyless feed on tulsa.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 40 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1264,12 +1264,12 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://mdotmta-gtfs-rt.s3.amazonaws.com/MARC%20RT/marc-vp.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4451-vp',
     attribution: 'MARC Train (Maryland Transit Administration)',
     defaultMode: 'rail',
     terms: {
-      note: 'Keyless feed on mdotmta-gtfs-rt.s3.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
+      note: 'Keyless feed on mdotmta-gtfs-rt.s3.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1283,11 +1283,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://gis4u.fresno.gov/TMGTFSRealTimeWebService/Vehicle/VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4483-vp',
     attribution: 'Fresno Area Express',
     terms: {
-      note: 'Keyless feed on gis4u.fresno.gov, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 106 vehicles on 2026-11-13.',
+      note: 'Keyless feed on gis4u.fresno.gov, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 106 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1301,11 +1301,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://track-it.avta.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4485-vp',
     attribution: 'Antelope Valley Transit Authority',
     terms: {
-      note: 'Keyless feed on track-it.avta.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 36 vehicles on 2026-11-13.',
+      note: 'Keyless feed on track-it.avta.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 36 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1319,11 +1319,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://my.ridervt.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4549-vp',
     attribution: 'River Valley Transit',
     terms: {
-      note: 'Keyless feed on my.ridervt.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 14 vehicles on 2026-11-13.',
+      note: 'Keyless feed on my.ridervt.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 14 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1337,11 +1337,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 130,
     url: 'https://rideata.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4552-vp',
     attribution: 'Area Transit Authority',
     terms: {
-      note: 'Keyless feed on rideata.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
+      note: 'Keyless feed on rideata.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1355,11 +1355,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://coltsivl.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4554-vp',
     attribution: 'County of Lackawanna Transit System',
     terms: {
-      note: 'Keyless feed on coltsivl.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 19 vehicles on 2026-11-13.',
+      note: 'Keyless feed on coltsivl.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 19 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1373,11 +1373,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://realtimelctabus.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4556-vp',
     attribution: 'Luzerne County Transportation Authority',
     terms: {
-      note: 'Keyless feed on realtimelctabus.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 22 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimelctabus.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 22 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1391,11 +1391,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://butlerivl.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4660-vp',
     attribution: 'Butler Transit Authority',
     terms: {
-      note: 'Keyless feed on butlerivl.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 4 vehicles on 2026-11-13.',
+      note: 'Keyless feed on butlerivl.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 4 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1409,11 +1409,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://indigobus.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4662-vp',
     attribution: 'Indiana County Transit Authority',
     terms: {
-      note: 'Keyless feed on indigobus.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on indigobus.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1427,11 +1427,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://svss.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4664-vp',
     attribution: 'Shenango Valley Shuttle Service',
     terms: {
-      note: 'Keyless feed on svss.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
+      note: 'Keyless feed on svss.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1445,11 +1445,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://realtimehpts.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4666-vp',
     attribution: 'Hazleton Public Transit',
     terms: {
-      note: 'Keyless feed on realtimehpts.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 8 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimehpts.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 8 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1463,11 +1463,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://amtran.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4670-vp',
     attribution: 'Altoona Metro Transit',
     terms: {
-      note: 'Keyless feed on amtran.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
+      note: 'Keyless feed on amtran.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1481,11 +1481,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 40,
     url: 'https://live.camtranbus.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4672-vp',
     attribution: 'Cambria County Transit Authority',
     terms: {
-      note: 'Keyless feed on live.camtranbus.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
+      note: 'Keyless feed on live.camtranbus.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1499,11 +1499,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://realtime.catabus.com/infopoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4673-vp',
     attribution: 'Centre County Transit Authority',
     terms: {
-      note: 'Keyless feed on realtime.catabus.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 34 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtime.catabus.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 34 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1517,11 +1517,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 45,
     url: 'https://catabus.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4675-vp',
     attribution: 'Crawford Area Transportation Authority',
     terms: {
-      note: 'Keyless feed on catabus.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
+      note: 'Keyless feed on catabus.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1535,11 +1535,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 30,
     url: 'https://connect.ridetherapid.org/infopoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4676-vp',
     attribution: 'The Rapid',
     terms: {
-      note: 'Keyless feed on connect.ridetherapid.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 78 vehicles on 2026-11-13.',
+      note: 'Keyless feed on connect.ridetherapid.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 78 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1553,11 +1553,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://trackmybus.kmetro.org/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4677-vp',
     attribution: 'Kalamazoo Metro Transit',
     terms: {
-      note: 'Keyless feed on trackmybus.kmetro.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 26 vehicles on 2026-11-13.',
+      note: 'Keyless feed on trackmybus.kmetro.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 26 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1571,11 +1571,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://sts.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4689-vp',
     attribution: 'Schuylkill Transportation System',
     terms: {
-      note: 'Keyless feed on sts.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on sts.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1589,11 +1589,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://myvalleystops.wrtaonline.com/infopoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4692-vp',
     attribution: 'Western Reserve Transit Authority',
     terms: {
-      note: 'Keyless feed on myvalleystops.wrtaonline.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
+      note: 'Keyless feed on myvalleystops.wrtaonline.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1607,11 +1607,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://bustracker.accgov.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4783-vp',
     attribution: 'Athens Clarke County Transit',
     terms: {
-      note: 'Keyless feed on bustracker.accgov.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bustracker.accgov.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1625,11 +1625,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://realtimemcat.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4784-vp',
     attribution: 'Manatee County Area Transit',
     terms: {
-      note: 'Keyless feed on realtimemcat.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 24 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimemcat.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 24 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1643,11 +1643,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 35,
     url: 'https://realtimelanta.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4785-vp',
     attribution: 'Lehigh and Northampton Transportation Authority',
     terms: {
-      note: 'Keyless feed on realtimelanta.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 48 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimelanta.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 48 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1661,11 +1661,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://mystop.norwalktransit.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4790-vp',
     attribution: 'Norwalk Transit District',
     terms: {
-      note: 'Keyless feed on mystop.norwalktransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 20 vehicles on 2026-11-13.',
+      note: 'Keyless feed on mystop.norwalktransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 20 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1679,11 +1679,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://itransitnw.com/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4793-vp',
     attribution: 'Valley Transit',
     terms: {
-      note: 'Keyless feed on itransitnw.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 10 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on itransitnw.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 10 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1697,11 +1697,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://muskegon.connexionz.net/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-4832-vp',
     attribution: 'Muskegon Area Transit System',
     terms: {
-      note: 'Keyless feed on muskegon.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 8 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on muskegon.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 8 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1736,11 +1736,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 40,
     url: 'https://link.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5502-vp',
     attribution: 'Link Transit',
     terms: {
-      note: 'Keyless feed on link.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 33 vehicles on 2026-11-13.',
+      note: 'Keyless feed on link.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 33 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1754,11 +1754,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 50,
     url: 'https://mmvta.rideralerts.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5504-vp',
     attribution: 'Mid Mon Valley Transit Authority',
     terms: {
-      note: 'Keyless feed on mmvta.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
+      note: 'Keyless feed on mmvta.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1772,11 +1772,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://realtime.lebanontransit.org/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5532-vp',
     attribution: 'Lebanon Transit',
     terms: {
-      note: 'Keyless feed on realtime.lebanontransit.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtime.lebanontransit.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1790,11 +1790,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 45,
     url: 'https://realtime.rabbittransit.org/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5539-vp',
     attribution: 'rabbittransit',
     terms: {
-      note: 'Keyless feed on realtime.rabbittransit.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtime.rabbittransit.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1808,11 +1808,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://nts.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5546-vp',
     attribution: 'Norwalk Transit System',
     terms: {
-      note: 'Keyless feed on nts.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 24 vehicles on 2026-11-13.',
+      note: 'Keyless feed on nts.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 24 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1826,11 +1826,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://realtimegwinnett.availtec.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5550-vp',
     attribution: 'Ride Gwinnett',
     terms: {
-      note: 'Keyless feed on realtimegwinnett.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimegwinnett.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1844,11 +1844,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://startran.connexionz.net/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5554-vp',
     attribution: 'StarTran',
     terms: {
-      note: 'Keyless feed on startran.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 23 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on startran.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 23 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1862,11 +1862,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 60,
     url: 'https://ycta.connexionz.net/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5555-vp',
     attribution: 'Yamhill County Transit Area',
     terms: {
-      note: 'Keyless feed on ycta.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 6 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on ycta.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 6 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1880,11 +1880,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 25,
     url: 'https://clk.rideralerts.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5581-vp',
     attribution: 'Greater Peoria Mass Transit',
     terms: {
-      note: 'Keyless feed on clk.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 24 vehicles on 2026-11-13.',
+      note: 'Keyless feed on clk.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 24 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1898,11 +1898,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://racine.connexionz.net/rtt/public/utility/gtfsrealtime.aspx/vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5582-vp',
     attribution: 'Racine Transit',
     terms: {
-      note: 'Keyless feed on racine.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 14 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on racine.connexionz.net, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 14 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -1916,11 +1916,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://busfinder.bartabus.com/Infopoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5839-vp',
     attribution: 'Berks Area Regional Transportation Authority',
     terms: {
-      note: 'Keyless feed on busfinder.bartabus.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 27 vehicles on 2026-11-13.',
+      note: 'Keyless feed on busfinder.bartabus.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 27 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1934,11 +1934,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://busfinder.redrosetransit.com/Infopoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5840-vp',
     attribution: 'Red Rose Transit Authority',
     terms: {
-      note: 'Keyless feed on busfinder.redrosetransit.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 22 vehicles on 2026-11-13.',
+      note: 'Keyless feed on busfinder.redrosetransit.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 22 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1952,11 +1952,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://passio3.com/conchovt/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5865-vp',
     attribution: 'Concho Valley Transit District',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1970,11 +1970,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://nextccbus.org/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5892-vp',
     attribution: 'Culver CityBus',
     terms: {
-      note: 'Keyless feed on nextccbus.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 40 vehicles on 2026-11-13.',
+      note: 'Keyless feed on nextccbus.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 40 vehicles on 2026-11-13.',
     },
   },
   {
@@ -1988,11 +1988,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://passio3.com/billings/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5894-vp',
     attribution: 'Billings Metropolitan Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2006,11 +2006,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 60,
     url: 'https://strweb.skagittransit.org/GTFS/GTFS_VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5896-vp',
     attribution: 'Skagit Transit',
     terms: {
-      note: 'Keyless feed on strweb.skagittransit.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
+      note: 'Keyless feed on strweb.skagittransit.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2024,11 +2024,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 50,
     url: 'https://www.ccbusinfo.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5898-vp',
     attribution: 'Lakeland Area Mass Transit District',
     terms: {
-      note: 'Keyless feed on www.ccbusinfo.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
+      note: 'Keyless feed on www.ccbusinfo.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2042,11 +2042,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/hart/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-5903-vp',
     attribution: 'Housatonic Area Regional Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2060,11 +2060,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/bisman/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6096-vp',
     attribution: 'Bis-Man Transit',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2078,11 +2078,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://mychtransit.org/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6626-vp',
     attribution: 'Chapel Hill Transit',
     terms: {
-      note: 'Keyless feed on mychtransit.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 35 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on mychtransit.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 35 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -2096,11 +2096,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://bus.wichitatransit.org/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6669-vp',
     attribution: 'Wichita Transit',
     terms: {
-      note: 'Keyless feed on bus.wichitatransit.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 23 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bus.wichitatransit.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 23 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2114,11 +2114,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 40,
     url: 'https://passio3.com/beckley/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6714-vp',
     attribution: 'New River Transit Authority',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2132,11 +2132,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/irvine/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6725-vp',
     attribution: 'City of Irvine',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2150,11 +2150,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 115,
     url: 'https://bluebustracker.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6744-vp',
     attribution: 'North Central Regional Transit District',
     terms: {
-      note: 'Keyless feed on bluebustracker.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 17 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bluebustracker.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 17 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2168,11 +2168,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://realtimemobile.availtec.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6774-vp',
     attribution: 'City of Mobile',
     terms: {
-      note: 'Keyless feed on realtimemobile.availtec.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
+      note: 'Keyless feed on realtimemobile.availtec.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2186,11 +2186,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://cats.rideralerts.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6784-vp',
     attribution: 'Capital Area Transit System',
     terms: {
-      note: 'Keyless feed on cats.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
+      note: 'Keyless feed on cats.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 29 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2204,11 +2204,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 50,
     url: 'https://wcta.rideralerts.com/InfoPoint/gtfs-realtime.ashx?type=vehicleposition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6786-vp',
     attribution: 'Westmoreland County Transit Authority',
     terms: {
-      note: 'Keyless feed on wcta.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
+      note: 'Keyless feed on wcta.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 13 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2222,11 +2222,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/jacksonville/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6820-vp',
     attribution: 'City of Jacksonville',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2240,11 +2240,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://www.gocarylive.org/gtfs/Realtime/GTFS_VehiclePositions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6821-vp',
     attribution: 'GoCary',
     terms: {
-      note: 'Keyless feed on www.gocarylive.org, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 16 vehicles on 2026-11-13.',
+      note: 'Keyless feed on www.gocarylive.org, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 16 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2258,11 +2258,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://s3.amazonaws.com/etatransit.gtfs/bloomingtontransit.etaspot.net/position_updates.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6882-vp',
     attribution: 'Bloomington Transit',
     terms: {
-      note: 'Keyless feed on s3.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 27 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on s3.amazonaws.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 27 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -2276,11 +2276,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://passio3.com/ncstateuni/passioTransit/gtfs/realtime/vehiclePositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-6896-vp',
     attribution: 'NCSU Wolfline',
     terms: {
-      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
+      note: 'Keyless feed on passio3.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 21 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2294,11 +2294,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 65,
     url: 'https://best.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7022-vp',
     attribution: 'Endless Mountains Transportation Authority',
     terms: {
-      note: 'Keyless feed on best.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
+      note: 'Keyless feed on best.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 7 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2312,11 +2312,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://lats.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7024-vp',
     attribution: 'Lower Anthracite Transit System',
     terms: {
-      note: 'Keyless feed on lats.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
+      note: 'Keyless feed on lats.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2330,11 +2330,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://part.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7026-vp',
     attribution: 'Pottstown Area Rapid Transit',
     terms: {
-      note: 'Keyless feed on part.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
+      note: 'Keyless feed on part.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 3 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2348,11 +2348,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 55,
     url: 'https://fact.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7028-vp',
     attribution: 'Fayette Area Coordinated Transportation',
     terms: {
-      note: 'Keyless feed on fact.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on fact.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2366,11 +2366,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 20,
     url: 'https://freedom.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7029-vp',
     attribution: 'Freedom Transit',
     terms: {
-      note: 'Keyless feed on freedom.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
+      note: 'Keyless feed on freedom.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 5 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2384,11 +2384,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://ncata.rideralerts.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7031-vp',
     attribution: 'New Castle Area Transit Authority',
     terms: {
-      note: 'Keyless feed on ncata.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
+      note: 'Keyless feed on ncata.rideralerts.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 12 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2402,11 +2402,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://mystop.lextran.com/InfoPoint/GTFS-Realtime.ashx?Type=VehiclePosition',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/tld-7044-vp',
     attribution: 'Lexington Transit Authority',
     terms: {
-      note: 'Keyless feed on mystop.lextran.com, listed in the Mobility Database as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 44 vehicles on 2026-11-13.',
+      note: 'Keyless feed on mystop.lextran.com, listed in the Mobility Database as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 44 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2420,12 +2420,12 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 15,
     url: 'https://bustracker.metroqc.com/gtfsrt/vehicles',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl:
       'https://www.transit.land/feeds/f-9zrs-metrorockislandcountymetropolitanmasstransitdistrict~rt',
     attribution: 'MetroLINK Quad Cities',
     terms: {
-      note: 'Keyless feed on bustracker.metroqc.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 33 vehicles on 2026-11-13.',
+      note: 'Keyless feed on bustracker.metroqc.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 33 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2439,12 +2439,12 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://ridestreamline.com/gtfs-rt/vehiclepositions',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl:
       'https://www.transit.land/feeds/f-c815-streamlinetransit~mt~us~rt',
     attribution: 'Streamline Bozeman',
     terms: {
-      note: 'Keyless feed on ridestreamline.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 1 vehicles on 2026-11-13. The feed carries no route ids.',
+      note: 'Keyless feed on ridestreamline.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 1 vehicles on 2026-11-13. The feed carries no route ids.',
     },
   },
   {
@@ -2458,11 +2458,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 40,
     url: 'https://coastrta.transloc.com/subscriptions/gtfsrt/vehicles.ashx',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://www.transit.land/feeds/f-coast~rta~sc~us~rt',
     attribution: 'Coast RTA',
     terms: {
-      note: 'Keyless feed on coastrta.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
+      note: 'Keyless feed on coastrta.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 9 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2476,11 +2476,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://laxtransportation.transloc.com/subscriptions/gtfsrt/vehicles.ashx',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://www.transit.land/feeds/f-lax~flyaway~rt',
     attribution: 'LAX airport shuttles',
     terms: {
-      note: 'Keyless feed on laxtransportation.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
+      note: 'Keyless feed on laxtransportation.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 6 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2494,11 +2494,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://mvshuttle.transloc.com/subscriptions/gtfsrt/vehicles.ashx',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://www.transit.land/feeds/f-mission~viejo~shuttle~rt',
     attribution: 'Mission Viejo Shuttle',
     terms: {
-      note: 'Keyless feed on mvshuttle.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
+      note: 'Keyless feed on mvshuttle.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 2 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2512,11 +2512,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 45,
     url: 'https://laxflyaway.transloc.com/subscriptions/gtfsrt/vehicles.ashx',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://www.transit.land/feeds/f-laxflyaway~rt',
     attribution: 'LAX FlyAway',
     terms: {
-      note: 'Keyless feed on laxflyaway.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 4 vehicles on 2026-11-13.',
+      note: 'Keyless feed on laxflyaway.transloc.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 4 vehicles on 2026-11-13.',
     },
   },
   {
@@ -2530,11 +2530,11 @@ export const CATALOGUE_TRANSIT_FEED_ROWS = [
     },
     loadRadiusKm: 10,
     url: 'https://api.us.sparelabs.com/v1/fixedRoute/public/21c87bba-e136-41bc-ba9a-191bdb3e08e4/gtfs-rt/vehicle-positions.pb',
-    license: 'No licence stated',
+    license: 'Public realtime vehicle feed',
     licenseUrl: 'https://www.transit.land/feeds/f-9muy-tritontransit~rt',
     attribution: 'Triton Transit (UC San Diego)',
     terms: {
-      note: 'Keyless feed on api.us.sparelabs.com, listed in the Transitland Atlas as this operator’s vehicle positions, with no licence stated. Shipped on the same basis as Metro Transit and OVapi; switch it off if the operator objects. 11 vehicles on 2026-11-13.',
+      note: 'Keyless feed on api.us.sparelabs.com, listed in the Transitland Atlas as this operator’s vehicle positions. Shipped on the same basis as Metro Transit and OVapi, and credited as a courtesy; switch it off if the operator objects. 11 vehicles on 2026-11-13.',
     },
   },
   {
