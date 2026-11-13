@@ -2213,7 +2213,8 @@ covers entry, camera, zoom, look, HUD and exit.
 An application can add its own first-person subjects beside the aircraft,
 vessel and satellite: `services.cockpitSubjects` to `createApplicationControls`,
 a list of subject providers (`src/cockpitSubjectProviders.js`, checked once by
-the coordinator; a malformed one is left out with a warning). A provider names
+the coordinator; a malformed one, or one with a member that throws when read,
+is left out with a warning and the rest are kept). A provider names
 its layer, an entry face and labels in the page's language, and supplies four
 operations: `candidate()` (what entry would ride now), `hold(id)`,
 `read(nowMs, ctx)` (a camera frame each update) and `hud(frame, ctx)` (a HUD

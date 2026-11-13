@@ -604,6 +604,16 @@ test('the view ends when the frame stops coming, and gives the subject back', as
   for (const ending of [
     null,
     { latitude: LAT, longitude: LON, id: 'other', eye: { upM: 2 } },
+    // A frame whose getter throws runs provider code: as a malformed frame.
+    Object.defineProperty(
+      { id: 'a1', longitude: LON, eye: { upM: 2 } },
+      'latitude',
+      {
+        get() {
+          throw new Error('latitude unavailable');
+        },
+      },
+    ),
   ]) {
     const ride = subjectProvider();
     const { cockpit } = fixture(t, { providers: [ride] });
@@ -932,6 +942,17 @@ test('a read that throws ends the view once; a hud that throws keeps the last', 
   cockpit.enter();
   await settle();
   ride.subject.hud = new Error('hud failed');
+  clock.advance(200);
+  cockpit.update();
+  await settle();
+  assert.equal(cockpit.active, true);
+  assert.equal($('#cockpit-callsign').textContent, HUD.title, 'last view kept');
+  // So does a view whose getter throws when read.
+  ride.subject.hud = Object.defineProperty({ ...HUD }, 'title', {
+    get() {
+      throw new Error('title unavailable');
+    },
+  });
   clock.advance(200);
   cockpit.update();
   await settle();

@@ -104,18 +104,46 @@ function labelsOf(raw) {
     : null;
 }
 
+/** A provider's look, normalized, or null without an aheadLabel. */
+function lookOf(raw) {
+  if (!isObject(raw)) return null;
+  const aheadLabel = cockpitSubjectText(raw.aheadLabel, 64);
+  if (!aheadLabel) return null;
+  return Object.freeze({
+    restPitchDeg: finite(raw.restPitchDeg)
+      ? clamp(raw.restPitchDeg, -90, 90)
+      : 0,
+    aheadLabel,
+  });
+}
+
 /**
- * A provider's worded member as it reads now: the value, or what the
- * function it is returns when called on `provider` (so it can follow the
- * page's language); undefined when that throws.
+ * A provider's worded member `key` as it reads now, normalized: the value,
+ * or what the function it is returns when called on `provider` (so it can
+ * follow the page's language); null when it is malformed or a read throws.
+ * Reading the member, and reading what it gives, runs provider code too (a
+ * getter), so both are guarded as the call is.
  */
-function wordedNow(value, provider) {
-  if (typeof value !== 'function') return value;
+function wordedNow(provider, key, normalize) {
   try {
-    return value.call(provider);
+    const value = provider[key];
+    return (
+      normalize(typeof value === 'function' ? value.call(provider) : value) ??
+      null
+    );
   } catch {
-    return undefined;
+    return null;
   }
+}
+
+/** A provider's name in a warning: its kind, cut, or its place in the list. */
+function providerName(provider, order) {
+  try {
+    if (typeof provider?.kind === 'string') return provider.kind.slice(0, 32);
+  } catch {
+    // A kind getter that throws gives no name.
+  }
+  return `#${order}`;
 }
 
 /** Why `provider` cannot be kept, or null. */
@@ -137,15 +165,10 @@ function refusal(provider, kinds) {
     typeof provider.isEntryAllowed !== 'function'
   )
     return 'isEntryAllowed is not a function';
-  if (!faceOf(wordedNow(provider.entryFace, provider)))
-    return 'malformed entry face';
-  if (!labelsOf(wordedNow(provider.labels, provider)))
+  if (!wordedNow(provider, 'entryFace', faceOf)) return 'malformed entry face';
+  if (!wordedNow(provider, 'labels', labelsOf))
     return 'labels need view, exit and exitText';
-  const look = wordedNow(provider.look, provider);
-  if (
-    provider.look != null &&
-    (!isObject(look) || !cockpitSubjectText(look.aheadLabel, 64))
-  )
+  if (provider.look != null && !wordedNow(provider, 'look', lookOf))
     return 'look needs an aheadLabel';
   return null;
 }
@@ -184,7 +207,8 @@ function refusal(provider, kinds) {
  *   once that promise settles; `release` must therefore be harmless for a
  *   subject it does not hold or already gave back.
  *
- * A provider that is not so is left out with one warning naming it.
+ * A provider that is not so, or whose members throw when read (a getter), is
+ * left out with one warning naming it; the providers after it are kept.
  * @param {unknown} list
  * @param {{warn?: (message: string) => void}} [options]
  * @returns {ReadonlyArray<object>}
@@ -196,77 +220,78 @@ export function cockpitSubjectProviders(
   const kept = [];
   const kinds = new Set();
   (Array.isArray(list) ? list : []).forEach((provider, order) => {
-    const reason = refusal(provider, kinds);
+    let reason;
+    let copy = null;
+    try {
+      reason = refusal(provider, kinds);
+      if (!reason) copy = keptProvider(provider, order);
+    } catch {
+      reason = 'a member threw when read';
+    }
     if (reason) {
-      const name =
-        typeof provider?.kind === 'string'
-          ? provider.kind.slice(0, 32)
-          : `#${order}`;
-      warn(`[Cockpit] subject provider ${name} left out: ${reason}`);
+      warn(
+        `[Cockpit] subject provider ${providerName(provider, order)} left out: ${reason}`,
+      );
       return;
     }
-    kinds.add(provider.kind);
-    // Worded members are read again on each use (see above); the last good
-    // read stands in for a bad one.
-    const worded = (value) => wordedNow(value, provider);
-    let face = faceOf(worded(provider.entryFace));
-    let labels = labelsOf(worded(provider.labels));
-    const firstLook = worded(provider.look);
-    const lookOf = (raw) =>
-      Object.freeze({
-        restPitchDeg: finite(firstLook.restPitchDeg)
-          ? clamp(firstLook.restPitchDeg, -90, 90)
-          : 0,
-        aheadLabel: cockpitSubjectText(raw.aheadLabel, 64),
-      });
-    let look = isObject(firstLook) ? lookOf(firstLook) : null;
-    kept.push(
-      Object.freeze({
-        kind: provider.kind,
-        layerId: provider.layerId,
-        priority: finite(provider.priority) ? provider.priority : 0,
-        order,
-        get entryFace() {
-          face = faceOf(worded(provider.entryFace)) ?? face;
-          return face;
-        },
-        get labels() {
-          labels = labelsOf(worded(provider.labels)) ?? labels;
-          return labels;
-        },
-        get look() {
-          if (!look) return null;
-          const raw = worded(provider.look);
-          if (isObject(raw) && cockpitSubjectText(raw.aheadLabel, 64))
-            look = lookOf(raw);
-          return look;
-        },
-        cameraIntervalMs:
-          finite(provider.cameraIntervalMs) &&
-          provider.cameraIntervalMs >= 0 &&
-          provider.cameraIntervalMs <= 1000
-            ? provider.cameraIntervalMs
-            : null,
-        headingSlewDps:
-          provider.headingSlewDps === Infinity ||
-          (finite(provider.headingSlewDps) && provider.headingSlewDps > 0)
-            ? provider.headingSlewDps
-            : null,
-        // Bound, so a method that uses `this` (a class instance's, say)
-        // still reads its own provider when called on this copy.
-        candidate: provider.candidate.bind(provider),
-        isEntryAllowed: provider.isEntryAllowed
-          ? provider.isEntryAllowed.bind(provider)
-          : () => true,
-        hold: provider.hold.bind(provider),
-        read: provider.read.bind(provider),
-        hud: provider.hud.bind(provider),
-        release: provider.release.bind(provider),
-      }),
-    );
+    kinds.add(copy.kind);
+    kept.push(copy);
   });
   kept.sort((a, b) => a.priority - b.priority || a.order - b.order);
   return Object.freeze(kept);
+}
+
+/** The frozen copy the Cockpit keeps of a provider `refusal` passed. */
+function keptProvider(provider, order) {
+  // Worded members are read again on each use (see above); the last good
+  // read stands in for one that is malformed or throws.
+  let face = wordedNow(provider, 'entryFace', faceOf);
+  let labels = wordedNow(provider, 'labels', labelsOf);
+  // On or off, and its rest pitch, as first read.
+  let look = wordedNow(provider, 'look', lookOf);
+  const restPitchDeg = look?.restPitchDeg ?? 0;
+  return Object.freeze({
+    kind: provider.kind,
+    layerId: provider.layerId,
+    priority: finite(provider.priority) ? provider.priority : 0,
+    order,
+    get entryFace() {
+      face = wordedNow(provider, 'entryFace', faceOf) ?? face;
+      return face;
+    },
+    get labels() {
+      labels = wordedNow(provider, 'labels', labelsOf) ?? labels;
+      return labels;
+    },
+    get look() {
+      if (!look) return null;
+      const now = wordedNow(provider, 'look', lookOf);
+      if (now)
+        look = Object.freeze({ restPitchDeg, aheadLabel: now.aheadLabel });
+      return look;
+    },
+    cameraIntervalMs:
+      finite(provider.cameraIntervalMs) &&
+      provider.cameraIntervalMs >= 0 &&
+      provider.cameraIntervalMs <= 1000
+        ? provider.cameraIntervalMs
+        : null,
+    headingSlewDps:
+      provider.headingSlewDps === Infinity ||
+      (finite(provider.headingSlewDps) && provider.headingSlewDps > 0)
+        ? provider.headingSlewDps
+        : null,
+    // Bound, so a method that uses `this` (a class instance's, say) still
+    // reads its own provider when called on this copy.
+    candidate: provider.candidate.bind(provider),
+    isEntryAllowed: provider.isEntryAllowed
+      ? provider.isEntryAllowed.bind(provider)
+      : () => true,
+    hold: provider.hold.bind(provider),
+    read: provider.read.bind(provider),
+    hud: provider.hud.bind(provider),
+    release: provider.release.bind(provider),
+  });
 }
 
 /**
@@ -275,9 +300,19 @@ export function cockpitSubjectProviders(
  * `selectedAt` (a number or a short string, else null) is a token the
  * provider changes each time its subject is selected, even again: a
  * subject selected after the built-in ones takes entry (entryCandidates).
+ * Null too when reading `raw` throws (a getter runs provider code).
  * @param {unknown} raw What `candidate()` returned.
  */
 export function cockpitSubjectCandidate(raw) {
+  try {
+    return candidateOf(raw);
+  } catch {
+    // A getter on what candidate() returned threw: no candidate.
+    return null;
+  }
+}
+
+function candidateOf(raw) {
   if (!isObject(raw) || typeof raw.id !== 'string') return null;
   const id = raw.id.trim();
   if (!id || id.length > 128) return null;
@@ -297,7 +332,8 @@ export function cockpitSubjectCandidate(raw) {
 /**
  * One camera frame from a provider, normalized, or null when it cannot place
  * the camera (the view then ends): not an object, an id other than `heldId`,
- * a position that is not finite, or an eye with no valid `upM` (0..1000).
+ * a position that is not finite, an eye with no valid `upM` (0..1000), or a
+ * read of it that throws (a getter runs provider code).
  * A `heightM` that is not finite or lies outside
  * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null:
  * the eye then stands on the shared floor, or where it last stood while that
@@ -309,6 +345,15 @@ export function cockpitSubjectCandidate(raw) {
  *   pitchDeg, minClearanceM}}`.
  */
 export function cockpitSubjectFrame(raw, heldId) {
+  try {
+    return frameOf(raw, heldId);
+  } catch {
+    // A getter on what read() returned threw: as a malformed frame.
+    return null;
+  }
+}
+
+function frameOf(raw, heldId) {
   if (!isObject(raw) || raw.id !== heldId) return null;
   const latitude = raw.latitude;
   const longitude = raw.longitude;
@@ -412,10 +457,12 @@ function progressOf(raw) {
  * A provider's HUD view model, normalized; never throws. Texts are coerced
  * and cut to their caps, lists to their lengths, tones to
  * COCKPIT_SUBJECT_TONES, numbers clamped; a malformed member reads as absent.
+ * Null when reading `raw` throws (a getter runs provider code), so the caller
+ * keeps the view it has, as when `hud()` itself throws.
  * All text is shown as given: the provider words it in the page's language.
  * @param {unknown} raw What `hud()` returned.
- * @returns {object} `{kicker, title, meta: {text, tone}, speed: {value, unit,
- *   tag, tone}|null, readouts: [{id, label, value, detail, tone}],
+ * @returns {object|null} `{kicker, title, meta: {text, tone}, speed: {value,
+ *   unit, tag, tone}|null, readouts: [{id, label, value, detail, tone}],
  *   sources: [{id, label, text, tone}],
  *   route: {title, from, to, status}|null,
  *   progress: {ticks: [{at, tone, label: {text, detail, priority,
@@ -424,6 +471,15 @@ function progressOf(raw) {
  *   lookReadout, signals: [{id, tone, title, detail}]}`.
  */
 export function cockpitSubjectHudView(raw) {
+  try {
+    return hudViewOf(raw);
+  } catch {
+    // A getter on what hud() returned threw: the caller keeps its last view.
+    return null;
+  }
+}
+
+function hudViewOf(raw) {
   const view = isObject(raw) ? raw : {};
   const meta = isObject(view.meta) ? view.meta : {};
   const speed =

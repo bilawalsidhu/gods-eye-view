@@ -154,9 +154,9 @@ const SUBJECT_SIGNAL_TONES = Object.freeze({
 /**
  * Present a provider subject's HUD: its view model (cockpitSubjectHudView)
  * in the generic readouts, the compass at the camera's heading, the route
- * card, and its signals in Live Signals. A HUD view that is null, or a
- * `hud()` that throws, keeps the last one. Contact navigation stays with
- * aircraft, so the Contact card is withdrawn.
+ * card, and its signals in Live Signals. A HUD view that is null, a `hud()`
+ * that throws, or a view whose reading throws keeps the last one. Contact
+ * navigation stays with aircraft, so the Contact card is withdrawn.
  */
 function updateSubjectHud(info, nowMs, forceContext) {
   const provider = this.subjectProvider;
@@ -176,7 +176,8 @@ function updateSubjectHud(info, nowMs, forceContext) {
         null,
       )
     : null;
-  if (raw != null) this.subjectHud = cockpitSubjectHudView(raw);
+  if (raw != null)
+    this.subjectHud = cockpitSubjectHudView(raw) ?? this.subjectHud;
   const hud = this.subjectHud ?? cockpitSubjectHudView(null);
   const view = this.instruments;
   view.kind = 'subject';

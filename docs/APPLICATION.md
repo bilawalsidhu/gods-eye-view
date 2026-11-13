@@ -237,15 +237,19 @@ Core's Cockpit rides a tracked aircraft, the tracked satellite and the
 selected AIS vessel. An application adds kinds of its own with
 `services.cockpitSubjects` on `createApplicationControls`: a list of
 providers, checked once when the controls are built
-(`src/cockpitSubjectProviders.js`). A malformed provider is left out with a
-warning. A provider's subject takes entry when it was selected after every
+(`src/cockpitSubjectProviders.js`). A malformed provider, or one with a member
+that throws when read (a getter), is left out with a warning and the rest are
+kept. A provider's subject takes entry when it was selected after every
 built-in subject present (a tracked aircraft or satellite, a selected vessel),
 whose own fixed order is unchanged, and needs the provider's `layerId` on; the
 provider then holds its subject, hands the camera a frame and the generic HUD
 a view model on every update, and releases it on exit. Provider methods are
 synchronous and are called on the provider, so a class instance's methods keep
 their `this`; one that throws or returns a promise is treated as having
-failed.
+failed. What a method returns may carry getters: one that throws when read
+makes a candidate none, a frame malformed (the view ends) and a HUD view keep
+the last; a worded member (labels, entry face, look) that throws keeps its
+last good words.
 
 ```js
 import { getLocale, onLocaleChange } from '@gods-eye-view/core/i18n';

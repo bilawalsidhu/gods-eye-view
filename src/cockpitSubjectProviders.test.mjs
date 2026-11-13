@@ -596,3 +596,92 @@ test('labels, entry face and look given as functions are read again on each use'
   assert.deepEqual(bad.kept, []);
   assert.equal(bad.warnings.length, 2);
 });
+
+/** `target` with a getter for `key` that throws (provider code runs on a read). */
+const throwingGetter = (target, key) =>
+  Object.defineProperty(target, key, {
+    enumerable: true,
+    get() {
+      throw new Error(`${key} unavailable`);
+    },
+  });
+
+test('a provider whose getter throws is left out with one warning; the next is kept', () => {
+  const { kept, warnings } = keep([
+    throwingGetter(provider({ kind: 'thrown-face' }), 'entryFace'),
+    throwingGetter(provider({ kind: 'thrown-labels' }), 'labels'),
+    throwingGetter(provider({ kind: 'thrown-look' }), 'look'),
+    throwingGetter(provider(), 'kind'),
+    throwingGetter(provider({ kind: 'thrown-method' }), 'read'),
+    // Read only once the provider is accepted, so its kind must stay free.
+    throwingGetter(provider({ kind: 'example-kind' }), 'priority'),
+    provider({ kind: 'example-kind' }),
+  ]);
+  assert.deepEqual(
+    kept.map(({ kind }) => kind),
+    ['example-kind'],
+  );
+  assert.deepEqual(warnings, [
+    '[Cockpit] subject provider thrown-face left out: malformed entry face',
+    '[Cockpit] subject provider thrown-labels left out: labels need view, exit and exitText',
+    '[Cockpit] subject provider thrown-look left out: a member threw when read',
+    '[Cockpit] subject provider #3 left out: a member threw when read',
+    '[Cockpit] subject provider thrown-method left out: a member threw when read',
+    '[Cockpit] subject provider example-kind left out: a member threw when read',
+  ]);
+});
+
+test('a worded getter that starts throwing keeps the last good words', () => {
+  let failing = false;
+  const words = (value) => () => {
+    if (failing) throw new Error('translations unavailable');
+    return value;
+  };
+  const definition = provider();
+  for (const [key, value] of Object.entries({
+    labels: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT' },
+    entryFace: { icon: 'commute', label: 'RIDE' },
+    look: { restPitchDeg: 10, aheadLabel: 'Look ahead' },
+  }))
+    Object.defineProperty(definition, key, { get: words(value) });
+  const { kept, warnings } = keep([definition]);
+  assert.deepEqual(warnings, []);
+  const [ride] = kept;
+  failing = true;
+  assert.equal(ride.labels.view, 'Ride view');
+  assert.equal(ride.entryFace.label, 'RIDE');
+  assert.deepEqual(ride.look, { restPitchDeg: 10, aheadLabel: 'Look ahead' });
+  // So does a worded object whose own member throws when read.
+  failing = false;
+  Object.defineProperty(definition, 'labels', {
+    get: () => throwingGetter({ view: 'v', exit: 'e', exitText: 'x' }, 'view'),
+  });
+  assert.equal(ride.labels.view, 'Ride view');
+});
+
+test('a candidate, frame or HUD view whose getter throws reads as null', () => {
+  assert.equal(
+    cockpitSubjectCandidate(throwingGetter({ name: 'Example' }, 'id')),
+    null,
+  );
+  const frame = { id: 'a1', latitude: 1, longitude: 2, eye: { upM: 3 } };
+  assert.ok(cockpitSubjectFrame(frame, 'a1'), 'well formed');
+  assert.equal(
+    cockpitSubjectFrame(throwingGetter({ ...frame }, 'latitude'), 'a1'),
+    null,
+  );
+  assert.equal(
+    cockpitSubjectFrame({ ...frame, eye: throwingGetter({}, 'upM') }, 'a1'),
+    null,
+  );
+  assert.equal(
+    cockpitSubjectHudView(throwingGetter({ title: 'T' }, 'meta')),
+    null,
+  );
+  assert.equal(
+    cockpitSubjectHudView({ title: 'T', readouts: [throwingGetter({}, 'id')] }),
+    null,
+  );
+  // Nothing to read is still the empty view, never null.
+  assert.equal(cockpitSubjectHudView(null).title, '');
+});
