@@ -2263,7 +2263,7 @@ which way it runs (`pathBinding.js` learns it), its rail height, speed as
 reported or derived, position source, feed credit and stops, and
 `selectedAtMs`, when the user last selected it by a click or `focusTrain`,
 even again; null after a deselection and for a train only a hold selected),
-`setCockpitSubject(key)` (its marker and card hidden, the selection kept, its
+`setCockpitSubject(key)` (its marker, 3D model and card hidden, the selection kept, its
 feed held, clicks and Escape left to the view; the held copy stays the one
 drawn of its train while held, another feed's copy hidden, and it keeps
 moving, still selected, when its category is turned off) and
@@ -2273,8 +2273,8 @@ and these read APIs are experimental and may change without notice. A snapshot r
 the one read before, and its `path.line` is a frozen copy. Transit
 offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
-out of the camera's view, and its sprite, card, trail and detection box are
-hidden; released, it is out of play until a visibility sweep finds it in
+out of the camera's view, and its sprite, 3D model, card, trail and detection
+box are hidden; released, it is out of play until a visibility sweep finds it in
 view. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
 `src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests

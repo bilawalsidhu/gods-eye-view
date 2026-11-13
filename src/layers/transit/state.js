@@ -99,8 +99,8 @@ export function createState({ services }) {
   state._selectedAtMs = null;
   /**
    * The vehicle a first-person view holds (cockpitSubject.js), or null: its
-   * sprite, card, trail and detection box are hidden, and it keeps moving
-   * out of the camera's view.
+   * sprite, 3D model, card, trail and detection box are hidden, and it keeps
+   * moving out of the camera's view.
    * @type {string|null}
    */
   state._cockpitSubjectKey = null;

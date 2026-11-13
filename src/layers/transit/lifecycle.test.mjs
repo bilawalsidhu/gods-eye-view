@@ -11,6 +11,7 @@ import {
   VEHICLE_MAX_FIX_AGE_MS,
 } from './policy.js';
 import { FLOOR_WARM_PER_POLL } from './policy.js';
+import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
 import {
   FUTURE_STAMP_TOLERANCE_MS,
   ORDER_REJECTS_BEFORE_RESET,
@@ -63,6 +64,25 @@ function snapshot(
     truncated: false,
     count: vehicles.length,
     vehicles,
+  };
+}
+
+/** A camera's place and frame looking straight down from `altitude` over `at`. */
+function lookingDown(at, altitude) {
+  const positionWC = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, altitude);
+  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
+    positionWC,
+    new Cesium.Cartesian3(),
+  );
+  return {
+    positionWC,
+    directionWC: Cesium.Cartesian3.negate(up, new Cesium.Cartesian3()),
+    upWC: Cesium.Cartesian3.UNIT_Z,
+    frustum: {
+      computeCullingVolume: () => ({
+        computeVisibility: () => Cesium.Intersect.INSIDE,
+      }),
+    },
   };
 }
 
@@ -160,6 +180,9 @@ function harness(
       east: at.lon + 0.1,
       north: at.lat + 0.1,
     },
+    // Fleet-model services (testSupport/fleetModelFakes.mjs), with a camera
+    // looking straight down for them; without them vehicles stay icons.
+    fleet = null,
   } = {},
 ) {
   const viewRect = { ...view };
@@ -220,6 +243,7 @@ function harness(
           viewRect.north,
         );
       },
+      ...(fleet ? lookingDown(at, altitude) : {}),
     },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
@@ -266,6 +290,7 @@ function harness(
   const layer = createTransitLayer({
     source,
     services: {
+      ...(fleet ? { fleet } : {}),
       ground,
       mesh: {
         sampleMeshFloorCells(scene, points, options) {
@@ -4215,6 +4240,42 @@ test('a vehicle read again while nothing changed is the snapshot read before', a
   assert.equal(moved.stop, first.stop);
   assert.equal(moved.provenance, first.provenance);
   assert.equal(app.layer.getSelectedVehicle(), moved);
+});
+
+test('a held vehicle draws no 3D model either; let go, its model draws again', async (t) => {
+  const models = await fleetModelFakes(t);
+  const app = harness(t, { fleet: models.fleet, altitude: 1_000 });
+  const key = await busRunningNorth(app);
+  const [entry] = app.vehicles();
+  assert.notEqual(entry.mode, 'unknown', 'a mode its model is chosen by');
+  // The throttled sweep runs; a model's load answers off the frame and the
+  // next frames place it.
+  const frames = async () => {
+    app.advance(250);
+    app.settle();
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    app.settle();
+  };
+  await frames();
+  assert.equal(models.drawn(key).length, 1, 'near the camera: its model');
+  assert.equal(entry.modelOwnsVisual, true);
+  assert.equal(entry.marker.show, false, 'its icon hands over');
+
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  app.frame();
+  // The view's eye is inside the vehicle.
+  assert.equal(models.drawn(key).length, 0, 'no model');
+  assert.equal(entry.modelOwnsVisual, false);
+  assert.equal(entry.marker.show, false, 'and no icon');
+  await frames();
+  assert.equal(models.drawn(key).length, 0, 'not on a later frame either');
+  assert.equal(entry.marker.show, false);
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  await frames();
+  assert.equal(models.drawn(key).length, 1, 'let go: its model again');
+  assert.equal(entry.modelOwnsVisual, true);
+  assert.equal(entry.marker.show, false);
 });
 
 test('selectedAtMs is the user’s selection time; a hold and a deselection leave none', async (t) => {

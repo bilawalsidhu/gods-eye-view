@@ -526,7 +526,7 @@ export function createRendering({ state, services, parts }) {
   /**
    * Whether a train's icon is drawn: shown, not drawn by its model, and no
    * first-person view rides it (cockpitSubject.js). A held train keeps its
-   * playback; only its icon hides.
+   * playback; only its icon and model hide.
    */
   function markerShown(entry) {
     return (
@@ -760,7 +760,9 @@ export function createRendering({ state, services, parts }) {
     }
     item.position = entry.marker.position;
     item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
-    item.show = categoryShown(entry);
+    // A train a first-person view rides draws no model: the camera is inside
+    // it (cockpitSubject.js).
+    item.show = categoryShown(entry) && entry.key !== state._cockpitSubjectKey;
     return item;
   }
 

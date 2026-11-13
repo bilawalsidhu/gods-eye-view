@@ -89,7 +89,7 @@ function createState({ services }) {
     _heldFeedId: null,
     /**
      * The train a first-person view holds (cockpitSubject.js), or null: its
-     * marker and card are hidden and the selection stays on it.
+     * marker, 3D model and card are hidden and the selection stays on it.
      */
     _cockpitSubjectKey: null,
     /**

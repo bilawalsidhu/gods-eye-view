@@ -95,8 +95,8 @@ function reuse(previous, next) {
  * and a part that did not change (its feed, its line, its stops) is the same
  * object in the next one, so a view can read it on every frame. `path.line`
  * is a frozen copy of the train's line for `pointAtS` and `projectOnPath`.
- * `setCockpitSubject(key)` holds a train: its marker, card and selected line
- * are hidden, it stays selected (so its stops stay fresh and its feed stays
+ * `setCockpitSubject(key)` holds a train: its marker, 3D model, card and
+ * selected line are hidden, it stays selected (so its stops stay fresh and its feed stays
  * polled at any distance) and clicks and Escape no longer change the
  * selection. A held train keeps moving, hidden, and keeps the selection when
  * its category is turned off, and is the copy of its train drawn though

@@ -27,8 +27,8 @@ function reuse(previous, next) {
  * that did not change (its feed, its stop) is the same object in the next
  * one, so a view can read it on every frame. Transit has no route shapes or
  * stops, so a snapshot names only the vehicle's last reported stop.
- * `setCockpitSubject(key)` holds a vehicle: its sprite, card, trail and
- * detection box are hidden, it keeps moving when it is out of the camera's
+ * `setCockpitSubject(key)` holds a vehicle: its sprite, 3D model, card,
+ * trail and detection box are hidden, it keeps moving when it is out of the camera's
  * view, its feed stays polled, and clicks and Escape no longer change the
  * selection. The hold ends with `setCockpitSubject(null)`, and on
  * its own when the vehicle is removed or the layer is turned off.

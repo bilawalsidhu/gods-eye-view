@@ -18,6 +18,7 @@ import {
 import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
 import { pointAtS } from '../../data/railPaths.js';
+import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
 
 const M_PER_DEG = 111_320;
 const LAT = 42.36;
@@ -226,6 +227,38 @@ test('a held train hides its marker and card and keeps the selection', async (t)
     1,
     'the card is back',
   );
+});
+
+test('a held train draws no 3D model either; let go, its model draws again', async (t) => {
+  const models = await fleetModelFakes(t);
+  const app = await onTheLine(t, { fleet: models.fleet, altitude: 1_000 });
+  // A model's load answers off the frame; the next frames place it.
+  const frames = async () => {
+    app.run(500);
+    await app.settle();
+    app.run(500);
+  };
+  await frames();
+  assert.equal(models.drawn(T1).length, 1, 'near the camera: its model');
+  assert.equal(app.entry(T1).modelOwnsVisual, true);
+  assert.equal(app.entry(T1).marker.show, false, 'its icon hands over');
+
+  assert.equal(app.layer.setCockpitSubject(T1), true);
+  app.run(250);
+  // The view's eye is inside the train.
+  assert.equal(models.drawn(T1).length, 0, 'no model');
+  assert.equal(app.entry(T1).modelOwnsVisual, false);
+  assert.equal(app.entry(T1).marker.show, false, 'and no icon');
+  assert.equal(models.drawn(T2).length, 1, 'another train keeps its model');
+  await frames();
+  assert.equal(models.drawn(T1).length, 0, 'not on a later frame either');
+  assert.equal(app.entry(T1).marker.show, false);
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  await frames();
+  assert.equal(models.drawn(T1).length, 1, 'let go: its model again');
+  assert.equal(app.entry(T1).modelOwnsVisual, true);
+  assert.equal(app.entry(T1).marker.show, false);
 });
 
 const MADRID = { lat: 40.4168, lon: -3.7038 };

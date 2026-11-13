@@ -1441,5 +1441,6 @@
   "src/data/fleetModels.test.mjs",
   "src/data/fleetModelInstances.test.mjs",
   "src/testSupport/fleetGlb.mjs",
+  "src/testSupport/fleetModelFakes.mjs",
   "scripts/measure-fleet-trail-anchors.mjs"
 ]

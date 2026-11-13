@@ -493,7 +493,7 @@ export function createRendering({ state, services, parts }) {
     });
   }
 
-  /** Hand an entry's visual back to its icon. */
+  /** Hand an entry's visual back to its icon, unless a view rides it. */
   function handBack(entry) {
     if (!entry.modelOwnsVisual) return;
     entry.modelOwnsVisual = false;
@@ -501,7 +501,8 @@ export function createRendering({ state, services, parts }) {
       entry.marker.show =
         vehicleInView(entry) &&
         !entry.heightPending &&
-        entry.surfaceReady !== false;
+        entry.surfaceReady !== false &&
+        entry.key !== state._cockpitSubjectKey;
   }
 
   function updateModels() {
@@ -538,7 +539,12 @@ export function createRendering({ state, services, parts }) {
       }
       item.position = entry.marker.position;
       item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
-      item.show = !entry.heightPending && entry.surfaceReady !== false;
+      // A vehicle a first-person view rides draws no model: the camera is
+      // inside it (cockpitSubject.js).
+      item.show =
+        !entry.heightPending &&
+        entry.surfaceReady !== false &&
+        entry.key !== state._cockpitSubjectKey;
       next.set(entry.key, item);
     }
     for (const [key, item] of modelItems)
