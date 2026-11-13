@@ -3,66 +3,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { installRenderFailureNotice } from './renderFailure.js';
-
-// What src/app/scene.js passes to the viewer (showRenderLoopErrors).
-const SHOW_RENDER_LOOP_ERRORS = false;
+import { renderLoopFixture } from './renderLoopFixture.mjs';
 
 function runLoop(render) {
-  const frames = [];
-  const previousRaf = globalThis.requestAnimationFrame;
-  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
-  try {
-    const scene = {
-      renderError: new Cesium.Event(),
-      preUpdate: new Cesium.Event(),
-      postRender: new Cesium.Event(),
-      requestRender() {},
-      initializeFrame() {},
-      render,
-    };
-    const widget = Object.create(Cesium.CesiumWidget.prototype);
-    Object.assign(widget, {
-      _scene: scene,
-      _clock: { tick() {} },
-      _canRender: true,
-      _useDefaultRenderLoop: false,
-      _renderLoopRunning: false,
-      _showRenderLoopErrors: SHOW_RENDER_LOOP_ERRORS,
-      _targetFrameRate: undefined,
-      isDestroyed: () => false,
-      resize() {},
-      showErrorPanel() {},
-    });
-    const viewer = {
-      scene,
-      cesiumWidget: widget,
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      get useDefaultRenderLoop() {
-        return widget.useDefaultRenderLoop;
-      },
-      set useDefaultRenderLoop(value) {
-        widget.useDefaultRenderLoop = value;
-      },
-    };
-    const store = {
-      renderFailure: null,
-      publishRenderFailure(next) {
-        this.renderFailure = next;
-      },
-    };
-    const logged = [];
-    const uninstall = installRenderFailureNotice(viewer, {
-      store,
-      locationRef: { href: 'https://gev.example/', reload() {}, assign() {} },
-      logError: (error) => logged.push(error),
-    });
-    viewer.useDefaultRenderLoop = true;
-    while (frames.length) frames.shift()(16);
-    return { widget, store, logged, uninstall };
-  } finally {
-    globalThis.requestAnimationFrame = previousRaf;
-  }
+  const scene = {
+    renderError: new Cesium.Event(),
+    preUpdate: new Cesium.Event(),
+    postRender: new Cesium.Event(),
+    requestRender() {},
+    initializeFrame() {},
+    render,
+  };
+  const fixture = renderLoopFixture(scene);
+  fixture.viewer.useDefaultRenderLoop = true;
+  fixture.runFrames(3);
+  return { ...fixture, uninstall: fixture.restore };
 }
 
 test('an error thrown outside tryAndCatchError still shows the notice', () => {

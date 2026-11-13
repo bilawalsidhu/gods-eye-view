@@ -563,6 +563,7 @@
   "src/ui/renderFailureEventRetry.test.mjs",
   "src/app/renderFailureInlineRetry.test.mjs",
   "src/ui/renderFailureSecondLoop.test.mjs",
+  "src/ui/renderLoopFixture.mjs",
   "src/layers/cctv/lifecycle.js",
   "src/layers/cctv/controls.js",
   "src/layers/cctv/geometry.js",

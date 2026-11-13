@@ -5,10 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { keepPanelRendering } from './embed.js';
-import { installRenderFailureNotice } from '../ui/renderFailure.js';
+import { renderLoopFixture } from '../ui/renderLoopFixture.mjs';
 
 function setup() {
-  const frames = [];
   let tick = null;
   let clock = 0;
   // The host reports the panel hidden: its own animation frames never arrive.
@@ -18,8 +17,6 @@ function setup() {
     setInterval: (fn) => ((tick = fn), 1),
     clearInterval() {},
   };
-  const previousRaf = globalThis.requestAnimationFrame;
-  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
   const previousError = console.error;
   console.error = () => {};
   const state = { failure: null, drawn: 0 };
@@ -40,66 +37,33 @@ function setup() {
       this.postRender.raiseEvent(this);
     },
   };
-  const widget = Object.create(Cesium.CesiumWidget.prototype);
-  Object.assign(widget, {
-    _scene: scene,
-    _clock: { tick() {} },
-    _canRender: true,
-    _useDefaultRenderLoop: false,
-    _renderLoopRunning: false,
-    _showRenderLoopErrors: false,
-    _targetFrameRate: undefined,
-    isDestroyed: () => false,
-    resize() {},
-  });
-  // CesiumWidget's own renderError handler, which marks the loop stopped.
-  scene.renderError.addEventListener(() => {
-    widget._useDefaultRenderLoop = false;
-    widget._renderLoopRunning = false;
-  });
-  const viewer = {
-    scene,
-    cesiumWidget: widget,
-    canvas: { addEventListener() {}, removeEventListener() {} },
-    get useDefaultRenderLoop() {
-      return widget.useDefaultRenderLoop;
-    },
-    set useDefaultRenderLoop(value) {
-      widget.useDefaultRenderLoop = value;
-    },
-    isDestroyed: () => false,
-    render: () => widget.render(),
-    resize: () => widget.resize(),
-  };
-  const store = {
-    renderFailure: null,
-    publishRenderFailure(next) {
-      this.renderFailure = next;
-    },
-  };
-  const uninstall = installRenderFailureNotice(viewer, {
-    store,
-    allowReload: false,
-    locationRef: { href: 'https://gev.example/', reload() {}, assign() {} },
-    logError() {},
-  });
+  const { frames, widget, viewer, store, runFrames, restore } =
+    renderLoopFixture(scene, {
+      viewer: {
+        isDestroyed: () => false,
+        render: () => widget.render(),
+        resize: () => widget.resize(),
+      },
+      notice: { allowReload: false },
+    });
   const stop = keepPanelRendering(viewer, { windowRef, now: () => clock });
   viewer.useDefaultRenderLoop = true;
   const timerFrame = () => {
     clock += 400;
     tick();
   };
-  const animationFrames = (n) => {
-    for (let frame = 1; frame <= n; frame += 1)
-      for (const render of frames.splice(0)) render(frame * 16);
+  return {
+    frames,
+    state,
+    store,
+    timerFrame,
+    animationFrames: runFrames,
+    restore: () => {
+      stop();
+      restore();
+      console.error = previousError;
+    },
   };
-  const restore = () => {
-    stop();
-    uninstall();
-    globalThis.requestAnimationFrame = previousRaf;
-    console.error = previousError;
-  };
-  return { frames, state, store, timerFrame, animationFrames, restore };
 }
 
 for (const failure of ['caught', 'thrown']) {

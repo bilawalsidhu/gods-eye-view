@@ -4,12 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { installRenderFailureNotice } from './renderFailure.js';
+import { renderLoopFixture } from './renderLoopFixture.mjs';
 
 function setup({ targetFrameRate } = {}) {
-  const frames = [];
-  const previousRaf = globalThis.requestAnimationFrame;
-  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
   const scene = {
     renderError: new Cesium.Event(),
     preUpdate: new Cesium.Event(),
@@ -29,57 +26,7 @@ function setup({ targetFrameRate } = {}) {
       this.postRender.raiseEvent(this, time);
     },
   };
-  const widget = Object.create(Cesium.CesiumWidget.prototype);
-  Object.assign(widget, {
-    _scene: scene,
-    _clock: { tick() {} },
-    _canRender: true,
-    _useDefaultRenderLoop: false,
-    _renderLoopRunning: false,
-    _showRenderLoopErrors: false,
-    _targetFrameRate: targetFrameRate,
-    isDestroyed: () => false,
-    resize() {},
-  });
-  // CesiumWidget's own renderError handler (CesiumWidget.js:414).
-  scene.renderError.addEventListener(() => {
-    widget._useDefaultRenderLoop = false;
-    widget._renderLoopRunning = false;
-  });
-  const viewer = {
-    scene,
-    cesiumWidget: widget,
-    canvas: { addEventListener() {}, removeEventListener() {} },
-    get useDefaultRenderLoop() {
-      return widget.useDefaultRenderLoop;
-    },
-    set useDefaultRenderLoop(value) {
-      widget.useDefaultRenderLoop = value;
-    },
-  };
-  const store = {
-    renderFailure: null,
-    publishRenderFailure(next) {
-      this.renderFailure = next;
-    },
-  };
-  const uninstall = installRenderFailureNotice(viewer, {
-    store,
-    locationRef: { href: 'https://gev.example/', reload() {}, assign() {} },
-    logError() {},
-  });
-  let time = 0;
-  const runFrames = (n) => {
-    for (let i = 0; i < n; i += 1) {
-      time += 17;
-      for (const fn of frames.splice(0)) fn(time);
-    }
-  };
-  const restore = () => {
-    uninstall();
-    globalThis.requestAnimationFrame = previousRaf;
-  };
-  return { frames, scene, viewer, store, runFrames, restore };
+  return { scene, ...renderLoopFixture(scene, { targetFrameRate }) };
 }
 
 for (const targetFrameRate of [undefined, 60]) {

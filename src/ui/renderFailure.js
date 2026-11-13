@@ -21,7 +21,7 @@ export function installRenderFailureNotice(
   } = {},
 ) {
   const { scene } = viewer;
-  const canvas = viewer.canvas ?? scene.canvas;
+  const { canvas } = viewer;
   let notice = null;
   let contextLost = false;
   // With rethrowRenderErrors, Scene throws the error it has just raised;
@@ -36,7 +36,7 @@ export function installRenderFailureNotice(
       return;
     }
     viewer.useDefaultRenderLoop = true;
-    scene.requestRender?.();
+    scene.requestRender();
   }
 
   function reset() {
@@ -113,11 +113,11 @@ export function installRenderFailureNotice(
       raisedByScene = null;
     }),
   );
-  canvas?.addEventListener?.('webglcontextlost', onContextLost);
+  canvas.addEventListener('webglcontextlost', onContextLost);
   return () => {
     removeRenderError();
     unguard.forEach((restore) => restore());
-    canvas?.removeEventListener?.('webglcontextlost', onContextLost);
+    canvas.removeEventListener('webglcontextlost', onContextLost);
     clear();
   };
 }
@@ -147,7 +147,6 @@ function frameEvents(viewer) {
       tileset?.loadProgress,
       tileset?.allTilesLoaded,
       tileset?.initialTilesLoaded,
-      tileset?.tileLoad,
     );
   }
   return events;

@@ -1,27 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import { installRenderFailureNotice } from './renderFailure.js';
-
-function event() {
-  const listeners = new Set();
-  return {
-    listeners,
-    addEventListener(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    raise(...args) {
-      for (const listener of [...listeners]) listener(...args);
-    },
-  };
-}
 
 function fixture(t, options = {}) {
   const canvasListeners = new Map();
   const scene = {
-    renderError: event(),
-    preUpdate: event(),
-    postRender: event(),
+    renderError: new Cesium.Event(),
+    preUpdate: new Cesium.Event(),
+    postRender: new Cesium.Event(),
     requestRender() {
       this.requests = (this.requests ?? 0) + 1;
     },
@@ -62,12 +49,12 @@ function fixture(t, options = {}) {
   // One Cesium frame: preUpdate, an optional render error, then postRender,
   // which Cesium raises after a failed frame too.
   const frame = (error) => {
-    scene.preUpdate.raise(scene);
+    scene.preUpdate.raiseEvent(scene);
     if (error) {
       viewer.useDefaultRenderLoop = false;
-      scene.renderError.raise(scene, error);
+      scene.renderError.raiseEvent(scene, error);
     }
-    scene.postRender.raise(scene);
+    scene.postRender.raiseEvent(scene);
   };
   return {
     viewer,
@@ -105,8 +92,8 @@ test('Retry restarts the render loop and a clean frame clears the notice', (t) =
   f.frame();
   assert.equal(f.store.renderFailure, null);
   // Clearing stops the per-frame listeners.
-  assert.equal(f.scene.preUpdate.listeners.size, 0);
-  assert.equal(f.scene.postRender.listeners.size, 0);
+  assert.equal(f.scene.preUpdate.numberOfListeners, 0);
+  assert.equal(f.scene.postRender.numberOfListeners, 0);
 });
 
 test('a loop restarted into the same error keeps one notice', (t) => {
@@ -137,7 +124,7 @@ test('a new failure after recovery is a new appearance', (t) => {
 test('a render error without a value shows no detail', (t) => {
   const f = fixture(t);
   f.viewer.useDefaultRenderLoop = false;
-  f.scene.renderError.raise(f.scene, undefined);
+  f.scene.renderError.raiseEvent(f.scene, undefined);
   assert.equal(f.store.renderFailure.reason, 'render-error');
   assert.equal(f.store.renderFailure.detail, '');
 });
@@ -179,8 +166,8 @@ test('uninstall removes the listeners and the notice', (t) => {
   f.frame(new Error('boom'));
   f.uninstall();
   assert.equal(f.store.renderFailure, null);
-  assert.equal(f.scene.renderError.listeners.size, 0);
-  assert.equal(f.scene.postRender.listeners.size, 0);
+  assert.equal(f.scene.renderError.numberOfListeners, 0);
+  assert.equal(f.scene.postRender.numberOfListeners, 0);
   assert.equal(f.canvasListeners.size, 0);
   f.frame(new Error('later'));
   assert.equal(f.store.renderFailure, null);

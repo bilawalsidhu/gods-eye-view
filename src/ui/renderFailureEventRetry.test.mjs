@@ -5,11 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { installRenderFailureNotice } from './renderFailure.js';
+import { renderLoopFixture } from './renderLoopFixture.mjs';
 
 function setup() {
-  const frames = [];
-  const previousRaf = globalThis.requestAnimationFrame;
-  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
   // Scene.render as in Scene.js:4369: preUpdate always, preRender/postRender
   // only when a frame is rendered (requestRenderMode idle skips them).
   const scene = {
@@ -34,53 +32,7 @@ function setup() {
       this.postRender.raiseEvent(this, time);
     },
   };
-  const widget = Object.create(Cesium.CesiumWidget.prototype);
-  Object.assign(widget, {
-    _scene: scene,
-    _clock: { tick() {} },
-    _canRender: true,
-    _useDefaultRenderLoop: false,
-    _renderLoopRunning: false,
-    _showRenderLoopErrors: false,
-    _targetFrameRate: undefined,
-    isDestroyed: () => false,
-    resize() {},
-  });
-  scene.renderError.addEventListener(() => {
-    widget._useDefaultRenderLoop = false;
-    widget._renderLoopRunning = false;
-  });
-  const viewer = {
-    scene,
-    cesiumWidget: widget,
-    canvas: { addEventListener() {}, removeEventListener() {} },
-    get useDefaultRenderLoop() {
-      return widget.useDefaultRenderLoop;
-    },
-    set useDefaultRenderLoop(value) {
-      widget.useDefaultRenderLoop = value;
-    },
-  };
-  const store = {
-    renderFailure: null,
-    publishRenderFailure(next) {
-      this.renderFailure = next;
-    },
-  };
-  const uninstall = installRenderFailureNotice(viewer, {
-    store,
-    locationRef: { href: 'https://gev.example/', reload() {}, assign() {} },
-    logError() {},
-  });
-  const runFrames = (n) => {
-    for (let i = 0; i < n; i += 1)
-      for (const fn of frames.splice(0)) fn(16 * (i + 1));
-  };
-  const restore = () => {
-    uninstall();
-    globalThis.requestAnimationFrame = previousRaf;
-  };
-  return { frames, scene, widget, viewer, store, runFrames, restore };
+  return { scene, ...renderLoopFixture(scene) };
 }
 
 for (const eventName of ['postRender', 'preUpdate']) {
@@ -200,7 +152,6 @@ const FRAME_EVENTS = {
   'tileset.allTilesLoaded': (v) => v.scene.primitives.get(0).allTilesLoaded,
   'tileset.initialTilesLoaded': (v) =>
     v.scene.primitives.get(0).initialTilesLoaded,
-  'tileset.tileLoad': (v) => v.scene.primitives.get(0).tileLoad,
 };
 
 for (const [name, pick] of Object.entries(FRAME_EVENTS)) {
@@ -214,7 +165,6 @@ for (const [name, pick] of Object.entries(FRAME_EVENTS)) {
       loadProgress: new Cesium.Event(),
       allTilesLoaded: new Cesium.Event(),
       initialTilesLoaded: new Cesium.Event(),
-      tileLoad: new Cesium.Event(),
     };
     const viewer = {
       scene: {
