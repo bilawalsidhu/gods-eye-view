@@ -9,7 +9,7 @@ const source = readFileSync(new URL('../../index.html', import.meta.url), 'utf8'
 test('the standalone document hosts every view once and keeps element ids unique', async () => {
   const hosts = [...source.matchAll(/data-gev-view="([^"]+)"/g)].map((match) => match[1]);
   // Order is stacking order for fixed elements that share a z-index.
-  assert.deepEqual(hosts, ['scene-chrome', 'cockpit', 'display-controls', 'command-dock', 'layer-panels', 'context', 'welcome', 'provider-settings', 'intel-hud']);
+  assert.deepEqual(hosts, ['scene-chrome', 'cockpit', 'display-controls', 'command-dock', 'layer-panels', 'context', 'welcome', 'provider-settings', 'intel-hud', 'stories']);
   assert.deepEqual([...hosts].sort(), Object.keys(APPLICATION_VIEWS).sort());
   const html = await readApplicationHtml();
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);

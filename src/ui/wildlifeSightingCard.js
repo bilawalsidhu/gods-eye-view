@@ -204,6 +204,8 @@ export function createWildlifeSightingCard({
 
   const keydown = (event) => {
     if (!selected.value || event.key !== 'Escape') return;
+    // Stories owns Escape while it is open (the card is behind it).
+    if (documentRef.body?.classList?.contains?.('stories-mode')) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     layer.clearSightingSelection();

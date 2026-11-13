@@ -265,6 +265,9 @@ function ownBoxEntries() {
       // The phone shell is its own layout; mobileShell.test.mjs pins its
       // attribution clearance.
       if (part.startsWith('body.mobile-shell')) continue;
+      // So is Stories, with GEV's chrome stepped aside; storiesCredit.test.mjs
+      // pins its attribution placement.
+      if (part.startsWith('body.stories-mode')) continue;
       entries.push({ rule, part });
     }
   }

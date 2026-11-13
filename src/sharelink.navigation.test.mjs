@@ -140,6 +140,59 @@ test("the app's own hash writes never trigger a restore", (t) => {
   manager.destroy();
 });
 
+test('restore applies a hash even when the address already shows it', (t) => {
+  installTab(t, SHARE_A);
+  const manager = new ShareLinkManager(fakeViewer());
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const restored = [];
+  manager.watchNavigation((state) => restored.push(state));
+  // Back landed here already, so the hash is known and a hashchange is ignored.
+  window.dispatchEvent(new Event('hashchange'));
+  assert.equal(restored.length, 0);
+  assert.equal(manager.restore(SHARE_A), true);
+  assert.equal(restored.length, 1);
+  manager.destroy();
+});
+
+test('holding writes first writes a view change still waiting for its debounce', (t) => {
+  installTab(t, SHARE_A);
+  const timers = installManualTimers(t);
+  const manager = new ShareLinkManager(fakeViewer());
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const before = window.location.hash;
+  manager._buildHashParams = () => new URLSearchParams('v=2&lat=5');
+  manager._scheduleUpdate();
+  assert.equal(window.location.hash, before, 'still waiting');
+  manager.holdWrites(true);
+  assert.equal(window.location.hash, '#v=2&lat=5', 'written before the hold');
+  manager._buildHashParams = () => new URLSearchParams('v=2&lat=9');
+  assert.equal(manager.snapshotHash(), 'v=2&lat=9');
+  assert.equal(
+    window.location.hash,
+    '#v=2&lat=5',
+    'snapshot leaves the URL alone',
+  );
+  manager._scheduleUpdate();
+  assert.equal(timers.size, 0, 'nothing scheduled while held');
+  manager.destroy();
+});
+
+test('a hash write keeps the state another owner stored on the entry', (t) => {
+  installTab(t, SHARE_A);
+  const written = [];
+  globalThis.history.state = { gevStories: { stories: 'explore', depth: 1 } };
+  const replace = globalThis.history.replaceState;
+  globalThis.history.replaceState = (state, title, next) => {
+    written.push(state);
+    replace(state, title, next);
+  };
+  const manager = new ShareLinkManager(fakeViewer());
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  manager._updateHash();
+  assert.deepEqual(written, [{ gevStories: { stories: 'explore', depth: 1 } }]);
+  manager.destroy();
+});
+
 test('a non-share hash is ignored and Back/Forward restores each entry once', (t) => {
   const tab = installTab(t, SHARE_A);
   const manager = new ShareLinkManager(fakeViewer());

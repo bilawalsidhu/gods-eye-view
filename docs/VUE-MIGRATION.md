@@ -155,7 +155,7 @@ a feature supplying only its accent.
    keep their imperative entry points until their owners are components:
    the rail cards, card blocks and timeline (`src/ui/rail/`) render through
    Vue's synchronous `render()` behind `createRailCards()`,
-   `createRailCardBlocks()` and `createRailTimeline()`. Order: Scenes (done: `SceneOptions` and
+   `createRailCardBlocks()` and `createRailTimeline()`. Order: Scenes (done: the scene name and
    `SceneShotList` over the `gev-scenes` store; the panel's buttons, status
    line, progress bar and the runtime chip render the panel SceneControls
    presents there, and the buttons and file chooser call its actions), Weather (done: the owner

@@ -348,6 +348,34 @@ test('push-to-talk rechecks focus before the hold threshold claims voice', (t) =
   assert.equal(f.controller.spaceKeyHeld, false);
 });
 
+test('opening Stories cancels a pending Space hold even when focus stays put', (t) => {
+  const f = createPushToTalkFixture(t);
+  const background = pushToTalkTarget();
+  const classes = new Set();
+  f.document.body = { classList: { contains: (name) => classes.has(name) } };
+
+  f.key('keydown', background);
+  classes.add('stories-mode');
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.deepEqual(f.starts, []);
+  assert.deepEqual(f.radio, []);
+  assert.equal(f.controller.spaceKeyHeld, false);
+  assert.equal(f.timers.size, 0);
+
+  classes.delete('stories-mode');
+  f.key('keydown', background);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.microphone.enabled, true);
+  f.key('keyup', background);
+  assert.equal(f.microphone.enabled, false);
+
+  f.key('keydown', background);
+  classes.add('stories-mode');
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 1);
+  assert.equal(f.microphone.enabled, false);
+});
+
 test('push-to-talk never claims a control-started hold after focus moves outside', (t) => {
   const f = createPushToTalkFixture(t);
   const control = pushToTalkTarget({ tagName: 'BUTTON' });

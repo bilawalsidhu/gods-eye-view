@@ -9,6 +9,13 @@ export const MICROPHONE_VISUALIZER_GATE = 0.12;
 
 export const ASSISTANT_VISUALIZER_GATE = 0.04;
 
+/** Stories takes keyboard and microphone ownership away from voice. */
+export function isStoriesOpen() {
+  return (
+    globalThis.document?.body?.classList?.contains?.('stories-mode') ?? false
+  );
+}
+
 /**
  * Returns whether a keyboard event represents the hold-Space voice shortcut.
  * @param {KeyboardEvent|object|null} event
