@@ -1,4 +1,4 @@
-import { msg, t } from '../i18n/index.js';
+import { msg, onLocaleChange, t } from '../i18n/index.js';
 
 /** Quiet time before the eye fades while clean view is on. */
 export const CLEAN_VIEW_EYE_IDLE_MS = 3000;
@@ -56,6 +56,14 @@ export function bindCleanViewEye({
     button.removeAttribute('data-idle');
     arm();
   };
+  // Unlike a Vue template, this button's accessible text is written by the
+  // controller. Re-translate it when the page locale changes.
+  const updateLabels = () => {
+    const label = t(enabled ? LABELS.on : LABELS.off);
+    button.setAttribute('aria-label', label);
+    button.setAttribute('title', t('{label} (V)', { label }));
+  };
+  const stopLocaleUpdates = onLocaleChange(updateLabels);
   const listenerOptions = { capture: true, passive: true };
   for (const type of WAKE_EVENTS)
     documentRef.addEventListener(type, wake, listenerOptions);
@@ -63,10 +71,8 @@ export function bindCleanViewEye({
     sync(next) {
       if (destroyed) return;
       enabled = Boolean(next);
-      const label = t(enabled ? LABELS.on : LABELS.off);
       button.setAttribute('aria-pressed', String(enabled));
-      button.setAttribute('aria-label', label);
-      button.setAttribute('title', t('{label} (V)', { label }));
+      updateLabels();
       button.removeAttribute('data-idle');
       if (enabled) arm();
       else cancel();
@@ -74,6 +80,7 @@ export function bindCleanViewEye({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      stopLocaleUpdates();
       cancel();
       for (const type of WAKE_EVENTS)
         documentRef.removeEventListener(type, wake, listenerOptions);
