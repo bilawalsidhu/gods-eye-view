@@ -2019,6 +2019,8 @@ while Previous/Next stay empty. Enabling the panel never triggers this fallback.
 An active camera outside the local view is omitted from the
 panel preview, with an explanation and an empty state when coverage is absent;
 changing the map or search alone does not select a camera or navigate the globe.
+Panning away and back does not reopen a panel the user collapsed when the
+underlying active camera has not changed.
 Panel enable also respects discovery results when choosing an initial camera.
 The filter applies to panel controls; voice next/previous, voice nearest and
 layer auto-hop retain their catalog-wide contracts. A scope tooltip makes this

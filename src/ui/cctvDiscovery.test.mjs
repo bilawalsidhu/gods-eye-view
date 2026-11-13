@@ -127,6 +127,65 @@ test('map changes refresh discovery, navigation stays in results, and disposal r
   assert.equal(removed, 1);
 });
 
+test('map pans do not reopen a collapsed panel when the active camera is unchanged', () => {
+  let mapView = view;
+  const expansions = [];
+  const controls = new CctvControls({
+    elements: {},
+    cctv: {},
+    actions: {
+      isEnabled: () => true,
+      readMapView: () => mapView,
+      setPanelCollapsed: (id, collapsed) => expansions.push([id, collapsed]),
+    },
+  });
+  const active = cameras[2];
+  const state = {
+    enabled: true,
+    count: cameras.length,
+    discoveryIndex: cameras,
+    activeCameraId: active.id,
+    activeCamera: active,
+  };
+  try {
+    controls._renderCctvState(state);
+    assert.deepEqual(expansions, [['cctv-panel', false]]);
+    // The user collapses the panel after this initial activation.
+    expansions.length = 0;
+    mapView = {
+      west: -124,
+      east: -122,
+      south: 49,
+      north: 50,
+      center: { lat: 49.28, lon: -123.12 },
+    };
+    controls._renderCctvState(state);
+    mapView = view;
+    controls._renderCctvState(state);
+    assert.deepEqual(
+      expansions,
+      [],
+      'map-only visibility changes must not expand an unchanged selection',
+    );
+    controls._renderCctvState({ ...state, enabled: false });
+    assert.deepEqual(expansions, [], 'disabling must not reopen the panel');
+    controls._renderCctvState(state);
+    assert.equal(expansions.length, 1, 'reenabling permits initial activation');
+    controls._renderCctvState({
+      ...state,
+      activeCameraId: cameras[1].id,
+      activeCamera: cameras[1],
+    });
+    assert.equal(
+      expansions.length,
+      2,
+      'a different local selection opens the panel',
+    );
+  } finally {
+    controls.destroy();
+  }
+});
+
 test('explicit Nearest reaches global coverage from an empty view without changing enable behavior', () => {
   let mapView = {
     west: 20,

@@ -216,10 +216,13 @@ export function _renderCctvState(state) {
   // from re-expanding a panel the user deliberately collapsed, and timed
   // auto-hop transitions only expand on the first activation so the panel
   // does not pop open on every hop.
-  const effectiveActiveId = enabled ? activeId || null : null;
+  // Map filtering can hide an active camera temporarily. Track the real
+  // selection so panning back cannot reopen a deliberately collapsed panel.
+  const effectiveActiveId = enabled ? state?.activeCameraId || null : null;
   const isFirstActivation = this._lastSeenCctvActiveId === null;
   if (
-    effectiveActiveId &&
+    enabled &&
+    activeId &&
     effectiveActiveId !== this._lastSeenCctvActiveId &&
     (!state?.autoHop || isFirstActivation)
   ) {
