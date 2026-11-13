@@ -1,0 +1,48 @@
+{
+  "id": "ma-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Massachusetts Statewide Imagery",
+  "provider": "MassGIS (EOTSS)",
+  "description": "Aerial orthophotos: Statewide coverage of Massachusetts.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-73.51, 41.24, -69.93, 42.89]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/hGdibHYSPO59RG1h/arcgis/rest/services/orthos2021/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "15–30 cm",
+    "resolutionM": 0.3,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Roughly every 3 years",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://gis.data.mass.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "MassGIS, Commonwealth of Massachusetts",
+    "url": "https://gis.data.mass.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

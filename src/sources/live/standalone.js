@@ -12,6 +12,11 @@ import {
 } from './aircraft.js';
 import { normalizeVesselTrack, vesselSnapshot } from './vessels.js';
 import { parsePlanespottersPhoto } from '../../data/planespottersPhoto.js';
+import {
+  MMSI,
+  openVesselPhotosUrl,
+  parseOpenVesselPhoto,
+} from '../../data/openVesselPhoto.js';
 
 const defaultFetch = (...args) => globalThis.fetch(...args);
 const header = (response, name) => response.headers?.get?.(name);
@@ -40,6 +45,34 @@ async function planespottersPhoto(fetchImpl, hex, signal) {
   );
   if (!response.ok) throw httpError(response, 'Planespotters');
   return parsePlanespottersPhoto(payload);
+}
+
+/**
+ * A vessel's Open Vessel Photos photo, read and host-checked. The API is
+ * keyless and answers with `access-control-allow-origin: *`, so the browser
+ * asks it straight. An MMSI it does not know answers 404: no photo.
+ * @param {Function} fetchImpl fetch.
+ * @param {string} mmsi The vessel's nine-digit MMSI.
+ * @param {AbortSignal} [signal] Abort signal.
+ * @returns {Promise<object>} A `parseOpenVesselPhoto` result.
+ */
+export async function fetchOpenVesselPhoto(fetchImpl, mmsi, signal) {
+  const id = String(mmsi || '');
+  if (!MMSI.test(id))
+    throw new LiveSourceError('unsupported', 'Enrichment unavailable');
+  const timeout = AbortSignal.timeout(PHOTO_TIMEOUT_MS);
+  const { response, payload } = await readResponse(
+    fetchImpl,
+    openVesselPhotosUrl(id),
+    {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      credentials: 'omit',
+    },
+    'Open Vessel Photos',
+  );
+  if (response.status === 404) return parseOpenVesselPhoto(null);
+  if (!response.ok) throw httpError(response, 'Open Vessel Photos');
+  return parseOpenVesselPhoto(payload, id);
 }
 
 function openSkyError(response) {
@@ -234,6 +267,11 @@ export function createVesselSource({
         ...vesselSnapshot(payload, { source: feedSource(response, 'Vessels') }),
         status: response.status,
       };
+    },
+    async getEnrichment(query, { signal } = {}) {
+      if (query.kind !== 'photo')
+        throw new LiveSourceError('unsupported', 'Enrichment unavailable');
+      return fetchOpenVesselPhoto(fetchImpl, query.id, signal);
     },
     async getTrack(reference, { signal } = {}) {
       const { response, payload } = await readResponse(

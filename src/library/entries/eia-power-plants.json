@@ -1,0 +1,68 @@
+{
+  "id": "eia-power-plants",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "US power plants, 100 MW and up (EIA)",
+  "provider": "EIA",
+  "description": "Operating US power plants with at least 100 MW of capacity, with their primary energy source, from the EIA's US Energy Atlas.",
+  "icon": "ϟ",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-180, 13, -64, 72]
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/Power_Plants_in_the_US/FeatureServer/0",
+    "query": {
+      "where": "Total_MW >= 100",
+      "outFields": "Plant_Name,Utility_Na,PrimSource,Total_MW,State"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxFeatures": 4000,
+    "maxPages": 3
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "Plant_Name",
+    "fields": ["PrimSource", "Total_MW"],
+    "rank": {
+      "field": "Total_MW",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "PrimSource",
+      "colors": {
+        "coal": "#d55181",
+        "natural gas": "#d55181",
+        "petroleum": "#d55181",
+        "nuclear": "#c98500",
+        "hydroelectric": "#3987e5",
+        "pumped storage": "#3987e5",
+        "wind": "#008300",
+        "solar": "#008300"
+      },
+      "labels": {
+        "coal": "Fossil (coal, gas, oil)",
+        "natural gas": "Fossil (coal, gas, oil)",
+        "petroleum": "Fossil (coal, gas, oil)",
+        "nuclear": "Nuclear",
+        "hydroelectric": "Hydro",
+        "pumped storage": "Hydro",
+        "wind": "Wind and solar",
+        "solar": "Wind and solar"
+      }
+    }
+  },
+  "licence": {
+    "name": "U.S. Energy Information Administration data: public domain",
+    "url": "https://www.eia.gov/about/copyrights_reuse.php"
+  },
+  "attribution": {
+    "text": "U.S. Energy Information Administration (EIA-860, EIA-860M, EIA-923)",
+    "url": "https://atlas.eia.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-21"
+}
