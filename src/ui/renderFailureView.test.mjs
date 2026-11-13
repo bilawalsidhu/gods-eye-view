@@ -1,5 +1,4 @@
-// src/ui/renderFailureView.test.mjs — the scene chrome renders the render
-// failure notice installRenderFailureNotice() publishes, with its actions.
+// The scene chrome renders the render failure notice and its actions.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';

@@ -2445,66 +2445,47 @@ during viewer construction, before any tile builds a draw command.
 ## Render failure notice
 
 When the globe stops drawing, the scene chrome says so instead of leaving a
-black globe behind controls that still respond. `installRenderFailureNotice()`
-(`src/ui/renderFailure.js`) listens for Cesium's `renderError`, after which
-Cesium stops its render loop, and for the canvas' `webglcontextlost`. It logs
-the error and publishes a notice to the status store, which
-`RenderFailure.vue` renders as an alert dialog that takes focus. When the
-globe draws again, focus goes back to the element that had it, or, if that
-element is gone or cannot take focus, to the globe's canvas, which the map's
-keys (Enter to finish a drawing, Space to talk) read as the map. The canvas
-gets `tabindex="-1"` only until focus moves on or the globe is pressed, and a
-press leaves focus on the page, as Cesium has it. Focus the user moved
-meanwhile stays put. The
-application scene creates its viewer with `showRenderLoopErrors: false`, so
-Cesium's own "Rendering has stopped" panel, which offers no way back, no longer
-appears; `applicationViewerOptions()` and `createApplicationViewer()` keep
-Cesium's panel by default for other callers. An error thrown outside Scene's
-own error handling (a `preRender` or `postRender` listener, the clock's
-`onTick`, a resize) also stops the loop without a `renderError`, so the notice
-wraps the widget's `render()` and `resize()` and raises such an error as a
-render error before Cesium's loop handles it as before; one Scene has raised
-already and throws on (`rethrowRenderErrors`) is not raised again. A lost
-context fails every later frame, and those errors are only logged, so the
-notice keeps saying why. The notice sits above floating panels such as the
-Québec camera viewer, and its buttons are 44 px tall on touch screens.
+black globe behind working controls. `installRenderFailureNotice()`
+(`src/ui/renderFailure.js`) listens for Cesium's `renderError` and the canvas'
+`webglcontextlost`, logs the error, and publishes a notice that
+`RenderFailure.vue` shows as an alert dialog with focus on its first action.
+The app's viewer uses `showRenderLoopErrors: false`, so Cesium's dead-end
+"Rendering has stopped" panel no longer appears; `applicationViewerOptions()`
+keeps it by default for other callers.
 
-- **Retry** after a render error restarts the render loop. The notice stays
-  until a frame starts and ends without a render error (Cesium raises
-  `postRender` after a failed frame too), and a loop that fails again keeps it.
-  A listener that throws leaves its Cesium event mid-raise, with listeners
-  added or removed since only queued, so the `render()` and `resize()` wrapper
-  finishes the events it cut short (`finishRaise()`) before it raises the
-  render error. These are the events Cesium raises outside Scene's error
-  handling (`frameEvents()`): Scene's frame events, the camera's and the
-  clock's, the globe's tile load progress, and the load events of the scene's
-  top-level tilesets. So the notice's frame watchers start with the next
-  frame, a listener removed while the loop is stopped, for a layer turned off,
-  is not called again, and one turned off and on again keeps running.
-- **Reload** after a lost context reloads the page: Cesium cannot draw into a
-  context it has lost, and the address keeps the view.
-- **Reset view** opens the app's root address (`appRootUrl()`), without the
-  hash or `/share/<code>` path the view was restored from; the query, such as
-  `?lang=`, is kept.
+- **Retry** restarts the render loop. The notice stays until a frame starts
+  and ends without an error: Cesium raises `postRender` after a failed frame
+  too.
+- **Reload**, after a lost context, reloads the page; the address keeps the
+  view.
+- **Reset view** opens `appRootUrl()`, without the hash or `/share/<code>`
+  path; the query, such as `?lang=`, is kept.
 
-An inline conversation panel never reloads or navigates its host's page, so it
+Pitfalls:
+
+- An error thrown outside Scene's error handling (a frame listener, `onTick`,
+  a resize) stops the loop without a `renderError`. The notice wraps the
+  widget's `render()` and `resize()` and raises it as one, once even with
+  `rethrowRenderErrors`.
+- A throwing listener leaves its Cesium event mid-raise, with listener changes
+  only queued. The wrapper finishes those raises first (`finishRaise()` over
+  `frameEvents()`), so a layer turned off or on meanwhile behaves.
+- A render error marks the loop stopped while its next frame is still queued.
+  The wrapper keeps the loop marked running, so a Retry or a shown tab
+  (`src/app/tools.js`) before that frame starts no second loop.
+- After a lost context, later render errors are only logged, so the notice
+  keeps saying why. The listener neither prevents nor restores the loss.
+- When the globe draws again, focus goes back where it was, or to the globe's
+  canvas, which the map's keys read as the map; the canvas is focusable only
+  until focus leaves or the globe is pressed. Focus the user moved stays put.
+- The notice sits above floating panels such as the Québec camera viewer, and
+  its buttons are 44 px tall on touch screens.
+
+An inline conversation panel never reloads or navigates its host's page: it
 offers Retry after a render error only, and nothing after a lost context, where
-the panel runtime's own notice applies. The panel's timer
-(`keepPanelRendering()`) draws only while Cesium's render loop is on, so it
-stops after a render error and draws again after Retry. An error a frame of
-the timer throws stops there: it has been raised as a render error, and
-thrown on it would only reach the host page.
-
-A render error marks Cesium's loop stopped, but a frame drawn while the loop
-ran leaves its next animation frame queued: an error Scene catches itself
-returns to the loop, which queues the frame, and a frame the panel's timer
-draws leaves it queued. The `render()` and `resize()` wrapper keeps the loop
-marked running after such a call, so a Retry before that frame, or a tab shown
-again (`src/app/tools.js`), does not start a second loop that would draw every
-frame twice. The queued frame stops the loop itself if nothing restarted it.
-
-The `webglcontextlost` listener does not `preventDefault()` the context loss or
-restore the context; it only reports it.
+the panel runtime's own notice applies. Its timer (`keepPanelRendering()`)
+draws only while the render loop is on. An error a timer frame throws is caught
+there: it has already been raised as a render error.
 
 ## Map Source control ownership
 

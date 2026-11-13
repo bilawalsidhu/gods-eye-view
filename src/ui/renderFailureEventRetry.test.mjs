@@ -1,8 +1,6 @@
-// Retry after an error thrown by a scene event listener. Cesium's
-// Event.raiseEvent has no try/finally: a throwing listener leaves the event
-// with _invokingListeners = true, so listeners added or removed afterwards are
-// only queued (_toAdd/_toRemove) until the next raise of that event completes.
-// Drives Cesium's real Event and startRenderLoop (CesiumWidget.prototype).
+// Retry after a scene event listener throws. Cesium's Event.raiseEvent has no
+// try/finally, so the event stays mid-raise and only queues listener changes.
+// Drives Cesium's real Event and startRenderLoop.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';

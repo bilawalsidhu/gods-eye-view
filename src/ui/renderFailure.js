@@ -4,14 +4,11 @@ import { describeError } from '../app/errors.js';
 import { appRootUrl } from '../share/shareLinkPath.js';
 
 /**
- * Tell the user when the globe stops drawing, rather than leave a black globe
- * behind controls that still respond. Cesium stops its render loop after a
- * render error, and a page whose WebGL context was lost never draws again.
- *
- * Retry restarts the loop, and the notice stays until a frame renders without
- * an error; after a context loss Retry reloads the page. Reset opens the app's
- * root address. With `allowReload: false`, Reset is left out, and so is Retry
- * after a context loss. Returns a function that removes the notice.
+ * Show a recoverable notice when the globe stops drawing, instead of a black
+ * globe behind working controls. Retry restarts the render loop, or reloads
+ * after a lost WebGL context; Reset opens the app's root address. With
+ * `allowReload: false`, Reset is dropped, and so is Retry after a context loss.
+ * Returns a function that removes the notice.
  */
 export function installRenderFailureNotice(
   viewer,
@@ -27,8 +24,8 @@ export function installRenderFailureNotice(
   const canvas = viewer.canvas ?? scene.canvas;
   let notice = null;
   let contextLost = false;
-  // The error Scene raised as a render error and, with rethrowRenderErrors,
-  // throws on: the render() wrapper must not raise it a second time.
+  // With rethrowRenderErrors, Scene throws the error it has just raised;
+  // the render() wrapper must not raise it again.
   let raisedByScene = null;
   let frameFailed = false;
   let removeFrameListeners = null;
@@ -104,14 +101,10 @@ export function installRenderFailureNotice(
   };
 
   const removeRenderError = scene.renderError.addEventListener(onRenderError);
-  // An error thrown outside Scene's own error handling (a preRender or
-  // postRender listener, the clock's onTick, a resize) also stops Cesium's
-  // render loop, but raises no renderError, and Cesium reports it only in the
-  // panel the app turns off. Raise it as a render error, so Cesium's handler,
-  // an inline panel's timer and this notice all see it. Such an error passes
-  // here before anything else runs, so finish the raises of frameEvents() it
-  // cut short first: listeners added or removed while the loop is stopped
-  // then apply at once, in order.
+  // An error thrown outside Scene's error handling (a frame listener, onTick,
+  // resize) stops the loop without a renderError. Raise one, so Cesium, an
+  // inline panel's timer and this notice all see it. First finish the event
+  // raises it cut short, so listeners added or removed meanwhile apply.
   const unguard = ['resize', 'render'].map((name) =>
     reportThrown(viewer.cesiumWidget, name, (error) => {
       frameEvents(viewer).forEach(finishRaise);
@@ -130,11 +123,8 @@ export function installRenderFailureNotice(
 }
 
 /**
- * The events Cesium raises in a frame outside Scene's own error handling, so
- * that a listener's error cuts their raise short: Scene's frame events, the
- * camera's and the clock's, and those raised after the frame renders, the
- * globe's tile load progress and the load events of the scene's tilesets.
- * Tilesets nested in a collection are not reached.
+ * Events Cesium raises in a frame outside Scene's error handling, which a
+ * listener's error can leave mid-raise. Only top-level tilesets are reached.
  */
 function frameEvents(viewer) {
   const { scene } = viewer;
@@ -164,10 +154,8 @@ function frameEvents(viewer) {
 }
 
 /**
- * Finish the raise a throwing listener cut short. Cesium's `Event.raiseEvent`
- * marks the event as raising until every listener returns, and until then it
- * only queues the listeners added or removed. Apply the queue as the raise
- * would have, so listeners added or removed from here on take effect at once.
+ * Finish a raise a throwing listener cut short. Until a raise ends, Cesium's
+ * `Event` only queues added and removed listeners; apply that queue.
  */
 function finishRaise(event) {
   if (!event?._invokingListeners) return;
@@ -187,15 +175,12 @@ function finishRaise(event) {
 }
 
 /**
- * Report an error the widget's `name` method throws, and throw it on.
+ * Report an error the widget's `name` method throws, and rethrow it.
  *
- * A render error marks Cesium's render loop stopped, but a call made while
- * the loop ran leaves the loop's next animation frame queued: the loop queues
- * it after a call that returns, and a frame an inline panel's timer draws
- * leaves it queued. That frame stops the loop itself, and a Retry or a shown
- * tab that comes first must not start a second loop beside it, so the loop
- * stays marked running. A call from the loop that throws is still marked
- * stopped by the loop's own catch.
+ * A render error marks the loop stopped, but a call made while it ran leaves
+ * its next frame queued, and that frame stops it. Keep the loop marked
+ * running, so a Retry or a shown tab before that frame starts no second loop.
+ * After a throw, the loop's own catch still marks it stopped.
  */
 function reportThrown(widget, name, report) {
   const original = widget?.[name];

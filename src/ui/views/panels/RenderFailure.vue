@@ -5,8 +5,7 @@ import { msg, t } from '../../../i18n/index.js';
 import { useStatusStore } from '../../stores/status.js';
 import UiButton from '../../kit/UiButton.vue';
 
-// The notice installRenderFailureNotice() (src/ui/renderFailure.js) publishes
-// while the globe cannot draw, with the actions it offers.
+// Published by installRenderFailureNotice() (src/ui/renderFailure.js).
 const { renderFailure: failure } = storeToRefs(useStatusStore());
 const panel = ref(null);
 const MESSAGES = {
@@ -17,10 +16,8 @@ const MESSAGES = {
     'Rendering stopped after an error. Layers and controls still work, but the map is not updating.',
   ),
 };
-// Focus moves to the first action each time the notice appears, so a
-// keyboard user can act on it at once. When the globe draws again, it goes
-// back where it was, or to the map if that cannot take it, unless the user
-// has moved it since.
+// Focus goes to the first action when the notice appears. When the globe
+// draws again, it goes back, or to the map, unless the user moved it.
 let focusBefore;
 watch(
   () => Boolean(failure.value),
@@ -39,7 +36,7 @@ watch(
     if (active && active !== document.body) return;
     if (previous?.isConnected && previous !== document.body) {
       previous.focus({ preventScroll: true });
-      // A control disabled, hidden or made inert since does not take it.
+      // A control disabled, hidden or made inert meanwhile does not take it.
       if (document.activeElement === previous) return;
     }
     focusMap();
@@ -47,10 +44,9 @@ watch(
   { immediate: true },
 );
 
-// The globe's canvas, which the map's keys (Enter to finish a drawing, Space
-// to talk) read as the map. It takes focus only this once: when focus moves
-// on, or the globe is pressed, it goes back to a canvas that cannot take
-// focus, and a press leaves focus on the page, as Cesium has it.
+// The map's keys (Enter to finish a drawing, Space to talk) read the canvas
+// as the map. It stays focusable only until focus leaves or the globe is
+// pressed; a press leaves focus on the page, as in Cesium.
 function focusMap() {
   const canvas = document.querySelector(
     '#cesiumContainer .cesium-widget canvas',

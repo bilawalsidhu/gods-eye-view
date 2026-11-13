@@ -1,9 +1,6 @@
-// Retry after an error Scene catches itself (Scene.tryAndCatchError raises
-// renderError and returns). CesiumWidget's renderError handler marks the loop
-// stopped, but startRenderLoop still queues the loop's next animation frame.
-// A Retry that lands before that frame runs must not start a second loop.
-// Drives Cesium's real startRenderLoop and useDefaultRenderLoop setter
-// (CesiumWidget.prototype).
+// Retry after an error Scene catches itself: the loop is marked stopped but
+// its next frame is still queued, so an early Retry must not start a second
+// loop. Drives Cesium's real startRenderLoop and useDefaultRenderLoop setter.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';

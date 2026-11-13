@@ -1,7 +1,5 @@
-// Errors thrown in the render loop outside Scene's tryAndCatchError (a
-// preRender/postRender listener, clock.onTick, resize). Drives Cesium's real
-// startRenderLoop through the CesiumWidget.prototype.useDefaultRenderLoop
-// setter.
+// Errors thrown in the render loop outside Scene's tryAndCatchError. Drives
+// Cesium's real startRenderLoop through the useDefaultRenderLoop setter.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
