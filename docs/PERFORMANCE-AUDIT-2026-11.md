@@ -52,7 +52,7 @@ Worst first. "Fix" names the pull request that carries the fix.
 | 12 | `/api/firms` | The whole fire set is filtered, serialised and sent uncompressed on every request; 15 to 55 MB estimated in a heavy season | #1711 |
 | 13 | AIS store | Both vessel maps are walked on every position message, and sorted whole once past the cap | #1712 |
 | 14 | Satellite clouds on the 3D Tiles map | A CPU pass over a 4096 x 2048 image, 90 to 180 ms measured on a synthetic canvas, twice in a row | #1713 (canvas path) |
-| 15 | NVG and FLIR styles | Over 100 texture reads per pixel on every frame | not started |
+| 15 | NVG and FLIR styles | Over 100 texture reads per pixel, and 60 renders a second while the style is on. Measured afterwards: the reads cost 0.4 ms a frame at 1440 x 900 and 1.2 ms at 2560 x 1440 | #1718 |
 | 16 | Wind server | Full 0.25 degree GRIB fields decoded on the event loop. Measured afterwards: 68 ms blocked per warm refresh, about 250 ms on the first, about 400 ms when all six keys refresh together | #1717 |
 | 17 | Imported geo files and other per-feature ground clamps | Measured afterwards: imported files do not freeze; see below | none needed |
 
@@ -250,9 +250,18 @@ shell, do the transfer in its fragment shader.
 ### 15. NVG and FLIR styles
 
 `src/styles/surveillance.js` loops 11 x 11 texture reads per pixel and
-`src/styles/thermal.js` totals 106.
+`src/styles/thermal.js` totals 106. Timed on the GPU, those loops cost about
+0.4 ms a frame at 1440 x 900 and 1.2 ms at 2560 x 1440 on the test machine:
+real, but small there. The standing cost is that a style with animated grain
+holds continuous rendering at 60 frames a second.
 
-Fix: a separable or half-resolution blur, and noise ticked at about 15 Hz.
+Fix: split the bloom into a row pass and a column pass, which gives the same
+picture from a fifth to a half of the reads, and step the grain's clock at
+15 Hz, asking for one frame per step instead of holding the render loop. The
+grain then changes 15 times a second, which is visible in motion.
+
+Switching on any style stage at all costs more than the bloom did (1.8 ms a
+frame at 1440 x 900 for the one-line noir style). That was not looked into.
 
 ### 16. Wind server
 
