@@ -148,14 +148,16 @@
 }
 
 /* The open item takes the accent colour; its highlight is the rail's shared
-   one, which slides to it. Without that highlight the button carries its own. */
+   one, which slides to it. The button carries no fill of its own: as a rail
+   folds its labelled pills to icons, a fill on the shrinking button would
+   read as the highlight stretching. */
 :is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item.ui-rail__item--on {
   color: #00d4ff !important;
 }
 
 :is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail:not(.ui-rail--glide) .ui-rail__item.ui-rail__item--on {
-  background: rgba(0, 212, 255, 0.15);
-  border-color: rgba(0, 212, 255, 0.15);
+  background: none;
+  border-color: transparent;
 }
 
 :is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail::before {

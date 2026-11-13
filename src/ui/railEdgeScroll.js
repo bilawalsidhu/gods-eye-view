@@ -83,6 +83,11 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     const railBox = rail.getBoundingClientRect();
     const box = on.getBoundingClientRect();
     const shown = gliding.has(rail);
+    // A rail opening its first panel folds its labelled pills to icons, the
+    // buttons shrinking over a few frames; the highlight waits until the open
+    // button is an icon again (square) rather than fading in at a pill's
+    // width and then shrinking.
+    if (!shown && (rail.classList.contains('ui-rail--expanded') || box.width > box.height + 2)) return;
     // Appearing from nothing: jump into place, then fade in.
     rail.classList.toggle('ui-rail--glide-jump', !shown);
     rail.style.setProperty('--rail-glide-x', `${box.left - railBox.left - rail.clientLeft}px`);

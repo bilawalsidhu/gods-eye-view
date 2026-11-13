@@ -31,10 +31,11 @@
   opacity: 0;
   pointer-events: none;
   transform: translate(var(--rail-glide-x, 0), var(--rail-glide-y, 0));
+  /* Only the position slides. The size follows at once: it changes only
+     when the rail changes shape (its labelled pills folding to icons as a
+     panel opens), and a size easing there reads as a stretch. */
   transition:
     transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 380ms cubic-bezier(0.22, 1, 0.36, 1),
-    height 380ms cubic-bezier(0.22, 1, 0.36, 1),
     border-radius var(--transition-fast),
     opacity 200ms ease;
 }
