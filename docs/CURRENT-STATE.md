@@ -194,8 +194,8 @@ refers to a person by a title or role (Mr, captain, master, owner, crew,
 such word can still pass. Deaths appear only as a Wikidata count.
 
 The globe draws a round marker with a hull and mast per wreck, all in one
-billboard collection, ground-clamped with the depth test off and the horizon
-cull GhostMaps uses, sized by deaths (a bigger toll draws on top) and coloured
+billboard collection, placed on the ellipsoid (no terrain height read per
+marker) with the depth test off and the horizon cull GhostMaps uses, sized by deaths (a bigger toll draws on top) and coloured
 by era (a legend under the row): before 1900 (ancient wrecks dated only by
 period count here), 1900–1945, after 1945, and date unknown. A period filter
 under the row picks a start year and an end year side by side (two pickers
