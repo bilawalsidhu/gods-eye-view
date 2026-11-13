@@ -40,7 +40,7 @@ Worst first. "Fix" names the pull request that carries the fix.
 | 5 | ALPR cameras | Depth samples inside the overlay paint, repeated on every re-enable: 240 samples and about 1 s across eight toggles. A first-sample freeze of up to 1.9 s was seen in the sweep but not on a second day | #1706 |
 | 6 | Wind | First zoom after load: up to 14 long tasks (longest 414 ms). Re-measured as one-off shader links, not a standing cost: see below | none proposed |
 | 7 | Submarine cables | About 2 s of long tasks on load, heap briefly at 1 GB, about 0.5 s again on each re-enable | #1707 (first step) |
-| 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | #1708 (fleet pass); overlay is a follow-up |
+| 8 | Live Flights at whole-globe view with detection labels | Fine on the test machine; at 4x CPU throttle, 8 fps with 143 long tasks in 15 s | #1708 (fleet pass), #1719 (overlay) |
 | 9 | Radio | 7 to 10 long tasks when the directory loads, longest 447 ms | #1709 |
 | 10 | Pointer pick | Not reproduced on a second look: see below | none needed |
 | 11 | CCTV | A still-image camera holds continuous rendering at 60 frames a second although its picture changes about every 10 s | #1710 |
@@ -183,11 +183,15 @@ read.
 The second turned out smaller than it looked. The bracket strokes are already
 one path per colour, and collecting the objects is about 3 ms of a 56 ms frame
 at 4x throttle once the first fix is in. What costs is the per-object loop in
-`_drawOverlay` (projection, occlusion, alpha, twelve path calls per bracket),
-about 13 ms per frame at 4x. Removing it means keeping the bracket paths across
-frames while the camera and every contributing layer are unchanged, which needs
-a revision signal from each detectable layer: a design change, left as a
-follow-up.
+`_drawOverlay` (projection, occlusion, alpha, twelve path calls per bracket).
+
+Fix for the second: keep what a sweep built and reuse it on the next paint when
+the view and every contact are exactly what it was built from, compared value
+by value so no layer has to announce a change. Between two fleet passes most
+paints qualify, which cuts frame work by a fifth to a third on a still camera
+at full speed. At 4x throttle a frame outlasts a fleet pass, no paint
+qualifies, and the gain is a few milliseconds; the fleet pass is what
+dominates there.
 
 ### 9. Radio
 
