@@ -7,3 +7,11 @@
   km/h (Dijon, Le Mans, Bourg-en-Bresse, Blois, Montluçon) are converted to
   m/s, and internal route keys read as the line on the vehicle. Networks
   already in the layer are not added a second time (#1716).
+- Add 139 more keyless feeds to the Transit layer from the open GTFS-Realtime
+  catalogues, most of them United States agencies (Sacramento, Spokane,
+  Cleveland, St. Louis, Madison, Louisville, Fresno, Broward County and many
+  smaller systems), plus Zagreb, Bilbao's metro, Chișinău, Parma and a few
+  Québec networks. Operators whose terms were read are credited as those
+  terms ask; feeds with no stated licence say so in the registry and
+  DATA_SOURCES.md. Feeds whose terms need a key, registration or permission
+  (New York City buses, Detroit, Pittsburgh and others) are left out (#1716).
