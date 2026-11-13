@@ -242,6 +242,12 @@ export function createGravityLayer({
     playTimer = setTimeoutImpl(async () => {
       playTimer = null;
       if (!playing || !enabled) return;
+      // A month still loading (the first one, after Play restarts from the
+      // latest) is not the end of the replay: wait another step for it.
+      if (loading) {
+        scheduleStep();
+        return;
+      }
       const list = solutions();
       const position = list.findIndex(({ id }) => id === shownId);
       if (position < 0 || position >= list.length - 1) {

@@ -53,13 +53,14 @@ function fieldFor(id) {
   return field;
 }
 
-function harness() {
+function harness({ fieldReady = () => Promise.resolve() } = {}) {
   const fetched = [];
   const cells = [];
   const feed = {
     getIndex: async () => INDEX,
     getField: async (id) => {
       fetched.push(id);
+      await fieldReady(id);
       return fieldFor(id);
     },
     getCell: async (lat, lon) => {
@@ -259,6 +260,27 @@ test('playback starts over from the first solution and stops at the latest', asy
   assert.equal(layer.getCardState().shownIndex, 2);
   await timers.shift()();
   assert.equal(layer.getCardState().playing, false, 'stops at the latest');
+  assert.deepEqual(fetched, ['2026-08-01', '2026-06-01', '2026-07-01']);
+});
+
+test('a replay waits for a slow first month instead of stopping at once', async () => {
+  let release;
+  const slowFirst = new Promise((resolve) => (release = resolve));
+  const { layer, fetched, timers } = harness({
+    fieldReady: (id) => (id === '2026-06-01' ? slowFirst : Promise.resolve()),
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ playing: true });
+  await settle();
+  assert.equal(layer.getCardState().shownIndex, 2, 'the latest is still drawn');
+  await timers.shift()();
+  assert.equal(layer.getCardState().playing, true, 'still replaying');
+  release();
+  await settle();
+  assert.equal(layer.getCardState().shownIndex, 0, 'the first month arrived');
+  await timers.shift()();
+  assert.equal(layer.getCardState().shownIndex, 1);
   assert.deepEqual(fetched, ['2026-08-01', '2026-06-01', '2026-07-01']);
 });
 
