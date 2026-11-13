@@ -182,3 +182,63 @@ test("the ISS live player is NASA's stream on the privacy-enhanced host", async 
     `https://www.youtube.com/watch?v=${ISS_LIVE_VIDEO_ID}`,
   );
 });
+
+test('live iframe follows selection, dismissal, cockpit and locale', async (t) => {
+  const { installVueDom } = await import('../../testSupport/vueDom.mjs');
+  const { getLocale, setLocale } = await import('../../i18n/index.js');
+  const { createIssLive } = await import('./issLive.js');
+  const originalLocale = getLocale();
+  const uninstall = installVueDom();
+  const state = { _enabled: true, _trackedNorad: null };
+  let cockpitHeld = false;
+  const live = createIssLive({
+    state,
+    parts: { cockpit: { _cockpitHeld: () => cockpitHeld } },
+  });
+  t.after(() => {
+    live._destroyIssLive();
+    setLocale(originalLocale);
+    uninstall();
+  });
+
+  const player = () => document.querySelector('.iss-live-panel iframe');
+  assert.equal(player(), null);
+  state._trackedNorad = ISS_NORAD;
+  live._syncIssLive();
+  const first = player();
+  assert.ok(first);
+  assert.equal(
+    new URL(first.src).origin,
+    'https://www.youtube-nocookie.com',
+  );
+
+  // Per-frame sync and language changes must not restart a live player.
+  live._syncIssLive();
+  assert.equal(player(), first);
+  setLocale(originalLocale === 'fr' ? 'es' : 'fr');
+  assert.equal(player(), first);
+  assert.equal(document.querySelectorAll('.iss-live-panel iframe').length, 1);
+
+  // Dismissal stays in effect for this selection; another selection resets it.
+  document.querySelector('.iss-live-panel .qci-header button').click();
+  assert.equal(player(), null);
+  live._syncIssLive();
+  assert.equal(player(), null);
+  state._trackedNorad = null;
+  live._syncIssLive();
+  state._trackedNorad = ISS_NORAD;
+  live._syncIssLive();
+  assert.ok(player());
+  assert.notEqual(player(), first);
+
+  // The embedded stream is released whenever its owner stops showing it.
+  cockpitHeld = true;
+  live._syncIssLive();
+  assert.equal(player(), null);
+  cockpitHeld = false;
+  live._syncIssLive();
+  assert.ok(player());
+  state._enabled = false;
+  live._syncIssLive();
+  assert.equal(player(), null);
+});
