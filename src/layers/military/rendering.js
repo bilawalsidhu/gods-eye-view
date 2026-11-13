@@ -1,22 +1,10 @@
+import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
-  CLASS_MODEL_REAL,
-  CLASS_SCALE_3D,
-  CLASS_SCALE_2D,
-} from '../../data/aircraftClass.js';
-import {
-  visualCenterForModel,
-  trailAnchorForModel,
-} from '../../data/modelVisualAnchor.js';
+  aircraftLayerModelSpec,
+  aircraftModelSpecCacheKey,
+} from '../flights/modelSpec.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
-  PLANE_MODEL_SCALE,
-  PLANE_MODEL_URL,
-  PLANE_NATIVE_RADIUS_M,
-  PLANE_BELLY_OFFSET_NATIVE,
-  MODEL_SCALE,
-  JET_MODEL_URL,
-  MODEL_NATIVE_RADIUS_M,
-  MODEL_BELLY_OFFSET_NATIVE,
   MODEL_HEADING_OFFSET_DEG,
   BILLBOARD_SCALE,
   GROUND_SCALE,
@@ -37,51 +25,20 @@ export function createRendering({
 }) {
   const { tr3bIconKind } = services.aircraftPresentation;
 
-  function _modelSpec(klass) {
-    let spec = flightState._specCache.get(klass);
+  /** The fleet model an aircraft draws with, by its type and emitter category
+   *  (shared with the flights layer), in this layer's own tint. */
+  function _modelSpec(meta) {
+    const key = aircraftModelSpecCacheKey(meta);
+    let spec = flightState._specCache.get(key);
     if (spec) return spec;
-    const real = CLASS_MODEL_REAL[klass];
-    if (real) {
-      spec = {
-        url: real.url,
-        scale: 1,
-        nativeRadiusM: real.radiusM,
-        bellyM: real.bellyM,
-        headingOffsetDeg: 180,
-        blendAmount: MODEL_COLOR_BLEND_AMOUNT,
-        visualCenterNative: visualCenterForModel(real.url),
-        trailAnchorNative: trailAnchorForModel(real.url),
-      };
-    } else if (
-      klass === 'airliner' ||
-      klass === 'quadjet' ||
-      klass === 'glider'
-    ) {
-      const scale = PLANE_MODEL_SCALE * (CLASS_SCALE_3D[klass] || 1);
-      spec = {
-        url: PLANE_MODEL_URL,
-        scale,
-        nativeRadiusM: PLANE_NATIVE_RADIUS_M,
-        bellyM: PLANE_BELLY_OFFSET_NATIVE * scale,
-        headingOffsetDeg: 180,
-        blendAmount: MODEL_COLOR_BLEND_AMOUNT,
-        visualCenterNative: visualCenterForModel(PLANE_MODEL_URL),
-        trailAnchorNative: trailAnchorForModel(PLANE_MODEL_URL),
-      };
-    } else {
-      const scale = MODEL_SCALE * (CLASS_SCALE_3D[klass] || 1);
-      spec = {
-        url: JET_MODEL_URL,
-        scale,
-        nativeRadiusM: MODEL_NATIVE_RADIUS_M,
-        bellyM: MODEL_BELLY_OFFSET_NATIVE * scale,
-        headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
-        blendAmount: MODEL_COLOR_BLEND_AMOUNT,
-        visualCenterNative: visualCenterForModel(JET_MODEL_URL),
-        trailAnchorNative: trailAnchorForModel(JET_MODEL_URL),
-      };
-    }
-    flightState._specCache.set(klass, spec);
+    const base = aircraftLayerModelSpec(meta);
+    spec = Object.freeze({
+      ...base,
+      blendAmount: MODEL_COLOR_BLEND_AMOUNT,
+      headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
+    });
+    // Not cached before the model set loads: the answer changes once it has.
+    if (spec.model) flightState._specCache.set(key, spec);
     return spec;
   }
 

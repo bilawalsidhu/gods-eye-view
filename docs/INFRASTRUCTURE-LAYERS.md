@@ -31,8 +31,9 @@ const layers = createInfrastructureLayers({
 | `overlayHost.clearSource` | `(sourceId)`; remove that source's overlay entries |
 | `registerEntityContext` | `(entity, metadata)`; register selectable feature metadata, including the owning layer and data source |
 | `selectEntityContext` | `(entity)`; select that registered feature |
-| `clearSelectedEntityContextForLayer` | `(layerId)`; clear selection only if owned by this layer |
-| `removeEntityContextsForLayer` | `(layerId)`; remove records owned by the layer on destruction or failed setup |
+| `clearSelectedEntityContextForLayer` | `(layerId, { evicted })`; clear selection only if owned by this layer; `evicted` when its feature left the data |
+| `removeEntityContextsForLayer` | `(layerId, { retainIds })`; remove records owned by the layer on destruction or failed setup, or those a new feature set no longer has |
+| `getSelectedEntityContext` | optional; `()` the selected record, so `replaceFeatures` keeps a selection the new set still has |
 | `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
 
 Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
@@ -75,7 +76,13 @@ heights stand their pin on the stem's tip. Edges follow rhumb lines.
 
 `gods-eye-view/infrastructure/geojson` exports the lower-level
 `createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay
-helpers. `gods-eye-view/infrastructure/lod` exports the existing LOD policy helpers.
+helpers. Its options also take `loadFeatures({ signal })`, a loader resolving to
+GeoJSON features in place of `url`, and `featureColor(properties)`, a CSS colour
+per feature for its fill, stem, dot, pin and label accent. The layer it returns
+also has `dropCachedFeatures()`, so the next `enable` loads again, and
+`replaceFeatures(viewer, features)`, which draws a new feature set in place of
+the current one: the current one stays drawn until the new one is built, and
+stays if that fails (the call then rejects). `gods-eye-view/infrastructure/lod` exports the existing LOD policy helpers.
 Consumers use the package exports, which do not import standalone application
 globals.
 

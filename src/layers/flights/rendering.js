@@ -1,4 +1,7 @@
-import { civilAircraftModelSpec } from './modelSpec.js';
+import {
+  aircraftLayerModelSpec,
+  aircraftModelSpecCacheKey,
+} from './modelSpec.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
@@ -59,11 +62,14 @@ export function createRendering({
     );
   }
 
-  function _modelSpec(klass) {
-    const cached = flightState._specCache.get(klass);
+  /** The fleet model an aircraft draws with, by its type and emitter category. */
+  function _modelSpec(meta) {
+    const key = aircraftModelSpecCacheKey(meta);
+    const cached = flightState._specCache.get(key);
     if (cached) return cached;
-    const spec = civilAircraftModelSpec(klass);
-    flightState._specCache.set(klass, spec);
+    const spec = aircraftLayerModelSpec(meta);
+    // Not cached before the model set loads: the answer changes once it has.
+    if (spec.model) flightState._specCache.set(key, spec);
     return spec;
   }
 

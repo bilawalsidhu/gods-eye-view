@@ -103,6 +103,13 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (Array.isArray(props.__gevDetails)) {
+    // Data Library features carry their card lines from the manifest
+    // (src/library/formats.js presentLibraryProperties).
+    for (const line of props.__gevDetails.slice(0, 2)) {
+      const clean = cleanLabel(line);
+      if (clean) details.push(clampCardLine(clean));
+    }
   }
 
   return { title, details };
@@ -508,8 +515,13 @@ function wideFov(pose) {
  * port: polygons and lines on the ground, and on each polygon or point a
  * 3D stem with a dot on its tip, sized to the camera and lifted onto the
  * sampled surface. Clicking any of it selects the feature and flies there.
- * @param {object} options Dataset URL, identity, appearance and optional adapters.
+ * @param {object} options Dataset URL (or a `loadFeatures({signal})` loader
+ *   resolving to GeoJSON features), identity, appearance (an optional
+ *   `featureColor(properties)` returns a CSS colour per feature) and optional
+ *   adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
+ *   An optional `getSelectedEntityContext()` lets `replaceFeatures` keep the
+ *   selection on a feature the new set still has.
  * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
  * Destroy the previous instance before replacing it. Importing creates no layers.
@@ -526,6 +538,8 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    loadFeatures = null,
+    featureColor = null,
     inputFor = defaultInputFor,
     projectToWindow = (viewer, position) =>
       findQuery(viewer)?.project(position) ?? null,
@@ -536,12 +550,17 @@ export function createLocalGeoJsonLayer(
     selectEntityContext,
     clearSelectedEntityContextForLayer,
     removeEntityContextsForLayer,
+    getSelectedEntityContext = null,
     governorRequestRender,
     showOsmCredit,
     hideOsmCredit,
   },
 ) {
   const setPrefix = `${id}:${++layerInstances}`;
+  /** Builds made so far: each draws under set ids of its own. */
+  let builds = 0;
+  /** Bumped by each `replaceFeatures`, so only the latest one swaps in. */
+  let replacements = 0;
   /** The pins its points stand on, one image per distinct marker. */
   const pinMaker = createGeojsonPins();
   /** What this layer draws while built: its sets and parts, or null. */
@@ -652,6 +671,12 @@ export function createLocalGeoJsonLayer(
     host: overlayHost,
   });
 
+  /** Register the context of each record a build made. */
+  function registerContexts(records) {
+    for (const record of records)
+      registerEntityContext(record.carrier, record.context);
+  }
+
   /** Let go of every set a build made. */
   function disposeSets(sets) {
     for (const set of Object.values(sets)) {
@@ -708,24 +733,38 @@ export function createLocalGeoJsonLayer(
    * Build the sets for the parsed features: a fill for each polygon, a
    * draped line for each line, a pin for each point, and a stem and its dot
    * for each polygon and point. Hidden until the enable finishes, as the
-   * loader's data source was.
+   * loader's data source was. Each record's context is made here and
+   * registered by the caller once the build has succeeded.
    */
   function buildDrawn(viewer, features) {
     const draw = drawOf(viewer);
     const rgba = cssColor(color) ?? [1, 1, 1, 1];
     const fillColor = [rgba[0], rgba[1], rgba[2], FILL_ALPHA];
+    // An optional per-feature colour (Data Library colorBy): its CSS value
+    // and RGBA, one per distinct value.
+    const colors = new Map();
+    const colorOf = (properties) => {
+      const css =
+        (typeof featureColor === 'function' && featureColor(properties)) ||
+        color;
+      if (css === color) return { css, rgba };
+      if (!colors.has(css)) colors.set(css, { css, rgba: cssColor(css) });
+      const found = colors.get(css);
+      return found.rgba ? found : { css: color, rgba };
+    };
     const parts = localGeojsonParts(features);
     const sets = {};
     const built = { sets, parts: new Map(), records: [], count: parts.length };
+    const prefix = `${setPrefix}:${++builds}`;
     try {
-      sets.fills = draw.shapes({ id: `${setPrefix}:fills`, show: false });
+      sets.fills = draw.shapes({ id: `${prefix}:fills`, show: false });
       // Raised polygons apart: a ground fill showing or hiding changes in
       // place only in a set of ground fills.
-      sets.raised = draw.shapes({ id: `${setPrefix}:raised`, show: false });
-      sets.lines = draw.lines({ id: `${setPrefix}:lines`, show: false });
-      sets.pins = draw.icons({ id: `${setPrefix}:pins`, show: false });
-      sets.stems = draw.lines({ id: `${setPrefix}:stems`, show: false });
-      sets.dots = draw.points({ id: `${setPrefix}:dots`, show: false });
+      sets.raised = draw.shapes({ id: `${prefix}:raised`, show: false });
+      sets.lines = draw.lines({ id: `${prefix}:lines`, show: false });
+      sets.pins = draw.icons({ id: `${prefix}:pins`, show: false });
+      sets.stems = draw.lines({ id: `${prefix}:stems`, show: false });
+      sets.dots = draw.points({ id: `${prefix}:dots`, show: false });
 
       const fills = [];
       const lines = [];
@@ -757,6 +796,7 @@ export function createLocalGeoJsonLayer(
           continue;
         }
 
+        const own = colorOf(properties);
         let lon;
         let lat;
         if (part.kind === 'polygon') {
@@ -774,7 +814,11 @@ export function createLocalGeoJsonLayer(
                 }))
               : rhumbPositions(ring),
           );
-          part.fill = fillOf(style, fillColor);
+          // A feature colour of its own fills it, over its simplestyle fill.
+          part.fill =
+            own.rgba === rgba
+              ? fillOf(style, fillColor)
+              : withAlpha(own.rgba, FILL_ALPHA);
           // The stem stands on the centre of the outer ring's bounding
           // sphere, carried to the surface.
           const center = toLonLatH(
@@ -791,7 +835,7 @@ export function createLocalGeoJsonLayer(
           lat = part.coordinates[1];
           part.pinClamped = part.coordinates.length <= 2;
           part.pinPos = { lon, lat };
-          const marker = markerOf(style, rgba);
+          const marker = markerOf(style, own.rgba);
           part.pin = pinMaker.pin({
             ...marker,
             symbol: style?.['marker-symbol'],
@@ -818,6 +862,7 @@ export function createLocalGeoJsonLayer(
           lastGroundSampleMs: 0,
           priority,
           properties,
+          rgba: own.rgba,
           visible: true,
           entry: labels
             ? createLocalInfrastructureOverlayEntry({
@@ -826,9 +871,22 @@ export function createLocalGeoJsonLayer(
                 position: tip,
                 properties,
                 priority,
-                accent: color,
+                accent: own.css,
               })
             : null,
+          context: {
+            id: `${id}:${recordId}`,
+            layerId: id,
+            layerName: name,
+            source,
+            label: featureLabelFromProperties(properties, id),
+            properties,
+            latitude: Number(lat.toFixed(6)),
+            longitude: Number(lon.toFixed(6)),
+            // The surface base voice targeting projects. Ground sampling
+            // re-grounds it in place, so this stays current.
+            targetPosition: base,
+          },
         };
         carrier.record = record;
         // A context record is active while its feature shows.
@@ -836,34 +894,20 @@ export function createLocalGeoJsonLayer(
           get: () => record.visible,
           enumerable: true,
         });
-        registerEntityContext(carrier, {
-          id: `${id}:${recordId}`,
-          layerId: id,
-          layerName: name,
-          source,
-          label: featureLabelFromProperties(properties, id),
-          properties,
-          latitude: Number(lat.toFixed(6)),
-          longitude: Number(lon.toFixed(6)),
-          // The surface base voice targeting projects. Ground sampling
-          // re-grounds it in place, so this stays current.
-          targetPosition: base,
-        });
         built.records.push(record);
-        if (part.kind === 'polygon') fills.push(fillItem(record, rgba));
+        if (part.kind === 'polygon') fills.push(fillItem(record));
         else pins.push(pinItem(record));
       }
       sets.fills.set(fills.filter((item) => item.height === 'clampGround'));
       sets.raised.set(fills.filter((item) => item.height !== 'clampGround'));
       sets.lines.set(lines);
       sets.pins.set(pins);
-      sets.stems.set(built.records.map((record) => stemItem(record, rgba)));
-      sets.dots.set(built.records.map((record) => dotItem(record, rgba)));
+      sets.stems.set(built.records.map(stemItem));
+      sets.dots.set(built.records.map(dotItem));
     } catch (error) {
       disposeSets(sets);
       throw error;
     }
-    built.rgba = rgba;
     return built;
   }
 
@@ -875,18 +919,14 @@ export function createLocalGeoJsonLayer(
   function writeChanges(drawn, moved, shown) {
     if (!moved.size && !shown.size) return;
     const stems = new Set([...moved, ...shown]);
-    drawn.sets.stems.upsert(
-      [...stems].map((record) => stemItem(record, drawn.rgba)),
-    );
-    drawn.sets.dots.upsert(
-      [...stems].map((record) => dotItem(record, drawn.rgba)),
-    );
+    drawn.sets.stems.upsert([...stems].map(stemItem));
+    drawn.sets.dots.upsert([...stems].map(dotItem));
     const fills = [];
     const pins = [];
     for (const record of stems) {
       const { kind, pinClamped } = record.part;
       if (!shown.has(record) && (kind !== 'point' || pinClamped)) continue;
-      if (kind === 'polygon') fills.push(fillItem(record, drawn.rgba));
+      if (kind === 'polygon') fills.push(fillItem(record));
       else pins.push(pinItem(record));
     }
     const ground = fills.filter((item) => item.height === 'clampGround');
@@ -1091,7 +1131,17 @@ export function createLocalGeoJsonLayer(
             _error = null;
             try {
               let features = _cachedFeatures;
-              if (!features) {
+              if (!features && loadFeatures) {
+                // A caller-owned loader (the Data Library) fetches and bounds
+                // its own live dataset; this layer only draws it.
+                features = await loadFeatures({
+                  signal: _loadController.signal,
+                });
+                if (_destroyed) return;
+                if (!Array.isArray(features))
+                  throw new Error('dataset unavailable');
+                _cachedFeatures = features;
+              } else if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
                 });
@@ -1113,6 +1163,12 @@ export function createLocalGeoJsonLayer(
               });
               if (_destroyed) return;
               const built = buildDrawn(viewer, features);
+              try {
+                registerContexts(built.records);
+              } catch (error) {
+                disposeSets(built.sets);
+                throw error;
+              }
               _count = built.count;
               _stemRecords = built.records;
               _stemGeometryDirty = true;
@@ -1392,6 +1448,124 @@ export function createLocalGeoJsonLayer(
 
     disable: disableLayer,
 
+    /**
+     * Forget the parsed features so the next enable() loads them again: a
+     * caller-owned live loader (the Data Library) uses it once its data is
+     * older than the source allows.
+     */
+    dropCachedFeatures: () => {
+      _cachedFeatures = null;
+    },
+
+    /**
+     * Draw a new feature set in place of the current one while the layer is
+     * on (a live loader's refresh). The current features stay drawn until
+     * the new ones are built; a selected feature stays selected when the new
+     * set still has it (same id, or same place and label); a failed rebuild
+     * keeps the current features and rejects. Off, the set is only kept for
+     * the next enable().
+     * @param {object} viewer
+     * @param {object[]} features GeoJSON features.
+     */
+    replaceFeatures: async (viewer, features) => {
+      if (_destroyed) return;
+      const previousFeatures = _cachedFeatures;
+      _cachedFeatures = features;
+      if (!_enabled || !_drawn || _loadPromise) return;
+      const token = ++replacements;
+      const outgoing = _drawn;
+      // Still the replacement to make: on, not rebuilt or replaced meanwhile.
+      const current = () =>
+        !_destroyed &&
+        _enabled &&
+        _drawn === outgoing &&
+        token === replacements;
+      const selected = getSelectedEntityContext?.();
+      const selectedHere = selected?.layerId === id ? selected : null;
+      let built;
+      try {
+        // The loader drew its pins' symbols before it finished loading.
+        await pinMaker.load(markerSymbols(features));
+        if (!current()) return;
+        built = buildDrawn(viewer, features);
+        registerContexts(built.records);
+      } catch (error) {
+        // `buildDrawn` let go of its own sets on a throw; a build whose
+        // contexts failed goes here, and the current records keep theirs.
+        if (built) {
+          disposeSets(built.sets);
+          try {
+            registerContexts(outgoing.records);
+          } catch {
+            /* the store is gone with them */
+          }
+        }
+        if (!current()) return;
+        if (_cachedFeatures === features) _cachedFeatures = previousFeatures;
+        throw new Error(localDatasetError(error));
+      }
+
+      // A record the new set still has keeps the height sampled under it.
+      const previous = new Map(
+        outgoing.records.map((record) => [record.id, record]),
+      );
+      for (const record of built.records) {
+        const old = previous.get(record.id);
+        if (
+          !old?.groundSampled ||
+          old.lon !== record.lon ||
+          old.lat !== record.lat
+        )
+          continue;
+        record.groundSampled = true;
+        setLocalGroundHeight(record, old.groundHeight);
+      }
+      // The selected feature in the new set: by its own id (a feature
+      // without one has an id by position, which names another feature
+      // once the set changes), else by place and label.
+      const match = selectedHere
+        ? (built.records.find(
+            (record) =>
+              given(record.part.feature.id) &&
+              record.context.id === selectedHere.id,
+          ) ??
+          built.records.find(
+            (record) =>
+              Math.abs(record.lon - selectedHere.longitude) < 1e-6 &&
+              Math.abs(record.lat - selectedHere.latitude) < 1e-6 &&
+              record.context.label === selectedHere.label,
+          ))
+        : null;
+      // A follow of an old part ends with it, as a removed entity's did.
+      stopFollow(viewer);
+      _drawn = built;
+      _stemRecords = built.records;
+      _count = built.count;
+      _lastUpdate = Date.now();
+      _error = null;
+      // A fresh walk for the new records: LOD, stems and labels.
+      _stemGeometryDirty = true;
+      _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+      _activeLodIds = new Set();
+      _lodGraceState = new Map();
+      _lastLodBudgetLimit = 0;
+      _lodComputed = false;
+      _lastLodProbeMs = Number.NEGATIVE_INFINITY;
+      _groundRetryArms = 0;
+      // The new set's contexts took the old ids: a selection it does not
+      // have must not land on whatever now holds its id.
+      if (match) selectEntityContext(match.carrier);
+      else if (selectedHere)
+        clearSelectedEntityContextForLayer(id, { evicted: true });
+      // Records the new set no longer has go with the old sets.
+      removeEntityContextsForLayer(id, {
+        retainIds: new Set(built.records.map((record) => record.context.id)),
+      });
+      for (const set of Object.values(built.sets)) set.show = true;
+      disposeSets(outgoing.sets);
+      findFrame(viewer)?.requestRender('local-geojson');
+    },
+
     destroy: (viewer) => {
       if (_destroyed) return;
       _destroyed = true;
@@ -1417,10 +1591,10 @@ export function createLocalGeoJsonLayer(
 
 /**
  * A polygon's fill, showing as its record does: on the ground, or with
- * per-position heights and outlined in the layer colour (`outline`), as
- * the loader outlined every polygon.
+ * per-position heights and outlined in the feature's colour, as the loader
+ * outlined every polygon.
  */
-const fillItem = (record, outline) =>
+const fillItem = (record) =>
   record.part.raised
     ? {
         id: record.id,
@@ -1430,7 +1604,7 @@ const fillItem = (record, outline) =>
           perPositionHeight: true,
         },
         fill: record.part.fill,
-        outline,
+        outline: record.rgba,
         // The loader's outline was an outline geometry, whose width the
         // default renderer clamps to what WebGL draws: 1 px on most
         // browsers, whatever `stroke-width` says.
@@ -1463,13 +1637,13 @@ const pinItem = (record) => ({
   show: record.visible,
 });
 
-/** A record's stem, from its base to its tip. */
-const stemItem = (record, color) => ({
+/** A record's stem, from its base to its tip, in the feature's colour. */
+const stemItem = (record) => ({
   id: record.id,
   positions: [copy(record.base), copy(record.tip)],
   widthPx: STEM_WIDTH_PX,
   mode: '3d',
-  style: { kind: 'solid', color },
+  style: { kind: 'solid', color: record.rgba },
   meta: record.carrier,
   show: record.visible,
 });
@@ -1478,11 +1652,11 @@ const stemItem = (record, color) => ({
  * The dot on a record's tip, never depth-tested against the photoreal
  * mesh: the walk's horizon test hides it behind the globe.
  */
-const dotItem = (record, color) => ({
+const dotItem = (record) => ({
   id: record.id,
   pos: copy(record.tip),
   pixelSize: 10,
-  color,
+  color: record.rgba,
   outlineColor: BLACK,
   outlineWidth: 2,
   disableDepthTest: Number.POSITIVE_INFINITY,
@@ -1695,6 +1869,10 @@ function labelPriorityFromProperties(props, layerId) {
   if (props.output || tags['plant:output:electricity']) score += 120;
   if (layerId === 'local-dams') score += 80;
   if (layerId === 'local-datacenters') score += 60;
+  // Data Library features carry their manifest importance (0–600), below the
+  // named/unnamed gap so a rank never promotes an unnamed feature.
+  if (Number.isFinite(props.__gevRank))
+    score += Math.max(0, Math.min(600, props.__gevRank));
   return score;
 }
 

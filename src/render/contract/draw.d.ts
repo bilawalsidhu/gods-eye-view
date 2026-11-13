@@ -357,6 +357,35 @@ export interface ModelItem extends Placed {
   tint?: Color;
   colorBlend?: { mode: 'highlight' | 'replace' | 'mix'; amount?: number };
   environmentMap?: boolean;
+  /**
+   * The model's glTF (GLB) bytes, loaded already: the renderer draws it from
+   * these and never fetches `url`, which stays its identity (an update that
+   * keeps the `url` keeps the model, whatever bytes it carries), so models
+   * loaded up front are never fetched mid-session. A renderer reads models
+   * compressed with `EXT_meshopt_compression` and `KHR_mesh_quantization`.
+   */
+  gltf?: Uint8Array;
+  /**
+   * Per-axis multipliers on top of `scale`, along the model's own glTF axes
+   * (`x`, `y`, `z` as authored, before the Y-up turn): a model stretched
+   * wider or taller than its length scale. `minPixelSize` and
+   * `maxPixelSize` measure `scale` alone. Can change live.
+   */
+  axisScale?: [x: number, y: number, z: number];
+  /**
+   * For a model whose meshes carry a `_TINT` vertex attribute (0..1): a
+   * colour painted where it marks the model, drawn colour = colour ×
+   * mix(1, maskColor, _TINT), `maskColor` read as sRGB (its alpha unused).
+   * Applied under `pbr` and `unlit` shading, not under `thermal`. Never sent
+   * for a model without the attribute. Can change live.
+   */
+  maskColor?: Color;
+  /**
+   * `belowOrigin`: only the part of the model above the horizontal plane
+   * through `pos` is drawn (a hull above its waterline, where the globe
+   * would not hide what lies below it). Can change live.
+   */
+  clip?: 'belowOrigin';
 }
 
 /** A plane showing an image, a video or a canvas. */

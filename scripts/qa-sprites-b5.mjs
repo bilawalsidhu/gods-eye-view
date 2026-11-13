@@ -15,9 +15,9 @@
  *                   per-class glyph (image data-URI === aircraftIcon(klass),
  *                   imported from src) and per-class scale (flights:
  *                   CLASS_SCALE_2D; military: 0.7 × CLASS_SCALE_2D)
- *   B3 models     : with 3D on, fleet Cesium.Model.scale === the layer's
- *                   MODEL_SCALE (both 1; legacy scale is baked into the GLB)
- *                   × CLASS_SCALE_3D[klass] per icao; tracked too
+ *   B3 models     : with 3D on, fleet Cesium.Model.scale === the life-size
+ *                   scale of the fleet model the aircraft's type or category
+ *                   selects (aircraftModelSpec) per icao; tracked too
  *   B4 clean      : no console errors
  *
  * Visual output (qa-shots/b5/, untracked): top-down 2D spreads of both rows,
@@ -33,15 +33,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
-import { classifyAircraft, CLASS_SCALE_2D, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
-// Hangar fleet (2026-08-16): real per-class GLBs render at scale 1; military
-// heavies (airliner/quadjet/glider) render airplane.glb at 1 x class; only
-// fastjet/unknown keep the per-layer jet/airplane MODEL_SCALE formula.
-const flightsWantScale = (klass) => (CLASS_MODEL_REAL[klass] ? 1 : FL_MODEL_SCALE * CLASS_SCALE_3D[klass]);
-const MIL_PLANE_CLASSES = new Set(['airliner', 'quadjet', 'glider']);
-const militaryWantScale = (klass) => (CLASS_MODEL_REAL[klass] ? 1
-  : MIL_PLANE_CLASSES.has(klass) ? MIL_PLANE_MODEL_SCALE * CLASS_SCALE_3D[klass]
-    : MIL_MODEL_SCALE * CLASS_SCALE_3D[klass]);
+import { classifyAircraft, CLASS_SCALE_2D } from '../src/data/aircraftClass.js';
+import { aircraftModelSpec } from '../src/data/fleetModels.js';
+// Every aircraft draws its fleet model life size: its type's length over the
+// model's built length, chosen by type code (military) or category (flights).
+const FLEET_SET = Object.freeze({
+  catalog: JSON.parse(fs.readFileSync(new URL('../public/models/fleet/catalog.json', import.meta.url), 'utf8')),
+  types: JSON.parse(fs.readFileSync(new URL('../public/models/fleet/types.json', import.meta.url), 'utf8')),
+});
+const flightsWantScale = (icao) =>
+  aircraftModelSpec(FLEET_SET, { category: SPRITES.flights.find((p) => p.icao === icao)?.category }).scale;
+const militaryWantScale = (hex) =>
+  aircraftModelSpec(FLEET_SET, { typeCode: SPRITES.military.find((p) => p.hex === hex)?.t }).scale;
 import { aircraftIcon } from '../src/data/aircraftIcons.js';
 
 // ---------------------------------------------------------------------------
@@ -58,9 +61,6 @@ const APP_URL = getOpt('--url', 'http://localhost:4173');
 const HEADFUL = getFlag('--headful');
 const SHOT_DIR = path.resolve('qa-shots/b5');
 
-const FL_MODEL_SCALE = 1;         // flights.js (airplane.glb is transform-applied and meter-scale)
-const MIL_PLANE_MODEL_SCALE = 1;  // military heavy classes share the same baked airplane.glb
-const MIL_MODEL_SCALE = 1;        // militaryFlights.js (jet.glb is already real-world scale, native radius ~29.8 m)
 const MIL_BILLBOARD_SCALE = 0.7;  // militaryFlights BILLBOARD_SCALE
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -134,10 +134,9 @@ const SPRITES = {
     // course 0 like the rest — keeps the row a clean size-comparison line (2D
     // rotation is demoed by caa004 and gated by qa-heading-b3 anyway).
     { hex: 'dda008', flight: 'ML-FJ',   t: 'F16',  lon0: ROW_LON0 + 7 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 15000 },
-    // 3D cluster: C17 vs F16 (tracked) vs B744 vs C130. jet.glb is a
-    // real-world-scale asset (native bounding radius ~29.8) rendered at
-    // MODEL_SCALE 1, so models are ~22–43 m radius — same 150 m spacing and
-    // 450–900 m shot ranges as the flights cluster.
+    // 3D cluster: C17 vs F16 (tracked) vs B744 vs C130, each drawn life size
+    // (~8–36 m radius) — same 150 m spacing and 450–900 m shot ranges as the
+    // flights cluster.
     { hex: 'ddb001', flight: '3DMWID', t: 'C17',  lon0: CLUSTER_LON0 - mDegLon(150, 30.05), lat0: 30.05, courseDeg: 0, speedMps: 60, altFt: 12000 },
     { hex: 'ddb002', flight: '3DMFJ',  t: 'F16',  lon0: CLUSTER_LON0, lat0: 30.05, courseDeg: 0, speedMps: 60, altFt: 12000 },
     { hex: 'ddb003', flight: '3DMQUA', t: 'B744', lon0: CLUSTER_LON0 + mDegLon(150, 30.05), lat0: 30.05, courseDeg: 0, speedMps: 60, altFt: 12000 },
@@ -464,7 +463,7 @@ async function main() {
     // ========================================================================
     // B3 + 3D screenshots — flights cluster
     // ========================================================================
-    console.log('\n3D — flights cluster (airplane.glb, per-class scale)');
+    console.log('\n3D — flights cluster (fleet models, life size)');
     await page.evaluate(() => {
       const dm = window.__godsEyeView.dataManager;
       dm.layers.get('flights').module.setParams({ models3d: true });
@@ -481,20 +480,20 @@ async function main() {
       const flModels = await page.evaluate(() => window.__collectModels().filter((m) => m.ready));
       const modelScaleBad = [];
       for (const [id, want] of [
-        ['cbb001', flightsWantScale(expectedFlights.get('cbb001'))],
-        ['cbb003', flightsWantScale(expectedFlights.get('cbb003'))],
+        ['cbb001', flightsWantScale('cbb001')],
+        ['cbb003', flightsWantScale('cbb003')],
       ]) {
         const m = flModels.find((x) => x.id === id);
         if (!m || Math.abs(m.scale - want) > 1e-9) modelScaleBad.push(`${id}: ${m ? m.scale : 'missing'} != ${want}`);
       }
       const trackedM = flModels.find((x) => x.id === 'cbb002');
-      const trackedWant = flightsWantScale(expectedFlights.get('cbb002'));
+      const trackedWant = flightsWantScale('cbb002');
       if (!trackedM || Math.abs(trackedM.scale - trackedWant) > 1e-9) {
         modelScaleBad.push(`tracked: ${trackedM ? trackedM.scale : 'missing'} != ${trackedWant}`);
       }
-      record('B3a flights: model scales match the per-class registry (all GLBs meter-scale; shared @1×class)',
+      record('B3a flights: model scales match each type's life-size fleet model',
         modelScaleBad.length === 0,
-        modelScaleBad.length ? modelScaleBad.join(' ') : 'all exact per registry');
+        modelScaleBad.length ? modelScaleBad.join(' ') : 'all exact');
       console.log(`  world bounding radii (m): ${flModels.filter((m) => m.scale !== undefined).map((m) => `${m.id ?? 'tracked'}=${m.radius?.toFixed(1)}`).join(' ')}`);
 
       await sleep(1500);
@@ -509,7 +508,7 @@ async function main() {
     // ========================================================================
     // B3 + 3D screenshots — military cluster
     // ========================================================================
-    console.log('\n3D — military cluster (jet.glb, per-class scale)');
+    console.log('\n3D — military cluster (fleet models, life size)');
     await page.evaluate(() => {
       const dm = window.__godsEyeView.dataManager;
       dm.layers.get('military').module.setParams({ models3d: true });
@@ -526,25 +525,25 @@ async function main() {
       const milModels = await page.evaluate(() => window.__collectModels().filter((m) => m.ready));
       const modelScaleBad = [];
       for (const [id, want] of [
-        ['ddb001', militaryWantScale(expectedMilitary.get('ddb001'))],
-        ['ddb003', militaryWantScale(expectedMilitary.get('ddb003'))],
-        ['ddb004', militaryWantScale(expectedMilitary.get('ddb004'))],
+        ['ddb001', militaryWantScale('ddb001')],
+        ['ddb003', militaryWantScale('ddb003')],
+        ['ddb004', militaryWantScale('ddb004')],
       ]) {
         const m = milModels.find((x) => x.id === id);
         if (!m || Math.abs(m.scale - want) > 1e-9) modelScaleBad.push(`${id}: ${m ? m.scale : 'missing'} != ${want}`);
       }
       const trackedM = milModels.find((x) => x.id === 'ddb002');
-      const trackedWant = militaryWantScale(expectedMilitary.get('ddb002'));
+      const trackedWant = militaryWantScale('ddb002');
       if (!trackedM || Math.abs(trackedM.scale - trackedWant) > 1e-9) {
         modelScaleBad.push(`tracked: ${trackedM ? trackedM.scale : 'missing'} != ${trackedWant}`);
       }
-      record('B3b military: model scales match the weight-class registry (real/heavy/jet assets @1×class)',
+      record('B3b military: model scales match each type's life-size fleet model',
         modelScaleBad.length === 0,
-        modelScaleBad.length ? modelScaleBad.join(' ') : 'all exact per registry');
+        modelScaleBad.length ? modelScaleBad.join(' ') : 'all exact');
       console.log(`  world bounding radii (m): ${milModels.filter((m) => m.scale !== undefined).map((m) => `${m.id ?? 'tracked'}=${m.radius?.toFixed(1)}`).join(' ')}`);
 
       await sleep(1500);
-      // jet.glb at MODEL_SCALE 1 is real-world size — same shot ranges as the
+      // Fleet models are drawn life size — same shot ranges as the
       // flights cluster (close zoom no longer puts the camera inside a model).
       await zoomToRange(900);
       await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-military-far.png') });

@@ -261,6 +261,21 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * Distance along a pitched-down view axis to flat ground at the mount's own
+   * ground height, or null for an axis at or above the horizon.
+   * @param {number} mountHeightM Mount height above its ground.
+   * @param {number} pitchDeg Axis pitch (negative looks down).
+   * @returns {number|null}
+   */
+
+  function flatGroundAxisDistance(mountHeightM, pitchDeg) {
+    const height = Number(mountHeightM);
+    const pitch = Number(pitchDeg);
+    if (!Number.isFinite(height) || height <= 0 || !(pitch < 0)) return null;
+    return height / Math.sin((Math.min(89, -pitch) * Math.PI) / 180);
+  }
+
+  /**
    * Unit ECEF direction of the frustum view axis (heading/pitch) at a position.
    * Used by the plane orientation and the activation obstruction probe — both
    * need the UNCLAMPED axis, so it comes from the pose, not from clamped points.
@@ -509,12 +524,16 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * range, clamp the plane's effective range just short of the first hit so the
    * "big and dramatic" true end cap never clips into downtown buildings.
    *
-   * This is the ONLY raycast in the whole CCTV subsystem — once per activation,
-   * never per-frame (the zero-raycast invariant applies to steady state). The
-   * per-camera range slider overrides the clamp: a user-set rangeScale skips the
-   * probe entirely. Probe failure/miss keeps the unclamped range.
+   * On a globe map it also casts along the same axis against the globe's
+   * terrain (flat ground at the mount's ground when terrain is missed or met
+   * beyond the range) and clamps at the nearer end. These are the ONLY
+   * raycasts in the whole CCTV subsystem — once per activation, never
+   * per-frame (the zero-raycast invariant applies to steady state). The
+   * per-camera range slider overrides the clamp: a user-set rangeScale skips
+   * the probe entirely. A miss on the photoreal stack or a probe failure
+   * keeps the unclamped range.
    *
-   * The cast is made now, against the scene as it is, and answers a
+   * The casts are made now, against the scene as it is, and answer a
    * microtask later: the clamp then lands by rewriting the geometry from the
    * ground it was last written at, before the next frame draws. A newer
    * activation, or the camera's deactivation, drops an answer still to come.
@@ -537,17 +556,40 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       const mountAlt = parts.ground.groundAltFor(record) + camera.mountHeightM;
       const mountPos = fromDegrees(camera.lon, camera.lat, mountAlt);
       const { dir } = frustumFrameEcef(camera, mountPos);
-      // The cast sees through everything the layer draws.
-      return Promise.resolve(parts.rendering.obstructionHit(mountPos, dir))
-        .then((hit) => {
-          if (!hit || record.probeToken !== token) return;
+      // The casts see through everything the layer draws. The surface cast
+      // meets what is drawn on the globe (the photoreal tiles); on a globe
+      // map the axis also ends on the globe's terrain, the nearer of that and
+      // any surface hit. A hit at or beyond the range counts as none. Terrain
+      // still loading at a coarse level can be missed or met beyond the
+      // range; then flat ground at the mount's own ground stands in for it.
+      const inRange = (d) => Number.isFinite(d) && d > 0 && d < camera.rangeM;
+      return Promise.all([
+        parts.rendering.obstructionHit(mountPos, dir),
+        parts.rendering.terrainHit?.(mountPos, dir) ?? null,
+      ])
+        .then(([hit, terrain]) => {
+          if (record.probeToken !== token) return;
           if (record.camera.id !== layerState._activeCameraId) return;
           // A layer torn down or re-initialised since (another viewer, or
           // a new record for the same camera) is not the one it asked for.
           if (layerState._viewer !== viewer) return;
           if (layerState._recordById?.get(record.camera.id) !== record) return;
-          const dist = distance(mountPos, hit);
-          const clamp = activationProbeClampRange(camera.rangeM, dist);
+          const hitDist = hit ? distance(mountPos, hit) : NaN;
+          const distances = inRange(hitDist) ? [hitDist] : [];
+          if (terrain) {
+            const terrainDist = terrain.hit
+              ? distance(mountPos, terrain.hit)
+              : NaN;
+            const ground = inRange(terrainDist)
+              ? terrainDist
+              : flatGroundAxisDistance(camera.mountHeightM, camera.pitchDeg);
+            if (Number.isFinite(ground) && ground > 0) distances.push(ground);
+          }
+          if (!distances.length) return;
+          const clamp = activationProbeClampRange(
+            camera.rangeM,
+            Math.min(...distances),
+          );
           if (!Number.isFinite(clamp)) return;
           record.probeClampRangeM = clamp;
           if (Number.isFinite(record.groundAltM))
@@ -685,6 +727,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     hasShippedFootprint,
     footprintPose,
     activationProbeClampRange,
+    flatGroundAxisDistance,
     frustumFrameEcef,
     applyFrustumGeometry,
     updateRecordGeometry,

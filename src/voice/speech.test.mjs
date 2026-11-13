@@ -570,7 +570,7 @@ test('street-level failure cards are in the interface language; speech stays Eng
     ]);
     assert.deepEqual(
       lines('Google Street View needs the photoreal map, which is not available', { stage: 'map' }),
-      ['Google Street View braucht die Google 3D-Karte, die nicht verfügbar ist'],
+      ['Google Street View braucht die Karte „Google 3D“, die nicht verfügbar ist'],
     );
     assert.deepEqual(lines('Mapillary could not be switched on', { stage: 'provider' }), [
       'Mapillary konnte nicht eingeschaltet werden',

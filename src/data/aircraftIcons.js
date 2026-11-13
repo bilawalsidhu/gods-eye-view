@@ -160,8 +160,8 @@ const BODIES = {
              L -3,31 L -8,34 L -8,30 L -6,16
              L -27,26 L -27,20 L -5,-8
              C -4.6,-16 -4,-24 -3.5,-30 Z" fill="white" ${STROKE}/>`,
-  // 2026-08-15 Hangar additions: two NEW classes shipped with the real-model
-  // fleet (CLASS_MODEL_REAL). Same contract as the set above: 96×96 nose-up,
+  // 2026-08-15 additions: two NEW classes (bizjet, uav). Same contract as
+  // the set above: 96×96 nose-up,
   // white fill, hairline stroke, tint-safe.
   // Business jet — slender fuselage, modest swept wing, aft engines, T-tail.
   bizjet: `

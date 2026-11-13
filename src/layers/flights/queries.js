@@ -474,9 +474,7 @@ export function createQueries({
         // and rises only as the coarse ground-floor cell warms. Zero extra sampling and
         // no `_modelDisplayPosition` call from postRender. Icon-owned contacts keep
         // the drawn icon position — icon and bracket are co-located there.
-        const spec = modelOwnsVisual
-          ? parts.rendering._modelSpec(info?.klass)
-          : null;
+        const spec = modelOwnsVisual ? parts.rendering._modelSpec(info) : null;
         const pos = isTracked
           ? parts.motion._trackedVisualCached() ||
             icons.position(icao24, t, object._iconPos)

@@ -223,6 +223,22 @@ order-independently and would undo the addition; ground commands keep their
 pass and stencil and only blend differently. The checks `draw.sets.blend`
 (points, icons, lines, shapes) and `draw.models.blend` read the pixels.
 
+A model item may bring its glTF bytes (`gltf`): the renderer builds it from
+them and never fetches its `url`, which stays the model's identity, so a
+model set loaded up front (the procedural fleet models, GLBs compressed with
+`EXT_meshopt_compression` and `KHR_mesh_quantization`) is never fetched
+mid-session. `axisScale` stretches a model along its own glTF axes on top of
+`scale` (a hull drawn at its reported beam), `maskColor` paints a colour
+where the model's `_TINT` vertex attribute marks it (a vehicle in its route's
+colour), and `clip: 'belowOrigin'` draws only what is above the horizontal
+plane through its position (a hull above its waterline). Each changes live.
+The Cesium port passes the bytes as the model's `gltf` with its url as the
+base path, scales its model matrix along the axes Cesium's glTF axis
+correction turns them to, paints the mask in a custom shader per colour
+(unlit under `unlit` shading, left out under `thermal`), and clips with a
+clipping plane through the model's origin. The checks `draw.models.bytes`
+and `draw.models.fleet` cover them.
+
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium
 imagery layer just above it (in `blend` mode the later frame over the earlier
@@ -396,14 +412,14 @@ down to the pixels. The ports follow the API's shape; `ROLES` in
 `src/render/contract/index.js` names what the engine behind them does, and
 puts every member of `PORTS` in exactly one role. It changes no member.
 
-| Role      | What it does                                                                                                | Members                                                               |
-| --------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `surface` | Streams, decodes and builds the globe from map sources: imagery, terrain, photoreal 3D tiles, draped layers | `globe`, `imageryLayer`, `credits`                                    |
-| `scene`   | Draws the application's data as keyed, retained sets                                                        | `draw`, `drawSet`                                                     |
-| `view`    | Places and moves the camera, hands pointer input to the application                                         | `camera`, `flight`, `input`, `lease`                                  |
-| `queries` | Picks, surface positions and heights, rays, projection, occlusion                                           | `query`                                                               |
+| Role      | What it does                                                                                                | Members                                                                                |
+| --------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `surface` | Streams, decodes and builds the globe from map sources: imagery, terrain, photoreal 3D tiles, draped layers | `globe`, `imageryLayer`, `credits`                                                     |
+| `scene`   | Draws the application's data as keyed, retained sets                                                        | `draw`, `drawSet`                                                                      |
+| `view`    | Places and moves the camera, hands pointer input to the application                                         | `camera`, `flight`, `input`, `lease`                                                   |
+| `queries` | Picks, surface positions and heights, rays, projection, occlusion                                           | `query`                                                                                |
 | `look`    | Sky and atmosphere, surface shading, per-layer lighting, styles and screen effects                          | `effects`, `globe.sky`, `globe.weather`, `globe.setSurfaceShading`, `imageryLayer.lit` |
-| `host`    | Canvas and life cycle, the frame loop and scene time, quality, capture, settling                            | `renderer`, `frame`, `quality`                                        |
+| `host`    | Canvas and life cycle, the frame loop and scene time, quality, capture, settling                            | `renderer`, `frame`, `quality`                                                         |
 
 An entry is a port or a `port.member` prefix; the most specific one wins, so
 `roleOf('globe', 'sky.set')` is `'look'` while `roleOf('globe', 'setBase')`

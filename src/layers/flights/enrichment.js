@@ -167,10 +167,10 @@ export function createEnrichment({
           if (klass !== meta.klass) {
             meta.klass = klass;
             parts.icons._applyIconPresentation(icao24);
-            // Hangar fleet: the class's GLB/scale may have changed — resync the
-            // live model, any in-flight load, and the tracked standalone model.
-            parts.rendering._syncModelToClass(icao24);
           }
+          // The type picks the fleet model and its length — resync the live
+          // model, any in-flight load, and the tracked standalone model.
+          parts.rendering._syncModelToClass(icao24);
         }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);

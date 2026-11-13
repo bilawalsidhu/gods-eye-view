@@ -3,11 +3,12 @@
  * @description The Cesium draw port's `models` sets: one `Cesium.Model` per
  * item in the set's collection, changed where it is. An update that keeps an
  * item's `url` re-poses and restyles its model in place (position,
- * orientation, scale and pixel bounds, `shading`, `tint`, `colorBlend`,
- * `environmentMap`, `displayRange`, `show`); only a new `url` loads again,
- * and the old model keeps drawing until the new one is ready, so a swap
- * never blinks. `ready` fires once per load, when the model has loaded and
- * is posed.
+ * orientation, scale, `axisScale` and pixel bounds, `shading`, `tint`,
+ * `colorBlend`, `maskColor`, `clip`, `environmentMap`, `displayRange`,
+ * `show`); only a new `url` loads again, and the old model keeps drawing
+ * until the new one is ready, so a swap never blinks. `ready` fires once per
+ * load, when the model has loaded and is posed. An item with its `gltf`
+ * bytes is built from them; its url is then not fetched.
  *
  * What Cesium has no option for runs each frame before the scene draws:
  * `maxPixelSize` (the scale capped so the bounding sphere spans at most that
@@ -43,6 +44,64 @@ const DEFAULT_MIX = 0.5;
 
 let unlitShader = null;
 let thermalShader = null;
+
+/** Mask shaders by shading and colour: one per pair, shared by its models. */
+const maskShaders = new Map();
+
+/**
+ * The custom shader that paints `mask` where a model's `_TINT` vertex
+ * attribute marks it: drawn colour = colour × mix(1, mask, _TINT), unlit
+ * under `unlit` shading.
+ */
+function maskShaderOf(shading, mask) {
+  const key = `${shading === 'unlit' ? 'unlit' : 'pbr'}|${mask.toCssHexString()}`;
+  let shader = maskShaders.get(key);
+  if (!shader) {
+    shader = new Cesium.CustomShader({
+      mode: Cesium.CustomShaderMode.MODIFY_MATERIAL,
+      ...(shading === 'unlit'
+        ? { lightingModel: Cesium.LightingModel.UNLIT }
+        : {}),
+      uniforms: {
+        u_maskColor: {
+          type: Cesium.UniformType.VEC3,
+          value: new Cesium.Cartesian3(mask.red, mask.green, mask.blue),
+        },
+      },
+      fragmentShaderText: `
+void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+  vec3 mask = czm_srgbToLinear(u_maskColor);
+  material.diffuse *= mix(vec3(1.0), mask, fsInput.attributes.tint);
+}`,
+    });
+    maskShaders.set(key, shader);
+  }
+  return shader;
+}
+
+/**
+ * The custom shader an entry's item draws with: its mask colour's (but under
+ * `thermal`), else its `shading`'s.
+ */
+function entryShader(entry) {
+  const shading = entry.item.shading;
+  if (entry.mask && shading !== 'thermal')
+    return maskShaderOf(shading, entry.mask);
+  return shaderOf(shading);
+}
+
+/**
+ * A clipping plane through the model's origin, keeping what is above it:
+ * the planes sit in the model matrix's frame, whose origin is the item's
+ * position and whose Z axis is the local vertical. One per model: a
+ * collection belongs to the model it clips.
+ */
+function belowOriginClip() {
+  return new Cesium.ClippingPlaneCollection({
+    planes: [new Cesium.ClippingPlane(Cesium.Cartesian3.UNIT_Z, 0)],
+    edgeWidth: 0,
+  });
+}
 
 /** The custom shader a `shading` draws with; undefined for `pbr`. */
 function shaderOf(shading) {
@@ -88,6 +147,7 @@ export function cappedScale(scale, radiusM, metresPerPixel, maxPixelSize) {
 }
 
 const scratchHpr = new Cesium.HeadingPitchRoll();
+const scratchAxes = new Cesium.Cartesian3();
 const scratchMatrix = new Cesium.Matrix4();
 const scratchSphere = new Cesium.BoundingSphere();
 const scratchColor = new Cesium.Color();
@@ -215,13 +275,20 @@ export function createModelSets({
       requestRender();
     };
     entry.settleLoad = settleLoad;
+    // Bytes loaded already are drawn from: the url is then only the base
+    // path (Cesium's glTF cache keys by it, so each model keeps its own).
+    const source = item.gltf
+      ? { gltf: item.gltf, basePath: item.url }
+      : { url: item.url };
     Cesium.Model.fromGltfAsync({
-      url: item.url,
+      ...source,
       modelMatrix: matrixOf(entry, new Cesium.Matrix4()),
       scale: item.scale ?? 1,
       minimumPixelSize: item.minPixelSize ?? 0,
       maximumScale: item.maxScale,
-      customShader: shaderOf(item.shading),
+      customShader: entryShader(entry),
+      clippingPlanes:
+        item.clip === 'belowOrigin' ? belowOriginClip() : undefined,
       environmentMapOptions: { enabled: item.environmentMap !== false },
       // Shown once ready and placed: the pass below shows it.
       show: false,
@@ -279,13 +346,24 @@ export function createModelSets({
     scratchHpr.heading = o.heading ?? 0;
     scratchHpr.pitch = o.pitch ?? 0;
     scratchHpr.roll = o.roll ?? 0;
-    return Cesium.Transforms.headingPitchRollToFixedFrame(
+    Cesium.Transforms.headingPitchRollToFixedFrame(
       entry.at,
       scratchHpr,
       Cesium.Ellipsoid.WGS84,
       undefined,
       result,
     );
+    const axes = entry.item.axisScale;
+    if (axes && (axes[0] !== 1 || axes[1] !== 1 || axes[2] !== 1)) {
+      // Cesium's glTF axis correction (Y up to Z up, then Z forward to X
+      // forward) puts the model's own Z on local X, its X on local Y and
+      // its Y on local Z.
+      scratchAxes.x = axes[2];
+      scratchAxes.y = axes[0];
+      scratchAxes.z = axes[1];
+      Cesium.Matrix4.multiplyByScale(result, scratchAxes, result);
+    }
+    return result;
   }
 
   /**
@@ -302,8 +380,11 @@ export function createModelSets({
     if (model.minimumPixelSize !== minimum) model.minimumPixelSize = minimum;
     if (model.maximumScale !== item.maxScale)
       model.maximumScale = item.maxScale;
-    const shader = shaderOf(item.shading);
+    const shader = entryShader(entry);
     if (model.customShader !== shader) model.customShader = shader;
+    const clip = item.clip === 'belowOrigin';
+    if (Boolean(model.clippingPlanes) !== clip)
+      model.clippingPlanes = clip ? belowOriginClip() : undefined;
     const environment = item.environmentMap !== false;
     const manager = model.environmentMapManager;
     if (manager && manager.enabled !== environment)
@@ -373,6 +454,8 @@ export function createModelSets({
         at: new Cesium.Cartesian3(),
         tint: null,
         tintKey: undefined,
+        mask: null,
+        maskKey: undefined,
         radius: 0,
         next: null,
         token: null,
@@ -396,6 +479,11 @@ export function createModelSets({
     if (entry.tintKey !== tint) {
       entry.tintKey = tint;
       entry.tint = tint === null ? null : toColor(item.tint);
+    }
+    const mask = tintKey(item.maskColor);
+    if (entry.maskKey !== mask) {
+      entry.maskKey = mask;
+      entry.mask = mask === null ? null : toColor(item.maskColor);
     }
     if (entry.url !== item.url && item.url === entry.modelUrl) {
       // Back to the url it draws: the load in between is not wanted.

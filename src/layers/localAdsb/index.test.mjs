@@ -39,6 +39,15 @@ const iconOf = (draw, id) => layerSet(draw, ':markers')?.items.get(id);
 const ringOf = (draw, id) => layerSet(draw, ':rings')?.items.get(id);
 /** Degrees of latitude where an aircraft's icon now is. */
 const latitudeOf = (draw, id) => toLonLatH(iconOf(draw, id).pos).lat;
+import { loadFleetModelSet } from '../../data/fleetModels.js';
+import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
+import { fetchPublicFile } from '../../testSupport/fleetGlb.mjs';
+
+// The layer draws models only once the fleet model set has loaded; load it from disk.
+const realInfo = console.info;
+console.info = () => {};
+await loadFleetModelSet({ fetchImpl: fetchPublicFile });
+console.info = realInfo;
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -572,8 +581,14 @@ test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t
   const models = layerSet(draw, ':models');
   const model = () => models.items.get('local-adsb:a0b702');
   assert.ok(model(), 'admitted');
-  assert.equal(model().url, '/models/bell206.glb', 'the Flights helicopter');
-  assert.equal(model().scale, 1);
+  const spec = aircraftLayerModelSpec({ category: 'A7' });
+  assert.equal(
+    model().url,
+    '/models/fleet/helicopters/generic_heli.glb',
+    'the Flights rotorcraft model',
+  );
+  assert.ok(model().gltf instanceof Uint8Array, 'built from the loaded set');
+  assert.equal(model().scale, spec.scale, 'drawn life size');
   assert.deepEqual(model().tint, MAGENTA);
   assert.deepEqual(model().colorBlend, { mode: 'mix', amount: 0.94 });
   assert.equal(model().environmentMap, false);
@@ -1196,7 +1211,7 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
 });
 
-test('a grounded aircraft changing class keeps its drawn model on its own belly offset until the new one is ready', () => {
+test('a grounded aircraft changing type keeps its drawn model on its own belly offset until the new one is ready', () => {
   const { draw, viewer, camera } = modelViewer();
   const models = createLocalAdsbModels({
     viewer,
@@ -1210,31 +1225,33 @@ test('a grounded aircraft changing class keeps its drawn model on its own belly 
   const marker = {
     position: fromDegrees(0, 0, 0),
     courseDeg: 0,
-    klass: 'light',
+    typeCode: 'C172',
     onGround: true,
   };
   const markers = new Map([['a', marker]]);
   const display = { models3d: true, models3dMode: 'proximity' };
+  const light = 100 + aircraftLayerModelSpec({ typeCode: 'C172' }).bellyM;
+  const widebody = 100 + aircraftLayerModelSpec({ typeCode: 'B789' }).bellyM;
   const height = () =>
     toLonLatH(draw.sets.get('test:models').items.get('a').pos).height;
   models.frame(markers, display, 100_000);
   draw.ready('test:models', 'a');
   models.frame(markers, display, 100_001);
-  assert.ok(Math.abs(height() - 101.36) < 0.01, 'light: its belly offset');
-  marker.klass = 'widebody';
+  assert.ok(Math.abs(height() - light) < 0.01, 'light: its belly offset');
+  marker.typeCode = 'B789';
   models.frame(markers, display, 200_000);
   assert.equal(
     draw.sets.get('test:models').items.get('a').url,
-    '/models/b789.glb',
+    '/models/fleet/aircraft/b789.glb',
   );
-  assert.ok(Math.abs(height() - 101.36) < 0.01, 'the light model still draws');
+  assert.ok(Math.abs(height() - light) < 0.01, 'the light model still draws');
   draw.ready('test:models', 'a');
   models.frame(markers, display, 200_001);
-  assert.ok(Math.abs(height() - 107.81) < 0.01, 'the widebody, on its own');
+  assert.ok(Math.abs(height() - widebody) < 0.01, 'the widebody, on its own');
   models.destroy();
 });
 
-test('a class change takes its belly offset with the new model, however soon it is ready; a scale-only change at once', () => {
+test('a type change takes its belly offset with the new model, however soon it is ready; a scale-only change at once', () => {
   const { draw, viewer, camera } = modelViewer();
   const models = createLocalAdsbModels({
     viewer,
@@ -1248,29 +1265,37 @@ test('a class change takes its belly offset with the new model, however soon it 
   const marker = {
     position: fromDegrees(0, 0, 0),
     courseDeg: 0,
-    klass: 'narrowbody',
+    typeCode: 'A320',
     onGround: true,
   };
   const markers = new Map([['a', marker]]);
   const display = { models3d: true, models3dMode: 'proximity' };
+  const bellyOf = (typeCode) =>
+    100 + aircraftLayerModelSpec({ typeCode }).bellyM;
   const item = () => draw.sets.get('test:models').items.get('a');
   const height = () => toLonLatH(item().pos).height;
   models.frame(markers, display, 100_000);
   draw.ready('test:models', 'a');
   models.frame(markers, display, 100_001);
-  assert.ok(Math.abs(height() - 106.719) < 0.01, 'narrowbody');
-  // The same asset at another scale: no load, no ready.
-  marker.klass = 'glider';
+  assert.ok(Math.abs(height() - bellyOf('A320')) < 0.01, 'A320');
+  // The same model at another length: no load, no ready.
+  marker.typeCode = 'A321';
   models.frame(markers, display, 100_002);
-  assert.equal(item().url, '/models/airplane.glb');
-  assert.equal(item().scale, 0.75);
-  assert.ok(Math.abs(height() - 105.03925) < 0.01, 'at once');
-  // Another asset, ready before the next eligibility pass.
-  marker.klass = 'widebody';
+  assert.equal(item().url, '/models/fleet/aircraft/a320.glb');
+  assert.equal(
+    item().scale,
+    aircraftLayerModelSpec({ typeCode: 'A321' }).scale,
+  );
+  assert.ok(Math.abs(height() - bellyOf('A321')) < 0.01, 'at once');
+  // Another model, ready before the next eligibility pass.
+  marker.typeCode = 'B789';
   models.frame(markers, display, 100_003);
-  assert.ok(Math.abs(height() - 105.03925) < 0.01, 'the old model draws');
+  assert.ok(Math.abs(height() - bellyOf('A321')) < 0.01, 'the old model draws');
   draw.ready('test:models', 'a');
   models.frame(markers, display, 100_004);
-  assert.ok(Math.abs(height() - 107.81) < 0.01, 'the widebody, on its own');
+  assert.ok(
+    Math.abs(height() - bellyOf('B789')) < 0.01,
+    'the widebody, on its own',
+  );
   models.destroy();
 });

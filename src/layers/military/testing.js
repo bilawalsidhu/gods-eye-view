@@ -37,10 +37,10 @@ export function createTesting({
    */
 
   /** Turn a test's model fields into the contact's model record, in place. */
-  function _modelRecordForTest(fields, klass) {
-    const spec = parts.rendering._modelSpec(klass);
+  function _modelRecordForTest(fields, meta) {
+    const spec = parts.rendering._modelSpec(meta);
     const base = createModelRecord({
-      specKey: parts.rendering._specKeyFor(klass),
+      specKey: parts.rendering._specKeyFor(meta),
       bellyM: spec.bellyM,
       scale: spec.scale,
     });
@@ -80,7 +80,7 @@ export function createTesting({
     _seedIconForTest(icao24, icon, tracked);
     flightState._models.clear();
     for (const [key, model] of models)
-      flightState._models.set(key, _modelRecordForTest(model, meta?.klass));
+      flightState._models.set(key, _modelRecordForTest(model, meta));
     flightState._detectionObjects = new Map();
     flightState.records.data = new Map([[icao24, meta]]);
     flightState._positionHistory = new Map([[icao24, history]]);

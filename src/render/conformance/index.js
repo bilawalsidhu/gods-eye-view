@@ -55,7 +55,7 @@ import { portChecks } from './checks/ports.js';
  * @property {boolean} [cameraInput] The renderer's camera moves on pointer input sent through `pointer` (its own gestures, or a camera controller's): the camera scripts with `input` steps run.
  * @property {(r: object, fn: (point: {lon: number, lat: number}, against?: string) => number|null) => void} [scriptHeights]
  * @property {(r: object) => number} [wallTime] Epoch ms the renderer's `live` motion clock reads.
- * @property {{model?: string}} [assets]
+ * @property {{model?: string, missingModel?: string, modelBytes?: () => Promise<Uint8Array>}} [assets] `modelBytes`: the bytes of a model, for the check that a model given its bytes never fetches its url.
  */
 
 /**

@@ -273,7 +273,7 @@ export function createMotion({
     const viewportHeightPx = _viewportHeightPx();
     if (parts.rendering._modelOwnsVisual(icao24)) {
       const spec = parts.rendering._modelSpec(
-        flightState.records.data.get(icao24)?.klass,
+        flightState.records.data.get(icao24),
       );
       const scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -424,7 +424,7 @@ export function createMotion({
       parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     ) {
       const spec = parts.rendering._modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       return modelVisualAnchor(
         flightState._trackedModel.matrix,
@@ -467,7 +467,7 @@ export function createMotion({
     )
       return 0;
     const spec = parts.rendering._modelSpec(
-      flightState.records.data.get(flightState._trackedIcao)?.klass,
+      flightState.records.data.get(flightState._trackedIcao),
     );
     return (
       spec.nativeRadiusM *
@@ -484,7 +484,7 @@ export function createMotion({
       parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     ) {
       const spec = parts.rendering._modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       // Through the model's OWN render chain (modelVisualAnchor's hand-rolled
       // half-correction put this offset on the lateral axis — see

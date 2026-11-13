@@ -788,6 +788,22 @@ export function createRendering({
     return query.rayCast({ origin, direction }, { against: 'surface' });
   }
 
+  /**
+   * On a globe map, where the activation probe's axis meets the globe's
+   * terrain: `{hit}`, `hit` null on a miss. Null when the globe is not shown
+   * (the photoreal stack), where only the surface cast counts.
+   * @returns {Promise<{hit: object|null}|null>}
+   */
+  async function terrainHit(origin, direction) {
+    const viewer = layerState._viewer;
+    if (findGlobe(viewer)?.isGlobeVisible?.() !== true) return null;
+    const query = findQuery(viewer);
+    if (!query) return null;
+    return {
+      hit: await query.rayCast({ origin, direction }, { against: 'terrain' }),
+    };
+  }
+
   /** Whether there is a query port to cast the activation probe through. */
   function canPickFromRay() {
     return typeof findQuery(layerState._viewer)?.rayCast === 'function';
@@ -928,6 +944,7 @@ export function createRendering({
     buildCoverageEntities,
     placeCoverageLines,
     obstructionHit,
+    terrainHit,
     canPickFromRay,
     removeCoverageEntities,
     extractPickedCameraId,

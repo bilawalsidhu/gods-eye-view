@@ -88,6 +88,9 @@ export class LocationControls {
         event.target === elements.search
       )
         return;
+      // As for the application shortcuts: Cmd+R, Ctrl+W, Alt+E and the like
+      // belong to the browser and the system. Shift is not a chord.
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       const index = POI_KEYS.indexOf(event.key.toUpperCase());
       if (index !== -1 && index < (cities[cityId]?.pois.length || 0))
         onPoi(cityId, index);

@@ -17,15 +17,13 @@ export function createFlightState({ source, services }) {
    *  layer); see followsClock and displayDelayMs in policy.js. */
   flightState.timeline = null;
 
-  /** Per-class model spec for THIS layer (2026-08-16, owner playtest ask:
-   *  military contacts should read as their WEIGHT CLASS, always in this layer's
-   *  amber). Real Hangar GLBs serve the classes they cover (meters, nose −X →
-   *  180° offset); airliner/quadjet/glider get the shared 747 silhouette
-   *  (airplane.glb — C-5M/RC-135-style heavies stop rendering as bizjets);
-   *  fastjet and unknown keep jet.glb with the same 180° offset. The MIX tint stays
-   *  dominant everywhere — military is amber, tracked is TRACKED_ICON_COLOR,
-   *  and the tint must dominate any livery (owner: "stays yellow"). Specs are
-   *  static per class — memoized (the fleet pass asks at 12 Hz per model). */
+  /** Model spec per aircraft type and emitter category (aircraftLayerModelSpec in
+   *  flights/modelSpec.js): the procedural fleet model that draws the type, life size,
+   *  with its measured clearance, bounding radius and trail anchor. nativeRadiusM is PER
+   *  SCALE UNIT — pixel-cap math multiplies it by `scale`. The code-side MIX tint dominates
+   *  every model so silhouettes stay light (and in this layer's own colour). Memoized: the
+   *  detection weld asks for one per MODELED contact per frame on top of the 12 Hz fleet
+   *  pass. */
 
   flightState._specCache = new Map();
 

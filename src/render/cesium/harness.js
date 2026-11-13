@@ -233,6 +233,17 @@ export function createCesiumHarness({
     toEcef,
     tolerance: DEFAULT_TOLERANCE,
     flightPaths: 'trace',
-    ...(model ? { assets: { model, missingModel } } : {}),
+    ...(model
+      ? {
+          assets: {
+            model,
+            missingModel,
+            // The model's bytes, for the check that a model drawn from them
+            // never fetches its url.
+            modelBytes: async () =>
+              new Uint8Array(await (await fetch(model)).arrayBuffer()),
+          },
+        }
+      : {}),
   };
 }

@@ -30,6 +30,8 @@ export function createStubHarness(name = 'stub') {
     assets: {
       model: 'stub:model.glb',
       missingModel: `${STUB_FAILING_MODEL_SCHEME}model.glb`,
+      // Any bytes: the stub parses none.
+      modelBytes: async () => new Uint8Array([0x67, 0x6c, 0x54, 0x46]),
     },
   };
 }

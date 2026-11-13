@@ -140,6 +140,7 @@ export function createLifecycle({ state, services, parts }) {
         state._cameraChangedAttached = state._cameraChangedOff !== null;
       }
       parts.rendering.startFrames(viewer);
+      parts.rendering.startModels();
       parts.viewport.runProximityCheck();
     },
 
@@ -179,6 +180,7 @@ export function createLifecycle({ state, services, parts }) {
         destroyTrack(entry.track);
       }
       state._vehicles.clear();
+      parts.rendering.stopModels();
       parts.height.clear();
       parts.rendering.clearMarkers();
       state._altitudeGateOpen = false;
@@ -216,6 +218,7 @@ export function createLifecycle({ state, services, parts }) {
      */
     destroy(viewer) {
       this.disable(viewer);
+      parts.rendering.stopModels(true);
       parts.rendering.destroyMarkers(viewer);
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.height.clear();

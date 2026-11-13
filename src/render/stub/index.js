@@ -407,7 +407,7 @@ export function createStubRenderer(options = {}) {
     log('draw', kind, [spec]);
     // A model is ready once per load: when it is new or its url changes,
     // not when it is moved or restyled. One under the failing scheme fails
-    // its load instead.
+    // its load instead, unless it came with its bytes (`gltf`).
     // Each load is told once: a listener that starts another load of the
     // same item (or removes it) supersedes the one queued here.
     const loadTokens = new Map();
@@ -427,8 +427,10 @@ export function createStubRenderer(options = {}) {
       for (const [id, token] of loading) {
         if (loadTokens.get(id) !== token || !record.items.has(id)) continue;
         loadTokens.delete(id);
-        const url = String(record.items.get(id).url ?? '');
-        if (url.startsWith(STUB_FAILING_MODEL_SCHEME))
+        const item = record.items.get(id);
+        const url = String(item.url ?? '');
+        // A model given its bytes is drawn from them: its url is not fetched.
+        if (!item.gltf && url.startsWith(STUB_FAILING_MODEL_SCHEME))
           deliver(record.loadFailedListeners, id, `${url} does not load`);
         else deliver(record.readyListeners, id);
       }

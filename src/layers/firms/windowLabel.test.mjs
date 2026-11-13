@@ -32,10 +32,7 @@ test('a FIRMS snapshot that ends at a set time names it instead of LIVE', (conte
     assert.equal(methods.getStats().at, at);
     assert.equal(methods.getStats().source, 'NASA FIRMS', 'the row drops LIVE');
     setLocale('de');
-    assert.equal(
-      methods.getStats().loadingLabel,
-      '24 Std. bis 21.10. 15:00 UTC',
-    );
+    assert.equal(methods.getStats().loadingLabel, '24 h bis 21.10. 15:00 UTC');
     layerState._at = null;
     setLocale('en');
     assert.equal(methods.getStats().loadingLabel, 'LIVE · updated 2m ago');

@@ -10,6 +10,12 @@ function vesselMmsi(row) {
   return MMSI_PATTERN.test(text) ? text : '';
 }
 
+/** A positive measurement, else null. */
+function positive(value) {
+  const number = finite(value);
+  return number !== null && number > 0 ? number : null;
+}
+
 /** A row's stable id when its source names none: its MMSI or identifier. */
 function defaultVesselId(row) {
   return String(row?.mmsi || row?.input_identifier || '');
@@ -39,6 +45,9 @@ export function normalizeVesselObservation(row, reference = null, id = null) {
     imo: String(row.imo || ''),
     type: String(row.type_specific || row.type || ''),
     destination: String(row.destination || ''),
+    // Hull length and beam (metres) when the source reports them.
+    lengthM: positive(row.length),
+    beamM: positive(row.beam),
     speedMps: speedKts == null ? null : speedKts * 0.514444,
     courseDeg: finite(row.course),
     headingDeg: finite(row.heading),

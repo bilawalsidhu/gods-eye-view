@@ -258,3 +258,61 @@ test('partial static data keeps newer live metadata ahead of the old static cach
   assert.equal(rowFor(mmsi).type, '80');
   assert.equal(rowFor(mmsi).destination, 'HAMBURG');
 });
+
+// A static report's dimensions are the antenna's distances to bow (A), stern
+// (B), port (C) and starboard (D): length A+B, beam C+D. Zero is AIS's "not
+// available", so a vessel reporting none has no size, not a size of zero.
+test('a static report gives a vessel its hull length and beam', () => {
+  ingestAisStreamEnvelope(positionReport('636019825', { Sog: 14 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'ShipStaticData',
+    Message: {
+      ShipStaticData: {
+        UserID: 636019825,
+        Name: 'EVER GIVEN',
+        Type: 70,
+        Dimension: { A: 330, B: 70, C: 30, D: 29 },
+      },
+    },
+    MetaData: { MMSI: '636019825' },
+  });
+  const row = rowFor('636019825');
+  assert.equal(row.length, 400);
+  assert.equal(row.beam, 59);
+
+  ingestAisStreamEnvelope(positionReport('636019826', { Sog: 3 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'ShipStaticData',
+    Message: {
+      ShipStaticData: {
+        UserID: 636019826,
+        Type: 52,
+        Dimension: { A: 0, B: 0, C: 0, D: 0 },
+      },
+    },
+    MetaData: { MMSI: '636019826' },
+  });
+  assert.equal(rowFor('636019826').length, null);
+  assert.equal(rowFor('636019826').beam, null);
+});
+
+test('a Class B report carries its dimensions in part B', () => {
+  ingestAisStreamEnvelope(positionReport('244000777', { Sog: 6 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'StaticDataReport',
+    Message: {
+      StaticDataReport: {
+        UserID: 244000777,
+        ReportB: {
+          Valid: true,
+          ShipType: 37,
+          Dimension: { A: 8, B: 4, C: 2, D: 2 },
+        },
+      },
+    },
+    MetaData: { MMSI: '244000777' },
+  });
+  const row = rowFor('244000777');
+  assert.equal(row.length, 12);
+  assert.equal(row.beam, 4);
+});

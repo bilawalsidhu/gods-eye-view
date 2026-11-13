@@ -41,7 +41,7 @@ for (const layer of LAYERS) {
     assert.ok(calls.length >= 1, 'the draw port creates models');
     for (const [index, call] of calls.entries()) {
       assert.match(call[1], /\basynchronous:\s*false\b/,
-        `Model.fromGltfAsync call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
+        `_createModel call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
     }
   });
 

@@ -12,9 +12,9 @@ import { t } from '../i18n/index.js';
  * Construct the existing controls and camera presentation. `initialShareCode`
  * opens a share code (the `<code>` of `/share/<code>`) at start-up, for a host
  * whose address does not carry one. `localePicker: false` removes the language
- * picker, for a page that does not initialize the app's locale. `startView` is
- * where the camera starts (the whole planet by default; a host may pass a
- * city); a shared view flies from there.
+ * picker, for a host that offers its own language choice (`switchLocale` from
+ * the `./i18n` entry). `startView` is where the camera starts (the whole
+ * planet by default; a host may pass a city); a shared view flies from there.
  */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations, viewerDrawsEntity },

@@ -55,6 +55,17 @@ import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { loadFleetModelSet } from './fleetModels.js';
+import { aircraftLayerModelSpec } from '../layers/flights/modelSpec.js';
+import { fetchPublicFile } from '../testSupport/fleetGlb.mjs';
+
+// The layers draw only once the fleet model set has loaded; load it from disk.
+const _silentInfo = console.info;
+console.info = () => {};
+await loadFleetModelSet({ fetchImpl: fetchPublicFile });
+console.info = _silentInfo;
+const FLIGHTS_META = Object.freeze({ typeCode: 'A320', klass: 'airliner' });
+const MILITARY_META = Object.freeze({ typeCode: 'F16', klass: 'fastjet' });
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -245,7 +256,8 @@ const LAYERS = [
     trackedModel: flightsTrackedModel,
     modelSetIds: flightsModelSetIds,
     trackedBillboardColor: flightsTrackedBillboardColor,
-    bellyM: 6.719,
+    /** How far a grounded A320 stands its origin above the ground (scaled wheel clearance). */
+    bellyM: aircraftLayerModelSpec(FLIGHTS_META).bellyM,
     seed({ viewer, tracked = true, icao24 = ICAO, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedFlightRefreshStateForTest({
@@ -257,7 +269,7 @@ const LAYERS = [
         tracked,
         models,
         draw: viewer.draw,
-        meta: { callsign: 'TEST123 ', altitude: 10_668, klass: 'airliner', onGround },
+        meta: { callsign: 'TEST123 ', altitude: 10_668, ...FLIGHTS_META, onGround },
       });
       return iconView(icao24, flightsIcon, flightsSetIcon);
     },
@@ -272,7 +284,7 @@ const LAYERS = [
     trackedModel: militaryTrackedModel,
     modelSetIds: militaryModelSetIds,
     trackedBillboardColor: militaryTrackedBillboardColor,
-    bellyM: 5.631 * 0.8,
+    bellyM: aircraftLayerModelSpec(MILITARY_META).bellyM,
     seed({ viewer, tracked = true, icao24 = ICAO, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedMilitaryRefreshStateForTest({
@@ -284,7 +296,7 @@ const LAYERS = [
         tracked,
         models,
         draw: viewer.draw,
-        meta: { callsign: 'TEST123 ', altitudeFt: 35_000, klass: 'fastjet', onGround },
+        meta: { callsign: 'TEST123 ', altitudeFt: 35_000, ...MILITARY_META, onGround },
       });
       return iconView(icao24, militaryIcon, militarySetIcon);
     },

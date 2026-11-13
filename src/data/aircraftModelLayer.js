@@ -11,6 +11,7 @@ import {
   showModel,
 } from './modelRecord.js';
 import { modelDrawnScale } from './modelVisualAnchor.js';
+import { fleetModelSet } from './fleetModels.js';
 import { findCamera, findDraw, rendererOf } from '../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import {
@@ -23,12 +24,6 @@ import {
 
 /** A white tint: what an IR-boosted model draws with. */
 const WHITE = Object.freeze([1, 1, 1, 1]);
-
-/** Id of the hidden item that keeps the tracked asset loaded. */
-const PRELOAD_ID = '~preload';
-
-/** Where the preload item waits, unshown. */
-const NOWHERE = Object.freeze({ x: 0, y: 0, z: 0 });
 
 /** How long (ms) a fleet model whose load failed (`loadFailed`) waits
  *  before it is removed and added again, which loads it again. */
@@ -85,8 +80,12 @@ function inView(pose, point) {
  * @param {object} options.policy The layer's model budgets, radii, pixel
  *   bounds, heading offset, fleet tick interval and tracked-model load
  *   budget.
- * @param {(klass: string) => object} options.modelSpec The class's GLB, scale,
- *   geometry and tint blend; `headingOffsetDeg` overrides the policy's.
+ * @param {(meta: object|undefined) => object} options.modelSpec The fleet
+ *   model an aircraft draws with, from its record (its type and emitter
+ *   category): the model's url, scale, geometry, tint blend and spec `key`;
+ *   `headingOffsetDeg` overrides the policy's. A spec without a `url` (the
+ *   fleet set not loaded yet) keeps the aircraft an icon. A spec naming a
+ *   `model` of the fleet set is drawn from the set's bytes (`gltf`).
  * @param {(icao24: string) => object} options.modelColor Model tint
  *   (`{red, green, blue, alpha}`), including the tracked contact's.
  * @param {(icao24: string) => void} [options.onModelEligible] Runs when a
@@ -141,22 +140,25 @@ export function createAircraftModels({
     };
   }
 
-  /** The model heading offset a class's GLB needs. */
-  const _headingOffsetDeg = (klass) =>
-    _modelSpec(klass).headingOffsetDeg ?? policy.MODEL_HEADING_OFFSET_DEG;
+  /** A contact's record (its type and emitter category pick its model). */
+  const _metaOf = (icao24) => state.records.data.get(icao24);
 
-  /** A course (degrees) as the class's model heading (radians). */
-  const _modelHeading = (course, klass) =>
-    ((course || 0) + _headingOffsetDeg(klass)) * RADIANS_PER_DEGREE;
+  /** The model heading offset an aircraft's model needs. */
+  const _headingOffsetDeg = (meta) =>
+    _modelSpec(meta).headingOffsetDeg ?? policy.MODEL_HEADING_OFFSET_DEG;
+
+  /** A course (degrees) as the aircraft's model heading (radians). */
+  const _modelHeading = (course, meta) =>
+    ((course || 0) + _headingOffsetDeg(meta)) * RADIANS_PER_DEGREE;
 
   /**
    * Make this lifetime's model sets on the viewer's draw port (none on a
    * renderer that draws no models: the layer stays icons). `draw` stands in
    * for the viewer's (tests).
    * @param {object} viewer
-   * @param {{preloadUrl?: string, draw?: object}} [options]
+   * @param {{draw?: object}} [options]
    */
-  function _createModelSets(viewer, { preloadUrl, draw } = {}) {
+  function _createModelSets(viewer, { draw } = {}) {
     _disposeModelSets();
     const port = draw ?? findDraw(viewer);
     if (typeof port?.models !== 'function') return;
@@ -195,20 +197,6 @@ export function createAircraftModels({
       }),
     ];
     state._modelSets = { fleet, tracked, offs };
-    // A hidden item keeps the tracked asset loaded, so the tracked model
-    // draws as soon as it is wanted.
-    if (preloadUrl)
-      tracked.upsert([
-        {
-          id: PRELOAD_ID,
-          pos: NOWHERE,
-          url: preloadUrl,
-          orientation: { heading: 0, pitch: 0, roll: 0 },
-          environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
-          show: false,
-          pickable: false,
-        },
-      ]);
   }
 
   /** Let this lifetime's model sets go. */
@@ -328,7 +316,7 @@ export function createAircraftModels({
     if (h == null) return null;
     const at = toLonLatH(pos);
     if (!at) return null;
-    return fromDegrees(at.lon, at.lat, h + _modelSpec(meta.klass).bellyM);
+    return fromDegrees(at.lon, at.lat, h + _modelSpec(meta).bellyM);
   }
 
   /** How a contact's model draws now: the IR boost's flat white, or its tint. */
@@ -359,6 +347,8 @@ export function createAircraftModels({
       id,
       pos: { x: record.position.x, y: record.position.y, z: record.position.z },
       url: record.url,
+      // Built from the bytes loaded up front: never fetched mid-session.
+      ...(record.gltf ? { gltf: record.gltf } : {}),
       orientation: { heading: record.heading, pitch: 0, roll: 0 },
       scale: record.scale,
       minPixelSize: record.minPixelSize,
@@ -422,8 +412,8 @@ export function createAircraftModels({
       icons.setShown(icao24, true);
       return false;
     }
-    const klass = state.records.data.get(icao24)?.klass;
-    const spec = _modelSpec(klass);
+    const meta = _metaOf(icao24);
+    const spec = _modelSpec(meta);
     const set = state._modelSets?.fleet ?? null;
     _retryFailedFleetModel(set, icao24, record);
     const displayPos = _modelDisplayPosition(icao24, pos);
@@ -435,7 +425,7 @@ export function createAircraftModels({
     }
     // Placed BEFORE the readiness test on purpose: a model can turn ready
     // between ticks, and its first drawn frame must be at this placement.
-    placeModel(record, displayPos, _modelHeading(course, klass));
+    placeModel(record, displayPos, _modelHeading(course, meta));
     if (!record.ready) {
       showModel(record, false); // not loaded yet → keep the 2D icon, no half-model flash
       _send(set, icao24, record, spec, out);
@@ -532,23 +522,27 @@ export function createAircraftModels({
     return { pose: _pose(), ..._viewport() };
   }
 
-  /** Spec identity for an admitted model: URL and scale together (same-URL classes
-   *  differ by scale — airliner vs quadjet both ship airplane.glb). */
+  /** Spec identity for an admitted model: the model and its scale together
+   *  (one model draws several types, each at its own length). */
 
-  const _specKeyFor = (klass) => {
-    const spec = _modelSpec(klass);
-    return `${spec.url}@${spec.scale}`;
+  const _specKeyFor = (meta) => {
+    const spec = _modelSpec(meta);
+    return spec.key ?? `${spec.url}@${spec.scale}`;
   };
 
-  /** Class-change model sync (enrichment AND poll-path klass updates): when the
-   *  aircraft's model no longer matches its class's spec, drop it so the
+  /** A spec's bytes in the fleet model set loaded up front, if any. */
+  const _gltfOf = (spec) =>
+    spec.model ? (fleetModelSet()?.bytes?.get(spec.model) ?? null) : null;
+
+  /** Type-change model sync (enrichment AND poll-path type/category updates): when the
+   *  aircraft's model no longer matches its type's spec, drop it so the
    *  eligibility pass admits the right asset at the right scale. Gap-proof: the
    *  fleet icon is re-shown with the release, so the contact never goes
    *  invisible for the tick gap. The tracked standalone model gets the same
    *  rule (its billboard entity is always the fallback visual). */
 
   function _syncModelToClass(icao24) {
-    const key = _specKeyFor(state.records.data.get(icao24)?.klass);
+    const key = _specKeyFor(_metaOf(icao24));
     const current = state._models.get(icao24);
     if (current && current.specKey !== key) _releaseModel(icao24);
     if (
@@ -580,15 +574,18 @@ export function createAircraftModels({
     if (!state._modelSets) return;
     if (state._models.size >= _modelCap()) return;
     if (!_modelRegimeActive() || !state.records.data.has(icao24)) return;
-    const klass = state.records.data.get(icao24)?.klass;
-    const spec = _modelSpec(klass);
+    const meta = _metaOf(icao24);
+    const spec = _modelSpec(meta);
+    // Until the fleet model set has loaded the aircraft stays an icon.
+    if (!spec.url) return;
     const record = createModelRecord({
-      specKey: _specKeyFor(klass), // class-change sync compares against this
+      specKey: _specKeyFor(meta), // type-change sync compares against this
       bellyM: spec.bellyM,
       scale: spec.scale,
       minPixelSize: policy.MODEL_MIN_PX,
     });
     record.url = resolveAsset(spec.url);
+    record.gltf = _gltfOf(spec);
     record.tint = state._irBoost ? WHITE : rgba(_modelColor(icao24));
     // Admitted, not yet the visual: the handoff places and shows it, and the
     // set loads it from its first write.
@@ -672,7 +669,7 @@ export function createAircraftModels({
       state._modelSets?.tracked,
       record.id,
       record,
-      _modelSpec(state.records.data.get(record.id)?.klass),
+      _modelSpec(_metaOf(record.id)),
     );
   }
 
@@ -705,20 +702,23 @@ export function createAircraftModels({
       return;
     }
     const icao24 = state._trackedIcao;
-    const klass = state.records.data.get(icao24)?.klass;
-    const spec = _modelSpec(klass);
+    const meta = _metaOf(icao24);
+    const spec = _modelSpec(meta);
     if (state._trackedModel && state._trackedModel.id !== icao24)
       _releaseTrackedModel();
     if (!state._trackedModel) {
       if (!_trackedModelLoadAllowed()) return; // the icon carries it
+      // Until the fleet model set has loaded the icon carries it.
+      if (!spec.url) return;
       const record = createModelRecord({
-        specKey: _specKeyFor(klass), // class-change sync compares against this
+        specKey: _specKeyFor(meta), // type-change sync compares against this
         bellyM: spec.bellyM,
         scale: spec.scale,
         minPixelSize: policy.TRACKED_MODEL_MIN_PX,
       });
       record.id = icao24;
       record.url = resolveAsset(spec.url);
+      record.gltf = _gltfOf(spec);
       state._trackedModel = record;
     }
     const record = state._trackedModel;
@@ -741,7 +741,7 @@ export function createAircraftModels({
     placeModel(
       record,
       displayPos,
-      _modelHeading(parts.motion._trackedDisplayCourse(), klass),
+      _modelHeading(parts.motion._trackedDisplayCourse(), meta),
     );
     if (record.ready) {
       const pose = _pose();
@@ -906,7 +906,7 @@ export function createAircraftModels({
             state._modelSets?.fleet,
             icao24,
             hidden,
-            _modelSpec(state.records.data.get(icao24)?.klass),
+            _modelSpec(_metaOf(icao24)),
             items,
           );
         }

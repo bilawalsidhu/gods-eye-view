@@ -474,9 +474,7 @@ export function createQueries({
         // contacts read the translation the fleet tick already wrote into their
         // modelMatrix; icon-owned contacts keep the drawn icon position, where icon and
         // bracket are co-located anyway.
-        const spec = modelOwnsVisual
-          ? parts.rendering._modelSpec(info?.klass)
-          : null;
+        const spec = modelOwnsVisual ? parts.rendering._modelSpec(info) : null;
         const pos = isTracked
           ? parts.motion._trackedVisualCached() ||
             icons.position(icao24, t, object._iconPos)

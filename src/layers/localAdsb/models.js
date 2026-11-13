@@ -8,7 +8,8 @@ import {
   sub,
 } from '../../geo/vector.js';
 import { cssColor } from '../../render/color.js';
-import { civilAircraftModelSpec } from '../flights/modelSpec.js';
+import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
+import { fleetModelSet, loadFleetModelSet } from '../../data/fleetModels.js';
 import {
   FLEET_DR_INTERVAL_MS,
   MODEL_ALL_ADD_M,
@@ -36,19 +37,28 @@ function inView(pose, point) {
   );
 }
 
+/** The fleet model an aircraft draws with: its adsbdb type, else its emitter category. */
+const specOf = (marker) =>
+  aircraftLayerModelSpec({
+    typeCode: marker?.typeCode,
+    category: marker?.category,
+  });
+
 /**
  * 3D models for Local ADS-B aircraft under the DISPLAY rail's 3D toggle,
  * drawn as one `models` set of the renderer's draw port.
  *
  * Mirrors the public Flights fleet: models only below the altitude ceiling,
  * the same proximity/all caps and add/keep radii, the same visible-first
- * eligibility (`selectModelEligible`), the same per-class asset and scale
- * (`civilAircraftModelSpec`) and the same tint path (a MIX colour blend, here
- * magenta, as Flights tints military amber). A billboard stays the visual
- * until its model is ready (the set's `ready`) AND placed; a grounded
- * aircraft's model rides the one-shot ground snap plus the class belly
- * offset, and without a resolved ground it stays a billboard. Models move
- * and turn in place each frame; only a class change loads another asset.
+ * eligibility (`selectModelEligible`), the same fleet model per type, life
+ * size (`aircraftLayerModelSpec`) and the same tint path (a MIX colour blend,
+ * here magenta, as Flights tints military amber). A billboard stays the
+ * visual until its model is ready (the set's `ready`) AND placed; a grounded
+ * aircraft's model rides the one-shot ground snap plus the model's clearance,
+ * and without a resolved ground it stays a billboard. Models move and turn in
+ * place each frame; only a type change loads another model. Every fleet
+ * model loads once, up front, when the layer starts (`loadFleetModelSet`),
+ * and models are drawn from those bytes.
  * @param {object} options
  * @param {object} options.viewer The viewer the layer draws on; the ground
  *   snap samples through it.
@@ -74,6 +84,9 @@ export function createLocalAdsbModels({
 }) {
   if (typeof draw?.models !== 'function' || !camera) return null;
   const tint = cssColor(color) ?? color;
+  void loadFleetModelSet({ resolveAsset }).catch(() => {
+    /* aircraft stay billboards */
+  });
   const set = draw.models({ id: setId, show: false });
   /** What ground samples see through, by set id (with every set not drawn as ground). */
   const groundSets = [setId, ...seeThrough];
@@ -118,13 +131,16 @@ export function createLocalAdsbModels({
   }
 
   /**
-   * Admit a model for `id`. One admitted keeps its slot through a class
-   * change: the frame pass asks for the new asset, loaded in place.
+   * Admit a model for `id`. One admitted keeps its slot through a type
+   * change: the frame pass asks for the new model, loaded in place. Until
+   * the fleet model set has loaded the aircraft stays a billboard.
    */
   function admit(id, marker, cap) {
     if (models.has(id) || models.size >= cap) return;
+    const spec = specOf(marker);
+    if (!spec.url) return;
     models.set(id, {
-      bellyM: civilAircraftModelSpec(marker.klass).bellyM,
+      bellyM: spec.bellyM,
       nextBellyM: null,
       sentUrl: null,
       drawnUrl: null,
@@ -199,7 +215,7 @@ export function createLocalAdsbModels({
      * every admitted model and hand each marker's visual to its model only
      * once the model is ready and placed.
      * @param {Map<string, object>} markers Layer markers (position, courseDeg,
-     *   klass, onGround); `modelOwnsVisual` is written back.
+     *   typeCode, category, onGround); `modelOwnsVisual` is written back.
      * @param {object} preferences `{ models3d, models3dMode }`.
      * @param {number} nowMs
      */
@@ -222,8 +238,10 @@ export function createLocalAdsbModels({
         const record = models.get(id);
         marker.modelOwnsVisual = false;
         if (!record || !marker.position) continue;
-        const spec = civilAircraftModelSpec(marker.klass);
+        const spec = specOf(marker);
+        if (!spec.url) continue;
         const url = resolveAsset(spec.url);
+        const gltf = fleetModelSet()?.bytes?.get(spec.model);
         noteAsset(record, url, spec.bellyM);
         const position = placement(id, marker);
         const shown =
@@ -233,6 +251,8 @@ export function createLocalAdsbModels({
           // Unplaced, it waits hidden where it last was (or at the marker).
           pos: position ?? marker.position,
           url,
+          // Built from the bytes loaded up front: never fetched mid-session.
+          ...(gltf ? { gltf } : {}),
           orientation: {
             heading:
               ((marker.courseDeg || 0) + MODEL_HEADING_OFFSET_DEG) *

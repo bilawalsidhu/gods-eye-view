@@ -654,6 +654,7 @@ export function createQueries({
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
         const visual = components.rendering.getVisual(record);
+        // Horizon visibility: a vessel drawn as its model still counts.
         if (!visual.visible) continue;
         const position = visual.position;
         if (!position) continue;

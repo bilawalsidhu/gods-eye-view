@@ -26,11 +26,11 @@ test('the shared option turns the dynamic environment map off', () => {
 
 for (const { name, source } of SOURCES) {
   test(`${name}: every drawn aircraft model skips the dynamic environment map`, () => {
-    // Its models are draw-port items; every item it builds (fleet, tracked
-    // and the tracked preload) carries the shared option.
+    // Its models are draw-port items; every item it builds (fleet and
+    // tracked) carries the shared option.
     assert.doesNotMatch(source, /fromGltfAsync|loadModel\(/);
-    const items = [...source.matchAll(/\burl: (?:record\.url|preloadUrl),/g)];
-    assert.ok(items.length >= 2, `expected model items in ${name}`);
+    const items = [...source.matchAll(/\burl: record\.url,/g)];
+    assert.ok(items.length >= 1, `expected model items in ${name}`);
     const flags = [
       ...source.matchAll(/\benvironmentMap:\s*AIRCRAFT_ENVIRONMENT_MAP_OPTIONS\.enabled\b/g),
     ];

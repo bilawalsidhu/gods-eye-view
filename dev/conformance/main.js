@@ -30,7 +30,7 @@ const SAVE = '/__conformance/references/';
 const ctx = {
   toEcef,
   assets: {
-    model: '/models/c172.glb',
+    model: '/models/fleet/aircraft/c172.glb',
     // Not served: the model failure check loads it.
     missingModel: '/models/conformance-missing.glb',
   },

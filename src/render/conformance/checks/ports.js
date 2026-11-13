@@ -3525,6 +3525,81 @@ export function portChecks() {
       },
       { capability: 'models' },
     ),
+    check(
+      'draw.models.bytes',
+      'a model given its bytes is drawn from them, its url never fetched',
+      async (h, r) => {
+        if (!h.assets?.modelBytes || !h.assets?.missingModel)
+          return { skip: 'no model bytes in this harness' };
+        const gltf = await h.assets.modelBytes();
+        const set = r.draw.models({ id: 'conf:models.bytes' });
+        const ready = [];
+        const failed = [];
+        set.on('ready', (id) => ready.push(id));
+        set.on('loadFailed', (id) => failed.push(id));
+        set.set([
+          {
+            id: 'm',
+            pos: { ...AUSTIN, height: 0 },
+            // A url that does not load: only the bytes can draw it.
+            url: h.assets.missingModel,
+            gltf,
+            orientation: { heading: 0, pitch: 0, roll: 0 },
+          },
+        ]);
+        for (let i = 0; i < 600 && !ready.length && !failed.length; i++)
+          await drawn(h, r, 1);
+        deepEqual(ready, ['m'], 'ready from its bytes');
+        deepEqual(failed, [], 'its url not fetched');
+        set.dispose();
+      },
+      { capability: 'models' },
+    ),
+    check(
+      'draw.models.fleet',
+      'a model’s axis scale and clip change live, without loading again',
+      async (h, r) => {
+        if (!h.assets?.model) return { skip: 'no model asset in this harness' };
+        await overAustin(h, r);
+        const set = r.draw.models({ id: 'conf:models.fleet' });
+        const ready = [];
+        const failed = [];
+        set.on('ready', (id) => ready.push(id));
+        set.on('loadFailed', (id) => failed.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const model = (extra) => ({
+          id: 'm',
+          pos,
+          url: h.assets.model,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          minPixelSize: 96,
+          meta: { n: 1 },
+          ...extra,
+        });
+        const picked = () => {
+          const s = r.query.project(pos);
+          return (
+            s !== null &&
+            r.query.drillPick(s.x, s.y).some((hit) => hit.set === set.id)
+          );
+        };
+        set.set([model({ axisScale: [1, 1, 1] })]);
+        for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+        deepEqual(ready, ['m'], 'ready');
+        set.upsert([model({ axisScale: [1, 1.5, 2], clip: 'belowOrigin' })]);
+        await drawn(h, r, 3);
+        await settled(r);
+        ok(picked(), 'stretched and clipped, still drawn where it is');
+        set.upsert([model({ axisScale: [2, 1, 1], clip: undefined })]);
+        await drawn(h, r, 3);
+        await settled(r);
+        ok(picked(), 'restretched and unclipped');
+        deepEqual(ready, ['m'], 'restyled without loading again');
+        deepEqual(failed, [], 'nothing failed');
+        set.dispose();
+      },
+      { capability: 'models' },
+    ),
 
     // --- Query -------------------------------------------------------------
     check(

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- The renderer contract's `models` capability draws the procedural fleet
+  models: a model item can carry its glTF bytes (`gltf`, drawn without a
+  fetch), a per-axis stretch (`axisScale`), a colour for its tinted parts
+  (`maskColor`) and a cut below its origin (`clip: 'belowOrigin'`, a hull at
+  the waterline). Aircraft, military, local ADS-B, vessel, transit and rail
+  models are drawn through it (samehkhamis).
 - A tracked aircraft's trail no longer draws a straight line from its track
   history across a landing or take-off that was not seen: a parked or
   taxiing aircraft whose history ends in the air (often its previous flight)

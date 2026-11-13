@@ -1,5 +1,5 @@
 import { findCamera, findFrame } from '../../render/rendererOf.js';
-import { PLANE_MODEL_URL } from './policy.js';
+import { loadFleetModelSet } from '../../data/fleetModels.js';
 
 export function createLifecycle({
   flightState,
@@ -44,10 +44,12 @@ export function createLifecycle({
       flightState._focusEvidenceIds.clear();
       flightState._viewer = viewer;
       parts.icons._createIcons(viewer);
-      // The models' draw sets; a hidden item keeps the tracked asset loaded so
-      // the tracked plane's model draws as soon as it is wanted.
-      parts.rendering._createModelSets(viewer, {
-        preloadUrl: resolveAsset(PLANE_MODEL_URL),
+      // The models' draw sets. Every fleet model loads once, up front, for
+      // every layer that draws them (fleetModels.js), so no model is fetched
+      // while the session runs; until the set has loaded aircraft stay icons.
+      parts.rendering._createModelSets(viewer);
+      loadFleetModelSet({ resolveAsset }).catch(() => {
+        /* aircraft stay icons */
       });
       flightState._grounded.clear();
       flightState._floorPinned.clear();

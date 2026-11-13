@@ -45,7 +45,7 @@ function contractOnly(renderer) {
   return wrapped;
 }
 
-const ctx = { toEcef, assets: { model: '/models/c172.glb' } };
+const ctx = { toEcef, assets: { model: '/models/fleet/aircraft/c172.glb' } };
 
 test('every reference scene builds and disposes on the stub through the contract alone', async () => {
   const ids = new Set();

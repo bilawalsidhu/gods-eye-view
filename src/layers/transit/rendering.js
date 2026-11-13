@@ -36,6 +36,12 @@ import {
   TRANSIT_MODE_COLORS,
   vehicleNearView,
 } from './policy.js';
+import {
+  fleetModelSet,
+  loadFleetModelSet,
+  transitModelSpec,
+} from '../../data/fleetModels.js';
+import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 
 /** Layers built so far, so each one's draw sets have ids of their own. */
 let instances = 0;
@@ -145,14 +151,18 @@ export function createRendering({ state, services, parts }) {
 
   /** The ids of both sets (for the frame probe and floor sampling). */
   function setIds() {
-    return [state._stillIcons?.id, state._movingIcons?.id].filter(Boolean);
+    return [state._stillIcons?.id, state._movingIcons?.id, modelSetId()].filter(
+      Boolean,
+    );
   }
 
   /** Whether `setId` is one of this layer's sets. */
   function ownsSet(setId) {
     return (
       typeof setId === 'string' &&
-      (setId === state._stillIcons?.id || setId === state._movingIcons?.id)
+      (setId === state._stillIcons?.id ||
+        setId === state._movingIcons?.id ||
+        setId === modelSetId())
     );
   }
 
@@ -160,6 +170,8 @@ export function createRendering({ state, services, parts }) {
   function setNameOf(setId) {
     if (setId && setId === state._movingIcons?.id) return 'moving';
     if (setId && setId === state._stillIcons?.id) return 'still';
+    // A vehicle drawn as its model is picked as the vehicle.
+    if (setId && setId === modelSetId()) return 'model';
     return null;
   }
 
@@ -473,7 +485,7 @@ export function createRendering({ state, services, parts }) {
     );
     entry.surfaceReady = !!known;
     entry.heightPending = !known;
-    setShown(entry, !!known && vehicleInView(entry));
+    setShown(entry, !!known && vehicleInView(entry) && !entry.modelOwnsVisual);
     if (known) {
       const p = entry.marker.position;
       const s = state._scratchCartesian;
@@ -790,6 +802,7 @@ export function createRendering({ state, services, parts }) {
     const now = state.now();
     if (state._vehicles.size === 0) {
       state._moving.clear();
+      updateModels();
       syncRenderHold();
       return;
     }
@@ -848,7 +861,116 @@ export function createRendering({ state, services, parts }) {
     }
     flushMarkers();
     if (state._heightDirty.size) governorRequestRender('transit-height-batch');
+    updateModels();
     syncRenderHold();
+  }
+
+  // Under the DISPLAY rail's 3D toggle, vehicles in view near the camera are
+  // drawn as the project's procedural fleet models, chosen by mode, painted
+  // in their mode colour where the model marks it, on the aircraft layers'
+  // icon-to-model rules (services.fleet). The fleet set loads once, up front,
+  // when the layer starts.
+  let fleetModels = null;
+  /** Items drawn last frame, and the map the next frame's are gathered into. */
+  let modelItems = new Map();
+  let spareItems = new Map();
+  /** The lift icons are drawn with above the floor; a model stands on the floor. */
+  const groundLiftM = services.ground?.GROUND_FLOOR_LIFT_M || 0;
+
+  /** Load the fleet set and create the layer's models (on enable). */
+  function startModels() {
+    const fleet = services.fleet;
+    if (!fleet?.policy || !state._viewer) return;
+    loadFleetModelSet({ resolveAsset: fleet.resolveAsset }).catch(() => {
+      /* models stay off; vehicles keep their icons */
+    });
+    fleetModels ||= createFleetModelLayer({
+      viewer: state._viewer,
+      display: fleet.display,
+      policy: fleet.policy,
+      resolveAsset: fleet.resolveAsset,
+    });
+  }
+
+  /** Hand an entry's visual back to its icon. */
+  function handBack(entry) {
+    if (!entry.modelOwnsVisual) return;
+    entry.modelOwnsVisual = false;
+    if (entry.marker)
+      setShown(
+        entry,
+        vehicleInView(entry) &&
+          !entry.heightPending &&
+          entry.surfaceReady !== false,
+      );
+  }
+
+  function updateModels() {
+    if (!fleetModels) return;
+    if (!fleetModels.active() || state._vehicles.size === 0) {
+      if (modelItems.size) {
+        for (const item of modelItems.values()) handBack(item.entry);
+        modelItems.clear();
+        fleetModels.frame(modelItems, performance.now());
+      }
+      return;
+    }
+    const set = fleetModelSet();
+    const next = spareItems;
+    next.clear();
+    for (const entry of state._visible) {
+      // A vehicle of no known mode keeps its icon: no model says what it is.
+      if (!entry.marker || !entry.hasRendered || entry.mode === 'unknown')
+        continue;
+      let item = modelItems.get(entry.key);
+      if (!item || item.entry !== entry) {
+        item = {
+          entry,
+          pickId: entry.key,
+          modelOwnsVisual: false,
+          groundLiftM,
+        };
+      }
+      if (item.mode !== entry.mode) {
+        item.mode = entry.mode;
+        item.spec = transitModelSpec(set, { mode: entry.mode });
+        item.tint =
+          TRANSIT_MODE_COLORS[entry.mode] || TRANSIT_MODE_COLORS.unknown;
+      }
+      item.position = entry.marker.position;
+      item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
+      item.show = !entry.heightPending && entry.surfaceReady !== false;
+      next.set(entry.key, item);
+    }
+    for (const [key, item] of modelItems)
+      if (next.get(key) !== item) handBack(item.entry);
+    spareItems = modelItems;
+    modelItems = next;
+    fleetModels.frame(modelItems, performance.now());
+    for (const item of modelItems.values()) {
+      const entry = item.entry;
+      if (item.modelOwnsVisual) {
+        entry.modelOwnsVisual = true;
+        setShown(entry, false);
+      } else handBack(entry);
+    }
+    if (fleetModels.settling) governorRequestRender('transit-models');
+  }
+
+  /** The fleet models' set id, or null before the layer draws models. */
+  function modelSetId() {
+    return fleetModels?.setId ?? null;
+  }
+
+  /** Drop every model (layer disabled); `destroy` also lets their set go. */
+  function stopModels(destroy = false) {
+    for (const item of modelItems.values()) item.entry.modelOwnsVisual = false;
+    modelItems.clear();
+    spareItems.clear();
+    if (destroy) {
+      fleetModels?.destroy();
+      fleetModels = null;
+    } else fleetModels?.clear();
   }
 
   const candidatePosition = { x: 0, y: 0, z: 0 };
@@ -963,7 +1085,10 @@ export function createRendering({ state, services, parts }) {
       setShown(
         entry,
         Boolean(
-          visible && !entry.heightPending && entry.surfaceReady !== false,
+          visible &&
+          !entry.heightPending &&
+          entry.surfaceReady !== false &&
+          !entry.modelOwnsVisual,
         ),
       );
       visibility.heightPending = !!entry.heightPending;
@@ -1166,5 +1291,7 @@ export function createRendering({ state, services, parts }) {
     setStylePreset,
     onPreRender,
     syncRenderHold,
+    startModels,
+    stopModels,
   };
 }
