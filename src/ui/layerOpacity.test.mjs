@@ -335,6 +335,10 @@ test('an incoming link is applied once and its own address is not rewritten', as
   assert.deepEqual(writes, [], 'a non-canonical incoming lop is left as is');
   navigationTarget.dispatchEvent(new Event('hashchange')); // same entry
   assert.equal(calls.length, 2, 'the entry is reconciled once');
+  opacity.set('wind', 0.6);
+  await wait();
+  assert.equal(writes.length, 1, 'the guard is cleared: sliders write again');
+  assert.match(writes[0].url, /wind:60/);
 });
 
 test('an inline instance keeps user values across host hashchange', () => {
