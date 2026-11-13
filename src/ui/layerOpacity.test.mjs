@@ -309,3 +309,44 @@ test('share navigation resets omitted opacity and pending writes', async () => {
   navigationTarget.dispatchEvent(new Event('popstate'));
   assert.equal(calls.length, count, 'destroy removes navigation listeners');
 });
+
+test('a navigation event that leaves lop alone keeps what the user set', async () => {
+  const { opacity, location, navigationTarget, calls, writes } = fixture();
+  opacity.restore();
+  opacity.set('wind', 0.4); // address still has no lop: write is pending
+  location.href = 'https://gev.example/app/?lang=de#v=2&l=f&lat=9'; // anchor
+  navigationTarget.dispatchEvent(new Event('hashchange'));
+  assert.equal(opacity.get('wind'), 0.4, 'a hash edit must not undo a drag');
+  assert.deepEqual(calls, [['wind', 0.4]], 'no hook call for a no-op event');
+  await wait();
+  assert.equal(writes.length, 1, 'the pending write still lands');
+});
+
+test('an incoming link is applied once and its own address is not rewritten', async () => {
+  const { opacity, location, navigationTarget, calls, writes } = fixture();
+  opacity.restore();
+  location.href = 'https://gev.example/app/?lop=wind:35,sea-marks:50#lat=1';
+  navigationTarget.dispatchEvent(new Event('popstate'));
+  assert.deepEqual(calls, [
+    ['wind', 0.35],
+    ['sea-marks', 0.5],
+  ]);
+  await wait();
+  assert.deepEqual(writes, [], 'a non-canonical incoming lop is left as is');
+  navigationTarget.dispatchEvent(new Event('hashchange')); // same entry
+  assert.equal(calls.length, 2, 'the entry is reconciled once');
+});
+
+test('an inline instance keeps user values across host hashchange', () => {
+  const { manager, navigationTarget } = fixture();
+  const inline = new LayerOpacity(manager, {
+    locationRef: { href: 'https://host.example/page#a' },
+    historyRef: null,
+    navigationTarget,
+    addressDelayMs: 0,
+  });
+  inline.set('wind', 0.6);
+  navigationTarget.dispatchEvent(new Event('hashchange'));
+  assert.equal(inline.get('wind'), 0.6);
+  inline.destroy();
+});
