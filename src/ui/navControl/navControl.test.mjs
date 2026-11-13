@@ -514,3 +514,23 @@ test('mounting the navigation control leaves the shell’s Tilt and North-up but
   globe.detach(shell._orientationToken);
   shell._navControl.destroy();
 });
+
+test('a step stops, and leaves the camera where it was moved, when something else moves the camera', () => {
+  const { viewer, activate, clock, frame } = setup({
+    view: { heading: 0, pitch: -45, range: 1_000 },
+  });
+  activate('zoom-in');
+  // Two frames of the step, so the animator has a position to compare with.
+  clock.advance(60, () => viewer.scene.preUpdate.raiseEvent());
+  clock.advance(60, () => viewer.scene.preUpdate.raiseEvent());
+  const eased = frame().range;
+  assert.ok(eased < 1_000 && eased > 700, `mid-step range ${eased}`);
+  // A drag, wheel or flight moves the camera by far more than the step did.
+  viewer.camera.move(Cesium.Cartesian3.UNIT_X, 500);
+  const moved = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  clock.advance(400, () => viewer.scene.preUpdate.raiseEvent());
+  assert.ok(
+    Cesium.Cartesian3.distance(moved, viewer.camera.positionWC) < 1e-6,
+    'the step does not pull the camera back',
+  );
+});

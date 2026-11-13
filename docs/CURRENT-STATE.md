@@ -2629,7 +2629,8 @@ keys turn it, Home returns to north), a north-up button, a tilt slider with
 up/down buttons and a top-down button, zoom in/out with press-and-hold repeat,
 and a four-way look-around pad. Steps ease over about 220 ms; a step that is
 still easing stops as soon as anything else moves the camera (a drag or wheel
-on the globe, a flight) or the followed entity changes. The tilt shown is read
+on the globe, a flight) or the followed entity changes; while an entity is
+followed, a drag or wheel does not stop a step, which lasts at most 650 ms. The tilt shown is read
 from the camera's target once the camera has been still for 1.5 s after a
 move, never inside `moveEnd` or the frames after it, so the depth read cannot
 delay the arrival work other `moveEnd` observers do (the 500 ms arrival check
