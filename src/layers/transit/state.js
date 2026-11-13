@@ -42,7 +42,7 @@ export function createState({ services }) {
   state._cameraChangedAttached = false;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
-  /** Globe-view coverage glow: its billboards and the last opacity drawn. */
+  /** Coverage glow: its draw batches and the last opacities drawn. */
   state._coverageSpots = null;
   state._coverageOpacity = null;
   /** Camera sensitivity as we found it, so disable() can hand it back. */

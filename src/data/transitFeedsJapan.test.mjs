@@ -38,6 +38,11 @@ test('every Japanese row is a live, keyless feed under CC0 or CC BY', () => {
       /Vehicle positions were seen on|its positions have not been seen yet/,
       `${row.id} says whether positions were seen`,
     );
+    assert.equal(
+      row.liveSeen === false,
+      /have not been seen yet/.test(row.terms.note),
+      `${row.id} is flagged exactly when its positions are unseen`,
+    );
     assert.equal(new URL(row.url).protocol, 'https:');
     assert.ok(
       // Japan, Hokkaidō to Okinawa.

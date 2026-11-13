@@ -9,7 +9,9 @@
  * operator in Japanese, as the operator publishes it.
  *
  * Most rows were added overnight in Japan, when the feeds answer with an
- * empty message: each note says whether vehicle positions have been seen.
+ * empty message: each note says whether vehicle positions have been seen,
+ * and a row whose positions have not been seen carries `liveSeen: false`,
+ * which keeps it out of the globe-view coverage glow until it is confirmed.
  * `center` is the catalogue's bounding-box centre and `loadRadiusKm` an
  * estimate from the kind of network, to be tightened once vehicles are seen.
  *
@@ -37,6 +39,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kitokito-bus-imizu',
@@ -57,6 +60,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kaetsuno-bus-himi',
@@ -77,6 +81,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kaetsuno-bus',
@@ -97,6 +102,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kaetsuno-world-heritage-bus',
@@ -117,6 +123,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kamiichi-town-bus',
@@ -137,6 +144,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kurobe-city-bus',
@@ -157,6 +165,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kurobe-shinkansen-ikuji-bus',
@@ -177,6 +186,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'noru-my-car-namerikawa',
@@ -197,6 +207,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'nanto-city-bus',
@@ -217,6 +228,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'noran-my-car-nyuzen',
@@ -237,6 +249,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'oyabe-city-bus',
@@ -257,6 +270,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'takaoka-city-bus',
@@ -277,6 +291,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'tateyama-town-bus',
@@ -297,6 +312,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'gruun-tokoname',
@@ -317,6 +333,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'tonami-city-bus',
@@ -337,6 +354,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'asahimachi-bus',
@@ -357,6 +375,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-fuchu-community-bus',
@@ -377,6 +396,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-horikawa-minami-bus',
@@ -397,6 +417,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-jojo-community-bus',
@@ -417,6 +438,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-kureha-ikiiki-bus',
@@ -437,6 +459,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-maidohaya-bus',
@@ -457,6 +480,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-mizuhashi-fureai-bus',
@@ -477,6 +501,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-oyama-community-bus',
@@ -497,6 +522,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-yamada-community-bus',
@@ -517,6 +543,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'toyama-yatsuo-community-bus',
@@ -537,6 +564,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'uozu-citizens-bus',
@@ -557,6 +585,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'uozu-omotenashi-bus',
@@ -577,6 +606,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/publicdomain/zero/1.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'aiai-bus-chita',
@@ -597,6 +627,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'okage-bus-ise',
@@ -617,6 +648,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'keisei-bus-chiba-west-shiohama',
@@ -638,6 +670,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kamoshika-go-komono',
@@ -658,6 +691,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kumamoto-bus',
@@ -738,6 +772,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-iga',
@@ -758,6 +793,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-nanki',
@@ -778,6 +814,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-ise',
@@ -798,6 +835,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-kuwana',
@@ -818,6 +856,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-matsusaka',
@@ -838,6 +877,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-shima',
@@ -858,6 +898,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'mie-kotsu-yokkaichi',
@@ -878,6 +919,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'nagai-bus-maebashi',
@@ -898,6 +940,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'nagano-city-bus',
@@ -918,6 +961,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'asapi-go-owariasahi',
@@ -938,6 +982,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'sanko-bus-kumamoto',
@@ -978,6 +1023,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'tsuchimaru-bus-tsuchiura',
@@ -998,6 +1044,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'yanbaru-express-bus',
@@ -1018,6 +1065,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/deed.ja',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kenko-hokubu-kotsu',
@@ -1038,6 +1086,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kochi-koryo-kotsu',
@@ -1058,6 +1107,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'kochi-seinan-kotsu',
@@ -1078,6 +1128,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'susaki-city-bus',
@@ -1098,6 +1149,7 @@ export const JAPAN_TRANSIT_FEED_ROWS = [
       quote: 'https://creativecommons.org/licenses/by/4.0/',
       note: 'The Mobility Database record gives this licence for the feed; the quote is the licence it links. Added while services were not running (2026-11-14, 01:40 Japan time): the feed answered with a well-formed, empty message, so its positions have not been seen yet. The centre is the catalogue’s bounding-box centre for the network.',
     },
+    liveSeen: false,
   },
   {
     id: 'aomori-city-community-bus',
