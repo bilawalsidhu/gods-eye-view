@@ -742,6 +742,11 @@ export class ShareLinkManager {
     history.replaceState(history.state, '', url.href);
   }
 
+  /** Capture the live share hash without changing the current history entry. */
+  snapshotHash() {
+    return this._buildHashParams()?.toString() ?? null;
+  }
+
   /** Build a deterministic snapshot without mutating history. */
   _buildHashParams() {
     if (this._destroyed) return null;

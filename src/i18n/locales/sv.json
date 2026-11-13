@@ -739,6 +739,7 @@
   "Requesting microphone": "Begär åtkomst till mikrofonen",
   "Ask or command": "Fråga eller ge ett kommando",
   "Running command": "Kör kommando",
+  "Voice is disabled in Stories.": "Röststyrning är avstängd i Stories.",
   "Voice off": "Röst av",
   "WebRTC microphone support unavailable": "Mikrofonstöd för WebRTC saknas",
   "VOICE UNAVAILABLE": "RÖST OTILLGÄNGLIG",

@@ -2437,6 +2437,7 @@
   "Gemini voice is not connected": "Gemini音声が接続されていません",
   "Gemini interrupted input exceeded its buffer or wait limit. Start voice again.": "Geminiの中断された入力がバッファーまたは待機の上限を超えました。音声をもう一度開始してください。",
   "Gemini Live connection is expiring. Start voice again for a new conversation.": "Gemini Liveの接続がまもなく期限切れです。新しい会話を始めるには、音声をもう一度開始してください。",
+  "Voice is disabled in Stories.": "ストーリーでは音声操作が無効になります。",
   "Voice off": "音声 オフ",
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Gemini音声のセッションには時間制限があります。セッションが期限切れになったら、音声をもう一度開始して新しい会話を始めてください。",
   "Stopped by voice": "音声で停止しました",

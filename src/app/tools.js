@@ -20,6 +20,7 @@ import { createLibraryBrowser } from '../ui/libraryBrowser.js';
 import { useDataLibraryStore } from '../ui/stores/dataLibrary.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { isStoriesOpen } from '../voice/realtimeInputPolicy.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import {
   installScopeMask,
@@ -75,12 +76,23 @@ export function createApplicationTools({
   onSceneDirector?.(sceneDirector);
   // Stories: GEV scenes on this globe, from a Stories button. Its screens,
   // styles, story data and controller load on first use.
+  const storiesStore = useStoriesStore(applicationPinia());
+  let voiceCommands;
   const stories = bootStories({
     // Inline in a host page, the URL and history are the host's.
     available: !isEmbeddedInline(),
     viewer,
     director: sceneDirector,
-    store: useStoriesStore(applicationPinia()),
+    store: storiesStore,
+    onEnter: () => {
+      const session = voiceCommands?.session;
+      // A typed command can finish its reply without keeping a microphone on.
+      if (!session || session.adapter.getStartOptions?.().textOnly) return;
+      const wasActive = session.isActive();
+      session.stop();
+      if (wasActive)
+        storiesStore.flashToast(t('Voice is disabled in Stories.'), 4000);
+    },
     onLoadFailed: () =>
       styleManager._showToast?.(
         t('Stories could not load. Check the connection and try again.'),
@@ -289,8 +301,15 @@ export function createApplicationTools({
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
-  const voiceCommands = initGevVoiceCommands({
+  voiceCommands = initGevVoiceCommands({
     ...voice,
+    canStartVoice: () => !isStoriesOpen(),
+    openStories: storiesStore.available
+      ? ({ isCurrent }) =>
+          storiesStore.mode === 'closed'
+            ? stories.open({ isCurrent })
+            : 'already-open'
+      : null,
     floorServices: operations.surface.groundFloor,
     annotationResolver: operations.annotationResolver,
     searchNavigation: operations.searchAndFlyTo,

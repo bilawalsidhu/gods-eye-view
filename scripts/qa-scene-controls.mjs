@@ -45,7 +45,7 @@ try {
       window.__qaSceneState.push(notification),
     );
   });
-  await page.click('[data-collapse-target="scene-panel"]');
+  await page.click('[data-rail-item="scene-panel"]');
   await page.click('#scene-new-btn');
   await page.waitForFunction(
     () => document.querySelector('#scene-name')?.textContent === 'QA Scene',
@@ -276,7 +276,7 @@ try {
       panel.classList.contains('collapsed'),
     )
   )
-    await page.click('[data-collapse-target="scene-panel"]');
+    await page.click('[data-rail-item="scene-panel"]');
   await page.waitForSelector('#scene-download-btn', { visible: true });
   await page.click('#scene-download-btn');
   const metadata = await page.evaluate(async () =>
@@ -389,15 +389,15 @@ try {
     () =>
       !window.__godsEyeView.sceneDirector._project.scenes.some(
         (item) => item.title === 'QA Scene',
-      ),
+      ) && document.querySelector('#scene-name.scene-name-empty'),
   );
   check(
-    'Deleting the final scene restores the built-in recipes',
+    'Deleting the final scene restores the built-in recipes and clears Authoring',
     await page.evaluate(
       () =>
         window.__godsEyeView.sceneDirector._project.scenes.length > 0 &&
-        document.querySelector('#scene-name')?.textContent ===
-          window.__godsEyeView.sceneDirector._getSelectedScene()?.title,
+        window.__godsEyeView.sceneDirector._getSelectedScene() === null &&
+        document.querySelector('#scene-name.scene-name-empty') !== null,
     ),
   );
   check(
@@ -425,6 +425,10 @@ try {
       );
     }),
   );
+  promptValue = 'Disposal scene';
+  await page.click('#scene-new-btn');
+  await page.click('#scene-capture-btn');
+  await page.waitForSelector('.scene-shot-label', { visible: true });
   const teardown = await page.evaluate(async () => {
     const director = window.__godsEyeView.sceneDirector;
     const controls = director._controls;

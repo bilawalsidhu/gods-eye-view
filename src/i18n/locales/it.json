@@ -2537,6 +2537,7 @@
   "Gemini voice is not connected": "La voce Gemini non è connessa",
   "Gemini interrupted input exceeded its buffer or wait limit. Start voice again.": "L'input interrotto di Gemini ha superato il limite di buffer o di attesa. Riavvia la voce.",
   "Gemini Live connection is expiring. Start voice again for a new conversation.": "La connessione a Gemini Live sta scadendo. Riavvia la voce per una nuova conversazione.",
+  "Voice is disabled in Stories.": "Il controllo vocale è disattivato nelle Storie.",
   "Voice off": "Voce disattivata",
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Le sessioni vocali Gemini hanno un limite di tempo. Quando una sessione scade, riavvia la voce per una nuova conversazione.",
   "Stopped by voice": "Fermato dalla voce",

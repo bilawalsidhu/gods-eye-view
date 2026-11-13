@@ -1070,6 +1070,7 @@ const STEP_TITLES = Object.freeze({
   set_detection: msg('Adjust detection overlay'),
   set_map_stack: msg('Change map stack'),
   set_post_processing: msg('Adjust post-processing'),
+  open_stories: msg('Stories'),
   control_scene: msg('Control scene'),
   control_cctv: msg('Control CCTV'),
   control_radio: msg('Control radio'),

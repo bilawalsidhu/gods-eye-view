@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createPinia, setActivePinia } from 'pinia';
+import { createStateChannel } from '../app/stateChannel.js';
 
 registerHooks({
   load(url, context, next) {
@@ -123,21 +124,31 @@ function setup(options = {}) {
   const store = useStoriesStore();
   const viewer = fakeViewer();
   const director = fakeDirector(options);
-  const controller = createStoriesController({ viewer, director, store });
+  const controller = createStoriesController({
+    viewer,
+    director,
+    store,
+    onEnter: options.onEnter,
+  });
   store.connect(controller, listStories());
   return { store, viewer, director, controller };
 }
 
 test('Close steps back over every entry Stories pushed', async () => {
-  const { controller } = setup();
+  const entered = [];
+  const { controller } = setup({
+    onEnter: () =>
+      entered.push(document.body.classList.contains('stories-mode')),
+  });
   const steps = [];
   const go = history.go;
   history.go = (n) => steps.push(n);
   try {
-    controller.open();
+    assert.equal(controller.open(), true);
     assert.equal(history.state.gevStories.depth, 1);
     controller.openStory('gev:flights-radar');
     assert.equal(history.state.gevStories.depth, 2);
+    assert.deepEqual(entered, [true]);
     await controller.close();
     // Back after Close would otherwise land on ?story=… and reopen it.
     assert.deepEqual(steps, [-2]);
@@ -158,8 +169,13 @@ test('Close from a Stories link clears Stories from the URL in place', async () 
 });
 
 test('Cockpit keeps the camera: Stories does not open', () => {
-  const { controller, store, director } = setup({ refuse: true });
-  controller.open();
+  const { controller, store, director } = setup({
+    refuse: true,
+    onEnter: () => assert.fail('refused entry should not stop voice'),
+  });
+  assert.equal(controller.open({ isCurrent: () => false }), false);
+  assert.deepEqual(director.claims, []);
+  assert.equal(controller.open(), false);
   assert.equal(store.mode, 'closed');
   assert.equal(director.stops, 0);
   // The navigation policy shows the refusal; it needs a sentence for the noun.
@@ -169,17 +185,21 @@ test('Cockpit keeps the camera: Stories does not open', () => {
 });
 
 test('reopening while a scene tears down keeps the view from before Stories', async () => {
-  const { controller, viewer, director } = setup();
+  const { controller, viewer, director, store } = setup();
   const before = viewer.camera.positionWC;
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
-  const closing = controller.close();
+  const toast = store.hostedToast;
+  const closing = controller.openInGev();
   // The scene has moved the camera; the person opens Stories again at once.
   viewer.camera.positionWC = new Cesium.Cartesian3(9, 9, 9);
   controller.open();
   director.running = false;
   await closing;
+  assert.deepEqual(director.selected, []);
+  assert.deepEqual(director.styleManager.panels, []);
+  assert.equal(store.hostedToast, toast);
   assert.equal(
     viewer.camera.views.length,
     0,
@@ -204,14 +224,36 @@ test('after a GEV scene, the person’s view comes back once the scene has torn 
   controller.destroy();
 });
 
-test('a share link carries the story, not the sender’s camera and layers', () => {
-  const { controller } = setup();
+test('Share links to the selection and captures the playing story’s timeline', () => {
+  const { controller, store } = setup();
   controller.open();
+  assert.equal(new URL(controller.shareLink()).search, '?stories=explore');
+  controller.pick('gev:orbital-watch');
+  assert.equal(
+    new URL(controller.shareLink()).search,
+    '?stories=explore&selectedStory=gev%3Aorbital-watch',
+  );
   controller.openStory('gev:flights-radar');
+  store.playback = { ...store.playback, playing: true, wallMs: 1250.6 };
   const link = new URL(controller.shareLink());
-  assert.equal(link.searchParams.get('story'), 'gev:flights-radar');
+  assert.deepEqual(
+    [...link.searchParams],
+    [
+      ['story', 'gev:flights-radar'],
+      ['storyTime', '1251'],
+    ],
+  );
   assert.equal(link.hash, '');
-  assert.equal(link.searchParams.has('x'), false, 'no other query parameters');
+  store.playback.wallMs = 1850;
+  assert.equal(
+    new URL(controller.shareLink()).searchParams.get('storyTime'),
+    '1850',
+  );
+  controller.backToExplore({ fromHistory: true });
+  assert.equal(
+    new URL(controller.shareLink()).search,
+    '?stories=explore&selectedStory=gev%3Aflights-radar',
+  );
   controller.destroy();
 });
 
@@ -227,7 +269,7 @@ function recordGo(t) {
 }
 
 test('Back to Explore after a related story steps past both stories', (t) => {
-  const { controller } = setup();
+  const { controller, store } = setup();
   const steps = recordGo(t);
   controller.open();
   controller.openStory('gev:flights-radar');
@@ -235,9 +277,19 @@ test('Back to Explore after a related story steps past both stories', (t) => {
   assert.equal(history.state.gevStories.depth, 3);
   assert.equal(history.state.gevStories.explore, 1);
   controller.backToExplore();
-  // A second click before the traversal lands does nothing more.
+  controller.openStory('gev:flights-radar'); // queued behind Back
+  // The latest Back cancels that queued story without another traversal.
   controller.backToExplore();
   assert.deepEqual(steps, [-2]);
+  history.replaceState(
+    { gevStories: { stories: 'explore', depth: 1, explore: 1 } },
+    '',
+    '/?stories=explore',
+  );
+  dispatchEvent(new PopStateEvent('popstate'));
+  assert.equal(store.mode, 'explore');
+  assert.equal(store.storyId, null);
+  assert.equal(history.state.gevStories.depth, 1, 'no queued story pushed');
   controller.destroy();
 });
 
@@ -246,13 +298,13 @@ test('a second Close after a quick reopen still waits for the scene to tear down
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
-  controller.close();
+  const first = controller.close({ keepCamera: true });
   controller.open(); // reopened while the scene is still stopping
   const closing = controller.close(); // Explore: no GEV story on screen
   assert.ok(closing, 'this Close waits too');
   assert.equal(viewer.camera.views.length, 0, 'nothing restored yet');
   setTimeout(() => (director.running = false), 120);
-  await closing;
+  await Promise.all([first, closing]);
   assert.equal(viewer.camera.views.length, 1);
   controller.destroy();
 });
@@ -262,7 +314,7 @@ test('a reload of a Stories entry keeps its history; Close steps all of it back'
   history.replaceState(
     { gevStories: { story: 'gev:flights-radar', depth: 2, explore: 1 } },
     '',
-    '/?story=gev%3Aflights-radar',
+    '/?story=gev%3Aflights-radar&storyTime=1250',
   );
   const steps = recordGo(t);
   const store = useStoriesStore();
@@ -274,6 +326,8 @@ test('a reload of a Stories entry keeps its history; Close steps all of it back'
   store.connect(controller, listStories());
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.equal(store.storyId, 'gev:flights-radar');
+  assert.equal(store.playback.wallMs, 1250);
+  assert.equal(store.playback.playing, false);
   assert.equal(history.state.gevStories.depth, 2, 'no extra entry pushed');
   await controller.close();
   assert.deepEqual(steps, [-2]);
@@ -282,7 +336,7 @@ test('a reload of a Stories entry keeps its history; Close steps all of it back'
 
 test('a new story link puts Explore under the story', async (t) => {
   setActivePinia(createPinia());
-  history.replaceState(null, '', '/?story=gev%3Aflights-radar');
+  history.replaceState(null, '', '/?story=gev%3Aflights-radar&storyTime=1250');
   const steps = recordGo(t);
   const store = useStoriesStore();
   const controller = createStoriesController({
@@ -293,8 +347,11 @@ test('a new story link puts Explore under the story', async (t) => {
   store.connect(controller, listStories());
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.equal(store.storyId, 'gev:flights-radar');
+  assert.equal(store.playback.wallMs, 1250);
+  assert.equal(store.playback.playing, false);
   assert.deepEqual(history.state.gevStories, {
     story: 'gev:flights-radar',
+    storyTime: 1250,
     depth: 1,
     explore: 0,
   });
@@ -377,6 +434,29 @@ function land(hash = '#v=2&lat=1') {
   dispatchEvent(new PopStateEvent('popstate'));
 }
 
+test('a second browser Back during scene teardown supersedes the Stories restore', async () => {
+  const { controller, director, store, viewer } = setup();
+  const share = director.styleManager.shareLinkManager;
+  const holds = [];
+  share.holdWrites = (held) => holds.push(held);
+  director.selection = () => ({ sceneId: 'previous', shotId: 'shot-1' });
+  controller.open();
+  controller.openStory('gev:bhote-koshi-nepal-scene');
+  director.running = true;
+  land();
+  assert.equal(store.mode, 'closed');
+  land('#v=2&lat=2');
+  director.running = false;
+  await tick(0);
+  assert.equal(location.hash, '#v=2&lat=2');
+  assert.equal(viewer.camera.views.length, 0);
+  assert.deepEqual(share.restored, []);
+  assert.deepEqual(director.selected, []);
+  assert.deepEqual(holds, [true, false]);
+  assert.equal(document.body.classList.contains('stories-mode'), false);
+  controller.destroy();
+});
+
 test('Close after a GEV scene puts the share state back once the step back lands', async (t) => {
   const { controller, director } = setup();
   const steps = recordGo(t);
@@ -386,8 +466,10 @@ test('Close after a GEV scene puts the share state back once the step back lands
   await controller.close();
   assert.deepEqual(steps, [-2]);
   assert.deepEqual(restored, [], 'not before the landing');
+  assert.equal(document.body.classList.contains('stories-mode'), true);
   land();
   assert.deepEqual(restored, ['v=2&lat=1']);
+  assert.equal(document.body.classList.contains('stories-mode'), false);
   controller.destroy();
 });
 
@@ -435,7 +517,7 @@ test('a reloaded Stories entry drops the share hash GEV wrote on boot', async ()
   history.replaceState(
     { gevStories: { stories: 'explore', depth: 1, explore: 1 } },
     '',
-    '/?stories=explore#v=2&lat=7',
+    '/?stories=explore&selectedStory=gev%3Aorbital-watch#v=2&lat=7',
   );
   const store = useStoriesStore();
   const controller = createStoriesController({
@@ -447,7 +529,19 @@ test('a reloaded Stories entry drops the share hash GEV wrote on boot', async ()
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.equal(store.mode, 'explore');
   assert.equal(location.hash, '');
-  assert.equal(new URL(location.href).searchParams.get('stories'), 'explore');
+  assert.equal(store.picked, 'gev:orbital-watch');
+  assert.equal(
+    location.search,
+    '?stories=explore&selectedStory=gev%3Aorbital-watch',
+  );
+  const exploreState = history.state;
+  const exploreUrl = location.href;
+  controller.openStory('gev:flights-radar');
+  assert.equal(location.search, '?story=gev%3Aflights-radar');
+  history.replaceState(exploreState, '', exploreUrl);
+  dispatchEvent(new PopStateEvent('popstate'));
+  assert.equal(store.mode, 'explore');
+  assert.equal(store.picked, 'gev:orbital-watch');
   controller.destroy();
 });
 
@@ -478,13 +572,13 @@ test('a scene saved to Stories from AUTHORING joins the list at once', () => {
       shotCount: 2,
     },
   ];
-  listener({ type: 'stories-changed' });
+  listener({ change: { type: 'stories-changed' } });
   const story = store.byId('gev:my-scene');
   assert.equal(story?.title, 'Harbour at dawn');
   assert.equal(story.mine, true);
   assert.equal(store.stories[0].id, 'gev:my-scene', 'the person’s own first');
   mine = [];
-  listener({ type: 'stories-changed' });
+  listener({ change: { type: 'stories-changed' } });
   assert.equal(store.byId('gev:my-scene'), null, 'removed from Stories');
   controller.destroy();
   assert.equal(listener, null, 'unsubscribed');
@@ -492,10 +586,13 @@ test('a scene saved to Stories from AUTHORING joins the list at once', () => {
 
 test('Back to Explore after a scene puts the look back once the scene has torn down, then frames Explore', async () => {
   const { controller, viewer, director } = setup();
+  history.replaceState(null, '', '/');
   const flights = [];
   viewer.camera.flyTo = (f) => flights.push(f);
   viewer.camera.flyToBoundingSphere = (f) => flights.push(f);
   const share = director.styleManager.shareLinkManager;
+  const original = 'v=2&lat=1&style=normal';
+  share.snapshotHash = () => original;
   // GEV's restore writes the hash it applies; Explore's address drops it.
   share.restore = function (hash) {
     this.restored.push(hash);
@@ -506,13 +603,18 @@ test('Back to Explore after a scene puts the look back once the scene has torn d
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
   flights.length = 0;
-  controller.backToExplore({ fromHistory: true });
+  history.replaceState(
+    { gevStories: { stories: 'explore', depth: 1, explore: 1 } },
+    '',
+    '/?stories=explore',
+  );
+  dispatchEvent(new PopStateEvent('popstate'));
   await tick(30);
   assert.deepEqual(share.restored, [], 'not under the stopping scene');
   assert.equal(flights.length, 0, 'Explore waits for the scene');
   director.running = false;
   await tick(40);
-  assert.deepEqual(share.restored, ['v=2&lat=1']);
+  assert.deepEqual(share.restored, [original]);
   assert.equal(location.hash, '', 'the address names only Stories');
   assert.equal(flights.length, 1, 'then Explore frames the globe');
   // A later Back to Explore with no scene in between restores nothing more.
@@ -579,9 +681,16 @@ test('Explore tours from story to story once idle, stops on a pick or a touch, a
 
 test('a new Explore link keeps the address free of the share hash GEV writes as Stories opens', async () => {
   setActivePinia(createPinia());
-  history.replaceState(null, '', '/?stories=explore');
+  history.replaceState(
+    null,
+    '',
+    '/?stories=explore&selectedStory=gev%3Aorbital-watch',
+  );
   const store = useStoriesStore();
   const director = fakeDirector();
+  const playbackCalls = [];
+  director.startScene = () => playbackCalls.push('start');
+  director.seekScene = () => playbackCalls.push('seek');
   // Holding writes first writes the view change still waiting.
   director.styleManager.shareLinkManager.holdWrites = (held) => {
     if (held) history.replaceState(history.state, '', `${location.search}#v=2`);
@@ -595,7 +704,13 @@ test('a new Explore link keeps the address free of the share hash GEV writes as 
   await tick(400);
   assert.equal(store.mode, 'explore');
   assert.equal(location.hash, '');
-  assert.equal(location.search, '?stories=explore');
+  assert.equal(
+    location.search,
+    '?stories=explore&selectedStory=gev%3Aorbital-watch',
+  );
+  assert.equal(store.picked, 'gev:orbital-watch');
+  assert.equal(store.storyId, null);
+  assert.deepEqual(playbackCalls, []);
   controller.destroy();
 });
 
@@ -690,13 +805,12 @@ test('Close after Back to Explore still puts AUTHORING’s selection back', asyn
   controller.destroy();
 });
 
-test('the person’s unsaved scenes list as drafts, which cannot be shared', () => {
+test('unsaved scenes appear as local drafts and disappear when deleted', () => {
   setActivePinia(createPinia());
   history.replaceState(null, '', '/');
   const store = useStoriesStore();
   const director = fakeDirector();
-  director.subscribe = () => () => {};
-  director.draftScenes = () => [
+  const drafts = [
     {
       id: 'sketch',
       title: 'Sketch',
@@ -706,6 +820,9 @@ test('the person’s unsaved scenes list as drafts, which cannot be shared', () 
       tags: [],
     },
   ];
+  const channel = createStateChannel(() => ({ scenes: drafts }));
+  director.subscribe = channel.subscribe;
+  director.draftScenes = () => drafts;
   const controller = createStoriesController({
     viewer: fakeViewer(),
     director,
@@ -715,6 +832,10 @@ test('the person’s unsaved scenes list as drafts, which cannot be shared', () 
   const draft = store.byId('gev:sketch');
   assert.equal(draft?.draft, true);
   assert.equal(draft.mine, true, 'local only: no Share');
+  drafts.length = 0;
+  channel.publish({ type: 'scene-deleted' });
+  controller.open();
+  assert.equal(store.byId('gev:sketch'), null);
   controller.destroy();
 });
 
@@ -755,20 +876,31 @@ test('the tour waits again after a wheel turn or a cancelled press, and a list c
     assert.equal(flights.length, before + 1, `${type}: then tours`);
   }
   canvas.dispatchEvent(new Event('pointerdown'));
-  listener({ type: 'stories-changed' });
+  listener({ change: { type: 'stories-changed' } });
   const held = flights.length;
   t.mock.timers.tick(30000);
   assert.equal(flights.length, held, 'nothing flies under the drag');
   again.destroy();
 });
 
-test('teardown mid-close lets the share link write again', () => {
-  const { controller, director } = setup();
+test('teardown mid-close releases share writes and cancels a queued reopen', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { controller, director, store, viewer } = setup();
+  recordGo(t);
   const held = [];
   director.styleManager.shareLinkManager.holdWrites = (on) => held.push(on);
+  let flights = 0;
+  viewer.camera.flyTo = () => flights++;
   controller.open();
+  await controller.close();
+  controller.open(); // queued until the Close traversal lands
   controller.destroy();
+  const before = flights;
   assert.equal(held.at(-1), false);
+  t.mock.timers.tick(3000);
+  assert.equal(store.mode, 'closed');
+  assert.equal(held.at(-1), false, 'no late reopen holds writes again');
+  assert.equal(flights, before, 'no late flight after teardown');
 });
 
 test('place names name only a shipped scene’s untitled shots', () => {
@@ -784,4 +916,77 @@ test('place names name only a shipped scene’s untitled shots', () => {
     ['The Atlantic', 'Over the harbour'],
   );
   controller.destroy();
+});
+
+test('new navigation cancels a delayed initial story link', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const action of ['back', 'open', 'close']) {
+    setActivePinia(createPinia());
+    history.replaceState(null, '', '/?story=gev%3Aflights-radar');
+    const store = useStoriesStore();
+    const controller = createStoriesController({
+      viewer: fakeViewer(),
+      director: fakeDirector(),
+      store,
+    });
+    store.connect(controller, listStories());
+    try {
+      if (action === 'back') land();
+      else if (action === 'open') controller.open();
+      else controller.close();
+      const url = location.href;
+      t.mock.timers.tick(400);
+      assert.equal(
+        store.mode,
+        action === 'open' ? 'explore' : 'closed',
+        action,
+      );
+      assert.equal(store.storyId, null, action);
+      assert.equal(
+        location.href,
+        url,
+        'the old link does not rewrite navigation',
+      );
+    } finally {
+      controller.destroy();
+    }
+  }
+});
+
+test('an earlier Back timeout cannot release a later traversal', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { controller, store } = setup();
+  const steps = recordGo(t);
+  const landExplore = () => {
+    history.replaceState(
+      { gevStories: { stories: 'explore', depth: 1, explore: 1 } },
+      '',
+      '/?stories=explore',
+    );
+    dispatchEvent(new PopStateEvent('popstate'));
+  };
+  try {
+    controller.open();
+    controller.openStory('gev:flights-radar');
+    controller.backToExplore();
+    landExplore();
+    t.mock.timers.tick(1500);
+    controller.openStory('gev:orbital-watch');
+    controller.backToExplore();
+    controller.close();
+    t.mock.timers.tick(600);
+    assert.equal(store.mode, 'story', 'Close still waits for the second Back');
+    assert.deepEqual(steps, [-1, -1]);
+    landExplore();
+    // Drain the director's already-idle promise without advancing timers.
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    assert.equal(store.mode, 'closed');
+    assert.deepEqual(
+      steps,
+      [-1, -1, -1],
+      'queued Close runs once after landing',
+    );
+  } finally {
+    controller.destroy();
+  }
 });

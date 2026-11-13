@@ -166,6 +166,12 @@ test('holding writes first writes a view change still waiting for its debounce',
   manager.holdWrites(true);
   assert.equal(window.location.hash, '#v=2&lat=5', 'written before the hold');
   manager._buildHashParams = () => new URLSearchParams('v=2&lat=9');
+  assert.equal(manager.snapshotHash(), 'v=2&lat=9');
+  assert.equal(
+    window.location.hash,
+    '#v=2&lat=5',
+    'snapshot leaves the URL alone',
+  );
   manager._scheduleUpdate();
   assert.equal(timers.size, 0, 'nothing scheduled while held');
   manager.destroy();

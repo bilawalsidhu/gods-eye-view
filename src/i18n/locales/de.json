@@ -783,6 +783,7 @@
   "Requesting microphone": "Mikrofonzugriff wird angefordert",
   "Ask or command": "Fragen oder Befehl geben",
   "Running command": "Befehl läuft",
+  "Voice is disabled in Stories.": "Die Sprachsteuerung ist in Stories deaktiviert.",
   "Voice off": "Sprache aus",
   "WebRTC microphone support unavailable": "WebRTC-Mikrofonunterstützung nicht verfügbar",
   "VOICE UNAVAILABLE": "SPRACHE N. V.",

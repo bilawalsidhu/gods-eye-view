@@ -19,6 +19,20 @@ import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
 
 const PARAM_STORIES = 'stories';
 const PARAM_STORY = 'story';
+const PARAM_STORY_TIME = 'storyTime';
+const PARAM_SELECTED_STORY = 'selectedStory';
+
+function exploreSelection(params) {
+  const id = params.get(PARAM_SELECTED_STORY);
+  const story = id ? storyById(id) : null;
+  return story && !story.mine ? story.id : null;
+}
+
+function storyTime(params) {
+  const value = params.get(PARAM_STORY_TIME);
+  const ms = Number(value);
+  return value && /^\d+$/.test(value) && Number.isSafeInteger(ms) ? ms : 0;
+}
 
 /**
  * Stories: Explore (the story list over the person's own Cesium globe, with
@@ -34,19 +48,28 @@ const PARAM_STORY = 'story';
  *
  * @param {{viewer: Cesium.Viewer,
  *   director: import('../scenes/director.js').SceneDirector,
- *   store: ReturnType<typeof import('../ui/stores/stories.js').useStoriesStore>}} options
+ *   store: ReturnType<typeof import('../ui/stores/stories.js').useStoriesStore>,
+ *   onEnter?: () => void}} options
  */
-export function createStoriesController({ viewer, director, store }) {
+export function createStoriesController({ viewer, director, store, onEnter }) {
   let player = null;
   let saved = null;
   // The view a Close is about to restore, once a stopping scene has settled.
   let pendingView = null;
+  // Reopening reuses the saved view, but supersedes the old close request.
+  let closeGeneration = 0;
   let removeReadout = null;
   let destroyed = false;
   // Close steps back over Stories' own entries; the landing popstate is ours.
   let closingHistory = false;
   // A Back to Explore traversal is on its way.
   let steppingBack = false;
+  let backTimer = 0;
+  let readyTimer = 0;
+  function cancelInitialLink() {
+    clearTimeout(readyTimer);
+    readyTimer = 0;
+  }
   // A call made while a traversal is landing runs from the entry it lands on,
   // so two traversals never stack (Close after Back to Explore would step
   // one entry too far).
@@ -78,7 +101,7 @@ export function createStoriesController({ viewer, director, store }) {
     // A draft's THUMBNAIL or tags.
     'story-details-changed',
   ]);
-  const unsubscribeScenes = director.subscribe?.((change) => {
+  const unsubscribeScenes = director.subscribe?.(({ change }) => {
     if (!LIST_CHANGES.has(change?.type) || destroyed) return;
     store.stories = markRaw(listStories());
     if (removePins) {
@@ -96,6 +119,8 @@ export function createStoriesController({ viewer, director, store }) {
     const url = new URL(location.href);
     url.searchParams.delete(PARAM_STORIES);
     url.searchParams.delete(PARAM_STORY);
+    url.searchParams.delete(PARAM_STORY_TIME);
+    url.searchParams.delete(PARAM_SELECTED_STORY);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     if (Object.keys(params).length) url.hash = '';
     return url.toString();
@@ -168,6 +193,7 @@ export function createStoriesController({ viewer, director, store }) {
   }
   const onPopState = () => {
     if (destroyed) return;
+    cancelInitialLink();
     const queued = afterTraversal;
     afterTraversal = null;
     try {
@@ -177,6 +203,8 @@ export function createStoriesController({ viewer, director, store }) {
     }
   };
   function handlePopState() {
+    clearTimeout(backTimer);
+    backTimer = 0;
     steppingBack = false;
     if (closingHistory) {
       closingHistory = false;
@@ -189,12 +217,24 @@ export function createStoriesController({ viewer, director, store }) {
     }
     const params = new URLSearchParams(location.search);
     const id = params.get(PARAM_STORY);
-    if (id && storyById(id)) controller.openStory(id, { fromHistory: true });
+    if (id && storyById(id))
+      controller.openStory(id, {
+        fromHistory: true,
+        atMs: storyTime(params),
+      });
     else if (params.has(PARAM_STORIES))
       store.mode === 'closed'
         ? controller.open({ fromHistory: true })
         : controller.backToExplore({ fromHistory: true });
     else if (store.mode !== 'closed') controller.close({ fromHistory: true });
+    else if (pendingView) {
+      // Another browser navigation landed while the scene was stopping.
+      // The destination owns the globe now, so discard the earlier restore.
+      pendingView = null;
+      closeGeneration += 1;
+      document.body.classList.remove('stories-mode');
+      shareLink()?.holdWrites?.(false);
+    }
   }
   addEventListener('popstate', onPopState);
 
@@ -209,9 +249,8 @@ export function createStoriesController({ viewer, director, store }) {
       time: viewer.clock.currentTime.clone(),
       animate: viewer.clock.shouldAnimate,
       openedAt: Date.now(),
-      // The share state (layers, style, camera) as it was, for after a GEV
-      // scene has changed it.
-      hash: location.hash,
+      // Story history entries have no hash. Capture the live globe state.
+      hash: shareLink()?.snapshotHash?.() ?? location.hash,
       ranScene: false,
       // Whether a scene played during this visit, which selects it in
       // AUTHORING (ranScene clears once Back to Explore has undone the look).
@@ -585,7 +624,9 @@ export function createStoriesController({ viewer, director, store }) {
       saved = pendingView;
       pendingView = null;
     } else saveView();
+    closeGeneration += 1;
     document.body.classList.add('stories-mode');
+    onEnter?.();
     return true;
   }
 
@@ -678,34 +719,41 @@ export function createStoriesController({ viewer, director, store }) {
   }
 
   const controller = {
-    open({ fromHistory = false } = {}) {
+    open({ fromHistory = false, isCurrent } = {}) {
+      if (destroyed || (isCurrent && !isCurrent())) return false;
+      cancelInitialLink();
       if (!fromHistory && traversing()) {
-        afterTraversal = () => controller.open();
-        return;
+        if (!isCurrent) afterTraversal = () => controller.open();
+        return false;
       }
-      if (store.mode !== 'closed') return;
-      if (!enterStories()) return;
-      store.picked = null;
+      if (store.mode !== 'closed' || !enterStories()) return false;
+      store.picked = fromHistory
+        ? exploreSelection(new URLSearchParams(location.search))
+        : null;
       showExplore();
       if (!fromHistory) navigate({ [PARAM_STORIES]: 'explore' }, true);
+      return true;
     },
     close({ fromHistory = false, keepCamera = false } = {}) {
+      if (destroyed) return;
+      cancelInitialLink();
       if (store.mode === 'closed') return;
       if (!fromHistory && traversing()) {
         afterTraversal = () => controller.close({ keepCamera });
         return;
       }
+      const generation = ++closeGeneration;
       dropPlayer();
       stopPins();
       viewer.camera.cancelFlight();
-      // GEV comes back on screen now; `stories-mode` (keyboard guard, voice
-      // refusal) stays until the view is back, so nothing acts on GEV under
-      // a scene that is still tearing down.
+      // Close the Stories screens now and keep their input guard until the
+      // scene and share view have finished restoring.
       document.body.classList.remove('stories-scene');
       store.mode = 'closed';
       store.storyId = null;
       store.picked = null;
       store.expanded = false;
+      store.toast = '';
       const was = saved;
       saved = null;
       pendingView = was;
@@ -727,9 +775,14 @@ export function createStoriesController({ viewer, director, store }) {
         canvas.removeEventListener('pointerdown', onDrag);
         stopWatching();
         // Reopened meanwhile (the reopen took `was` over), or torn down.
-        if (pendingView !== was || destroyed || viewer.isDestroyed?.()) return;
+        if (
+          generation !== closeGeneration ||
+          pendingView !== was ||
+          destroyed ||
+          viewer.isDestroyed?.()
+        )
+          return;
         pendingView = null;
-        document.body.classList.remove('stories-mode');
         if (!navigated) restoreView(was, { keepCamera });
         // AUTHORING shows what it showed before, unless the person opened
         // the story there.
@@ -740,6 +793,7 @@ export function createStoriesController({ viewer, director, store }) {
           // over the earlier entry instead.
           if (!keepCamera && !navigated) restoreShareState(was);
           shareLink()?.holdWrites?.(false);
+          document.body.classList.remove('stories-mode');
         };
         if (fromHistory) afterLanding();
         else leaveHistory(afterLanding);
@@ -759,6 +813,8 @@ export function createStoriesController({ viewer, director, store }) {
      * @param {{autoplay?: boolean, fromHistory?: boolean, atMs?: number}} [opts]
      */
     openStory(id, { autoplay = false, fromHistory = false, atMs = 0 } = {}) {
+      if (destroyed) return;
+      cancelInitialLink();
       const story = storyById(id);
       if (!story) return;
       if (!fromHistory && traversing()) {
@@ -777,6 +833,9 @@ export function createStoriesController({ viewer, director, store }) {
       store.sheet = 'peek';
       store.bigPlay = !autoplay;
       syncSceneShots(story);
+      atMs = Number.isFinite(atMs)
+        ? Math.max(0, Math.min(story.durationMs, Math.round(atMs)))
+        : 0;
       store.playback = {
         wallMs: atMs,
         worldMs: null,
@@ -796,15 +855,26 @@ export function createStoriesController({ viewer, director, store }) {
       // Opened paused, a scene frames its first shot (or the moment asked).
       if (atMs || !autoplay) player.seek(atMs);
       if (autoplay) player.play();
-      if (!fromHistory) navigate({ [PARAM_STORY]: story.id }, true);
+      if (!fromHistory)
+        navigate(
+          atMs
+            ? { [PARAM_STORY]: story.id, [PARAM_STORY_TIME]: atMs }
+            : { [PARAM_STORY]: story.id },
+          true,
+        );
       if (!store.hintSeen) {
         store.hintSeen = true;
         store.flashHint(t('Drag the map to explore · Resume any time'), 4200);
       }
     },
     backToExplore({ fromHistory = false } = {}) {
-      // A second press while the first is landing does nothing more.
-      if (!fromHistory && traversing()) return;
+      if (destroyed) return;
+      cancelInitialLink();
+      // A second Back keeps the traversal, but cancels a story queued since.
+      if (!fromHistory && traversing()) {
+        if (steppingBack) afterTraversal = null;
+        return;
+      }
       dropPlayer();
       store.expanded = false;
       if (!fromHistory) {
@@ -816,7 +886,9 @@ export function createStoriesController({ viewer, director, store }) {
         if (params.has(PARAM_STORY) && to != null && depth() > to) {
           steppingBack = true;
           // A step that never lands gives up, as Close's does.
-          setTimeout(() => {
+          clearTimeout(backTimer);
+          backTimer = setTimeout(() => {
+            backTimer = 0;
             if (!steppingBack) return;
             steppingBack = false;
             const queued = afterTraversal;
@@ -827,6 +899,10 @@ export function createStoriesController({ viewer, director, store }) {
           return;
         }
         navigate({ [PARAM_STORIES]: 'explore' }, true);
+      } else {
+        const params = new URLSearchParams(location.search);
+        if (params.has(PARAM_SELECTED_STORY))
+          store.picked = exploreSelection(params);
       }
       showExplore();
     },
@@ -855,7 +931,10 @@ export function createStoriesController({ viewer, director, store }) {
       player.pause();
       // After Close has settled: the scene's teardown restores GEV's look
       // and panels, which would fold the Scenes panel again.
-      await controller.close({ keepCamera: true });
+      const closing = controller.close({ keepCamera: true });
+      const generation = closeGeneration;
+      await closing;
+      if (destroyed || generation !== closeGeneration) return;
       director.selectShot?.(s.sceneId, shotId);
       director.styleManager?.setPanelCollapsed?.('scene-panel', false, {
         explicit: true,
@@ -871,15 +950,35 @@ export function createStoriesController({ viewer, director, store }) {
     shareLink() {
       const here = new URL(location.href);
       const url = new URL(here.pathname, here.origin);
-      for (const key of [PARAM_STORIES, PARAM_STORY])
-        if (here.searchParams.has(key))
-          url.searchParams.set(key, here.searchParams.get(key));
+      const id = store.mode === 'story' ? store.storyId : store.picked;
+      const story = id ? storyById(id) : null;
+      if (store.mode === 'story' && story && !story.mine) {
+        url.searchParams.set(PARAM_STORY, story.id);
+        const ms = Math.round(store.playback.wallMs);
+        if (Number.isSafeInteger(ms) && ms > 0)
+          url.searchParams.set(PARAM_STORY_TIME, String(ms));
+      } else {
+        url.searchParams.set(PARAM_STORIES, 'explore');
+        if (story && !story.mine)
+          url.searchParams.set(PARAM_SELECTED_STORY, story.id);
+      }
       return url.toString();
     },
     destroy() {
       if (destroyed) return;
-      controller.close();
       destroyed = true;
+      cancelInitialLink();
+      clearTimeout(backTimer);
+      clearTimeout(landingTimer);
+      steppingBack = closingHistory = false;
+      afterTraversal = landed = null;
+      dropPlayer();
+      stopPins();
+      viewer.camera.cancelFlight();
+      store.mode = 'closed';
+      store.storyId = null;
+      store.picked = null;
+      store.expanded = false;
       // Torn down mid-close: what the close would undo once settled is
       // undone now (keyboard and voice guard, held share writes).
       document.body.classList.remove('stories-mode', 'stories-scene');
@@ -893,7 +992,6 @@ export function createStoriesController({ viewer, director, store }) {
       canvas.removeEventListener('pointerup', onExploreInput);
       canvas.removeEventListener('pointercancel', onExploreInput);
       canvas.removeEventListener('wheel', onExploreInput);
-      stopTour();
       canvas.removeEventListener('pointerup', onUp);
     },
   };
@@ -901,17 +999,21 @@ export function createStoriesController({ viewer, director, store }) {
   // A shared link opens where it points once GEV has finished loading.
   const params = new URLSearchParams(location.search);
   if (params.has(PARAM_STORY) || params.has(PARAM_STORIES)) {
-    const id = params.get(PARAM_STORY);
     const started = Date.now();
     const whenReady = () => {
+      readyTimer = 0;
       if (destroyed) return;
+      const params = new URLSearchParams(location.search);
+      if (!params.has(PARAM_STORY) && !params.has(PARAM_STORIES)) return;
+      const id = params.get(PARAM_STORY);
+      const atMs = storyTime(params);
       const loading = document.getElementById('loading-screen');
       if (
         loading &&
         !loading.classList.contains('hidden') &&
         Date.now() - started < 30000
       ) {
-        setTimeout(whenReady, 300);
+        readyTimer = setTimeout(whenReady, 300);
         return;
       }
       // A reload, or Back/Forward into a Stories entry: its history is
@@ -920,11 +1022,19 @@ export function createStoriesController({ viewer, director, store }) {
         // GEV's boot wrote its share hash onto the entry: Stories' entries
         // carry none.
         const own = Object.fromEntries(
-          [...params].filter(([k]) => k === PARAM_STORIES || k === PARAM_STORY),
+          [...params].filter(
+            ([key]) =>
+              key === PARAM_STORIES ||
+              key === PARAM_STORY ||
+              (key === PARAM_STORY_TIME && id && atMs) ||
+              (key === PARAM_SELECTED_STORY &&
+                !id &&
+                params.has(PARAM_STORIES)),
+          ),
         );
         history.replaceState(history.state, '', urlFor(own));
         if (id && storyById(id))
-          controller.openStory(id, { fromHistory: true });
+          controller.openStory(id, { fromHistory: true, atMs });
         else {
           controller.open({ fromHistory: true });
           if (id) store.flashToast(t('That story is not available here'));
@@ -933,19 +1043,24 @@ export function createStoriesController({ viewer, director, store }) {
       }
       // A new link: Explore sits under a story it opens, so Back lands there.
       const landing = { stories: 'explore', depth: 0, explore: 0 };
+      const selected =
+        !id && params.has(PARAM_STORIES) ? exploreSelection(params) : null;
       history.replaceState(
         { ...(history.state ?? {}), gevStories: landing },
         '',
-        urlFor({ [PARAM_STORIES]: 'explore' }),
+        urlFor({
+          [PARAM_STORIES]: 'explore',
+          ...(selected ? { [PARAM_SELECTED_STORY]: selected } : {}),
+        }),
       );
-      if (id && storyById(id)) controller.openStory(id);
+      if (id && storyById(id)) controller.openStory(id, { atMs });
       else {
         controller.open({ fromHistory: true });
         // A story saved on someone else's device, or no longer here.
         if (id) store.flashToast(t('That story is not available here'));
       }
     };
-    setTimeout(whenReady, 300);
+    readyTimer = setTimeout(whenReady, 300);
   }
 
   if (import.meta.env?.DEV) globalThis.__gevStories = { viewer, controller };

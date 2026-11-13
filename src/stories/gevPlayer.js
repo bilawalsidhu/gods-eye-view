@@ -44,7 +44,7 @@ export function createGevPlayer(director, story, hooks = {}) {
   let shotIndex = 0;
   let destroyed = false;
   // Each Play, Pause, Seek and Destroy takes a new number; a Play that waited
-  // for a teardown or a start goes ahead only if nothing came after it.
+  // for a teardown or a run to finish acts only if nothing came after it.
   let request = 0;
 
   const state = () => ({
@@ -65,7 +65,8 @@ export function createGevPlayer(director, story, hooks = {}) {
     wallMs = (snap.sceneElapsedSec ?? 0) * 1000;
     shotIndex = snap.shotIndex ?? shotIndex;
     playing = !!snap.running && !snap.seeking;
-    if (!playing && wallMs >= durationMs - 250) wallMs = durationMs;
+    if (!playing && !snap.seeking && wallMs >= durationMs - 250)
+      wallMs = durationMs;
     tick();
   });
 
@@ -100,13 +101,9 @@ export function createGevPlayer(director, story, hooks = {}) {
         afterShotId,
         preview: true,
       });
-      if (destroyed) return;
-      if (mine !== request) {
-        // Paused or scrubbed while the run was starting: that wins.
-        if (result?.started)
-          director.seekScene(sceneId, durationMs ? wallMs / durationMs : 0);
-        return;
-      }
+      // startScene resolves after the run finishes, not when it starts.
+      // A newer pause, seek or play already owns the director by then.
+      if (destroyed || mine !== request) return;
       if (!result?.started) {
         playing = false;
         tick();

@@ -670,14 +670,18 @@ a key pressed in Stories stops at its root, and a key pressed anywhere else
 stops at the window, so none of GEV's document-level shortcuts act behind it,
 except on a playing GEV scene's own on-globe controls (`data-globe-overlay`);
 the capture-phase listeners (hold Space to talk, a surface's Tab trap, the
-wildlife card's Escape) check `body.stories-mode` themselves. Voice tool calls
+wildlife card's Escape) check `body.stories-mode` themselves. "Open Stories"
+works from voice or typed AI chat. Entering Stories ends active or pending
+microphone capture and blocks microphone starts while Stories owns the
+globe. Stories shows a notice when it turns off an active or connecting
+voice session. A typed reply can finish after opening Stories. Globe tool calls
 are refused while `stories-mode` is set ("Close Stories first").
 
-The address bar names only the story while Stories is open: the share link
-holds its hash writes (`ShareLinkManager.holdWrites`, which first writes a
-change still waiting for its debounce, so the view Stories saves is current).
-Close works in this order. Stories' screens go and GEV is back on screen, but
-`stories-mode` (keyboard guard, voice refusal) stays. The director is waited
+The address bar names only the story while Stories is open. Stories holds
+hash writes (`ShareLinkManager.holdWrites`) and saves a snapshot of the live
+globe, including when it opens from a story link without a hash.
+Close dismisses the Stories screens and keeps the keyboard and microphone
+guards until the previous view is back. The director is waited
 on until idle (`SceneDirector.whenIdle`: no run and no pending LOAD, seek or
 interaction; at most 15 s). The camera and clock are put back, unless a
 camera owner took over during the wait (a drag on the globe, a layer's
@@ -700,7 +704,9 @@ host's.
 The Stories button sits left of whatever holds GEV's top-right corner: the
 ACTIVE STYLE readout, or GEV Hosted's account avatar. The first-visit popup
 is a labelled region that does not take focus. The story page's rail offers
-Open in GEV and Share only. A scene of the person's own (saved or draft)
+Open in GEV and Share only. Share on Explore reopens the list with the same
+shipped story selected. A story link opens paused at the shared
+point on its timeline. A scene of the person's own (saved or draft)
 shows as theirs ("You") and has no Share: the project lives on this device,
 so a link to it would open nothing elsewhere; a link to a story that is not
 here opens Explore and says so. GEV's own credit line stays on screen throughout, inside the

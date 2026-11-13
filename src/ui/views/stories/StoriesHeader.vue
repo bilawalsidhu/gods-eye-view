@@ -22,15 +22,19 @@ const props = defineProps({
 const emit = defineEmits(['back', 'home', 'crumb', 'search']);
 const store = useStoriesStore();
 // A scene saved on this device only: a link to it opens nothing elsewhere.
-const localOnly = computed(() => !!store.byId(store.storyId)?.mine);
+const localOnly = computed(
+  () =>
+    !!store.byId(props.screen === 'story' ? store.storyId : store.picked)?.mine,
+);
 
 async function share() {
   const what = props.screen === 'story' ? t('Story') : t('Stories');
+  const url = store.controller.shareLink();
   try {
-    await navigator.clipboard.writeText(store.controller.shareLink());
+    await navigator.clipboard.writeText(url);
     store.flashToast(t('{what} link copied', { what }));
   } catch {
-    store.flashToast(t('Copy this link: {url}', { url: location.href }), 4000);
+    store.flashToast(t('Copy this link: {url}', { url }), 4000);
   }
 }
 // Long titles scroll gently so the whole name can be read.
@@ -131,7 +135,7 @@ onBeforeUnmount(() => observer?.disconnect());
         </svg>
       </button>
       <button
-        v-if="!(screen === 'story' && localOnly)"
+        v-if="!localOnly"
         class="tbtn hide-m"
         type="button"
         :aria-label="t('Share')"

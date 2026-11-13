@@ -309,6 +309,11 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  open_stories: {
+    description:
+      'Open the Stories Explore list on request ("open Stories", "show the story list"). Turns off voice.',
+    $position: 1,
+  },
   control_scene: {
     description:
       'Cinematic scene playback: list scenes, play one scene by name, stop, advance, or read status. Play starts a single named scene and returns immediately.',

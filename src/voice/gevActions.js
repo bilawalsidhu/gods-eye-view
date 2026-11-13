@@ -7,6 +7,7 @@ import {
 import { readLayerLifecycleSummary } from './layerSummary.js';
 import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
+import { isStoriesOpen } from './realtimeInputPolicy.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
@@ -278,6 +279,7 @@ export function createGevActionRunner({
   styleManager,
   dataManager,
   sceneDirector = null,
+  openStories = null,
   annotations = null,
   placeSearch = unavailablePlaceSearch,
   floorServices = defaultFloorServices,
@@ -428,9 +430,51 @@ export function createGevActionRunner({
     runOptions = {},
   ) {
     const args = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Stories covers GEV and owns its camera and scenes: an open-mic session
-    // must not fly, load or change what is behind it.
-    if (globalThis.document?.body?.classList?.contains?.('stories-mode'))
+    const current = () =>
+      !runOptions.signal?.aborted &&
+      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+    if (name === 'open_stories') {
+      const denied = { ok: false, action: name, applied: false };
+      const cancelled = {
+        ...denied,
+        code: 'CANCELLED',
+        cancelled: true,
+        error: 'This request was superseded.',
+      };
+      if (!current()) return cancelled;
+      if (typeof openStories !== 'function')
+        return {
+          ...denied,
+          unavailable: true,
+          error: 'Stories is unavailable in this host.',
+          say: 'Stories is unavailable in this host.',
+        };
+      // Opening Stories can stop the voice session that requested it. The
+      // action was applied even when that session is no longer current.
+      const opened = await openStories({ isCurrent: current });
+      if (opened === true)
+        return {
+          ok: true,
+          action: name,
+          applied: true,
+          say: 'Stories is open.',
+        };
+      if (!current()) return cancelled;
+      if (opened === 'already-open')
+        return {
+          ok: true,
+          action: name,
+          applied: false,
+          say: 'Stories is already open.',
+        };
+      return {
+        ...denied,
+        error: 'Stories could not be opened.',
+        say: 'Stories could not be opened.',
+      };
+    }
+    // Stories owns the camera and scenes. Leave the globe behind it alone.
+    if (isStoriesOpen())
       return {
         ok: false,
         action: name,
@@ -439,9 +483,6 @@ export function createGevActionRunner({
         error: 'Stories is open. Close Stories first.',
         say: 'Stories is open. Close Stories first to control the globe.',
       };
-    const current = () =>
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
     // Step reports for voice narration and the voice card; never fatal.
     const reportProgress = (step, label = '') => {
       try {

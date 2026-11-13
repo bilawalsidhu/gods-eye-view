@@ -2586,6 +2586,7 @@
   "Gemini voice is not connected": "Голосовий режим Gemini не підключено",
   "Gemini interrupted input exceeded its buffer or wait limit. Start voice again.": "Перерване введення Gemini перевищило ліміт буфера або очікування. Запустіть голосовий режим знову.",
   "Gemini Live connection is expiring. Start voice again for a new conversation.": "Термін дії зʼєднання з Gemini Live спливає. Запустіть голосовий режим знову для нової розмови.",
+  "Voice is disabled in Stories.": "Голосове керування в історіях вимкнено.",
   "Voice off": "Голос вимкнено",
   "Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.": "Тривалість голосових сеансів Gemini обмежена. Коли сеанс завершиться, запустіть голосовий режим знову для нової розмови.",
   "Stopped by voice": "Зупинено голосовою командою",

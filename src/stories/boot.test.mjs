@@ -70,7 +70,14 @@ test('the shell loads the controller on first open, then steps aside', async () 
   setActivePinia(createPinia());
   history.replaceState(null, '', '/');
   const store = useStoriesStore();
-  const shell = bootStories({ viewer, director, store });
+  const entries = [];
+  const shell = bootStories({
+    viewer,
+    director,
+    store,
+    onEnter: () =>
+      entries.push(document.body.classList.contains('stories-mode')),
+  });
   assert.equal(store.controller, shell);
   assert.equal(store.stories.length, 0, 'no catalog until Stories is used');
   const engineLoaded = () =>
@@ -78,7 +85,14 @@ test('the shell loads the controller on first open, then steps aside', async () 
       /stories\/(controller|catalog|protoEngine)\.js$/.test(u),
     );
   assert.equal(engineLoaded(), false, 'GEV starts without the Stories chunk');
-  await shell.open();
+  let current = true;
+  const staleOpen = shell.open({ isCurrent: () => current });
+  current = false;
+  assert.equal(await staleOpen, false);
+  assert.equal(store.mode, 'closed');
+  assert.deepEqual(entries, []);
+  assert.equal(await shell.open(), true);
+  assert.deepEqual(entries, [true]);
   assert.equal(engineLoaded(), true);
   assert.notEqual(store.controller, shell);
   assert.ok(store.stories.length > 0);
@@ -115,10 +129,10 @@ test('a failed load is reported and the next open tries again', async () => {
         ? Promise.reject(new Error('offline'))
         : Promise.all([import('./controller.js'), import('./catalog.js')]),
   });
-  await shell.open();
+  assert.equal(await shell.open(), undefined);
   assert.equal(failures, 1);
   assert.equal(store.mode, 'closed');
-  await shell.open();
+  assert.equal(await shell.open(), true);
   assert.equal(attempts, 2, 'the failure was not kept');
   assert.equal(store.mode, 'explore');
   shell.destroy();
