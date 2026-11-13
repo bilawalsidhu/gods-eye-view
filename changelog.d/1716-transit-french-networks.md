@@ -15,3 +15,6 @@
   terms ask, and every feed is recorded in DATA_SOURCES.md. Feeds whose
   terms need a key, registration or permission (New York City buses,
   Detroit, Pittsburgh and others) are left out (#1716).
+- Add 55 Japanese bus networks to the Transit layer, the first in Toyama,
+  Mie, Kumamoto, Kōchi, Aichi, Okinawa and Aomori prefectures, each recorded
+  under CC0 1.0 or CC BY 4.0 with the operator credited in Japanese (#1716).

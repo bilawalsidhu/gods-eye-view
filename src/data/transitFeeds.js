@@ -2,6 +2,7 @@ import { greatCircleKm } from '../geoDistance.js';
 import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 import { CATALOGUE_TRANSIT_FEED_ROWS } from './transitFeedsCatalogue.js';
 import { FRANCE_TRANSIT_FEED_ROWS } from './transitFeedsFrance.js';
+import { JAPAN_TRANSIT_FEED_ROWS } from './transitFeedsJapan.js';
 import { FRANCE_ROUTE_NAMES } from './transitRouteNamesFrance.js';
 
 /**
@@ -15,7 +16,8 @@ import { FRANCE_ROUTE_NAMES } from './transitRouteNamesFrance.js';
  * a DATA_SOURCES.md row with its license, and a credit in dataCredits.js.
  * The French networks listed on transport.data.gouv.fr are rows of the same
  * shape in `transitFeedsFrance.js`, and feeds added from the open catalogues
- * are in `transitFeedsCatalogue.js`; both are appended to the registry below.
+ * are in `transitFeedsCatalogue.js` and `transitFeedsJapan.js`; all are appended
+ * to the registry below.
  *
  * Admission rules for a feed:
  *  - No key, token, or registration required (identify-yourself headers are
@@ -1645,7 +1647,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     defaultMode: 'bus',
   }),
   ...FRANCE_TRANSIT_FEED_ROWS.map(franceTransitFeed),
-  ...CATALOGUE_TRANSIT_FEED_ROWS.map((row) =>
+  ...[...CATALOGUE_TRANSIT_FEED_ROWS, ...JAPAN_TRANSIT_FEED_ROWS].map((row) =>
     transitFeed({ defaultMode: 'bus', ...row }),
   ),
 ]);

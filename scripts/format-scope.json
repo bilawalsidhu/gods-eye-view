@@ -801,6 +801,8 @@
   "server/providers/transitHistory.js",
   "server/providers/transitHistory.test.mjs",
   "src/data/rioRouteNames.js",
+  "src/data/transitFeedsJapan.js",
+  "src/data/transitFeedsJapan.test.mjs",
   "src/data/transitFeedsCatalogue.js",
   "src/data/transitFeedsCatalogue.test.mjs",
   "src/data/transitFeedsFrance.js",
