@@ -826,7 +826,10 @@ function getEntityContext(result) {
   const identityLine = sentence(
     [
       title,
-      spokenLabel(properties.operator || '', 32) || 'operator unknown',
+      spokenLabel(properties.operator || '', 32) ||
+        (properties.registrationCountry
+          ? `operator unknown, registered in ${spokenLabel(properties.registrationCountry, 32)}`
+          : 'operator unknown'),
       spokenLabel(properties.type || '', 32) || 'type unknown',
       route || 'no route on file',
     ].join(', '),

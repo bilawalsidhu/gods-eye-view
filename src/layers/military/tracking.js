@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, getLocale, t } from '../../i18n/index.js';
+import { intlLocale } from '../../i18n/locale.js';
+import { icaoCountryName } from '../../data/icaoCountry.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
@@ -127,6 +129,9 @@ export function createTracking({
       properties: {
         name: label,
         operator: parts.queries._toCleanText(info?.operator) || '',
+        // State whose ICAO address block holds the hex — the registering
+        // country, not a confirmed operator. English for the model.
+        registrationCountry: icaoCountryName(icao24, 'en') || '',
         callsign: described.callsign || '',
         registration: described.registration || '',
         // Converted contacts report their class as TR-3B — the same override
@@ -330,8 +335,14 @@ export function createTracking({
     );
     const registration =
       parts.queries._toCleanText(info?.registration) || t('Reg unknown');
+    // No operator on file (usual for military rows): name the state whose
+    // ICAO address block the hex sits in, labelled as an inference.
+    const country = icaoCountryName(icao24, intlLocale(getLocale()));
     const operator =
-      parts.queries._toCleanText(info?.operator) || t('Operator unknown');
+      parts.queries._toCleanText(info?.operator) ||
+      (country
+        ? t('{country} (ICAO block)', { country })
+        : t('Operator unknown'));
     const altitude = parts.queries._formatAltitude(info?.altitudeFt);
     const speedKt = info?.speedMps ? Math.round(info.speedMps * 1.944) : null;
     const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;

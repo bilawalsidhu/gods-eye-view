@@ -3425,5 +3425,6 @@
   "{source} imagery could not be opened": "无法打开 {source} 影像",
   "{place} has no position to look for imagery at": "{place} 没有可查找影像的位置",
   "No {source} imagery near {place}": "{place} 附近没有 {source} 影像",
-  "{reason} (filters on: {filters})": "{reason}（已开启筛选：{filters}）"
+  "{reason} (filters on: {filters})": "{reason}（已开启筛选：{filters}）",
+  "{country} (ICAO block)": "{country}（ICAO 地址段）"
 }

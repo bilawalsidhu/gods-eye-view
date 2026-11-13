@@ -69,7 +69,7 @@ test('military analyst record: full record maps every contract field', () => {
     onGround: false,
     military: true,
     aircraftClass: 'widebody',
-    originCountry: null,
+    originCountry: 'United States',
     operator: 'United States Air Force',
     squawk: null,
     emergency: false,
@@ -82,10 +82,15 @@ test('military analyst record: full record maps every contract field', () => {
   });
 });
 
-test('military analyst record: military is ALWAYS true, routes/country always null', () => {
+test('military analyst record: military is ALWAYS true, routes always null', () => {
   const r = mapAnalystRecord('ae01ce', undefined);
   assert.equal(r.military, true);
-  assert.equal(r.originCountry, null);
+  assert.equal(
+    r.originCountry,
+    'United States',
+    'country comes from the hex block, not the record',
+  );
+  assert.equal(mapAnalystRecord('~2a01ce', undefined).originCountry, null);
   assert.equal(r.routeOrigin, null);
   assert.equal(r.routeDestination, null);
 });

@@ -1471,6 +1471,18 @@ still cannot enter the renderer. Source replacement
 and disposal abort pending work and clear retained identities; construction
 starts no network request. Both standalone aircraft layers use one registry.
 
+adsb.lol rarely carries an operator (`ownOp`) for military rows, so
+`src/data/icaoCountry.js` names the state whose ICAO Annex 10 address block holds
+the contact's hex. With no operator on file, the tracked card reads
+`<country> (ICAO block)` instead of "Operator unknown", in the UI language through
+`Intl.DisplayNames`; a reported operator always wins. Voice context carries the
+English name as `registrationCountry`, and the identity line says "operator
+unknown, registered in <country>". Military analyst records fill `originCountry`
+the same way OpenSky's `origin_country` does for civil flights, so country
+filters work on both layers. Non-ICAO (`~`) and reserved addresses get no
+country. The block names where an airframe is registered, not who flies it:
+NATO's Pápa C-17s read as Hungary.
+
 ## Civil-flight components
 
 `gods-eye-view/layers/flights` exports `createCivilFlightLayer`. Each instance

@@ -15,6 +15,7 @@ import {
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { icaoCountryName } from '../../data/icaoCountry.js';
 
 export function createQueries({
   flightState,
@@ -165,14 +166,15 @@ export function createQueries({
    * analyst record (analyst query engine seam) — same shape as the flights
    * layer's mapAnalystRecord, with `military` always true. Pure — no Cesium
    * types, no fetches. Missing/unknown fields are null, never NaN/undefined.
-   * adsb.lol carries no origin-country field and this layer has no route
-   * enrichment, so originCountry/routeOrigin/routeDestination are always null.
+   * adsb.lol carries no origin-country field, so originCountry comes from the
+   * hex's ICAO address block (null outside every block). This layer has no
+   * route enrichment, so routeOrigin/routeDestination are always null.
    * @param {string} icao24 - ICAO hex identifier of the aircraft.
    * @param {Object|null|undefined} info - `_flightData` record for this aircraft.
    * @returns {{id: string, icao24: string, callsign: string|null, lat: number|null,
    *   lon: number|null, altitudeM: number|null, speedMps: number|null,
    *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
-   *   military: boolean, aircraftClass: string|null, originCountry: null,
+   *   military: boolean, aircraftClass: string|null, originCountry: string|null,
    *   operator: string|null, squawk: string|null, emergency: boolean,
    *   emergencyKind: string|null, emergencySource: 'squawk'|'ads-b'|null,
    *   emergencyBroadcast: string|null, lastContactAtMs: number|null, routeOrigin: null, routeDestination: null}}
@@ -204,7 +206,9 @@ export function createQueries({
       // A converted contact reports the class it RENDERS as (mirror of
       // flights.js), so an analyst filter/superlative agrees with the triangle.
       aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
-      originCountry: null,
+      // Same meaning as OpenSky's origin_country on the flights layer: the
+      // state whose ICAO address block holds the hex (English name).
+      originCountry: icaoCountryName(icao24, 'en'),
       operator: text(info?.operator),
       squawk: text(info?.squawk),
       // True while this poll broadcast an emergency (7500/7600/7700 or the
