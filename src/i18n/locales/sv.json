@@ -3605,5 +3605,10 @@
   "Confirm: remove every added entry from Data Layers": "Bekräfta: ta bort alla tillagda poster från Datalager",
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
   "Showing {shown} of {total}": "Visar {shown} av {total}",
-  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET"
+  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "NOAA SWPC solar wind": "Solvind från NOAA SWPC",
+  "extrapolated": "extrapolerad",
+  "Solar wind feed unavailable": "Solvindsdata är inte tillgängliga",
+  "Field lines not re-traced · previous lines kept": "Fältlinjerna har inte räknats om · tidigare linjer behålls",
+  "Magnetosphere": "Magnetosfär"
 }

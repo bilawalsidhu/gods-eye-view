@@ -3692,5 +3692,10 @@
   "Confirm: remove every added entry from Data Layers": "Conferma: rimuovi da Livelli dati tutte le voci aggiunte",
   "Remove every added entry from Data Layers": "Rimuovi da Livelli dati tutte le voci aggiunte",
   "Showing {shown} of {total}": "Mostrati: {shown} su {total}",
-  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI"
+  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI",
+  "NOAA SWPC solar wind": "Vento solare NOAA SWPC",
+  "extrapolated": "estrapolato",
+  "Solar wind feed unavailable": "Flusso del vento solare non disponibile",
+  "Field lines not re-traced · previous lines kept": "Linee di campo non ritracciate · linee precedenti mantenute",
+  "Magnetosphere": "Magnetosfera"
 }

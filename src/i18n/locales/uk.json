@@ -3779,5 +3779,10 @@
   "Confirm: remove every added entry from Data Layers": "Підтвердити: видалити всі додані записи з «Шарів даних»",
   "Remove every added entry from Data Layers": "Видалити всі додані записи з «Шарів даних»",
   "Showing {shown} of {total}": "Показано {shown} з {total}",
-  "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ"
+  "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ",
+  "NOAA SWPC solar wind": "Сонячний вітер NOAA SWPC",
+  "extrapolated": "екстрапольовано",
+  "Solar wind feed unavailable": "Потік даних сонячного вітру недоступний",
+  "Field lines not re-traced · previous lines kept": "Силові лінії не перераховано · попередні лінії збережено",
+  "Magnetosphere": "Магнітосфера"
 }

@@ -3953,5 +3953,10 @@
   "Confirm: remove every added entry from Data Layers": "تأكيد: إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Remove every added entry from Data Layers": "إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Showing {shown} of {total}": "عرض {shown} من {total}",
-  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات"
+  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات",
+  "NOAA SWPC solar wind": "الرياح الشمسية من NOAA SWPC",
+  "extrapolated": "مستقرأ",
+  "Solar wind feed unavailable": "تغذية الرياح الشمسية غير متاحة",
+  "Field lines not re-traced · previous lines kept": "لم تُعَد خطوط المجال · أُبقيت الخطوط السابقة",
+  "Magnetosphere": "الغلاف المغناطيسي"
 }
