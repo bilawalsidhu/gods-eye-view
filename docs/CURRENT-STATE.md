@@ -5096,7 +5096,9 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
 - **Gate.** `npm run i18n` (and `src/i18n/catalog.test.mjs` under `npm test`)
   extracts every message and fails on missing, empty, unused,
   placeholder-mismatched, still-English (plural forms included) or
-  wrongly-shaped plural entries.
+  wrongly-shaped plural entries. `zh-Hant` is generated from `zh-CN`
+  (`npm run i18n -- --zh-hant`: OpenCC `s2tw` through `opencc-js`, then a
+  fixed list of character corrections), and the gate fails when it differs.
 - **Not translated by design:** layer ids, share-link and hash parameters, API
   fields, voice tool schemas, provider names, feed data (callsigns, vessel and
   station names) and attribution.

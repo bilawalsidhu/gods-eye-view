@@ -3,17 +3,21 @@
 //   npm run i18n                     check every catalog and find unmarked UI text
 //   npm run i18n -- --prune          also drop entries the code no longer uses
 //   npm run i18n -- --missing ru     print what ru lacks, as JSON to translate
+//   npm run i18n -- --zh-hant        rewrite zh-Hant from zh-CN (see toZhHant)
 //
 // A translation left as the English fails unless src/i18n/same-as-english.json
-// lists it.
+// lists it. zh-Hant is not translated: it is generated from zh-CN, and the
+// check fails when it differs.
 //
 // Messages are the English literals passed to t(), tn() and msg() in src/,
 // plus the markup opted in with data-i18n* in index.html and the Vue views.
 // It also lists UI text that is not marked at all (see findUnmarked).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOCALES_DIR = path.join(ROOT, 'src/i18n/locales');
@@ -618,15 +622,122 @@ export function missingTemplate(locale, catalog, messages) {
   return out;
 }
 
+// zh-Hant is zh-CN in Traditional characters (docs/translations/zh-Hant.md):
+// the same wording, only the script differs. OpenCC s2tw (opencc-js, cn → tw)
+// converts characters only; s2twp would also swap in Taiwan vocabulary
+// (影片, 伺服器, 載入), which the catalog does not use.
+const ZH_HANT = 'zh-Hant';
+const ZH_HANT_SOURCE = 'zh-CN';
+const ZH_HANT_COMMAND = 'npm run i18n -- --zh-hant';
+
+// Characters s2tw picks wrongly in this text, replaced after the conversion.
+const ZH_HANT_CORRECTIONS = [
+  ['年曆史', '年歷史'],
+  ['下遊', '下游'],
+  ['並道', '併道'],
+  ['發佈', '發布'],
+  ['公佈', '公布'],
+  ['控制檯', '控制台'],
+  // 周 as a week: the time-lapse speed in weeks per second.
+  [' 周/秒', ' 週/秒'],
+];
+
+let s2tw;
+
+/** zh-CN text in Traditional characters, as zh-Hant shows it. */
+export function toZhHant(text) {
+  // Loaded on first use: extracting messages needs no converter, and a copy
+  // of this script without node_modules (stale-index.test.mjs) still runs.
+  s2tw ??= createRequire(import.meta.url)('opencc-js/cn2t').Converter({
+    from: 'cn',
+    to: 'tw',
+  });
+  return ZH_HANT_CORRECTIONS.reduce(
+    (out, [wrong, right]) => out.replaceAll(wrong, right),
+    s2tw(text),
+  );
+}
+
+/** The zh-Hant catalog for a zh-CN catalog: the same keys in the same order. */
+export function zhHantCatalog(zhCN) {
+  const convert = (entry) => {
+    if (typeof entry === 'string') return toZhHant(entry);
+    if (entry && typeof entry === 'object')
+      return Object.fromEntries(
+        Object.entries(entry).map(([category, form]) => [
+          category,
+          convert(form),
+        ]),
+      );
+    return entry;
+  };
+  return Object.fromEntries(
+    Object.entries(zhCN).map(([text, entry]) => [text, convert(entry)]),
+  );
+}
+
+/**
+ * Where a zh-Hant catalog is not the conversion of the zh-CN one.
+ * @returns {string[]} One error per entry, naming its key.
+ */
+export function checkZhHant(zhCN, zhHant) {
+  const expected = zhHantCatalog(zhCN);
+  const fix = `zh-Hant is generated: edit ${ZH_HANT_SOURCE}, then run ${ZH_HANT_COMMAND}`;
+  const errors = [];
+  for (const [text, entry] of Object.entries(expected)) {
+    if (!Object.hasOwn(zhHant, text))
+      errors.push(`"${text}" is in ${ZH_HANT_SOURCE} but not here. ${fix}`);
+    else if (!isDeepStrictEqual(zhHant[text], entry))
+      errors.push(
+        `"${text}" is ${JSON.stringify(zhHant[text])}, not ${ZH_HANT_SOURCE} converted (${JSON.stringify(entry)}). ${fix}`,
+      );
+  }
+  for (const text of Object.keys(zhHant)) {
+    if (!Object.hasOwn(expected, text))
+      errors.push(`"${text}" is not in ${ZH_HANT_SOURCE}. ${fix}`);
+  }
+  if (!errors.length) {
+    const order = Object.keys(expected);
+    const keys = Object.keys(zhHant);
+    const at = order.findIndex((text, i) => keys[i] !== text);
+    if (at >= 0)
+      errors.push(
+        `entries leave the ${ZH_HANT_SOURCE} order at "${order[at]}": run ${ZH_HANT_COMMAND}`,
+      );
+  }
+  return errors;
+}
+
+const serialize = (catalog) => `${JSON.stringify(catalog, null, 2)}\n`;
+
+/** Rewrite zh-Hant.json as the conversion of zh-CN.json. */
+export function writeZhHant() {
+  const catalog = zhHantCatalog(readCatalog(ZH_HANT_SOURCE));
+  writeFileSync(catalogPath(ZH_HANT), serialize(catalog));
+  return Object.keys(catalog).length;
+}
+
 function main(args) {
   const messages = extractMessages();
   const missingFor = args.includes('--missing')
     ? args[args.indexOf('--missing') + 1]
     : null;
+  if (missingFor?.toLowerCase() === ZH_HANT.toLowerCase()) {
+    console.error(
+      `${ZH_HANT} is generated, not translated: add the entries to ${ZH_HANT_SOURCE} (npm run i18n -- --missing ${ZH_HANT_SOURCE}), then run ${ZH_HANT_COMMAND}`,
+    );
+    return 1;
+  }
   if (missingFor) {
     const out = missingTemplate(missingFor, readCatalog(missingFor), messages);
     console.log(JSON.stringify(out, null, 2));
     return 0;
+  }
+  if (args.includes('--zh-hant')) {
+    const count = writeZhHant();
+    console.log(
+      `${ZH_HANT}: wrote ${count} entries converted from ${ZH_HANT_SOURCE}`,
+    );
   }
   let failed = false;
   for (const locale of shippedLocales()) {
@@ -636,10 +747,7 @@ function main(args) {
       catalog = Object.fromEntries(
         Object.entries(catalog).filter(([text]) => messages.has(text)),
       );
-      writeFileSync(
-        catalogPath(locale),
-        `${JSON.stringify(catalog, null, 2)}\n`,
-      );
+      writeFileSync(catalogPath(locale), serialize(catalog));
       console.log(`${locale}: pruned ${stale.length} unused entries`);
     } else if (stale.length) {
       failed = true;
@@ -648,11 +756,16 @@ function main(args) {
       );
       for (const text of stale) console.log(`  ${JSON.stringify(text)}`);
     }
+    // shippedLocales() is sorted, so --prune has already pruned zh-CN.
+    if (locale === ZH_HANT)
+      errors.push(...checkZhHant(readCatalog(ZH_HANT_SOURCE), catalog));
     if (missing.length) {
       failed = true;
-      console.log(
-        `${locale}: ${missing.length} missing (npm run i18n -- --missing ${locale}):`,
-      );
+      const fill =
+        locale === ZH_HANT
+          ? `add them to ${ZH_HANT_SOURCE}, then ${ZH_HANT_COMMAND}`
+          : `npm run i18n -- --missing ${locale}`;
+      console.log(`${locale}: ${missing.length} missing (${fill}):`);
       for (const text of missing)
         console.log(`  ${JSON.stringify(text)}  ${messages.get(text).where}`);
     }
