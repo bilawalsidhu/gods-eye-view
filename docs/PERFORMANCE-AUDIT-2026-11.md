@@ -80,16 +80,21 @@ test, so place them on the ellipsoid with `HeightReference.NONE`.
 
 ### 3. Camera: rendering stops after pan then zoom
 
-Cesium's zoom-to-cursor path (`ScreenSpaceCameraController` `zoom3D` →
-`handleZoom` → `Camera.rotate`) builds a rotation from a zero or NaN axis when
-the camera looks straight down at a whole-globe view, throws
-`DeveloperError: normalized result is not a number`, and Cesium stops its render
-loop for good.
+Pure Cesium; no application code is involved. Above 1,000 km,
+`ScreenSpaceCameraController` `handleZoom` rotates the camera about the cross
+product of the picked point's normal and the screen centre's normal whenever
+their dot product is between 0 and 1. With the pointer on the exact centre pixel
+the two are the same vector, yet `n · n` often rounds to `0.9999999999999999`,
+so the check passes with a zero axis. `Camera.rotate` then throws
+`DeveloperError: normalized result is not a number` from
+`Scene.initializeFrame`, outside the scene's own try/catch, so
+`scene.renderError` never fires and Cesium stops its render loop for good. The
+pans in the first reproduction only moved the camera to a pose where the
+rounding goes that way.
 
-Fix: keep the wheel zoom off the degenerate case (no zoom-to-cursor at near
-−90° pitch above a set altitude, or a pitch nudged off exactly −90°), and handle
-`scene.renderError` by restoring a sane camera and restarting the loop, so one
-bad frame does not need a reload.
+Fix: make `camera.rotate` ignore a zero or non-finite axis, and recover from any
+stopped loop by restoring the last drawn camera pose and restarting it a bounded
+number of times before showing Cesium's error panel.
 
 ### 4. Street Traffic road loading
 
@@ -168,11 +173,18 @@ Two costs that scale with the 7,500 aircraft of a full poll:
 - The detection overlay (`src/data/detection.js` `_drawOverlay`) collects every
   detectable object and strokes every bracket on every frame.
 
-Fix: skip the floor path for a contact clearly above any terrain, keep the floor
-per aircraft per fix, make the floor-cell key a number, and stop promoting the
-cache entry on every read. Collect detection candidates when the fleet pass, the
-poll or the camera changes rather than per frame, and stroke the brackets as one
-path per colour.
+Fix for the first: skip the floor path for a contact clearly above any terrain,
+make the floor-cell key a number, and stop promoting the cache entry on every
+read.
+
+The second turned out smaller than it looked. The bracket strokes are already
+one path per colour, and collecting the objects is about 3 ms of a 56 ms frame
+at 4x throttle once the first fix is in. What costs is the per-object loop in
+`_drawOverlay` (projection, occlusion, alpha, twelve path calls per bracket),
+about 13 ms per frame at 4x. Removing it means keeping the bracket paths across
+frames while the camera and every contributing layer are unchanged, which needs
+a revision signal from each detectable layer: a design change, left as a
+follow-up.
 
 ### 9. Radio
 
