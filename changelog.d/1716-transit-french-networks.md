@@ -12,6 +12,6 @@
   Cleveland, St. Louis, Madison, Louisville, Fresno, Broward County and many
   smaller systems), plus Zagreb, Bilbao's metro, Chișinău, Parma and a few
   Québec networks. Operators whose terms were read are credited as those
-  terms ask; feeds with no stated licence say so in the registry and
-  DATA_SOURCES.md. Feeds whose terms need a key, registration or permission
-  (New York City buses, Detroit, Pittsburgh and others) are left out (#1716).
+  terms ask, and every feed is recorded in DATA_SOURCES.md. Feeds whose
+  terms need a key, registration or permission (New York City buses,
+  Detroit, Pittsburgh and others) are left out (#1716).
