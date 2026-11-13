@@ -176,3 +176,49 @@ test('type enrichment asks the database first and adsbdb only for its misses', a
     '/api/adsbdb/route/UAL1',
   ]);
 });
+
+test('a stalled type endpoint times out without holding up snapshots, then retries', async () => {
+  let clock = 0;
+  let requests = 0;
+  const lookup = createAircraftTypeLookup({
+    now: () => clock,
+    requestTimeoutMs: 25,
+    fetchImpl: async (_url, { signal }) => {
+      requests += 1;
+      if (requests === 1)
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener(
+            'abort',
+            () => reject(signal.reason),
+            { once: true },
+          );
+        });
+      return Response.json({
+        aircraft: { a1b2c3: ['B738', 'N123AB'] },
+        typeNames: { B738: 'Boeing 737-800' },
+      });
+    },
+  });
+  const records = [aircraft('a1b2c3')];
+  let guardTimer;
+  try {
+    await Promise.race([
+      lookup.fill(records),
+      new Promise((_resolve, reject) => {
+        guardTimer = setTimeout(
+          () => reject(new Error('optional type lookup blocked a snapshot')),
+          1_000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(guardTimer);
+  }
+  assert.equal(records[0].typeCode, null, 'positions survive a type timeout');
+  assert.equal(requests, 1);
+  clock += 60_000;
+  await lookup.fill(records);
+  assert.equal(requests, 2, 'timeout retries after the cooldown');
+  assert.equal(records[0].typeCode, 'B738');
+  assert.equal(records[0].registration, 'N123AB');
+});

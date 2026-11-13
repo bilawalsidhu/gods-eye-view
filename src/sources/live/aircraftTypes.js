@@ -9,6 +9,8 @@
  */
 
 const RETRY_MS = 60_000;
+/** The optional type endpoint must not stall a healthy flight snapshot. */
+const REQUEST_TIMEOUT_MS = 2_000;
 /** Forget addresses no longer in the feed once the memory passes this. */
 const MAX_REMEMBERED = 50_000;
 /** The most ids the server takes in one request (its MAX_IDS). */
@@ -17,17 +19,22 @@ export const BATCH_IDS = 20_000;
 export function createAircraftTypeLookup({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
+  requestTimeoutMs = REQUEST_TIMEOUT_MS,
 } = {}) {
   /** hex → [typeCode, registration, typeName] or null for a known miss. */
   const known = new Map();
   let retryAt = 0;
 
   async function requestBatch(ids, signal) {
+    // Keep request cancellation separate from the flight poll's lifetime.
+    // A stalled type lookup is best-effort, not a reason to lose positions.
+    const timeout = AbortSignal.timeout(requestTimeoutMs);
+    const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const response = await fetchImpl('/api/aircraft-types', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
-      signal,
+      signal: requestSignal,
     });
     if (!response.ok) {
       // 503 while the server's database loads, with a Retry-After of seconds.

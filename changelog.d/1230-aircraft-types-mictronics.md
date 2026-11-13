@@ -4,3 +4,6 @@
   aircraft draw in their own class, area queries list types, single lookups
   answer without spending adsbdb's budget, and `find_aircraft` searches civil
   registrations (quanticsoul4772, #1230).
+- Bound optional aircraft-type requests to two seconds so a stalled lookup
+  cannot hold up live flight positions; retry the type enrichment later
+  (quanticsoul4772, #1230).

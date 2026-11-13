@@ -1778,7 +1778,9 @@ aircraft classes and the layer queries all read the filled records. Type
 enrichment for one aircraft asks the database first and adsbdb only for
 addresses it lacks; adsbdb still answers routes, and an adsbdb answer for an
 aircraft takes precedence. Aircraft the database has typed no longer spend
-adsbdb's ambient budget.
+adsbdb's ambient budget. The optional type request times out after two
+seconds if its proxy stalls; live position snapshots remain usable and the
+lookup can retry after a short cool-down.
 
 ## Transponder emergency highlighting
 
