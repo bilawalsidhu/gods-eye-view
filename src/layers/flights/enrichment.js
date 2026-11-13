@@ -59,9 +59,24 @@ export function createEnrichment({
   }
 
   /**
+   * How long a temporarily failed lookup stays unasked. A rate-limit refusal
+   * says itself when to ask again (`retryAfterMs`), so that wins; any other
+   * temporary failure waits ENRICH_RETRY_COOLDOWN_MS.
+   * @param {*} error The rejection, as `LiveSourceError` carries it.
+   * @returns {number} Milliseconds.
+   */
+  function _enrichCooldownMs(error) {
+    const hinted = Number(error?.retryAfterMs);
+    return error?.code === 'limited' && Number.isFinite(hinted) && hinted > 0
+      ? hinted
+      : ENRICH_RETRY_COOLDOWN_MS;
+  }
+
+  /**
    * Ask each key at most once per session, except that a lookup whose source
    * failed temporarily (rejected or threw) may be asked again after
-   * ENRICH_RETRY_COOLDOWN_MS; an answer, found or not, and a permanent
+   * ENRICH_RETRY_COOLDOWN_MS, or after the refusal's own `retryAfterMs` for a
+   * rate limit (see _enrichCooldownMs); an answer, found or not, and a permanent
    * refusal (see _enrichFailureIsFinal) are final.
    * @param {string} key Session-unique lookup key.
    * @param {object} query The source's enrichment query.
@@ -128,7 +143,7 @@ export function createEnrichment({
             flightState._enrichSeen.delete(job.key);
             flightState._enrichRetryAfter.set(
               job.key,
-              Date.now() + ENRICH_RETRY_COOLDOWN_MS,
+              Date.now() + _enrichCooldownMs(error),
             );
           },
         )
