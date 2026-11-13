@@ -1428,5 +1428,9 @@
   "src/ui/ownerFlagSheet.js",
   "src/data/placePacksLoading.test.mjs",
   "src/ui/placePacksLoading.js",
-  "src/ui/placePacksLoading.test.mjs"
+  "src/ui/placePacksLoading.test.mjs",
+  "src/data/fleetModels.test.mjs",
+  "src/data/fleetModelInstances.test.mjs",
+  "src/testSupport/fleetGlb.mjs",
+  "scripts/measure-fleet-trail-anchors.mjs"
 ]
