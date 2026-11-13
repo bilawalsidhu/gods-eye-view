@@ -34,6 +34,7 @@ export function createVoiceCommands({
   supportedProviders,
   onProviderChange,
   onSessionEvent,
+  canStartVoice,
   createCard = (options) => new VoiceCardControls(options),
   pointer = null,
   referents = null,
@@ -49,6 +50,7 @@ export function createVoiceCommands({
   let panelMount;
   const session = createVoiceSession({
     runner,
+    canStart: (options) => options?.textOnly || canStartVoice?.() !== false,
     signal,
     createAdapter: (hooks) => {
       if (panelHost) actionObserver = panelHost.observeActions(hooks);
@@ -284,7 +286,7 @@ export function createVoiceCommands({
     void session.start({ pushToTalk: false });
   };
   const buttonHandler = () => {
-    if (adapter.ignoreButtonClick?.()) return;
+    if (canStartVoice?.() === false || adapter.ignoreButtonClick?.()) return;
     chat?.close();
     if (session.isActive() && adapter.getStartOptions?.().textOnly) {
       session.stop();

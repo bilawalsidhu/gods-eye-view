@@ -1,5 +1,5 @@
 // A GEV scene's Play waits for the last run to tear down and for the new run
-// to start; a Pause, Seek or Destroy meanwhile must win.
+// to finish; a Pause, Seek or Destroy meanwhile must win.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGevPlayer } from './gevPlayer.js';
@@ -10,7 +10,7 @@ const story = {
   chapters: [{ wallMs: 0 }, { wallMs: 30000 }],
 };
 
-/** A director whose start resolves when the test says so. */
+/** A director whose run starts immediately and ends when the test says so. */
 function deferredDirector({ running = false } = {}) {
   const calls = [];
   let release = null;
@@ -30,14 +30,15 @@ function deferredDirector({ running = false } = {}) {
     seekScene: (id, f) => calls.push(`seek ${f}`),
     startScene: () => {
       calls.push('start');
+      director.running = true;
       return new Promise((resolve) => {
         release = () => {
-          director.running = true;
+          director.running = false;
           resolve({ started: true });
         };
       });
     },
-    finishStart: () => release?.(),
+    finishRun: () => release?.(),
   };
   return director;
 }
@@ -70,17 +71,39 @@ test('a Seek during the last run’s teardown cancels the waiting Play', async (
   assert.equal(player.state.wallMs, 30000);
 });
 
-test('a Pause while the run is starting is applied once it has started', async () => {
+test('a stopped run’s completion does not repeat a newer seek', async () => {
   const director = deferredDirector();
   const player = createGevPlayer(director, story);
   const playing = player.play();
   await turns();
   assert.deepEqual(director.calls, ['start']);
+  assert.equal(director.running, true);
   player.pause();
-  director.finishStart();
+  player.seek(30000);
+  director.finishRun();
   await playing;
-  // Pause seeks once when pressed, and again after the late start.
-  assert.equal(director.calls.filter((c) => c.startsWith('seek')).length, 2);
+  assert.deepEqual(director.calls, ['start', 'seek 0', 'seek 0.5']);
+  assert.equal(player.state.playing, false);
+  assert.equal(player.state.wallMs, 30000);
+});
+
+test('a paused seek keeps its exact position near the end of a story', () => {
+  const director = deferredDirector();
+  let publishClock;
+  director.subscribeSceneClock = (listener) => {
+    publishClock = listener;
+    return () => {};
+  };
+  const player = createGevPlayer(director, story);
+  player.seek(59800);
+  publishClock({
+    sceneId: story.sceneId,
+    sceneElapsedSec: 59.8,
+    sceneDurationSec: 60,
+    running: false,
+    seeking: true,
+  });
+  assert.equal(player.state.wallMs, 59800);
   assert.equal(player.state.playing, false);
 });
 

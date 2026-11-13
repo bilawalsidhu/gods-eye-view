@@ -14,6 +14,7 @@ const wantsStories = () => {
  * @param {{viewer: import('cesium').Viewer,
  *   director: import('../scenes/director.js').SceneDirector,
  *   store: ReturnType<typeof import('../ui/stores/stories.js').useStoriesStore>,
+ *   onEnter?: () => void,
  *   onLoadFailed?: () => void,
  *   loadModules?: () => Promise<[object, object]>}} options `onLoadFailed`
  *   tells the person a click did nothing because Stories could not load;
@@ -26,6 +27,7 @@ export function bootStories({
   viewer,
   director,
   store,
+  onEnter,
   onLoadFailed,
   available = true,
   loadModules = () =>
@@ -67,6 +69,7 @@ export function bootStories({
           viewer,
           director,
           store,
+          onEnter,
         });
         store.connect(real, listStories());
         return real;
