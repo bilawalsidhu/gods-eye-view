@@ -9,7 +9,11 @@ import {
   contactMatchWins,
   CONTACT_MATCH_TIER,
 } from '../../data/contactMatch.js';
-import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
+import {
+  LANDED_ALT_MAX_FT,
+  LANDED_SPEED_MAX_MPS,
+  followsClock,
+} from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
@@ -834,6 +838,8 @@ export function createQueries({
         retryInSec,
         source: flightState.feed._lastSource,
         fallback: false,
+        // Following the world clock, the snapshot's age is told from its time.
+        ...(followsClock(flightState) && { atMs: flightState.now() }),
       };
     },
   };

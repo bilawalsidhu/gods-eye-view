@@ -110,7 +110,7 @@ const SUMMARY_LANGUAGES = Object.freeze({
 const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
 
 /** Shipped locales not written in Latin letters. */
-const NON_LATIN_LOCALES = /^(?:ar|ja|ru|uk|zh)(?:-|$)/;
+const NON_LATIN_LOCALES = /^(?:ar|ja|ru|uk|zh|he)(?:-|$)/;
 
 /** Scripts whose letters extend a word; any other neighbour ends it. */
 const WORD_SCRIPTS = [

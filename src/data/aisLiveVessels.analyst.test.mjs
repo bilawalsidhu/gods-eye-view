@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { mapAnalystRecord } from './aisLiveVessels.js';
 
 const FULL_RECORD = {
+  id: '353136000',
   mmsi: '353136000',
   name: 'EVER GIVEN',
   lat: 29.55,
@@ -20,6 +21,7 @@ test('ais analyst record: full record maps every contract field', () => {
   const r = mapAnalystRecord(FULL_RECORD);
   assert.deepEqual(r, {
     id: 'EVER GIVEN',
+    vesselId: '353136000',
     mmsi: '353136000',
     name: 'EVER GIVEN',
     lat: 29.55,
@@ -36,6 +38,16 @@ test('ais analyst record: nameless vessel falls back to mmsi id', () => {
   const r = mapAnalystRecord({ ...FULL_RECORD, name: '  ' });
   assert.equal(r.id, '353136000');
   assert.equal(r.name, null);
+});
+
+test('ais analyst record: the key is the source id; the MMSI rides along when known', () => {
+  const shared = mapAnalystRecord({ ...FULL_RECORD, id: 'provider-a' });
+  assert.equal(shared.vesselId, 'provider-a');
+  assert.equal(shared.mmsi, '353136000');
+  const noMmsi = mapAnalystRecord({ ...FULL_RECORD, id: 'provider-b', mmsi: '', name: '' });
+  assert.equal(noMmsi.vesselId, 'provider-b');
+  assert.equal(noMmsi.mmsi, null);
+  assert.equal(noMmsi.id, 'provider-b', 'a nameless vessel with no MMSI is labelled by its id');
 });
 
 test('ais analyst record: empty strings and NaN become null, never undefined', () => {
