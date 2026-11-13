@@ -14,9 +14,18 @@ const STEP_DELTA = 40;
  * gesture moves one step, however long it runs, trackpad coasting included.
  */
 const GESTURE_GAP_MS = 180;
-/** Things in the strip that keep their own pointer and wheel behaviour. */
+/** After a step, how long (ms) before the same motion can count as a new flick. */
+const STEP_COOLDOWN_MS = 220;
+/** A wheel event this large (pixels) is a mouse wheel notch, not a trackpad. */
+const NOTCH_DELTA = 100;
+/** The widest the strip gets, measured from the screen edge, whatever shape the rail takes. */
+const STRIP_MAX = 84;
+/**
+ * Things in the strip that keep their own pointer and wheel behaviour: any
+ * control, and every panel in either side's stack (a panel scrolls itself).
+ */
 const OWN_CONTROLS =
-  'a, button, input, select, textarea, [role="dialog"], .ui-panel, #first-run-launcher, #cesium-credits';
+  'a, button, input, select, textarea, [role="dialog"], .ui-panel, #left-panel-stack > :not(.gev-panel-rail), #right-context-rail > :not(.gev-panel-rail), #first-run-launcher, #cesium-credits';
 
 /**
  * @param {Document} [doc]
@@ -32,6 +41,10 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   let lastWheel = 0;
   let lastSpeed = 0;
   let stepped = false;
+  /** When the last step was taken, the fastest the gesture has been, and whether it has slowed since. */
+  let steppedAt = 0;
+  let peakSpeed = 0;
+  let slowed = false;
   let frame = 0;
 
   const rails = () =>
@@ -103,10 +116,14 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     if (doc.body.classList.contains('mobile-shell') || coarse?.matches) return null;
     for (const { side, rail } of rails()) {
       const box = rail.getBoundingClientRect();
+      // From the screen edge to just past the rail, but never wider than a
+      // rail's own column: a rail laid out as a row across the top of its
+      // panels would otherwise claim most of the panel's width.
+      const width = doc.documentElement.clientWidth;
       const inStrip =
         side === 'left'
-          ? x <= box.right + STRIP_MARGIN
-          : x >= box.left - STRIP_MARGIN;
+          ? x <= Math.min(box.right + STRIP_MARGIN, STRIP_MAX)
+          : x >= Math.max(box.left - STRIP_MARGIN, width - STRIP_MAX);
       if (!inStrip) continue;
       if (rail.contains(target)) return rail;
       if (target?.closest?.(OWN_CONTROLS)) return null;
@@ -151,37 +168,65 @@ export function installRailEdgeScroll(doc = globalThis.document) {
       panel.classList.remove('rail-switch-down', 'rail-switch-up');
       void panel.offsetWidth;
       panel.classList.add(direction > 0 ? 'rail-switch-down' : 'rail-switch-up');
-      panel.addEventListener(
-        'animationend',
-        () => panel.classList.remove('rail-switch-down', 'rail-switch-up'),
-        { once: true },
-      );
+      // The classes come off when the slide ends, or after a moment where
+      // there is no slide to end (reduced motion).
+      const settle = () => {
+        win.clearTimeout(timer);
+        panel.removeEventListener('animationend', settle);
+        panel.classList.remove('rail-switch-down', 'rail-switch-up');
+      };
+      const timer = win.setTimeout(settle, 600);
+      panel.addEventListener('animationend', settle);
     }
     follow();
   }
 
   function onWheel(event) {
-    if (!hot || event.ctrlKey) return;
+    if (event.ctrlKey) return;
+    const now = win.performance?.now?.() ?? Date.now();
+    const inGesture = now - lastWheel <= GESTURE_GAP_MS;
     // Recheck: the pointer may not have moved since the panels changed.
-    if (railAt(event.clientX, event.target) !== hot) return setHot(null);
+    const stillHot = Boolean(hot) && railAt(event.clientX, event.target) === hot;
+    if (!stillHot) {
+      setHot(null);
+      // The rest of a gesture that has already stepped is used up here, so
+      // its coasting does not go on to zoom the globe or scroll what opened
+      // under the pointer.
+      if (stepped && inGesture) {
+        event.preventDefault();
+        event.stopPropagation();
+        lastWheel = now;
+      }
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
-    const now = win.performance?.now?.() ?? Date.now();
     const speed = Math.abs(event.deltaY);
-    // A new gesture: after a pause, after turning round, or a fresh flick
-    // while the last one is still coasting (the speed jumps back up).
+    // A new gesture: after a pause, after turning round, a mouse wheel notch,
+    // or a fresh flick while the last one is still coasting. A flick is a
+    // rise in speed after the gesture has clearly slowed, and not in the
+    // moment after a step: a swipe is still speeding up when it first steps.
     const turned = travel && Math.sign(event.deltaY) !== Math.sign(travel);
-    const flick = stepped && speed > 20 && speed > lastSpeed * 2;
-    if (now - lastWheel > GESTURE_GAP_MS || turned || flick) {
+    const cooled = now - steppedAt > STEP_COOLDOWN_MS;
+    const notch = stepped && cooled && speed >= NOTCH_DELTA;
+    const flick = stepped && cooled && slowed && speed > Math.max(8, lastSpeed * 1.8);
+    if (!inGesture || turned || notch || flick) {
       travel = 0;
       stepped = false;
+      peakSpeed = 0;
+      slowed = false;
     }
     lastWheel = now;
     lastSpeed = speed;
-    if (stepped) return;
+    peakSpeed = Math.max(peakSpeed, speed);
+    if (stepped) {
+      if (speed < peakSpeed * 0.5) slowed = true;
+      return;
+    }
     travel += event.deltaY;
     if (Math.abs(travel) < STEP_DELTA) return;
     stepped = true;
+    steppedAt = now;
     step(Math.sign(travel));
   }
 
