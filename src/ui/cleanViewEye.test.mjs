@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { bindCleanViewEye, CLEAN_VIEW_EYE_IDLE_MS } from './cleanViewEye.js';
 import { bindApplicationShortcuts } from './applicationShortcuts.js';
+import { getLocale, setLocale, t } from '../i18n/index.js';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 
 const ROOT = path.resolve(
@@ -406,4 +407,55 @@ test('styles: 44 px corner eye, safe areas, fade, and the modes that own the scr
     rule('body.ui-clean-view #cesium-credits .cesium-widget-credits'),
     /white-space: normal/,
   );
+});
+
+test('eye accessible text follows locale changes without toggling or waking', () => {
+  const previousLocale = getLocale();
+  const documentRef = new FakeDocument();
+  const timers = fakeTimers();
+  const button = new FakeElement('clean-view-eye');
+  const eye = bindCleanViewEye({ button, documentRef, timers });
+  try {
+    setLocale('en');
+    eye.sync(true);
+    timers.advance(CLEAN_VIEW_EYE_IDLE_MS);
+    assert.equal(button.getAttribute('data-idle'), 'true');
+    assert.equal(
+      button.getAttribute('aria-label'),
+      'Exit clean view: show the controls',
+    );
+
+    setLocale('es');
+    const exitLabel = t('Exit clean view: show the controls');
+    assert.notEqual(exitLabel, 'Exit clean view: show the controls');
+    assert.equal(button.getAttribute('aria-label'), exitLabel);
+    assert.equal(
+      button.getAttribute('title'),
+      t('{label} (V)', { label: exitLabel }),
+    );
+    assert.equal(
+      button.getAttribute('data-idle'),
+      'true',
+      'locale change must not reset the fade timer',
+    );
+
+    eye.sync(false);
+    setLocale('ru');
+    assert.equal(
+      button.getAttribute('aria-label'),
+      t('Clean view: hide the controls'),
+    );
+
+    eye.destroy();
+    const lastLabel = button.getAttribute('aria-label');
+    setLocale('de');
+    assert.equal(
+      button.getAttribute('aria-label'),
+      lastLabel,
+      'destroy removes the locale listener',
+    );
+  } finally {
+    eye.destroy();
+    setLocale(previousLocale);
+  }
 });
