@@ -115,6 +115,8 @@ try {
   await page.$eval('[data-collapse-target="cctv-panel"]', (button) =>
     button.click(),
   );
+  // This gate exercises explicit catalog targets across camera flights.
+  await page.select('#cctv-camera-scope', 'all');
   await page.click('#cctv-enable-btn');
   await page.waitForFunction(
     () =>
@@ -371,6 +373,23 @@ try {
   await page.setViewport({ width: 390, height: 844 });
   await new Promise((resolve) => setTimeout(resolve, 700));
   // Phones present CCTV in the Cameras tab's sheet.
+  await page
+    .waitForSelector('#mobile-tab-bar [data-mobile-sheet="cameras"]', {
+      timeout: 5000,
+    })
+    .catch(async (error) => {
+      console.log(
+        'Mobile diagnostics',
+        await page.evaluate(() => ({
+          body: document.body.className,
+          tab: document.getElementById('mobile-tab-bar')?.outerHTML,
+          dock: !!document.getElementById('command-dock'),
+          shell: !!window.__godsEyeView.styleManager._mobileShell,
+        })),
+        errors,
+      );
+      throw error;
+    });
   await page.click('#mobile-tab-bar [data-mobile-sheet="cameras"]');
   await new Promise((resolve) => setTimeout(resolve, 400));
   await page.screenshot({ path: 'qa-shots/camera-controls/narrow.png' });
@@ -379,6 +398,23 @@ try {
     await page.$eval('#cctv-panel', (panel) => {
       const rect = panel.getBoundingClientRect();
       return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth + 1;
+    }),
+  );
+  check(
+    'narrow discovery search and scope remain usable side by side',
+    await page.evaluate(() => {
+      const search = document
+        .getElementById('cctv-camera-search')
+        .getBoundingClientRect();
+      const scope = document
+        .getElementById('cctv-camera-scope')
+        .getBoundingClientRect();
+      return (
+        search.width >= 100 &&
+        scope.width >= 70 &&
+        Math.abs(search.top - scope.top) < 2 &&
+        scope.right <= innerWidth
+      );
     }),
   );
   check(

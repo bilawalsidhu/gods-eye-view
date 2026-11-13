@@ -221,6 +221,13 @@ test('UI state builds the full camera list only when it is read', () => {
     first.cameraIndex,
     'the index keeps its identity while the view does',
   );
+  assert.equal(first.discoveryIndex.length, 2);
+  assert.equal(first.discoveryIndex, cctvLayer.getUIState().discoveryIndex);
+  assert.equal(
+    built,
+    0,
+    'global discovery does not build media/calibration state',
+  );
   assert.equal(first.cameras.length, 2);
   assert.ok(built > 0, 'reading `cameras` builds it');
   assert.equal(first.cameras, first.cameras, 'and builds it once');

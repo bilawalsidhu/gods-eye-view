@@ -3692,5 +3692,27 @@
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
-  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
+  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "<1 km": "פחות מק״מ אחד",
+  "{distance} km": "{distance} ק״מ",
+  "No matching cameras. Try another search or All cameras.": "לא נמצאו מצלמות תואמות. נסו חיפוש אחר או בחרו בכל המצלמות.",
+  "No cameras in map view. Move the map or choose All cameras.": "אין מצלמות בתצוגת המפה. הזיזו את המפה או בחרו בכל המצלמות.",
+  "No cameras loaded.": "לא נטענו מצלמות.",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "המצלמה שנבחרה נמצאת מחוץ לתצוגת המפה. בחרו מצלמה כאן או עברו לכל המצלמות.",
+  "Search city, camera or provider": "חיפוש עיר, מצלמה או ספק",
+  "Search CCTV cameras": "חיפוש מצלמות מעקב",
+  "CCTV search area": "אזור חיפוש מצלמות",
+  "Filters panel controls only; voice navigation uses the full catalog.": "הסינון חל רק על פקדי הלוח; ניווט קולי משתמש בקטלוג המלא.",
+  "In map view": "בתצוגת המפה",
+  "All cameras": "כל המצלמות",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} מצלמה בתצוגת המפה · הקרובות תחילה",
+    "two": "{count} מצלמות בתצוגת המפה · הקרובות תחילה",
+    "other": "{count} מצלמות בתצוגת המפה · הקרובות תחילה"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} מצלמה ברחבי העולם · הקרובות תחילה",
+    "two": "{count} מצלמות ברחבי העולם · הקרובות תחילה",
+    "other": "{count} מצלמות ברחבי העולם · הקרובות תחילה"
+  }
 }

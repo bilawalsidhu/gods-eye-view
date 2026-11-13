@@ -1,4 +1,11 @@
-import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
+import {
+  formatNumber,
+  getLocale,
+  keepCodesWithValues,
+  msg,
+  t,
+  tn,
+} from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
@@ -19,7 +26,17 @@ export function _calBadgeLabel(badge) {
 
 /** A picker option for a camera. */
 function pickerOption(camera, id = camera.id) {
-  return { value: id, label: `${camera.city} · ${camera.name}` };
+  const distance = Number.isFinite(camera.distanceKm)
+    ? camera.distanceKm < 1
+      ? t('<1 km')
+      : t('{distance} km', {
+          distance: formatNumber(Math.round(camera.distanceKm)),
+        })
+    : '';
+  return {
+    value: id,
+    label: `${camera.city} · ${camera.name}${distance ? ` · ${distance}` : ''}`,
+  };
 }
 
 /** The picker's closing line for the cameras the view leaves out. */
@@ -39,7 +56,8 @@ function outsideNoteText(count) {
  * @param {boolean} enabled Whether the layer is on.
  */
 export function presentCctvPanel(state, enabled) {
-  const cameras = state?.cameraIndex || state?.cameras || [];
+  const cameras =
+    state?.discoveryIndex || state?.cameraIndex || state?.cameras || [];
   const catalogCount = Number.isFinite(state?.count)
     ? state.count
     : cameras.length;
@@ -144,16 +162,38 @@ export function _renderCctvState(state) {
     this._calibrationEdit?.(false);
   }
   this._cctvState = state || null;
-  // The light index, not `state.cameras`: reading that builds every camera's
-  // full state, which a large catalog cannot afford on each notification.
-  const cameras = state?.cameraIndex || state?.cameras || [];
-  // The picker lists what is in view; the catalog is every camera.
+  const discovery = this.discoverCameras(state);
+  const cameras = discovery.cameras;
+  const localScope =
+    !!this.actions.readMapView && this._cctvScope?.value !== 'all';
+  const outsideView =
+    localScope &&
+    state?.activeCamera &&
+    !discovery.localIds.has(state.activeCameraId);
   const catalogCount = Number.isFinite(state?.count)
     ? state.count
-    : cameras.length;
+    : (state?.discoveryIndex || state?.cameraIndex || state?.cameras || [])
+        .length;
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
-  const activeId = state?.activeCameraId || '';
-  const activeCamera = state?.activeCamera || null;
+  const activeId = outsideView ? '' : state?.activeCameraId || '';
+  const activeCamera = outsideView ? null : state?.activeCamera || null;
+  const discoveryStatus = cameras.length
+    ? localScope
+      ? tn(
+          cameras.length,
+          '{count} camera in map view · nearest first',
+          '{count} cameras in map view · nearest first',
+        )
+      : tn(
+          cameras.length,
+          '{count} camera worldwide · nearest first',
+          '{count} cameras worldwide · nearest first',
+        )
+    : this._cctvSearch?.value?.trim()
+      ? t('No matching cameras. Try another search or All cameras.')
+      : localScope
+        ? t('No cameras in map view. Move the map or choose All cameras.')
+        : t('No cameras loaded.');
   const selectionRevision = Number(state?.activeCameraReselection);
   const reselected =
     this._lastQuebecSelectionRevision !== null &&
@@ -176,10 +216,13 @@ export function _renderCctvState(state) {
   // from re-expanding a panel the user deliberately collapsed, and timed
   // auto-hop transitions only expand on the first activation so the panel
   // does not pop open on every hop.
-  const effectiveActiveId = enabled ? activeId || null : null;
+  // Map filtering can hide an active camera temporarily. Track the real
+  // selection so panning back cannot reopen a deliberately collapsed panel.
+  const effectiveActiveId = enabled ? state?.activeCameraId || null : null;
   const isFirstActivation = this._lastSeenCctvActiveId === null;
   if (
-    effectiveActiveId &&
+    enabled &&
+    activeId &&
     effectiveActiveId !== this._lastSeenCctvActiveId &&
     (!state?.autoHop || isFirstActivation)
   ) {
@@ -198,7 +241,16 @@ export function _renderCctvState(state) {
     const picking = document.activeElement === this._cctvSelect && !disabled;
     // Cameras the view leaves out get one closing line, so a short list
     // does not read as the whole catalog. A disabled layer has no view.
-    const outside = enabled ? Math.max(0, catalogCount - cameras.length) : 0;
+    const outside =
+      enabled && this._cctvScope?.value !== 'all'
+        ? Math.max(
+            0,
+            catalogCount -
+              (this.actions.readMapView
+                ? discovery.localIds.size
+                : cameras.length),
+          )
+        : 0;
     let picker = this._picker;
     // The index keeps its identity until the view or the active camera
     // changes, so an unchanged list keeps its options; a new locale words
@@ -253,7 +305,17 @@ export function _renderCctvState(state) {
     });
   }
 
-  this.store.publish(presentCctvPanel(state, enabled));
+  // Avoid spreading UI state: its lazy cameras getter materializes the catalog.
+  const panelState = Object.create(state || null);
+  Object.assign(panelState, { activeCameraId: activeId, activeCamera });
+  this.store.publish({
+    ...presentCctvPanel(panelState, enabled),
+    discoveryStatus,
+    navDisabled: !enabled || cameras.length === 0,
+    nearestDisabled:
+      !enabled ||
+      (!cameras.length && (discovery.localIds.size > 0 || catalogCount === 0)),
+  });
 
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
@@ -300,7 +362,11 @@ export function _renderCctvState(state) {
 
   this._syncCctvSourceBadge(activeCamera, enabled);
   this._typeCctvSummary(
-    state?.summary ||
+    (outsideView
+      ? t(
+          'The selected camera is outside the map view. Choose a camera here, or switch to All cameras.',
+        )
+      : state?.summary) ||
       t('Enable CCTV to start camera-linked intelligence summaries.'),
   );
 }

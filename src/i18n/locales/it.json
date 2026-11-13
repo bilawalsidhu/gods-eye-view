@@ -3692,5 +3692,27 @@
   "Confirm: remove every added entry from Data Layers": "Conferma: rimuovi da Livelli dati tutte le voci aggiunte",
   "Remove every added entry from Data Layers": "Rimuovi da Livelli dati tutte le voci aggiunte",
   "Showing {shown} of {total}": "Mostrati: {shown} su {total}",
-  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI"
+  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI",
+  "<1 km": "<1 km",
+  "All cameras": "Tutte le telecamere",
+  "CCTV search area": "Area di ricerca CCTV",
+  "Filters panel controls only; voice navigation uses the full catalog.": "Filtra solo i comandi del pannello; la navigazione vocale usa l’intero catalogo.",
+  "In map view": "Nella vista della mappa",
+  "No cameras in map view. Move the map or choose All cameras.": "Nessuna telecamera nella vista. Sposta la mappa o scegli Tutte le telecamere.",
+  "No cameras loaded.": "Nessuna telecamera caricata.",
+  "No matching cameras. Try another search or All cameras.": "Nessuna telecamera corrispondente. Prova un’altra ricerca o Tutte le telecamere.",
+  "Search CCTV cameras": "Cerca telecamere CCTV",
+  "Search city, camera or provider": "Cerca città, telecamera o fornitore",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "La telecamera selezionata è fuori dalla vista. Scegline una qui o passa a Tutte le telecamere.",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} telecamera nella vista · più vicina prima",
+    "many": "{count} telecamere nella vista · più vicine prima",
+    "other": "{count} telecamere nella vista · più vicine prima"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} telecamera nel mondo · più vicina prima",
+    "many": "{count} telecamere nel mondo · più vicine prima",
+    "other": "{count} telecamere nel mondo · più vicine prima"
+  },
+  "{distance} km": "{distance} km"
 }

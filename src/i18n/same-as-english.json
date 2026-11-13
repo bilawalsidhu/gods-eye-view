@@ -249,7 +249,9 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "<1 km",
+    "{distance} km"
   ],
   "es": [
     "1 min/s",
@@ -411,7 +413,9 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "<1 km",
+    "{distance} km"
   ],
   "fr": [
     "1 min/s",
@@ -633,7 +637,9 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "<1 km",
+    "{distance} km"
   ],
   "it": [
     "1 min/s",
@@ -839,7 +845,9 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "<1 km",
+    "{distance} km"
   ],
   "ja": [
     "1090 MHz",
@@ -905,7 +913,9 @@
     "▲ {frp} MW",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "<1 km",
+    "{distance} km"
   ],
   "pt": [
     "1 min/s",
@@ -1067,7 +1077,9 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "<1 km",
+    "{distance} km"
   ],
   "ru": [
     "1900–1945",
@@ -1264,7 +1276,9 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "<1 km",
+    "{distance} km"
   ],
   "uk": [
     "1900–1945",
@@ -1295,7 +1309,9 @@
     "{division}, {country}",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1366,7 +1382,9 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1437,7 +1455,9 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "<1 km",
+    "{distance} km"
   ],
   "he": [
     "{speed} kn",

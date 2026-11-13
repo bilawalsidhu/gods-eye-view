@@ -3953,5 +3953,33 @@
   "Confirm: remove every added entry from Data Layers": "تأكيد: إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Remove every added entry from Data Layers": "إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Showing {shown} of {total}": "عرض {shown} من {total}",
-  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات"
+  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات",
+  "<1 km": "أقل من 1 كم",
+  "{distance} km": "{distance} كم",
+  "No matching cameras. Try another search or All cameras.": "لا توجد كاميرات مطابقة. جرّب بحثًا آخر أو اختر كل الكاميرات.",
+  "No cameras in map view. Move the map or choose All cameras.": "لا توجد كاميرات في عرض الخريطة. حرّك الخريطة أو اختر كل الكاميرات.",
+  "No cameras loaded.": "لم يتم تحميل أي كاميرات.",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "الكاميرا المحددة خارج عرض الخريطة. اختر كاميرا هنا أو انتقل إلى كل الكاميرات.",
+  "Search city, camera or provider": "ابحث عن مدينة أو كاميرا أو مزوّد",
+  "Search CCTV cameras": "البحث عن كاميرات المراقبة",
+  "CCTV search area": "نطاق البحث عن كاميرات المراقبة",
+  "Filters panel controls only; voice navigation uses the full catalog.": "تُطبّق المرشحات على عناصر اللوحة فقط؛ يستخدم التنقل الصوتي الكتالوج الكامل.",
+  "In map view": "ضمن عرض الخريطة",
+  "All cameras": "كل الكاميرات",
+  "{count} cameras in map view · nearest first": {
+    "zero": "{count} كاميرا في عرض الخريطة · الأقرب أولًا",
+    "one": "{count} كاميرا في عرض الخريطة · الأقرب أولًا",
+    "two": "{count} كاميرا في عرض الخريطة · الأقرب أولًا",
+    "few": "{count} كاميرات في عرض الخريطة · الأقرب أولًا",
+    "many": "{count} كاميرا في عرض الخريطة · الأقرب أولًا",
+    "other": "{count} كاميرا في عرض الخريطة · الأقرب أولًا"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "zero": "{count} كاميرا حول العالم · الأقرب أولًا",
+    "one": "{count} كاميرا حول العالم · الأقرب أولًا",
+    "two": "{count} كاميرا حول العالم · الأقرب أولًا",
+    "few": "{count} كاميرات حول العالم · الأقرب أولًا",
+    "many": "{count} كاميرا حول العالم · الأقرب أولًا",
+    "other": "{count} كاميرا حول العالم · الأقرب أولًا"
+  }
 }

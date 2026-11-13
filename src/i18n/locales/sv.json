@@ -3605,5 +3605,25 @@
   "Confirm: remove every added entry from Data Layers": "Bekräfta: ta bort alla tillagda poster från Datalager",
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
   "Showing {shown} of {total}": "Visar {shown} av {total}",
-  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET"
+  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "<1 km": "<1 km",
+  "{distance} km": "{distance} km",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} kamera i kartvyn · närmast först",
+    "other": "{count} kameror i kartvyn · närmast först"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} kamera världen över · närmast först",
+    "other": "{count} kameror världen över · närmast först"
+  },
+  "No matching cameras. Try another search or All cameras.": "Inga matchande kameror. Prova en annan sökning eller Alla kameror.",
+  "No cameras in map view. Move the map or choose All cameras.": "Inga kameror i kartvyn. Flytta kartan eller välj Alla kameror.",
+  "No cameras loaded.": "Inga kameror har lästs in.",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "Den valda kameran är utanför kartvyn. Välj en kamera här eller byt till Alla kameror.",
+  "Search city, camera or provider": "Sök stad, kamera eller leverantör",
+  "Search CCTV cameras": "Sök övervakningskameror",
+  "CCTV search area": "Sökområde för övervakningskameror",
+  "Filters panel controls only; voice navigation uses the full catalog.": "Filtrerar endast panelens kontroller; röstnavigering använder hela katalogen.",
+  "In map view": "I kartvyn",
+  "All cameras": "Alla kameror"
 }

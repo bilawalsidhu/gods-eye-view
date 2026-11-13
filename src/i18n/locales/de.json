@@ -3605,5 +3605,25 @@
   "Confirm: remove every added entry from Data Layers": "Bestätigen: alle hinzugefügten Einträge aus Datenebenen entfernen",
   "Remove every added entry from Data Layers": "Alle hinzugefügten Einträge aus Datenebenen entfernen",
   "Showing {shown} of {total}": "{shown} von {total} angezeigt",
-  "BROWSE DATA LIBRARY": "DATENBIBLIOTHEK DURCHSUCHEN"
+  "BROWSE DATA LIBRARY": "DATENBIBLIOTHEK DURCHSUCHEN",
+  "<1 km": "<1 km",
+  "All cameras": "Alle Kameras",
+  "CCTV search area": "CCTV-Suchgebiet",
+  "Filters panel controls only; voice navigation uses the full catalog.": "Filtert nur die Bedienung im Panel; die Sprachnavigation nutzt den gesamten Katalog.",
+  "In map view": "Im Kartenausschnitt",
+  "No cameras in map view. Move the map or choose All cameras.": "Keine Kameras im Kartenausschnitt. Verschieben Sie die Karte oder wählen Sie „Alle Kameras“.",
+  "No cameras loaded.": "Keine Kameras geladen.",
+  "No matching cameras. Try another search or All cameras.": "Keine passenden Kameras. Versuchen Sie eine andere Suche oder „Alle Kameras“.",
+  "Search CCTV cameras": "CCTV-Kameras suchen",
+  "Search city, camera or provider": "Stadt, Kamera oder Anbieter suchen",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "Die ausgewählte Kamera liegt außerhalb des Kartenausschnitts. Wählen Sie hier eine Kamera oder wechseln Sie zu „Alle Kameras“.",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} Kamera im Kartenausschnitt · nächste zuerst",
+    "other": "{count} Kameras im Kartenausschnitt · nächste zuerst"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} Kamera weltweit · nächste zuerst",
+    "other": "{count} Kameras weltweit · nächste zuerst"
+  },
+  "{distance} km": "{distance} km"
 }

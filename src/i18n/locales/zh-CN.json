@@ -3518,5 +3518,23 @@
   "Confirm: remove every added entry from Data Layers": "确认：从数据图层中移除所有已添加条目",
   "Remove every added entry from Data Layers": "从数据图层中移除所有已添加条目",
   "Showing {shown} of {total}": "显示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "浏览数据资源库"
+  "BROWSE DATA LIBRARY": "浏览数据资源库",
+  "<1 km": "<1 km",
+  "All cameras": "所有摄像头",
+  "CCTV search area": "CCTV 搜索区域",
+  "Filters panel controls only; voice navigation uses the full catalog.": "仅筛选面板控件；语音导航使用完整目录。",
+  "In map view": "地图视野内",
+  "No cameras in map view. Move the map or choose All cameras.": "地图视野内没有摄像头。请移动地图或选择所有摄像头。",
+  "No cameras loaded.": "尚未加载摄像头。",
+  "No matching cameras. Try another search or All cameras.": "没有匹配的摄像头。请尝试其他搜索或选择所有摄像头。",
+  "Search CCTV cameras": "搜索 CCTV 摄像头",
+  "Search city, camera or provider": "搜索城市、摄像头或提供商",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "所选摄像头位于地图视野之外。请选择此处的摄像头，或切换至所有摄像头。",
+  "{count} cameras in map view · nearest first": {
+    "other": "地图视野内 {count} 个摄像头 · 距离由近到远"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "other": "全球 {count} 个摄像头 · 距离由近到远"
+  },
+  "{distance} km": "{distance} km"
 }

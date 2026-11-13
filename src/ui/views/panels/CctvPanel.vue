@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import UiSelect from '../../kit/UiSelect.js';
 import UiButton from '../../kit/UiButton.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
@@ -40,8 +41,16 @@ const frameData = computed(() =>
     <div id="cctv-meta">{{ view?.meta ?? t('Enable CCTV to load camera intersections') }}</div>
     <div class="cctv-controls">
       <UiButton class="scene-btn" :pressed="Boolean(view?.enabled)" pressed-class="active" id="cctv-enable-btn">{{ view?.enabled ? t('CCTV ON') : t('CCTV OFF') }}</UiButton>
-      <UiButton id="cctv-nearest-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.navDisabled">{{ t('NEAREST') }}</UiButton>
+      <UiButton id="cctv-nearest-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.nearestDisabled">{{ t('NEAREST') }}</UiButton>
     </div>
+    <div class="cctv-controls">
+      <input class="gev-field" id="cctv-camera-search" type="search" :placeholder="t('Search city, camera or provider')" :aria-label="t('Search CCTV cameras')" />
+      <UiSelect class="gev-field" id="cctv-camera-scope" :aria-label="t('CCTV search area')" :title="t('Filters panel controls only; voice navigation uses the full catalog.')">
+        <option value="view">{{ t('In map view') }}</option>
+        <option value="all">{{ t('All cameras') }}</option>
+      </UiSelect>
+    </div>
+    <div id="cctv-discovery-status" role="status" aria-live="polite">{{ view?.discoveryStatus }}</div>
     <div class="cctv-controls">
       <UiButton id="cctv-prev-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.navDisabled">{{ t('PREV') }}</UiButton>
       <CctvPicker class="gev-field" id="cctv-camera-select" :aria-label="t('CCTV camera')" />
