@@ -6,6 +6,7 @@ import {
   mountNavControl,
   orbitCameraPosition,
   plausibleTarget,
+  TILT_IDLE_MS,
 } from './navControl.js';
 import { createPinia } from 'pinia';
 import { useNavControlStore } from '../stores/navControl.js';
@@ -125,7 +126,7 @@ function setup(options = {}) {
   return { viewer, clock, handle, nav, navigations, frame, settle, activate };
 }
 
-test('camera moveEnd does not synchronously pick the scene for tilt', () => {
+test('camera moveEnd leaves the tilt read until the camera has been still', () => {
   const { viewer, handle, clock } = setup();
   let reads = 0;
   viewer.scene.globe.pick = () => {
@@ -133,12 +134,20 @@ test('camera moveEnd does not synchronously pick the scene for tilt', () => {
     return GROUND;
   };
   viewer.camera.moveEnd.raiseEvent();
-  viewer.camera.moveEnd.raiseEvent();
   assert.equal(reads, 0, 'moveEnd must not synchronously read the target');
-  assert.equal(clock.pendingCount, 1, 'multiple events coalesce');
-  clock.advance(1);
-  assert.equal(reads, 1, 'target is read after the event returns');
+  assert.equal(clock.pendingCount, 1);
+  clock.advance(TILT_IDLE_MS - 1);
+  assert.equal(reads, 0, 'nothing is read while other observers re-aim');
+  // Another camera move restarts the wait, and still leaves one read pending.
   viewer.camera.moveEnd.raiseEvent();
+  assert.equal(clock.pendingCount, 1, 'repeated events share one read');
+  clock.advance(TILT_IDLE_MS - 1);
+  assert.equal(reads, 0, 'the wait restarted');
+  clock.advance(1);
+  assert.equal(reads, 1, 'the target is read once the camera has been still');
+  assert.equal(clock.pendingCount, 0);
+  viewer.camera.moveEnd.raiseEvent();
+  assert.equal(clock.pendingCount, 1);
   handle.destroy();
   assert.equal(clock.pendingCount, 0, 'destroy cancels a pending read');
 });
