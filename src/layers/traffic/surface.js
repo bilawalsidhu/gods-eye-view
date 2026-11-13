@@ -69,6 +69,45 @@ export function trafficSurfaceReady(scene) {
   return currentRenderedFrame(scene)?.ready === true;
 }
 
+/**
+ * Ground-floor reads for one synchronous pass over road coordinates, asking
+ * the shared cache once per floor cell instead of once per coordinate.
+ *
+ * A road tile puts thousands of coordinates into a few hundred ~111 m cells,
+ * and each shared read formats and looks up two string keys, which added up
+ * to seconds per street-level load. Mesh floors answer per point (the nearest
+ * reading in the cell), so they are read through unchanged; only the DEM
+ * regime is one value per cell. Build a reader per pass: cells warm up
+ * between passes.
+ */
+export function floorCellReader(ground) {
+  const read = ground?.cachedGroundFloor;
+  if (!read) return () => undefined;
+  if (ground.meshFloorPreferred?.() !== false)
+    return (lat, lon) => read(lat, lon);
+  const cells = new Map();
+  return (lat, lon) => {
+    const y = lat * 1000,
+      x = lon * 1000;
+    const row = Math.round(y),
+      column = Math.round(x);
+    // The shared cache rounds with toFixed(3). At a cell edge that and
+    // Math.round can pick different cells, so an edge point asks directly.
+    if (!(
+      Math.abs(Math.abs(y - row) - 0.5) > 1e-6 &&
+      Math.abs(Math.abs(x - column) - 0.5) > 1e-6
+    ))
+      return read(lat, lon);
+    const key = row * 1e6 + column;
+    let floor = cells.get(key);
+    if (floor === undefined) {
+      floor = read(lat, lon) ?? null;
+      cells.set(key, floor);
+    }
+    return floor;
+  };
+}
+
 /** Preserve bends and insert height samples at most 150 m apart, splitting long roads. */
 export function roadSurfaceChunks(coordinates) {
   const chunks = [];
