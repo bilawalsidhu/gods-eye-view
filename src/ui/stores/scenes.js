@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { computed, markRaw, shallowRef } from 'vue';
 
 /**
  * @typedef {object} SceneRowHandlers
@@ -7,10 +7,10 @@ import { markRaw, shallowRef } from 'vue';
  * @property {(sceneId: string, shotId: string, title: string) => void} rename
  * @property {(sceneId: string, shotId: string) => void} load
  * @property {(sceneId: string, shotId: string) => void} remove
- * @property {(sceneId: string) => void} selectScene The select's choice.
  * @property {(file: File) => Promise<void>|void} importFile A chosen file.
- * @property {() => void} create, deleteScene, capture, update, start, stop,
- *   next, export, download The panel's buttons.
+ * @property {() => void} create, deleteScene, stories, thumb, capture, update,
+ *   start, stop, next, export, download The panel's buttons.
+ * @property {(tag: string) => void} tag A Stories tag chip.
  */
 
 /**
@@ -23,15 +23,15 @@ export const useSceneStore = defineStore('gev-scenes', () => {
   const scenes = shallowRef(markRaw([]));
   const selectedSceneId = shallowRef(null);
   const selectedShotId = shallowRef(null);
-  // The select's choice, updated only when its options are rendered.
-  const listedSceneId = shallowRef(null);
-  // Counts option renders: each one re-applies the select's choice, which
-  // the person may have changed since.
-  const listedRevision = shallowRef(0);
+  /** The scene being edited, whose name the panel shows, or null. */
+  const currentScene = computed(
+    () =>
+      scenes.value.find((scene) => scene.id === selectedSceneId.value) ?? null,
+  );
   /**
    * The panel's buttons, status line, progress and runtime chip:
-   * `{running, hasShots, disabled: {[button]: boolean}, status, progress,
-   * runtime, playLabel}`, or null until an owner presents them.
+   * `{running, hasShots, inStories, disabled: {[button]: boolean}, status,
+   * progress, runtime, playLabel}`, or null until an owner presents them.
    */
   const panel = shallowRef(null);
 
@@ -63,13 +63,6 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     selectedShotId.value = state.selectedShotId ?? null;
   }
 
-  /** Publish the project and the select's choice. */
-  function publishOptions(state) {
-    publish(state);
-    listedSceneId.value = state.selectedSceneId ?? null;
-    listedRevision.value++;
-  }
-
   /** @param {string|null} id */
   function selectShot(id) {
     selectedShotId.value = id ?? null;
@@ -83,7 +76,7 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     if (token !== owner) return;
     owner = null;
     attached.value = false;
-    publishOptions({});
+    publish({});
   }
 
   /** @returns {boolean} Whether `token` is the owner presenting now. */
@@ -104,14 +97,12 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     scenes,
     selectedSceneId,
     selectedShotId,
-    listedSceneId,
-    listedRevision,
+    currentScene,
     attached,
     panel,
     publishPanel,
     attach,
     publish,
-    publishOptions,
     selectShot,
     detach,
     owns,

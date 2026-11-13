@@ -36,7 +36,6 @@ try {
   );
   const inventory = await page.evaluate(() => {
     const selects = [
-      'scene-select',
       'cctv-camera-select',
       'hud-layout-select',
       'radio-filter',
@@ -45,7 +44,7 @@ try {
     return {
       ids: selects.map((node) => node.id),
       shared:
-        selects.length === 5 &&
+        selects.length === 4 &&
         selects.every((node) => node.classList.contains('gev-field')),
       native: selects.every(
         (node) =>
@@ -57,7 +56,7 @@ try {
     };
   });
   check(
-    'all five panel dropdowns retain native select semantics and shared surface',
+    'all four panel dropdowns retain native select semantics and shared surface',
     inventory.shared && inventory.native,
     inventory,
   );
@@ -76,12 +75,6 @@ try {
       persist: false,
       syncShare: false,
     });
-    window.__qaFormChanges = [];
-    document
-      .getElementById('scene-select')
-      .addEventListener('change', (event) =>
-        window.__qaFormChanges.push(event.target.value),
-      );
   });
   const ownerSetup = await page.evaluate(() => {
     const owner = window.__godsEyeView.styleManager._cctvControls;
@@ -176,7 +169,7 @@ try {
     window.__qaFormCalls = [];
     document.getElementById('cctv-camera-select').disabled = true;
   });
-  await page.focus('#scene-select');
+  await page.focus('#hud-layout-select');
   await page.focus('#cctv-camera-select');
   check(
     'disabled native selects cannot receive keyboard focus',
@@ -288,7 +281,7 @@ try {
     for (const width of [1440, 620, 390]) {
       await page.setViewport({ width, height: 900 });
       const layout = await page.evaluate(() => {
-        const ids = ['scene-select', 'cctv-camera-select', 'hud-layout-select'];
+        const ids = ['cctv-camera-select', 'hud-layout-select'];
         return ids.map((id) => {
           const node = document.getElementById(id),
             rect = node.getBoundingClientRect(),
@@ -317,7 +310,7 @@ try {
     document.documentElement.dataset.uiTheme = 'cyber';
   });
   const cyber = await page.$eval(
-    '#scene-select',
+    '#cctv-camera-select',
     (node) => getComputedStyle(node).backgroundColor,
   );
   check(
@@ -340,62 +333,23 @@ try {
         window.__qaFormCalls.length === 2,
     ),
   );
-  // Scene selection can restore application settings. Exercise it after the
-  // fixture-owned CCTV phase so those asynchronous effects cannot replace ports.
-  page.once('dialog', (dialog) => dialog.accept('Baseline selection fixture'));
-  await page.click('#scene-new-btn');
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('#scene-select option')].some(
-      (option) => option.textContent === 'Baseline selection fixture',
-    ),
-  );
+  // Authoring has no scene picker: NEW SCENE selects the scene it creates and
+  // the panel names it. Exercise it after the fixture-owned CCTV phase.
   page.once('dialog', (dialog) => dialog.accept('QA selection fixture'));
   await page.click('#scene-new-btn');
   await page.waitForFunction(
-    () => document.querySelectorAll('#scene-select option').length > 1,
+    () =>
+      document.getElementById('scene-name')?.textContent ===
+      'QA selection fixture',
   );
-  const targetSceneId = await page.$eval(
-    '#scene-select',
-    (node) =>
-      [...node.options].find(
-        (option) => option.textContent === 'QA selection fixture',
-      ).value,
-  );
-  const baselineSceneId = await page.$eval(
-    '#scene-select',
-    (node) =>
-      [...node.options].find(
-        (option) => option.textContent === 'Baseline selection fixture',
-      ).value,
-  );
-  await page.select('#scene-select', baselineSceneId);
-  await page.waitForFunction(
-    (id) => window.__godsEyeView.sceneDirector._getSelectedScene().id !== id,
-    {},
-    targetSceneId,
-  );
-  await page.evaluate(() => {
-    window.__qaFormChanges = [];
-  });
-  await page.focus('#scene-select');
-  // Typeahead is native even when headless Chrome does not drive OS popups.
-  await page.keyboard.press('q');
-  const sceneSelection = await page.evaluate(() => ({
-    id: document.getElementById('scene-select').value,
-    selected: window.__godsEyeView.sceneDirector._getSelectedScene().id,
-    changes: window.__qaFormChanges,
-    focus: document.activeElement.id,
-    outline: getComputedStyle(document.activeElement).outlineStyle,
-  }));
   check(
-    'native typeahead reaches the Scene owner and keeps focus',
-    sceneSelection.id === targetSceneId &&
-      sceneSelection.selected === targetSceneId &&
-      sceneSelection.changes.at(-1) === targetSceneId &&
-      sceneSelection.focus === 'scene-select',
-    sceneSelection,
+    'NEW SCENE selects and names the new scene',
+    await page.evaluate(
+      () =>
+        window.__godsEyeView.sceneDirector._getSelectedScene().title ===
+          'QA selection fixture' && !document.getElementById('scene-select'),
+    ),
   );
-  check('keyboard focus remains visible', sceneSelection.outline === 'solid');
   const localized = new URL(page.url());
   localized.searchParams.set('lang', 'ru');
   await page.goto(localized.href, { waitUntil: 'domcontentloaded' });
@@ -420,11 +374,9 @@ try {
       });
   });
   const translated = await page.evaluate(() => {
-    const nodes = [
-      'scene-select',
-      'cctv-camera-select',
-      'hud-layout-select',
-    ].map((id) => document.getElementById(id));
+    const nodes = ['cctv-camera-select', 'hud-layout-select'].map((id) =>
+      document.getElementById(id),
+    );
     return (
       document.documentElement.lang === 'ru' &&
       nodes.every(

@@ -16,6 +16,8 @@ import { validateSceneDataPacks } from './packs/manifest.js';
 import { validateSceneCameras } from './cameraDocument.js';
 export { SCENE_DOCUMENT_LIMITS, SceneDocumentError } from './documentFields.js';
 import { validateSceneInteractions } from './interactions/document.js';
+import { STORY_TAG_LIMIT, isStoryTagList } from '../scenes/storyTags.js';
+import { STORY_THUMB_MAX_LENGTH, isStoryThumb } from '../scenes/storyThumb.js';
 export const SCENE_DOCUMENT_VERSION = 6;
 
 function visual(value, path, legacy) {
@@ -58,7 +60,12 @@ function visual(value, path, legacy) {
 
 /** Validate a parsed scene project without mutating it or applying any state. */
 export function validateSceneDocument(project) {
-  jsonTree(project, '$', { nodes: 0 });
+  jsonTree(project, '$', {
+    nodes: 0,
+    // A Stories card thumbnail is the one text allowed past the usual limit.
+    longText: (path) =>
+      /^\$\.scenes\.\d+\.storyThumb$/.test(path) ? STORY_THUMB_MAX_LENGTH : 0,
+  });
   fields(project, '$', [
     'version',
     'createdAt',
@@ -84,12 +91,34 @@ export function validateSceneDocument(project) {
       'releaseLayerIds',
       'appliedShotPacks',
       'shots',
+      'stories',
+      'storyThumb',
+      'storyTags',
       ...(version >= 4 ? ['anchors'] : []),
       ...(version >= 5 ? ['dataPacks'] : []),
     ]);
     uniqueId(scene, path, sceneIds);
     optional(scene, 'title', path, (v, p) => string(v, p, 4096));
     optional(scene, 'releaseLayerIds', path, ids);
+    // Published to the Stories page; absent when it is not.
+    optional(scene, 'stories', path, (value, field) => {
+      if (value !== true) fail(field, 'expected true');
+    });
+    // The Stories card's thumbnail and tags; absent until the author sets them.
+    optional(scene, 'storyThumb', path, (value, field) => {
+      if (!isStoryThumb(value))
+        fail(
+          field,
+          `expected a JPEG or PNG data URL, at most ${STORY_THUMB_MAX_LENGTH} characters`,
+        );
+    });
+    optional(scene, 'storyTags', path, (value, field) => {
+      if (!isStoryTagList(value))
+        fail(
+          field,
+          `expected at most ${STORY_TAG_LIMIT} different Stories tags`,
+        );
+    });
     optional(scene, 'appliedShotPacks', path, (packs, field) => {
       array(packs, field);
       const packIds = new Set();

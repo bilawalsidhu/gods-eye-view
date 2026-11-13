@@ -252,7 +252,12 @@
     "OPT-IN",
     "{minutes} min",
     "1 min/s",
-    "Status"
+    "Status",
+    "Region",
+    "Wind (km/h)",
+    "Story",
+    "STORY",
+    "Japan"
   ],
   "es": [
     "1 min/s",
@@ -417,7 +422,10 @@
     "NORAD: {id}",
     "Regional",
     "{datasets} · {tiles} · {packs}",
-    "VIRTUAL"
+    "VIRTUAL",
+    "Sensor",
+    "{count} acres",
+    "California"
   ],
   "fr": [
     "1 min/s",
@@ -641,7 +649,11 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "Maritime",
+    "Europe",
+    "Globe",
+    "Sources"
   ],
   "it": [
     "1 min/s",
@@ -848,7 +860,9 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "followers",
+    "California"
   ],
   "ja": [
     "1090 MHz",
@@ -1079,7 +1093,9 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "VIRTUAL"
+    "VIRTUAL",
+    "Sensor",
+    "{count} acres"
   ],
   "ru": [
     "1900–1945",
@@ -1277,7 +1293,9 @@
     "ICAO: {id}",
     "NORAD: {id}",
     "MMSI: {id}",
-    "Status"
+    "Status",
+    "Region",
+    "Japan"
   ],
   "uk": [
     "1900–1945",

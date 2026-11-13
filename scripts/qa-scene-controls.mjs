@@ -48,9 +48,7 @@ try {
   await page.click('[data-collapse-target="scene-panel"]');
   await page.click('#scene-new-btn');
   await page.waitForFunction(
-    () =>
-      document.querySelector('#scene-select option:checked')?.textContent ===
-      'QA Scene',
+    () => document.querySelector('#scene-name')?.textContent === 'QA Scene',
   );
   check(
     'New creates and selects a persisted empty scene',
@@ -368,7 +366,7 @@ try {
   await page.screenshot({ path: path.join(shots, 'narrow.png') });
   check(
     'Scene controls stay inside the narrow viewport',
-    await page.$eval('#scene-select', (element) => {
+    await page.$eval('#scene-name', (element) => {
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth;
     }),
@@ -398,7 +396,8 @@ try {
     await page.evaluate(
       () =>
         window.__godsEyeView.sceneDirector._project.scenes.length > 0 &&
-        document.querySelectorAll('#scene-select option').length > 0,
+        document.querySelector('#scene-name')?.textContent ===
+          window.__godsEyeView.sceneDirector._getSelectedScene()?.title,
     ),
   );
   check(

@@ -50,38 +50,52 @@ export function describeShot(shot) {
 
 /**
  * While a scene plays, the authoring and file actions here are off and STOP
- * is on. Otherwise a button is off when it would do nothing: DELETE and
- * CAPTURE SHOT without a scene, UPDATE SHOT without a selected shot, PLAY and
- * NEXT when no scene in the project has a shot (both continue into the
- * following scenes).
+ * is on. Otherwise a button is off when it would do nothing: DELETE, SAVE TO
+ * STORIES, THUMBNAIL and the tag chips without a scene, UPDATE SHOT
+ * without a selected shot, SAVE TO STORIES when the scene has no shot, PLAY
+ * and NEXT without a scene or when no scene in the project has a shot (both
+ * continue into the following scenes). CAPTURE SHOT without a scene starts
+ * one. EDIT DETAILS (which needs a shot) and SHARE SCENE keep their own
+ * checks during playback.
  */
 export function sceneButtonsDisabled(
   running,
   hasRun,
-  { hasScene = true, playableShots = 1, hasSelectedShot = true } = {},
+  {
+    hasScene = true,
+    sceneShots = 1,
+    playableShots = 1,
+    hasSelectedShot = true,
+  } = {},
 ) {
   const idleOff = {
     delete: !hasScene,
-    capture: !hasScene,
+    stories: !hasScene || sceneShots === 0,
+    thumb: !hasScene,
+    tags: !hasScene,
     update: !hasSelectedShot,
-    start: playableShots === 0,
-    next: playableShots === 0,
+    start: !hasScene || playableShots === 0,
+    next: !hasScene || playableShots === 0,
   };
   const disabled = {};
   for (const name of [
     'start',
     'next',
-    'select',
     'new',
     'delete',
     'capture',
     'update',
+    'thumb',
+    'tags',
+    'stories',
     'export',
     'import',
   ])
     disabled[name] = running || !!idleOff[name];
   disabled.stop = !running;
   disabled.download = !hasRun;
+  disabled.details = !hasScene || !hasSelectedShot;
+  disabled.share = !hasScene;
   return disabled;
 }
 

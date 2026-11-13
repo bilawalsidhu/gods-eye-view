@@ -1,0 +1,243 @@
+/* Stories, closed: the Stories button, its first-visit popup and the
+   back-to-story toast, which every GEV page shows. The rest of Stories'
+   styles (stories.css) load with Stories itself. */
+/* Ported from the GEV Stories prototype (gev-stories-real-globe.html), scoped to #gev-stories. */
+#gev-stories {
+  --bg-dark: #0a0a0f;
+  --glass-bg: rgba(12, 12, 20, 0.72);
+  --glass-strong: rgba(14, 14, 24, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.15);
+  --accent: #00d4ff;
+  --accent-dim: rgba(0, 212, 255, 0.15);
+  --accent-glow: rgba(0, 212, 255, 0.4);
+  --text-primary: #e8eaed;
+  --text-secondary: rgba(232, 234, 237, 0.64);
+  --text-dim: rgba(232, 234, 237, 0.42);
+  --menu-bg: #12121c;
+  --warn: #ffb45a;
+  --live: #ff4d4d;
+  --cable: #a9b8ff;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --panel-radius: 16px;
+  --btn-radius: 10px;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --review-h: 46px;
+  color-scheme: dark;
+}
+#gev-stories {
+  background: #050508;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+#gev-stories .glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+#gev-stories .tbtn {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--btn-radius);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  font: 500 12px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+#gev-stories .tbtn:hover {
+  border-color: var(--glass-border-hover);
+}
+#gev-stories .tbtn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+#gev-stories .tbtn.accent {
+  border-color: rgba(0, 212, 255, 0.55);
+  color: var(--accent);
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: 0 0 18px -6px var(--accent-glow);
+}
+#gev-stories .tbtn.accent:hover {
+  background: rgba(0, 212, 255, 0.14);
+}
+#gev-stories .tbtn.solid {
+  background: var(--accent);
+  color: #001820;
+  border-color: transparent;
+  font-weight: 600;
+}
+#gev-stories .h-pop {
+  position: absolute;
+  z-index: 9;
+  top: 84px;
+  right: 74px;
+  width: 300px;
+  padding: 16px;
+  border-radius: var(--panel-radius);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  animation: gsx-popIn 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+#gev-stories .h-pop::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: 60px;
+  width: 12px;
+  height: 12px;
+  background: var(--glass-strong);
+  border-left: 1px solid var(--glass-border);
+  border-top: 1px solid var(--glass-border);
+  transform: rotate(45deg);
+}
+#gev-stories .h-pop {
+  background: var(--glass-strong);
+}
+#gev-stories .h-pop .k {
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+#gev-stories .h-pop h2 {
+  font-size: 17px;
+  margin: 4px 0 6px;
+}
+#gev-stories .h-pop p {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+#gev-stories .h-pop .row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+#gev-stories .h-toast {
+  position: absolute;
+  z-index: 9;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 14px;
+  background: rgba(12, 12, 20, 0.92);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: gsx-popIn 0.25s ease;
+  max-width: calc(100% - 28px);
+}
+#gev-stories .h-toast[hidden] {
+  display: none;
+}
+#gev-stories .h-toast b {
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+#gev-stories .h-toast span {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+#gev-stories .h-toast .tbtn {
+  height: 32px;
+  flex: none;
+}
+
+/* The root only hosts fixed layers; it takes no room of its own. */
+#gev-stories {
+  position: static;
+  height: 0 !important;
+  overflow: visible !important;
+  background: none !important;
+}
+
+/* GEV: the Stories entry sits in GEV's top-right row. */
+#gev-stories .gs-entry {
+  position: fixed;
+  z-index: 1200;
+  height: 36px;
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+#gev-stories .gs-entry svg {
+  width: 17px;
+  height: 17px;
+}
+body:has(#loading-screen:not(.hidden)) #gev-stories .gs-entry,
+body:has(#loading-screen:not(.hidden)) #gev-stories .gs-pop,
+body.recording-mode #gev-stories .gs-entry,
+body.recording-mode #gev-stories .gs-pop,
+body.ui-clean-view #gev-stories .gs-entry,
+body.ui-clean-view #gev-stories .gs-pop {
+  display: none;
+}
+#gev-stories .gs-pop {
+  position: fixed;
+  z-index: 1201;
+  left: auto;
+}
+#gev-stories .gs-hosted-toast {
+  position: fixed;
+  z-index: 1201;
+  bottom: 110px;
+}
+@media (max-width: 700px) {
+  #gev-stories .gs-pop {
+    left: 12px;
+    right: 12px !important;
+    width: auto;
+  }
+}
+/* Shared with the screens' panels (stories.css). */
+@keyframes gsx-popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Over a live globe a backdrop blur is redrawn every frame (costly on
+   software WebGL): the closed-state pieces use a near-opaque fill instead. */
+#gev-stories .gs-entry,
+#gev-stories .gs-pop,
+#gev-stories .gs-hosted-toast {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+#gev-stories .gs-entry {
+  background: rgba(6, 24, 34, 0.92);
+}
+#gev-stories .gs-pop,
+#gev-stories .gs-hosted-toast {
+  background: rgba(12, 12, 20, 0.95);
+}
