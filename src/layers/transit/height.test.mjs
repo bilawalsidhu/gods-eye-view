@@ -82,7 +82,11 @@ function terrain(t, { costMs = 0, surface = () => 100, provider = {} } = {}) {
 test('a point is read from the terrain once and reused until its reuse time passes', (t) => {
   const { height, reads, clock, world } = terrain(t);
   const first = height.requestHeight(42.36, -71.06);
-  assert.deepEqual(first, { cell: '42.36,-71.06', height: 100 + LIFT, prior: null });
+  assert.deepEqual(first, {
+    cell: '42.36,-71.06',
+    height: 100 + LIFT,
+    prior: null,
+  });
   for (let i = 0; i < 500; i++) height.requestHeight(42.36, -71.06);
   assert.equal(reads.length, 1, '501 requests, one terrain read');
 
@@ -147,7 +151,10 @@ test('new points stop being read once a window has spent its budget', (t) => {
     [null, null, null],
     'a point in a cell never read waits',
   );
-  assert.ok(reads.length * costMs < TERRAIN_READ_BUDGET_MS + costMs, 'the overrun is one read at most');
+  assert.ok(
+    reads.length * costMs < TERRAIN_READ_BUDGET_MS + costMs,
+    'the overrun is one read at most',
+  );
 
   // A new point in a cell that was read borrows that cell's height.
   const borrowed = height.requestHeight(42.36004, -71.06);
@@ -168,8 +175,15 @@ test('new points stop being read once a window has spent its budget', (t) => {
 test("a vehicle's own position is read even when the window is spent", (t) => {
   const { height, reads } = terrain(t, { costMs: TERRAIN_READ_BUDGET_MS });
   height.requestHeight(42.36, -71.06);
-  assert.equal(height.requestHeight(42.37, -71.07).height, null, 'a trail point waits');
-  assert.equal(height.requestHeight(42.38, -71.08, null, TERRAIN_NEED.MARKER).height, 100 + LIFT);
+  assert.equal(
+    height.requestHeight(42.37, -71.07).height,
+    null,
+    'a trail point waits',
+  );
+  assert.equal(
+    height.requestHeight(42.38, -71.08, null, TERRAIN_NEED.MARKER).height,
+    100 + LIFT,
+  );
   assert.equal(reads.length, 2);
 });
 
@@ -178,12 +192,21 @@ test('undrawn trail history leaves most of the budget to the paths markers are d
   const { height, reads } = terrain(t, { costMs });
   // New points, one per floor cell: history first, as a pass offers them.
   let lon = -71;
-  const ask = (need) => height.requestHeight(42, (lon -= 0.001), null, need).height;
+  const ask = (need) =>
+    height.requestHeight(42, (lon -= 0.001), null, need).height;
   const history = Array.from({ length: 30 }, () => ask(TERRAIN_NEED.HISTORY));
   const read = history.filter((h) => h !== null).length;
-  assert.equal(read, TERRAIN_READ_BUDGET_MS / 4, 'history stops at a quarter of the budget');
+  assert.equal(
+    read,
+    TERRAIN_READ_BUDGET_MS / 4,
+    'history stops at a quarter of the budget',
+  );
   const path = Array.from({ length: 30 }, () => ask(TERRAIN_NEED.PATH));
-  assert.equal(path.filter((h) => h !== null).length, TERRAIN_READ_BUDGET_MS - read, 'the path takes the rest');
+  assert.equal(
+    path.filter((h) => h !== null).length,
+    TERRAIN_READ_BUDGET_MS - read,
+    'the path takes the rest',
+  );
   assert.equal(ask(TERRAIN_NEED.HISTORY), null);
   assert.equal(ask(TERRAIN_NEED.MARKER), 100 + LIFT, 'a marker is still read');
   assert.equal(reads.length, TERRAIN_READ_BUDGET_MS + 1);
@@ -191,8 +214,13 @@ test('undrawn trail history leaves most of the budget to the paths markers are d
 
 test('held points keep their last height while re-reads are over budget, and the longest-held are re-read first so none starves', (t) => {
   const costMs = TERRAIN_REFRESH_BUDGET_MS / 2;
-  const { height, reads, clock, world, nextWindow } = terrain(t, { surface: () => 50 });
-  const points = Array.from({ length: 40 }, (_, i) => [42.36, -71.06 - i * 0.001]);
+  const { height, reads, clock, world, nextWindow } = terrain(t, {
+    surface: () => 50,
+  });
+  const points = Array.from({ length: 40 }, (_, i) => [
+    42.36,
+    -71.06 - i * 0.001,
+  ]);
   for (const [lat, lon] of points) height.requestHeight(lat, lon);
   assert.equal(reads.length, 40);
 
@@ -200,12 +228,21 @@ test('held points keep their last height while re-reads are over budget, and the
   world.surface = () => 80;
   clock.now += TERRAIN_HEIGHT_FRESH_MS;
   reads.length = 0;
-  const pass = () => points.map(([lat, lon]) => height.requestHeight(lat, lon).height);
+  const pass = () =>
+    points.map(([lat, lon]) => height.requestHeight(lat, lon).height);
   const first = pass();
   const perWindow = Math.ceil(TERRAIN_REFRESH_BUDGET_MS / costMs);
-  assert.equal(reads.length, perWindow, 'one window re-reads its budget and no more');
+  assert.equal(
+    reads.length,
+    perWindow,
+    'one window re-reads its budget and no more',
+  );
   assert.deepEqual(first.slice(0, perWindow), Array(perWindow).fill(80 + LIFT));
-  assert.deepEqual(first.slice(perWindow), Array(40 - perWindow).fill(50 + LIFT), 'the rest keep their last height');
+  assert.deepEqual(
+    first.slice(perWindow),
+    Array(40 - perWindow).fill(50 + LIFT),
+    'the rest keep their last height',
+  );
 
   // Pass after pass, a window apart: the budget moves down the list instead
   // of returning to the first points, whose reuse time runs out again long
@@ -220,13 +257,21 @@ test('held points keep their last height while re-reads are over budget, and the
     for (const point of reads) turns.set(point, (turns.get(point) || 0) + 1);
   }
   assert.equal(turns.size, 40, 'every point was re-read in one cycle');
-  assert.ok([...turns.values()].every((count) => count === 1), 'and none twice before the others once');
-  assert.ok(cycle * TERRAIN_READ_WINDOW_MS > TERRAIN_HEIGHT_FRESH_MS, 'the cycle is longer than the reuse time, so the first points were stale again');
+  assert.ok(
+    [...turns.values()].every((count) => count === 1),
+    'and none twice before the others once',
+  );
+  assert.ok(
+    cycle * TERRAIN_READ_WINDOW_MS > TERRAIN_HEIGHT_FRESH_MS,
+    'the cycle is longer than the reuse time, so the first points were stale again',
+  );
   assert.deepEqual(pass().slice(-1), [80 + LIFT]);
 });
 
 test('once the camera and the tiles have settled a height is kept until either changes', (t) => {
-  const { height, state, globe, reads, clock, world } = terrain(t, { surface: () => 10 });
+  const { height, state, globe, reads, clock, world } = terrain(t, {
+    surface: () => 10,
+  });
   const read = () => height.requestHeight(42.36, -71.06).height;
   assert.equal(read(), 10 + LIFT);
   // Still settling: the point falls due and is read again.
@@ -243,7 +288,11 @@ test('once the camera and the tiles have settled a height is kept until either c
   assert.equal(reads.length, 2);
 
   // The camera moves: the globe may draw the point from a finer tile.
-  state._viewer.camera.positionCartographic = { longitude: 0, latitude: 0, height: 250 };
+  state._viewer.camera.positionCartographic = {
+    longitude: 0,
+    latitude: 0,
+    height: 250,
+  };
   clock.now += TERRAIN_READ_WINDOW_MS;
   assert.equal(read(), 99 + LIFT);
   assert.equal(reads.length, 3);
@@ -324,7 +373,10 @@ test('the points kept stay bounded', (t) => {
   const { height } = terrain(t);
   const total = TERRAIN_HEIGHT_CACHE_MAX + 5_000;
   for (let i = 0; i < total; i++)
-    height.requestHeight(10 + Math.floor(i / 1000) * 0.001, 20 + (i % 1000) * 0.0001);
+    height.requestHeight(
+      10 + Math.floor(i / 1000) * 0.001,
+      20 + (i % 1000) * 0.0001,
+    );
   const { held, reads } = height.terrainStats();
   assert.equal(reads, total);
   assert.ok(held <= TERRAIN_HEIGHT_CACHE_MAX, `${held} held`);
@@ -355,11 +407,20 @@ test('a fleet rereading every trail fix reads each point once, not once per requ
     }
   };
   height.anchorFloors();
-  for (let i = 0; i < FLOOR_REREAD_ATTEMPTS; i++) t.mock.timers.tick(FLOOR_REREAD_MS);
+  for (let i = 0; i < FLOOR_REREAD_ATTEMPTS; i++)
+    t.mock.timers.tick(FLOOR_REREAD_MS);
   assert.equal(requests, 600 * 40 * 2 * (FLOOR_REREAD_ATTEMPTS + 1));
   assert.equal(new Set(reads).size, 600 * 40);
-  assert.equal(reads.length, 600 * 40, `${requests} requests, ${reads.length} terrain reads`);
-  assert.ok(fleet.every((entry) => entry.heightM === 100 + LIFT && entry.heightResolved));
+  assert.equal(
+    reads.length,
+    600 * 40,
+    `${requests} requests, ${reads.length} terrain reads`,
+  );
+  assert.ok(
+    fleet.every(
+      (entry) => entry.heightM === 100 + LIFT && entry.heightResolved,
+    ),
+  );
 });
 
 test('a reread cycle outlasts its attempts while trail points still wait for a read, then stops', (t) => {
@@ -369,7 +430,10 @@ test('a reread cycle outlasts its attempts while trail points still wait for a r
   const entry = {
     key: 'bus',
     // One fix per floor cell, so nothing can be borrowed.
-    fixes: Array.from({ length: 60 }, (_, i) => ({ lat: 42, lon: -71 + i * 0.001 })),
+    fixes: Array.from({ length: 60 }, (_, i) => ({
+      lat: 42,
+      lon: -71 + i * 0.001,
+    })),
   };
   state._vehicles.set(entry.key, entry);
   state._visible.add(entry);
@@ -384,7 +448,10 @@ test('a reread cycle outlasts its attempts while trail points still wait for a r
     passes++;
   }
   assert.equal(new Set(reads).size, 60, 'every fix was read in the end');
-  assert.ok(passes > FLOOR_REREAD_ATTEMPTS + 1, `${passes} passes: the cycle kept going for the unread fixes`);
+  assert.ok(
+    passes > FLOOR_REREAD_ATTEMPTS + 1,
+    `${passes} passes: the cycle kept going for the unread fixes`,
+  );
   assert.ok(passes < 120, `${passes} passes: and stopped once none waited`);
   assert.equal(state._floorTimer, null);
 });
