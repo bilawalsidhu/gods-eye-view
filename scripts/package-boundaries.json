@@ -238,6 +238,8 @@
       "server/providers/common/compress.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js",
       "server/providers/aircraft/opensky.js",
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
