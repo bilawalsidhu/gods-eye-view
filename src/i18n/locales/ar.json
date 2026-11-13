@@ -3831,6 +3831,8 @@
   "(+{minutes} min late)": "(تأخير {minutes} د)",
   "Exit cockpit to fly to a train": "اخرج من القمرة للانتقال إلى قطار",
   "Photo © {photographer}": "صورة © {photographer}",
+  "Photo: {photographer} · {licence}": "صورة: {photographer} · {licence}",
+  "Photo · {licence}": "صورة · {licence}",
   "The shared flight isn't reporting now — showing where it was last seen": "الرحلة المشتركة: لا بيانات واردة الآن — يُعرض آخر موضع معروف",
   "The shared flight isn't reporting now — showing where it was at {time}": "الرحلة المشتركة: لا بيانات واردة الآن — يُعرض موضعها عند {time}",
   "The shared military flight isn't reporting now — showing where it was last seen": "الرحلة العسكرية المشتركة: لا بيانات واردة الآن — يُعرض آخر موضع معروف",

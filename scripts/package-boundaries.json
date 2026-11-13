@@ -1479,7 +1479,8 @@
       "src/sources/live/index.js",
       "src/sources/live/standalone.js",
       "src/sources/live/vessels.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": []
   },
@@ -1701,7 +1702,9 @@
       "src/i18n/locales/sv.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/vessels/photos.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": ["cesium"]
   },
@@ -3782,7 +3785,9 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
-      "src/ui/stores/dataLibrary.js"
+      "src/ui/stores/dataLibrary.js",
+      "src/data/openVesselPhoto.js",
+      "src/layers/vessels/photos.js"
     ],
     "external": [
       "hls.js",
@@ -4507,7 +4512,9 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/layers/vessels/photos.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": [
       "hls.js",
@@ -5759,7 +5766,8 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

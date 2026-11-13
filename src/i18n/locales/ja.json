@@ -3426,6 +3426,8 @@
   "(+{minutes} min late)": "（{minutes}分遅れ）",
   "Exit cockpit to fly to a train": "列車へ移動するにはコックピットを終了してください",
   "Photo © {photographer}": "写真 © {photographer}",
+  "Photo: {photographer} · {licence}": "写真：{photographer} · {licence}",
+  "Photo · {licence}": "写真 · {licence}",
   "The shared flight isn't reporting now — showing where it was last seen": "共有されたフライトは現在報告していません。最後に確認された位置を表示しています",
   "The shared flight isn't reporting now — showing where it was at {time}": "共有されたフライトは現在報告していません。{time}時点の位置を表示しています",
   "The shared military flight isn't reporting now — showing where it was last seen": "共有された軍用機は現在報告していません。最後に確認された位置を表示しています",
