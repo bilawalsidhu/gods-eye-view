@@ -1,0 +1,3320 @@
+[
+  {
+    "iso2": "AD",
+    "iso3": "AND",
+    "name": "Andorra",
+    "flag": "🇦🇩",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "AE",
+    "iso3": "ARE",
+    "name": "United Arab Emirates",
+    "flag": "🇦🇪",
+    "regPrefixes": [
+      "A6"
+    ],
+    "icao24Ranges": [
+      [
+        "896000",
+        "896FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AF",
+    "iso3": "AFG",
+    "name": "Afghanistan",
+    "flag": "🇦🇫",
+    "regPrefixes": [
+      "YA"
+    ],
+    "icao24Ranges": [
+      [
+        "700000",
+        "700FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AG",
+    "iso3": "ATG",
+    "name": "Antigua and Barbuda",
+    "flag": "🇦🇬",
+    "regPrefixes": [
+      "V2"
+    ],
+    "icao24Ranges": [
+      [
+        "0CA000",
+        "0CA3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AI",
+    "iso3": "AIA",
+    "name": "Anguilla",
+    "flag": "🇦🇮",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "AL",
+    "iso3": "ALB",
+    "name": "Albania",
+    "flag": "🇦🇱",
+    "regPrefixes": [
+      "ZA"
+    ],
+    "icao24Ranges": [
+      [
+        "501000",
+        "5013FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AM",
+    "iso3": "ARM",
+    "name": "Armenia",
+    "flag": "🇦🇲",
+    "regPrefixes": [
+      "EK"
+    ],
+    "icao24Ranges": [
+      [
+        "600000",
+        "6003FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AO",
+    "iso3": "AGO",
+    "name": "Angola",
+    "flag": "🇦🇴",
+    "regPrefixes": [
+      "D2"
+    ],
+    "icao24Ranges": [
+      [
+        "090000",
+        "090FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AQ",
+    "iso3": "ATA",
+    "name": "Antarctica",
+    "flag": "🇦🇶",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "AR",
+    "iso3": "ARG",
+    "name": "Argentina",
+    "flag": "🇦🇷",
+    "regPrefixes": [
+      "LV",
+      "LQ"
+    ],
+    "icao24Ranges": [
+      [
+        "E00000",
+        "E3FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AS",
+    "iso3": "ASM",
+    "name": "American Samoa",
+    "flag": "🇦🇸",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "AT",
+    "iso3": "AUT",
+    "name": "Austria",
+    "flag": "🇦🇹",
+    "regPrefixes": [
+      "OE"
+    ],
+    "icao24Ranges": [
+      [
+        "440000",
+        "447FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AU",
+    "iso3": "AUS",
+    "name": "Australia",
+    "flag": "🇦🇺",
+    "regPrefixes": [
+      "VH"
+    ],
+    "icao24Ranges": [
+      [
+        "7C0000",
+        "7FFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "AW",
+    "iso3": "ABW",
+    "name": "Aruba",
+    "flag": "🇦🇼",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "AX",
+    "iso3": "ALA",
+    "name": "Åland Islands",
+    "flag": "🇦🇽",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "AZ",
+    "iso3": "AZE",
+    "name": "Azerbaijan",
+    "flag": "🇦🇿",
+    "regPrefixes": [
+      "4K"
+    ],
+    "icao24Ranges": [
+      [
+        "600800",
+        "600BFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BA",
+    "iso3": "BIH",
+    "name": "Bosnia and Herzegovina",
+    "flag": "🇧🇦",
+    "regPrefixes": [
+      "E7"
+    ],
+    "icao24Ranges": [
+      [
+        "513000",
+        "5133FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BB",
+    "iso3": "BRB",
+    "name": "Barbados",
+    "flag": "🇧🇧",
+    "regPrefixes": [
+      "8P"
+    ],
+    "icao24Ranges": [
+      [
+        "0AA000",
+        "0AA3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BD",
+    "iso3": "BGD",
+    "name": "Bangladesh",
+    "flag": "🇧🇩",
+    "regPrefixes": [
+      "S2"
+    ],
+    "icao24Ranges": [
+      [
+        "702000",
+        "702FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BE",
+    "iso3": "BEL",
+    "name": "Belgium",
+    "flag": "🇧🇪",
+    "regPrefixes": [
+      "OO"
+    ],
+    "icao24Ranges": [
+      [
+        "448000",
+        "44FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BF",
+    "iso3": "BFA",
+    "name": "Burkina Faso",
+    "flag": "🇧🇫",
+    "regPrefixes": [
+      "XT"
+    ],
+    "icao24Ranges": [
+      [
+        "09C000",
+        "09CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BG",
+    "iso3": "BGR",
+    "name": "Bulgaria",
+    "flag": "🇧🇬",
+    "regPrefixes": [
+      "LZ"
+    ],
+    "icao24Ranges": [
+      [
+        "450000",
+        "457FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BH",
+    "iso3": "BHR",
+    "name": "Bahrain",
+    "flag": "🇧🇭",
+    "regPrefixes": [
+      "A9C"
+    ],
+    "icao24Ranges": [
+      [
+        "894000",
+        "894FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BI",
+    "iso3": "BDI",
+    "name": "Burundi",
+    "flag": "🇧🇮",
+    "regPrefixes": [
+      "9U"
+    ],
+    "icao24Ranges": [
+      [
+        "032000",
+        "032FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BJ",
+    "iso3": "BEN",
+    "name": "Benin",
+    "flag": "🇧🇯",
+    "regPrefixes": [
+      "TY"
+    ],
+    "icao24Ranges": [
+      [
+        "094000",
+        "0943FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BL",
+    "iso3": "BLM",
+    "name": "Saint Barthélemy",
+    "flag": "🇧🇱",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "BM",
+    "iso3": "BMU",
+    "name": "Bermuda",
+    "flag": "🇧🇲",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "BN",
+    "iso3": "BRN",
+    "name": "Brunei Darussalam",
+    "flag": "🇧🇳",
+    "regPrefixes": [
+      "V8"
+    ],
+    "icao24Ranges": [
+      [
+        "895000",
+        "8953FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BO",
+    "iso3": "BOL",
+    "name": "Bolivia",
+    "flag": "🇧🇴",
+    "regPrefixes": [
+      "CP"
+    ],
+    "icao24Ranges": [
+      [
+        "E94000",
+        "E94FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BQ",
+    "iso3": "BES",
+    "name": "Bonaire, Sint Eustatius and Saba",
+    "flag": "🇧🇶",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "BR",
+    "iso3": "BRA",
+    "name": "Brazil",
+    "flag": "🇧🇷",
+    "regPrefixes": [
+      "PP",
+      "PR",
+      "PS",
+      "PT",
+      "PU"
+    ],
+    "icao24Ranges": [
+      [
+        "E40000",
+        "E7FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BS",
+    "iso3": "BHS",
+    "name": "Bahamas",
+    "flag": "🇧🇸",
+    "regPrefixes": [
+      "C6"
+    ],
+    "icao24Ranges": [
+      [
+        "0A8000",
+        "0A8FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BT",
+    "iso3": "BTN",
+    "name": "Bhutan",
+    "flag": "🇧🇹",
+    "regPrefixes": [
+      "A5"
+    ],
+    "icao24Ranges": [
+      [
+        "680000",
+        "6803FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BV",
+    "iso3": "BVT",
+    "name": "Bouvet Island",
+    "flag": "🇧🇻",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "BW",
+    "iso3": "BWA",
+    "name": "Botswana",
+    "flag": "🇧🇼",
+    "regPrefixes": [
+      "A2"
+    ],
+    "icao24Ranges": [
+      [
+        "030000",
+        "0303FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BY",
+    "iso3": "BLR",
+    "name": "Belarus",
+    "flag": "🇧🇾",
+    "regPrefixes": [
+      "EW"
+    ],
+    "icao24Ranges": [
+      [
+        "510000",
+        "5103FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "BZ",
+    "iso3": "BLZ",
+    "name": "Belize",
+    "flag": "🇧🇿",
+    "regPrefixes": [
+      "V3"
+    ],
+    "icao24Ranges": [
+      [
+        "0AB000",
+        "0AB3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CA",
+    "iso3": "CAN",
+    "name": "Canada",
+    "flag": "🇨🇦",
+    "regPrefixes": [
+      "C"
+    ],
+    "icao24Ranges": [
+      [
+        "C00000",
+        "C3FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CC",
+    "iso3": "CCK",
+    "name": "Cocos (Keeling) Islands",
+    "flag": "🇨🇨",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "CD",
+    "iso3": "COD",
+    "name": "Democratic Republic of the Congo",
+    "flag": "🇨🇩",
+    "regPrefixes": [
+      "9Q"
+    ],
+    "icao24Ranges": [
+      [
+        "08C000",
+        "08CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CF",
+    "iso3": "CAF",
+    "name": "Central African Republic",
+    "flag": "🇨🇫",
+    "regPrefixes": [
+      "TL"
+    ],
+    "icao24Ranges": [
+      [
+        "06C000",
+        "06CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CG",
+    "iso3": "COG",
+    "name": "Congo",
+    "flag": "🇨🇬",
+    "regPrefixes": [
+      "TN"
+    ],
+    "icao24Ranges": [
+      [
+        "036000",
+        "036FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CH",
+    "iso3": "CHE",
+    "name": "Switzerland",
+    "flag": "🇨🇭",
+    "regPrefixes": [
+      "HB"
+    ],
+    "icao24Ranges": [
+      [
+        "4B0000",
+        "4B7FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CI",
+    "iso3": "CIV",
+    "name": "Côte d'Ivoire",
+    "flag": "🇨🇮",
+    "regPrefixes": [
+      "TU"
+    ],
+    "icao24Ranges": [
+      [
+        "038000",
+        "038FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CK",
+    "iso3": "COK",
+    "name": "Cook Islands",
+    "flag": "🇨🇰",
+    "regPrefixes": [],
+    "icao24Ranges": [
+      [
+        "901000",
+        "9013FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CL",
+    "iso3": "CHL",
+    "name": "Chile",
+    "flag": "🇨🇱",
+    "regPrefixes": [
+      "CC"
+    ],
+    "icao24Ranges": [
+      [
+        "E80000",
+        "E80FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CM",
+    "iso3": "CMR",
+    "name": "Cameroon",
+    "flag": "🇨🇲",
+    "regPrefixes": [
+      "TJ"
+    ],
+    "icao24Ranges": [
+      [
+        "034000",
+        "034FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CN",
+    "iso3": "CHN",
+    "name": "China",
+    "flag": "🇨🇳",
+    "regPrefixes": [
+      "B"
+    ],
+    "icao24Ranges": [
+      [
+        "780000",
+        "7BFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CO",
+    "iso3": "COL",
+    "name": "Colombia",
+    "flag": "🇨🇴",
+    "regPrefixes": [
+      "HK"
+    ],
+    "icao24Ranges": [
+      [
+        "0AC000",
+        "0ACFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CR",
+    "iso3": "CRI",
+    "name": "Costa Rica",
+    "flag": "🇨🇷",
+    "regPrefixes": [
+      "TI"
+    ],
+    "icao24Ranges": [
+      [
+        "0AE000",
+        "0AEFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CU",
+    "iso3": "CUB",
+    "name": "Cuba",
+    "flag": "🇨🇺",
+    "regPrefixes": [
+      "CU"
+    ],
+    "icao24Ranges": [
+      [
+        "0B0000",
+        "0B0FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CV",
+    "iso3": "CPV",
+    "name": "Cabo Verde",
+    "flag": "🇨🇻",
+    "regPrefixes": [
+      "D4"
+    ],
+    "icao24Ranges": [
+      [
+        "096000",
+        "0963FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CW",
+    "iso3": "CUW",
+    "name": "Curaçao",
+    "flag": "🇨🇼",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "CX",
+    "iso3": "CXR",
+    "name": "Christmas Island",
+    "flag": "🇨🇽",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "CY",
+    "iso3": "CYP",
+    "name": "Cyprus",
+    "flag": "🇨🇾",
+    "regPrefixes": [
+      "5B"
+    ],
+    "icao24Ranges": [
+      [
+        "4C8000",
+        "4C83FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "CZ",
+    "iso3": "CZE",
+    "name": "Czechia",
+    "flag": "🇨🇿",
+    "regPrefixes": [
+      "OK"
+    ],
+    "icao24Ranges": [
+      [
+        "498000",
+        "49FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "DE",
+    "iso3": "DEU",
+    "name": "Germany",
+    "flag": "🇩🇪",
+    "regPrefixes": [
+      "D"
+    ],
+    "icao24Ranges": [
+      [
+        "3C0000",
+        "3FFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "DJ",
+    "iso3": "DJI",
+    "name": "Djibouti",
+    "flag": "🇩🇯",
+    "regPrefixes": [
+      "J2"
+    ],
+    "icao24Ranges": [
+      [
+        "098000",
+        "0983FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "DK",
+    "iso3": "DNK",
+    "name": "Denmark",
+    "flag": "🇩🇰",
+    "regPrefixes": [
+      "OY"
+    ],
+    "icao24Ranges": [
+      [
+        "458000",
+        "45FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "DM",
+    "iso3": "DMA",
+    "name": "Dominica",
+    "flag": "🇩🇲",
+    "regPrefixes": [
+      "J7"
+    ],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "DO",
+    "iso3": "DOM",
+    "name": "Dominican Republic",
+    "flag": "🇩🇴",
+    "regPrefixes": [
+      "HI"
+    ],
+    "icao24Ranges": [
+      [
+        "0C4000",
+        "0C4FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "DZ",
+    "iso3": "DZA",
+    "name": "Algeria",
+    "flag": "🇩🇿",
+    "regPrefixes": [
+      "7T"
+    ],
+    "icao24Ranges": [
+      [
+        "0A0000",
+        "0A7FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "EC",
+    "iso3": "ECU",
+    "name": "Ecuador",
+    "flag": "🇪🇨",
+    "regPrefixes": [
+      "HC"
+    ],
+    "icao24Ranges": [
+      [
+        "E84000",
+        "E84FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "EE",
+    "iso3": "EST",
+    "name": "Estonia",
+    "flag": "🇪🇪",
+    "regPrefixes": [
+      "ES"
+    ],
+    "icao24Ranges": [
+      [
+        "511000",
+        "5113FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "EG",
+    "iso3": "EGY",
+    "name": "Egypt",
+    "flag": "🇪🇬",
+    "regPrefixes": [
+      "SU"
+    ],
+    "icao24Ranges": [
+      [
+        "010000",
+        "017FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "EH",
+    "iso3": "ESH",
+    "name": "Western Sahara",
+    "flag": "🇪🇭",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "ER",
+    "iso3": "ERI",
+    "name": "Eritrea",
+    "flag": "🇪🇷",
+    "regPrefixes": [
+      "E3"
+    ],
+    "icao24Ranges": [
+      [
+        "202000",
+        "2023FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ES",
+    "iso3": "ESP",
+    "name": "Spain",
+    "flag": "🇪🇸",
+    "regPrefixes": [
+      "EC"
+    ],
+    "icao24Ranges": [
+      [
+        "340000",
+        "37FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ET",
+    "iso3": "ETH",
+    "name": "Ethiopia",
+    "flag": "🇪🇹",
+    "regPrefixes": [
+      "ET"
+    ],
+    "icao24Ranges": [
+      [
+        "040000",
+        "040FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "FI",
+    "iso3": "FIN",
+    "name": "Finland",
+    "flag": "🇫🇮",
+    "regPrefixes": [
+      "OH"
+    ],
+    "icao24Ranges": [
+      [
+        "460000",
+        "467FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "FJ",
+    "iso3": "FJI",
+    "name": "Fiji",
+    "flag": "🇫🇯",
+    "regPrefixes": [
+      "DQ"
+    ],
+    "icao24Ranges": [
+      [
+        "C88000",
+        "C88FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "FK",
+    "iso3": "FLK",
+    "name": "Falkland Islands (Malvinas)",
+    "flag": "🇫🇰",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "FM",
+    "iso3": "FSM",
+    "name": "Micronesia",
+    "flag": "🇫🇲",
+    "regPrefixes": [
+      "V6"
+    ],
+    "icao24Ranges": [
+      [
+        "681000",
+        "6813FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "FO",
+    "iso3": "FRO",
+    "name": "Faroe Islands",
+    "flag": "🇫🇴",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "FR",
+    "iso3": "FRA",
+    "name": "France",
+    "flag": "🇫🇷",
+    "regPrefixes": [
+      "F"
+    ],
+    "icao24Ranges": [
+      [
+        "380000",
+        "3BFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GA",
+    "iso3": "GAB",
+    "name": "Gabon",
+    "flag": "🇬🇦",
+    "regPrefixes": [
+      "TR"
+    ],
+    "icao24Ranges": [
+      [
+        "03E000",
+        "03EFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GB",
+    "iso3": "GBR",
+    "name": "United Kingdom",
+    "flag": "🇬🇧",
+    "regPrefixes": [
+      "G"
+    ],
+    "icao24Ranges": [
+      [
+        "400000",
+        "43FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GD",
+    "iso3": "GRD",
+    "name": "Grenada",
+    "flag": "🇬🇩",
+    "regPrefixes": [
+      "J3"
+    ],
+    "icao24Ranges": [
+      [
+        "0CC000",
+        "0CC3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GE",
+    "iso3": "GEO",
+    "name": "Georgia",
+    "flag": "🇬🇪",
+    "regPrefixes": [
+      "4L"
+    ],
+    "icao24Ranges": [
+      [
+        "514000",
+        "5143FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GF",
+    "iso3": "GUF",
+    "name": "French Guiana",
+    "flag": "🇬🇫",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GG",
+    "iso3": "GGY",
+    "name": "Guernsey",
+    "flag": "🇬🇬",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GH",
+    "iso3": "GHA",
+    "name": "Ghana",
+    "flag": "🇬🇭",
+    "regPrefixes": [
+      "9G"
+    ],
+    "icao24Ranges": [
+      [
+        "044000",
+        "044FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GI",
+    "iso3": "GIB",
+    "name": "Gibraltar",
+    "flag": "🇬🇮",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GL",
+    "iso3": "GRL",
+    "name": "Greenland",
+    "flag": "🇬🇱",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GM",
+    "iso3": "GMB",
+    "name": "Gambia",
+    "flag": "🇬🇲",
+    "regPrefixes": [
+      "C5"
+    ],
+    "icao24Ranges": [
+      [
+        "09A000",
+        "09AFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GN",
+    "iso3": "GIN",
+    "name": "Guinea",
+    "flag": "🇬🇳",
+    "regPrefixes": [
+      "3X"
+    ],
+    "icao24Ranges": [
+      [
+        "046000",
+        "046FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GP",
+    "iso3": "GLP",
+    "name": "Guadeloupe",
+    "flag": "🇬🇵",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GQ",
+    "iso3": "GNQ",
+    "name": "Equatorial Guinea",
+    "flag": "🇬🇶",
+    "regPrefixes": [
+      "3C"
+    ],
+    "icao24Ranges": [
+      [
+        "042000",
+        "042FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GR",
+    "iso3": "GRC",
+    "name": "Greece",
+    "flag": "🇬🇷",
+    "regPrefixes": [
+      "SX"
+    ],
+    "icao24Ranges": [
+      [
+        "468000",
+        "46FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GS",
+    "iso3": "SGS",
+    "name": "South Georgia and the South Sandwich Islands",
+    "flag": "🇬🇸",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GT",
+    "iso3": "GTM",
+    "name": "Guatemala",
+    "flag": "🇬🇹",
+    "regPrefixes": [
+      "TG"
+    ],
+    "icao24Ranges": [
+      [
+        "0B4000",
+        "0B4FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GU",
+    "iso3": "GUM",
+    "name": "Guam",
+    "flag": "🇬🇺",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "GW",
+    "iso3": "GNB",
+    "name": "Guinea-Bissau",
+    "flag": "🇬🇼",
+    "regPrefixes": [
+      "J5"
+    ],
+    "icao24Ranges": [
+      [
+        "048000",
+        "0483FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "GY",
+    "iso3": "GUY",
+    "name": "Guyana",
+    "flag": "🇬🇾",
+    "regPrefixes": [
+      "8R"
+    ],
+    "icao24Ranges": [
+      [
+        "0B6000",
+        "0B6FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "HK",
+    "iso3": "HKG",
+    "name": "Hong Kong",
+    "flag": "🇭🇰",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "HM",
+    "iso3": "HMD",
+    "name": "Heard Island and McDonald Islands",
+    "flag": "🇭🇲",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "HN",
+    "iso3": "HND",
+    "name": "Honduras",
+    "flag": "🇭🇳",
+    "regPrefixes": [
+      "HR"
+    ],
+    "icao24Ranges": [
+      [
+        "0BA000",
+        "0BAFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "HR",
+    "iso3": "HRV",
+    "name": "Croatia",
+    "flag": "🇭🇷",
+    "regPrefixes": [
+      "9A"
+    ],
+    "icao24Ranges": [
+      [
+        "501C00",
+        "501FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "HT",
+    "iso3": "HTI",
+    "name": "Haiti",
+    "flag": "🇭🇹",
+    "regPrefixes": [
+      "HH"
+    ],
+    "icao24Ranges": [
+      [
+        "0B8000",
+        "0B8FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "HU",
+    "iso3": "HUN",
+    "name": "Hungary",
+    "flag": "🇭🇺",
+    "regPrefixes": [
+      "HA"
+    ],
+    "icao24Ranges": [
+      [
+        "470000",
+        "477FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ID",
+    "iso3": "IDN",
+    "name": "Indonesia",
+    "flag": "🇮🇩",
+    "regPrefixes": [
+      "PK"
+    ],
+    "icao24Ranges": [
+      [
+        "8A0000",
+        "8A7FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IE",
+    "iso3": "IRL",
+    "name": "Ireland",
+    "flag": "🇮🇪",
+    "regPrefixes": [
+      "EI"
+    ],
+    "icao24Ranges": [
+      [
+        "4CA000",
+        "4CAFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IL",
+    "iso3": "ISR",
+    "name": "Israel",
+    "flag": "🇮🇱",
+    "regPrefixes": [
+      "4X"
+    ],
+    "icao24Ranges": [
+      [
+        "738000",
+        "73FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IM",
+    "iso3": "IMN",
+    "name": "Isle of Man",
+    "flag": "🇮🇲",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "IN",
+    "iso3": "IND",
+    "name": "India",
+    "flag": "🇮🇳",
+    "regPrefixes": [
+      "VT"
+    ],
+    "icao24Ranges": [
+      [
+        "800000",
+        "83FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IO",
+    "iso3": "IOT",
+    "name": "British Indian Ocean Territory",
+    "flag": "🇮🇴",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "IQ",
+    "iso3": "IRQ",
+    "name": "Iraq",
+    "flag": "🇮🇶",
+    "regPrefixes": [
+      "YI"
+    ],
+    "icao24Ranges": [
+      [
+        "728000",
+        "72FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IR",
+    "iso3": "IRN",
+    "name": "Iran",
+    "flag": "🇮🇷",
+    "regPrefixes": [
+      "EP"
+    ],
+    "icao24Ranges": [
+      [
+        "730000",
+        "737FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IS",
+    "iso3": "ISL",
+    "name": "Iceland",
+    "flag": "🇮🇸",
+    "regPrefixes": [
+      "TF"
+    ],
+    "icao24Ranges": [
+      [
+        "4CC000",
+        "4CCFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "IT",
+    "iso3": "ITA",
+    "name": "Italy",
+    "flag": "🇮🇹",
+    "regPrefixes": [
+      "I"
+    ],
+    "icao24Ranges": [
+      [
+        "300000",
+        "33FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "JE",
+    "iso3": "JEY",
+    "name": "Jersey",
+    "flag": "🇯🇪",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "JM",
+    "iso3": "JAM",
+    "name": "Jamaica",
+    "flag": "🇯🇲",
+    "regPrefixes": [
+      "6Y"
+    ],
+    "icao24Ranges": [
+      [
+        "0BE000",
+        "0BEFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "JO",
+    "iso3": "JOR",
+    "name": "Jordan",
+    "flag": "🇯🇴",
+    "regPrefixes": [
+      "JY"
+    ],
+    "icao24Ranges": [
+      [
+        "740000",
+        "747FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "JP",
+    "iso3": "JPN",
+    "name": "Japan",
+    "flag": "🇯🇵",
+    "regPrefixes": [
+      "JA"
+    ],
+    "icao24Ranges": [
+      [
+        "840000",
+        "87FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KE",
+    "iso3": "KEN",
+    "name": "Kenya",
+    "flag": "🇰🇪",
+    "regPrefixes": [
+      "5Y"
+    ],
+    "icao24Ranges": [
+      [
+        "04C000",
+        "04CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KG",
+    "iso3": "KGZ",
+    "name": "Kyrgyzstan",
+    "flag": "🇰🇬",
+    "regPrefixes": [
+      "EX"
+    ],
+    "icao24Ranges": [
+      [
+        "601000",
+        "6013FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KH",
+    "iso3": "KHM",
+    "name": "Cambodia",
+    "flag": "🇰🇭",
+    "regPrefixes": [
+      "XU"
+    ],
+    "icao24Ranges": [
+      [
+        "70E000",
+        "70EFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KI",
+    "iso3": "KIR",
+    "name": "Kiribati",
+    "flag": "🇰🇮",
+    "regPrefixes": [
+      "T3"
+    ],
+    "icao24Ranges": [
+      [
+        "C8E000",
+        "C8E3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KM",
+    "iso3": "COM",
+    "name": "Comoros",
+    "flag": "🇰🇲",
+    "regPrefixes": [
+      "D6"
+    ],
+    "icao24Ranges": [
+      [
+        "035000",
+        "0353FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KN",
+    "iso3": "KNA",
+    "name": "Saint Kitts and Nevis",
+    "flag": "🇰🇳",
+    "regPrefixes": [
+      "V4"
+    ],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "KP",
+    "iso3": "PRK",
+    "name": "North Korea",
+    "flag": "🇰🇵",
+    "regPrefixes": [
+      "P"
+    ],
+    "icao24Ranges": [
+      [
+        "720000",
+        "727FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KR",
+    "iso3": "KOR",
+    "name": "South Korea",
+    "flag": "🇰🇷",
+    "regPrefixes": [
+      "HL"
+    ],
+    "icao24Ranges": [
+      [
+        "718000",
+        "71FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KW",
+    "iso3": "KWT",
+    "name": "Kuwait",
+    "flag": "🇰🇼",
+    "regPrefixes": [
+      "9K"
+    ],
+    "icao24Ranges": [
+      [
+        "706000",
+        "706FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "KY",
+    "iso3": "CYM",
+    "name": "Cayman Islands",
+    "flag": "🇰🇾",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "KZ",
+    "iso3": "KAZ",
+    "name": "Kazakhstan",
+    "flag": "🇰🇿",
+    "regPrefixes": [
+      "UN"
+    ],
+    "icao24Ranges": [
+      [
+        "683000",
+        "6833FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LA",
+    "iso3": "LAO",
+    "name": "Laos",
+    "flag": "🇱🇦",
+    "regPrefixes": [
+      "RDPL"
+    ],
+    "icao24Ranges": [
+      [
+        "708000",
+        "708FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LB",
+    "iso3": "LBN",
+    "name": "Lebanon",
+    "flag": "🇱🇧",
+    "regPrefixes": [
+      "OD"
+    ],
+    "icao24Ranges": [
+      [
+        "748000",
+        "74FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LC",
+    "iso3": "LCA",
+    "name": "Saint Lucia",
+    "flag": "🇱🇨",
+    "regPrefixes": [
+      "J6"
+    ],
+    "icao24Ranges": [
+      [
+        "C8C000",
+        "C8C3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LI",
+    "iso3": "LIE",
+    "name": "Liechtenstein",
+    "flag": "🇱🇮",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "LK",
+    "iso3": "LKA",
+    "name": "Sri Lanka",
+    "flag": "🇱🇰",
+    "regPrefixes": [
+      "4R"
+    ],
+    "icao24Ranges": [
+      [
+        "770000",
+        "777FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LR",
+    "iso3": "LBR",
+    "name": "Liberia",
+    "flag": "🇱🇷",
+    "regPrefixes": [
+      "A8"
+    ],
+    "icao24Ranges": [
+      [
+        "050000",
+        "050FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LS",
+    "iso3": "LSO",
+    "name": "Lesotho",
+    "flag": "🇱🇸",
+    "regPrefixes": [
+      "7P"
+    ],
+    "icao24Ranges": [
+      [
+        "04A000",
+        "04A3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LT",
+    "iso3": "LTU",
+    "name": "Lithuania",
+    "flag": "🇱🇹",
+    "regPrefixes": [
+      "LY"
+    ],
+    "icao24Ranges": [
+      [
+        "503C00",
+        "503FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LU",
+    "iso3": "LUX",
+    "name": "Luxembourg",
+    "flag": "🇱🇺",
+    "regPrefixes": [
+      "LX"
+    ],
+    "icao24Ranges": [
+      [
+        "4D0000",
+        "4D03FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LV",
+    "iso3": "LVA",
+    "name": "Latvia",
+    "flag": "🇱🇻",
+    "regPrefixes": [
+      "YL"
+    ],
+    "icao24Ranges": [
+      [
+        "502C00",
+        "502FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "LY",
+    "iso3": "LBY",
+    "name": "Libya",
+    "flag": "🇱🇾",
+    "regPrefixes": [
+      "5A"
+    ],
+    "icao24Ranges": [
+      [
+        "018000",
+        "01FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MA",
+    "iso3": "MAR",
+    "name": "Morocco",
+    "flag": "🇲🇦",
+    "regPrefixes": [
+      "CN"
+    ],
+    "icao24Ranges": [
+      [
+        "020000",
+        "027FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MC",
+    "iso3": "MCO",
+    "name": "Monaco",
+    "flag": "🇲🇨",
+    "regPrefixes": [
+      "3A"
+    ],
+    "icao24Ranges": [
+      [
+        "4D4000",
+        "4D43FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MD",
+    "iso3": "MDA",
+    "name": "Moldova",
+    "flag": "🇲🇩",
+    "regPrefixes": [
+      "ER"
+    ],
+    "icao24Ranges": [
+      [
+        "504C00",
+        "504FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ME",
+    "iso3": "MNE",
+    "name": "Montenegro",
+    "flag": "🇲🇪",
+    "regPrefixes": [
+      "4O"
+    ],
+    "icao24Ranges": [
+      [
+        "516000",
+        "5163FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MF",
+    "iso3": "MAF",
+    "name": "Saint Martin (French part)",
+    "flag": "🇲🇫",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "MG",
+    "iso3": "MDG",
+    "name": "Madagascar",
+    "flag": "🇲🇬",
+    "regPrefixes": [
+      "5R"
+    ],
+    "icao24Ranges": [
+      [
+        "054000",
+        "054FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MH",
+    "iso3": "MHL",
+    "name": "Marshall Islands",
+    "flag": "🇲🇭",
+    "regPrefixes": [
+      "V7"
+    ],
+    "icao24Ranges": [
+      [
+        "900000",
+        "9003FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MK",
+    "iso3": "MKD",
+    "name": "North Macedonia",
+    "flag": "🇲🇰",
+    "regPrefixes": [
+      "Z3"
+    ],
+    "icao24Ranges": [
+      [
+        "512000",
+        "5123FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ML",
+    "iso3": "MLI",
+    "name": "Mali",
+    "flag": "🇲🇱",
+    "regPrefixes": [
+      "TZ"
+    ],
+    "icao24Ranges": [
+      [
+        "05C000",
+        "05CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MM",
+    "iso3": "MMR",
+    "name": "Myanmar",
+    "flag": "🇲🇲",
+    "regPrefixes": [
+      "XY"
+    ],
+    "icao24Ranges": [
+      [
+        "704000",
+        "704FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MN",
+    "iso3": "MNG",
+    "name": "Mongolia",
+    "flag": "🇲🇳",
+    "regPrefixes": [
+      "JU"
+    ],
+    "icao24Ranges": [
+      [
+        "682000",
+        "6823FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MO",
+    "iso3": "MAC",
+    "name": "Macao",
+    "flag": "🇲🇴",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "MP",
+    "iso3": "MNP",
+    "name": "Northern Mariana Islands",
+    "flag": "🇲🇵",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "MQ",
+    "iso3": "MTQ",
+    "name": "Martinique",
+    "flag": "🇲🇶",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "MR",
+    "iso3": "MRT",
+    "name": "Mauritania",
+    "flag": "🇲🇷",
+    "regPrefixes": [
+      "5T"
+    ],
+    "icao24Ranges": [
+      [
+        "05E000",
+        "05E3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MS",
+    "iso3": "MSR",
+    "name": "Montserrat",
+    "flag": "🇲🇸",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "MT",
+    "iso3": "MLT",
+    "name": "Malta",
+    "flag": "🇲🇹",
+    "regPrefixes": [
+      "9H"
+    ],
+    "icao24Ranges": [
+      [
+        "4D2000",
+        "4D23FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MU",
+    "iso3": "MUS",
+    "name": "Mauritius",
+    "flag": "🇲🇺",
+    "regPrefixes": [
+      "3B"
+    ],
+    "icao24Ranges": [
+      [
+        "060000",
+        "0603FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MV",
+    "iso3": "MDV",
+    "name": "Maldives",
+    "flag": "🇲🇻",
+    "regPrefixes": [
+      "8Q"
+    ],
+    "icao24Ranges": [
+      [
+        "05A000",
+        "05A3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MW",
+    "iso3": "MWI",
+    "name": "Malawi",
+    "flag": "🇲🇼",
+    "regPrefixes": [
+      "7Q"
+    ],
+    "icao24Ranges": [
+      [
+        "058000",
+        "058FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MX",
+    "iso3": "MEX",
+    "name": "Mexico",
+    "flag": "🇲🇽",
+    "regPrefixes": [
+      "XA",
+      "XB",
+      "XC"
+    ],
+    "icao24Ranges": [
+      [
+        "0D0000",
+        "0D7FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MY",
+    "iso3": "MYS",
+    "name": "Malaysia",
+    "flag": "🇲🇾",
+    "regPrefixes": [
+      "9M"
+    ],
+    "icao24Ranges": [
+      [
+        "750000",
+        "757FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "MZ",
+    "iso3": "MOZ",
+    "name": "Mozambique",
+    "flag": "🇲🇿",
+    "regPrefixes": [
+      "C9"
+    ],
+    "icao24Ranges": [
+      [
+        "006000",
+        "006FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NA",
+    "iso3": "NAM",
+    "name": "Namibia",
+    "flag": "🇳🇦",
+    "regPrefixes": [
+      "V5"
+    ],
+    "icao24Ranges": [
+      [
+        "201000",
+        "2013FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NC",
+    "iso3": "NCL",
+    "name": "New Caledonia",
+    "flag": "🇳🇨",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "NE",
+    "iso3": "NER",
+    "name": "Niger",
+    "flag": "🇳🇪",
+    "regPrefixes": [
+      "5U"
+    ],
+    "icao24Ranges": [
+      [
+        "062000",
+        "062FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NF",
+    "iso3": "NFK",
+    "name": "Norfolk Island",
+    "flag": "🇳🇫",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "NG",
+    "iso3": "NGA",
+    "name": "Nigeria",
+    "flag": "🇳🇬",
+    "regPrefixes": [
+      "5N"
+    ],
+    "icao24Ranges": [
+      [
+        "064000",
+        "064FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NI",
+    "iso3": "NIC",
+    "name": "Nicaragua",
+    "flag": "🇳🇮",
+    "regPrefixes": [
+      "YN"
+    ],
+    "icao24Ranges": [
+      [
+        "0C0000",
+        "0C0FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NL",
+    "iso3": "NLD",
+    "name": "Netherlands",
+    "flag": "🇳🇱",
+    "regPrefixes": [
+      "PH"
+    ],
+    "icao24Ranges": [
+      [
+        "480000",
+        "487FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NO",
+    "iso3": "NOR",
+    "name": "Norway",
+    "flag": "🇳🇴",
+    "regPrefixes": [
+      "LN"
+    ],
+    "icao24Ranges": [
+      [
+        "478000",
+        "47FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NP",
+    "iso3": "NPL",
+    "name": "Nepal",
+    "flag": "🇳🇵",
+    "regPrefixes": [
+      "9N"
+    ],
+    "icao24Ranges": [
+      [
+        "70A000",
+        "70AFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NR",
+    "iso3": "NRU",
+    "name": "Nauru",
+    "flag": "🇳🇷",
+    "regPrefixes": [
+      "C2"
+    ],
+    "icao24Ranges": [
+      [
+        "C8A000",
+        "C8A3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "NU",
+    "iso3": "NIU",
+    "name": "Niue",
+    "flag": "🇳🇺",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "NZ",
+    "iso3": "NZL",
+    "name": "New Zealand",
+    "flag": "🇳🇿",
+    "regPrefixes": [
+      "ZK"
+    ],
+    "icao24Ranges": [
+      [
+        "C80000",
+        "C87FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "OM",
+    "iso3": "OMN",
+    "name": "Oman",
+    "flag": "🇴🇲",
+    "regPrefixes": [
+      "A4O"
+    ],
+    "icao24Ranges": [
+      [
+        "70C000",
+        "70C3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PA",
+    "iso3": "PAN",
+    "name": "Panama",
+    "flag": "🇵🇦",
+    "regPrefixes": [
+      "HP"
+    ],
+    "icao24Ranges": [
+      [
+        "0C2000",
+        "0C2FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PE",
+    "iso3": "PER",
+    "name": "Peru",
+    "flag": "🇵🇪",
+    "regPrefixes": [
+      "OB"
+    ],
+    "icao24Ranges": [
+      [
+        "E8C000",
+        "E8CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PF",
+    "iso3": "PYF",
+    "name": "French Polynesia",
+    "flag": "🇵🇫",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "PG",
+    "iso3": "PNG",
+    "name": "Papua New Guinea",
+    "flag": "🇵🇬",
+    "regPrefixes": [
+      "P2"
+    ],
+    "icao24Ranges": [
+      [
+        "898000",
+        "898FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PH",
+    "iso3": "PHL",
+    "name": "Philippines",
+    "flag": "🇵🇭",
+    "regPrefixes": [
+      "RP"
+    ],
+    "icao24Ranges": [
+      [
+        "758000",
+        "75FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PK",
+    "iso3": "PAK",
+    "name": "Pakistan",
+    "flag": "🇵🇰",
+    "regPrefixes": [
+      "AP"
+    ],
+    "icao24Ranges": [
+      [
+        "760000",
+        "767FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PL",
+    "iso3": "POL",
+    "name": "Poland",
+    "flag": "🇵🇱",
+    "regPrefixes": [
+      "SP"
+    ],
+    "icao24Ranges": [
+      [
+        "488000",
+        "48FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PM",
+    "iso3": "SPM",
+    "name": "Saint Pierre and Miquelon",
+    "flag": "🇵🇲",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "PN",
+    "iso3": "PCN",
+    "name": "Pitcairn",
+    "flag": "🇵🇳",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "PR",
+    "iso3": "PRI",
+    "name": "Puerto Rico",
+    "flag": "🇵🇷",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "PS",
+    "iso3": "PSE",
+    "name": "Palestine",
+    "flag": "🇵🇸",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "PT",
+    "iso3": "PRT",
+    "name": "Portugal",
+    "flag": "🇵🇹",
+    "regPrefixes": [
+      "CS"
+    ],
+    "icao24Ranges": [
+      [
+        "490000",
+        "497FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PW",
+    "iso3": "PLW",
+    "name": "Palau",
+    "flag": "🇵🇼",
+    "regPrefixes": [
+      "T8A"
+    ],
+    "icao24Ranges": [
+      [
+        "684000",
+        "6843FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "PY",
+    "iso3": "PRY",
+    "name": "Paraguay",
+    "flag": "🇵🇾",
+    "regPrefixes": [
+      "ZP"
+    ],
+    "icao24Ranges": [
+      [
+        "E88000",
+        "E88FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "QA",
+    "iso3": "QAT",
+    "name": "Qatar",
+    "flag": "🇶🇦",
+    "regPrefixes": [
+      "A7"
+    ],
+    "icao24Ranges": [
+      [
+        "06A000",
+        "06A3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "RE",
+    "iso3": "REU",
+    "name": "Réunion",
+    "flag": "🇷🇪",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "RO",
+    "iso3": "ROU",
+    "name": "Romania",
+    "flag": "🇷🇴",
+    "regPrefixes": [
+      "YR"
+    ],
+    "icao24Ranges": [
+      [
+        "4A0000",
+        "4A7FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "RS",
+    "iso3": "SRB",
+    "name": "Serbia",
+    "flag": "🇷🇸",
+    "regPrefixes": [
+      "YU"
+    ],
+    "icao24Ranges": [
+      [
+        "4C0000",
+        "4C7FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "RU",
+    "iso3": "RUS",
+    "name": "Russia",
+    "flag": "🇷🇺",
+    "regPrefixes": [
+      "RA"
+    ],
+    "icao24Ranges": [
+      [
+        "100000",
+        "1FFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "RW",
+    "iso3": "RWA",
+    "name": "Rwanda",
+    "flag": "🇷🇼",
+    "regPrefixes": [
+      "9XR"
+    ],
+    "icao24Ranges": [
+      [
+        "06E000",
+        "06EFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SA",
+    "iso3": "SAU",
+    "name": "Saudi Arabia",
+    "flag": "🇸🇦",
+    "regPrefixes": [
+      "HZ"
+    ],
+    "icao24Ranges": [
+      [
+        "710000",
+        "717FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SB",
+    "iso3": "SLB",
+    "name": "Solomon Islands",
+    "flag": "🇸🇧",
+    "regPrefixes": [
+      "H4"
+    ],
+    "icao24Ranges": [
+      [
+        "897000",
+        "8973FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SC",
+    "iso3": "SYC",
+    "name": "Seychelles",
+    "flag": "🇸🇨",
+    "regPrefixes": [
+      "S7"
+    ],
+    "icao24Ranges": [
+      [
+        "074000",
+        "0743FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SD",
+    "iso3": "SDN",
+    "name": "Sudan",
+    "flag": "🇸🇩",
+    "regPrefixes": [
+      "ST"
+    ],
+    "icao24Ranges": [
+      [
+        "07C000",
+        "07CFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SE",
+    "iso3": "SWE",
+    "name": "Sweden",
+    "flag": "🇸🇪",
+    "regPrefixes": [
+      "SE"
+    ],
+    "icao24Ranges": [
+      [
+        "4A8000",
+        "4AFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SG",
+    "iso3": "SGP",
+    "name": "Singapore",
+    "flag": "🇸🇬",
+    "regPrefixes": [
+      "9V"
+    ],
+    "icao24Ranges": [
+      [
+        "768000",
+        "76FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SH",
+    "iso3": "SHN",
+    "name": "Saint Helena, Ascension and Tristan da Cunha",
+    "flag": "🇸🇭",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "SI",
+    "iso3": "SVN",
+    "name": "Slovenia",
+    "flag": "🇸🇮",
+    "regPrefixes": [
+      "S5"
+    ],
+    "icao24Ranges": [
+      [
+        "506C00",
+        "506FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SJ",
+    "iso3": "SJM",
+    "name": "Svalbard and Jan Mayen",
+    "flag": "🇸🇯",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "SK",
+    "iso3": "SVK",
+    "name": "Slovakia",
+    "flag": "🇸🇰",
+    "regPrefixes": [
+      "OM"
+    ],
+    "icao24Ranges": [
+      [
+        "505C00",
+        "505FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SL",
+    "iso3": "SLE",
+    "name": "Sierra Leone",
+    "flag": "🇸🇱",
+    "regPrefixes": [
+      "9L"
+    ],
+    "icao24Ranges": [
+      [
+        "076000",
+        "0763FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SM",
+    "iso3": "SMR",
+    "name": "San Marino",
+    "flag": "🇸🇲",
+    "regPrefixes": [
+      "T7"
+    ],
+    "icao24Ranges": [
+      [
+        "500000",
+        "5003FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SN",
+    "iso3": "SEN",
+    "name": "Senegal",
+    "flag": "🇸🇳",
+    "regPrefixes": [
+      "6V"
+    ],
+    "icao24Ranges": [
+      [
+        "070000",
+        "070FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SO",
+    "iso3": "SOM",
+    "name": "Somalia",
+    "flag": "🇸🇴",
+    "regPrefixes": [
+      "6O"
+    ],
+    "icao24Ranges": [
+      [
+        "078000",
+        "078FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SR",
+    "iso3": "SUR",
+    "name": "Suriname",
+    "flag": "🇸🇷",
+    "regPrefixes": [
+      "PZ"
+    ],
+    "icao24Ranges": [
+      [
+        "0C8000",
+        "0C8FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SS",
+    "iso3": "SSD",
+    "name": "South Sudan",
+    "flag": "🇸🇸",
+    "regPrefixes": [
+      "Z8"
+    ],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "ST",
+    "iso3": "STP",
+    "name": "Sao Tome and Principe",
+    "flag": "🇸🇹",
+    "regPrefixes": [
+      "S9"
+    ],
+    "icao24Ranges": [
+      [
+        "09E000",
+        "09E3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SV",
+    "iso3": "SLV",
+    "name": "El Salvador",
+    "flag": "🇸🇻",
+    "regPrefixes": [
+      "YS"
+    ],
+    "icao24Ranges": [
+      [
+        "0B2000",
+        "0B2FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SX",
+    "iso3": "SXM",
+    "name": "Sint Maarten (Dutch part)",
+    "flag": "🇸🇽",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "SY",
+    "iso3": "SYR",
+    "name": "Syria",
+    "flag": "🇸🇾",
+    "regPrefixes": [
+      "YK"
+    ],
+    "icao24Ranges": [
+      [
+        "778000",
+        "77FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "SZ",
+    "iso3": "SWZ",
+    "name": "Eswatini",
+    "flag": "🇸🇿",
+    "regPrefixes": [
+      "3D"
+    ],
+    "icao24Ranges": [
+      [
+        "07A000",
+        "07A3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TC",
+    "iso3": "TCA",
+    "name": "Turks and Caicos Islands",
+    "flag": "🇹🇨",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "TD",
+    "iso3": "TCD",
+    "name": "Chad",
+    "flag": "🇹🇩",
+    "regPrefixes": [
+      "TT"
+    ],
+    "icao24Ranges": [
+      [
+        "084000",
+        "084FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TF",
+    "iso3": "ATF",
+    "name": "French Southern Territories",
+    "flag": "🇹🇫",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "TG",
+    "iso3": "TGO",
+    "name": "Togo",
+    "flag": "🇹🇬",
+    "regPrefixes": [
+      "5V"
+    ],
+    "icao24Ranges": [
+      [
+        "088000",
+        "088FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TH",
+    "iso3": "THA",
+    "name": "Thailand",
+    "flag": "🇹🇭",
+    "regPrefixes": [
+      "HS"
+    ],
+    "icao24Ranges": [
+      [
+        "880000",
+        "887FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TJ",
+    "iso3": "TJK",
+    "name": "Tajikistan",
+    "flag": "🇹🇯",
+    "regPrefixes": [
+      "EY"
+    ],
+    "icao24Ranges": [
+      [
+        "515000",
+        "5153FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TK",
+    "iso3": "TKL",
+    "name": "Tokelau",
+    "flag": "🇹🇰",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "TL",
+    "iso3": "TLS",
+    "name": "Timor-Leste",
+    "flag": "🇹🇱",
+    "regPrefixes": [
+      "4W"
+    ],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "TM",
+    "iso3": "TKM",
+    "name": "Turkmenistan",
+    "flag": "🇹🇲",
+    "regPrefixes": [
+      "EZ"
+    ],
+    "icao24Ranges": [
+      [
+        "601800",
+        "601BFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TN",
+    "iso3": "TUN",
+    "name": "Tunisia",
+    "flag": "🇹🇳",
+    "regPrefixes": [
+      "TS"
+    ],
+    "icao24Ranges": [
+      [
+        "028000",
+        "02FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TO",
+    "iso3": "TON",
+    "name": "Tonga",
+    "flag": "🇹🇴",
+    "regPrefixes": [
+      "A3"
+    ],
+    "icao24Ranges": [
+      [
+        "C8D000",
+        "C8D3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TR",
+    "iso3": "TUR",
+    "name": "Turkey",
+    "flag": "🇹🇷",
+    "regPrefixes": [
+      "TC"
+    ],
+    "icao24Ranges": [
+      [
+        "4B8000",
+        "4BFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TT",
+    "iso3": "TTO",
+    "name": "Trinidad and Tobago",
+    "flag": "🇹🇹",
+    "regPrefixes": [
+      "9Y"
+    ],
+    "icao24Ranges": [
+      [
+        "0C6000",
+        "0C6FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "TV",
+    "iso3": "TUV",
+    "name": "Tuvalu",
+    "flag": "🇹🇻",
+    "regPrefixes": [
+      "T2"
+    ],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "TW",
+    "iso3": "TWN",
+    "name": "Taiwan",
+    "flag": "🇹🇼",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "TZ",
+    "iso3": "TZA",
+    "name": "Tanzania",
+    "flag": "🇹🇿",
+    "regPrefixes": [
+      "5H"
+    ],
+    "icao24Ranges": [
+      [
+        "080000",
+        "080FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "UA",
+    "iso3": "UKR",
+    "name": "Ukraine",
+    "flag": "🇺🇦",
+    "regPrefixes": [
+      "UR"
+    ],
+    "icao24Ranges": [
+      [
+        "508000",
+        "50FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "UG",
+    "iso3": "UGA",
+    "name": "Uganda",
+    "flag": "🇺🇬",
+    "regPrefixes": [
+      "5X"
+    ],
+    "icao24Ranges": [
+      [
+        "068000",
+        "068FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "UM",
+    "iso3": "UMI",
+    "name": "United States Minor Outlying Islands",
+    "flag": "🇺🇲",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "US",
+    "iso3": "USA",
+    "name": "United States",
+    "flag": "🇺🇸",
+    "regPrefixes": [
+      "N"
+    ],
+    "icao24Ranges": [
+      [
+        "A00000",
+        "AFFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "UY",
+    "iso3": "URY",
+    "name": "Uruguay",
+    "flag": "🇺🇾",
+    "regPrefixes": [
+      "CX"
+    ],
+    "icao24Ranges": [
+      [
+        "E90000",
+        "E90FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "UZ",
+    "iso3": "UZB",
+    "name": "Uzbekistan",
+    "flag": "🇺🇿",
+    "regPrefixes": [
+      "UK"
+    ],
+    "icao24Ranges": [
+      [
+        "507C00",
+        "507FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "VA",
+    "iso3": "VAT",
+    "name": "Holy See",
+    "flag": "🇻🇦",
+    "regPrefixes": [
+      "HV"
+    ],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "VC",
+    "iso3": "VCT",
+    "name": "Saint Vincent and the Grenadines",
+    "flag": "🇻🇨",
+    "regPrefixes": [
+      "J8"
+    ],
+    "icao24Ranges": [
+      [
+        "0BC000",
+        "0BC3FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "VE",
+    "iso3": "VEN",
+    "name": "Venezuela",
+    "flag": "🇻🇪",
+    "regPrefixes": [
+      "YV"
+    ],
+    "icao24Ranges": [
+      [
+        "0D8000",
+        "0DFFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "VG",
+    "iso3": "VGB",
+    "name": "Virgin Islands (British)",
+    "flag": "🇻🇬",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "VI",
+    "iso3": "VIR",
+    "name": "Virgin Islands (U.S.)",
+    "flag": "🇻🇮",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "VN",
+    "iso3": "VNM",
+    "name": "Vietnam",
+    "flag": "🇻🇳",
+    "regPrefixes": [
+      "VN"
+    ],
+    "icao24Ranges": [
+      [
+        "888000",
+        "88FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "VU",
+    "iso3": "VUT",
+    "name": "Vanuatu",
+    "flag": "🇻🇺",
+    "regPrefixes": [
+      "YJ"
+    ],
+    "icao24Ranges": [
+      [
+        "C90000",
+        "C903FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "WF",
+    "iso3": "WLF",
+    "name": "Wallis and Futuna",
+    "flag": "🇼🇫",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "WS",
+    "iso3": "WSM",
+    "name": "Samoa",
+    "flag": "🇼🇸",
+    "regPrefixes": [
+      "5W"
+    ],
+    "icao24Ranges": [
+      [
+        "902000",
+        "9023FF"
+      ]
+    ]
+  },
+  {
+    "iso2": "YE",
+    "iso3": "YEM",
+    "name": "Yemen",
+    "flag": "🇾🇪",
+    "regPrefixes": [
+      "7O"
+    ],
+    "icao24Ranges": [
+      [
+        "890000",
+        "890FFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "YT",
+    "iso3": "MYT",
+    "name": "Mayotte",
+    "flag": "🇾🇹",
+    "regPrefixes": [],
+    "icao24Ranges": []
+  },
+  {
+    "iso2": "ZA",
+    "iso3": "ZAF",
+    "name": "South Africa",
+    "flag": "🇿🇦",
+    "regPrefixes": [
+      "ZS"
+    ],
+    "icao24Ranges": [
+      [
+        "008000",
+        "00FFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ZM",
+    "iso3": "ZMB",
+    "name": "Zambia",
+    "flag": "🇿🇲",
+    "regPrefixes": [
+      "9J"
+    ],
+    "icao24Ranges": [
+      [
+        "08A000",
+        "08AFFF"
+      ]
+    ]
+  },
+  {
+    "iso2": "ZW",
+    "iso3": "ZWE",
+    "name": "Zimbabwe",
+    "flag": "🇿🇼",
+    "regPrefixes": [
+      "Z"
+    ],
+    "icao24Ranges": [
+      [
+        "004000",
+        "0043FF"
+      ]
+    ]
+  }
+]

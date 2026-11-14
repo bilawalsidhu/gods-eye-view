@@ -149,6 +149,20 @@ export const DATA_CREDITS = [
       "· each photo keeps its author's open licence, credited beside it",
   },
   {
+    key: 'countryallocation',
+    html:
+      'Aircraft registry country: ' +
+      'ICAO Annex 10 Vol III 24-bit address allocation, via ' +
+      '<a href="https://github.com/flightaware/dump1090" target="_blank" rel="noopener">dump1090</a> (BSD)',
+  },
+  {
+    key: 'openflights',
+    html:
+      'Airline data: ' +
+      '<a href="https://openflights.org/data.html" target="_blank" rel="noopener">OpenFlights</a> ' +
+      '(<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)',
+  },
+  {
     key: 'openvesselphotos',
     html:
       'Vessel photos: ' +

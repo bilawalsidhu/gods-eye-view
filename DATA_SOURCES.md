@@ -427,6 +427,9 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
 | **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
 | **Aircraft type library** (197 ICAO types: name, class, specs, one photo each) | `src/data/aircraftTypes/`, `public/aircraft-types/` | Photos: **public domain, CC0, CC BY or CC BY-SA** from Wikimedia Commons, per file ([credits](docs/AIRCRAFT-PHOTO-CREDITS.md)). Specs: Wikidata (**CC0**) and ICAO Doc 8643 (facts only) | ✅ (attribution and share-alike per photo) | "Aircraft type photos: Wikimedia Commons" in Data attribution; author, licence and source link beside every photo |
+| **ICAO 24-bit address allocation** (187 state blocks, naming a contact's country of registry) | `src/data/countries/` | Facts of the allocation in **ICAO Annex 10 Vol III**, read from the BSD-licensed dump1090 `ICAO_Ranges` table | ✅ (BSD notice kept in the source credit) | "Aircraft registry country: ICAO Annex 10 Vol III address allocation, via dump1090" in Data attribution |
+| **ISO 3166-1 country list** (249 countries: code and name) | `src/data/countries/` | Facts; only the name and the two codes are taken | ✅ (no restrictions) | None required |
+| **OpenFlights airline database** (5,774 airlines with an ICAO designator, joined to a callsign) | `src/data/airlines/` | **ODbL 1.0**, share-alike for the derived catalog | ✅ (attribution and share-alike) | "Airline data: OpenFlights" in Data attribution |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -469,6 +472,10 @@ credits it anyway as `SPECS: CCTV-DATABASE.COM` beside any spec line it renders.
 ### Aircraft type library (`src/data/aircraftTypes/`, `public/aircraft-types/`)
 
 One entry per ICAO type designator for the 150 most common types in the adsbdb cache plus a curated set, with name, manufacturer, class, specs and one photo. Specs come from Wikidata (length, wingspan, first flight) and ICAO Doc 8643 (engines); each entry's `specsSource` names the source item. Only photos licensed CC0, public domain, CC BY or CC BY-SA are kept, each scaled to at most 640 px and re-encoded as WebP. Author, licence and the Commons file page are stored with the entry and shown beside the photo on the selected-aircraft card. The photo shows the aircraft type, not the tracked airframe. [docs/AIRCRAFT-TYPE-LIBRARY.md](docs/AIRCRAFT-TYPE-LIBRARY.md) describes the data and the builder, and [docs/AIRCRAFT-PHOTO-CREDITS.md](docs/AIRCRAFT-PHOTO-CREDITS.md) credits every photo.
+
+### Country and airline libraries (`src/data/countries/`, `src/data/airlines/`)
+
+The selected-aircraft card names the country of registry from the contact's ICAO 24-bit address and the operator from the leading three letters of its callsign. The address blocks are the facts of ICAO Annex 10 Vol III chapter 9, read from the BSD-licensed dump1090 `ICAO_Ranges` table. Country codes and names are the ISO 3166-1 facts. Airlines come from the [OpenFlights](https://openflights.org/data.html) `airlines.dat`, Open Database License 1.0. `src/data/airlines/catalog.json` is a derived database that stays under ODbL 1.0 with the OpenFlights attribution wherever it is redistributed. No logo or livery image is bundled, only a curated solid colour per major carrier. [docs/COUNTRY-AIRLINE-LIBRARIES.md](docs/COUNTRY-AIRLINE-LIBRARIES.md) describes the data and the builders.
 
 ### Bundled OpenStreetMap data
 
