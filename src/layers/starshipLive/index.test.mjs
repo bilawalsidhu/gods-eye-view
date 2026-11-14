@@ -42,8 +42,8 @@ test('Starship Live renders a vehicle and exposes row controls', async () => {
   assert.equal(stats.empty, false);
   const controls = layer.getRowControls();
   assert.equal(controls.list.items.length, 1);
-  assert.equal(controls.list.items[0].active, true);
-  assert.match(controls.summary.detail, /Starship Flight 15/);
+  assert.equal(controls.list.items[0].active, false);
+  assert.match(controls.summary.detail, /1 vehicles/);
   layer.disable();
   assert.equal(layer.getStats().count, 0);
   layer.destroy();
@@ -56,6 +56,8 @@ test('Starship Live exposes selected telemetry for object inspection', async () 
   layer.init(viewer);
   layer.enable();
   await layer.update(viewer);
+  assert.equal(layer.getInspectionInfo(), null);
+  layer.setParams({ vehicleId: 'ship42' });
   const info = layer.getInspectionInfo();
   assert.equal(info.id, 'ship42');
   assert.equal(info.label, 'Starship Flight 15');
@@ -73,8 +75,9 @@ test('Starship Live switches selection and clears tracking on disable', async ()
   layer.init(viewer);
   layer.enable();
   await layer.update(viewer);
-  assert.ok(viewer.trackedEntity);
+  assert.equal(viewer.trackedEntity, null);
   layer.setParams({ vehicleId: 'ship42' });
+  assert.equal(viewer.trackedEntity?.id, 'starship-live:ship42');
   layer.disable();
   assert.equal(viewer.trackedEntity, undefined);
   layer.destroy();
@@ -105,6 +108,7 @@ test('Starship Live retains the last valid speed when upstream reports zero', as
   await layer.update(viewer);
   source.getSnapshot = async () => second;
   await layer.update(viewer);
+  layer.setParams({ vehicleId: 'ship42' });
   const info = layer.getInspectionInfo();
   assert.equal(info.properties.speedMps, 100);
   assert.equal(info.speed, 360);

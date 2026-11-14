@@ -180,6 +180,7 @@ export function createStarshipLiveLayer({ source, services = {} }) {
     positions.delete(id);
     lastSpeedMps.delete(id);
     trails.delete(id);
+    if (viewer?.trackedEntity === entity) viewer.trackedEntity = undefined;
     if (selectedId === id) selectedId = null;
   }
 
@@ -215,16 +216,6 @@ export function createStarshipLiveLayer({ source, services = {} }) {
     }
 
     snapshot = nextSnapshot;
-    if (!selectedId && nextSnapshot.vehicles.length)
-      selectedId = nextSnapshot.vehicles[0].id;
-    const selectedEntity = selectedId ? entities.get(selectedId) : null;
-    const trackedId = viewer?.trackedEntity?.id;
-    if (
-      selectedEntity &&
-      (!trackedId || trackedId.startsWith('starship-live:')) &&
-      viewer.trackedEntity !== selectedEntity
-    )
-      viewer.trackedEntity = selectedEntity;
   }
 
   function clearScene() {
