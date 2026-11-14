@@ -61,12 +61,17 @@ export class ContextControls {
   }
   /**
    * Whether Context isolation switched this layer off and leaving the mode
-   * restores it. Such a layer is suspended, not switched off by the user.
+   * restores it. Such a layer is suspended, not switched off by the user: a
+   * layer the user switched during the session is theirs again.
    * @param {string} layerId Layer id.
    * @returns {boolean}
    */
   suspendsLayer(layerId) {
-    return Boolean(this._contextSessionSnapshot?.enabledLayerIds?.has(layerId));
+    const snapshot = this._contextSessionSnapshot;
+    return Boolean(
+      snapshot?.enabledLayerIds?.has(layerId) &&
+      !snapshot.userSwitched?.has(layerId),
+    );
   }
   setClearBusy(...args) {
     if (!this.destroyed) this.actions.setClearBusy(...args);

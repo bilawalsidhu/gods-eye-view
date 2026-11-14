@@ -36,6 +36,8 @@ export function _captureContextSessionSnapshot({ excludeLayerIds = [] } = {}) {
     ),
     userAdded: new Set(),
     userRemoved: new Set(),
+    // Every layer the user switched during the session, either way.
+    userSwitched: new Set(),
     params,
   };
 }
@@ -149,6 +151,7 @@ export async function _restoreContextSession({
       enabledLayerIds: new Set(restoreState.enabledLayerIds),
       userAdded: new Set(),
       userRemoved: new Set(),
+      userSwitched: new Set(),
       params: snapshot.params,
     };
   }

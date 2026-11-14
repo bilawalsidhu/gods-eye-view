@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ContextControls } from './contextControls.js';
+import { recordContextSessionUserChange } from '../contextModePolicy.js';
 
 class Button extends EventTarget {
   constructor() {
@@ -188,4 +189,39 @@ test('a layer Context isolation switches off is suspended until the mode is left
   // A switch-off after the mode is left is the user's own.
   await controls._dataManager.setEnabled('cctv', false);
   assert.deepEqual(seen.at(-1), ['cctv', false, false]);
+});
+
+test('a layer the user switches inside the mode is no longer suspended', async (t) => {
+  const { controls } = fixture(t);
+  const enabled = new Set(['cctv']);
+  controls._dataManager = {
+    layers: new Map([['cctv', {}]]),
+    getEnabledLayerIds: () => [...enabled],
+    getLayerParams: () => null,
+    isEffectivelyEnabled: (layerId) => enabled.has(layerId),
+    isEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, next) {
+      if (next) enabled.add(layerId);
+      else enabled.delete(layerId);
+      return true;
+    },
+  };
+  controls._captureContextSessionSnapshot();
+  await controls._clearLayersOutsideContextMode('flights');
+  assert.equal(controls.suspendsLayer('cctv'), true);
+  // Inside Contacts the user turns CCTV back on, then off again: the panel
+  // must close like any other switch-off.
+  for (const next of [true, false]) {
+    recordContextSessionUserChange({
+      snapshot: controls._contextSessionSnapshot,
+      change: {
+        type: 'visibility',
+        origin: 'user',
+        layerId: 'cctv',
+        enabled: next,
+      },
+      effectiveContextMode: 'flights',
+    });
+  }
+  assert.equal(controls.suspendsLayer('cctv'), false);
 });
