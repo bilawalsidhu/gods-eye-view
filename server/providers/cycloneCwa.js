@@ -56,6 +56,7 @@ function cleanText(value, max = 160) {
 
 function number(value, low, high, { required = false } = {}) {
   value = scalar(value);
+  if (typeof value === 'string') value = value.trim();
   if (value === null || value === undefined || value === '') {
     if (required) throw invalid();
     return null;

@@ -559,3 +559,34 @@ test('last-good CWA data is retained with a stale marker during an outage', asyn
     /private CWA detail|cwa-test-key/,
   );
 });
+
+function withFirstStorm(mutate) {
+  const value = product();
+  mutate(value.cwaopendata.Dataset.TropicalCyclones.TropicalCyclone[0]);
+  return value;
+}
+
+test('CWA treats blank numeric strings as missing, not zero', () => {
+  for (const mutate of [
+    (s) => (s.AnalysisData.Fix[1].CoordinateLongitude = '   '),
+    (s) => (s.AnalysisData.Fix[1].CoordinateLatitude = '   '),
+    (s) => (s.ForecastData.Fix[0].CoordinateLongitude = '   '),
+  ])
+    assert.throws(() => parseCwaCyclones(withFirstStorm(mutate), NOW));
+  const [blankRadius] = parseCwaCyclones(
+    withFirstStorm((s) => {
+      s.ForecastData.Fix[0].RadiusOf70PercentProbability = {
+        Radius: { '#text': '   ', '@unit': 'km' },
+      };
+    }),
+    NOW,
+  );
+  assert.equal(blankRadius.forecastPoints[0].probabilityRadiusKm, null);
+  const [padded] = parseCwaCyclones(
+    withFirstStorm((s) => {
+      s.AnalysisData.Fix[1].CoordinateLongitude = ' 121.5 ';
+    }),
+    NOW,
+  );
+  assert.equal(padded.position.longitude, 121.5);
+});
