@@ -3534,5 +3534,13 @@
   "Funicular": "纜索鐵路",
   "Gondola": "纜車",
   "Move panels back beside the rail": "將面板移回側欄旁",
-  "Move panels over the rail, to the edge": "將面板移到側欄上方，貼齊邊緣"
+  "Move panels over the rail, to the edge": "將面板移到側欄上方，貼齊邊緣",
+  "panel|VISUAL": "視覺",
+  "Look": "外觀",
+  "Overlay": "疊加層",
+  "Effects": "效果",
+  "Scope opacity": "視域不透明度",
+  "How dark the scope shades the view outside the keyhole": "視域遮罩使視域之外的畫面變暗的程度",
+  "Reset to default": "還原預設",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "將視覺還原為預設設定：常規外觀、HUD、視域、標籤和效果"
 }

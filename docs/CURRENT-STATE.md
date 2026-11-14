@@ -646,6 +646,53 @@ panel that holds its row, and `set_panel_open` reaches it as
 `utilities-panel` or by "utilities", "draw", "drawing" or "import". On a phone
 it sits collapsed in the Layers sheet under Data Layers.
 
+## The Visual panel — November 14, 2026
+
+Visual (`#pp-toggles`, `src/ui/views/panels/DisplayPanel.vue`) is headed
+VISUAL, has the edge switch in its header like the other side panels, and is
+grouped from the top: Look, the six style presets with their 1–6 keys, and
+Map source, the map source chips (`VisualPresets.vue`); Overlay, the HUD,
+detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
+Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control
+is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
+on/off pill worded in the current language (Clean UI, an action, has none;
+the buttons carry their state as `aria-pressed`). Under the Cyber HUD the
+cards keep Cyber's own red skin. The presets and chips call the
+same Display store actions as the dock's Visual Presets tray, which stays on
+desktop and phone as before, along with Location; voice `Visual Presets`
+still opens that tray. On a phone the More sheet shows that tray right above
+Visual, so Visual leaves out its own presets and chips there. In Cockpit the
+groups Cockpit's Display popover takes
+leave the panel as before and keep their own styling there.
+
+Scope has an Opacity slider (`#scope-opacity-slider`, 50–100%, default 100%;
+`SCOPE_OPACITY_MIN_PCT` in `src/ui/visualSettings.js`, since a fainter mask
+reads as Scope off while labels still fade outside the keyhole)
+that fades the whole mask (`setScopeMaskOpacity` in `src/scopeMask.js`, the
+canvas's CSS opacity) without repainting it or changing the altitude
+terminus; it is disabled while Scope is off and keeps its value. Share links
+carry it as `sco` in the long form and field 30 in the compact form, written
+only below 100%, so links made before it keep their codes and open at full
+opacity, and a link without it sets the opacity back to 100%; a link asking
+for less than 50% opens at 50%. Scenes do not
+save it: a scene shot leaves the opacity as it is.
+
+Reset to default (`resetVisual` in `src/ui/displayBindings.js`) brings back
+the out-of-the-box look: the Normal style, the first-run post defaults
+(bloom off, sharpen on at 49%, the HUD shown, Dense detection at 75%
+with its fade and outside opacity, the celestial ring off), Elastic
+allocation, Scope on at 100% feather and 100% opacity, and 3D aircraft on in
+Proximity. The HUD layout follows the Normal style, as choosing it does: the
+Tactical HUD, except that the Cyber HUD stays Cyber. Inside Contacts, which
+lends detection for the session, the reset's detection becomes what leaving
+Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
+settings, other styles' parameters, the layers and the panels alone.
+
+With Scope off the side rails, open panels and the dock's trays carry a soft
+drop shadow and the rails' labels and icons a text shadow
+(`src/ui/styles/scope-off-shadows.css`), so their edges hold against bright
+imagery.
+
 ## Side rails and the screen edge — November 14, 2026
 
 Visual (`#pp-toggles`, the display settings, rail item `palette`) is the last
@@ -768,6 +815,8 @@ Display's native Scope checkbox defaults ON with feather at 100%, adjustable
 from 0–200%. OFF disables the slider while retaining its value. HUD layout
 changes preserve both settings; share links and scenes restore them. The
 historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
+Its Opacity slider (0–100%, default 100%) fades the mask; share links
+restore it (`sco`), scenes do not (see The Visual panel).
 
 With Scope OFF, Tactical and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original

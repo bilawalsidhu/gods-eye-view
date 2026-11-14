@@ -102,6 +102,7 @@
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
       "src/ui/views/panels/DisplayPanel.vue",
+      "src/ui/views/panels/VisualPresets.vue",
       "src/ui/views/panels/GeoImport.vue",
       "src/ui/views/panels/DrawControls.vue",
       "src/ui/views/panels/DrawMarkList.vue",

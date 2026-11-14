@@ -104,6 +104,9 @@ export class ShareLinkManager {
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
     this._scopeFeatherPct = 100;
+    // How strongly the scope mask shows, 0..100; 100 (the full mask) is the
+    // default and leaves `sco` out of the link.
+    this._scopeOpacityPct = 100;
     // null = the altitude-adaptive terminus (the default). A number pins the
     // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
     this._scopeTerminusPct = null;
@@ -286,6 +289,10 @@ export class ShareLinkManager {
       // mirrors live state for the link this session generates, so it must match
       // the mask, not the archive.)
       scopeFeatherPct: clampScopeFeatherPct(parseOr(params.get('scf'), 35)),
+      scopeOpacityPct: Math.max(
+        0,
+        Math.min(100, Math.round(parseOr(params.get('sco'), 100))),
+      ),
       // Absent (or non-numeric) `sce` = adaptive (null), the default behavior;
       // a value pins the terminus opacity percent, clamped into the SUPPORTED
       // 94..100 band. `sce=0` used to survive as a sub-94 terminus — a hole in
@@ -459,6 +466,7 @@ export class ShareLinkManager {
         celestialRing: visualCurrent ? state.celestialRing : undefined,
         scopeEnabled: visualCurrent ? state.scopeEnabled : undefined,
         scopeFeatherPct: visualCurrent ? state.scopeFeatherPct : undefined,
+        scopeOpacityPct: visualCurrent ? state.scopeOpacityPct : undefined,
         scopeTerminusPct: visualCurrent ? state.scopeTerminusPct : undefined,
         mapStack: mapCurrent ? state.mapStack : undefined,
         panelState,
@@ -625,6 +633,12 @@ export class ShareLinkManager {
     if (typeof extras.scopeFeatherPct === 'number') {
       this._scopeFeatherPct = clampScopeFeatherPct(extras.scopeFeatherPct);
     }
+    if (typeof extras.scopeOpacityPct === 'number') {
+      this._scopeOpacityPct = Math.max(
+        0,
+        Math.min(100, Math.round(extras.scopeOpacityPct)),
+      );
+    }
     if (extras.scopeTerminusPct === null) this._scopeTerminusPct = null;
     else if (typeof extras.scopeTerminusPct === 'number') {
       this._scopeTerminusPct = clampScopeTerminusPct(extras.scopeTerminusPct);
@@ -740,6 +754,8 @@ export class ShareLinkManager {
     params.set('cr', this._celestialRingEnabled ? '1' : '0');
     params.set('sc', this._scopeEnabled ? '1' : '0');
     params.set('scf', Math.round(this._scopeFeatherPct).toString());
+    if (this._scopeOpacityPct !== 100)
+      params.set('sco', String(this._scopeOpacityPct));
     // Only written when pinned — an absent `sce` IS the adaptive default, so a
     // shared link never freezes the ramp for the recipient by accident. The
     // same 94..100 clamp applies on the way OUT, so a link can never carry an

@@ -3708,5 +3708,13 @@
   "Funicular": "Funicular",
   "Gondola": "Góndola",
   "Move panels back beside the rail": "Devolver los paneles junto a la barra",
-  "Move panels over the rail, to the edge": "Mover los paneles sobre la barra, hasta el borde"
+  "Move panels over the rail, to the edge": "Mover los paneles sobre la barra, hasta el borde",
+  "panel|VISUAL": "VISUAL",
+  "Look": "Aspecto",
+  "Overlay": "Superposición",
+  "Effects": "Efectos",
+  "Scope opacity": "Opacidad de la mirilla",
+  "How dark the scope shades the view outside the keyhole": "Cuánto oscurece la mirilla la vista fuera del ojo de cerradura",
+  "Reset to default": "Restablecer valores predeterminados",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Restablecer Visual a sus valores predeterminados: aspecto Normal, HUD, mirilla, etiquetas y efectos"
 }
