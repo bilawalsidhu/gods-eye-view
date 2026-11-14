@@ -138,6 +138,16 @@ async function listenerRules(r, where, subscribe, fire) {
 }
 
 /** A check over a fresh renderer, destroyed afterwards. */
+/**
+ * The sky with the renderer's look off (`SkySettings`): what is drawn shows
+ * its own colours, for the checks that read an exact colour.
+ */
+const BARE_SKY = Object.freeze({
+  atmosphere: false,
+  fog: false,
+  lighting: false,
+});
+
 function check(id, title, run, extra = {}) {
   return {
     id,
@@ -151,6 +161,7 @@ function check(id, title, run, extra = {}) {
         for (const capability of [extra.capability ?? []].flat())
           if (!r.capabilities.has(capability))
             return { skip: `no ${capability}` };
+        if (extra.bareSky) r.globe.sky.set(BARE_SKY);
         return await run(h, r);
       } finally {
         r.destroy();
@@ -3439,7 +3450,7 @@ export function portChecks() {
         deepEqual(ready, ['m'], 'restyled without loading again');
         set.dispose();
       },
-      { capability: 'models' },
+      { capability: 'models', bareSky: true },
     ),
     check(
       'draw.models.blend',
@@ -3523,7 +3534,7 @@ export function portChecks() {
           under.dispose();
         }
       },
-      { capability: 'models' },
+      { capability: 'models', bareSky: true },
     ),
     check(
       'draw.models.bytes',
@@ -4383,7 +4394,7 @@ export function portChecks() {
           );
         }
       },
-      { capability: 'vectorBase' },
+      { capability: 'vectorBase', bareSky: true },
     ),
     check(
       'globe.imagery.frames',
@@ -4576,7 +4587,7 @@ export function portChecks() {
           URL.revokeObjectURL(url);
         }
       },
-      { capability: 'imageryFrames' },
+      { capability: 'imageryFrames', bareSky: true },
     ),
     check(
       'globe.withoutImageHooks',

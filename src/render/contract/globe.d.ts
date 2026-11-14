@@ -203,7 +203,9 @@ export interface BaseStatus {
  * looks. How the sky, the atmosphere over the ground, distance haze, the
  * lighting and the tone mapping and exposure of the frame look is each
  * renderer's own, and no check compares colours with
- * each other. Where the renderer's sun, moon or fog are not separate from its
+ * another's. With `atmosphere`, `fog` and `lighting` off and clear weather,
+ * a renderer applies none of its look: what is drawn shows its own colours.
+ * A renderer whose sun, moon or fog are not separate from its
  * atmosphere follows `atmosphere` for them and reports them as it draws them.
  */
 export interface SkySettings {

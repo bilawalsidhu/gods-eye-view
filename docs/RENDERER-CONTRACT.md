@@ -155,7 +155,10 @@ the sun lights it. The checks `globe.weather`, `globe.weather.drawn` and
 
 How the sky, atmosphere, haze, lighting and the frame's tone mapping and
 exposure look is the renderer's own: `globe.sky` switches parts on and
-off, and no check compares colours. The
+off, and no check compares colours. With
+`atmosphere`, `fog` and `lighting` off and clear weather a renderer applies
+none of its look, so the checks that read an exact colour (`bareSky` in
+`checks/ports.js`) set that sky first. The
 reference images under `src/render/conformance/goldens/visual/` are the
 default renderer's own, for checking it against itself.
 
