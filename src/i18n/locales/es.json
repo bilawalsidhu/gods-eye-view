@@ -3692,5 +3692,19 @@
   "500–1,000 m": "500–1000 m",
   "1,000–2,000 m": "1000–2000 m",
   "2,000–3,000 m": "2000–3000 m",
-  "3,000 m and above": "3000 m o más"
+  "3,000 m and above": "3000 m o más",
+  "USGS Lakes & Reservoirs": "USGS: lagos y embalses",
+  "Water": "Agua",
+  "USGS Rivers & Streams": "USGS: ríos y arroyos",
+  "USGS Springs": "USGS: manantiales",
+  "Zoom in to a region to load river gauges": "Acércate a una región para cargar los medidores de ríos",
+  "as of {time}": "a fecha de {time}",
+  "No current reading": "Sin lectura actual",
+  "Reading": "Lectura",
+  "Gage height": "Altura limnimétrica",
+  "Discharge": "Caudal",
+  "Lake/reservoir stage": "Nivel del lago/embalse",
+  "Lake elevation above NGVD29": "Elevación del lago sobre NGVD29",
+  "Lake elevation above NAVD88": "Elevación del lago sobre NAVD88",
+  "USGS Water Data · refreshed hourly": "Datos hídricos del USGS · actualizados cada hora"
 }

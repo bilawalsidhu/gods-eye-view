@@ -3605,5 +3605,19 @@
   "Confirm: remove every added entry from Data Layers": "Bekräfta: ta bort alla tillagda poster från Datalager",
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
   "Showing {shown} of {total}": "Visar {shown} av {total}",
-  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET"
+  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "Zoom in to a region to load river gauges": "Zooma in på en region för att läsa in flodmätare",
+  "USGS Rivers & Streams": "USGS floder och vattendrag",
+  "USGS Lakes & Reservoirs": "USGS sjöar och reservoarer",
+  "USGS Springs": "USGS källor",
+  "Water": "Vatten",
+  "as of {time}": "per {time}",
+  "No current reading": "Ingen aktuell avläsning",
+  "Reading": "Avläsning",
+  "Gage height": "Vattenstånd",
+  "Discharge": "Flöde",
+  "Lake/reservoir stage": "Sjö-/magasinsnivå",
+  "Lake elevation above NGVD29": "Sjöns höjd över NGVD29",
+  "Lake elevation above NAVD88": "Sjöns höjd över NAVD88",
+  "USGS Water Data · refreshed hourly": "USGS vattendata · uppdateras varje timme"
 }

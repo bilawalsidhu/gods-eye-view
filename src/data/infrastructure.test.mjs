@@ -66,6 +66,15 @@ test('infrastructure factory preserves identity and creates independent state wi
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
       { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      ...[
+        ['local-usgs-water', 'USGS Rivers & Streams'],
+        ['local-usgs-lakes', 'USGS Lakes & Reservoirs'],
+        ['local-usgs-springs', 'USGS Springs'],
+      ].map(([id, name]) => ({
+        id,
+        name,
+        source: 'USGS Water Data · refreshed hourly',
+      })),
     ],
   );
   first.forEach((layer, index) => {
@@ -190,12 +199,19 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
+  // USGS water layers (copy.js, index.js) ship with the infrastructure
+  // package; marker.js is the dependency-free msg() for portable modules.
+  // The gauge cards take their translator from the layer services
+  // (services.i18n), so the i18n runtime and catalogs stay out of this bundle.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
+    'copy.js',
+    'index.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'marker.js',
   ]);
   assert.deepEqual(
     entry.imports,

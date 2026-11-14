@@ -1,0 +1,308 @@
+/**
+ * USGS water levels, nationwide: rivers & streams, lakes & reservoirs, springs.
+ *
+ * The server (server/providers/usgsWater.js) refreshes the newest USGS
+ * readings hourly and serves one file per site class under /api/usgs-water/.
+ * Streams are about ten thousand gauges, so they are also cut into 4-degree
+ * tiles and this module loads ONLY the tiles that intersect the camera's view
+ * rectangle, re-loading when the camera settles. When zoomed out past
+ * STREAM_MAX_VIEW_DEG the stream layer loads nothing and asks the user to zoom
+ * in, rather than pulling every gauge.
+ *
+ * The small classes (lakes/reservoirs, springs) load whole, but still
+ * re-fetch on every enable so the hourly refresh shows up without a reload.
+ */
+import * as Cesium from 'cesium';
+import { msg } from '../../i18n/marker.js';
+import { createLocalGeoJsonLayer } from '../../data/localGeojsonCore.js';
+import { usgsWaterCardDetails } from './copy.js';
+
+export const USGS_WATER_BASE = '/api/usgs-water';
+/** Wider than this many degrees (lon or lat span) → streams wait for zoom-in. */
+export const STREAM_MAX_VIEW_DEG = 24;
+/** Hard ceiling on stream tiles fetched for one view. */
+export const STREAM_MAX_TILES = 40;
+
+// Shown through sourceLabel() (src/ui/layerNames.js), which translates it.
+const SOURCE = msg('USGS Water Data · refreshed hourly');
+
+/** Water layers in panel order. `cls` matches the server classes. */
+export const USGS_WATER_LAYERS = Object.freeze([
+  Object.freeze({
+    id: 'local-usgs-water',
+    cls: 'stream',
+    name: 'USGS Rivers & Streams',
+    color: '#33ffaa',
+    viewport: true,
+  }),
+  Object.freeze({
+    id: 'local-usgs-lakes',
+    cls: 'lake',
+    name: 'USGS Lakes & Reservoirs',
+    color: '#3fa9ff',
+    viewport: false,
+  }),
+  Object.freeze({
+    id: 'local-usgs-springs',
+    cls: 'spring',
+    name: 'USGS Springs',
+    color: '#ffd23f',
+    viewport: false,
+  }),
+]);
+
+/** Parse a JSON Lines body into features (blank lines ignored). */
+export function parseJsonl(text) {
+  return String(text || '')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line));
+}
+
+/**
+ * The camera view as a degree box, or null when it cannot be expressed as one
+ * (looking at space / horizon). A west > east box crosses the antimeridian.
+ */
+export function viewBoxDegrees(viewer) {
+  const rect = viewer?.camera?.computeViewRectangle?.(
+    viewer.scene?.globe?.ellipsoid,
+  );
+  if (!rect) return null;
+  const box = {
+    west: Cesium.Math.toDegrees(rect.west),
+    south: Cesium.Math.toDegrees(rect.south),
+    east: Cesium.Math.toDegrees(rect.east),
+    north: Cesium.Math.toDegrees(rect.north),
+  };
+  if (!Object.values(box).every(Number.isFinite)) return null;
+  if (box.north <= box.south || box.east === box.west) return null;
+  return box;
+}
+
+/**
+ * Pick the stream tiles for a view box. Pure.
+ * @param {object} tiles manifest.classes.stream.tiles: key -> {bounds:[w,s,e,n], file, count}
+ * @param {{west:number,south:number,east:number,north:number}|null} box
+ * @returns {{status:'ok'|'zoom-in', tiles:Array<{key:string,file:string,count:number}>}}
+ */
+export function selectStreamTiles(tiles, box) {
+  if (!box || box.east === box.west) return { status: 'zoom-in', tiles: [] };
+  const longitudeSpan =
+    box.east >= box.west ? box.east - box.west : box.east + 360 - box.west;
+  if (
+    longitudeSpan > STREAM_MAX_VIEW_DEG ||
+    box.north - box.south > STREAM_MAX_VIEW_DEG
+  )
+    return { status: 'zoom-in', tiles: [] };
+  // A narrow view crossing +180/-180 has two longitude intervals.
+  const longitudeSpans =
+    box.east < box.west
+      ? [
+          [box.west, 180],
+          [-180, box.east],
+        ]
+      : [[box.west, box.east]];
+  const picked = [];
+  // Degrees round-trip through radians (Cesium rectangles), so a view that
+  // stops exactly on a tile edge comes back a hair inside it. Without a
+  // tolerance that sliver fetches a whole neighbouring tile for nothing.
+  const EPS = 1e-6;
+  for (const [key, tile] of Object.entries(tiles || {})) {
+    const [w, s, e, n] = tile.bounds || [];
+    if (
+      n <= box.south + EPS ||
+      s >= box.north - EPS ||
+      !longitudeSpans.some(([west, east]) => e > west + EPS && w < east - EPS)
+    )
+      continue;
+    picked.push({ key, file: tile.file, count: tile.count });
+  }
+  picked.sort((a, b) => a.key.localeCompare(b.key));
+  if (picked.length > STREAM_MAX_TILES) return { status: 'zoom-in', tiles: [] };
+  return { status: 'ok', tiles: picked };
+}
+
+async function fetchText(url, signal, fetchImpl) {
+  const response = await fetchImpl(url, { signal, cache: 'no-store' });
+  if (!response.ok) throw new Error(`HTTP ${response.status ?? '?'}`);
+  return response.text();
+}
+
+/**
+ * Create the water layers. Each returned layer is a standard local GeoJSON
+ * layer; the stream layer additionally reloads on camera settle and reports
+ * a 'zoom-in' guidance status when the view is too wide.
+ * @param {object} services local GeoJSON services (overlay host, contexts, ...).
+ *   An optional `services.i18n` ({ t, formatNumber, formatDate, isolate,
+ *   onLocaleChange }) words the gauge cards in the application's language and,
+ *   through `onLocaleChange(listener) => stop`, words the cards of an enabled
+ *   layer again when the language changes (no new request). English without
+ *   it; a card is not worded again when `onLocaleChange` is missing.
+ * @param {object} [options]
+ * @param {Function} [options.fetchImpl] `fetch` replacement (default: the
+ *   global `fetch`).
+ * @param {string} [options.base] URL prefix of the server's water files
+ *   (default `/api/usgs-water`).
+ * @param {Function} [options.screenSpaceEventHandlerFactory] Passed to each
+ *   local GeoJSON layer: `(canvas) => handler` for the click handler.
+ * @param {Function} [options.projectToWindow] Passed to each local GeoJSON
+ *   layer: `(scene, position) => {x, y}|undefined`, how a card position is
+ *   projected to the screen (default: Cesium's world-to-window transform).
+ */
+export function createUsgsWaterLayers(
+  services,
+  {
+    fetchImpl = (...a) => fetch(...a),
+    base = USGS_WATER_BASE,
+    screenSpaceEventHandlerFactory,
+    projectToWindow,
+  } = {},
+) {
+  return USGS_WATER_LAYERS.map((spec) => {
+    let manifest = null;
+    let viewStatus = 'ok';
+    let tileKeys = '';
+    let moveRemover = null;
+    let reloadTimer = null;
+    let stopLocaleWatch = null;
+    let destroyed = false;
+
+    async function loadManifest(signal) {
+      manifest = JSON.parse(
+        await fetchText(`${base}/manifest.json`, signal, fetchImpl),
+      );
+      return manifest;
+    }
+
+    const loadFeatures = async ({ signal, viewer }) => {
+      try {
+        const m = await loadManifest(signal);
+        const cls = m?.classes?.[spec.cls];
+        if (!cls) throw new Error(`manifest has no ${spec.cls} class`);
+        if (!spec.viewport) {
+          viewStatus = 'ok';
+          return parseJsonl(
+            await fetchText(`${base}/${cls.file}`, signal, fetchImpl),
+          );
+        }
+        const pick = selectStreamTiles(cls.tiles, viewBoxDegrees(viewer));
+        viewStatus = pick.status;
+        tileKeys = pick.tiles.map((t) => t.key).join(',');
+        const bodies = await Promise.all(
+          pick.tiles.map((t) =>
+            fetchText(`${base}/${t.file}`, signal, fetchImpl),
+          ),
+        );
+        return bodies.flatMap(parseJsonl);
+      } catch (error) {
+        // localGeojsonCore logs this error and copies its message into status.
+        // Upstream text can carry credentials; keep both surfaces fixed.
+        throw new Error('USGS request failed');
+      }
+    };
+
+    const layer = createLocalGeoJsonLayer(
+      {
+        id: spec.id,
+        url: `${base}/${spec.cls}.geojsonl`,
+        name: spec.name,
+        color: spec.color,
+        icon: '💧',
+        source: SOURCE,
+        labels: true,
+        labelMax: 700,
+        labelGridPx: 138,
+        loadFeatures,
+        cacheLoadedFeatures: false,
+        // Gauge readings and observation time on the card, worded with the
+        // application's translator when the services carry one.
+        cardDetails: (props) =>
+          usgsWaterCardDetails(props, { i18n: services.i18n }),
+        ...(screenSpaceEventHandlerFactory
+          ? { screenSpaceEventHandlerFactory }
+          : {}),
+        ...(projectToWindow ? { projectToWindow } : {}),
+      },
+      services,
+    );
+
+    // Cards are worded when a layer loads; a language change words them again
+    // from the loaded gauges, with no request. Listening only while enabled
+    // keeps a disabled or destroyed layer out of language changes.
+    const watchLocale = () => {
+      if (destroyed || stopLocaleWatch) return;
+      const watch = services?.i18n?.onLocaleChange;
+      if (typeof watch !== 'function') return;
+      const stop = watch(() => layer.refreshCards());
+      stopLocaleWatch = typeof stop === 'function' ? stop : () => {};
+    };
+    const unwatchLocale = () => {
+      const stop = stopLocaleWatch;
+      stopLocaleWatch = null;
+      stop?.();
+    };
+
+    const baseEnable = layer.enable;
+    const baseDisable = layer.disable;
+    const baseDestroy = layer.destroy;
+    const baseStats = layer.getStats;
+
+    // Re-fetch the small classes on every enable (no stale in-memory cache).
+    layer.enable = async (viewer) => {
+      watchLocale();
+      await baseEnable(viewer);
+      if (!spec.viewport || moveRemover || !viewer?.camera?.moveEnd) return;
+      moveRemover = viewer.camera.moveEnd.addEventListener(() => {
+        clearTimeout(reloadTimer);
+        // Settle briefly so a fling does not fetch every intermediate view.
+        reloadTimer = setTimeout(() => {
+          reloadTimer = null;
+          const cls = manifest?.classes?.[spec.cls];
+          const next = selectStreamTiles(cls?.tiles, viewBoxDegrees(viewer));
+          const nextKeys = next.tiles.map((t) => t.key).join(',');
+          if (next.status === viewStatus && nextKeys === tileKeys) return;
+          layer.reload(viewer);
+        }, 400);
+      });
+    };
+
+    const stopTracking = () => {
+      clearTimeout(reloadTimer);
+      reloadTimer = null;
+      if (moveRemover) {
+        moveRemover();
+        moveRemover = null;
+      }
+    };
+    layer.disable = (viewer) => {
+      unwatchLocale();
+      stopTracking();
+      viewStatus = 'ok';
+      tileKeys = '';
+      return baseDisable(viewer);
+    };
+    layer.destroy = (viewer) => {
+      destroyed = true;
+      unwatchLocale();
+      stopTracking();
+      return baseDestroy(viewer);
+    };
+    layer.getStats = () => {
+      const stats = baseStats();
+      if (spec.viewport && viewStatus === 'zoom-in' && !stats.error) {
+        return {
+          ...stats,
+          status: 'zoom-in',
+          statusMessage: msg('Zoom in to a region to load river gauges'),
+        };
+      }
+      return stats;
+    };
+    /** Diagnostics for QA/tests: which stream tiles are loaded. */
+    layer.getViewportDiagnostics = () => ({
+      status: viewStatus,
+      tiles: tileKeys ? tileKeys.split(',') : [],
+    });
+    return layer;
+  });
+}

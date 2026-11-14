@@ -3518,5 +3518,19 @@
   "Confirm: remove every added entry from Data Layers": "確認：追加したすべての項目をデータレイヤーから削除",
   "Remove every added entry from Data Layers": "追加したすべての項目をデータレイヤーから削除",
   "Showing {shown} of {total}": "{total}件中{shown}件を表示",
-  "BROWSE DATA LIBRARY": "データライブラリを見る"
+  "BROWSE DATA LIBRARY": "データライブラリを見る",
+  "Water": "水",
+  "Zoom in to a region to load river gauges": "地域にズームして河川観測所を読み込みます",
+  "USGS Springs": "USGS：湧水",
+  "USGS Rivers & Streams": "USGS：河川・小川",
+  "USGS Lakes & Reservoirs": "USGS：湖・貯水池",
+  "as of {time}": "{time}時点",
+  "No current reading": "現在の測定値なし",
+  "Reading": "測定値",
+  "Gage height": "水位",
+  "Discharge": "流量",
+  "Lake/reservoir stage": "湖・貯水池の水位",
+  "Lake elevation above NGVD29": "NGVD29基準の湖面標高",
+  "Lake elevation above NAVD88": "NAVD88基準の湖面標高",
+  "USGS Water Data · refreshed hourly": "USGS水データ · 1時間ごとに更新"
 }

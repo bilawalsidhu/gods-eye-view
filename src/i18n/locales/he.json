@@ -3692,5 +3692,19 @@
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
-  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
+  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "Water": "מים",
+  "USGS Springs": "מעיינות של USGS",
+  "USGS Rivers & Streams": "נהרות ונחלים של USGS",
+  "USGS Lakes & Reservoirs": "אגמים ומאגרי מים של USGS",
+  "Zoom in to a region to load river gauges": "התקרבו לאזור כדי לטעון מדי מפלס נהרות",
+  "as of {time}": "נכון ל-{time}",
+  "No current reading": "אין קריאה עדכנית",
+  "Reading": "קריאה",
+  "Gage height": "גובה מד המים",
+  "Discharge": "ספיקה",
+  "Lake/reservoir stage": "מפלס האגם/המאגר",
+  "Lake elevation above NGVD29": "גובה האגם מעל NGVD29",
+  "Lake elevation above NAVD88": "גובה האגם מעל NAVD88",
+  "USGS Water Data · refreshed hourly": "נתוני המים של USGS · מתעדכנים מדי שעה"
 }

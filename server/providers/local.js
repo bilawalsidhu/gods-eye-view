@@ -37,6 +37,7 @@ import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 import { libraryProxy } from './library.js';
+import { usgsWaterProxy } from './usgsWater.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -81,6 +82,7 @@ function localProviderPlugins({
     ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
     googlePlacesContextProxy(),
     windProxy(),
+    usgsWaterProxy(),
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),

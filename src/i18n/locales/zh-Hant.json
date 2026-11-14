@@ -3518,5 +3518,19 @@
   "Confirm: remove every added entry from Data Layers": "確認：從數據圖層中移除所有已添加條目",
   "Remove every added entry from Data Layers": "從數據圖層中移除所有已添加條目",
   "Showing {shown} of {total}": "顯示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "瀏覽數據資源庫"
+  "BROWSE DATA LIBRARY": "瀏覽數據資源庫",
+  "USGS Rivers & Streams": "USGS：河流與溪流",
+  "USGS Springs": "USGS：泉水",
+  "Zoom in to a region to load river gauges": "放大到某個區域以載入河流水位站",
+  "Water": "水",
+  "USGS Lakes & Reservoirs": "USGS：湖泊與水庫",
+  "as of {time}": "截至 {time}",
+  "No current reading": "目前無讀數",
+  "Reading": "讀數",
+  "Gage height": "水位",
+  "Discharge": "流量",
+  "Lake/reservoir stage": "湖泊/水庫水位",
+  "Lake elevation above NGVD29": "高於 NGVD29 的湖面高程",
+  "Lake elevation above NAVD88": "高於 NAVD88 的湖面高程",
+  "USGS Water Data · refreshed hourly": "USGS 水文資料 · 每小時更新"
 }
