@@ -1,0 +1,384 @@
+// A temporary snapshot failure (HTTP 5xx, timeout, network error) is not
+// evidence that a camera has no public picture. Mounted-route regression for
+// the #1314 review (radianx): two 503s used to mark the camera location-only
+// for 24 h, the client then stopped requesting frames, and nothing probed it.
+//
+// Run with: npm test   (node --test)
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { EventEmitter } from 'node:events';
+import { cctvProxy } from '../../server/providers/cctv.js';
+import { DEFAULT_WORLD_CCTV_SOURCE_FILE } from '../../server/providers/cctv/constants.js';
+import {
+  NO_FEED_CAMERA_TTL_MS,
+  NO_FEED_TRANSIENT_TTL_MS,
+} from '../../server/providers/cctv/feedAvailability.js';
+
+const CAM = {
+  id: 'alias-cam',
+  name: 'Alias camera',
+  lat: -35.1,
+  lon: -60.2,
+  feedType: 'image',
+  snapshotUrl: 'https://cams.upstream.invalid/snapshot.jpg',
+  url: 'https://cams.upstream.invalid/snapshot.jpg',
+};
+const T0 = 1800000000000;
+
+function fixture(t, fetchImpl, cam = CAM, worldRows = null, savedMarks = null) {
+  const saved = { ...process.env };
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-1314-transient-'));
+  if (savedMarks) {
+    const cacheDir = path.join(root, '.gev-cache');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cacheDir, 'cctv-feed-availability.json'),
+      JSON.stringify(savedMarks),
+    );
+  }
+  const server = new EventEmitter();
+  process.env.CCTV_SOURCES_JSON = JSON.stringify(
+    Array.isArray(cam) ? cam : [cam],
+  );
+  process.env.CCTV_SOURCES_FILE = 'absent.json';
+  process.env.CCTV_FORCE_AUSTIN = '0';
+  delete process.env.GOOGLE_MAPS_API_KEY;
+  delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
+  if (worldRows) {
+    process.env.CCTV_WORLD_CAMERAS_ENABLED = '1';
+    process.env.CCTV_FORCE_AUSTIN = '1'; // live packs load only when forced
+    const file = path.join(root, DEFAULT_WORLD_CCTV_SOURCE_FILE);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(worldRows));
+  }
+  t.mock.method(globalThis, 'fetch', fetchImpl);
+  let handler;
+  const start = () =>
+    cctvProxy({ sourceRoot: root }).configureServer({
+      httpServer: server,
+      middlewares: {
+        use(_prefix, fn) {
+          handler = fn;
+        },
+      },
+    });
+  start();
+  t.after(() => {
+    server.emit('close');
+    for (const key of Object.keys(process.env))
+      if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const get = async (url) => {
+    const res = new EventEmitter();
+    res.writeHead = (status, headers = {}) => {
+      res.status = status;
+      res.headers = headers;
+    };
+    res.setHeader = () => {};
+    res.end = (body) => {
+      res.body = body;
+      res.writableEnded = true;
+      res.emit('finish');
+    };
+    await handler({ url, method: 'GET', headers: {} }, res);
+    return res;
+  };
+  const feedType = async () =>
+    JSON.parse((await get('/sources')).body).sources[0].feedType;
+  const frame = () => get(`/frame/${cam.id}`);
+  return { get, feedType, frame };
+}
+
+const jpeg = () =>
+  new Response('jpeg', { headers: { 'Content-Type': 'image/jpeg' } });
+
+test('503 twice: catalog goes to a short retry window, then recovers on its own', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  let healthy = false;
+  let calls = 0;
+  const { feedType, frame } = fixture(t, async () => {
+    calls += 1;
+    return healthy ? jpeg() : new Response(null, { status: 503 });
+  });
+  assert.equal(await feedType(), 'image');
+  await frame();
+  assert.equal(await feedType(), 'image');
+  await frame();
+  assert.equal(await feedType(), 'none', 'retry window while the 503 is fresh');
+  healthy = true;
+  now = T0 + NO_FEED_TRANSIENT_TTL_MS - 1;
+  assert.equal(await feedType(), 'none');
+  now = T0 + NO_FEED_TRANSIENT_TTL_MS;
+  assert.equal(await feedType(), 'image', 'advertised again long before 24 h');
+  assert.ok(NO_FEED_TRANSIENT_TTL_MS < NO_FEED_CAMERA_TTL_MS);
+  const res = await frame();
+  assert.equal(res.status, 200);
+  assert.equal(await feedType(), 'image');
+  assert.equal(calls, 3);
+});
+
+test('still failing after the window: ONE retry re-opens the window (bounded probe)', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  let calls = 0;
+  const { feedType, frame } = fixture(t, async () => {
+    calls += 1;
+    return new Response(null, { status: 503 });
+  });
+  await frame();
+  await frame();
+  assert.equal(await feedType(), 'none');
+  now += NO_FEED_TRANSIENT_TTL_MS;
+  assert.equal(await feedType(), 'image');
+  await frame();
+  assert.equal(calls, 3, 'one request per window');
+  assert.equal(await feedType(), 'none');
+});
+
+test('timeout / network error is also temporary', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  const { feedType, frame } = fixture(t, async () => {
+    throw new TypeError('fetch failed');
+  });
+  await frame();
+  await frame();
+  assert.equal(await feedType(), 'none');
+  now += NO_FEED_TRANSIENT_TTL_MS;
+  assert.equal(await feedType(), 'image');
+});
+
+test('control: two 404s are a real missing feed, stay location-only for 24 h', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  const { feedType, frame } = fixture(
+    t,
+    async () => new Response(null, { status: 404 }),
+  );
+  await frame();
+  await frame();
+  assert.equal(await feedType(), 'none');
+  now = T0 + NO_FEED_TRANSIENT_TTL_MS + 1;
+  assert.equal(await feedType(), 'none');
+  now = T0 + NO_FEED_CAMERA_TTL_MS - 1;
+  assert.equal(await feedType(), 'none');
+  now = T0 + NO_FEED_CAMERA_TTL_MS;
+  assert.equal(await feedType(), 'image');
+});
+
+test('control: a 200 with a non-image body is a real missing feed', async (t) => {
+  t.mock.method(Date, 'now', () => T0);
+  const { feedType, frame } = fixture(
+    t,
+    async () =>
+      new Response('<html></html>', {
+        headers: { 'Content-Type': 'text/html' },
+      }),
+  );
+  await frame();
+  await frame();
+  assert.equal(await feedType(), 'none');
+  t.mock.method(Date, 'now', () => T0 + NO_FEED_TRANSIENT_TTL_MS + 1);
+  assert.equal(await feedType(), 'none');
+});
+
+test('control: a success between two 503s resets the count', async (t) => {
+  t.mock.method(Date, 'now', () => T0);
+  const answers = [503, 200, 503];
+  const { feedType, frame } = fixture(t, async () => {
+    const s = answers.shift();
+    return s === 200 ? jpeg() : new Response(null, { status: s });
+  });
+  await frame();
+  await frame();
+  await frame();
+  assert.equal(await feedType(), 'image');
+});
+
+test('control: a 404 after 503s makes the definitive 24 h mark', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  const answers = [503, 404];
+  const { feedType, frame } = fixture(
+    t,
+    async () => new Response(null, { status: answers.shift() }),
+  );
+  await frame();
+  await frame();
+  now += NO_FEED_TRANSIENT_TTL_MS + 1;
+  assert.equal(await feedType(), 'none');
+});
+
+test('a successful frame inside the retry window clears it at once', async (t) => {
+  let healthy = false;
+  t.mock.method(Date, 'now', () => T0);
+  const { feedType, frame } = fixture(t, async () =>
+    healthy ? jpeg() : new Response(null, { status: 503 }),
+  );
+  await frame();
+  await frame();
+  assert.equal(await feedType(), 'none');
+  healthy = true;
+  assert.equal((await frame()).status, 200);
+  assert.equal(await feedType(), 'image');
+});
+
+test('world-camera sources (throttled fetch path) are not learned from', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  let worldCalls = 0;
+  const WORLD = {
+    id: 'world-or-1',
+    name: 'World camera',
+    sourceKind: 'tripcheck-odot',
+    lat: 45.5,
+    lon: -122.6,
+    url: 'https://www.tripcheck.com/roadcams/cams/one.jpg',
+    snapshotUrl: 'https://www.tripcheck.com/roadcams/cams/one.jpg',
+  };
+  const { get, frame } = fixture(
+    t,
+    async (url) => {
+      if (String(url).includes('/roadcams/')) worldCalls += 1;
+      return new Response(null, { status: 404 });
+    },
+    CAM,
+    [WORLD],
+  );
+  const kind = async () =>
+    JSON.parse((await get('/sources')).body).sources.find(
+      (s) => s.id === WORLD.id,
+    )?.feedType;
+  assert.notEqual(await kind(), undefined, 'world camera is in the catalog');
+  for (let i = 0; i < 3; i += 1) {
+    await get(`/frame/${WORLD.id}`);
+    now += 60 * 60 * 1000;
+  }
+  assert.ok(
+    worldCalls >= 2,
+    'the throttled path really fetched more than once',
+  );
+  assert.notEqual(await kind(), 'none');
+});
+
+for (const [feedType, liveUrl] of [
+  ['hls', 'https://cams.upstream.invalid/live.m3u8'],
+  ['mp4', 'https://cams.upstream.invalid/live.mp4'],
+  ['webm', 'https://cams.upstream.invalid/live.webm'],
+  ['mjpeg', 'https://cams.upstream.invalid/live.mjpg'],
+]) {
+  test(`${feedType}: broken still preview preserves live feed`, async (t) => {
+    t.mock.method(Date, 'now', () => T0);
+    const camera = {
+      ...CAM,
+      id: `live-${feedType}`,
+      feedType,
+      url: liveUrl,
+      snapshotUrl: 'https://cams.upstream.invalid/missing.jpg',
+    };
+    let snapshotAttempts = 0;
+    const {
+      frame,
+      feedType: listedType,
+      get,
+    } = fixture(
+      t,
+      async (url) => {
+        assert.equal(String(url), camera.snapshotUrl);
+        snapshotAttempts += 1;
+        return new Response(null, { status: 404 });
+      },
+      camera,
+    );
+    assert.equal(await listedType(), feedType);
+    await frame();
+    await frame();
+    assert.equal(snapshotAttempts, 2, 'both preview attempts reached upstream');
+    assert.equal(
+      await listedType(),
+      feedType,
+      'a failed optional snapshot cannot turn a live feed location-only',
+    );
+    // The stream payload reads the source feed type directly and never
+    // consults feed availability, so this only shows it is unaffected.
+    assert.equal(
+      JSON.parse((await get(`/stream/${camera.id}`)).body).feedType,
+      feedType,
+    );
+  });
+}
+
+test('mjpeg without a snapshot url keeps its live feed after two frame failures', async (t) => {
+  t.mock.method(Date, 'now', () => T0);
+  const camera = {
+    ...CAM,
+    id: 'live-mjpeg-nosnap',
+    feedType: 'mjpeg',
+    url: 'https://cams.upstream.invalid/live.mjpg',
+  };
+  let attempts = 0;
+  const { frame, feedType: listedType } = fixture(
+    t,
+    async (url) => {
+      attempts += 1;
+      assert.equal(String(url), camera.url);
+      return new Response(null, { status: 404 });
+    },
+    camera,
+  );
+  assert.equal(await listedType(), 'mjpeg');
+  await frame();
+  await frame();
+  assert.equal(attempts, 2, 'both frame attempts reached the live url');
+  assert.equal(
+    await listedType(),
+    'mjpeg',
+    'a live mjpeg stream with no snapshot stays advertised',
+  );
+});
+
+test('a stored mark hides a still camera but not a live feed', async (t) => {
+  t.mock.method(Date, 'now', () => T0);
+  const live = [
+    ['hls', 'https://cams.upstream.invalid/live.m3u8'],
+    ['mp4', 'https://cams.upstream.invalid/live.mp4'],
+    ['webm', 'https://cams.upstream.invalid/live.webm'],
+    ['mjpeg', 'https://cams.upstream.invalid/live.mjpg'],
+  ].map(([feedType, url]) => ({
+    ...CAM,
+    id: `stored-${feedType}`,
+    feedType,
+    url,
+    snapshotUrl: 'https://cams.upstream.invalid/live.jpg',
+  }));
+  const still = {
+    ...CAM,
+    id: 'stored-still',
+    feedType: 'image',
+    snapshotUrl: 'https://cams.upstream.invalid/still.jpg',
+  };
+  const marks = { 'stored-still': T0 };
+  for (const camera of live) marks[camera.id] = T0;
+  const { get } = fixture(
+    t,
+    async () => new Response(null, { status: 404 }),
+    [...live, still],
+    null,
+    { cameras: marks },
+  );
+  const listed = Object.fromEntries(
+    JSON.parse((await get('/sources')).body).sources.map((source) => [
+      source.id,
+      source.feedType,
+    ]),
+  );
+  for (const camera of live)
+    assert.equal(listed[camera.id], camera.feedType);
+  assert.equal(listed['stored-still'], 'none');
+});

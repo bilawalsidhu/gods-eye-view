@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createCctvCatalog } from './cctv/catalog.js';
 import { quebec511VideoUrl, quebecBrowserVideoEnabled } from './cctv/quebec.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
@@ -21,6 +22,10 @@ import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
+import {
+  createFeedAvailability,
+  probeFeedGroups,
+} from './cctv/feedAvailability.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -179,6 +184,38 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     });
   };
 
+  // Location-only cameras (see ./cctv/feedAvailability.js).
+  const feedAvailability = createFeedAvailability({
+    file: path.join(sourceRoot, '.gev-cache', 'cctv-feed-availability.json'),
+  });
+  const feedGroupKey = (source) =>
+    source?.sourceKind === 'txdot-its' && source.cityId
+      ? `txdot:${source.cityId}`
+      : null;
+  let feedProbeInflight = null;
+  const maybeProbeFeedGroups = (sources) => {
+    if (feedProbeInflight) return;
+    feedProbeInflight = probeFeedGroups(
+      sources,
+      feedAvailability,
+      feedGroupKey,
+      async (source) => !!(await fetchTxdotSnapshot(source.snapshotUrl))?.ok,
+    )
+      .then((verdicts) => {
+        if (Object.keys(verdicts).length)
+          console.log('[CCTV] feed group probe:', JSON.stringify(verdicts));
+      })
+      .catch((error) =>
+        console.warn(
+          '[CCTV] feed group probe failed:',
+          error?.message || error,
+        ),
+      )
+      .finally(() => {
+        feedProbeInflight = null;
+      });
+  };
+
   /** Snapshot all camera health entries as an array. */
   const listHealth = () => Array.from(health.values());
 
@@ -265,6 +302,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // key-bearing Street View fallback below has its own check.
         if (admitSameSiteKeyless(req, res)) return;
         const sources = await getCctvSources();
+        maybeProbeFeedGroups(sources);
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
         );
@@ -290,7 +328,21 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               rangeM: source.rangeM,
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
-              feedType: normalizeFeedType(source.feedType),
+              // 'none' = location-only (no public picture found).
+              // Only a still camera can be location-only: a stored mark on a
+              // live feed (HLS, MP4, WebM, MJPEG) must not hide its media.
+              feedType: (() => {
+                const listed = normalizeFeedType(source.feedType);
+                const stillCamera =
+                  !isVideoFeedType(listed) && listed !== 'mjpeg';
+                return stillCamera &&
+                  feedAvailability.isUnavailable(
+                    source.id,
+                    feedGroupKey(source),
+                  )
+                  ? 'none'
+                  : listed;
+              })(),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               sourceUrl: source.sourceUrl || '',
@@ -645,12 +697,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
+        const sourceFeedType = normalizeFeedType(source?.feedType);
         const upstreamCandidate =
           source?.snapshotUrl ||
-          (!isVideoFeedType(normalizeFeedType(source?.feedType))
-            ? source?.url
-            : '');
+          (!isVideoFeedType(sourceFeedType) ? source?.url : '');
 
+        const fetchOutcome = { transient: false };
         const upstreamImage =
           source?.pack === 'world-cameras'
             ? await fetchThrottledFrame(source, cameraId, upstreamCandidate)
@@ -661,9 +713,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                   ottawaAuthorizedFrameUrl(upstreamCandidate),
                 )
               : source?.sourceKind === 'txdot-its'
-                ? await fetchTxdotSnapshot(upstreamCandidate)
+                ? await fetchTxdotSnapshot(upstreamCandidate, {
+                    outcome: fetchOutcome,
+                  })
                 : await fetchCctvImageFromUpstream(upstreamCandidate, {
                     allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
+                    outcome: fetchOutcome,
                   });
         if (
           source?.sourceKind === 'mlit-river' &&
@@ -707,6 +762,24 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           );
           return;
         }
+        // Learn cameras with no public picture. A 5xx/timeout is not
+        // evidence of that (see feedAvailability.js).
+        // Sources fetched through fetchThrottledFrame (world cameras, Ottawa)
+        // have their own refresh floor, stale-frame reuse and failure backoff;
+        // a reused or throttled answer is not a fresh upstream reply, so they
+        // are not learned from here.
+        if (
+          source &&
+          upstreamCandidate &&
+          source.pack !== 'world-cameras' &&
+          source.sourceKind !== 'ottawa-traffic' &&
+          // A missing optional still preview cannot invalidate live video.
+          !isVideoFeedType(sourceFeedType) &&
+          sourceFeedType !== 'mjpeg'
+        )
+          feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok, {
+            transient: fetchOutcome.transient,
+          });
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: upstreamImage.stale ? 'degraded' : 'ok',

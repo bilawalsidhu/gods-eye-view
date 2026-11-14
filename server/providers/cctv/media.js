@@ -449,6 +449,7 @@ export async function fetchTxdotSnapshot(
     fetchImpl = fetch,
     timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
     maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
+    outcome = null,
   } = {},
 ) {
   if (!url) return null;
@@ -479,7 +480,10 @@ export async function fetchTxdotSnapshot(
       signal: controller.signal,
       redirect: 'manual',
     });
-    if (!upstream.ok) return null;
+    if (!upstream.ok) {
+      markTransient(outcome, isTransientStatus(upstream.status));
+      return null;
+    }
     const envelope = await readCappedResponseBytes(upstream, maxEnvelopeBytes);
     if (!envelope) return null;
     let payload;
@@ -508,11 +512,26 @@ export async function fetchTxdotSnapshot(
     if (body[0] !== 0xff || body[1] !== 0xd8 || body[2] !== 0xff) return null;
     return { ok: true, body, contentType: 'image/jpeg' };
   } catch {
+    markTransient(outcome, true);
     return null;
   } finally {
     clearTimeout(timeoutId);
     controller.abort();
   }
+}
+
+/**
+ * A status that says "try again later", not "there is no picture here".
+ * @param {number} status
+ */
+export function isTransientStatus(status) {
+  const n = Number(status);
+  return n === 408 || n === 429 || (n >= 500 && n <= 599);
+}
+
+/** Callers pass `outcome` to learn WHY a fetch returned null. */
+function markTransient(outcome, transient) {
+  if (outcome && typeof outcome === 'object') outcome.transient = !!transient;
 }
 
 /** Redirect hops the frame path will follow, and only within the same host. */
@@ -866,6 +885,7 @@ export async function fetchCctvImageFromUpstream(
     timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
     maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
     allowMjpeg = false,
+    outcome = null,
   } = {},
 ) {
   if (!url || !/^https?:\/\//i.test(url)) return null;
@@ -886,6 +906,7 @@ export async function fetchCctvImageFromUpstream(
     );
     if (!upstream) return null;
     if (!upstream.ok) {
+      markTransient(outcome, isTransientStatus(upstream.status));
       try {
         await upstream.body?.cancel();
       } catch {
@@ -912,6 +933,7 @@ export async function fetchCctvImageFromUpstream(
     if (!body) return null;
     return { ok: true, body, contentType: 'image/jpeg' };
   } catch {
+    markTransient(outcome, true);
     return null;
   } finally {
     clearTimeout(timeoutId);
