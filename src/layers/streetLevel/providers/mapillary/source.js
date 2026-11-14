@@ -1,7 +1,7 @@
 import { msg } from '../../../../i18n/marker.js';
+import { appBaseHref } from '../../../../sources/appBaseUrl.js';
 import { NEAREST_RADIUS_M } from '../../policy.js';
 import {
-  MAPILLARY_GRAPH_HOST,
   NEAREST_IMAGE_FIELDS,
   NEAREST_LIMIT,
   NEAREST_TIMEOUT_MS,
@@ -51,28 +51,33 @@ function endpointBase(endpoint) {
 }
 
 /**
- * Mapillary network access: tiles via the local proxy, which adds the token
- * and caches; Graph API lookups direct with the client token, as MapillaryJS.
- * With `graphEndpoint` (a Graph API base that adds the token itself, such as
- * a same-origin proxy), the source's Graph lookups go there through
- * `fetchImpl` instead, and the photo viewer sends its own lookups there too;
- * no token is sent or needed.
- * @param {{token?: string, fetchImpl?: Function, endpoints?: object,
- *   graphEndpoint?: string}} options
+ * Mapillary network access: tiles and Graph API lookups both go through this
+ * app's server, which adds the client token (the browser never holds it).
+ * Whether the server holds a token is learned from the status route; the
+ * application asks once before it starts and passes the answer as
+ * `configured`, so `hasToken()` is right from the first call, and the
+ * provider's own status check keeps it current. With `graphEndpoint` (a Graph
+ * API base that adds the token itself, such as a same-origin proxy), the
+ * source's Graph lookups and the photo viewer's go there instead.
+ * @param {{fetchImpl?: Function, endpoints?: object, graphEndpoint?: string,
+ *   configured?: boolean}} options
  */
 export function createMapillarySource({
-  token = '',
   fetchImpl = (...args) => globalThis.fetch(...args),
   endpoints = {},
   graphEndpoint = '',
+  configured: knownConfigured = false,
 } = {}) {
-  const graphBase = endpointBase(graphEndpoint);
+  const namedGraphBase = endpointBase(graphEndpoint);
   const urls = {
     status: '/api/mapillary/status',
     tiles: '/api/mapillary/tiles',
-    graph: MAPILLARY_GRAPH_HOST,
+    graph: '/api/mapillary/graph',
     ...endpoints,
   };
+  // The Graph base that adds the token: the one named, else this app's own.
+  const graphBase = namedGraphBase || endpointBase(urls.graph);
+  let configured = knownConfigured === true;
 
   async function graph(path, params = {}, { signal, timeoutMs = 0 } = {}) {
     if (!timeoutMs) return graphOnce(path, params, { signal });
@@ -115,41 +120,38 @@ export function createMapillarySource({
   }
 
   async function graphOnce(path, params, { signal }) {
-    if (graphBase) {
-      const search = new URLSearchParams(params);
-      const response = await fetchImpl(`${graphBase}${path}?${search}`, {
-        signal,
-      });
-      return readJsonOrThrow(response, 'Mapillary graph');
-    }
-    if (!token)
-      throw new MapillarySourceError('Mapillary token not configured', {
-        status: 503,
-        payload: { keyRequired: true },
-      });
-    const search = new URLSearchParams({ access_token: token, ...params });
-    const response = await fetchImpl(`${urls.graph}/${path}?${search}`, {
+    const search = new URLSearchParams(params);
+    const response = await fetchImpl(`${graphBase}${path}?${search}`, {
       signal,
     });
     return readJsonOrThrow(response, 'Mapillary graph');
   }
 
   return {
-    get token() {
-      return token;
-    },
-    /** The Graph API base that adds the token itself, or '' (direct). */
+    /** Absolute Graph endpoint (with trailing slash) for MapillaryJS. */
     get graphEndpoint() {
-      return graphBase;
+      if (namedGraphBase) return namedGraphBase;
+      // MapillaryJS resolves paths against this with `new URL`, so it must be
+      // absolute and end in a slash. In the MCP Apps panel the app's address
+      // is the one the panel names, not the host page's.
+      return new URL(graphBase, appBaseHref()).href;
     },
-    hasToken: () => Boolean(token),
+    /**
+     * Whether a Graph base was named, as opposed to this app's own route
+     * (which always exists, token or not).
+     */
+    hasGraphProxy: () => Boolean(namedGraphBase),
+    /** True once the server has said it holds a token. */
+    hasToken: () => configured,
 
     async getStatus({ signal } = {}) {
       const response = await fetchImpl(urls.status, {
         signal,
         cache: 'no-store',
       });
-      return readJsonOrThrow(response, 'Mapillary status');
+      const status = await readJsonOrThrow(response, 'Mapillary status');
+      configured = status?.configured === true;
+      return status;
     },
 
     /** Raw protobuf bytes for one tile; an empty array means no data. */

@@ -57,21 +57,31 @@ function forwardedProtocol(req) {
 }
 
 /**
- * Cross-site gate for keyless routes the map needs in order to render
- * (`/api/terrain/heights`, `/api/overpass`). It refuses the same cross-site browser shapes as
- * `admitSameSite` (a `Sec-Fetch-Site` other than same-origin/none, a foreign
- * or opaque `Origin`) but does not refuse reverse-proxy forwarding headers:
- * those protect credentials and spend, which a keyless route has neither of,
- * and refusing them would break rendering for an instance served behind the
- * reverse proxy the README documents. A single `X-Forwarded-Proto` supplies
- * the scheme an `Origin` is compared against. That header cannot be attached
- * to a cross-site browser request without a CORS preflight this server never
- * answers, and `Sec-Fetch-Site` is still enforced regardless.
+ * Cross-site gate for routes the map needs in order to render and that may be
+ * reached through the reverse proxy the README documents. It refuses the same
+ * cross-site browser shapes as `admitSameSite` (a `Sec-Fetch-Site` other than
+ * same-origin/none, a foreign or opaque `Origin`) but does not refuse
+ * reverse-proxy forwarding headers: refusing them would break rendering for
+ * an instance served behind a proxy. A single `X-Forwarded-Proto` supplies
+ * the scheme an `Origin` is compared against. It only picks which scheme of
+ * the request's own `Host` that comparison uses; a page on another origin is
+ * refused by `Sec-Fetch-Site` (a cross-site or same-site fetch) and by the
+ * `Origin` comparison (a foreign host matches under neither scheme) whatever
+ * the header says. A client that is not a browser can send any header, and is
+ * not what this gate defends against.
+ *
+ * Use it for keyless routes (`admitSameSiteKeyless` is the same gate under
+ * the name those routes use: they hold no credential and spend nothing, which
+ * is what the forwarding-header refusal protects) and for the one keyed
+ * exception, `/api/ion/*`: Cesium ion has to answer for the page to render.
+ * What that route hands out is ion's endpoint document for an allow-listed
+ * asset (see server/providers/keyIsolation/ionEndpoint.js for what each
+ * holds), never the account token.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @returns {boolean} True when a 403 was sent.
  */
-export function admitSameSiteKeyless(req, res) {
+export function admitSameSiteBehindProxy(req, res) {
   const verdict = admitSameSiteRequest({
     hostHeader: req.headers?.host,
     protocol: forwardedProtocol(req),
@@ -85,4 +95,33 @@ export function admitSameSiteKeyless(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify({ error: verdict.error }));
   return true;
+}
+
+/**
+ * Gate for keyless routes the map needs in order to render
+ * (`/api/terrain/heights`, `/api/overpass`, ...). Forwarding headers are not
+ * refused because those protect credentials and spend, which a keyless route
+ * has neither of. See `admitSameSiteBehindProxy` for the checks that remain.
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @returns {boolean} True when a 403 was sent.
+ */
+export function admitSameSiteKeyless(req, res) {
+  return admitSameSiteBehindProxy(req, res);
+}
+
+/**
+ * Wrap a middleware handler with `admitSameSiteBehindProxy`: cross-site
+ * browser requests get a 403, requests carrying forwarding headers do not.
+ * For a route that holds a key only when what it returns cannot be used
+ * outside the page (see `admitSameSiteBehindProxy`); everything else keeps
+ * `sameSiteGated`.
+ * @param {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next?: Function) => unknown} handler
+ * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next?: Function) => unknown}
+ */
+export function sameSiteGatedBehindProxy(handler) {
+  return (req, res, next) => {
+    if (admitSameSiteBehindProxy(req, res)) return undefined;
+    return handler(req, res, next);
+  };
 }

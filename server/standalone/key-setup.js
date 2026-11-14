@@ -61,7 +61,7 @@ const DEV_FRESH_EXTERNAL_KEYS_AT_BOOT = new Set(
  *   this payload, so the key registry stays in one place (src/keySetupCore.mjs).
  * POST /api/setup/keys → validate {ENV_VAR: value} pairs and upsert them into
  *   the repo-root .env (created if absent), set process.env live, then restart
- *   the dev server so the client-exposed defines re-inject and the page
+ *   the dev server so the Google browser key define re-injects and the page
  *   reloads itself. Pasting a key in the app IS the whole setup — no
  *   hand-edited env files.
  *
@@ -334,7 +334,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
             });
           }
           // Live for the server-side proxies immediately; the restart below is
-          // what re-injects the client-exposed defines (Google, Cesium ion).
+          // what re-injects the client-exposed defines (Google).
           // Removal sets '' rather than deleting: an empty value stays falsy
           // through loadEnv after restart, matching the Pinokio launcher's own
           // blank-field semantics.

@@ -3186,6 +3186,130 @@ provider returns an uncached `204 No Content` for `GET /api/google/tiles-token`
 real token providers and before the unknown-API handler, so existing Google
 browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
 
+## Cesium ion and Mapillary tokens stay on the server
+
+`CESIUM_ION_TOKEN` and `MAPILLARY_CLIENT_TOKEN` are no longer injected into the
+browser bundle; the build defines no credential other than the Google Maps
+browser key `GOOGLE_MAPS_API_KEY` (it also defines the validated Photon URL and
+build constants) (`server/providers/keyIsolation/`,
+`src/sources/serverKeys.js`).
+
+- **Cesium ion.** At start the browser asks `/api/ion/status` whether the server
+  holds a token. If it does, world terrain, Bing imagery and ion-hosted Google
+  3D load through CesiumJS's `server` option, so CesiumJS requests
+  `/api/ion/v1/assets/{id}/endpoint` from this app. The server calls ion with
+  the token and returns only ion's endpoint document. Only assets 1-4 and
+  2275207 are answered. What a document holds depends on the asset: terrain
+  (asset 1) gets an access token ion issues for that asset; the Bing documents
+  (assets 2-4) carry a Bing Maps key ion issues, which CesiumJS passes to its
+  Bing imagery provider as `key`; the Google Photorealistic 3D Tiles document
+  (asset 2275207) is an external 3D Tiles asset whose `options.url`, the
+  tileset address CesiumJS uses, points at Google's tile service and may carry
+  a provider key in its URL. Their lifetime is ion's to set. A visitor who can
+  reach the route obtains those documents; the account token is never
+  returned, and an answer that would contain it is refused.
+  A terrain document is served from memory for at most a minute (CesiumJS
+  requests the endpoint again, with the same request, when ion rejects an
+  asset token, and only for assets it reads without an `externalType`) and
+  only while its token has more than 10 minutes left; a Bing or Google
+  document is kept until its token has 10 minutes or less left, or 30 minutes
+  when it carries no expiry. So while ion returns documents whose token has
+  more than 10 minutes left, it is called at most once a minute per asset for
+  terrain, and once per document lifetime for the others, however many clients
+  ask; requests that arrive while a call to ion is under way share it. That
+  bound holds only while ion returns such documents. When ion fails (no
+  answer, a timeout, 408, 429, a 5xx, or an answer this server cannot use: one
+  that is too large, is not JSON or contains the account token), it is not
+  called again for that asset for 10 seconds, or the `Retry-After` it names
+  (in seconds), at most 60 seconds; meanwhile a held document is served while
+  its token has more than 10 minutes left (a document that carries no expiry,
+  for its 30 minutes), and with none the same error is answered from memory
+  with a `Retry-After`. A refusal (401, 403, 404 or any other 4xx except 408
+  and 429) is not cached and has no back-off: the held document is dropped,
+  and each request that finds no call to ion under way reaches ion, as often
+  as the per-IP limit allows (300 a minute per client, 1,200 a minute across
+  all clients). A request answered from memory, or one that joins a call under
+  way, does not count against the per-IP limit. An explicit token passed by an
+  embedder still goes straight to ion.
+- **Mapillary.** MapillaryJS and the Street Level source call
+  `/api/mapillary/graph/*`; the server adds the token as an `Authorization`
+  header and forwards only the Graph paths (`images`, `image_ids`, an image id,
+  its `tiles`) and parameters the app uses, dropping any client-supplied
+  `access_token`. Image CDN URLs in the answers carry no token.
+- **The cross-site gate.** Both routes refuse cross-site browser requests (a
+  foreign or opaque `Origin`, a `Sec-Fetch-Site` other than
+  `same-origin`/`none`) and sit behind a per-IP limit. They differ on
+  forwarding headers. `/api/ion/status` and `/api/ion/v1/assets/{id}/endpoint`
+  use the proxy-tolerant gate (`sameSiteGatedBehindProxy` in
+  `server/providers/common/same-site.js`, the form the keyless map routes use
+  as `admitSameSiteKeyless`): ion is needed to render terrain and imagery, so an
+  install behind a reverse proxy with the key in `.env` keeps ion, and a
+  visitor can obtain the endpoint documents the page needs (the ion item above
+  says what they hold). A single `X-Forwarded-Proto` supplies the scheme an
+  `Origin` is compared with. `/api/mapillary/graph/*` keeps the full gate, so
+  behind a reverse proxy it answers 403, as the Mapillary tile and status
+  routes already did. The per-IP limits key on the socket peer, so all users
+  behind one proxy share one bucket (300 a minute for ion, 1200 for Graph); an
+  ion request answered from memory does not count against it.
+  `server/providers/keyIsolation/routeGate.test.mjs` runs the plugin's mounts
+  on a real HTTP server and pins each rule.
+- **`application` is a Promise.** The app learns from `/api/ion/status` and
+  `/api/mapillary/status` whether the server holds an ion token and a
+  Mapillary token before it creates itself, so `src/main.js` now exports
+  `application` as a Promise of the application, not the application. Code
+  that imports it must `await` it (the QA scripts do). The two requests go out
+  together, so startup waits for the slower one. Neither question fails, and
+  each is given up after 15 seconds: a missing route, a refusal, an error or
+  no answer all read as "no token" and keep the keyless terrain and imagery.
+  A synchronous failure to create the application is reported on the loading
+  screen like a failure to start it, and `application` still rejects.
+- **Street Level's first source.** The Mapillary answer (a boolean, never the
+  token) is handed to the Mapillary source as its starting state, so Street
+  Level, which chooses its first source when it is built, starts on Mapillary
+  when the server holds a token and on the first keyless source (KartaView)
+  when it does not, as it does for an install with no key. The built-in Graph
+  route is always present, so it does not count as a key; a Graph base named
+  by an embedder (`graphEndpoint`) still does. The provider's own status check
+  keeps the value current afterwards.
+- **The MCP Apps panel.** The panel build holds neither token. The panel page
+  sends the app's paths, `/api/ion/` and `/api/mapillary/graph/` among them, to
+  the server the MCP server is pointed at through `panel_request`
+  (`src/tools/queries/panelRequest.js`), and every server the repository starts
+  mounts those routes (`server/providers/keyIsolation/plugin.js` covers the
+  development and the preview server; Docker and Pinokio run the same
+  configuration). `panel_request` sends neither `Origin` nor `Sec-Fetch-Site`,
+  so the cross-site gate lets it through. A server the MCP server reaches
+  through a reverse proxy that adds forwarding headers still answers the ion
+  routes but refuses the Graph route, so Mapillary coverage reports a missing
+  key there. The ion
+  endpoint and Graph addresses resolve against `GEV_APP_BASE_URL`, the address
+  the panel names for the app, since a host may serve the page from an address
+  that cannot be a base. Without an answer the panel runs keyless: no ion
+  terrain or imagery, and Street Level starts on its first keyless source
+  (Mapillary reports the missing key if it is chosen; the coverage tiles
+  already came through the same path before). The panel's
+  security policy still lists `graph.mapillary.com`, which the panel no longer
+  calls itself. Tests: `server/mcp/panelKeyRoutes.test.mjs` (the real
+  `panel_request` against the key routes) and `src/sources/serverKeys.test.mjs`.
+- **For embedders (a breaking change).** `createMapillarySource({ token })`
+  (`gods-eye-view/layers/street-level/mapillary/source`) no longer takes a
+  token: the option is ignored and `source.token` is gone, because the source
+  never holds one. Its Graph calls go to this app's `/api/mapillary/graph/`,
+  or to `graphEndpoint` when one is passed. An embedder runs the server routes
+  (`server/providers/keyIsolation/`, mounted by the servers this repository
+  starts) with `MAPILLARY_CLIENT_TOKEN` set on the server, or passes
+  `graphEndpoint` for its own Graph proxy that adds the token (the provider
+  then counts the key as present). `createBrowserViteConfig`
+  (`gods-eye-view/build/vite`) likewise ignores `cesiumToken` and
+  `mapillaryToken`; it defines no credential other than the Google Maps key. A
+  `cesiumToken` handed to `createStandaloneApplication` still works: an explicit
+  token goes straight to ion.
+- `src/tooling/keyExposure.test.mjs` starts the real Vite config with fake
+  tokens and fails if either reaches served client code, and walks the sources
+  (without git) for a read of either token from `import.meta.env`;
+  `node scripts/check-key-exposure.mjs` scans a running app or a production
+  build the same way. The Google browser key is expected in the bundle.
+
 ## Infrastructure marker visibility
 
 Datacenter/dam registration uses fresh reusable factories with the application's
@@ -5392,8 +5516,8 @@ key reads KEY REJECTED and stops tile requests until the layer goes off; a 429
 pauses them for its Retry-After.
 
 The server proxy (`server/providers/mapillary.js`) adds the token to
-coverage-tile requests (the browser holds it too, for MapillaryJS and the Graph
-API), serves only z11–14 coverage, refuses upstream redirects, strips the
+coverage-tile requests (the Graph API calls of MapillaryJS and the Street Level
+source go through `/api/mapillary/graph/*`, which adds the token), serves only z11–14 coverage, refuses upstream redirects, strips the
 unused `image` layer, shares one fetch per tile, runs at most six at once
 (cancelling those every client has left) and keeps tiles in memory for 24 h
 (a body too big to be a trimmed tile is served but not kept). While Mapillary

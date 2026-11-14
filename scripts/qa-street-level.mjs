@@ -6,7 +6,7 @@
  * `--fixtures` (CI) answers every *.mapillary.com, KartaView and Panoramax
  * request and the coverage tile route from fixtures, so nothing reaches those
  * providers; the server still needs a (dummy) Mapillary token because the
- * bundle carries it. `--strict` fails on any
+ * server adds it to Graph and tile calls. `--strict` fails on any
  * skip other than "fixtures only". A failed run saves evidence under
  * qa-artifacts/street-level/.
  */
@@ -153,11 +153,22 @@ async function serveFixtures(page, fixture) {
     body: JSON.stringify(payload),
   });
   const answerFor = (method, address) => {
-    if (/(^|\.)mapillary\.com$/.test(address.hostname)) {
-      const call = describeCall(method, address);
+    // Graph calls go to this server (/api/mapillary/graph), which adds the
+    // token, so the page never reaches graph.mapillary.com itself. Answer them
+    // as if it had, which keeps the fixture paths identical.
+    const graphPrefix = '/api/mapillary/graph/';
+    const viaServer = address.pathname.startsWith(graphPrefix);
+    if (viaServer || /(^|\.)mapillary\.com$/.test(address.hostname)) {
+      const upstream = viaServer
+        ? new URL(
+            `${address.pathname.slice(graphPrefix.length - 1)}${address.search}`,
+            'https://graph.mapillary.com',
+          )
+        : address;
+      const call = describeCall(method, upstream);
       const answer = answerMapillaryRequest({
         method,
-        url: address.href,
+        url: upstream.href,
         images: fixture.images,
       });
       fixture.calls.add(call);
@@ -471,8 +482,8 @@ async function main() {
   const errors = [];
   const monitors = [];
   // The layer only warns on listener exceptions, so count those as errors.
-  const open = async (name, fixture) => {
-    const page = await browser.newPage();
+  const open = async (name, fixture, context = browser) => {
+    const page = await context.newPage();
     monitors.push(
       watchPage(page, {
         name,
@@ -576,7 +587,9 @@ async function main() {
 
     await expandPanel(page);
     if (!configured && litAlone(await getUI(page), 'mapillary')) {
-      // A keyed bundle behind a server without the token keeps Mapillary.
+      // The app asks the server before it starts, so Mapillary is lit with no
+      // token only if the server's answer changed since (the token was
+      // removed): the controls are then gated on the key.
       await step('keyless server: KEY REQUIRED gates the controls', () =>
         assertKeyRequired(page),
       );
@@ -1025,18 +1038,39 @@ async function main() {
       );
 
       await fixtureStep(
-        // The fixture bundle carries a token, so this covers a keyless
-        // server behind a keyed bundle; the keyless default is checked above.
+        // This page restores the Mapillary choice the main page saved, and the
+        // server answers "no Mapillary token" for it: a chosen source is kept
+        // and gated on its key.
         'keyless server (second page): KEY REQUIRED gates the controls',
         async () => {
-          const keyless = await open(
-            'keyless',
-            newFixture({ configured: false }),
-          );
+          const keylessFixture = newFixture({ configured: false });
+          const keyless = await open('keyless', keylessFixture);
           await expandPanel(keyless);
           await assertKeyRequired(keyless);
           await collectRenderErrors(keyless, 'keyless');
           await keyless.close();
+          // A request from this page that no fixture answers fails the step.
+          assert.deepEqual(keylessFixture.unknown, []);
+        },
+      );
+
+      await fixtureStep(
+        // Nothing is saved in a new profile, so with no Mapillary token on
+        // the server the layer opens on the first keyless source.
+        'keyless server (new profile): opens on KartaView, not KEY REQUIRED',
+        async () => {
+          const context = await browser.createBrowserContext();
+          const freshFixture = newFixture({ configured: false });
+          try {
+            const fresh = await open('keyless-new', freshFixture, context);
+            await expandPanel(fresh);
+            await assertKeylessDefault(fresh);
+            await collectRenderErrors(fresh, 'keyless-new');
+          } finally {
+            await context.close();
+          }
+          // A request from this page that no fixture answers fails the step.
+          assert.deepEqual(freshFixture.unknown, []);
         },
       );
 

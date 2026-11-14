@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createMapillaryProvider } from './index.js';
+import { createMapillarySource } from './source.js';
 import { mapillaryImageUrl } from './policy.js';
 import { sequenceIdFromPick } from '../../lineCoverage.js';
 import { thinImages } from '../../sequenceCones.js';
@@ -207,4 +208,34 @@ test('nearestImage opens the closest image that passes the filter, not the first
     fakeContext({ pano: 'all', sinceMs: 100 }),
   );
   assert.equal(await tooOld.nearestImage({ lat: 1, lon: 2 }), null);
+});
+
+test('keyReady: the built-in route alone is not a key; a token or a configured Graph proxy is', () => {
+  const ready = (options) =>
+    createMapillaryProvider({
+      source: createMapillarySource({
+        fetchImpl: async () => new Response('{}'),
+        ...options,
+      }),
+    }).keyReady();
+  // The server has not said it holds a token: the same-origin Graph route
+  // always exists, so its address must not count.
+  assert.equal(ready({}), false);
+  assert.equal(ready({ configured: false }), false);
+  // The server holds one.
+  assert.equal(ready({ configured: true }), true);
+  // A Graph base the embedder named adds a token itself.
+  assert.equal(ready({ graphEndpoint: 'https://graph.example/proxy' }), true);
+  assert.equal(ready({ graphEndpoint: '  ' }), false, 'blank is not named');
+});
+
+test('keyReady: a stand-in source without hasGraphProxy keeps the old reading of its endpoint', () => {
+  const ready = (source) => createMapillaryProvider({ source }).keyReady();
+  const base = fakeMapillarySource({ hasToken: () => false });
+  assert.equal(ready(base), false);
+  assert.equal(
+    ready({ ...base, graphEndpoint: '/api/mapillary/graph/' }),
+    true,
+  );
+  assert.equal(ready({ ...base, hasGraphProxy: () => false }), false);
 });

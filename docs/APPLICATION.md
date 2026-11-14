@@ -84,7 +84,10 @@ standalone share-restoration result keep their existing separate contracts.
 ## Standalone wiring
 
 `src/main.js` reads the existing browser configuration and starts
-`src/standalone/application.js`. That module selects the four implementations
+`src/standalone/application.js`. The `application` it exports is a Promise of
+the application, not the application: the page asks its server whether it holds
+Cesium ion and Mapillary tokens before the application is created, so code
+that imports `application` must `await` it. That module selects the four implementations
 in its directory. Scene setup, controls, layer registration, tools and loading
 chrome have separate owners. The existing `window.__godsEyeView` debugging shape
 is preserved while the app is running.
