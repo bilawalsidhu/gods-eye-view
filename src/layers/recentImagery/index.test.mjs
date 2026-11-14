@@ -1128,6 +1128,33 @@ test('an automatic overview that probes empty hands over to the next ranked day'
   assert.deepEqual(f.drapes(), { a: `${V15}|none`, b: null });
 });
 
+test('with empty days shown, focus leaves an empty automatic overview with the hand-over and its successor drapes', async () => {
+  const f = fixture();
+  f.layer.setSources({ hls: false });
+  f.layer.setShowUnavailable(true);
+  await f.ready();
+  assert.equal(f.diag().following, V21, 'today is followed');
+  f.thumbnails.probe(V21, 'empty');
+  assert.equal(f.diag().following, V15, 'yesterday takes over');
+  assert.equal(f.snap().focus.key, V15, 'focus goes with it');
+  f.thumbnails.probe(V15, 'present');
+  assert.equal(f.snap().preview.key, V15);
+  assert.equal(f.snap().preview.pending, null);
+  assert.deepEqual(f.drapes(), { a: `${V15}|none`, b: null });
+});
+
+test('focus on an empty automatic day moves to the next ranked day, not the nearest card, and it drapes once present', async () => {
+  const f = fixture();
+  await f.ready([CANDIDATES[0], CANDIDATES[1], CANDIDATES[3]]);
+  assert.equal(f.snap().preview.key, S18);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.diag().following, V21, 'the newest overview takes over');
+  assert.equal(f.snap().focus.key, V21, 'not the older neighbour V15');
+  f.thumbnails.probe(V21, 'present');
+  assert.equal(f.snap().preview.key, V21);
+  assert.deepEqual(f.drapes(), { a: `${V21}|none`, b: null });
+});
+
 test('a pinned day still being probed drapes once the probe says present', async () => {
   const f = fixture();
   f.layer.setParams({ ...LINK_BOX, a: V21, mode: 0 });

@@ -285,12 +285,17 @@ export function createRecentImageryLayer({
   const rank = (list) =>
     rankLatest(list.map(withAvailability), { truncated: _truncated });
 
-  /** Focus the START HERE day and preview it when the mode's slot is empty. */
-  function autoPreview() {
+  /**
+   * Focus the START HERE day and preview it when the mode's slot is empty.
+   * @param {string | null} [emptyKey] The empty automatic day handed over;
+   *   focus still on it moves too, since a followed day previews only while
+   *   it is focused.
+   */
+  function autoPreview(emptyKey = null) {
     const ranked = rank(sourcedCandidates());
     if (!ranked.candidate) return;
     const key = ranked.candidate.key;
-    if (!_focusKey) _focusKey = key;
+    if (!_focusKey || _focusKey === emptyKey) _focusKey = key;
     if (!previewSlot() || activeSlotOf(key)) return;
     _auto = { key, reason: ranked.reason, certain: ranked.certain };
     if (drapable(candidateFor(key))) _previewKey = key;
@@ -317,7 +322,7 @@ export function createRecentImageryLayer({
       _previewKey = null;
       _auto = null;
       changed = true;
-      if (wasAuto) autoPreview();
+      if (wasAuto) autoPreview(preview.key);
     }
     // A followed day that turns out empty is dropped; an automatic one hands
     // over to the next ranked day.
@@ -327,7 +332,7 @@ export function createRecentImageryLayer({
       _followKey = null;
       if (wasAuto) {
         _auto = null;
-        autoPreview();
+        autoPreview(followed.key);
       }
       changed = true;
     }
