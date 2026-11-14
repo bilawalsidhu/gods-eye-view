@@ -2,6 +2,7 @@
 // Local, not i18n/marker.js: the token-ledger tests run this file in isolation.
 const msg = (text) => text;
 import { normalizeIdSwitches, patchRequestedIdSwitches } from './idSwitches.js';
+import { normalizeSatelliteClassMask } from './satelliteClassMask.js';
 import reservationRows from './layerStateTokenReservations.json' with { type: 'json' };
 
 const VALID_DISPOSITIONS = new Set([
@@ -312,6 +313,13 @@ const OPTION_GROUPS = Object.freeze({
       high: 'h',
     }),
   ]),
+  rail: Object.freeze([
+    booleanOption('transit', 't', true),
+    booleanOption('local', 'l', true),
+    booleanOption('regional', 'r', true),
+    booleanOption('national', 'n', true),
+    booleanOption('international', 'i', true),
+  ]),
   'wildlife-sightings': Object.freeze([
     booleanOption('confirmed', 'c', false),
     enumOption(
@@ -335,6 +343,9 @@ const OPTION_GROUPS = Object.freeze({
       osm: 'o',
       hybrid: 'h',
     }),
+    // Street Traffic row toggles: flow-colored road lines, moving dots.
+    booleanOption('lines', 'l', false),
+    booleanOption('dots', 'd', true),
   ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
@@ -413,6 +424,16 @@ const OPTION_GROUPS = Object.freeze({
       dense: 'd',
     }),
     integerOption('selectedSatTrackingId', 't', null),
+    // Every class but Starlink shows by default (satellites/classes.js).
+    Object.freeze({
+      key: 'classes',
+      token: 'k',
+      defaultValue: 'sitpd',
+      normalize: normalizeSatelliteClassMask,
+      encode: (value) => value,
+      decode: (value) =>
+        typeof value === 'string' ? normalizeSatelliteClassMask(value) : null,
+    }),
   ]),
   cctv: Object.freeze([
     enumOption('coverageMode', 'c', 'on', ['off', 'on', 'viewshed'], {
@@ -679,11 +700,18 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'i',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'news', token: '00', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'radio',
     token: 'r',
     disposition: 'enabled+options',
     optionOwner: 'radio',
+  }),
+  Object.freeze({
+    id: 'rail',
+    token: '02',
+    disposition: 'enabled+options',
+    optionOwner: 'rail',
   }),
   Object.freeze({
     id: 'recent-imagery',
@@ -708,6 +736,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'satellites',
   }),
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'shipwrecks', token: '01', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',

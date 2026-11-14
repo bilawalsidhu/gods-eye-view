@@ -535,14 +535,26 @@ export function createModel({
     return `${isolate(latPart)} ${isolate(lonPart)}`;
   }
 
+  /**
+   * Millisecond delta → `{ unit: '<1h' | 'h' | 'd', count }`, or null for
+   * invalid input. Both age formatters read it, so they pick the same unit.
+   */
+
+  function ageParts(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
+    const hours = deltaMs / 3600000;
+    if (hours < 1) return { unit: '<1h', count: 0 };
+    const wholeHours = Math.round(hours);
+    if (wholeHours < 48) return { unit: 'h', count: wholeHours };
+    return { unit: 'd', count: Math.round(hours / 24) };
+  }
+
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
 
   function formatAge(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
-    const hours = deltaMs / 3600000;
-    if (hours < 1) return '<1h';
-    if (hours < 48) return `${Math.round(hours)}h`;
-    return `${Math.round(hours / 24)}d`;
+    const age = ageParts(deltaMs);
+    if (!age) return '';
+    return age.unit === '<1h' ? '<1h' : `${age.count}${age.unit}`;
   }
 
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
@@ -573,12 +585,12 @@ export function createModel({
   /** formatAge for a card: "<1h", "24h", "3d" in the UI language ("24 ч"). */
 
   function formatAgeLabel(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
-    const hours = deltaMs / 3600000;
-    if (hours < 1) return t('<1h', { context: 'age' });
-    if (hours < 48)
-      return t('{count}h', { context: 'age', count: Math.round(hours) });
-    return t('{count}d', { context: 'age', count: Math.round(hours / 24) });
+    const age = ageParts(deltaMs);
+    if (!age) return '';
+    if (age.unit === '<1h') return t('<1h', { context: 'age' });
+    return age.unit === 'h'
+      ? t('{count}h', { context: 'age', count: age.count })
+      : t('{count}d', { context: 'age', count: age.count });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */

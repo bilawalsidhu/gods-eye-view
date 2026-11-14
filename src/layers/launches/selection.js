@@ -9,7 +9,8 @@ export function createSelection({
 }) {
   const { getKeyholeGeometry } = services.geometry;
 
-  function focusFullGlobe(viewer, duration = 2.4) {
+  /** @returns {boolean} Whether the flight started. */
+  function focusFullGlobe(viewer, { duration = 2.4, complete, cancel } = {}) {
     const canvas = viewer?.scene?.canvas;
     const height = canvas?.clientHeight || canvas?.height;
     const width = canvas?.clientWidth || canvas?.width;
@@ -23,7 +24,7 @@ export function createSelection({
       fovy <= 0 ||
       fovy >= Math.PI
     )
-      return;
+      return false;
     const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
     const keyholeRadius = getKeyholeGeometry(width, height).radius;
     const targetScreenRadius = keyholeRadius * 0.61;
@@ -32,6 +33,7 @@ export function createSelection({
     );
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
+    layerState._cameraReleased = false;
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromRadians(
         cartographic.longitude,
@@ -45,7 +47,10 @@ export function createSelection({
       },
       duration,
       easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      complete,
+      cancel,
     });
+    return true;
   }
 
   function entityLaunchId(entity) {
@@ -187,6 +192,7 @@ export function createSelection({
       Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3()),
       new Cesium.Cartesian3(),
     );
+    layerState._cameraReleased = false;
     layerState._viewer.camera.flyTo({
       destination,
       orientation: { direction, up },
@@ -209,6 +215,7 @@ export function createSelection({
     layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
       `rocket-launch:${launch.id}`,
     );
+    layerState._cameraReleased = false;
     layerState._viewer.camera.flyToBoundingSphere(
       new Cesium.BoundingSphere(launchPosition, 0),
       {

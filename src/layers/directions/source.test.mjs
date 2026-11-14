@@ -41,3 +41,15 @@ test('route failures are surfaced without fallback requests', async () => {
     assert.equal(calls, 1);
   }
 });
+
+test('a routing outage stays an outage when its body carries an error', async () => {
+  const source = createDirectionsSource({ fetchImpl: async () =>
+    Response.json({ ok: false, error: 'routing service unavailable' }, { status: 502 }) });
+  await assert.rejects(source.getRoute(query), { status: 502, message: 'Routing unavailable (HTTP 502)' });
+});
+
+test('a routing outage page that is not JSON still reads as an outage', async () => {
+  const source = createDirectionsSource({ fetchImpl: async () =>
+    new Response('<html>Bad Gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } }) });
+  await assert.rejects(source.getRoute(query), { status: 502, message: 'Routing unavailable (HTTP 502)' });
+});

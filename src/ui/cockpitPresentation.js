@@ -146,19 +146,53 @@ export function formatCockpitWindDirection(value) {
 }
 
 /**
- * The Cockpit entry for each subject it can ride: an aircraft's cockpit.
- * Both entry buttons (Contacts and the Intel HUD readout) show it.
+ * A TLE epoch as compact UTC, `2026-11-04 08:12Z`, or '' when unknown.
+ * @param {number|null|undefined} epochMs
+ */
+export function formatTleEpochUtc(epochMs) {
+  // Beyond ±8.64e15 ms a Date is invalid and toISOString throws.
+  if (!Number.isFinite(epochMs) || Math.abs(epochMs) > 8.64e15) return '';
+  const iso = new Date(epochMs).toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}Z`;
+}
+
+/**
+ * How old a TLE is, in the identifier line's compact units: under an hour,
+ * whole hours under a day, then whole days. A TLE's propagation error grows
+ * with its age, so the age is shown beside the epoch.
+ * @param {number|null|undefined} ageMs Now minus the TLE epoch.
+ * @returns {{unit: 'under-hour'}|{unit: 'hours'|'days', value: number}|null}
+ *   Null without a usable age.
+ */
+export function tleAgeParts(ageMs) {
+  if (!Number.isFinite(ageMs)) return null;
+  const hours = Math.max(0, ageMs) / 3_600_000;
+  if (hours < 1) return { unit: 'under-hour' };
+  if (hours < 24) return { unit: 'hours', value: Math.floor(hours) };
+  return { unit: 'days', value: Math.floor(hours / 24) };
+}
+
+/**
+ * The Cockpit entry for each subject it can ride: an aircraft's cockpit, a
+ * vessel's bridge or a satellite's orbit. Both entry buttons (Contacts and
+ * the Intel HUD readout) show it.
  */
 const COCKPIT_ENTRY_FACES = Object.freeze({
   aircraft: Object.freeze({ icon: 'flight', label: msg('COCKPIT') }),
+  vessel: Object.freeze({ icon: 'directions_boat', label: msg('BRIDGE') }),
+  satellite: Object.freeze({ icon: 'satellite_alt', label: msg('ORBIT') }),
 });
 
 /**
- * The entry's glyph and localized label for the subject it would ride.
- * @param {'aircraft'|null|undefined} kind
+ * The entry's glyph and localized label for the subject it would ride. An
+ * application provider's subject brings its own face, already in the page's
+ * language (`presence.entryFace`).
+ * @param {string|null|undefined} kind
+ * @param {{icon: string, label: string}|null} [face]
  * @returns {{icon: string, label: string}}
  */
-export function cockpitEntryFace(kind) {
-  const face = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
-  return { icon: face.icon, label: t(face.label) };
+export function cockpitEntryFace(kind, face = null) {
+  if (face?.icon && face?.label) return { icon: face.icon, label: face.label };
+  const known = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
+  return { icon: known.icon, label: t(known.label) };
 }

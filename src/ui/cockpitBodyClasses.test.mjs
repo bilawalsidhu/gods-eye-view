@@ -1,7 +1,8 @@
 // src/ui/cockpitBodyClasses.test.mjs — the classes the Cockpit puts on
 // <body> must not also name an element's rule. A bare `.name { … }` written
 // for a panel matches <body> the moment <body> carries `name`, and its
-// pointer-events, position and overflow then apply to the whole page.
+// pointer-events, position and overflow then apply to the whole page (a
+// shared `cockpit-orbital` once made every click in orbit fall through).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -52,7 +53,7 @@ function cockpitBodyClasses() {
 
 test('the Cockpit adds its subject classes to <body>', () => {
   const classes = cockpitBodyClasses();
-  for (const name of ['cockpit-mode']) {
+  for (const name of ['cockpit-mode', 'cockpit-bridge', 'cockpit-orbit']) {
     assert.ok(classes.includes(name), `${name} is not added to <body>`);
   }
 });

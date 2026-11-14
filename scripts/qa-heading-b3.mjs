@@ -40,7 +40,7 @@
  *                       the DISPLAYED (render-delayed) time within 35° — catches
  *                       sign/offset inversion in the whole chain (chord lags the
  *                       tangent by ≤ half a segment ≈ 22.5°)
- *   Both layers: flights (airplane.glb, offset 180°) then military (jet.glb,
+ *   Both layers: flights (fleet models, offset 180°) then military (fleet models,
  *   normalized nose -X, offset 180°).
  *
  *   VISUAL — with the turning flights plane tracked in 3D, capture screenshots
@@ -99,6 +99,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 // ---------------------------------------------------------------------------
 // Args (same shape as track-regression.mjs)
@@ -466,6 +467,7 @@ async function main() {
   const failedResponses = [];
   try {
     const page = await browser.newPage();
+    await stubPlanespotters(page);
     await page.setViewport({ width: 1280, height: 800 });
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -719,7 +721,7 @@ async function main() {
     // ========================================================================
     // Phase 1 — FLIGHTS layer: track TRN001, sample displayed course 30 s
     // ========================================================================
-    console.log('\nPhase 1 — flights layer (airplane.glb, heading offset 180°)');
+    console.log('\nPhase 1 — flights layer (fleet models, heading offset 180°)');
     await page.evaluate((icao) => {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
     }, TURN.flights[0].icao);
@@ -805,7 +807,7 @@ async function main() {
     // ========================================================================
     // Phase 2 — MILITARY layer: track TRNMIL1 (flights layer auto-clears)
     // ========================================================================
-    console.log('\nPhase 2 — military layer (jet.glb, heading offset 180°)');
+    console.log('\nPhase 2 — military layer (fleet models, heading offset 180°)');
     await page.evaluate((hex) => {
       window.__godsEyeView.dataManager.layers.get('military').module.trackById(hex);
     }, TURN.military[0].hex);

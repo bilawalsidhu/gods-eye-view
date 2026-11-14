@@ -209,6 +209,7 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
     'fire',
     'sighting',
     'sighting-area',
+    'train',
     'vessel',
   ]);
   for (const kind of kinds) {
@@ -243,6 +244,10 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
   assert.deepEqual(
     { ...WORLD_FOCUS_FRAMING.fire },
     { radiusM: 400, rangeM: 3000, pitchDeg: -35 },
+  );
+  assert.deepEqual(
+    { ...WORLD_FOCUS_FRAMING.train },
+    { radiusM: 200, rangeM: 2500, pitchDeg: -35 },
   );
   assert.deepEqual(
     { ...WORLD_FOCUS_FRAMING.sighting },
