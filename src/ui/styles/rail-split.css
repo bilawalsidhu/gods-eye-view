@@ -51,7 +51,10 @@
    gap above it, with or without a panel open, so opening one doesn't move
    the rail down. */
 #left-panel-stack {
-  top: calc(var(--left-stack-safe-top, var(--left-stack-top)) + var(--panel-rail-lift, 0px));
+  top: calc(
+    var(--left-stack-safe-top, var(--left-stack-top)) +
+      var(--panel-rail-lift, 0px)
+  );
 }
 
 /* The right rail splits the same way with nothing open, mirrored: the icon
@@ -151,11 +154,14 @@
    one, which slides to it. The button carries no fill of its own: as a rail
    folds its labelled pills to icons, a fill on the shrinking button would
    read as the highlight stretching. */
-:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item.ui-rail__item--on {
+:is(.gev-panel-rail--left, .gev-panel-rail--right)
+  .ui-rail__item.ui-rail__item--on {
   color: #00d4ff !important;
 }
 
-:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail:not(.ui-rail--glide) .ui-rail__item.ui-rail__item--on {
+:is(.gev-panel-rail--left, .gev-panel-rail--right)
+  .ui-rail:not(.ui-rail--glide)
+  .ui-rail__item.ui-rail__item--on {
   background: none;
   border-color: transparent;
 }
@@ -174,7 +180,10 @@
   gap: 12px;
 }
 
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on) {
   background: none !important;
   border-color: transparent !important;
@@ -183,7 +192,10 @@
   -webkit-backdrop-filter: none;
 }
 
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
   > .ui-tooltip::before {
   position: absolute;
@@ -199,7 +211,10 @@
 }
 
 /* The ends of the rail. */
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
   > .ui-tooltip:first-child::before {
   top: -5px;
@@ -208,7 +223,10 @@
   border-top-right-radius: 14px;
 }
 
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
   > .ui-tooltip:last-child::before {
   bottom: -5px;
@@ -218,7 +236,10 @@
 }
 
 /* The runs stop short of the open icon. */
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
   > .ui-tooltip:has(+ .ui-tooltip > .ui-rail__item--on)::before {
   bottom: -1px;
@@ -227,9 +248,13 @@
   border-bottom-right-radius: 14px;
 }
 
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
-  > .ui-tooltip:has(> .ui-rail__item--on) + .ui-tooltip::before {
+  > .ui-tooltip:has(> .ui-rail__item--on)
+  + .ui-tooltip::before {
   top: -1px;
   border-top-width: 1px;
   border-top-left-radius: 14px;
@@ -237,7 +262,10 @@
 }
 
 /* The open icon's own piece. */
-:is(body:not(.panels-edge-left) .gev-panel-rail--left, body:not(.panels-edge-right) .gev-panel-rail--right)
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
   .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
   > .ui-tooltip:has(> .ui-rail__item--on)::before {
   inset: -4px -5px;
