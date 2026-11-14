@@ -638,7 +638,8 @@ The panel runs the app's panel build (`npm run build:panel`, served at
 in Claude Desktop and in the Codex and ChatGPT desktop apps with a local
 server and no HTTPS. `?embed=1` shows the app as the globe alone and takes
 new views from the page that frames it; framing is off unless
-`GEV_EMBED_FRAME_ANCESTORS` allows the framing page. MCP leads with the tools that find
+`GEV_EMBED_FRAME_ANCESTORS` allows the framing page (sources separated by
+spaces or commas; invalid entries are dropped with a warning). MCP leads with the tools that find
 what to show. See [tools and the MCP server](TOOLS.md).
 
 Stdio processes from one install share the panel key in

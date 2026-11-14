@@ -34,15 +34,61 @@ export function isEmbedDocumentRequest(url) {
   );
 }
 
+const KEYWORDS = new Set(["'self'", "'none'"]);
+/** A CSP host source: scheme, host (optionally `*.`-prefixed) and port, no path or quotes. */
+const HOST_SOURCE = /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:\*\.)?[a-z0-9.-]+(?::(?:\d{1,5}|\*))?\/?$/i;
+const SCHEME_SOURCE = /^[a-z][a-z0-9+.-]*:$/i;
+
+/**
+ * Normalizes `GEV_EMBED_FRAME_ANCESTORS` into CSP frame-ancestors sources.
+ * CSP separates sources with spaces, but a comma-separated list (the usual
+ * shape for env lists) used to be pasted verbatim, giving browsers an invalid
+ * directive that silently blocks every framing page. Commas and any
+ * whitespace now separate sources, bare keywords gain their quotes, and
+ * anything that is not a source (a path, a `;`) is dropped with a warning
+ * rather than injected into the header.
+ */
+export function parseFrameAncestors(value, { warn = console.warn } = {}) {
+  const raw = String(value ?? '').trim();
+  if (raw === '*') return { anywhere: true, sources: [] };
+  // A `;` would end the directive and start another one: refuse the whole value.
+  if (raw.includes(';')) {
+    if (raw) warn('GEV_EMBED_FRAME_ANCESTORS: contains ";"; keeping the default framing protection');
+    return { anywhere: false, sources: [] };
+  }
+  const tokens = raw
+    .split(/[\s,]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const sources = [];
+  for (const token of tokens) {
+    const keyword = /^'?(self|none)'?$/i.exec(token);
+    const source = keyword ? `'${keyword[1].toLowerCase()}'` : token.replace(/\/$/, '');
+    if (token === '*') {
+      warn('GEV_EMBED_FRAME_ANCESTORS: "*" must be the whole value to allow any page; ignoring it here');
+    } else if (KEYWORDS.has(source) || SCHEME_SOURCE.test(source) || HOST_SOURCE.test(token)) {
+      if (!sources.includes(source)) sources.push(source);
+    } else {
+      warn(`GEV_EMBED_FRAME_ANCESTORS: ignoring "${token}", which is not a CSP source`);
+    }
+  }
+  // 'none' combined with other sources is ignored by browsers; keep the intent explicit.
+  if (sources.includes("'none'") && sources.length > 1) {
+    warn(`GEV_EMBED_FRAME_ANCESTORS: 'none' cannot be combined with other sources; using 'none'`);
+    return { anywhere: false, sources: ["'none'"] };
+  }
+  return { anywhere: false, sources };
+}
+
 /** Vite plugin applying the embed framing policy on dev and preview servers. */
 export function embedFramingPlugin({
   ancestors = process.env.GEV_EMBED_FRAME_ANCESTORS || '',
+  warn,
 } = {}) {
-  const allowed = ancestors.trim();
-  // Unset: embed documents keep the server's framing protection.
-  if (!allowed) return { name: 'embed-framing' };
-  const anywhere = allowed === '*';
-  const policy = `frame-ancestors ${allowed}`;
+  const { anywhere, sources } = parseFrameAncestors(ancestors, { warn });
+  // Unset, or nothing valid: embed documents keep the server's framing protection.
+  if (!anywhere && !sources.length) return { name: 'embed-framing' };
+  const policy = `frame-ancestors ${sources.join(' ')}`;
   const install = (server) => {
     server.middlewares.use((req, res, next) => {
       if (!isEmbedDocumentRequest(req.url)) return next();
