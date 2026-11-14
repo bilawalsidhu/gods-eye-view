@@ -368,6 +368,62 @@ test('graph: an answer that quotes the token is refused; bad paths never reach M
   assert.equal(n, before);
 });
 
+test('graph: percent-encoded token echoes from an upstream error are refused', async () => {
+  const encoded = encodeURIComponent(MLY);
+  for (const reflected of [encoded, encoded.replaceAll('%7C', '%7c')]) {
+    const handler = createMapillaryGraphHandler({
+      env: { MAPILLARY_CLIENT_TOKEN: MLY },
+      fetchImpl: async () =>
+        response({ error: { message: `Invalid OAuth ${reflected}` } }, 400),
+    });
+    const res = await call(handler, { url: '/images?fields=id' });
+    assert.equal(res.status, 502, reflected);
+    assert.deepEqual(res.json(), { error: 'Mapillary answer refused' });
+    assert.ok(!decodeURIComponent(res.text).includes(MLY));
+  }
+});
+
+test('graph: selectively escaped and JSON-escaped token echoes are refused', async () => {
+  const variants = [
+    `M%4cY%7c${'1'.repeat(16)}%7C${'a'.repeat(32)}`,
+    MLY.replaceAll('|', '%257C'),
+    MLY.replaceAll('|', '\\u007c'),
+    Buffer.from(MLY).toString('base64'),
+    ...['x', 'xx', 'xxx'].map((prefix) =>
+      Buffer.from(`${prefix}${MLY}suffix`).toString('base64'),
+    ),
+    '%FF' + MLY.replaceAll('|', '%7c'),
+    Array.from({ length: 10 }).reduce((s) => encodeURIComponent(s), MLY),
+  ];
+  for (const value of variants) {
+    const handler = createMapillaryGraphHandler({
+      env: { MAPILLARY_CLIENT_TOKEN: MLY },
+      fetchImpl: async () => response(`{"error":"${value}"}`, 400),
+    });
+    const res = await call(handler, { url: '/images?fields=id' });
+    assert.equal(res.status, 502);
+  }
+});
+
+test('ion: escaped long-lived token in an endpoint document is refused', async () => {
+  const variants = [
+    LONG_LIVED_ION.replaceAll('.', '%2e'),
+    LONG_LIVED_ION.replaceAll('.', '\\u002e'),
+    Buffer.from(LONG_LIVED_ION).toString('base64'),
+  ];
+  for (const value of variants) {
+    const env = { CESIUM_ION_TOKEN: LONG_LIVED_ION };
+    const fetchEndpoint = createIonEndpointFetcher({
+      env,
+      fetchImpl: async () => response(`{"accessToken":"${value}"}`),
+    });
+    const res = await call(createIonRouteHandler({ env, fetchEndpoint }), {
+      url: '/v1/assets/1/endpoint',
+    });
+    assert.equal(res.status, 502);
+  }
+});
+
 test('graph: upstream errors without the token pass through with their status', async () => {
   const handler = createMapillaryGraphHandler({
     env: { MAPILLARY_CLIENT_TOKEN: MLY },

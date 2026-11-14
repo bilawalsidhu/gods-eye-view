@@ -1,6 +1,7 @@
 import { sameSiteGated } from '../common/same-site.js';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { containsCredentialEcho } from './credentialEcho.js';
 
 /**
  * Mapillary Graph API without the client token in the browser.
@@ -125,7 +126,7 @@ export function createMapillaryGraphHandler({
         return sendJson(res, 502, { error: 'Mapillary answer was too large' });
       }
       // Never echo the token, even if an upstream error body quotes it.
-      if (text.includes(token))
+      if (containsCredentialEcho(text, token))
         return sendJson(res, 502, { error: 'Mapillary answer refused' });
       if (res.writableEnded) return undefined;
       // Pass Mapillary's JSON (including its error bodies) straight through.

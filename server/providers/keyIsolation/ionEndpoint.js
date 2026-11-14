@@ -1,6 +1,7 @@
 import { sameSiteGatedBehindProxy } from '../common/same-site.js';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { containsCredentialEcho } from './credentialEcho.js';
 
 /**
  * Cesium ion without the long-lived token in the browser.
@@ -181,7 +182,7 @@ export function createIonEndpointFetcher({
       );
     }
     // The long-lived token must never be echoed to a browser.
-    if (text.includes(token))
+    if (containsCredentialEcho(text, token))
       throw new IonEndpointError(502, 'Cesium ion answer refused', transient());
     const expiry = jwtExpiryMs(document?.accessToken);
     cache.set(assetId, {
