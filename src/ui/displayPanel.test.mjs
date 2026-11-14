@@ -314,6 +314,59 @@ test('Scope and Celestial render what VisualSettings shows', async (t) => {
   assert.equal(celestial.title, 'Celestial ring — reveal the full globe');
 });
 
+test('scope opacity renders what VisualSettings shows and sets the mask', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner } = settings(store);
+  const mask = { opacity: 1 };
+  owner.services = {
+    ...owner.services,
+    setScopeMaskEnabled() {},
+    setScopeMaskOpacity: (value) => (mask.opacity = value),
+  };
+  assert.equal($('scope-opacity-slider').value, '100');
+  assert.equal($('scope-opacity-value').textContent, '100%');
+
+  owner._setScope({ opacityPct: 42.4 });
+  await nextTick();
+  assert.equal(mask.opacity, 0.42);
+  assert.equal($('scope-opacity-slider').value, '42');
+  assert.equal($('scope-opacity-value').textContent, '42%');
+  assert.equal(store.view.scope.opacityPct, 42);
+
+  owner._setScope({ opacityPct: 180 });
+  await nextTick();
+  assert.equal(mask.opacity, 1, 'clamped');
+  assert.equal($('scope-opacity-value').textContent, '100%');
+
+  owner._setScope({ opacityPct: 30 }, { apply: false });
+  await nextTick();
+  assert.equal(mask.opacity, 1, 'only shown');
+  assert.equal($('scope-opacity-value').textContent, '30%');
+
+  owner._setScope({ enabled: false });
+  await nextTick();
+  assert.equal($('scope-opacity-slider').disabled, true, 'off with the scope');
+  assert.equal(store.view.scope.opacityPct, 30, 'kept while off');
+});
+
+test('the Visual panel groups its controls and words its on/off pills', (t) => {
+  const { $ } = fixture(t);
+  const panel = $('pp-toggles');
+  assert.deepEqual(
+    [...panel.querySelectorAll('.pp-section-heading, .visual-presets__heading')].map(
+      (el) => el.textContent.trim(),
+    ),
+    ['Look', 'MAP SOURCE 3D', 'Overlay', 'Effects'],
+  );
+  assert.equal(panel.querySelector('.pp-header-label').textContent, 'VISUAL');
+  const body = panel.querySelector('.pp-panel-body');
+  assert.equal(body.style.getPropertyValue('--pp-pill-on'), '"ON"');
+  assert.equal(body.style.getPropertyValue('--pp-pill-off'), '"OFF"');
+  const reset = panel.querySelector('.pp-reset-btn');
+  assert.equal(reset, body.lastElementChild, 'the reset closes the panel');
+  assert.equal(reset.textContent.trim(), 'restart_altReset to default');
+});
+
 test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   const { store, $ } = fixture(t);
   const params = [];

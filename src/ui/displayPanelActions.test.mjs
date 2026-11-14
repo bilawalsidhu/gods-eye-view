@@ -231,3 +231,100 @@ test('several owners answer their own actions, the newest first', (t) => {
     ['display', 'toggleBloom'],
   ]);
 });
+
+test('the Visual panel’s scope opacity, reset and presets call their actions', async (t) => {
+  const store = mount(t);
+  const { calls } = recorder(store);
+  const selected = [];
+  store.connectMapSource({ select: async (id) => selected.push(id) });
+  store.publishMapSource({
+    status: { text: 'OSM', warn: false },
+    chips: [
+      { id: 'photoreal', label: 'Google 3D', available: false },
+      { id: 'osm', label: 'OSM', available: true, active: true },
+    ],
+  });
+  await nextTick();
+  input($('scope-opacity-slider'), 40);
+  document.querySelector('#pp-toggles .pp-reset-btn').click();
+  const presets = document.querySelector('#pp-toggles .visual-presets');
+  presets.querySelector('[data-style="noir"]').click();
+  const chips = presets.querySelectorAll('.visual-presets__chip');
+  chips[0].click();
+  chips[1].click();
+  assert.deepEqual(calls, [
+    ['setScopeOpacity', 40],
+    ['resetVisual'],
+    ['setStyle', 'noir'],
+  ]);
+  assert.deepEqual(selected, ['osm'], 'an unavailable source is not selected');
+  // The presets follow the published style, as the dock's do.
+  assert.equal(
+    presets.querySelector('[data-style="normal"]').getAttribute('aria-pressed'),
+    'true',
+  );
+  store.publishStyle({ name: 'noir', label: 'NOIR' });
+  await nextTick();
+  assert.equal(
+    presets.querySelector('[data-style="noir"]').getAttribute('aria-pressed'),
+    'true',
+  );
+  assert.equal(
+    presets.querySelector('[data-style="normal"]').getAttribute('aria-pressed'),
+    'false',
+  );
+  // The dock keeps its own presets and map source beside them.
+  assert.ok(
+    document.querySelector('#control-panel .style-btn[data-style="noir"]'),
+  );
+  assert.ok($('map-stack-chips'));
+});
+
+test('DisplayBindings sets the scope opacity and resets Visual to its defaults', (t) => {
+  const store = mount(t);
+  const calls = [];
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => true, cycleDetectionMode: () => {} },
+    elements: { _locationSearch: document.createElement('input') },
+    operations: {
+      setStyle: (style, options) => calls.push(['style', style, options]),
+      _applyGlobalPostDefaults: () => calls.push(['postDefaults']),
+      _setDetectionAllocation: (value) => calls.push(['allocation', value]),
+      _setScope: (scope) => calls.push(['scope', scope]),
+      _setModels3dEnabled: (on) => calls.push(['models3d', on]),
+      _setModels3dMode: (mode) => calls.push(['models3dMode', mode]),
+      _syncModels3dModeRow: () => calls.push(['models3dRow']),
+      _syncShareState: () => calls.push(['share']),
+    },
+    readState: () => ({
+      shareLinkManager: {
+        claimRestoreLane: (lane) => calls.push(['claim', lane]),
+      },
+    }),
+    claimDetection: () => {},
+    displayStore: store,
+  });
+  bindings._initUI();
+  t.after(() => bindings.destroy());
+  calls.length = 0;
+  input($('scope-opacity-slider'), 35);
+  assert.deepEqual(calls, [
+    ['claim', 'visual'],
+    ['scope', { opacityPct: 35 }],
+    ['share'],
+  ]);
+  calls.length = 0;
+  document.querySelector('#pp-toggles .pp-reset-btn').click();
+  assert.deepEqual(calls, [
+    ['claim', 'visual'],
+    ['style', 'normal', { userInitiated: true }],
+    ['postDefaults'],
+    ['allocation', 'ELASTIC'],
+    ['scope', { enabled: true, featherPct: 100, opacityPct: 100 }],
+    ['models3d', true],
+    ['models3dMode', 'proximity'],
+    ['models3dRow'],
+    ['share'],
+  ]);
+});
