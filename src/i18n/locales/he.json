@@ -124,9 +124,9 @@
   "{year} HISTORICAL REFERENCE": "{year} ייחוס היסטורי",
   "{year} POST-EVENT": "{year} אחרי האירוע",
   "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} מיקום מאוכן במפת המקורות",
-    "two": "{count} מיקומים מאוכנים במפת המקורות",
-    "other": "{count} מיקומים מאוכנים במפת המקורות"
+    "one": "{count} מיקום מקור מוצב על מפת המקורות",
+    "two": "{count} מיקומי מקור מוצבים על מפת המקורות",
+    "other": "{count} מיקומי מקור מוצבים על מפת המקורות"
   },
   "NO PREVIEW": "אין תצוגה מקדימה",
   "YouTube source": "מקור YouTube",
@@ -166,7 +166,7 @@
     "two": "{count} מקורות",
     "other": "{count} מקורות"
   },
-  "OUTSIDE IMAGERY SWIPE": "מחוץ להשוואת הצילומים",
+  "OUTSIDE IMAGERY SWIPE": "השוואה מצילומי סביבה",
   "{scene} / AUTHORED SHOT": "{scene} / שוט ידני",
   "NEPAL FLOOD INCIDENT": "אירוע השיטפון בנפאל",
   "Play {shot}": "נגן את {shot}",
@@ -802,7 +802,7 @@
   "installation class|BASE": "בסיס",
   "installation class|BARRACKS": "מחנה",
   "installation class|TRAINING AREA": "שטח אימונים",
-  "installation class|PLACES CANDIDATE": "מועמד מ-Places",
+  "installation class|PLACES CANDIDATE": "מועמד להכלל ב-Places",
   "installation class|INSTALLATION": "מתקן",
   "No mapped sites within {km} km of the contact": "אין אתרים ממופים בטווח {km} ק\"מ מהמגע",
   "{count} mapped sites within {km} km of the contact": {
@@ -834,7 +834,7 @@
   "CONFIRMED": "מאושר",
   "PAD / RTLS": "כן שיגור / RTLS",
   "UNSPECIFIED": "לא צוין",
-  "{value} KM DOWNRANGE": "{value} ק\"מ לאורך המסלול",
+  "{value} KM DOWNRANGE": "{value} ק\"מ מהמשגר",
   "POSITION UNAVAILABLE": "מיקום אינו זמין",
   "FLIGHT {count}": "טיסה {count}",
   "REUSED": "בשימוש חוזר",
@@ -846,7 +846,7 @@
   "NO MISSIONS AVAILABLE IN THE CURRENT 30-DAY WINDOW": "אין משימות זמינות בחלון 30 הימים הנוכחי",
   "{value} KM": "{value} KM",
   "{value} KM/S": "{value} KM/S",
-  "EST. DOWNRANGE": "הערכה לאורך המסלול",
+  "EST. DOWNRANGE": "הערכה מהמשגר",
   "PLANNED · ": "מתוכנן · ",
   "SUPPLIED TRAJECTORY POINTS": "נקודות מסלול שסופקו",
   "RECONSTRUCTED ESTIMATE": "הערכת שחזור",
@@ -3351,7 +3351,7 @@
   "Two-line element set": "ערכת אלמנטים דו-שורתית",
   "ORBITAL VELOCITY": "מהירות מסלולית",
   "SUB-SATELLITE POINT": "נקודת תת-הלוויין",
-  "TRACK UP": "מסלול מעלה",
+  "TRACK UP": "המעקב מעלה",
   "NORTH UP": "צפון מעלה",
   "Return the view to nadir": "החזרת התצוגה אל הנדיר",
   "Return to nadir (Home or 0)": "חזרה אל הנדיר (Home או 0)",

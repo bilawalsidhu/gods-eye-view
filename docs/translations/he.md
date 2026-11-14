@@ -59,6 +59,6 @@ With {count} shown as a digit, `two` and `other` share the plural noun (2 מצל
 | PREV / NEXT                                    | הקודם / הבא                                           |
 | anchor / data pack / asset bundle (scene)      | עוגן / חבילת נתונים / חבילת נכסים                   |
 | forecast (weather)                             | תחזית                                                 |
-| witness / geolocated source                    | עד ראייה / מקור מאוכן                                 |
+| witness / geolocated source                    | עד ראייה / מקור מוצב על מפת המקורות                   |
 | contained (wildland fire) / FRP                | הכלה / FRP, בלי שינוי                                 |
 
