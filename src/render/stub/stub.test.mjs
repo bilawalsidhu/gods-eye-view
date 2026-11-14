@@ -19,14 +19,15 @@ test('the stub passes the conformance suite', async () => {
   const skipped = report.results
     .filter((r) => r.status === 'skip')
     .map((r) => r.id);
-  // It draws only models into pixels, so the sweep's, a lit shape's, a line outline's and
-  // the blends' (over a drawn shape), video tiles' and the weather's pixels (drawn, and by scene time) go unread; its camera takes no user gestures: the drag and wheel scripts are for a
+  // It draws only models into pixels, so the sweep's, a lit shape's, a line outline's, a
+  // split line's and the blends' (over a drawn shape), video tiles' and the weather's pixels (drawn, and by scene time) go unread; its camera takes no user gestures: the drag and wheel scripts are for a
   // camera that does (a controller over it, say).
   assert.deepEqual(skipped, [
     'effects.screenModulation.pixels',
     'draw.shapes.lit',
     'draw.lines.outline',
     'draw.sets.blend',
+    'draw.lines.split',
     'draw.models.blend',
     'globe.imagery.video',
     'globe.weather.drawn',

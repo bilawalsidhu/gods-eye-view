@@ -32,6 +32,11 @@ import {
 const NETWORK_SLICE_MS = 6;
 /** The fade is applied in steps, so a slow zoom does not rewrite it per event. */
 const FADE_STEP = 0.05;
+/** A split that moved less than this share of the line is not redrawn. */
+const SPLIT_EPSILON = 1e-5;
+/** The selected line's dark rim, which keeps it legible over bright
+ *  imagery: the outer 28% of its width at 22% of its colour. */
+const ROUTE_RIM = Object.freeze({ shade: 0.22, widthFraction: 0.28 });
 /** Arc a route-bound train must cover before its direction is trusted (m). */
 const DIRECTION_EVIDENCE_M = 60;
 const STOP_DOT_PX = 5;
@@ -315,58 +320,53 @@ export function createRouteDisplay({
       dropRoute();
       const { path } = shape;
       const positions = [];
-      // Arc length (m) of each drawn vertex, so each segment knows the arc
-      // it spans, and the cumulative drawn length per path vertex, which
-      // the split's fraction is measured on.
-      const drawnS = [];
+      // The cumulative drawn length per path vertex, which the split's
+      // fraction is measured on: metres on the ground, as a draped line's
+      // texture runs; one per vertex where the scene draws it over the
+      // surface instead, as a polyline's does.
+      const ground = port.clampState?.() !== 'overlay';
       const chordAt = new Float64Array(path.n);
       for (let i = 0; i < path.n; i++) {
         const point = fromDegrees(path.lon[i], path.lat[i], 0);
         const last = positions[positions.length - 1];
         const step = last ? distance(last, point) : 0;
         const repeat = last && step < REPEAT_M;
-        if (i > 0) chordAt[i] = chordAt[i - 1] + (repeat ? 0 : step);
-        if (!repeat) {
-          positions.push(point);
-          drawnS.push(path.s[i]);
-        }
+        if (i > 0)
+          chordAt[i] = chordAt[i - 1] + (repeat ? 0 : ground ? step : 1);
+        if (!repeat) positions.push(point);
       }
       if (positions.length < 2) return;
       routeSet ||= lineSet(`rail:${instance}:route:${++routeBuilds}`);
       if (!routeSet) return;
       routeSet.show = true;
-      const ahead = categoryColor(entry.category, 1);
-      const travelled = categoryColor(entry.category, ROUTE_TRAVELLED_ALPHA);
-      const midS = new Float64Array(positions.length - 1);
-      for (let j = 0; j < midS.length; j++)
-        midS[j] = (drawnS[j] + drawnS[j + 1]) / 2;
+      // Solid ahead of the train, dimmer behind, split where it is.
       const item = {
         id: 'route',
         positions,
         widthPx: ROUTE_AHEAD_WIDTH_PX,
         mode: 'draped',
-        style: { kind: 'solid', color: ahead },
-        segmentColors: new Array(midS.length).fill(ahead),
+        style: {
+          kind: 'split',
+          color: categoryColor(entry.category, 1),
+          behind: categoryColor(entry.category, ROUTE_TRAVELLED_ALPHA),
+          at: -1,
+          rim: ROUTE_RIM,
+        },
         pickable: false,
       };
       routeSet.set([item]);
       state._route = {
         id,
         item,
-        ahead,
-        travelled,
-        midS,
         path,
         chordAt,
+        ground,
         binding: shape.binding,
         // A trip's own shape runs the way the trip does; a route's shape may
         // be drawn either way, so its direction is learnt from the train.
         direction: shape.binding?.via === 'trip' ? 1 : 0,
         firstS: shape.binding ? shape.binding.drawS : NaN,
         fraction: NaN,
-        /** Segments drawn travelled, and which way: `${direction}:${count}`. */
-        split: '1:0',
-        ground: port.clampState?.() !== 'overlay',
       };
       governorRequestRender('rail-route');
     } else if (state._route.binding !== shape.binding) {
@@ -378,10 +378,7 @@ export function createRouteDisplay({
     updateSplit();
   }
 
-  /**
-   * Colour the segments behind the train travelled and the rest ahead: a
-   * segment is behind it when the middle of its arc is.
-   */
+  /** Move the travelled/ahead split to where the train is drawn now. */
   function updateSplit() {
     const route = state._route;
     if (!route) return;
@@ -396,24 +393,26 @@ export function createRouteDisplay({
       route.direction !== 0 && Number.isFinite(s)
         ? splitFraction(route.path, route.chordAt, s)
         : NaN;
-    // No position on the line yet: draw it all as ahead.
-    route.fraction = Number.isFinite(fraction) ? fraction : NaN;
-    const mids = route.midS;
-    let behind = 0;
-    if (Number.isFinite(fraction))
-      for (let j = 0; j < mids.length; j++)
-        if (route.direction > 0 ? mids[j] < s : mids[j] > s) behind += 1;
-    const direction = Number.isFinite(fraction) ? route.direction : 1;
-    const split = `${direction}:${behind}`;
-    if (split === route.split) return;
-    route.split = split;
-    const colors = route.item.segmentColors;
-    for (let j = 0; j < mids.length; j++) {
-      const travelled =
-        Number.isFinite(fraction) &&
-        (route.direction > 0 ? mids[j] < s : mids[j] > s);
-      colors[j] = travelled ? route.travelled : route.ahead;
+    const style = route.item.style;
+    if (!Number.isFinite(fraction)) {
+      // No position on the line yet: draw it all as ahead.
+      route.fraction = NaN;
+      if (style.at === -1 && !style.reverse) return;
+    } else {
+      const reverse = route.direction < 0;
+      if (
+        Number.isFinite(route.fraction) &&
+        Math.abs(fraction - route.fraction) < SPLIT_EPSILON &&
+        Boolean(style.reverse) === reverse
+      )
+        return;
+      route.fraction = fraction;
     }
+    const at = Number.isFinite(fraction) ? fraction : -1;
+    route.item = {
+      ...route.item,
+      style: { ...style, at, reverse: at >= 0 && route.direction < 0 },
+    };
     routeSet?.upsert([route.item]);
     governorRequestRender('rail-route-split');
   }

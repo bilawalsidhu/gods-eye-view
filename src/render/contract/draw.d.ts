@@ -242,7 +242,23 @@ export type LineStyle =
   | { kind: 'dash'; color: Color; length: number; pattern16?: number }
   | { kind: 'arrow'; color: Color }
   | { kind: 'pattern'; image: ImageRef; repeat: number }
-  | { kind: 'flow'; color: Color; repeat: number; duty: number; speed: number };
+  | { kind: 'flow'; color: Color; repeat: number; duty: number; speed: number }
+  | {
+      /**
+       * Draped lines only. `color` from fraction `at` of the line's length
+       * to its end, `behind` from its start to `at` (the other way round
+       * with `reverse`); `at` outside 0..1 draws it all in `color`. With a
+       * `rim`, the outer `widthFraction` of the width in all (half each
+       * side) draws each colour's red, green and blue times `shade`, its
+       * alpha kept. `at`, `reverse` and the colours change in place.
+       */
+      kind: 'split';
+      color: Color;
+      behind: Color;
+      at: number;
+      reverse?: boolean;
+      rim?: { shade: number; widthFraction: number };
+    };
 
 export interface LineItem {
   id: string;

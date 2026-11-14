@@ -5497,6 +5497,60 @@ test('a draped arrow drapes its arrow material on a ground polyline of its own, 
     set.dispose();
   }));
 
+test('a split line draws ahead and behind its split with a rim, the split moving in place', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'route', clampTo: 'tiles' });
+    const positions = new Float64Array([
+      ...Object.values(Cesium.Cartesian3.fromDegrees(0, 0)),
+      ...Object.values(Cesium.Cartesian3.fromDegrees(0.01, 0.01)),
+    ]);
+    const route = (at, reverse) => ({
+      id: 'route',
+      positions,
+      widthPx: 5,
+      mode: 'draped',
+      style: {
+        kind: 'split',
+        color: [0.2, 0.6, 1, 1],
+        behind: [0.2, 0.6, 1, 0.3],
+        at,
+        reverse,
+        rim: { shade: 0.22, widthFraction: 0.28 },
+      },
+    });
+    set.set([route(-1)]);
+    const host = scene.added[0];
+    const line = [...Array(host.length).keys()]
+      .map((i) => host.get(i))
+      .find((p) => p.appearance?.material?.type === 'DrawSplitLine');
+    assert.ok(line, 'drawn by the split material');
+    const uniforms = line.appearance.material.uniforms;
+    assert.deepEqual(
+      [uniforms.splitAt, uniforms.direction, uniforms.rimShade],
+      [-1, 1, 0.22],
+    );
+    assert.equal(uniforms.rimFraction, 0.28);
+    assert.equal(uniforms.behind.alpha, 0.3);
+    assert.ok(line.appearance.material.isTranslucent());
+    set.upsert([route(0.4)]);
+    assert.ok(!line.isDestroyed(), 'the same ground primitive');
+    assert.deepEqual([uniforms.splitAt, uniforms.direction], [0.4, 1]);
+    set.upsert([route(0.6, true)]);
+    assert.deepEqual([uniforms.splitAt, uniforms.direction], [0.6, -1]);
+    set.upsert([route(Number.NaN, true)]);
+    assert.deepEqual(
+      [uniforms.splitAt, uniforms.direction],
+      [-1, 1],
+      'no split: all ahead',
+    );
+    assert.throws(
+      () => set.upsert([{ ...route(0.5), mode: 'geodesic' }]),
+      TypeError,
+      'a split line is draped',
+    );
+  }));
+
 test('a draped line drawn by its own material changes colour in place; a batched one rebuilds', () =>
   withImageClasses(() => {
     const { scene, draw } = drawOver();

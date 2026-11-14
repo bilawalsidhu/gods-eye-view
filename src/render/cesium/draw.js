@@ -57,6 +57,20 @@ export function toColor(color, alpha = 1) {
 }
 
 /**
+ * A split line style's colours and split as its material's uniforms: `at`
+ * outside 0..1 draws it all in `color`, as a split before the start does.
+ */
+function splitUniforms(style) {
+  const at = Number.isFinite(style.at) && style.at >= 0 && style.at <= 1;
+  return {
+    color: toColor(style.color),
+    behind: toColor(style.behind),
+    splitAt: at ? style.at : -1,
+    direction: at && style.reverse ? -1 : 1,
+  };
+}
+
+/**
  * An image reference as something a billboard or material takes: a URL, an
  * SVG as a data URL, a blob as its object URL, or the canvas itself. An
  * atlas slot is read through the draw port's atlases first
@@ -238,6 +252,26 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
   return m;
 }`;
 
+const SPLIT_MATERIAL = 'DrawSplitLine';
+
+/**
+ * Along the line (`st.s`, 0 at its start, 1 at its end, by length on the
+ * ground) `color` from `splitAt` on and `behind` before it (`direction`
+ * -1: the other way); across it (`st.t`) the outer `rimFraction` in all is
+ * each colour's shade.
+ */
+const SPLIT_SOURCE = `
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  czm_material m = czm_getDefaultMaterial(materialInput);
+  float s = materialInput.st.s;
+  bool before = direction > 0.0 ? s < splitAt : s > splitAt;
+  vec4 c = before ? behind : color;
+  bool rim = abs(materialInput.st.t - 0.5) > 0.5 - rimFraction * 0.5;
+  m.diffuse = czm_gammaCorrect(rim ? c.rgb * rimShade : c.rgb);
+  m.alpha = c.a;
+  return m;
+}`;
+
 /**
  * How finely a clamped ellipse with an image fill is cut, radians, so an
  * image's round edge (a zone's rim) runs round.
@@ -307,6 +341,7 @@ const DRAPED_STYLES = new Set([
   'flow',
   'arrow',
   'pattern',
+  'split',
 ]);
 
 // Whether Cesium's approximate terrain heights have been asked for.
@@ -501,6 +536,10 @@ export function createCesiumDraw({
     // A shape's pulse the renderer cannot run is refused before anything
     // changes.
     const checkPulses = (list) => {
+      if (kind === 'lines')
+        for (const item of list)
+          if (item.style?.kind === 'split' && item.mode !== 'draped')
+            throw new TypeError('a split line is draped');
       if (kind !== 'shapes') return;
       for (const item of list) pulseOf(item);
       if (list.some((item) => item.animate)) record.mayPulse = true;
@@ -2136,9 +2175,12 @@ export function createCesiumDraw({
     // values in the fabric would be merged into copies of the type's.
     const template = ({ type, source, uniforms }) =>
       source ? { type, source, uniforms } : { type };
-    // A pattern's image carries its own alpha: drawn in the translucent
-    // pass, whatever its colour.
-    const translucent = style.kind === 'pattern' ? { translucent: true } : {};
+    // A pattern's image carries its own alpha, and a split line's colours
+    // may each have one: drawn in the translucent pass, whatever its colour.
+    const translucent =
+      style.kind === 'pattern' || style.kind === 'split'
+        ? { translucent: true }
+        : {};
     const material =
       reveal === undefined
         ? new Cesium.Material({ fabric: template(fabric), ...translucent })
@@ -2194,6 +2236,16 @@ export function createCesiumDraw({
             speed: style.speed,
           },
           source: FLOW_SOURCE,
+        };
+      case 'split':
+        return {
+          type: SPLIT_MATERIAL,
+          uniforms: {
+            ...splitUniforms(style),
+            rimShade: style.rim?.shade ?? 1,
+            rimFraction: style.rim?.widthFraction ?? 0,
+          },
+          source: SPLIT_SOURCE,
         };
       case 'solid':
         // An outlined line keeps its edge in one material: two lines
@@ -2976,7 +3028,10 @@ export function createCesiumDraw({
     replaceHost(record, collect(own, ground), ground, own);
   }
 
-  /** A line style but for its colours, which its material takes in place. */
+  /**
+   * A line style but for its colours (and a split line's split), which its
+   * material takes in place.
+   */
   const colourlessStyle = (style) =>
     style.outline
       ? {
@@ -2984,13 +3039,23 @@ export function createCesiumDraw({
           color: undefined,
           outline: { ...style.outline, color: undefined },
         }
-      : { ...style, color: undefined };
+      : style.kind === 'split'
+        ? {
+            ...style,
+            color: undefined,
+            behind: undefined,
+            at: undefined,
+            reverse: undefined,
+          }
+        : { ...style, color: undefined };
 
   /** Give a line's material its style's colours, its outline's too. */
   function paintLine(material, style) {
     material.uniforms.color = toColor(style.color);
     if (style.outline && 'outlineColor' in material.uniforms)
       material.uniforms.outlineColor = toColor(style.outline.color);
+    if (style.kind === 'split' && 'splitAt' in material.uniforms)
+      Object.assign(material.uniforms, splitUniforms(style));
   }
 
   /**

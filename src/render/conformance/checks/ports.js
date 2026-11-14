@@ -3033,6 +3033,96 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.split',
+      'a draped split line draws its behind colour before its split and its colour after it, each with a darker rim, the split and its direction moved in place',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + 0.002 });
+        const lines = r.draw.lines({ id: 'conf:line-split' });
+        const item = (split, reverse = false) => ({
+          id: 'route',
+          positions: [at(-0.004), at(0.004)],
+          widthPx: 24,
+          mode: 'draped',
+          style: {
+            kind: 'split',
+            color: '#ff0000',
+            behind: '#00ff00',
+            at: split,
+            reverse,
+            rim: { shade: 0.25, widthFraction: 0.3 },
+          },
+        });
+        // The middle column across the line at `dLon`, top to bottom:
+        // R/G its core, r/g the rim (under 0.8 of the core’s brightness, as
+        // a renderer may light or fog the colours), - neither.
+        const column = (dLon) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon));
+          const half = 24;
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x) - 2,
+              y: Math.round(s.y) - half,
+              width: 5,
+              height: 2 * half + 1,
+            },
+          });
+          const read = [];
+          for (let row = 0; row < image.height; row++) {
+            const i = (row * image.width + 2) * 4;
+            const [red, green, blue] = image.data.slice(i, i + 3);
+            const hue =
+              red > green + 20 && red > blue + 20
+                ? 'r'
+                : green > red + 20 && green > blue + 20
+                  ? 'g'
+                  : '';
+            read.push([hue, hue === 'r' ? red : hue === 'g' ? green : 0]);
+          }
+          const core = Math.max(...read.map(([, v]) => v));
+          return read
+            .map(([hue, v]) =>
+              !hue ? '-' : v >= 0.8 * core ? hue.toUpperCase() : hue,
+            )
+            .join('');
+        };
+        const reads = (col, hue) => {
+          const runs = col.match(/([rRgG])\1*/g) ?? [];
+          const core = runs.find((run) => run[0] === hue.toUpperCase());
+          const rims = runs.filter((run) => run[0] === hue);
+          return Boolean(core) && rims.length >= 2;
+        };
+        try {
+          lines.set([item(0.25)]);
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          let a = column(-0.003);
+          let b = column(0.001);
+          ok(reads(a, 'g'), `behind its split: green, rimmed (${a})`);
+          ok(reads(b, 'r'), `ahead of its split: red, rimmed (${b})`);
+          lines.upsert([item(0.75)]);
+          await drawn(h, r);
+          b = column(0.001);
+          ok(reads(b, 'g'), `the split moved past it: green (${b})`);
+          lines.upsert([item(0.25, true)]);
+          await drawn(h, r);
+          a = column(-0.003);
+          b = column(0.001);
+          ok(reads(a, 'r'), `reversed: ahead before the split, red (${a})`);
+          ok(reads(b, 'g'), `reversed: behind after it, green (${b})`);
+          equal(lines.size(), 1, 'moved in place, not added');
+        } finally {
+          lines.dispose();
+        }
+      },
+    ),
+    check(
       'draw.lines.segments',
       'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
       async (h, r) => {
