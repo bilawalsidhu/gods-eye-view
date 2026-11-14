@@ -367,6 +367,7 @@ export class StyleManager extends ShellFacade {
     this.hud = new IntelHUD(viewer, {
       placeSearch,
       summaryService: requestServices?.summary,
+      wikipediaService: requestServices?.wikipedia,
       publish: (view) => hudStore.publish(view),
     });
     this._recording.hud = this.hud;
@@ -566,6 +567,8 @@ export class StyleManager extends ShellFacade {
       services: {
         cycleDetectionMode: services.cycleDetectionMode,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
+        holdContinuousRender: services.holdContinuousRender,
+        releaseContinuousRender: services.releaseContinuousRender,
       },
       elements: {
         _locationSearch: this._locationSearch,
@@ -598,6 +601,7 @@ export class StyleManager extends ShellFacade {
         _setModels3dMode: (...args) => this._setModels3dMode(...args),
       },
       readState: () => ({
+        style: this.activeStyle,
         shareLinkManager: this.shareLinkManager,
         hud: this.hud,
         bloomEnabled: this.bloomEnabled,
