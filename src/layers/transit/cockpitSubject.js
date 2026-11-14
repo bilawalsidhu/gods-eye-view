@@ -77,6 +77,25 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     return reuse(previous, next);
   }
 
+  /**
+   * The floor under the vehicle where playback draws it: its segment's two
+   * reports' floors at the playback fraction, without the shared lift. Null
+   * while either floor is unknown, as on cold terrain, so a view waits for
+   * the surface. Not `entry.heightM`, the floor at the newest report, which
+   * playback has not reached yet.
+   */
+  function drawnFloorOf(entry) {
+    const segment = entry.segment;
+    if (!segment || entry.heightPending) return null;
+    const from = segment.from?.h;
+    const to = segment.to?.h;
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+    const f = Number.isFinite(segment.fraction)
+      ? Math.max(0, Math.min(1, segment.fraction))
+      : 1;
+    return from + (to - from) * f - liftM;
+  }
+
   /** The vehicle as a frozen snapshot (see the module comment), or null. */
   function vehicleView(entry) {
     if (!entry?.record) return null;
@@ -91,9 +110,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     const position = draft.position;
     position.latitude = finiteOrNull(sample?.lat) ?? record.lat;
     position.longitude = finiteOrNull(sample?.lon) ?? record.lon;
-    position.groundHeightM = Number.isFinite(entry.heightM)
-      ? entry.heightM - liftM
-      : null;
+    position.groundHeightM = drawnFloorOf(entry);
     position.atMs = finiteOrNull(sample?.displayT);
 
     const motion = draft.motion;

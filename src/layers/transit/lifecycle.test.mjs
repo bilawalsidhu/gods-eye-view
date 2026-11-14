@@ -753,6 +753,27 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
   assert.equal(app.vehicles().length, 1);
 });
 
+test('a held vehicle with no floor yet tells its view no height', async (t) => {
+  // Not the ellipsoid: a first-person view waits for the surface instead.
+  const app = harness(t, { floorAt: () => undefined });
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  assert.equal(entry.heightPending, true, 'it has nothing to stand on');
+  assert.ok(app.layer.setCockpitSubject(entry.key) !== false);
+  assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
+});
+
 test('a vehicle waits for its floor rather than standing on the ellipsoid', async (t) => {
   // The shared ground-floor system answers from the rendered mesh cell or the
   // real DEM cell; until one of them is warm there is no honest height to draw
@@ -1800,10 +1821,18 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
   assert.ok(Math.abs(entry.heightM - 101.5) < 1, 'the destination is uphill');
   const height = () =>
     Cesium.Cartographic.fromCartesian(entry.marker.position).height;
+  // A first-person view reads the floor where the vehicle is drawn, not the
+  // newest report's floor uphill.
+  app.layer.setCockpitSubject(entry.key);
+  const floor = () => app.layer.getCockpitSubject().position.groundHeightM;
   app.run(400);
   assert.ok(
     height() < 30,
     `still on the ground it is drawn on, got ${height().toFixed(1)} m`,
+  );
+  assert.ok(
+    Math.abs(floor() + 1.5 - height()) < 1,
+    `its snapshot stands where it is drawn, got ${floor().toFixed(1)} m`,
   );
 
   // Halfway along the segment it is halfway up; at the end, on the high ground.
@@ -1818,6 +1847,7 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
     Math.abs(height() - 101.5) < 1.5,
     `and arrives on the high ground, got ${height().toFixed(1)} m`,
   );
+  assert.ok(Math.abs(floor() - 100) < 1.5, 'and so does its snapshot');
 });
 test('a lone impossible fix leaves the displayed vehicle and health untouched', async (t) => {
   const app = harness(t, { floorAt: () => 5 });

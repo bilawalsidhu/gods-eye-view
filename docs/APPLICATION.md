@@ -252,8 +252,8 @@ the last; a worded member (labels, entry face, look) that throws keeps its
 last good words.
 
 ```js
-import { getLocale, onLocaleChange } from '@gods-eye-view/core/i18n';
-import { pointAtS } from '@gods-eye-view/core/layers/rail/paths';
+import { getLocale, onLocaleChange } from 'gods-eye-view/i18n';
+import { pointAtS } from 'gods-eye-view/layers/rail/paths';
 
 const words = {
   en: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT RIDE' },
@@ -281,6 +281,8 @@ const ride = {
       }
     );
   },
+  // Only a train bound to its line can be ridden: read() needs its path.
+  isEntryAllowed: () => Boolean(rail.getSelectedTrain()?.path),
   hold: (id) => rail.setCockpitSubject(id),
   read(nowMs, ctx) {
     const train = rail.getCockpitSubject();
@@ -291,8 +293,12 @@ const ride = {
       latitude: point.lat,
       longitude: point.lon,
       heightM: train.position.railHeightM, // null stands it on the shared floor
+      name: train.label,
       headingDeg:
         train.path.direction < 0 ? point.bearingDeg + 180 : point.bearingDeg,
+      speedMps: train.motion.reportedSpeedMps ?? train.motion.derivedSpeedMps,
+      // The layer already moves the train smoothly: sit on it.
+      anchor: 'exact',
       eye: { upM: 3.5 },
     };
   },
@@ -309,7 +315,7 @@ createApplicationControls({ /* ... */ services: { cockpitSubjects: [ride] } });
 The `./i18n` entry gives `getLocale()` and `onLocaleChange()`:
 Core translates only its own strings, so a provider words its labels, entry
 face and HUD for the page's language (labels may be functions, as above; the
-HUD is read again on a change). `@gods-eye-view/core/layers/rail/paths` is the
+HUD is read again on a change). `gods-eye-view/layers/rail/paths` is the
 Rail layer's pure path module (`createRailPath`, `pointAtS`, `projectOnPath`)
 for a provider placing a train along its line. The frame, HUD view and
 candidate fields are documented in `src/cockpitSubjectProviders.js`; the Rail

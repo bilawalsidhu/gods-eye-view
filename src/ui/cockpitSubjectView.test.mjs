@@ -1114,6 +1114,28 @@ test('a subject first seen together with a built-in one comes after it', async (
   assert.equal(store.presence.entryKind, 'vessel');
 });
 
+test("a double-click on the selected vessel does not enter an application's subject", async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  ride.subject.candidate = null;
+  const { cockpit, store, viewer } = fixture(t, {
+    providers: [ride],
+    vessel: VESSEL,
+  });
+  cockpit.syncEntry();
+  // The application's subject is selected after the vessel: it takes entry.
+  clock.advance(500);
+  ride.subject.candidate = { id: 'a1', name: 'Example 12', selectedAt: 1 };
+  cockpit.syncEntry();
+  assert.equal(cockpit.resolveEntryKind(), 'example-kind');
+  // Every world position lands under the pointer, the vessel's sprite too.
+  viewer.scene.cartesianToCanvasCoordinates = (_position, result = {}) =>
+    Object.assign(result, { x: 400, y: 300 });
+  assert.equal(cockpit.onSceneDoubleClick({ x: 400, y: 300 }), false);
+  await settle();
+  assert.notEqual(store.presence.active, true);
+});
+
 test('a provider view with look turns with the arrow keys and words its readout', async (t) => {
   const clock = manualClock(t, 10_000);
   const ride = subjectProvider();

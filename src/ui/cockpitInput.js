@@ -41,6 +41,9 @@ function subjectWorldPosition(kind) {
   }
   if (kind === 'satellite')
     return this.services.satellitesLayer?.getCockpitPosition?.() ?? null;
+  // An application's subject has no position before its view is entered:
+  // the selected vessel's sprite must not stand in for it.
+  if (kind !== 'vessel') return null;
   const info = this.readVesselInfo();
   if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
     return null;

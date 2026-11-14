@@ -337,7 +337,9 @@ function candidateOf(raw) {
  * A `heightM` that is not finite or lies outside
  * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null:
  * the eye then stands on the shared floor, or where it last stood while that
- * is cold.
+ * is cold. The anchor is `'inertial'` only when asked for and the frame
+ * gives a speed; otherwise it is `'exact'`. An id is compared with `heldId`
+ * trimmed, as `cockpitSubjectCandidate` trims it.
  * @param {unknown} raw What `read()` returned.
  * @param {string} heldId The subject the view holds.
  * @returns {object|null} `{id, name, latitude, longitude, heightM, headingDeg,
@@ -354,7 +356,8 @@ export function cockpitSubjectFrame(raw, heldId) {
 }
 
 function frameOf(raw, heldId) {
-  if (!isObject(raw) || raw.id !== heldId) return null;
+  if (!isObject(raw) || typeof raw.id !== 'string' || raw.id.trim() !== heldId)
+    return null;
   const latitude = raw.latitude;
   const longitude = raw.longitude;
   if (!finite(latitude) || !finite(longitude) || Math.abs(latitude) > 90)
@@ -364,6 +367,8 @@ function frameOf(raw, heldId) {
   const heading = (value) =>
     finite(value) ? ((value % 360) + 360) % 360 : null;
   const headingDeg = heading(raw.headingDeg);
+  const speedMps =
+    finite(raw.speedMps) && raw.speedMps >= 0 ? raw.speedMps : null;
   return {
     id: heldId,
     name: cockpitSubjectText(raw.name, 64) || cockpitSubjectText(heldId, 64),
@@ -377,10 +382,12 @@ function frameOf(raw, heldId) {
         : null,
     headingDeg,
     courseDeg: heading(raw.courseDeg) ?? headingDeg,
-    speedMps: finite(raw.speedMps) && raw.speedMps >= 0 ? raw.speedMps : null,
+    speedMps,
     stale: raw.stale === true,
     groundClamp: raw.groundClamp !== false,
-    anchor: raw.anchor === 'exact' ? 'exact' : 'inertial',
+    // An inertial anchor runs on at the frame's speed; with none it would
+    // close on a moving subject at the correction's floor and fall behind.
+    anchor: raw.anchor === 'exact' || speedMps === null ? 'exact' : 'inertial',
     eye: {
       upM: eye.upM,
       forwardM:

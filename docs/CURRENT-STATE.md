@@ -2241,7 +2241,8 @@ at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
 subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
 turn off the floor clamps (`groundClamp: false`, for a subject inside a
 structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
-layer that already moves it smoothly); `cameraIntervalMs: 0` updates the
+layer that already moves it smoothly; a frame with no `speedMps` is always
+exact, since an inertial anchor runs on at the frame's speed); `cameraIntervalMs: 0` updates the
 camera every rendered frame. A frame that is null, malformed or for another
 subject ends the view (`restoreTracking: false`), as an aircraft tracked
 meanwhile and the provider's layer turning off do; the exit control asks the
@@ -2252,7 +2253,7 @@ picture under the HUD (with passing light streaks, which stop under reduced
 motion), arrow-key look-around when the provider asks for it, and a progress
 line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
 labels never overlap). Core translates none of the provider's text: a host
-words it for the page's language (`@gods-eye-view/core/i18n`:
+words it for the page's language (`gods-eye-view/i18n`:
 `getLocale`, `onLocaleChange`). Its entry face, labels and look may be
 functions, read again when they are shown and on a change of language, as the
 HUD view is.
@@ -2268,14 +2269,18 @@ feed held, clicks and Escape left to the view; the held copy stays the one
 drawn of its train while held, another feed's copy hidden, and it keeps
 moving, still selected, when its category is turned off) and
 `focusTrain(key)` (false for a train the layer does not draw); its pure path
-module is exported as `@gods-eye-view/core/layers/rail/paths`. That export
+module is exported as `gods-eye-view/layers/rail/paths`. That export
 and these read APIs are experimental and may change without notice. A snapshot read again while nothing in it changed is
 the one read before, and its `path.line` is a frozen copy. Transit
 offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
 out of the camera's view, and its sprite, 3D model, card, trail and detection
 box are hidden; released, it is out of play until a visibility sweep finds it in
-view. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+view. Its snapshot's `position.groundHeightM` is the floor where playback draws
+it (its segment's two reports' floors at the playback fraction), not the newest
+report's, and null while that floor is unknown. Rail's `path.direction` is the
+way the drawn train runs: once playback has placed it, a report that runs back
+turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
 `src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
 cover them.

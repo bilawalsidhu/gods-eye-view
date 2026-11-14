@@ -196,9 +196,17 @@ test('a frame is the held subject at a finite place with an eye height, else nul
     speedMps: null,
     stale: false,
     groundClamp: true,
-    anchor: 'inertial',
+    // No speed to run an inertial anchor on: it sits on the subject.
+    anchor: 'exact',
     eye: { upM: 3.5, forwardM: 0, pitchDeg: 0, minClearanceM: 0 },
   });
+  assert.equal(
+    cockpitSubjectFrame(frame({ speedMps: 30 }), 'a1').anchor,
+    'inertial',
+    'with a speed it runs on',
+  );
+  // A held id is trimmed (cockpitSubjectCandidate), and so is a frame's.
+  assert.equal(cockpitSubjectFrame(frame({ id: ' a1 ' }), 'a1')?.id, 'a1');
   for (const bad of [
     null,
     frame({ id: 'other' }),
@@ -253,7 +261,10 @@ test('a frame is the held subject at a finite place with an eye height, else nul
     'a1',
   );
   assert.equal(loose.groundClamp, true);
-  assert.equal(loose.anchor, 'inertial');
+  assert.equal(
+    cockpitSubjectFrame(frame({ anchor: 'EXACT', speedMps: 5 }), 'a1').anchor,
+    'inertial',
+  );
   assert.equal(loose.courseDeg, 90);
   assert.equal(loose.speedMps, null);
 });

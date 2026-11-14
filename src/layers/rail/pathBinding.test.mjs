@@ -234,3 +234,31 @@ test('a binding learns which way its train runs, and keeps it through a stop', (
   );
   assert.equal(rebound?.direction ?? 0, 0);
 });
+
+test('a report that runs back turns the drawn train only when playback does', () => {
+  const p = pack();
+  const ids = { tripId: 'full', routeId: 'main' };
+  const binding = bindTrainPath(p, ids, fix(0, 300, 0));
+  const forward = {
+    from: { seq: 1, ...fix(0, 300, 0) },
+    to: { seq: 2, ...fix(10_000, 500, 0) },
+  };
+  const sample = (fraction) => ({ fromSeq: 1, toSeq: 2, fraction });
+  assert.ok(placeOnPath(binding, sample(0.2), forward, {}));
+  assert.equal(binding.direction, 1);
+  // The newest report lies behind the last one (a reversal, or GPS jitter)
+  // while playback still draws the forward segment.
+  assert.ok(followFix(binding, fix(10_000, 500, 0)));
+  assert.ok(followFix(binding, fix(20_000, 450, 0)));
+  assert.ok(placeOnPath(binding, sample(0.6), forward, {}));
+  assert.equal(binding.direction, 1, 'the drawn train still runs forward');
+  // Playback reaches the reversed segment: now it turns.
+  const back = {
+    from: { seq: 2, ...fix(10_000, 500, 0) },
+    to: { seq: 3, ...fix(20_000, 450, 0) },
+  };
+  assert.ok(
+    placeOnPath(binding, { fromSeq: 2, toSeq: 3, fraction: 0.5 }, back, {}),
+  );
+  assert.equal(binding.direction, -1);
+});
