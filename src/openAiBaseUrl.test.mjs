@@ -13,6 +13,7 @@ import {
 } from '../server/providers/openai/realtime.js';
 import { openAiRealtimeProxy } from '../server/providers/openai.js';
 import { handleHudSummary } from '../server/providers/openai/hud-summary.js';
+import { OPENAI_DEFAULT_PER_MIN } from '../server/providers/openai/rate-limit.js';
 import { createRealtimeBackend } from './voice/realtimeBackend.js';
 
 const GATEWAY = 'https://gateway.example/v1';
@@ -348,4 +349,108 @@ test('the HUD reasoning effort defaults to minimal, takes a value, and off omits
   assert.equal(reply.status, 200);
   assert.equal('reasoning' in bodies[0], false);
   assert.equal(bodies[0].max_output_tokens, 200);
+});
+
+function oversizedGatewayBody(onCancel) {
+  let sent = false;
+  return new ReadableStream(
+    {
+      pull(controller) {
+        if (sent) {
+          controller.close();
+        } else {
+          sent = true;
+          controller.enqueue(new Uint8Array(64 * 1024 + 1));
+        }
+      },
+      cancel() {
+        onCancel();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+}
+
+test('the relay cancels oversized successful SDP answers and returns a bounded 502', async () => {
+  let cancelled = false;
+  const { fetchImpl } = recordingFetch(
+    () =>
+      new Response(
+        oversizedGatewayBody(() => {
+          cancelled = true;
+        }),
+        { status: 201 },
+      ),
+  );
+  const handler = createRealtimeCallsRelayHandler({
+    environment: { OPENAI_BASE_URL: GATEWAY },
+    fetchImpl,
+  });
+  const reply = await request(handler, {
+    headers: {
+      authorization: 'Bearer minted',
+      'content-type': 'application/sdp',
+    },
+    body: 'v=0',
+  });
+  assert.equal(reply.status, 502);
+  assert.deepEqual(JSON.parse(reply.body), {
+    error: 'Realtime SDP exchange failed',
+  });
+  assert.ok(reply.body.length < 128);
+  assert.equal(cancelled, true, 'overflow must cancel the gateway stream');
+});
+
+test('the relay cancels gateway errors without reading their bodies', async () => {
+  let cancelled = false;
+  const { fetchImpl } = recordingFetch(
+    () =>
+      new Response(
+        oversizedGatewayBody(() => {
+          cancelled = true;
+        }),
+        { status: 429 },
+      ),
+  );
+  const handler = createRealtimeCallsRelayHandler({
+    environment: { OPENAI_BASE_URL: GATEWAY },
+    fetchImpl,
+  });
+  const reply = await request(handler, {
+    headers: {
+      authorization: 'Bearer expired',
+      'content-type': 'application/sdp',
+    },
+    body: 'v=0',
+  });
+  assert.equal(reply.status, 429);
+  assert.deepEqual(JSON.parse(reply.body), {
+    error: 'Realtime SDP exchange failed',
+  });
+  assert.equal(cancelled, true, 'gateway error bodies must be discarded');
+});
+
+test('the relay shares the OpenAI per-IP cap and rejects the first excess request', async () => {
+  const { calls, fetchImpl } = recordingFetch(
+    () => new Response('v=0 answer', { status: 201 }),
+  );
+  const handler = createRealtimeCallsRelayHandler({
+    environment: { OPENAI_BASE_URL: GATEWAY },
+    fetchImpl,
+  });
+  const options = {
+    remoteAddress: '198.51.100.212',
+    headers: {
+      authorization: 'Bearer unverified',
+      'content-type': 'application/sdp',
+    },
+    body: 'v=0',
+  };
+  for (let i = 0; i < OPENAI_DEFAULT_PER_MIN; i++) {
+    assert.equal((await request(handler, options)).status, 201, i);
+  }
+  const refused = await request(handler, options);
+  assert.equal(refused.status, 429);
+  assert.equal(refused.headers['retry-after'], '5');
+  assert.equal(calls.length, OPENAI_DEFAULT_PER_MIN);
 });

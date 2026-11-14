@@ -404,6 +404,30 @@ function createRealtimeTokenHandler({
 
 const SDP_MAX_BYTES = 64 * 1024;
 
+// Bound the gateway's return path as tightly as the incoming SDP offer.
+// Read incrementally so an oversized response is never fully buffered.
+async function readCappedSdpAnswer(response) {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > SDP_MAX_BYTES) {
+        await reader.cancel();
+        throw new Error('Realtime SDP answer too large');
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks, bytes).toString('utf8');
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /**
  * Relay the browser's Realtime SDP offer to `${OPENAI_BASE_URL}/realtime/calls`.
  *
@@ -437,6 +461,9 @@ function createRealtimeCallsRelayHandler({
     const authorization = String(req.headers?.authorization || '');
     if (!/^Bearer \S+$/.test(authorization))
       return fail(res, 401, 'Missing Realtime client secret');
+    // Share the token and HUD per-IP budget with the relay. A bearer with
+    // the right syntax is not proof that the gateway will accept it.
+    if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
     let offer;
     try {
@@ -460,11 +487,13 @@ function createRealtimeCallsRelayHandler({
         },
         body: offer,
       });
-      const answer = await response.text();
       if (!response.ok) {
+        // Discard untrusted gateway error bodies without buffering them.
+        await response.body?.cancel().catch(() => {});
         console.warn(`[realtime-calls] upstream HTTP ${response.status}`);
         return fail(res, response.status, 'Realtime SDP exchange failed');
       }
+      const answer = await readCappedSdpAnswer(response);
       res.statusCode = response.status;
       res.setHeader('Content-Type', 'application/sdp');
       res.end(answer);
