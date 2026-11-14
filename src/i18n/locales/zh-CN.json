@@ -3532,5 +3532,7 @@
   "Cable car": "缆索电车",
   "Monorail": "单轨列车",
   "Funicular": "缆索铁路",
-  "Gondola": "缆车"
+  "Gondola": "缆车",
+  "Move panels back beside the rail": "将面板移回侧栏旁",
+  "Move panels over the rail, to the edge": "将面板移到侧栏上方，贴靠边缘"
 }

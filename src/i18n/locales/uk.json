@@ -3793,5 +3793,7 @@
   "Cable car": "Канатний трамвай",
   "Monorail": "Монорейка",
   "Funicular": "Фунікулер",
-  "Gondola": "Канатна дорога"
+  "Gondola": "Канатна дорога",
+  "Move panels back beside the rail": "Повернути панелі до бічної смуги",
+  "Move panels over the rail, to the edge": "Перемістити панелі поверх бічної смуги до краю"
 }

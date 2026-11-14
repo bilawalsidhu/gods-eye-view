@@ -3706,5 +3706,7 @@
   "Cable car": "חשמלית כבלים",
   "Monorail": "מונורייל",
   "Funicular": "פוניקולר",
-  "Gondola": "רכבל"
+  "Gondola": "רכבל",
+  "Move panels back beside the rail": "החזרת הלוחות לצד הסרגל",
+  "Move panels over the rail, to the edge": "הזזת הלוחות מעל הסרגל, אל הקצה"
 }
