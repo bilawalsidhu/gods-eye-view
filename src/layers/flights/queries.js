@@ -480,9 +480,7 @@ export function createQueries({
         // and rises only as the coarse ground-floor cell warms. Zero extra sampling and
         // no `_modelDisplayPosition` call from postRender. Sprite-owned contacts keep
         // `bb.position` — sprite and bracket are co-located there, so association holds.
-        const spec = modelOwnsVisual
-          ? parts.rendering._modelSpec(info?.klass)
-          : null;
+        const spec = modelOwnsVisual ? parts.rendering._modelSpec(info) : null;
         const pos = isTracked
           ? parts.motion._trackedVisualCached() || bb.position
           : modelOwnsVisual
