@@ -95,6 +95,7 @@ export function createLifecycle({ state, services, parts, timetable }) {
           parts.rendering.onPreRender,
         );
       state._networkFade = -1;
+      parts.rendering.startModels();
       parts.viewport.loadCatalog();
       parts.viewport.runProximityCheck();
       restoreSpriteOrder(viewer);
@@ -125,8 +126,11 @@ export function createLifecycle({ state, services, parts, timetable }) {
       parts.ingestion.abortAllInFlight();
       state._activeFeeds.clear();
       state._heldFeedId = null;
+      state._cockpitSubjectKey = null;
+      state._cockpitLostFeedId = null;
       state._feedStatus.clear();
       dropAllTrains();
+      parts.rendering.stopModels();
       // Floor cells and track samples queued for trains now gone.
       parts.rendering.reset();
       parts.routes.hideAll();
@@ -154,6 +158,7 @@ export function createLifecycle({ state, services, parts, timetable }) {
     /** Tear down the collection and release every shared registration. */
     destroy(viewer) {
       this.disable(viewer);
+      parts.rendering.stopModels(true);
       parts.routes.destroy();
       if (state._markers) {
         unregisterSpriteCollection('rail', state._markers);

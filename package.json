@@ -99,6 +99,7 @@
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/app/viewer.js",
     "./time": "./src/time/worldClock.js",
+    "./i18n": "./src/i18n/page.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },
@@ -297,6 +298,7 @@
     },
     "./sources/rail-service": "./src/sources/railService.js",
     "./layers/rail/source": "./src/layers/rail/source.js",
+    "./layers/rail/paths": "./src/data/railPaths.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js",
     "./server/providers/mapillary": {
       "node": "./server/providers/mapillary.js"

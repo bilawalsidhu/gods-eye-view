@@ -35,6 +35,7 @@ import {
   vesselCameraProfile,
 } from '../cockpitSubjects.js';
 import { lookIsOffset, lookReadoutParts, wrapLookYaw } from '../cockpitLook.js';
+import { cockpitSubjectHudView } from '../cockpitSubjectProviders.js';
 import {
   RADAR_MAX_CONTACTS,
   radarPicture,
@@ -90,6 +91,13 @@ export function publishInstrumentsView() {
     compass: view.compass.map((division) => ({ ...division })),
     compassMarkers: { ...view.compassMarkers },
     look: { ...view.look },
+    // A provider's view model is rebuilt on each HUD update, never edited
+    // in place, so it is published as it stands.
+    readouts: view.readouts,
+    sources: view.sources,
+    banner: view.banner,
+    veil: view.veil,
+    progress: view.progress,
   });
 }
 
@@ -118,17 +126,151 @@ function wordLook({ side, bearingDeg, elevation, angleDeg }) {
  */
 export function presentLook() {
   const target = this.lookTarget;
+  // A provider's view words its own readout (its HUD view's `lookReadout`).
+  const provider = Boolean(this.subjectProvider);
+  const rest = provider ? this.lookRestPitch : VESSEL_BRIDGE_PITCH_DEG;
   const offset =
-    this.active &&
-    this.subjectKind === 'vessel' &&
-    lookIsOffset(target, VESSEL_BRIDGE_PITCH_DEG);
+    (this.active && this.subjectKind === 'vessel') ||
+    (provider && this.looksAround)
+      ? lookIsOffset(target, rest)
+      : false;
   this.instruments.look = offset
     ? {
         offset: true,
         yawDeg: wrapLookYaw(target.yawDeg),
-        readout: wordLook(lookReadoutParts(target, VESSEL_BRIDGE_PITCH_DEG)),
+        readout: provider
+          ? (this.subjectHud?.lookReadout ?? '')
+          : wordLook(lookReadoutParts(target, VESSEL_BRIDGE_PITCH_DEG)),
       }
     : { offset: false, yawDeg: 0, readout: '' };
+}
+
+/** Live Signals' tone for a provider's signal row. */
+const SUBJECT_SIGNAL_TONES = Object.freeze({
+  warning: 'warning',
+  alert: 'warning',
+});
+
+/**
+ * Present a provider subject's HUD: its view model (cockpitSubjectHudView)
+ * in the generic readouts, the compass at the camera's heading, the route
+ * card, and its signals in Live Signals. A HUD view that is null, a `hud()`
+ * that throws, or a view whose reading throws keeps the last one. Contact
+ * navigation stays with aircraft, so the Contact card is withdrawn.
+ */
+function updateSubjectHud(info, nowMs, forceContext) {
+  const provider = this.subjectProvider;
+  this.lastSubjectInfo = info;
+  const frame = this.lastSubjectFrame;
+  const look = {
+    yawDeg: this.lookTarget?.yawDeg ?? 0,
+    pitchDeg: this.lookTarget?.pitchDeg ?? 0,
+    offset:
+      this.looksAround && lookIsOffset(this.lookTarget, this.lookRestPitch),
+  };
+  const raw = frame
+    ? this.callSubject(
+        provider,
+        'hud',
+        [frame, Object.freeze({ ...this.subjectContext(), look })],
+        null,
+      )
+    : null;
+  if (raw != null)
+    this.subjectHud = cockpitSubjectHudView(raw) ?? this.subjectHud;
+  const hud = this.subjectHud ?? cockpitSubjectHudView(null);
+  const view = this.instruments;
+  view.kind = 'subject';
+  view.trackSource = null;
+  view.kicker = hud.kicker || provider.labels.kicker;
+  view.callsign = hud.title || info.name || '';
+  // While the floor under a subject with no height is acquired
+  // (cockpitCamera.js), the meta line says so in place of the provider's.
+  const acquiring = this.surfaceAcquiring === true;
+  view.meta.text = acquiring ? t('ACQUIRING SURFACE') : hud.meta.text;
+  view.meta.tone = acquiring ? 'warning' : hud.meta.tone;
+  view.meta.emergency = !acquiring && hud.meta.tone === 'alert';
+  const speed = hud.speed?.value ?? null;
+  view.speed = hud.speed
+    ? {
+        text: speed === null ? '---' : formatNumber(Math.round(speed)),
+        value: speed === null ? null : Math.round(speed),
+        immediate: forceContext,
+      }
+    : null;
+  view.speedUnit = hud.speed?.unit ?? '';
+  view.speedTag = hud.speed?.tag ?? '';
+  view.speedTone = hud.speed?.tone ?? 'normal';
+  view.speedRim.unavailable = true;
+  view.altitude = null;
+  view.altitudeRim.unavailable = true;
+  view.course = null;
+  const heading = normalizeHeading(this.heading ?? info.track ?? 0);
+  view.heading = {
+    text: formatHeadingReadout(heading),
+    value: heading,
+    immediate: forceContext,
+  };
+  const viewHeading = normalizeHeading(
+    heading + (provider.look ? (this.lookView?.yawDeg ?? 0) : 0),
+  );
+  view.compass = scrollingCompassDivisions(viewHeading).map((division) => ({
+    slot: division.slot,
+    heading: division.heading,
+    active: division.nearest,
+    label: compassPointLabel(formatCompassDivision(division.heading)),
+  }));
+  view.compassMarkers = {
+    prograde: compassMarkerSlot(heading, viewHeading),
+    retrograde: compassMarkerSlot(heading + 180, viewHeading),
+  };
+  view.clock = new Date().toISOString().slice(11, 19) + 'Z';
+  view.position = `${formatCockpitCoordinate(info.latitude, 'N', 'S')} · ${formatCockpitCoordinate(info.longitude, 'E', 'W')}`;
+  view.readouts = hud.readouts;
+  view.sources = hud.sources;
+  view.banner = hud.banner;
+  view.veil = hud.veil;
+  view.progress = hud.progress;
+  view.lookEnabled = Boolean(provider.look);
+  view.layer = provider.layerId;
+  this.presentLook();
+  this.publishInstrumentsView();
+  const route = this.routeView;
+  route.kind = 'subject';
+  route.title = hud.route?.title ?? '';
+  route.from = hud.route?.from ?? '';
+  route.to = hud.route?.to ?? '';
+  route.status = hud.route?.status ?? '';
+  route.visible = Boolean(hud.route);
+  // No destination arrow; clearing also publishes the card.
+  this.clearPredictiveRoute();
+  if (
+    forceContext ||
+    cockpitUiUpdateDue(
+      nowMs,
+      this.lastContextUpdateMs,
+      COCKPIT_CONTEXT_UPDATE_MS,
+    )
+  ) {
+    this.lastContextUpdateMs = nowMs;
+    this.updateLocalPosition(info);
+    this.maybeRefreshRegionalBrief(info);
+    this.showContextCard(false);
+    const keys = new Set();
+    for (const signal of hud.signals) {
+      const key = `subject:${signal.id}`;
+      keys.add(key);
+      this.pushCockpitSignal(
+        key,
+        SUBJECT_SIGNAL_TONES[signal.tone] ?? 'info',
+        signal.title,
+        signal.detail || signal.title,
+      );
+    }
+    for (const key of this.subjectSignalKeys ?? [])
+      if (!keys.has(key)) this.dropCockpitSignal(key);
+    this.subjectSignalKeys = keys;
+  }
 }
 
 export function updateHud(
@@ -136,6 +278,10 @@ export function updateHud(
   nowMs = performance.now(),
   forceContext = false,
 ) {
+  if (this.subjectProvider && info?.generic === true) {
+    updateSubjectHud.call(this, info, nowMs, forceContext);
+    return;
+  }
   if (info?.kind === 'vessel') {
     updateVesselHud.call(this, info, nowMs, forceContext);
     return;

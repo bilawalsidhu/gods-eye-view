@@ -96,7 +96,7 @@ export class StyleManager extends ShellFacade {
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
-   *   picker, for a host that does not initialize Core's locale.
+   *   picker, for a host that offers its own language choice.
    */
   constructor(
     viewer,
@@ -400,6 +400,9 @@ export class StyleManager extends ShellFacade {
             owner: 'cockpit-orbit',
             switchPolicy: 'esri-if-photoreal',
           }) ?? null,
+        // The application's own first-person subjects
+        // (src/cockpitSubjectProviders.js), checked by the coordinator.
+        cockpitSubjects: services.cockpitSubjects,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -764,7 +767,7 @@ export class StyleManager extends ShellFacade {
     this._lifetime.own(
       onLocaleChange(() => nextTick(() => this._sizeDisplayLabelColumn())),
     );
-    // A host that does not initialize Core's locale shows no picker.
+    // A host that offers its own language choice shows no picker.
     if (this._localePickerEnabled === false) return;
     this._publishLocalePicker();
   }
@@ -1197,6 +1200,11 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        // Clear selected data layers and Context isolation switch the layer
+        // off without the user asking: the panel keeps its state for both.
+        preservePanelState: () =>
+          this._preservePanelStateDuringLayerClear ||
+          this._contextSuspendsLayer('cctv'),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
       },

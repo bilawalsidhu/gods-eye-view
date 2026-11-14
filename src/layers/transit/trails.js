@@ -235,8 +235,11 @@ export function createTrails({ state, services, parts, source }) {
   }
   function update() {
     if (!selected || !renderer) return;
+    // A first-person view on the vehicle rides where its trail would start.
     renderer.setVisible(
-      state._enabled && state._vehicles.get(selected.key) === selected,
+      state._enabled &&
+        state._vehicles.get(selected.key) === selected &&
+        selected.key !== state._cockpitSubjectKey,
     );
     renderer.setDisplaySample(selected.sample, selected.marker?.position);
   }

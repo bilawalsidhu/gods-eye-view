@@ -148,6 +148,12 @@ export function createViewport({ state, services, parts, source }) {
       ))
         if (state._activeFeeds.has(feed.id)) desired.set(feed.id, feed);
     }
+    // A first-person view whose train its feed dropped keeps the feed polled
+    // until it lets go (cockpitSubject.js): from the cab the camera looks
+    // along the ground, often at a point beyond the feed's range.
+    const lost = state._cockpitLostFeedId;
+    if (lost && !desired.has(lost) && state._activeFeeds.has(lost))
+      desired.set(lost, state._activeFeeds.get(lost));
     // The selected train's feed stays polled however far out or away the
     // camera goes, so the train and its line stay on the map; while nothing
     // else would keep the feed, it carries the selected train alone and its
