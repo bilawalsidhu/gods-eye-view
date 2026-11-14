@@ -5,6 +5,7 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
+import { getSelectedEntityContext } from '../../data/contextStore.js';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z');
 const hotspotsPayload = {
@@ -249,6 +250,17 @@ test('choosing a card selects it and flies straight down from 150 km; reduced mo
   assert.equal(layer.getRowControls().feed.selected.id, 'major');
   layer.setParams({ clear: true });
   assert.equal(layer.getRowControls().feed.selected, null);
+});
+
+test('a selected report carries the point voice projects to find what is in view', async (t) => {
+  const { layer } = fixture(t);
+  layer.enable();
+  await layer.update();
+  layer.setParams({ reportId: 'major' });
+  const record = getSelectedEntityContext();
+  assert.equal(record?.id, 'news-report:major');
+  assert.ok(record.targetPosition, 'a position voice can project');
+  assert.equal(record.targetPosition, record.entity.__localBaseCartesian);
 });
 
 test('the severity floor changes what is shown, not what is read', async (t) => {

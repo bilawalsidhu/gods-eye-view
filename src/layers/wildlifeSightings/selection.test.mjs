@@ -14,7 +14,7 @@ const row = {
   link: 'https://www.inaturalist.org/observations/123',
 };
 
-function fixture(sighting = row) {
+function fixture(sighting = row, extraServices = {}) {
   const position = { x: 300, y: 300, z: 0 };
   const entries = new Map();
   const flights = [];
@@ -65,6 +65,7 @@ function fixture(sighting = row) {
         },
       }),
       eventTarget: new EventTarget(),
+      ...extraServices,
     },
     parts: {
       rendering: {
@@ -297,4 +298,18 @@ test('empty clicks and layer removal release the selected row and its overlay', 
   assert.equal(f.state.selectedId, null);
   assert.equal(f.seen.at(-1).value, null);
   assert.equal(f.entries.size, 0);
+});
+
+test('each sighting in context carries the point voice projects to find what is in view', () => {
+  const registered = [];
+  const f = fixture(row, {
+    context: {
+      registerEntityContext: (entity, metadata) =>
+        registered.push({ entity, metadata }),
+    },
+  });
+  f.selection.refreshContexts();
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0].metadata.id, row.stableId);
+  assert.equal(registered[0].metadata.targetPosition, f.position);
 });

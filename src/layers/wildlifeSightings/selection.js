@@ -338,6 +338,8 @@ export function createSelection({ state, services, parts }) {
     // i18n-ignore: provider names and feed-supplied organism names are verbatim
     const label = `${name} · ${row.origin === 'acartia' ? 'Acartia' : 'iNaturalist'}`;
     services.context.registerEntityContext(carrier, {
+      // Where voice's in-view scan projects it.
+      targetPosition: carrier.__localBaseCartesian,
       id: row.stableId,
       layerId: 'wildlife-sightings',
       layerName: t('Wildlife Sightings'),

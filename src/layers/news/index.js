@@ -909,6 +909,8 @@ export function createNewsLayer({
     );
     entity.__localBaseCartesian = fromDegrees(lon, lat);
     registerEntityContext(entity, {
+      // Where voice's in-view scan projects it.
+      targetPosition: entity.__localBaseCartesian,
       id: `news-report:${report.id}`,
       layerId: NEWS_LAYER_ID,
       layerName: 'News',
