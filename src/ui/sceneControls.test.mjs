@@ -627,7 +627,7 @@ test('Authoring PLAY uses the scene context, not the radio PLAY', async (context
   const f = fixture();
   try {
     await nextTick();
-    assert.equal(f.elements.start.textContent, 'REPROD.');
+    assert.equal(f.elements.start.textContent, 'REPRODUCIR');
   } finally {
     f.restore();
   }

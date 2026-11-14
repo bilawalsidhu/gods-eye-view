@@ -1,12 +1,9 @@
+import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
-  CLASS_MODEL_REAL,
-  CLASS_SCALE_3D,
-  CLASS_SCALE_2D,
-} from '../../data/aircraftClass.js';
-import {
-  visualCenterForModel,
-  trailAnchorForModel,
-} from '../../data/modelVisualAnchor.js';
+  aircraftLayerModelSpec,
+  aircraftModelSpecCacheKey,
+} from '../flights/modelSpec.js';
+import { createFleetModel } from '../../data/fleetModelInstances.js';
 import * as Cesium from 'cesium';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
@@ -20,14 +17,6 @@ import {
 import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
-  PLANE_MODEL_SCALE,
-  PLANE_MODEL_URL,
-  PLANE_NATIVE_RADIUS_M,
-  PLANE_BELLY_OFFSET_NATIVE,
-  MODEL_SCALE,
-  JET_MODEL_URL,
-  MODEL_NATIVE_RADIUS_M,
-  MODEL_BELLY_OFFSET_NATIVE,
   MODEL_HEADING_OFFSET_DEG,
   BILLBOARD_SCALE,
   GROUND_SCALE,
@@ -83,48 +72,20 @@ export function createRendering({
     return Number.POSITIVE_INFINITY;
   }
 
-  function _modelSpec(klass) {
-    let spec = flightState._specCache.get(klass);
+  /** The fleet model an aircraft draws with, by its type and emitter category
+   *  (shared with flights.js), in this layer's own tint. */
+  function _modelSpec(meta) {
+    const key = aircraftModelSpecCacheKey(meta);
+    let spec = flightState._specCache.get(key);
     if (spec) return spec;
-    const real = CLASS_MODEL_REAL[klass];
-    if (real) {
-      spec = {
-        url: real.url,
-        scale: 1,
-        nativeRadiusM: real.radiusM,
-        bellyM: real.bellyM,
-        headingOffsetDeg: 180,
-        visualCenterNative: visualCenterForModel(real.url),
-        trailAnchorNative: trailAnchorForModel(real.url),
-      };
-    } else if (
-      klass === 'airliner' ||
-      klass === 'quadjet' ||
-      klass === 'glider'
-    ) {
-      const scale = PLANE_MODEL_SCALE * (CLASS_SCALE_3D[klass] || 1);
-      spec = {
-        url: PLANE_MODEL_URL,
-        scale,
-        nativeRadiusM: PLANE_NATIVE_RADIUS_M,
-        bellyM: PLANE_BELLY_OFFSET_NATIVE * scale,
-        headingOffsetDeg: 180,
-        visualCenterNative: visualCenterForModel(PLANE_MODEL_URL),
-        trailAnchorNative: trailAnchorForModel(PLANE_MODEL_URL),
-      };
-    } else {
-      const scale = MODEL_SCALE * (CLASS_SCALE_3D[klass] || 1);
-      spec = {
-        url: JET_MODEL_URL,
-        scale,
-        nativeRadiusM: MODEL_NATIVE_RADIUS_M,
-        bellyM: MODEL_BELLY_OFFSET_NATIVE * scale,
-        headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
-        visualCenterNative: visualCenterForModel(JET_MODEL_URL),
-        trailAnchorNative: trailAnchorForModel(JET_MODEL_URL),
-      };
-    }
-    flightState._specCache.set(klass, spec);
+    const base = aircraftLayerModelSpec(meta);
+    spec = Object.freeze({
+      ...base,
+      blendAmount: MODEL_COLOR_BLEND_AMOUNT,
+      headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
+    });
+    // Not cached before the model set loads: the answer changes once it has.
+    if (spec.model) flightState._specCache.set(key, spec);
     return spec;
   }
 
@@ -312,7 +273,7 @@ export function createRendering({
       Cesium.Ellipsoid.WGS84,
       flightState._scratchGroundCarto,
     );
-    carto.height = h + _modelSpec(meta.klass).bellyM;
+    carto.height = h + _modelSpec(meta).bellyM;
     return Cesium.Cartesian3.fromRadians(
       carto.longitude,
       carto.latitude,
@@ -350,7 +311,7 @@ export function createRendering({
       displayPos,
       course,
       model.modelMatrix,
-      _modelSpec(flightState.records.data.get(icao24)?.klass).headingOffsetDeg,
+      _modelSpec(flightState.records.data.get(icao24)).headingOffsetDeg,
     );
     if (!model.ready) {
       model.show = false; // not loaded yet → keep the 2D icon, no half-model flash
@@ -385,20 +346,17 @@ export function createRendering({
     return !!model && model.ready === true && model.show === true;
   }
 
-  /** Spec identity for a LOADED model — mirror of flights.js: URL and scale
-   *  together (same-URL classes differ by scale). */
+  /** Spec identity for a LOADED model — mirror of flights.js: the model and
+   *  its scale together. */
 
-  const _specKeyFor = (klass) => {
-    const spec = _modelSpec(klass);
-    return `${spec.url}@${spec.scale}`;
-  };
+  const _specKeyFor = (meta) => _modelSpec(meta).key;
 
-  /** Class-change model sync — mirror of flights.js: drop a live model or
-   *  in-flight load whose spec no longer matches the class, re-showing the
+  /** Type-change model sync — mirror of flights.js: drop a live model or
+   *  in-flight load whose spec no longer matches the type, re-showing the
    *  fleet billboard FIRST (gap-proof) and covering the tracked standalone. */
 
   function _syncModelToClass(icao24) {
-    const key = _specKeyFor(flightState.records.data.get(icao24)?.klass);
+    const key = _specKeyFor(flightState.records.data.get(icao24));
     const current = flightState._models.get(icao24);
     if (
       (current && current._gevSpecKey !== key) ||
@@ -445,6 +403,11 @@ export function createRendering({
 
   /** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
 
+  /** A Cesium Model of `spec` from the fleet set loaded up front (no fetch mid-session). */
+  function _createModel(spec, options) {
+    return createFleetModel(spec, options, { resolveAsset });
+  }
+
   async function _ensureModel(icao24) {
     // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
     // tick skips it, so a model here would be orphaned + double-rendered.
@@ -461,6 +424,8 @@ export function createRendering({
       _modelCap()
     )
       return;
+    // Until the fleet model set has loaded the aircraft stays a billboard.
+    if (!_modelSpec(flightState.records.data.get(icao24)).model) return;
     const epoch = flightState._modelEpoch; // lifecycle token: if destroy() bumps it, this load is dead
     const gen = flightState._modelGen.get(icao24) || 0; // capture; if it changes during the load, we're stale
     flightState._modelPending.add(icao24);
@@ -468,12 +433,11 @@ export function createRendering({
     // Spec identity captured at load START (mirror of flights.js): a mid-load
     // reclassification makes the post-await admission reject the stale asset.
     // Boost state likewise — creation options bake it in.
-    const specKey = _specKeyFor(flightState.records.data.get(icao24)?.klass);
+    const specKey = _specKeyFor(flightState.records.data.get(icao24));
     const loadIrBoost = flightState._irBoost;
     try {
-      const spec = _modelSpec(flightState.records.data.get(icao24)?.klass);
-      model = await Cesium.Model.fromGltfAsync({
-        url: resolveAsset(spec.url),
+      const spec = _modelSpec(flightState.records.data.get(icao24));
+      model = await _createModel(spec, {
         asynchronous: false,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
@@ -522,7 +486,7 @@ export function createRendering({
       flightState._models.has(icao24) ||
       flightState._models.size >= _modelCap() ||
       // Class reclassified mid-load → this GLB/scale is for the OLD class.
-      _specKeyFor(flightState.records.data.get(icao24)?.klass) !== specKey ||
+      _specKeyFor(flightState.records.data.get(icao24)) !== specKey ||
       // IR boost flipped mid-load → this model baked the wrong shader/tint.
       flightState._irBoost !== loadIrBoost;
     if (stale) {
@@ -676,6 +640,9 @@ export function createRendering({
       return;
     }
     if (
+      // Until the fleet model set has loaded the billboard carries it.
+      _modelSpec(flightState.records.data.get(flightState._trackedIcao))
+        .model &&
       !flightState._trackedModel &&
       !flightState._trackedModelLoading &&
       parts.tracking._trackedModelLoadAllowed()
@@ -683,14 +650,13 @@ export function createRendering({
       flightState._trackedModelLoading = true;
       const gen = flightState._trackedModelGen;
       const trackedSpec = _modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       const trackedKey = _specKeyFor(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       const trackedIrBoost = flightState._irBoost;
-      Cesium.Model.fromGltfAsync({
-        url: resolveAsset(trackedSpec.url),
+      _createModel(trackedSpec, {
         asynchronous: false,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
@@ -724,7 +690,7 @@ export function createRendering({
           // _trackedModel was still null): drop the stale asset; driver reloads.
           if (
             _specKeyFor(
-              flightState.records.data.get(flightState._trackedIcao)?.klass,
+              flightState.records.data.get(flightState._trackedIcao),
             ) !== trackedKey ||
             flightState._irBoost !== trackedIrBoost
           ) {
@@ -793,7 +759,7 @@ export function createRendering({
         return;
       }
       const spec = _modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       _modelMatrix(
         displayPos,

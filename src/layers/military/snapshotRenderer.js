@@ -164,10 +164,15 @@ export function createMilitarySnapshotRenderer({
         ) {
           rendering._applyFleetBillboardPresentation(icao24, bb);
         }
-        // Per-class GLBs: a class change can mean a different asset OR scale —
-        // resync the live model, any in-flight load, and the tracked
-        // standalone (mirror of flights.js).
-        if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
+        // Per-type fleet models: a type or category change can mean a
+        // different model OR scale — resync the live model, any in-flight
+        // load, and the tracked standalone (mirror of flights.js).
+        if (
+          prevMeta?.klass !== meta.klass ||
+          prevMeta?.type !== meta.type ||
+          prevMeta?.category !== meta.category
+        )
+          rendering._syncModelToClass(icao24);
         // Round 5: depth policy is uniform (always depth-test-free, see
         // _groundDepthDistance) — nothing to flip on landing/takeoff.
       } else {

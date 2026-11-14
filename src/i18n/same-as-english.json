@@ -253,7 +253,9 @@
     "❚❚ Pause",
     "COMMUNITY",
     "Regional",
-    "OPT-IN"
+    "OPT-IN",
+    "{minutes} min",
+    "1 min/s"
   ],
   "es": [
     "1 min/s",
@@ -639,12 +641,14 @@
     "▲ {frp} MW",
     "SATELLITE",
     "Photo © {photographer}",
+    "Photo · {licence}",
     "❚❚ Pause",
     "PACK",
     "{count} packs",
     "Orthophoto",
     "Oblique",
-    "Type"
+    "Type",
+    "{range} NM"
   ],
   "it": [
     "1 min/s",

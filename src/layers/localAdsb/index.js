@@ -254,6 +254,9 @@ export function createLocalAdsbLayer({
     );
     marker.evidence = evidence;
     marker.klass = klass;
+    // What picks its fleet model: the adsbdb type, else the emitter category.
+    marker.typeCode = enrichment.get(marker.record.icao)?.typeCode || null;
+    marker.category = marker.record.category || null;
     const billboard = marker.entity?.billboard;
     if (!billboard) return;
     if (marker.iconKind !== klass) {
