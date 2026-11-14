@@ -355,6 +355,20 @@ export class VisualSettings {
     this._syncShareState();
   }
 
+  /**
+   * While Contacts holds detection, make the detection shown now the state
+   * leaving Contacts puts back (and a share link carries): the user chose it,
+   * as with Reset in Visual. Nothing changes outside Contacts.
+   */
+  adoptDetectionAsRestore() {
+    if (!this._contactsDetectionRestore) return;
+    const state = this.getDetectionState();
+    this._contactsDetectionRestore = {
+      mode: state.detectionMode,
+      densityPct: state.densityPct,
+    };
+  }
+
   _setCockpitVision(mode, active, { revealParameters = false } = {}) {
     const next = active ? normalizeCockpitVisionMode(mode) : 'optical';
     if (!this.stages) return;

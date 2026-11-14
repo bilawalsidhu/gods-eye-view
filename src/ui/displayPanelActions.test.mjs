@@ -8,6 +8,7 @@ import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useDisplayStore } from './stores/display.js';
 import { DisplayBindings } from './displayBindings.js';
+import { VisualSettings } from './visualSettings.js';
 import CommandDockView from './views/CommandDockView.vue';
 import DisplayControlsView from './views/DisplayControlsView.vue';
 import DrawControls from './views/panels/DrawControls.vue';
@@ -296,13 +297,14 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
       _setModels3dMode: (mode) => calls.push(['models3dMode', mode]),
       _syncModels3dModeRow: () => calls.push(['models3dRow']),
       _syncShareState: () => calls.push(['share']),
+      _adoptDetectionAsRestore: () => calls.push(['adoptDetection']),
     },
     readState: () => ({
       shareLinkManager: {
         claimRestoreLane: (lane) => calls.push(['claim', lane]),
       },
     }),
-    claimDetection: () => {},
+    claimDetection: () => calls.push(['claimDetection']),
     displayStore: store,
   });
   bindings._initUI();
@@ -325,6 +327,29 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
     ['models3d', true],
     ['models3dMode', 'proximity'],
     ['models3dRow'],
+    ['claimDetection'],
+    ['adoptDetection'],
     ['share'],
   ]);
+});
+
+test('a reset inside Contacts makes the shown detection what leaving puts back', () => {
+  const adopt = VisualSettings.prototype.adoptDetectionAsRestore;
+  const live = { detectionMode: 'DENSE', densityPct: 75 };
+  const inContacts = {
+    _contactsDetectionRestore: { mode: 'OFF', densityPct: 50 },
+    getDetectionState: () => live,
+  };
+  adopt.call(inContacts);
+  assert.deepEqual(inContacts._contactsDetectionRestore, {
+    mode: 'DENSE',
+    densityPct: 75,
+  });
+  // Outside Contacts there is no saved state to change.
+  const outside = {
+    _contactsDetectionRestore: null,
+    getDetectionState: () => live,
+  };
+  adopt.call(outside);
+  assert.equal(outside._contactsDetectionRestore, null);
 });

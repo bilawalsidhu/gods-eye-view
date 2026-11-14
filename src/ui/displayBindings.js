@@ -185,6 +185,12 @@ export class DisplayBindings {
         this._setModels3dEnabled(true);
         this._setModels3dMode('proximity');
         this._syncModels3dModeRow?.();
+        // Inside Contacts the detection shown is lent for the session, and
+        // leaving puts back the state from before. A reset there is the user's
+        // choice, so the defaults become what leaving puts back and what a
+        // share link carries.
+        this.claimDetection();
+        this._adoptDetectionAsRestore?.();
         this._syncShareState();
       },
     });

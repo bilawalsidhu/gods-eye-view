@@ -598,6 +598,8 @@ export class StyleManager extends ShellFacade {
         _setScope: (...args) => this._visualSettings._setScope(...args),
         _applyGlobalPostDefaults: (...args) =>
           this._applyGlobalPostDefaults(...args),
+        _adoptDetectionAsRestore: () =>
+          this._visualSettings.adoptDetectionAsRestore(),
         setCelestialRingEnabled: (...args) =>
           this.setCelestialRingEnabled(...args),
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
