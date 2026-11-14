@@ -221,6 +221,38 @@ test('county filtering works; statewide pagination defaults to all and prioritiz
   );
 });
 
+test('33 configured counties each with one page do not drop the statewide pack', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  const counties = Array.from({ length: 33 }, (_, i) => `County${i + 1}`);
+  const requested = [];
+  await withEnv(
+    {
+      CCTV_511PA_COUNTIES: counties.join(','),
+      CCTV_511PA_MAX_SOURCES: '2000',
+    },
+    async () => {
+      const cameras = await loadPennDotSources({
+        fetchImpl: async (url) => {
+          const query = JSON.parse(new URL(url).searchParams.get('query'));
+          assert.equal(query.start, 0);
+          const county = query.columns[0].search.value;
+          const index = counties.indexOf(county);
+          assert.ok(index >= 0);
+          requested.push(county);
+          return Response.json({
+            recordsFiltered: 1,
+            data: [site({ county, images: [{ id: 6000 + index }] })],
+          });
+        },
+      });
+      assert.equal(cameras.length, counties.length);
+      assert.equal(new Set(cameras.map((camera) => camera.id)).size, 33);
+    },
+  );
+  assert.deepEqual(requested, counties);
+});
+
 test('catalog failures, redirects, excessive bodies and stalled pagination return no partial pack', async (t) => {
   t.mock.method(console, 'warn', () => {});
   await withEnv({ CCTV_511PA_COUNTIES: 'Chester' }, async () => {

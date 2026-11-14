@@ -10,3 +10,5 @@
   available. Camera name labels use a separate, stricter city-scale budget
   and hide above 30 km while icons remain visible; live-session limits stay bounded
   (Dylan Maniatakes, @dylanmaniatakes, #1530).
+  Preserve valid multi-county selections beyond 32 one-page results with
+  a bounded 100-page catalog request budget.

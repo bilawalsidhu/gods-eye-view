@@ -6,7 +6,8 @@ const ORIGIN = 'https://511pa.com';
 const TOKEN_URL =
   'https://pa.arcadis-ivds.com/api/SecureTokenUri/GetSecureTokenUriBySourceId';
 const PAGE_SIZE = 100;
-const MAX_PAGES = 32;
+// Bound total requests while allowing one-page responses for every county.
+const MAX_PAGES = 100;
 const PENNSYLVANIA_ANCHORS = [
   { lat: 39.9526, lon: -75.1652 }, // Philadelphia
   { lat: 40.4406, lon: -79.9959 }, // Pittsburgh
