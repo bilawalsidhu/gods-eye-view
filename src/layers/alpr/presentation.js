@@ -1,5 +1,6 @@
 import { isFollowing } from '../../data/followed.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
 import { distance, fromDegrees, toLonLatH } from '../../geo/index.js';
 import {
   LAYER_ID,
@@ -322,6 +323,7 @@ export function createAlprPresentation({ state, services, source }) {
     visibleRecords = [];
     clampedMarkers.clear();
     markers.clear();
+    state.stockFollow?.stop();
     removeEntityContextsForLayer(LAYER_ID);
   }
 
@@ -376,6 +378,8 @@ export function createAlprPresentation({ state, services, source }) {
       if (!visibleIds.has(carrier.id)) gone.push(carrier.id);
     if (gone.length) {
       markers.remove(gone);
+      // A camera no longer shown takes its follow with it.
+      state.stockFollow?.retain((key) => Boolean(markers.get(key)));
       for (const id of gone) clampedMarkers.delete(id);
       changed = true;
     }
@@ -593,6 +597,26 @@ export function createAlprPresentation({ state, services, source }) {
       )
         selectRecord(id);
       else if (state.selectedId) clearSelection();
+    });
+    // A double-click follows a camera, its card shown, as the default
+    // renderer followed its entity.
+    state.stockFollow = followOnDoubleClick({
+      viewer,
+      inputFor,
+      name: LAYER_ID,
+      enabled: () => state.enabled,
+      targetFor: (hit) => {
+        const carrier = hit.set === markers.icons?.id && markers.get(hit.id);
+        if (!carrier) return null;
+        return {
+          key: carrier.id,
+          position: () => {
+            const at = alprIconPosition(carrier);
+            return at ? { ...at } : null;
+          },
+          entity: carrier,
+        };
+      },
     });
   }
   return {

@@ -315,7 +315,7 @@ function cameraHarness(layer = alprCamerasLayer) {
       },
     });
   let box = { south: 30.26, west: -97.75, north: 30.28, east: -97.73 };
-  let click, picked;
+  let click, dblclick, picked;
   const credits = new Set();
   const viewer = {
     creditDisplay: {
@@ -344,6 +344,15 @@ function cameraHarness(layer = alprCamerasLayer) {
     // port follows on a tracking widget of the fake's.
     trackedEntityChanged: new Cesium.Event(),
     entities: {},
+    // The viewer's stock double-click (its follow), which the input port
+    // takes and runs before layers' own.
+    screenSpaceEventHandler: {
+      getInputAction: (type) =>
+        type === Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
+          ? () => {}
+          : undefined,
+      removeInputAction() {},
+    },
   };
   const ports = fakeScenePorts(viewer);
   bindFakeCesiumCamera(viewer, ports);
@@ -361,6 +370,11 @@ function cameraHarness(layer = alprCamerasLayer) {
       modifier === undefined
     )
       click = fn;
+    if (
+      type === Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK &&
+      modifier === undefined
+    )
+      dblclick = fn;
     return setInput.call(this, fn, type, modifier);
   };
   try {
@@ -408,6 +422,11 @@ function cameraHarness(layer = alprCamerasLayer) {
       const item = typeof id === 'string' ? icons()?.items.get(id) : null;
       picked = item ? { id: { set: icons().id, id: item.id } } : undefined;
       click({ position: new Cesium.Cartesian2() });
+    },
+    dblclick(id) {
+      const item = typeof id === 'string' ? icons()?.items.get(id) : null;
+      picked = item ? { id: { set: icons().id, id: item.id } } : undefined;
+      dblclick({ position: new Cesium.Cartesian2() });
     },
     restore() {
       layer.destroy(viewer);
@@ -1546,4 +1565,23 @@ test('ALPR display tags collapse controls and cap final text without erasing Uni
   assert.equal(record.manufacturer, '😀'.repeat(90));
   assert.equal(record.cameraType, null);
   assert.equal(record.zone, 'traffic zone');
+});
+
+test('a double-click follows a camera with its card until it is no longer shown, as its entity was', async () => {
+  const { followedOf } = await import('./followed.js');
+  const h = cameraHarness();
+  try {
+    await alprCamerasLayer.update();
+    h.dblclick('alpr:42');
+    const followed = followedOf(h.viewer);
+    assert.ok(followed, 'the camera is followed');
+    assert.equal(followed.key, 'alpr:42');
+    assert.ok(followed.entity, 'through its entity record, for its card');
+    h.setFetch(async () => cameraResponse([cameraNode(43)]));
+    h.expire();
+    await alprCamerasLayer.update();
+    assert.equal(followedOf(h.viewer), null, 'gone: no longer followed');
+  } finally {
+    h.restore();
+  }
 });
