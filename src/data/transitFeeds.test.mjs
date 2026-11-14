@@ -734,6 +734,7 @@ test('Prague route-id ranges give metro, trains, ferries and trolleybuses their 
   ];
   assert.deepEqual(read('L22'), ['tram', '22']);
   assert.deepEqual(read('L58'), ['trolleybus', '58']);
+  assert.deepEqual(read('L55'), ['bus', '55'], 'not a PID trolleybus line');
   assert.deepEqual(read('L275'), ['trolleybus', '275'], 'route type 11');
   assert.deepEqual(read('L49'), ['funicular', 'LD'], 'Petřín funicular');
   assert.deepEqual(read('L135'), ['bus', '135']);

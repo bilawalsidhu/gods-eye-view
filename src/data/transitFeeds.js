@@ -547,6 +547,9 @@ function astuceRouteLabel(routeId) {
   return ASTUCE_ROUTES[routeId ?? '']?.label ?? astuceNetworkLabel(routeId);
 }
 
+/** PID trolleybus lines: route_type 11 in PID's routes.txt (checked 2026-11-14). */
+const PID_TROLLEYBUS_LINES = new Set([51, 52, 53, 58, 59, 232, 275]);
+
 /**
  * Prague PID route ids are `L` plus a number whose range says what runs it,
  * per PID's GTFS routes.txt (data.pid.cz, checked 2026-11-09): 1–99 trams
@@ -566,10 +569,11 @@ function pidRoute(routeId) {
   const n = Number(match[1]);
   // i18n-ignore: line code, as signed
   if (n === 49) return { mode: 'funicular', label: 'LD' };
-  if (n >= 50 && n <= 59) return { mode: 'trolleybus', label: String(n) };
+  if (PID_TROLLEYBUS_LINES.has(n))
+    return { mode: 'trolleybus', label: String(n) };
+  if (n >= 50 && n <= 59) return { mode: 'bus', label: String(n) };
   if (n < 100) return { mode: 'tram', label: String(n) };
   if (n >= 800 && n < 900) return { mode: 'bus', label: `X${n - 800}` };
-  if (n === 232 || n === 275) return { mode: 'trolleybus', label: String(n) };
   if (n < 991) return { mode: 'bus', label: String(n) };
   // i18n-ignore: metro line letters, as signed
   if (n <= 993) return { mode: 'subway', label: 'ABC'[n - 991] };
