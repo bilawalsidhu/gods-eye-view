@@ -2353,10 +2353,19 @@ and off hosted deployments unless the operator grants permission.
 The existing HLS puller resolves same-origin relative master/media references
 and serves local leased playlists and segments. It downloads complete segments
 without forwarding a browser Range header. Its per-segment streamed-byte cap
-is 8 MiB: Giroc's roughly ten-second 2702×1520 segments can exceed the former
+is 16 MiB: public high-resolution cameras can exceed 8 MiB (one Moscow
+segment measured 9,616,576 bytes); Giroc segments can exceed the former
 4 MiB cap (one measured 6,437,120 bytes). Retained data remains capped at
 24 MiB and 12 segments per session, with two sessions maximum. Redirect
 refusal, origin pinning, timeouts and lease expiry are unchanged.
+
+The native media path also accepts clear fMP4 playlists with a same-origin
+initialization segment, served under the existing viewer lease. Configured
+public Exdesign players, anonymous Ivideon HLS endpoints and unrestricted
+RTSP.ME/RTSP.RU players resolve to camera-pinned upstream URLs. Deleted,
+password-protected and domain-restricted players are rejected. A playing
+upstream stays pinned across resolver cache expiry; a new session resolves a
+fresh URL after idle time. Empty variants force a master-playlist refresh.
 
 ## NYC DOT TMC CCTV source pack
 

@@ -11,9 +11,9 @@ const playlist =
 const base = 'https://camera.example/live/list.m3u8';
 
 test('high-resolution HLS segments play while the retained session cache stays bounded', async (t) => {
-  // Giroc publishes roughly ten-second TS segments; one measured 6,437,120
-  // bytes. The former 4 MiB download cap rejected it before playback began.
-  const segmentBytes = 6_437_120;
+  // A Moscow public camera published a 9,616,576-byte TS segment.
+  // An 8 MiB cap rejects it before playback begins.
+  const segmentBytes = 9_616_576;
   const master =
     '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4570000\ntracks-v1a1/mono.m3u8\n';
   const media =
@@ -37,15 +37,15 @@ test('high-resolution HLS segments play while the retained session cache stays b
   await entry.polling;
   const result = await manager.buildPlaylist(entry, 'giroc');
   assert.ok(result, 'large valid segments should produce a playable playlist');
-  assert.match(result, /#EXT-X-MEDIA-SEQUENCE:2\n/);
+  assert.match(result, /#EXT-X-MEDIA-SEQUENCE:3\n/);
   assert.equal(manager.getSegment('giroc', entry.token, 0), null);
   const newest = manager.getSegment('giroc', entry.token, 4);
   assert.equal(newest.length, segmentBytes);
   assert.equal(newest[0], 4);
-  assert.deepEqual(manager.stats(), { sessions: 1, bytes: 19_311_360 });
+  assert.deepEqual(manager.stats(), { sessions: 1, bytes: 19_233_152 });
 });
 
-test('HLS downloads still reject declared and chunked bodies above 8 MiB', async () => {
+test('HLS downloads still reject declared and chunked bodies above the segment cap', async () => {
   for (const declared of [true, false]) {
     let chunks = 0;
     let cancelled = false;
@@ -61,7 +61,9 @@ test('HLS downloads still reject declared and chunked bodies above 8 MiB', async
                     // Each chunk fits on its own; only their cumulative size
                     // crosses the cap. Leave it open to verify cancellation.
                     controller.enqueue(
-                      Buffer.alloc(4 * 1024 * 1024 + (++chunks === 2 ? 1 : 0)),
+                      Buffer.alloc(
+                        HLS_LIMITS.segmentBytes / 2 + (++chunks === 2 ? 1 : 0),
+                      ),
                     );
                   },
                   cancel() {
@@ -70,7 +72,7 @@ test('HLS downloads still reject declared and chunked bodies above 8 MiB', async
                 }),
             {
               headers: declared
-                ? { 'content-length': String(8 * 1024 * 1024 + 1) }
+                ? { 'content-length': String(HLS_LIMITS.segmentBytes + 1) }
                 : {},
             },
           ),
@@ -94,6 +96,87 @@ test('playlist parser uses sequence, refuses escaping and unsupported references
     playlist.replace('2,', 'Infinity,'),
   ])
     assert.throws(() => parseHlsMedia(bad, base));
+});
+
+test('fragmented MP4 keeps its same-origin initialization segment and refuses external maps', async () => {
+  const fmp4 =
+    '#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:1\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:2,\na.m4s\n#EXTINF:2,\nb.m4s\n';
+  const parsed = parseHlsMedia(fmp4, base);
+  assert.equal(parsed[0].initUri, new URL('init.mp4', base).href);
+  assert.throws(() =>
+    parseHlsMedia(
+      fmp4.replace('init.mp4', 'https://evil.example/init.mp4'),
+      base,
+    ),
+  );
+  assert.throws(() =>
+    parseHlsMedia(
+      fmp4.replace('URI="init.mp4"', 'URI="init.mp4",BYTERANGE="1@0"'),
+      base,
+    ),
+  );
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 100000 },
+    fetchImpl: async (url) => new Response(url === base ? fmp4 : 'media'),
+  });
+  try {
+    const entry = await manager.ensure('mp4', base);
+    assert.equal(await manager.waitReady(entry), true);
+    const manifest = await manager.buildPlaylist(entry, 'mp4');
+    assert.match(
+      manifest,
+      /#EXT-X-MAP:URI="\/api\/cctv\/media\/mp4\/init\.mp4\?session=/,
+    );
+    assert.match(manifest, /seg_0\.m4s\?session=/);
+    assert.equal(manager.getInit('mp4', entry.token).toString(), 'media');
+    assert.equal(manager.getInit('mp4', 'expired'), null);
+  } finally {
+    await manager.shutdown();
+  }
+});
+
+test('fMP4 HLS accepts a same-origin .m4s initialization segment', async () => {
+  const media =
+    '#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-MEDIA-SEQUENCE:8\n' +
+    '#EXT-X-MAP:URI="init.m4s"\n#EXTINF:2,\na.m4s\n#EXTINF:2,\nb.m4s\n';
+  const initUrl = new URL('init.m4s', base).href;
+  // This must fail on the author's original PR head, which allows .mp4 only.
+  assert.equal(parseHlsMedia(media, base)[0].initUri, initUrl);
+  const requested = [];
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 100000, readyMs: 500 },
+    fetchImpl: async (url) => {
+      requested.push(url);
+      if (url === base) return new Response(media);
+      if (url === initUrl) return new Response('init bytes');
+      if (url === new URL('a.m4s', base).href) return new Response('segment a');
+      if (url === new URL('b.m4s', base).href) return new Response('segment b');
+      throw new Error('Unexpected HLS upstream URL');
+    },
+  });
+  try {
+    const entry = await manager.ensure('m4s-init', base);
+    assert.equal(await manager.waitReady(entry), true);
+    const playlist = await manager.buildPlaylist(entry, 'm4s-init');
+    assert.match(
+      playlist,
+      /#EXT-X-MAP:URI="\/api\/cctv\/media\/m4s-init\/init\.mp4\?session=/,
+    );
+    assert.match(playlist, /seg_0\.m4s\?session=/);
+    assert.deepEqual(requested, [
+      base,
+      initUrl,
+      new URL('a.m4s', base).href,
+      new URL('b.m4s', base).href,
+    ]);
+    assert.equal(manager.getInit('m4s-init', entry.token).toString(), 'init bytes');
+    assert.equal(
+      manager.getSegment('m4s-init', entry.token, 0).toString(),
+      'segment a',
+    );
+  } finally {
+    await manager.shutdown();
+  }
 });
 
 test('downloads reject redirect responses, oversized declared and chunked bodies', async () => {
@@ -276,6 +359,22 @@ test('two consumers share downloads but release and abandoned expiry are indepen
   assert.equal(b.controller.signal.aborted, true);
   assert.deepEqual(manager.stats(), { sessions: 0, bytes: 0 });
   await manager.shutdown();
+});
+
+test('playing upstream stays pinned and is released with its last viewer', async () => {
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 100000 },
+    fetchImpl: async (url) => new Response(url === base ? playlist : 'abc'),
+  });
+  try {
+    const entry = await manager.ensure('pinned', base, 'viewer');
+    await manager.waitReady(entry);
+    assert.equal(manager.getSourceUrl('pinned'), base);
+    manager.release('pinned', 'viewer');
+    assert.equal(manager.getSourceUrl('pinned'), null);
+  } finally {
+    await manager.shutdown();
+  }
 });
 
 test('an abandoned consumer expires while a renewed consumer keeps the session', async () => {
