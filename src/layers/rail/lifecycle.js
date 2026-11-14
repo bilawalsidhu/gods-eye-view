@@ -35,6 +35,7 @@ export function createLifecycle({ state, services, parts, timetable }) {
     for (const entry of state._trains.values()) {
       parts.rendering.cancelWake(entry);
       destroyTrack(entry.track);
+      entry.placement?.forget(entry.key);
     }
     state._trains.clear();
     state._moving.clear();

@@ -365,6 +365,25 @@ The source factories are exported at `layers/directions/source` and
 `layers/recent-imagery/source`. Configuration is applied at construction time;
 this does not introduce live source replacement.
 
+Application catalog composition also accepts an optional `placement`, a
+host-supplied placement provider (`src/data/placementProvider.js`): an object
+whose `layer(kind)` returns, for `aircraft`, `military`, `vessels`, `transit`
+or `rail`, either null or `{ place(id, wallMs), observe?(id, fix),
+forget?(id) }`. While live, each of those layers tells it every fix it accepts
+(time, position, the height it draws the fix at, reported speed, course and
+ground state) and draws a contact where `place` puts it: position, height
+(the layer's own when none is given), course and speed. A null answer, a
+provider that throws, a kind it leaves out, or no provider at all keeps the
+layer's own motion, unchanged; following the world clock, the layers never
+ask it. Transit and rail vehicles a provider places are advanced every frame
+in view while their placed position changes; one it holds still lets the
+render loop idle and is asked again each second, moving on once its placement
+does. A placed transit vehicle is drawn at its placed point, and a placed
+train where it is placed rather than on its bound railway line. Live vessels
+a provider places move on between refreshes: redrawn in place at most every
+250 ms, with a frame asked for each second while the provider places any
+drawn vessel, and none once the layer is off.
+
 Application catalog composition accepts an optional `streetLevelProviders` list.
 An explicit list replaces the default Mapillary provider; an empty list removes
 all imagery providers. Without that option, Mapillary is registered only when

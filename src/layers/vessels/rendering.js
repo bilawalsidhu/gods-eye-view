@@ -33,6 +33,8 @@ import { isAidToNavigation } from '../../data/vesselTypes.js';
 
 /** How often vessels move on as the world clock plays (wall ms). */
 const FOLLOW_POSITION_MS = 250;
+/** A frame is asked for this often while a placement moves live vessels. */
+const PLACEMENT_FRAME_MS = 1000;
 
 /** How often the vessels near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
@@ -58,10 +60,12 @@ export function createRendering({
       visual = { billboard: record.billboard || null };
       visualRecords.set(record, visual);
     }
-    // Following the world clock, a vessel is drawn where it was at the time.
+    // Following the world clock, a vessel is drawn where it was at the time;
+    // live, where a host-supplied placement draws it, if one does.
     const { lat, lon } = followsClock(vesselState)
       ? vesselPositionAt(record, vesselState.worldNow())
-      : record;
+      : (services.placement?.place(record.id, vesselState._aisRuntime.now()) ??
+        record);
     const heightM = components.queries.vesselDatumHeightM(
       components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
@@ -78,7 +82,48 @@ export function createRendering({
       visual.position,
       new Cesium.Cartesian3(),
     );
+    if (services.placement) {
+      visual.drawnLat = lat;
+      visual.drawnLon = lon;
+    }
     return visual;
+  }
+
+  /**
+   * Move a prepared vessel visual to `lat`/`lon`, writing into its own
+   * positions rather than allocating new ones: the placement pass runs for
+   * every drawn vessel several times a second.
+   */
+  function moveRecordVisual(visual, lat, lon) {
+    const heightM = components.queries.vesselDatumHeightM(
+      components.tracking.currentGeoidN(lat, lon),
+      VESSEL_LIFT_M,
+    );
+    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      heightM,
+      ellipsoid,
+      visual.position,
+    );
+    Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      heightM - VESSEL_LIFT_M,
+      ellipsoid,
+      visual.waterline,
+    );
+    Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      0,
+      ellipsoid,
+      visual.surfacePosition,
+    );
+    ellipsoid.geodeticSurfaceNormal(visual.position, visual.normal);
+    visual.drawnLat = lat;
+    visual.drawnLon = lon;
   }
 
   function resetRecordVisuals() {
@@ -391,6 +436,7 @@ export function createRendering({
     if (state.preRenderRemover || !viewer) return;
     state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
       if (followsClock(vesselState)) followClockPositions();
+      else if (services.placement && state.feed.enabled) followPlacements();
       updateVisibility();
       if (state.feed.enabled) updateModels();
     });
@@ -411,6 +457,50 @@ export function createRendering({
       const visual = prepareRecordVisual(record);
       if (visual.billboard) visual.billboard.position = visual.position;
     }
+  }
+
+  // Live with a host-supplied placement, vessels move on between refreshes:
+  // drawn where it places them at most every FOLLOW_POSITION_MS, with a frame
+  // asked for every PLACEMENT_FRAME_MS while it places any drawn vessel, so
+  // they move while the scene idles.
+  let placedAtWallMs = -Infinity;
+  let placing = false;
+  let placementFrameTimer = null;
+  function followPlacements() {
+    const wallMs = performance.now();
+    if (wallMs - placedAtWallMs >= FOLLOW_POSITION_MS) {
+      placedAtWallMs = wallMs;
+      placing = false;
+      const nowMs = vesselState._aisRuntime.now();
+      // Drawn vessels only, as a sprite or a model: a hidden one is placed
+      // again when it is drawn.
+      for (const record of state.records.all) {
+        const visual = visualRecords.get(record);
+        if (!visual?.position) continue;
+        if (!visual.billboard?.show && !visual.modelOwnsVisual) continue;
+        const placed = services.placement.place(record.id, nowMs);
+        if (placed) placing = true;
+        const { lat, lon } = placed ?? record;
+        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+        moveRecordVisual(visual, lat, lon);
+        if (visual.billboard) visual.billboard.position = visual.position;
+      }
+    }
+    if (placing && placementFrameTimer === null)
+      placementFrameTimer = vesselState._aisRuntime.setTimeout(() => {
+        placementFrameTimer = null;
+        if (state.feed.enabled && !followsClock(vesselState))
+          governorRequestRender('ais-vessels-placement');
+      }, PLACEMENT_FRAME_MS);
+  }
+
+  /** Stop asking for placement frames (the layer turned off or went away). */
+  function cancelPlacementFrame() {
+    placedAtWallMs = -Infinity;
+    placing = false;
+    if (placementFrameTimer === null) return;
+    vesselState._aisRuntime.clearTimeout(placementFrameTimer);
+    placementFrameTimer = null;
   }
 
   function scheduleTrailingVisibilityPass(now) {
@@ -787,6 +877,8 @@ export function createRendering({
     installRuntime,
     updateVisibility,
     cancelTrailingVisibilityPass,
+    cancelPlacementFrame,
+    followPlacements,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,

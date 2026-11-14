@@ -86,6 +86,7 @@ export function createIngestion({ state, services, parts, source }) {
     state._heightDirty.delete(entry);
     parts.rendering.cancelWake(entry);
     destroyTrack(entry.track);
+    entry.placement?.forget(key);
     state._vehicles.delete(key);
     state._detectRevision += 1;
   }
@@ -327,6 +328,8 @@ export function createIngestion({ state, services, parts, source }) {
         entry = {
           key,
           feedId: feed.id,
+          // A host-supplied placement, if any, draws it while live.
+          placement: services.placement ?? null,
           marker: null,
           mode,
           // The GTFS route type its model is chosen by, when it has one.

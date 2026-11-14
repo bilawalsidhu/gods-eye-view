@@ -82,6 +82,7 @@ export function createIngestion({ state, services, parts, source }) {
     state._moving.delete(entry);
     parts.rendering.cancelWake(entry);
     destroyTrack(entry.track);
+    entry.placement?.forget(key);
     state._trains.delete(key);
     state._revision += 1;
     // A copy it hid may now be the one to draw.
@@ -274,6 +275,8 @@ export function createIngestion({ state, services, parts, source }) {
     const entry = {
       key,
       feedId: feed.id,
+      // A host-supplied placement, if any, draws it while live.
+      placement: services.placement ?? null,
       marker: null,
       category: record.category,
       railMode: record.mode,
