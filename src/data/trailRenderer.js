@@ -27,8 +27,9 @@
  * changing settle into static geometry.
  */
 import { cssColor } from '../render/color.js';
-import { findDraw } from '../render/rendererOf.js';
+import { findDraw, findInput } from '../render/rendererOf.js';
 import { registerPickOwner } from './pickRegistry.js';
+import { drawnItemTarget, followOnDoubleClick } from './stockFollow.js';
 
 // Trail lines are pickable (a click on one must not fall through to the
 // ground under it). A trail hugs its aircraft, so an unclaimed pick would
@@ -42,6 +43,48 @@ registerPickOwner('trails', (pickedId) =>
 
 /** @type {number} Uniquifier for trail set and line ids. */
 let _trailSeq = 0;
+
+/**
+ * Per viewer, its trails' drawn lines by set id and the one double-click
+ * handler they share: a double-click on a trail line zooms to it, as the
+ * default renderer zoomed to the polyline entity a trail was drawn as.
+ * @type {WeakMap<object, {lines: Map<string, (id: string) => object|null>,
+ *   follow: object|null}>}
+ */
+const doubleClicks = new WeakMap();
+
+/**
+ * Take part in `viewer`'s trail double-click with the set `setId`, whose
+ * line by id `lineFor` gives. Returns how to leave it.
+ */
+function joinDoubleClick(viewer, setId, lineFor) {
+  let shared = doubleClicks.get(viewer);
+  if (!shared) {
+    const lines = new Map();
+    // A scene that takes no input has no double-click.
+    const input = findInput(viewer);
+    shared = {
+      lines,
+      follow: input
+        ? followOnDoubleClick({
+            viewer,
+            inputFor: () => input,
+            name: 'trails',
+            enabled: () => true,
+            targetFor: (hit) =>
+              drawnItemTarget(hit.set, lines.get(hit.set)?.(hit.id)),
+          })
+        : null,
+    };
+    doubleClicks.set(viewer, shared);
+  }
+  shared.lines.set(setId, lineFor);
+  return () => {
+    if (!shared.lines.delete(setId) || shared.lines.size) return;
+    shared.follow?.destroy();
+    if (doubleClicks.get(viewer) === shared) doubleClicks.delete(viewer);
+  };
+}
 
 /** @constant {number} Alpha where the trail passes the depth test. */
 const TRAIL_ALPHA = 0.85;
@@ -133,11 +176,21 @@ export function createTrail(viewer, { color, width = 2.5 }) {
    *  the position objects it was drawn from, which never change. */
   let chunks = [];
   let chunkSeq = 0;
+  /** Leaves the viewer's trail double-click, once the set is drawn. */
+  let leaveDoubleClick = null;
+
+  /** The line drawn under `id`, for a double-click to zoom to. */
+  function lineFor(id) {
+    const shown = drawn.get(id)?.item;
+    if (shown) return shown.show === false ? null : shown;
+    return chunks.find((chunk) => chunk.id === id)?.item ?? null;
+  }
 
   function ensureSet() {
     if (set || destroyed || !viewer || viewer.isDestroyed?.()) return set;
     set =
       findDraw(viewer)?.lines({ id: `trail:${seq}`, show: visible }) ?? null;
+    if (set) leaveDoubleClick = joinDoubleClick(viewer, set.id, lineFor);
     return set;
   }
 
@@ -223,16 +276,16 @@ export function createTrail(viewer, { color, width = 2.5 }) {
           }
         }
         const positions = seg.slice(i, end + 1);
-        const chunk = { id: `${bodyId}:${++chunkSeq}`, positions };
-        next.push(chunk);
-        added.push(
-          lineItem(
-            chunk.id,
-            positions.map(plain),
-            TRAIL_ALPHA,
-            TRAIL_OCCLUDED_ALPHA,
-          ),
+        const id = `${bodyId}:${++chunkSeq}`;
+        const item = lineItem(
+          id,
+          positions.map(plain),
+          TRAIL_ALPHA,
+          TRAIL_OCCLUDED_ALPHA,
         );
+        const chunk = { id, positions, item };
+        next.push(chunk);
+        added.push(item);
         i = end;
       }
     });
@@ -318,6 +371,8 @@ export function createTrail(viewer, { color, width = 2.5 }) {
     /** Remove the trail permanently (layer disable/teardown). */
     destroy() {
       destroyed = true;
+      leaveDoubleClick?.();
+      leaveDoubleClick = null;
       try {
         set?.dispose();
       } catch {

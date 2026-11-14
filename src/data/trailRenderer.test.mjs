@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { CHUNK_POINTS, createTrail } from './trailRenderer.js';
 import { findPickOwner } from './pickRegistry.js';
+import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
+import { fromDegrees } from '../geo/ellipsoid.js';
 
 function viewerWithDraw(t) {
   const viewer = { isDestroyed: () => false };
@@ -228,4 +230,57 @@ test('clearing a segmented trail lets every line go', (t) => {
   assert.equal(set.items.size, 0);
   trail.setSegments([points(4)]);
   assert.equal(historyLines(set).length, 1, 'drawn again after a clear');
+});
+
+test('a double-click on a trail line zooms to that line, as to the polyline entity it was', (t) => {
+  const viewer = { isDestroyed: () => false };
+  const fake = bindFakeGroundRenderer(viewer);
+  t.after(fake.unbind);
+  let dblclick = null;
+  const stock = { dblclickFollow: true };
+  fake.renderer.input = {
+    onPointer(type, handler) {
+      assert.equal(type, 'dblclick');
+      dblclick = handler;
+      return () => {
+        dblclick = null;
+      };
+    },
+    stockEnabled: (name) => stock[name] === true,
+  };
+  const trail = createTrail(viewer, { color: '#00d4ff' });
+  const a = fromDegrees(0, 0, 1000);
+  const b = fromDegrees(0.1, 0, 1000);
+  trail.setPositions([a, b]);
+  const set = fake.liveSets().find((s) => s.spec.id.startsWith('trail:'));
+  const [line] = set.items.values();
+  fake.setPick(() => ({ set: set.spec.id, id: line.id }));
+  const at = { position: { x: 1, y: 2 } };
+
+  dblclick(at);
+  assert.equal(fake.flights.length, 1, 'zoomed at once');
+  const { sphere, options } = fake.flights[0];
+  assert.equal(options.durationS, 0);
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+  assert.ok(
+    Math.hypot(
+      sphere.center.x - mid.x,
+      sphere.center.y - mid.y,
+      sphere.center.z - mid.z,
+    ) < 1,
+  );
+  assert.equal(fake.follows.length, 0, 'nothing followed');
+
+  // Held off (a tool holds the stock follow), a hidden trail line, or
+  // another layer's hit: nothing.
+  stock.dblclickFollow = false;
+  dblclick(at);
+  stock.dblclickFollow = true;
+  fake.setPick(() => ({ set: 'other', id: line.id }));
+  dblclick(at);
+  assert.equal(fake.flights.length, 1);
+
+  // The last trail gone, the viewer's double-click is let go.
+  trail.destroy();
+  assert.equal(dblclick, null);
 });
