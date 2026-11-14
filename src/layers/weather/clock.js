@@ -4,6 +4,52 @@ export const RADAR_MAX_GAP_MS = 30 * 60_000;
 export const REGIONAL_INFRARED_MAX_GAP_MS = 30 * 60_000;
 export const GLOBAL_INFRARED_MAX_GAP_MS = 3 * 60 * 60_000;
 export const LIGHTNING_MAX_GAP_MS = 30 * 60_000;
+/** How many of a feed's latest frames say how far apart its frames come. */
+const SPACING_FRAMES = 12;
+/** A frame holds this many of its feed's frame spacings before it lapses. */
+const SPACING_SLACK = 1.5;
+
+/**
+ * How far apart a feed's frames come: the median spacing of its latest
+ * frames, in ms, or null with fewer than two. Takes UTC times or epoch ms.
+ * @param {Array<string|number>} times
+ * @returns {number|null}
+ */
+export function frameSpacingMs(times) {
+  const at = [
+    ...new Set(
+      (times ?? [])
+        .map((time) => (typeof time === 'number' ? time : Date.parse(time)))
+        .filter(Number.isFinite),
+    ),
+  ]
+    .sort((a, b) => a - b)
+    .slice(-(SPACING_FRAMES + 1));
+  if (at.length < 2) return null;
+  const gaps = at
+    .slice(1)
+    .map((time, i) => time - at[i])
+    .sort((a, b) => a - b);
+  const middle = gaps.length >> 1;
+  return gaps.length % 2 ? gaps[middle] : (gaps[middle - 1] + gaps[middle]) / 2;
+}
+
+/**
+ * A product's least time, `leastMs`, held to its feed's own frame spacing:
+ * never less than one and a half spacings, so a feed whose frames come an
+ * hour apart covers the whole hour between them, while one with frames
+ * minutes apart keeps `leastMs`.
+ * @param {number} leastMs
+ * @param {Array<string|number>} times
+ * @returns {number}
+ */
+export function atLeastFrameSpacing(leastMs, times) {
+  const spacing = frameSpacingMs(times);
+  return spacing === null
+    ? leastMs
+    : Math.max(leastMs, spacing * SPACING_SLACK);
+}
+
 /** The longest play waits on a frame before it goes on without it. */
 export const PLAY_WAIT_MS = 8_000;
 // Playing on its own, the world does not wait on the frame it is at: that
