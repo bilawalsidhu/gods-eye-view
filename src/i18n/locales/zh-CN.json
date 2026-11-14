@@ -3521,5 +3521,11 @@
   "Confirm: remove every added entry from Data Layers": "确认：从数据图层中移除所有已添加条目",
   "Remove every added entry from Data Layers": "从数据图层中移除所有已添加条目",
   "Showing {shown} of {total}": "显示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "浏览数据资源库"
+  "BROWSE DATA LIBRARY": "浏览数据资源库",
+  "Atmosphere": "大气",
+  "Day and night": "昼夜",
+  "Sun": "太阳",
+  "Moon": "月亮",
+  "Stars": "星星",
+  "Milky Way": "银河"
 }

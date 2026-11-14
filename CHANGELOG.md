@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- The Display panel has a Sky group on a renderer with a sky to set: the
+  atmosphere, day and night (sun lighting by scene time), the sun, the
+  moon, the stars and the Milky Way's brightness. The choice is kept for the
+  next visit; what is not set stays as the renderer draws it (samehkhamis).
 - The renderer contract no longer ties a renderer's look to the default
   renderer's: `globe.sky` switches parts of the sky on and off, while how
   the sky, atmosphere, haze, lighting, tone mapping and exposure look is

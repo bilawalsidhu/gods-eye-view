@@ -39,6 +39,17 @@ export const useDisplayStore = defineStore('gev-display', () => {
     weather.value = next && markRaw(next);
   }
 
+  /**
+   * The Sky group, `{switches, milkyWay}` (switches by name, the Milky Way
+   * in percent); null where the renderer has no sky to set.
+   */
+  const sky = shallowRef(null);
+
+  /** @param {?object} next A fresh presentation of the Sky group. */
+  function publishSky(next) {
+    sky.value = next && markRaw(next);
+  }
+
   /** The Draw controls; null until the draw tool first renders. */
   const draw = shallowRef(null);
 
@@ -121,6 +132,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishModels3d,
     weather,
     publishWeather,
+    sky,
+    publishSky,
     draw,
     publishDraw,
     geoImport,

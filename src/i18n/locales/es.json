@@ -3695,5 +3695,11 @@
   "500–1,000 m": "500–1000 m",
   "1,000–2,000 m": "1000–2000 m",
   "2,000–3,000 m": "2000–3000 m",
-  "3,000 m and above": "3000 m o más"
+  "3,000 m and above": "3000 m o más",
+  "Atmosphere": "Atmósfera",
+  "Day and night": "Día y noche",
+  "Sun": "Sol",
+  "Moon": "Luna",
+  "Stars": "Estrellas",
+  "Milky Way": "Vía Láctea"
 }

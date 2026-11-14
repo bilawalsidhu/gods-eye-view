@@ -3782,5 +3782,11 @@
   "Confirm: remove every added entry from Data Layers": "Підтвердити: видалити всі додані записи з «Шарів даних»",
   "Remove every added entry from Data Layers": "Видалити всі додані записи з «Шарів даних»",
   "Showing {shown} of {total}": "Показано {shown} з {total}",
-  "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ"
+  "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ",
+  "Atmosphere": "Атмосфера",
+  "Day and night": "День і ніч",
+  "Sun": "Сонце",
+  "Moon": "Місяць",
+  "Stars": "Зорі",
+  "Milky Way": "Чумацький Шлях"
 }

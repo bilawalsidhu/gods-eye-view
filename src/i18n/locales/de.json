@@ -3608,5 +3608,11 @@
   "Confirm: remove every added entry from Data Layers": "Bestätigen: alle hinzugefügten Einträge aus Datenebenen entfernen",
   "Remove every added entry from Data Layers": "Alle hinzugefügten Einträge aus Datenebenen entfernen",
   "Showing {shown} of {total}": "{shown} von {total} angezeigt",
-  "BROWSE DATA LIBRARY": "DATENBIBLIOTHEK DURCHSUCHEN"
+  "BROWSE DATA LIBRARY": "DATENBIBLIOTHEK DURCHSUCHEN",
+  "Atmosphere": "Atmosphäre",
+  "Day and night": "Tag und Nacht",
+  "Sun": "Sonne",
+  "Moon": "Mond",
+  "Stars": "Sterne",
+  "Milky Way": "Milchstraße"
 }

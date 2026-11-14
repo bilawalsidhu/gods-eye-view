@@ -3521,5 +3521,11 @@
   "Confirm: remove every added entry from Data Layers": "確認：追加したすべての項目をデータレイヤーから削除",
   "Remove every added entry from Data Layers": "追加したすべての項目をデータレイヤーから削除",
   "Showing {shown} of {total}": "{total}件中{shown}件を表示",
-  "BROWSE DATA LIBRARY": "データライブラリを見る"
+  "BROWSE DATA LIBRARY": "データライブラリを見る",
+  "Atmosphere": "大気",
+  "Day and night": "昼と夜",
+  "Sun": "太陽",
+  "Moon": "月",
+  "Stars": "星",
+  "Milky Way": "天の川"
 }

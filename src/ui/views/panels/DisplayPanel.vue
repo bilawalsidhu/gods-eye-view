@@ -17,7 +17,7 @@ import { StyleParameterRows } from '../../styleParameters.js';
 // and each publishes them; until they do, the panel shows its initial markup.
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, parameters, cockpitPortal, weather } = storeToRefs(display);
+const { view, models3d, parameters, cockpitPortal, weather, sky } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -40,6 +40,13 @@ const weatherRows = computed(() => [
   { key: 'fog', label: t('Fog') },
   { key: 'rain', label: t('Rain') },
   { key: 'snow', label: t('Snow') },
+]);
+const skyRows = computed(() => [
+  { key: 'atmosphere', label: t('Atmosphere'), icon: 'public' },
+  { key: 'lighting', label: t('Day and night'), icon: 'adjust' },
+  { key: 'sun', label: t('Sun'), icon: 'light_mode' },
+  { key: 'moon', label: t('Moon'), icon: 'dark_mode' },
+  { key: 'stars', label: t('Stars'), icon: 'flare' },
 ]);
 const models3dOn = computed(() => models3d.value?.pressed ?? true);
 const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
@@ -180,6 +187,19 @@ const allocationOptions = computed(() => [
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
       <span class="pp-label">{{ t('Celestial') }}</span>
     </UiButton>
+  </div>
+  <!-- Sky: only where the renderer has a sky to set. -->
+  <div v-if="sky" class="pp-toggle-group" id="sky-group">
+    <label v-for="row in skyRows" :key="row.key" class="pp-toggle-btn pp-scope-toggle" :id="`sky-${row.key}-row`">
+      <span class="pp-icon material-symbols-outlined" aria-hidden="true">{{ row.icon }}</span>
+      <span class="pp-label">{{ row.label }}</span>
+      <input type="checkbox" :id="`sky-${row.key}-toggle`" @change="act('setSkySwitch', row.key, $event.target.checked)" :checked="sky.switches[row.key]" />
+    </label>
+    <div class="pp-slider-row visible" id="sky-milkyway-row">
+      <span class="pp-slider-mini-label">{{ t('Milky Way') }}</span>
+      <UiSlider class="pp-slider" id="sky-milkyway-slider" @update:model-value="act('setSkyMilkyWay', $event)" min="0" max="100" :model-value="sky.milkyWay" :aria-label="t('Milky Way')" />
+      <span class="pp-slider-value">{{ pct(sky.milkyWay) }}</span>
+    </div>
   </div>
   <!-- Weather: only where the renderer draws it. -->
   <div v-if="weather" class="pp-toggle-group" id="weather-group">

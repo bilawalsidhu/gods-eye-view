@@ -3,6 +3,7 @@ import { StyleManager } from '../ui/composition.js';
 import { applyStartView, START_VIEW } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
 import { createViewWeather } from '../viewWeather.js';
+import { createViewSky } from '../viewSky.js';
 import { findGlobe } from '../render/rendererOf.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -70,6 +71,12 @@ export function createApplicationControls({
     store: useDisplayStore(applicationPinia()),
   });
   defer(() => viewWeather.destroy());
+  // The atmosphere, sun lighting, sun, moon, stars and Milky Way the user
+  // chooses in the Display panel.
+  const viewSky = createViewSky(viewer, {
+    store: useDisplayStore(applicationPinia()),
+  });
+  defer(() => viewSky.destroy());
 
   loaderStatus.textContent = styleManager.hasShareState
     ? t('Restoring shared view...')

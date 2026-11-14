@@ -3695,5 +3695,11 @@
   "Confirm: remove every added entry from Data Layers": "Confirmar: remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Remove every added entry from Data Layers": "Remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Showing {shown} of {total}": "Mostrando {shown} de {total}",
-  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS"
+  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS",
+  "Atmosphere": "Atmosfera",
+  "Day and night": "Dia e noite",
+  "Sun": "Sol",
+  "Moon": "Lua",
+  "Stars": "Estrelas",
+  "Milky Way": "Via Láctea"
 }

@@ -3695,5 +3695,11 @@
   "Confirm: remove every added entry from Data Layers": "אישור: הסרת כל הפריטים שנוספו משכבות נתונים",
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
-  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים"
+  "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "Atmosphere": "אטמוספרה",
+  "Day and night": "יום ולילה",
+  "Sun": "שמש",
+  "Moon": "ירח",
+  "Stars": "כוכבים",
+  "Milky Way": "שביל החלב"
 }
