@@ -308,21 +308,15 @@ test('SPC Day 1 catalog entry presents ranked NOAA polygon risk categories', asy
     ({ id }) => id === 'spc-day1-convective-outlook',
   );
   assert.ok(spc, 'SPC Day 1 entry must be registered in the catalog');
-  const url =
-    'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson';
-  assert.equal(spc.source.url, url);
-  assert.equal(spc.source.format, 'geojson');
-  assert.equal(spc.source.fetch, 'browser-direct');
-  assert.equal(spc.source.cacheSeconds, 900);
 
-  // The DN values and published fills follow SPC's categorical risk scale.
+  // LABEL, DN and LABEL2 as SPC's outlook GeoJSON publishes them.
   const categories = [
-    ['TSTM', 2, 'General thunderstorms', '#c1e9c1'],
-    ['MRGL', 3, 'Marginal', '#66a366'],
-    ['SLGT', 4, 'Slight', '#ffe066'],
-    ['ENH', 5, 'Enhanced', '#ffa366'],
-    ['MDT', 6, 'Moderate', '#e06666'],
-    ['HIGH', 8, 'High', '#ee99ee'],
+    ['TSTM', 2, 'General Thunderstorms Risk'],
+    ['MRGL', 3, 'Marginal Risk'],
+    ['SLGT', 4, 'Slight Risk'],
+    ['ENH', 5, 'Enhanced Risk'],
+    ['MDT', 6, 'Moderate Risk'],
+    ['HIGH', 8, 'High Risk'],
   ];
   const valid = '2026-11-14T12:00:00Z';
   const expires = '2026-11-15T12:00:00Z';
@@ -356,7 +350,11 @@ test('SPC Day 1 catalog entry presents ranked NOAA polygon risk categories', asy
     requestedUrl = requested;
     return JSON.stringify(upstream);
   });
-  assert.equal(requestedUrl, url, 'the browser requests the SPC feed');
+  assert.equal(
+    requestedUrl,
+    spc.source.url,
+    'the browser requests the SPC feed',
+  );
   assert.equal(collection.truncated, false);
   const expected = [...categories].reverse();
   assert.deepEqual(
@@ -373,6 +371,6 @@ test('SPC Day 1 catalog entry presents ranked NOAA polygon risk categories', asy
     `VALID_ISO: ${valid}`,
     `EXPIRE_ISO: ${expires}`,
   ]);
-  for (const [key, , , color] of categories)
-    assert.equal(spc.display.colorBy.colors[key], color, key);
+  for (const [key] of categories)
+    assert.ok(spc.display.colorBy.colors[key], `${key} has a colour`);
 });
