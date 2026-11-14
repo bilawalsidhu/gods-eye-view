@@ -230,7 +230,9 @@ export function createCitsTileStore() {
       const state = message.state || {};
       tiles.set(tile, {
         seq: Number(message.seq) || 0,
-        points: { ...state.points },
+        points: Object.fromEntries(
+          Object.entries(state.points || {}).slice(0, CITS_MAX_POINTS_PER_TILE),
+        ),
         tracks: trackIds(state.tracks),
         maps: { ...state.trafficLightMaps },
       });

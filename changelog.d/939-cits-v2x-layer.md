@@ -11,3 +11,6 @@
   in view, rate-limits each client and closes when idle; the operator can opt
   into the full stream with `CITS_OTM_FULL_STREAM=1`, and
   `CITS_OTM_ENABLED=0` turns the relay off (@mupf-dev, #939).
+- Enforce the tiled mirror's 20,000-point limit on initial full-status
+  snapshots as well as later deltas, preventing oversized initial snapshots
+  from bypassing the per-tile memory budget (mupf-dev, kvnloo; #939).

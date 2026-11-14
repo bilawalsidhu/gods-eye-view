@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CITS_MAX_POINTS_PER_TILE,
   CITS_MAX_TILES,
   citsLanePointToLonLat,
   citsTilesForBounds,
@@ -94,6 +95,26 @@ test('deltas patch, upsert and remove points; a sequence gap asks for resync', (
   });
   assert.deepEqual(gap, ['13/1/1']);
   assert.equal(store.has('13/1/1'), false);
+});
+
+test('tile fullstatus snapshots enforce the per-tile point cap', () => {
+  const store = createCitsTileStore();
+  const points = Object.fromEntries(
+    Array.from({ length: CITS_MAX_POINTS_PER_TILE + 1 }, (_, index) => [
+      `station-${index}`,
+      point(`station-${index}`, 'tram', 15.42, 47.05),
+    ]),
+  );
+  store.applyFullStatus({
+    type: 'tile-fullstatus',
+    tile: '13/1/1',
+    seq: 1,
+    state: { points, tracks: {}, trafficLightMaps: {} },
+  });
+  const merged = store.merged();
+  assert.equal(merged.points.size, CITS_MAX_POINTS_PER_TILE);
+  assert.equal(merged.points.has('station-0'), true);
+  assert.equal(merged.points.has(`station-${CITS_MAX_POINTS_PER_TILE}`), false);
 });
 
 test('compaction drops silent vehicles, keeps fixed stations and dedupes hazards', () => {
