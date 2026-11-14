@@ -1541,12 +1541,14 @@ query. Movement within an accepted or pending query reuses it. Markers retain
 their Cesium identity while their geometry is unchanged; refreshes preserve
 selection without replaying a click event.
 
-Data Centers, Dams and Submarine Cables release their built Cesium data sources
+Data Centers and Dams release their built Cesium data sources
 and record references when disabled. Parsed datasets remain cached for the layer
 lifetime, so re-enable rebuilds entities without downloading or parsing again;
 this can take longer than simply revealing hidden entities. Destruction clears
 the parsed cache as well. A disable during loading cannot leave a completed
-build hidden in the scene.
+build hidden in the scene. Submarine Cables draws with its own primitives
+instead of entities and only hides them when disabled (see "Bundled geography
+and submarine cable components").
 
 CCTV exposes a factory through `./layers/cctv`. Catalog and health requests,
 frame/media URLs, camera records, ground placement, geometry queues, playback,
@@ -8287,16 +8289,36 @@ an error. Without feeds it keeps the WebUSB statuses. See
 Submarine cables use separate source, geometry, rendering, interaction and
 lifecycle modules. The layer factory accepts cable and landing-point GeoJSON
 collections from a source with `fetch(signal)` and a display label. The default
-source loads the same bundled TeleGeography files. Disabling still removes all
-three Cesium data sources; enabling rebuilds from the accepted parsed cache,
-and destroying clears it. Load ownership prevents cancelled work from adding
-entities after teardown.
+source loads the same bundled TeleGeography files. Load ownership prevents
+cancelled work from adding anything to the scene after teardown: the fetch is
+the load's only await, and everything is built in the turn after it.
 
-Every Cesium entity from multipart cable or landing-point geometry stays tied
-to its source feature, including generated IDs and IDs that collide with
-Cesium's multipart suffixes. Each segment gets its own feature's styling, click
+The layer draws with four Cesium primitives of its own and creates no entity
+or data source. Every line is one instance of a single
+`GroundPolylinePrimitive` (per-line colour and show flag, rhumb lines,
+tessellated in a worker; a map-stack change re-classifies it in place). Every
+point is a billboard in one `BillboardCollection`. Reference tips are one
+`PointPrimitiveCollection`, and the stems of the references in view are one
+static polyline `Primitive`: a horizon sweep that moved a tip or changed which
+references are in view builds a replacement in a worker, and it replaces the
+shown stems once it is ready. Disabling hides the lines, markers and tips and
+keeps them, so enabling again neither fetches nor builds them (only the stems
+are redrawn, for the new view); destroying removes everything. These are
+the same primitives Cesium built from the layer's entities, so the layer looks
+the same. Polygon geometry in a custom source is not drawn, and GeoJSON
+simplestyle properties (`marker-color`, `stroke` and the like) are not read.
+
+Every line and marker from multipart cable or landing-point geometry stays tied
+to its source feature. Each part gets its own feature's styling, click
 destination and horizon-culling reference, and each source feature has one
 reference stem. The source collections are not modified.
+
+Landing markers are ground-clamped billboards. A marker starts hidden and
+unclamped; the horizon sweep clamps and shows the visible ones 48 per rendered
+frame (`CABLE_LANDING_REVEALS_PER_FRAME`), so the terrain height reads are
+never one task. A marker is clamped once: Cesium then keeps it on the surface
+as terrain loads, and hiding or showing it again reads nothing; hiding is
+immediate.
 
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution

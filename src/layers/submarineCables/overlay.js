@@ -41,7 +41,7 @@ export function selectCableReferenceLabelWinners(
     .sort(
       (a, b) =>
         a.distanceM - b.distanceM ||
-        String(a.entity?.id || '').localeCompare(String(b.entity?.id || '')),
+        String(a.id || '').localeCompare(String(b.id || '')),
     )
     .slice(0, cap);
 }
@@ -248,16 +248,15 @@ export function createCableReferenceSweepGate({
 }
 
 /**
- * Recompute one staticized stem on the sweep cadence. Replaces the former
- * per-frame `CallbackProperty` pair: constant properties are redefined only
- * when the camera-scaled tip moved beyond the settle epsilon, and the two
- * preallocated position buffers alternate so each real change raises exactly
- * one geometry notification (the localGeojson double-buffer pattern).
- * @param {object} record Reference record with entity/base/tip/nextTip/buffers.
+ * Recompute one stem tip on the sweep cadence. The tip is moved in place, so
+ * the label entry keeps pointing at it, and only when the camera-scaled tip
+ * moved beyond the settle epsilon; the tip point follows with one buffer
+ * write, and the caller redraws the stems when any tip moved.
+ * @param {object} record Reference record with point/base/tip/nextTip.
  * @param {Cesium.Cartesian3} cameraPositionWC
  * @param {number} canvasHeight CSS-pixel canvas height.
  * @param {number} fov Camera frustum field of view (radians).
- * @returns {boolean} True when the stem geometry was redefined.
+ * @returns {boolean} True when the tip moved.
  */
 
 export function updateCableReferenceStem(
@@ -289,13 +288,7 @@ export function updateCableReferenceStem(
     return false;
   }
   Cesium.Cartesian3.clone(record.nextTip, record.tip);
-  record.stemPositionBufferIndex = 1 - record.stemPositionBufferIndex;
-  const stemPositions =
-    record.stemPositionBuffers[record.stemPositionBufferIndex];
-  stemPositions[0] = record.base;
-  stemPositions[1] = record.tip;
-  record.entity.position.setValue(record.tip);
-  record.entity.polyline.positions.setValue(stemPositions);
+  record.point.position = record.tip;
   return true;
 }
 
