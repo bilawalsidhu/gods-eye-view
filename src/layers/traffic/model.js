@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { roadSurfaceChunks } from './surface.js';
+import { floorCellReader, roadSurfaceChunks } from './surface.js';
 import { t, translateKnown } from '../../i18n/index.js';
 import {
   flowDensityMult,
@@ -13,22 +13,35 @@ import {
 } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
-  /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
-  function parseRoads(roadData) {
+  /**
+   * Build scene waypoints from source records; thinning and terrain remain rendering policy.
+   *
+   * `parsedBySource` (source record → its parsed roads) is filled as records
+   * are parsed, and a record already in it is answered from it.
+   */
+  function parseRoads(roadData, _trace, parsedBySource) {
     if (!roadData || !roadData.roads) {
       return [];
     }
 
     const roads = [];
+    const floorAt = floorCellReader(services.ground);
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
+      // A replacing snapshot repeats records this load already parsed.
+      const known = parsedBySource?.get(road);
+      if (known) {
+        for (const parsed of known) roads.push(parsed);
+        continue;
+      }
+      const first = roads.length;
 
       for (const coords of roadSurfaceChunks(road.coordinates)) {
         const type = road.type;
         const oneway = road.oneway;
         // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation
         const waypoints = coords.map(([lng, lat]) => {
-          const floor = services.ground?.cachedGroundFloor?.(lat, lng);
+          const floor = floorAt(lat, lng);
           const h =
             (Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? floor
@@ -60,6 +73,7 @@ export function createModel({ state: layerState, services, parts, source }) {
             flow: road.flow || null,
           });
       }
+      parsedBySource?.set(road, roads.slice(first));
     }
 
     return roads;
