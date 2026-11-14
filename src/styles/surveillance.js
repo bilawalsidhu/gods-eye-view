@@ -11,8 +11,55 @@ import { msg } from '../i18n/marker.js';
  *   scanlineStr (0-1) — scanline intensity (kept for compatibility)
  *   pixelation (1-6)  — intensifier tube resolution pixelation
  */
+
+/**
+ * The bloom is an 11x11 Gaussian over samples four texels apart. Its weight
+ * exp(-(x² + y²) / 18) is a product of a row weight and a column weight, and
+ * the stage reads its input with nearest sampling, so every sample is a whole
+ * texel away from the first. This pass therefore sums the eleven samples of
+ * each row once per texel and the main pass sums eleven of those: 22 reads
+ * for each pixel where one pass took 121, with the same result.
+ *
+ * The row sum is written across two 8-bit channels (whole 255ths in red, the
+ * remainder in green) so the stage keeps the default render target.
+ */
+const NVG_BLOOM_ROWS_SHADER = /* glsl */ `
+    uniform sampler2D colorTexture;
+    uniform vec2 colorTextureDimensions;
+    uniform float gain;
+    in vec2 v_textureCoordinates;
+
+    void main() {
+      vec2 texel = 1.0 / colorTextureDimensions;
+      float gainLevel = mix(0.8, 2.5, gain);
+      float rowSum = 0.0;
+      float rowW = 0.0;
+      for (int x = -5; x <= 5; x++) {
+        vec2 offset = vec2(float(x), 0.0) * texel * 4.0;
+        float sLuma = dot(texture(colorTexture, v_textureCoordinates + offset).rgb, vec3(0.299, 0.587, 0.114));
+        float bright = smoothstep(0.4, 0.9, sLuma * gainLevel);
+        float w = exp(-float(x * x) / 18.0);
+        rowSum += bright * w;
+        rowW += w;
+      }
+      float scaled = rowSum / rowW * 255.0;
+      out_FragColor = vec4(floor(scaled) / 255.0, fract(scaled), 0.0, 1.0);
+    }
+  `;
+
 export const nightVisionShader = {
   name: 'surveillance',
+  // The film grain, scanline drift and clock digits step at this rate, and
+  // the scene is redrawn at it while the style is the only thing moving.
+  timeHz: 15,
+  passes: [
+    {
+      name: 'bloomRows',
+      texture: 'bloomRowsTexture',
+      uniforms: ['gain'],
+      fragmentShader: NVG_BLOOM_ROWS_SHADER,
+    },
+  ],
   uniforms: {
     gain: { default: 0.55, min: 0, max: 1, label: msg('Gain') },
     bloom: { default: 0.3, min: 0, max: 1, label: msg('Bloom') },
@@ -21,6 +68,7 @@ export const nightVisionShader = {
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;
+    uniform sampler2D bloomRowsTexture;
     uniform vec2 colorTextureDimensions;
     uniform float intensity;
     uniform float time;
@@ -189,17 +237,15 @@ export const nightVisionShader = {
 
       // ── Intensifier tube bloom (THE key NVG visual) ─────
       // Bloom around bright sources — wider kernel for realistic halos
+      // Rows were summed by the bloomRows pass; the columns are summed here.
       float bloomAccum = 0.0;
       float bloomW = 0.0;
       for (int y = -5; y <= 5; y++) {
-        for (int x = -5; x <= 5; x++) {
-          vec2 offset = vec2(float(x), float(y)) * texel * 4.0;
-          float sLuma = dot(texture(colorTexture, distUV + offset).rgb, vec3(0.299, 0.587, 0.114));
-          float bright = smoothstep(0.4, 0.9, sLuma * gainLevel);
-          float w = exp(-float(x * x + y * y) / 18.0);
-          bloomAccum += bright * w;
-          bloomW += w;
-        }
+        vec2 offset = vec2(0.0, float(y)) * texel * 4.0;
+        vec2 rows = texture(bloomRowsTexture, distUV + offset).rg;
+        float w = exp(-float(y * y) / 18.0);
+        bloomAccum += (rows.r + rows.g / 255.0) * w;
+        bloomW += w;
       }
       bloomAccum /= bloomW;
 
