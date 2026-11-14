@@ -9,6 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { cctvProxy } from '../../server/providers/cctv.js';
+import { createStreetViewAdmission } from '../../server/providers/cctv/streetViewGuard.js';
+import { applyFrameResult, createFrameSlot } from './cctvCards.js';
 
 const STILL = {
   id: 'still-fixture',
@@ -104,7 +106,13 @@ function recordingResponse() {
  * Mount the real provider over the fixture cameras and answer every upstream
  * request from the supplied function.
  */
-function mount(t, respond) {
+function mount(
+  t,
+  respond,
+  {
+    streetViewAdmission = createStreetViewAdmission({ failureCooldownMs: 0 }),
+  } = {},
+) {
   const before = {
     json: process.env.CCTV_SOURCES_JSON,
     file: process.env.CCTV_SOURCES_FILE,
@@ -146,7 +154,7 @@ function mount(t, respond) {
   });
 
   let handler = null;
-  cctvProxy().configureServer({
+  cctvProxy({ streetViewAdmission }).configureServer({
     middlewares: {
       use: (_route, fn) => {
         handler = fn;
@@ -527,4 +535,44 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
   assert.equal(direct.headers['X-CCTV-Source'], 'streetview');
   assert.equal(direct.body, 'street-view');
   assert.equal(streetViewCalls(), 1);
+});
+
+test('rate refusal returns 204 and a previously drawn thumbnail persists', async (t) => {
+  const admission = createStreetViewAdmission({
+    perClientMax: 1,
+    globalMax: 1,
+    dailyMax: 1,
+  });
+  const app = mount(
+    t,
+    ({ url }) =>
+      url.startsWith('https://maps.googleapis.com/')
+        ? upstreamResponse({
+            headers: { 'content-type': 'image/jpeg' },
+            body: 'street-view',
+          })
+        : upstreamResponse({ status: 503, body: '' }),
+    { streetViewAdmission: admission },
+  );
+  process.env.GOOGLE_MAPS_SERVER_API_KEY = 'fixture-key';
+  const first = await app.call(`/frame/${STILL.id}`);
+  assert.equal(first.headers['X-CCTV-Source'], 'streetview');
+  const initialHealth = await app.health(STILL.id);
+  const frame = { pixels: 'last-good-streetview' };
+  const slot = applyFrameResult(createFrameSlot(), { ok: true, frame }, 100);
+
+  const refused = await app.call(`/frame/${STILL.id}`);
+  assert.equal(refused.statusCode, 204);
+  assert.equal(refused.body, '');
+  assert.equal(refused.headers['X-CCTV-Source'], 'deferred');
+  assert.equal(
+    app.requests.filter(({ url }) =>
+      url.startsWith('https://maps.googleapis.com/'),
+    ).length,
+    1,
+  );
+  const after = applyFrameResult(slot, { ok: false }, 200);
+  assert.strictEqual(after.frame, frame, 'a refused refresh retains the image');
+  assert.equal(after.stamp, slot.stamp, 'displayed image stamp is unchanged');
+  assert.deepEqual(await app.health(STILL.id), initialHealth);
 });

@@ -3,6 +3,7 @@ import { greatCircleKm } from '../../geoDistance.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
 import { DEFAULT_CAMERA_CALIBRATION } from './policy.js';
+import { cctvFallbackHeadingFromId } from '../../sources/cctvPose.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   const { focusPassIsNeeded, getFocusTarget } = services.focus;
@@ -140,12 +141,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function headingFromId(id) {
-    const text = String(id || '');
-    let acc = 0;
-    for (let i = 0; i < text.length; i++) {
-      acc = (acc * 33 + text.charCodeAt(i)) >>> 0;
-    }
-    return normalizeHeading((acc % 16) * 22.5);
+    return cctvFallbackHeadingFromId(id);
   }
 
   /**

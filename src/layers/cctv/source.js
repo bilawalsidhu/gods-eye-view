@@ -64,6 +64,10 @@ export function createCctvSource({
         cache: 'no-store',
         signal,
       });
+      // 204 means a metered fallback was refused (quota or cooldown).
+      // Do not treat its empty body as a valid source image.
+      if (response.status === 204)
+        throw new Error('Camera frame temporarily deferred');
       if (!response.ok) throw new Error('Camera frame HTTP ' + response.status);
       const bytes = new Uint8Array(await response.arrayBuffer());
       signal?.throwIfAborted();
