@@ -3692,5 +3692,12 @@
   "500–1,000 m": "500–1000 m",
   "1,000–2,000 m": "1000–2000 m",
   "2,000–3,000 m": "2000–3000 m",
-  "3,000 m and above": "3000 m o más"
+  "3,000 m and above": "3000 m o más",
+  "The globe stopped drawing": "El globo dejó de dibujarse",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "El navegador retiró los gráficos 3D del globo. Las capas y los controles siguen funcionando, pero el mapa no se dibujará hasta que se recargue la página.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "El renderizado se detuvo tras un error. Las capas y los controles siguen funcionando, pero el mapa no se actualiza.",
+  "Reset view reloads the app without the view restored from the address bar.": "Restablecer la vista recarga la app sin la vista restaurada desde la barra de direcciones.",
+  "Reload": "Recargar",
+  "Retry": "Reintentar",
+  "Reset view": "Restablecer la vista"
 }
