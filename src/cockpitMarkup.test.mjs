@@ -530,12 +530,12 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   );
 });
 
-test('Display orders 3D above Celestial, Clean UI below it, and Parameters below Detection', () => {
+test('Visual orders Parameters below Detection, 3D below them, and Clean UI above the Effects', () => {
   const display = html.match(/id="pp-toggles"[\s\S]*?id="clean-view-exit"/);
   assert.ok(display, 'Display markup is missing');
   assert.match(
     display[0],
-    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"[\s\S]*?id="celestial-toggle"[\s\S]*?id="clean-view-toggle"/,
+    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"[\s\S]*?id="scope-toggle"[\s\S]*?id="clean-view-toggle"[\s\S]*?class="pp-section-heading">Effects<[\s\S]*?id="celestial-toggle"/,
   );
   assert.equal(
     (html.match(/id="param-slider-panel"/g) || []).length,
