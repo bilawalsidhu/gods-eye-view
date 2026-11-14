@@ -8,11 +8,11 @@ artwork, and are covered by the repository's [MIT license](../../LICENSE)
 like the source code. The exception is NASA's model of the ISS, described in
 [its own section](#the-iss-model-issglb) below.
 
-| Path                                                                                                      | What it holds                                                                                                                                                                                                                              |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `fleet/catalog.json`                                                                                      | Every model by name: its file, category, built length, beam and bounds (metres, in Cesium's Z-up model frame: x along the length with the nose toward −X, y across the beam, z up), the clearance below its origin, and its 2D icon class. |
-| `fleet/types.json`                                                                                        | Which model draws which vehicle, and at what length: ICAO aircraft and helicopter type codes, ADS-B emitter categories, AIS ship-type and length ranges, GTFS route types, transit modes and rail categories, with the defaults.           |
-| `fleet/aircraft/`, `fleet/helicopters/`, `fleet/ships/`, `fleet/buoys/`, `fleet/transit/`, `fleet/other/` | The models, one GLB each (EXT_meshopt_compression and KHR_mesh_quantization, vertex colours, no textures).                                                                                                                                 |
+| Path | What it holds |
+|---|---|
+| `fleet/catalog.json` | Every model by name: its file, category, built length, beam and bounds (metres, in Cesium's Z-up model frame: x along the length with the nose toward −X, y across the beam, z up), the clearance below its origin, and its 2D icon class. |
+| `fleet/types.json` | Which model draws which vehicle, and at what length: ICAO aircraft and helicopter type codes, ADS-B emitter categories, AIS ship-type and length ranges, GTFS route types, transit modes and rail categories, with the defaults. |
+| `fleet/aircraft/`, `fleet/helicopters/`, `fleet/ships/`, `fleet/buoys/`, `fleet/transit/`, `fleet/other/` | The models, one GLB each (EXT_meshopt_compression and KHR_mesh_quantization, vertex colours, no textures). |
 
 How the layers use them:
 
