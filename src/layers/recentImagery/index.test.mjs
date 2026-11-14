@@ -1061,6 +1061,10 @@ test('alpha, split and visible range notify without re-rendering the row', async
   f.layer.setSplit(0.25);
   f.layer.setVisibleRange(1, 3);
   assert.equal(f.thumbnails.calls.at(-1)[2].firstVisible, 1);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(f.snap().focus.key),
+    'the current focus remains in the retained refinement intent',
+  );
   assert.equal(rowRenders, rows);
   assert.deepEqual(f.reasons.slice(-2), ['alpha', 'split']);
   f.layer.setAlpha('bad');
@@ -1148,6 +1152,48 @@ const dailyViirs = () =>
       new Date(Date.UTC(2026, 8, 21 - back)).toISOString().slice(0, 10),
     ),
   );
+
+test('empty auto VIIRS re-requests a cancelled successor', async () => {
+  const f = fixture();
+  const days = dailyViirs();
+  const newest = days[0].key;
+  const next = days[1].key;
+  f.layer.setSources({ hls: false });
+  await f.ready(days);
+
+  assert.equal(f.diag().following, newest);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(next),
+    'the next day was originally scheduled',
+  );
+
+  // Move the visible window away before either day answers: retention
+  // cancels the next day's probe but keeps the currently followed day.
+  f.layer.setVisibleRange(25, 29);
+  assert.equal(
+    f.thumbnails.retained.at(-1).includes(next),
+    false,
+    'the next day is no longer retained',
+  );
+  const before = f.thumbnails.requests.filter(([key]) => key === next).length;
+
+  f.thumbnails.probe(newest, 'empty');
+  assert.equal(f.diag().following, next);
+  assert.equal(f.snap().preview.pending, next);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(next),
+    'the new follow day is retained without scrolling again',
+  );
+  assert.equal(
+    f.thumbnails.requests.filter(([key]) => key === next).length,
+    before + 1,
+    'the cancelled successor is requested again',
+  );
+
+  f.thumbnails.probe(next, 'present');
+  assert.equal(f.snap().preview.key, next);
+  assert.deepEqual(f.drapes(), { a: `${next}|none`, b: null });
+});
 
 test('restored pins outside the visible strip window are probed and swipe once present', async () => {
   const f = fixture();
