@@ -10,6 +10,7 @@ import {
 import { LIBRARY_ENTRIES, libraryEntry } from './catalog.js';
 import { libraryTileUrl } from './manifest.js';
 import { createLibrarySource } from './source.js';
+import { layerOptions } from '../render/cesium/imagery.js';
 import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
@@ -225,31 +226,23 @@ test('an entry too dense to draw zoomed out is hidden below its scale', async (t
     undefined,
   );
 
-  // It names no minimum level, so zoomed out the globe takes its tiles at
-  // its own coarse levels, and every tile below z14 is held back unfetched.
+  // It keeps its minimum level and is hidden where the view is coarser, as
+  // Cesium's own layer was (minimumTerrainLevel z13 on the geographic globe).
   const { viewer, globe } = globeViewer(t);
   const layer = createLibraryTileLayer(cadastre, { source });
   await layer.init(viewer);
   await layer.enable(viewer);
   const [imagery] = globe.layers;
-  assert.equal(imagery.spec.minLevel, undefined);
-  let fetched = 0;
-  const fetch = () => {
-    fetched += 1;
-    return Promise.resolve('tile');
-  };
-  for (const level of [0, 4, 12, 13])
-    await assert.rejects(imagery.request({ x: 0, y: 0, level }, fetch));
-  assert.equal(fetched, 0, 'no tile below z14 is requested');
-  assert.equal(await imagery.request({ x: 0, y: 0, level: 14 }, fetch), 'tile');
-  // The held-back tiles are not failures.
-  for (let i = 0; i < 30; i++) imagery.fail({ tile: { x: i, y: 0, level: 4 } });
-  assert.equal(layer.getStats().error, null);
+  assert.equal(imagery.spec.minLevel, 14);
+  assert.equal(imagery.spec.hiddenBelowMinLevel, true);
+  assert.equal(imagery.spec.admit, undefined);
+  assert.deepEqual(layerOptions(imagery.spec), { minimumTerrainLevel: 13 });
   // An entry that is not dense keeps its minimum level.
   const lee = libraryEntry('lee-county-fl');
   const spec = libraryImagerySpec(lee, lee.source.url);
   assert.equal(spec.minLevel, lee.source.minZoom ?? 0);
-  assert.equal(spec.admit, undefined);
+  assert.equal(spec.hiddenBelowMinLevel, undefined);
+  assert.equal(layerOptions(spec), undefined);
   await layer.disable();
   assert.equal(globe.layers.length, 0);
 });

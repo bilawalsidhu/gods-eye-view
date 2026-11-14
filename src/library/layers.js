@@ -430,9 +430,6 @@ export function minimumTerrainLevelFor(entry) {
  */
 export const LIBRARY_AERIAL_Z = 10;
 
-/** Why a dense entry's tile below its minimum zoom is not drawn. */
-const BELOW_MIN_ZOOM = 'below the entry’s minimum zoom';
-
 /**
  * The globe port imagery spec for a tiles entry.
  * @param {object} entry Validated tiles entry.
@@ -442,10 +439,9 @@ const BELOW_MIN_ZOOM = 'below the entry’s minimum zoom';
 export function libraryImagerySpec(entry, url) {
   const bbox = entry.source.bounded ? entry.coverage.bbox : null;
   const minZoom = entry.source.minZoom ?? 0;
-  // A dense entry (`minimumTerrainLevelFor`) asks for no tile below its
-  // minimum zoom: the globe then takes this layer's tiles at its own
-  // level, a few zoomed out, and those below the minimum fail at once, so
-  // nothing is drawn or fetched until the view is close enough.
+  // A dense entry (`minimumTerrainLevelFor`) is hidden where the view is
+  // coarser than its minimum zoom, so nothing is drawn or fetched until the
+  // view is close enough; from there on it draws as any entry does.
   const dense = minimumTerrainLevelFor(entry) !== undefined;
   const tileTransform = libraryTileTransform(entry);
   return {
@@ -453,7 +449,8 @@ export function libraryImagerySpec(entry, url) {
     url,
     tiling: 'webMercator',
     tileSize: entry.source.tileSize ?? 256,
-    ...(dense ? {} : { minLevel: minZoom }),
+    minLevel: minZoom,
+    ...(dense ? { hiddenBelowMinLevel: true } : {}),
     maxLevel: entry.source.maxZoom ?? 18,
     credit: { text: entry.provider },
     // A bounded entry requests tiles inside its coverage only.
@@ -469,14 +466,6 @@ export function libraryImagerySpec(entry, url) {
       : {}),
     ...(entry.display.aerial ? { zOrder: LIBRARY_AERIAL_Z } : {}),
     ...(tileTransform ? { tileTransform } : {}),
-    ...(dense
-      ? {
-          admit: (tile, issue) =>
-            tile.level < minZoom
-              ? Promise.reject(new Error(BELOW_MIN_ZOOM))
-              : issue(),
-        }
-      : {}),
   };
 }
 
@@ -501,7 +490,6 @@ export function createLibraryTileLayer(
   const id = libraryLayerId(entry.id);
   const extent = coverageExtent(entry);
   const outlineMode = entry.display.outline || null;
-  const minZoom = entry.source.minZoom ?? 0;
   /** The coverage outline's set, and how many rings it draws. */
   let outline = null;
   let outlineCount = 0;
@@ -606,8 +594,8 @@ export function createLibraryTileLayer(
         libraryImagerySpec(entry, source.tileTemplate(entry)),
       );
     } catch (error) {
-      // A renderer without tile hooks cannot draw relief, clear the
-      // no-data fill or hold back a dense entry: no drape, not a wrong one.
+      // A renderer without tile hooks cannot draw relief or clear the
+      // no-data fill: no drape, not a wrong one.
       console.warn(`[Library] ${entry.id} tiles refused:`, error);
       refused = true;
       return false;
@@ -615,11 +603,9 @@ export function createLibraryTileLayer(
     imagery.alpha = entry.display.opacity ?? 1;
     removeErrorListener = imagery.on('tileError', (error) => {
       // A 4xx is the provider saying "no imagery here" (outside its
-      // coverage), and a tile below a dense entry's minimum zoom is held
-      // back on purpose: neither is a failure.
+      // coverage), not a failure.
       const status = error?.status;
       if (status >= 400 && status < 500) return;
-      if (error?.tile?.level < minZoom) return;
       tileErrors += 1;
     });
     lastUpdate = Date.now();

@@ -132,6 +132,20 @@ test('the look writes through to the Cesium layer', () => {
   assert.equal(layer.lit, false);
 });
 
+test('a layer hidden below its minimum level shows from the globe level as fine as it', () => {
+  const { scene, port } = setup();
+  port.imagery.add({
+    kind: 'xyz',
+    url: url('dense'),
+    minLevel: 14,
+    hiddenBelowMinLevel: true,
+  });
+  port.imagery.add({ kind: 'xyz', url: url('plain'), minLevel: 14 });
+  // Web Mercator z14 is as fine as the geographic globe's level 13.
+  assert.equal(scene.imageryLayers.get(0)._minimumTerrainLevel, 13);
+  assert.equal(scene.imageryLayers.get(1)._minimumTerrainLevel, undefined);
+});
+
 test('imagery drapes on the drawn base tileset while the globe is hidden', () => {
   const { scene, port, tick } = setup();
   const tileset = fakeTileset();

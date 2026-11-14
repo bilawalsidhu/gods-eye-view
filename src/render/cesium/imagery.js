@@ -109,6 +109,21 @@ function canvasProvider(spec) {
 }
 
 /**
+ * The Cesium layer options a spec asks for: one hidden below its minimum
+ * level is shown only from the globe level as fine as it (Cesium's globe
+ * tiles are geographic, two Web Mercator tiles across a level's one).
+ * @param {import('../contract/globe').ImagerySpec} spec
+ * @returns {object|undefined}
+ */
+export function layerOptions(spec) {
+  if (!spec.hiddenBelowMinLevel || !(spec.minLevel > 0)) return undefined;
+  const tiling =
+    spec.tiling ?? (spec.kind === 'canvas' ? 'geographic' : 'webMercator');
+  const shift = tiling === 'geographic' ? 0 : 1;
+  return { minimumTerrainLevel: Math.max(0, spec.minLevel - shift) };
+}
+
+/**
  * The Cesium provider a spec describes; a promise for the kinds Cesium
  * builds from metadata it fetches first.
  * @param {import('../contract/globe').ImagerySpec} spec
@@ -437,10 +452,14 @@ export function createCesiumImagery(
 
   /** A Cesium layer for the record, with its look. */
   function build(record) {
+    const options = layerOptions(record.spec);
     const layer =
       record.provider !== undefined
-        ? new Cesium.ImageryLayer(record.provider)
-        : Cesium.ImageryLayer.fromProviderAsync(record.providerPromise);
+        ? new Cesium.ImageryLayer(record.provider, options)
+        : Cesium.ImageryLayer.fromProviderAsync(
+            record.providerPromise,
+            options,
+          );
     layer.alpha = record.alpha;
     // A layer showing timed frames hides its own imagery.
     layer.show = record.show && !record.timed;
@@ -710,11 +729,15 @@ export function createCesiumImagery(
         return hookProvider(provider, spec, record.ctx);
       });
       provider.catch(() => {});
-      entry.layer = Cesium.ImageryLayer.fromProviderAsync(provider);
+      entry.layer = Cesium.ImageryLayer.fromProviderAsync(
+        provider,
+        layerOptions(spec),
+      );
     } else {
       entry.offError = record.watchErrors(made);
       entry.layer = new Cesium.ImageryLayer(
         timed.video ? made : hookProvider(made, spec, record.ctx),
+        layerOptions(spec),
       );
     }
     entry.layer.alpha = 0;

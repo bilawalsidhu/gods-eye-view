@@ -82,6 +82,12 @@ export interface ImagerySpec {
   rectangle?: GeoRect;
   minLevel?: number;
   maxLevel?: number;
+  /**
+   * Drawn nowhere the surface is coarser than `minLevel`, rather than made
+   * from `minLevel` tiles there: for a layer whose `minLevel` tiles are too
+   * many to fetch far out.
+   */
+  hiddenBelowMinLevel?: boolean;
   tileSize?: number;
   credit?: Credit;
   /** Requests in flight at once for this layer. */
