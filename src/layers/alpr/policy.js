@@ -66,14 +66,15 @@ export const MAX_CANVAS_FRUSTUMS = 64;
 /** Metres a floor-placed marker sits above its resolved ground cell. */
 export const MARKER_FLOOR_LIFT_M = 1.5;
 
-/** Rendered-surface samples one overlay paint may take (each is a depth render). */
-export const ANCHOR_SAMPLES_PER_PAINT = 4;
+/** Rendered-surface samples one frame may take (on photoreal tiles each is a
+ * depth render of several milliseconds, so they are spread over frames). */
+export const SURFACE_SAMPLES_PER_FRAME = 1;
+/** Surface answers kept by camera id, so a refresh or re-enable asks nothing. */
+export const REMEMBERED_ANCHORS = 2048;
 
 /** Accepted rendered-surface window around a floor cell (a cut or an embankment
  * sits within it; a rooftop or an unstreamed tile usually does not). */
 export const SURFACE_BELOW_FLOOR_M = 30;
-/** Rendered-surface refinements per paint while the camera is still. */
-export const SURFACE_SAMPLES_PER_PAINT = 2;
 export const SURFACE_ABOVE_FLOOR_M = 40;
 
 /** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
