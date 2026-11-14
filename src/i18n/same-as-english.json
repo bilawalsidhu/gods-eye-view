@@ -249,7 +249,9 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "Starship Live",
+    "Booster"
   ],
   "es": [
     "1 min/s",
@@ -633,7 +635,9 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "Starship Live",
+    "Booster"
   ],
   "it": [
     "1 min/s",
@@ -839,7 +843,9 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "Starship Live",
+    "Booster"
   ],
   "ja": [
     "1090 MHz",
@@ -1264,7 +1270,9 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "Starship Live",
+    "Booster"
   ],
   "uk": [
     "1900–1945",

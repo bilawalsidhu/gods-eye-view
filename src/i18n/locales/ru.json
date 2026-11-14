@@ -3786,5 +3786,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "«Сбросить вид» перезагружает приложение без вида, восстановленного из адресной строки.",
   "Reload": "Перезагрузить",
   "Retry": "Повторить",
-  "Reset view": "Сбросить вид"
+  "Reset view": "Сбросить вид",
+  "Starship telemetry unavailable": "Телеметрия Starship недоступна",
+  "Loading...": "Загрузка...",
+  "No active Starship telemetry": "Нет активной телеметрии Starship",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · Высота {altitude} · Скорость {speed} · Курс {heading}°",
+  "{count} vehicles": "{count} аппаратов",
+  "Starship Live": "Starship в прямом эфире",
+  "SpaceX public telemetry": "Публичная телеметрия SpaceX",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "Высота {altitude} · Скорость {speed} · Курс {heading}°",
+  "Starship Live vehicles": "Аппараты Starship в прямом эфире",
+  "Booster": "Ускоритель",
+  "Ship": "Корабль",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "Прямая телеметрия Starship из публичной трансляции SpaceX. Выберите аппарат, чтобы следить за ним. Метка ускорителя появится только если SpaceX опубликует его телеметрию."
 }

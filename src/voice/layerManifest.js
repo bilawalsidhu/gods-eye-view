@@ -159,6 +159,12 @@ const layers = [
     },
   },
   {
+    id: 'starship-live',
+    aliases: ['starship', 'starship live', 'live starship'],
+    context: false,
+    noQuery: 'live webcast telemetry; use the Starship Live row',
+  },
+  {
     id: 'rocket-launches',
     aliases: [
       'rocket launches',

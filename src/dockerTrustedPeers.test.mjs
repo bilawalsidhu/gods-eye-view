@@ -160,6 +160,7 @@ test('Compose resolves shell and project dotenv policy before the launcher start
   assert.deepEqual(config(dotenv), {
     GEV_KEY_SETUP_TRUSTED_PEERS: 'none',
     GEV_ALLOWED_HOSTS: 'globe.example.lan',
+    STARSHIP_LIVE_URL: null,
   });
   assert.equal(
     config(dotenv, { GEV_KEY_SETUP_TRUSTED_PEERS: '10.9.8.7' })

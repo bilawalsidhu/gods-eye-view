@@ -3960,5 +3960,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
   "Reload": "إعادة التحميل",
   "Retry": "إعادة المحاولة",
-  "Reset view": "إعادة ضبط العرض"
+  "Reset view": "إعادة ضبط العرض",
+  "Starship telemetry unavailable": "بيانات Starship غير متاحة",
+  "Loading...": "جارٍ التحميل...",
+  "No active Starship telemetry": "لا توجد بيانات Starship نشطة",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · الارتفاع {altitude} · السرعة {speed} · الاتجاه {heading}°",
+  "{count} vehicles": "{count} مركبات",
+  "Starship Live": "Starship مباشر",
+  "SpaceX public telemetry": "بيانات SpaceX العامة",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "الارتفاع {altitude} · السرعة {speed} · الاتجاه {heading}°",
+  "Starship Live vehicles": "مركبات Starship المباشرة",
+  "Booster": "الدافع",
+  "Ship": "السفينة",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "بيانات Starship المباشرة من بث SpaceX العام. اختر مركبة لمتابعتها. يظهر رمز الدافع فقط إذا نشرت SpaceX بياناته."
 }

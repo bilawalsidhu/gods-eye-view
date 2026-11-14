@@ -3525,5 +3525,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "「重置視圖」會重新加載應用，不使用從地址欄恢復的視圖。",
   "Reload": "重新加載",
   "Retry": "重試",
-  "Reset view": "重置視圖"
+  "Reset view": "重置視圖",
+  "Starship telemetry unavailable": "Starship遙測不可用",
+  "Loading...": "載入中...",
+  "No active Starship telemetry": "沒有活動的Starship遙測",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · 高度 {altitude} · 速度 {speed} · 航向 {heading}°",
+  "{count} vehicles": "{count}個載具",
+  "Starship Live": "Starship直播",
+  "SpaceX public telemetry": "SpaceX公開遙測",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "高度 {altitude} · 速度 {speed} · 航向 {heading}°",
+  "Starship Live vehicles": "Starship直播載具",
+  "Booster": "助推器",
+  "Ship": "飛船",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "來自SpaceX公開直播的Starship即時遙測。選擇載具即可跟隨。只有當SpaceX發布助推器遙測時，才會顯示助推器標記。"
 }

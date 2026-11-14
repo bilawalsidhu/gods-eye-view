@@ -182,6 +182,13 @@ export const DATA_CREDITS = [
       '(API documentation and rate limits)',
   },
   {
+    key: 'spacex-starship-live',
+    html:
+      'Live Starship telemetry: ' +
+      '<a href="https://www.spacex.com" target="_blank" rel="noopener">SpaceX public telemetry via stardash.live mirror</a> ' +
+      '(runtime only; no bundled data)',
+  },
+  {
     key: 'usgs',
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
