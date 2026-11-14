@@ -34,7 +34,6 @@ import {
   MODEL_PROX_KEEP_M,
   IR_RELOAD_BATCH,
   MODEL_MIN_PX,
-  MODEL_COLOR_BLEND_AMOUNT,
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
@@ -43,7 +42,10 @@ import {
   COURSE_MAX_DPS,
   STALE_ALPHA,
 } from './policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -81,7 +83,6 @@ export function createRendering({
     const base = aircraftLayerModelSpec(meta);
     spec = Object.freeze({
       ...base,
-      blendAmount: MODEL_COLOR_BLEND_AMOUNT,
       headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
     });
     // Not cached before the model set loads: the answer changes once it has.
@@ -152,11 +153,15 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model tint, mirroring the billboard color rules (amber instead of cyan/white). */
+  /** Model colour: the mesh's own (white), tinted amber while tracked and red
+   *  while broadcasting an emergency. */
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return TRACKED_ICON_COLOR;
-    return _fleetBillboardColor(icao24);
+    const info = flightState.records.data.get(icao24);
+    return isEmergency(info?.emergency)
+      ? EMERGENCY_ICON_COLOR
+      : Cesium.Color.WHITE;
   }
 
   /** Fleet (untracked) tint: red while the latest poll broadcast an emergency,
@@ -443,9 +448,7 @@ export function createRendering({
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // near self-illuminated tint so planes read uniform near AND far; IR boost → flat UNLIT white (hot)
-        colorBlendAmount: flightState._irBoost ? 1.0 : MODEL_COLOR_BLEND_AMOUNT,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
@@ -662,9 +665,7 @@ export function createRendering({
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // near self-illuminated tint so planes read uniform near AND far; IR boost → flat UNLIT white (hot)
-        colorBlendAmount: flightState._irBoost ? 1.0 : MODEL_COLOR_BLEND_AMOUNT,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
