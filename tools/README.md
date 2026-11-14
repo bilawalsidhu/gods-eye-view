@@ -1,6 +1,16 @@
 # Tools
 
-CLI scripts for fetching, rendering, and reprojecting geospatial imagery. All tools read the Google Maps API key from `.env` automatically.
+CLI scripts for camera interchange and for fetching, rendering, and reprojecting
+geospatial imagery. The imagery tools read the Google Maps API key from `.env`
+automatically.
+
+## Offline Blender camera interchange
+
+`export-blender-camera.mjs` exports the cameras of a saved Director scene as a
+plain-text USD stage (`.usda`) that Blender opens with File > Import >
+Universal Scene Description. It requires no key, environment file, browser,
+network access or Blender add-on, and exports no imagery or geometry. Usage,
+format and lens units: [Blender cameras](../docs/BLENDER-CAMERAS.md).
 
 Output files go to `output/` by default (gitignored).
 
