@@ -175,7 +175,7 @@ const allocationOptions = computed(() => [
       <span class="pp-label">{{ t('Celestial') }}</span>
     </UiButton>
   </div>
-  <button class="pp-toggle-btn" id="clean-view-toggle" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
+  <button class="pp-toggle-btn" id="clean-view-toggle" aria-pressed="false" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
     <span class="pp-icon">&#x25A1;</span>
     <span class="pp-label">{{ t('Clean UI') }}</span>
   </button>

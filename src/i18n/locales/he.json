@@ -3699,5 +3699,8 @@
   "Reset view reloads the app without the view restored from the address bar.": "\"איפוס תצוגה\" טוען מחדש את האפליקציה בלי התצוגה ששוחזרה משורת הכתובת.",
   "Reload": "טען מחדש",
   "Retry": "נסה שוב",
-  "Reset view": "איפוס תצוגה"
+  "Reset view": "איפוס תצוגה",
+  "Clean view: hide the controls": "תצוגה נקייה: הסתרת הפקדים",
+  "Exit clean view: show the controls": "יציאה מהתצוגה הנקייה: הצגת הפקדים",
+  "{label} (V)": "{label} (V)"
 }

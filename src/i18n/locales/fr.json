@@ -3699,5 +3699,8 @@
   "Reset view reloads the app without the view restored from the address bar.": "Réinitialiser la vue recharge l’app sans la vue restaurée depuis la barre d’adresse.",
   "Reload": "Recharger",
   "Retry": "Réessayer",
-  "Reset view": "Réinitialiser la vue"
+  "Reset view": "Réinitialiser la vue",
+  "Clean view: hide the controls": "Vue épurée : masquer les commandes",
+  "Exit clean view: show the controls": "Quitter la vue épurée : afficher les commandes",
+  "{label} (V)": "{label} (V)"
 }

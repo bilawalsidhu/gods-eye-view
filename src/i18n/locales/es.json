@@ -3699,5 +3699,8 @@
   "Reset view reloads the app without the view restored from the address bar.": "Restablecer la vista recarga la app sin la vista restaurada desde la barra de direcciones.",
   "Reload": "Recargar",
   "Retry": "Reintentar",
-  "Reset view": "Restablecer la vista"
+  "Reset view": "Restablecer la vista",
+  "Clean view: hide the controls": "Vista limpia: ocultar los controles",
+  "Exit clean view: show the controls": "Salir de vista limpia: mostrar los controles",
+  "{label} (V)": "{label} (V)"
 }

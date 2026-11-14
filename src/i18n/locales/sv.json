@@ -3612,5 +3612,8 @@
   "Reset view reloads the app without the view restored from the address bar.": "”Återställ vy” laddar om appen utan vyn som återställdes från adressfältet.",
   "Reload": "Ladda om",
   "Retry": "Försök igen",
-  "Reset view": "Återställ vy"
+  "Reset view": "Återställ vy",
+  "Clean view: hide the controls": "Rent gränssnitt: dölj kontrollerna",
+  "Exit clean view: show the controls": "Lämna rent gränssnitt: visa kontrollerna",
+  "{label} (V)": "{label} (V)"
 }

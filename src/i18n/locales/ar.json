@@ -3960,5 +3960,8 @@
   "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
   "Reload": "إعادة التحميل",
   "Retry": "إعادة المحاولة",
-  "Reset view": "إعادة ضبط العرض"
+  "Reset view": "إعادة ضبط العرض",
+  "Clean view: hide the controls": "العرض النظيف: إخفاء عناصر التحكم",
+  "Exit clean view: show the controls": "الخروج من العرض النظيف: إظهار عناصر التحكم",
+  "{label} (V)": "{label} (V)"
 }
