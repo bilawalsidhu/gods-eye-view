@@ -139,3 +139,26 @@ test('a filter that hides stations clusters them again at once', async () => {
     },
   );
 });
+
+test('a double-click follows a station, as its entity was', async () => {
+  const { createStubRenderer } = await import('../../render/stub/index.js');
+  const renderer = createStubRenderer();
+  const stations = [station(1, -97.0, 30.0), station(2, -90, 35)];
+  try {
+    await withRadioLayer({ stations, renderer }, async () => {
+      const set = renderer.testing
+        .sets()
+        .find((id) => id.endsWith(':stations'));
+      renderer.testing.scriptPicks(() => [
+        { set, id: `radio:${stations[1].id}`, surface: false },
+      ]);
+      renderer.testing.pointer('dblclick', 10, 10);
+      const followed = renderer.camera.followed;
+      assert.ok(followed, 'the station is followed');
+      const { lon, lat } = toLonLatH(followed.position(0), WGS84);
+      assert.ok(Math.abs(lon + 90) < 1e-6 && Math.abs(lat - 35) < 1e-6);
+    });
+  } finally {
+    renderer.destroy();
+  }
+});
