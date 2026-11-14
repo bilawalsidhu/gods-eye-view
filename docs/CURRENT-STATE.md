@@ -661,9 +661,9 @@ cards keep Cyber's own red skin. The presets and chips call the
 same Display store actions as the dock's Visual Presets tray, which stays on
 desktop and phone as before, along with Location; voice `Visual Presets`
 still opens that tray. On a phone the More sheet shows that tray right above
-Visual, so Visual leaves out its own presets and chips there. In Cockpit the
-groups Cockpit's Display popover takes
-leave the panel as before and keep their own styling there.
+Visual, so Visual leaves out its own presets and chips there. In Cockpit,
+the groups that Cockpit's Display popover takes leave the panel as before and
+keep their own styling there.
 
 Scope has an Opacity slider (`#scope-opacity-slider`, 50–100%, default 100%;
 `SCOPE_OPACITY_MIN_PCT` in `src/ui/visualSettings.js`, since a fainter mask
@@ -722,6 +722,28 @@ world timeline in the strip keep their own wheel. The strip is off on phones
 and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
+
+## Cockpit side panels — November 14, 2026
+
+On the desktop, the cockpit's side panels match the main page's
+(`src/ui/styles/cockpit-panels.css`). The left rail shows Data Layers only:
+Authoring, Utilities and Visual, with their panels, are hidden, since the
+cockpit's own Display panel stands in for Visual. Display and Radio
+(`CockpitUtilityControls.vue`) become a right rail of two icons with their
+names beside them, and each opens one panel at a time beside the rail, with a
+header and a "−" to close it. The rail's buttons are disclosures
+(`aria-expanded`, `aria-controls`) and go through the `toggleCockpitUtility`
+action (`src/ui/radioBindings.js`); closing a panel gives focus back to the
+rail. Both rails start at the same height: the left one in CSS, and Display
+and Radio through the cockpit layout pass, whose floor
+(`COCKPIT_UTILITY_MIN_TOP_PX` / `_RATIO` in `src/ui/cockpitPresentation.js`)
+matches it, so an open panel still stops short of the briefing. Contact and
+Live Signals are shorter, in the same glass, with the briefing's rows and
+weather tiles tightened; Regional News stays a briefing page. The map credits
+sit on one line at the bottom. In a right-to-left language, the rail keeps its
+physical side as the cockpit's other windows do. The Cyber HUD and the phone
+keep their own cockpit layouts, with the Display and Radio launchers as
+before, and edge mode does not apply in the cockpit.
 
 ## God's Eye View in conversations — October 2, 2026
 
