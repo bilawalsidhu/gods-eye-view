@@ -123,6 +123,59 @@ test('data setup keeps layers polling in an inline panel its host reports hidden
   for (const release of releases.reverse()) await release();
 });
 
+for (const inline of [false, true]) {
+  test(`layer opacity is restored from the address and ${inline ? 'never written to an inline host' : 'kept in the address'}`, async (t) => {
+    const saved = {
+      document: globalThis.document,
+      location: globalThis.location,
+      history: globalThis.history,
+    };
+    const location = {
+      href: 'https://gev.example/app/?lop=dimmable:40,plain:20',
+    };
+    const writes = [];
+    globalThis.document = { getElementById: () => null };
+    globalThis.location = location;
+    globalThis.history = {
+      state: null,
+      replaceState(_state, _title, url) {
+        writes.push(url);
+        location.href = url;
+      },
+    };
+    if (inline) globalThis.GEV_EMBED_INLINE = true;
+    t.after(() => {
+      delete globalThis.GEV_EMBED_INLINE;
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete globalThis[key];
+        else globalThis[key] = value;
+      }
+    });
+    const told = [];
+    const layers = [
+      { id: 'dimmable', setOpacity: (value) => told.push(value) },
+      { id: 'plain' },
+    ];
+    const releases = [];
+    const { opacity } = createApplicationData({
+      scene: { viewer: {} },
+      controls: { styleManager: { attachDataManager() {} } },
+      catalog: createLayerCatalog(layers, metadata(layers)),
+      defer: (release) => releases.push(release),
+    });
+    // The address is read once the registry is sealed; a layer without the
+    // hook is ignored.
+    assert.deepEqual(told, [0.4]);
+    assert.equal(opacity.get('plain'), 1);
+    opacity.set('dimmable', 0.7);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    if (inline) assert.deepEqual(writes, []);
+    else assert.deepEqual(writes, ['https://gev.example/app/?lop=dimmable:70']);
+    for (const release of releases.reverse()) await release();
+    assert.equal(opacity.supports('dimmable'), false, 'released with the app');
+  });
+}
+
 test('controls bind catalog instances rather than similarly named defaults', () => {
   const ids = [
     'traffic',

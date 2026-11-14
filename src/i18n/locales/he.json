@@ -3706,5 +3706,6 @@
   "Cable car": "חשמלית כבלים",
   "Monorail": "מונורייל",
   "Funicular": "פוניקולר",
-  "Gondola": "רכבל"
+  "Gondola": "רכבל",
+  "{name} opacity": "אטימות של {name}"
 }

@@ -3532,5 +3532,6 @@
   "Cable car": "缆索电车",
   "Monorail": "单轨列车",
   "Funicular": "缆索铁路",
-  "Gondola": "缆车"
+  "Gondola": "缆车",
+  "{name} opacity": "{name}的不透明度"
 }

@@ -3706,5 +3706,6 @@
   "Cable car": "Bonde a cabo",
   "Monorail": "Monotrilho",
   "Funicular": "Funicular",
-  "Gondola": "Teleférico"
+  "Gondola": "Teleférico",
+  "{name} opacity": "Opacidade de {name}"
 }

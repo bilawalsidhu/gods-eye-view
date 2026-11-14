@@ -2493,6 +2493,39 @@ The clear control presents busy state while its existing action owns the transac
 The Wildlife group follows Events and precedes Weather; Wildlife Sightings
 provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.
 
+### Layer opacity
+
+A layer that implements `setOpacity(fraction)` gets an Opacity slider (0–100 %,
+step 5, double-click resets) under its row while it is on. `src/ui/layerOpacity.js`
+(`LayerOpacity`) holds the values, calls the hook, repaints the panel through a
+subscription and keeps the page address in step; `src/ui/layerPanel/LayerOpacityRow.vue`
+draws the slider with the shared `UiSlider`. A layer keeps its value while it is off
+or not yet initialized, so a restored value is honoured when it starts.
+
+The hook is opt-in and implemented by Wind (streamlines through the shader's height
+fade, the 2D canvas fallback through CSS opacity, and the temperature/pressure
+field through its imagery or shell alpha), Fire Perimeters and Drone Airspace
+(the colours of their entities, through `src/layers/sceneOpacity.js`), and the Sea
+Marks and Ski Pistes overlays (imagery alpha). Every other layer, including the
+Weather layers with their own strength control and Recent Imagery, shows no slider.
+Entity layers dim only constant entity colours: textures, time-dynamic colours,
+primitives and the world-overlay labels are left as drawn. Wind's inspection marker is
+also left as drawn.
+
+The setting travels as `?lop=<layer-id>:<percent>,…` (`src/data/layerOpacity.js`).
+It is a query parameter of its own: the `#v=2` share codec, layer tokens and existing
+links are unchanged, a link without it means 100 %, and nothing is written for a
+layer at 100 %. Reading drops unknown ids and layers without the hook, malformed or
+duplicate pairs, values outside 0–100 and anything beyond 2,048 characters or 96
+pairs, and never throws; percentages snap to the slider step. The address is rewritten
+with `history.replaceState` shortly after the last change; an app embedded inline reads
+the address but never rewrites its host page's.
+
+`scripts/qa-layer-opacity.mjs` drives the Sea Marks slider with the real mouse in
+headless Chromium (software GL) and checks the imagery alpha, the address, double-click
+reset, restoring from an address and hostile `lop` values. It does not draw or compare
+pixels; the unit tests cover the other layers' hooks against doubles and Cesium entities.
+
 ## Sky background
 
 `src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale

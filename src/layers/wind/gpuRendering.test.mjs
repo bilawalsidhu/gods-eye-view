@@ -397,3 +397,28 @@ test('a failed later cell build releases already installed cells and shared mate
   }
   assert.match(h.owner.getDiagnostics().error, /later cell failed/);
 });
+
+test('opacity scales the streamline fade uniform and survives height changes', () => {
+  const h = harness();
+  h.owner.setField(field());
+  const batches = [...h.members];
+  const camera = h.scene.camera;
+  camera.positionCartographic.height = 37500; // fade 0.5
+  h.owner.updateVisibility(camera);
+  h.owner.setOpacity(0.4);
+  for (const batch of batches)
+    assert.ok(
+      Math.abs(batch.appearance.material.uniforms.heightFade - 0.2) < 1e-12,
+    );
+  camera.positionCartographic.height = 60000; // fade 1
+  h.owner.updateVisibility(camera);
+  for (const batch of batches)
+    assert.ok(
+      Math.abs(batch.appearance.material.uniforms.heightFade - 0.4) < 1e-12,
+    );
+  // Diagnostics keep reporting the camera fade, not the product.
+  assert.equal(h.owner.getDiagnostics().heightFade, 1);
+  h.owner.setOpacity(Number.NaN);
+  for (const batch of batches)
+    assert.equal(batch.appearance.material.uniforms.heightFade, 1);
+});

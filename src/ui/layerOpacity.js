@@ -1,0 +1,213 @@
+import {
+  OPACITY_DEFAULT,
+  LAYER_OPACITY_PARAM,
+  normalizeOpacity,
+  readLayerOpacityFromUrl,
+  writeLayerOpacityToUrl,
+} from '../data/layerOpacity.js';
+
+/** How long a change waits before the address is rewritten. */
+const ADDRESS_DELAY_MS = 250;
+
+/**
+ * Own the opacity of the data layers that can be dimmed.
+ *
+ * A layer opts in by implementing `setOpacity(fraction)`: it applies the
+ * fraction to what it draws and keeps it until told another, including while
+ * it is off or not yet initialized, so a value restored from the address
+ * before the layer starts is honoured when it does. Layers without the hook
+ * have no opacity control and are never written to the address.
+ *
+ * The owner holds the values, calls the hook, keeps `?lop=` in step with them
+ * (see src/data/layerOpacity.js) and tells subscribers, which repaint. It
+ * imports neither Vue nor Cesium.
+ */
+export class LayerOpacity {
+  /**
+   * @param {{layers: Map<string, {module?: object}>}} manager The layer manager.
+   * @param {object} [options]
+   * @param {Location|null} [options.locationRef] The page address to read and keep.
+   * @param {History|null} [options.historyRef] Where the address is rewritten.
+   * @param {EventTarget|null} [options.navigationTarget] Watches links.
+   * @param {() => void} [options.requestRender] Ask the scene to draw again.
+   * @param {number} [options.addressDelayMs] Wait before the address is rewritten.
+   */
+  constructor(
+    manager,
+    {
+      locationRef = globalThis.location ?? null,
+      historyRef = globalThis.history ?? null,
+      navigationTarget = globalThis.window ?? null,
+      requestRender = () => {},
+      addressDelayMs = ADDRESS_DELAY_MS,
+    } = {},
+  ) {
+    this._manager = manager;
+    this._location = locationRef;
+    this._history = historyRef;
+    this._requestRender = requestRender;
+    this._addressDelayMs = addressDelayMs;
+    /** @type {Map<string, number>} only layers off the default */
+    this._values = new Map();
+    this._listeners = new Set();
+    this._addressTimer = null;
+    this._destroyed = false;
+    this._navigationTarget = navigationTarget;
+    this._reconciling = false;
+    // The raw `lop` text the address last held, read or written by us. A
+    // hashchange/popstate that leaves it alone (a host page's routing, an
+    // in-page anchor, the same entry's second event) is not an incoming link
+    // and must not undo what the user set since. Trade-off, deliberate: Back
+    // pressed inside the write delay on two entries with no lop looks the same
+    // as an anchor click, so the pending write lands on the entry navigated to.
+    this._knownLop = this._addressLop();
+    this._onNavigation = () => {
+      if (this._destroyed || this._addressLop() === this._knownLop) return;
+      this._reconciling = true;
+      try {
+        this.restore();
+      } finally {
+        this._reconciling = false;
+      }
+    };
+    this._navigationTarget?.addEventListener?.('popstate', this._onNavigation);
+    this._navigationTarget?.addEventListener?.(
+      'hashchange',
+      this._onNavigation,
+    );
+  }
+
+  /** Whether the layer has an opacity control. */
+  supports(id) {
+    return (
+      !this._destroyed &&
+      typeof this._manager.layers.get(id)?.module?.setOpacity === 'function'
+    );
+  }
+
+  /** The layer's opacity as a fraction; 1 unless it was changed. */
+  get(id) {
+    return this._values.get(id) ?? OPACITY_DEFAULT;
+  }
+
+  /**
+   * Change a layer's opacity.
+   * @param {string} id
+   * @param {number} fraction 0 to 1; rounded to a whole percent.
+   * @returns {boolean} Whether the value changed.
+   */
+  set(id, fraction) {
+    if (!this.supports(id)) return false;
+    const next = normalizeOpacity(fraction);
+    if (next === this.get(id)) return false;
+    if (next === OPACITY_DEFAULT) this._values.delete(id);
+    else this._values.set(id, next);
+    this._apply(id, next);
+    this._scheduleAddress();
+    for (const listener of [...this._listeners]) {
+      try {
+        listener(id, next);
+      } catch {
+        console.warn('[Opacity] listener error');
+      }
+    }
+    return true;
+  }
+
+  /** Return a layer to the default of 100 %. */
+  reset(id) {
+    return this.set(id, OPACITY_DEFAULT);
+  }
+
+  /**
+   * Take the opacity the page address carries. Entries for unknown layers, or
+   * layers without the hook, are ignored.
+   */
+  restore() {
+    if (this._destroyed || !this._location) return;
+    this._knownLop = this._addressLop();
+    const carried = readLayerOpacityFromUrl(this._location.href, (id) =>
+      this.supports(id),
+    );
+    // An incoming link replaces the previous snapshot, including values it
+    // omits. Cancel a pending write of the old view before applying it.
+    clearTimeout(this._addressTimer);
+    this._addressTimer = null;
+    for (const id of [...this._values.keys()])
+      if (!carried.has(id)) this.reset(id);
+    for (const [id, value] of carried) this.set(id, value);
+  }
+
+  /**
+   * Observe changes.
+   * @param {(id: string, fraction: number) => void} listener
+   * @returns {() => void} Stop observing.
+   */
+  subscribe(listener) {
+    this._listeners.add(listener);
+    return () => this._listeners.delete(listener);
+  }
+
+  _apply(id, fraction) {
+    try {
+      this._manager.layers.get(id)?.module?.setOpacity?.(fraction);
+    } catch {
+      console.warn('[Opacity] setOpacity error');
+    }
+    this._requestRender();
+  }
+
+  // The address is a convenience; a slow drag or a browser that limits
+  // history writes must not cost the slider anything.
+  _scheduleAddress() {
+    // Applying an incoming link must not rewrite that link's own address.
+    if (this._reconciling) return;
+    if (!this._location || !this._history?.replaceState) return;
+    clearTimeout(this._addressTimer);
+    this._addressTimer = setTimeout(
+      () => this._writeAddress(),
+      this._addressDelayMs,
+    );
+  }
+
+  _addressLop() {
+    try {
+      return new URL(this._location?.href ?? '', 'http://x').searchParams
+        .getAll(LAYER_OPACITY_PARAM)
+        .join('&');
+    } catch {
+      return '';
+    }
+  }
+
+  _writeAddress() {
+    this._addressTimer = null;
+    if (this._destroyed) return;
+    try {
+      const next = writeLayerOpacityToUrl(this._location.href, this._values);
+      if (next !== this._location.href)
+        this._history.replaceState(this._history.state, '', next);
+      this._knownLop = this._addressLop();
+    } catch {
+      console.warn('[Opacity] address update failed');
+    }
+  }
+
+  /** Stop timers and listeners. The layers keep the opacity they were given. */
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this._navigationTarget?.removeEventListener?.(
+      'popstate',
+      this._onNavigation,
+    );
+    this._navigationTarget?.removeEventListener?.(
+      'hashchange',
+      this._onNavigation,
+    );
+    clearTimeout(this._addressTimer);
+    this._addressTimer = null;
+    this._listeners.clear();
+    this._values.clear();
+  }
+}

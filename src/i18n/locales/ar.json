@@ -3967,5 +3967,6 @@
   "Cable car": "ترام كابلي",
   "Monorail": "قطار أحادي السكة",
   "Funicular": "قطار جبلي مائل",
-  "Gondola": "تلفريك"
+  "Gondola": "تلفريك",
+  "{name} opacity": "عتامة {name}"
 }
