@@ -11,6 +11,7 @@ import {
 import { alprMarkers, createAlprMarkerSet } from './markerState.js';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+import { rendererOf } from '../../render/rendererOf.js';
 
 function harness(t, count = 2, { floor = null } = {}) {
   const previousImage = globalThis.Image;
@@ -333,4 +334,29 @@ test('a bearing wedge is plain ECEF at the apex and its two far corners', () => 
   // The corner north of the apex takes the sampled height; the other falls back.
   assert.ok(heights.some((h) => Math.abs(h - 160) < 1e-6));
   assert.ok(heights.slice(1).some((h) => Math.abs(h - 150) < 1e-6));
+});
+
+test('anchors wait for the surface heights answer from: the globe’s terrain while shown, else the shown 3D tiles', (t) => {
+  const h = harness(t, 1, { floor: 150 });
+  const scene = h.state.viewer.scene;
+  h.state.viewer.camera.directionWC = Cesium.Cartesian3.UNIT_X;
+  scene.sampleHeightSupported = true;
+  scene.primitives = { length: 0, get: () => null };
+  let samples = 0;
+  scene.sampleHeight = () => (samples++, 172);
+  // The renderer's own `surface` rule; a non-base tileset still streaming
+  // over a hidden globe leaves it unsettled.
+  let surface = false;
+  const asked = new Set();
+  rendererOf(h.state.viewer).globe = {
+    isSettled: (kind) => (asked.add(kind), kind === 'surface' ? surface : true),
+  };
+  h.overlay.sync(h.records);
+  h.paint();
+  h.paint();
+  assert.equal(samples, 0, 'no samples while the surface streams');
+  assert.deepEqual([...asked], ['surface']);
+  surface = true;
+  h.paint();
+  assert.ok(samples > 0, 'sampled once it has loaded');
 });

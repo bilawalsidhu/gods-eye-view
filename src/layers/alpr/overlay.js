@@ -138,9 +138,10 @@ export function createAlprOverlay({
   /** Whether the visible photoreal tiles (or globe) have finished streaming. */
   function surfaceSettled() {
     const globe = rendererOf(state.viewer)?.globe;
+    // The globe's terrain while it is shown, otherwise the shown 3D tiles.
     // A viewer with no renderer of its own cannot say; its samples are
     // still checked against the floor.
-    return !globe || (globe.isSettled('terrain') && globe.isSettled('tiles'));
+    return !globe || globe.isSettled('surface');
   }
 
   /**
