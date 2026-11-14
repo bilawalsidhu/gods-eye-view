@@ -388,8 +388,6 @@ export function createLocalAdsbLayer({
       scaleByDistance: MARKER_SPRITE.scaleByDistance,
       disableDepthTest: Number.POSITIVE_INFINITY,
       displayRange: MARKER_RANGE,
-      // Rings pass picks through to their aircraft.
-      pickable: false,
     };
   }
 
@@ -647,7 +645,10 @@ export function createLocalAdsbLayer({
   /** A local aircraft's id when `hit` is one of its markers or models. */
   function ownHit(hit) {
     if (!hit || hit.surface || !markers.has(hit.id)) return null;
-    return hit.set === sets?.markers.id || hit.set === models?.setId
+    // A ring is its aircraft's, as the ring was a point on its entity.
+    return hit.set === sets?.markers.id ||
+      hit.set === sets?.rings.id ||
+      hit.set === models?.setId
       ? hit.id
       : null;
   }
@@ -707,7 +708,9 @@ export function createLocalAdsbLayer({
       enabled: () => enabled,
       targetFor: (hit) => {
         const marker =
-          !hit.surface && hit.set === sets?.markers.id && markers.get(hit.id);
+          !hit.surface &&
+          (hit.set === sets?.markers.id || hit.set === sets?.rings.id) &&
+          markers.get(hit.id);
         if (!marker?.carrier) return null;
         return {
           key: marker.id,
@@ -798,7 +801,6 @@ export function createLocalAdsbLayer({
           id: `${prefix}:rings`,
           horizonCull: true,
           show: false,
-          pickable: false,
         }),
       };
       models = createLocalAdsbModels({

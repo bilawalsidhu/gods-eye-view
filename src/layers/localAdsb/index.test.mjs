@@ -1336,3 +1336,29 @@ test('a double-click follows a local aircraft with its card, until it goes, as i
   await layer.update();
   assert.equal(followedOf(viewer), null, 'gone, it is no longer followed');
 });
+
+test('a click on a UAT ring selects its aircraft, as the ring was a point on its entity', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const feeds = fakeFeeds();
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, feeds, {
+    viewer: harness.viewer,
+  });
+  t.after(() => layer.destroy());
+  feeds.set({
+    configured: true,
+    feeds: [{ band: '978', label: '978 MHz UAT', status: 'live' }],
+    records: [record({ icao: 'a1b2c3', band: '978', source: 'feed' })],
+  });
+  await layer.update();
+  const rings = layerSet(draw, ':rings');
+  assert.notEqual(rings.spec.pickable, false, 'the rings are picked');
+  assert.notEqual(ringOf(draw, 'local-adsb:a1b2c3').pickable, false);
+  harness.scene.pickResult = {
+    primitive: {},
+    id: { set: rings.spec.id, id: 'local-adsb:a1b2c3' },
+  };
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:a1b2c3']);
+});
