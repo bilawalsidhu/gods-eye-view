@@ -623,7 +623,7 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   const openDock = rule('body.mobile-shell[data-mobile-sheet] #command-dock');
   const railSheet = rule(
-    "body.mobile-shell[data-mobile-sheet='more'] #right-context-rail",
+    "body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack",
   );
   assert.ok(z(sheetCredit) > z(openDock));
   assert.ok(z(sheetCredit) > z(railSheet));
