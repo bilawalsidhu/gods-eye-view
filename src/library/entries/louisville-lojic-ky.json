@@ -1,0 +1,49 @@
+{
+  "id": "louisville-lojic-ky",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Louisville / LOJIC, Kentucky Imagery",
+  "provider": "LOJIC",
+  "description": "Aerial orthophotos: Louisville / LOJIC, Kentucky jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-86.5156, 37.4289, -84.8574, 38.7994]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://services.lojic.org/arcgis/rest/services/Lojic/Imagery/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2020–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.lojic.org/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "LOJIC, USDA-NAIP",
+    "url": "https://www.lojic.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

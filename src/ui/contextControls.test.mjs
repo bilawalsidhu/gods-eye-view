@@ -153,3 +153,56 @@ test('a rejected tracked reaction settles without an unhandled rejection', async
   await controls._waitForContextLayerSettlement();
   assert.equal(controls._contextLayerReactionPromises.size, 0);
 });
+
+test('only a layer Context isolation is switching off is suspended', async (t) => {
+  const { controls } = fixture(t);
+  const enabled = new Set(['cctv']);
+  // What the CCTV panel is told at each visibility change of its layer.
+  const seen = [];
+  controls._dataManager = {
+    layers: new Map([['cctv', {}]]),
+    getEnabledLayerIds: () => [...enabled],
+    getLayerParams: () => null,
+    setLayerParams() {},
+    isEnabled: (layerId) => enabled.has(layerId),
+    isEffectivelyEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, next) {
+      // The layer tells its panel it is off while it is being disabled.
+      if (next) enabled.add(layerId);
+      else enabled.delete(layerId);
+      seen.push([layerId, next, controls.suspendsLayer(layerId)]);
+      return true;
+    },
+    async restoreEnabledLayerIds(layerIds) {
+      for (const layerId of layerIds) await this.setEnabled(layerId, true);
+    },
+  };
+  assert.equal(controls.suspendsLayer('cctv'), false);
+  controls._captureContextSessionSnapshot();
+  await controls._clearLayersOutsideContextMode('flights');
+  assert.deepEqual(seen, [['cctv', false, true]]);
+  assert.equal(controls.suspendsLayer('cctv'), false, 'only while isolating');
+  // Inside the mode the user turns CCTV back on, then off: their own.
+  await controls._dataManager.setEnabled('cctv', true);
+  await controls._dataManager.setEnabled('cctv', false);
+  assert.deepEqual(seen.at(-1), ['cctv', false, false]);
+  await controls._restoreContextSession();
+  assert.equal(enabled.has('cctv'), true);
+  // A switch-off after the mode is left is the user's own too.
+  await controls._dataManager.setEnabled('cctv', false);
+  assert.deepEqual(seen.at(-1), ['cctv', false, false]);
+});
+
+test('a failed isolation leaves no layer suspended', async (t) => {
+  const { controls } = fixture(t);
+  controls._dataManager = {
+    layers: new Map([['cctv', {}]]),
+    isEffectivelyEnabled: () => true,
+    isEnabled: () => true,
+    setEnabled: async () => {
+      throw new Error('disable failed');
+    },
+  };
+  await assert.rejects(controls._clearLayersOutsideContextMode('flights'));
+  assert.equal(controls.suspendsLayer('cctv'), false);
+});

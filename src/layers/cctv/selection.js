@@ -79,6 +79,12 @@ export function createSelection({
         record,
       )
     ) {
+      // Browser-only feeds have a separate player; a reselect retries it
+      // without re-running activation or touching the projection geometry.
+      if (parts.model.isBrowserOverlayCamera(record.camera)) {
+        layerState._activeCameraReselection += 1;
+        parts.presentation.notifyListeners();
+      }
       return CCTV_ACTIVATION_RESULT.UNCHANGED;
     }
     layerState._activeCameraId = cameraId;

@@ -32,6 +32,7 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#gev-voice-control',
   '#pp-toggles',
   '#param-slider-panel',
+  '#world-timeline',
 ].join(', ');
 /**
  * Fixed UI regions that can occupy the right control lane. Runtime rectangle
@@ -59,6 +60,7 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#cesium-credits .cesium-credit-textContainer',
   '#command-dock',
   '#gev-voice-control',
+  '#world-timeline',
 ].join(', ');
 export class PanelLayoutController {
   constructor({
@@ -95,6 +97,7 @@ export class PanelLayoutController {
     this._ppToggles = document.getElementById('pp-toggles');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._weatherPanel = document.getElementById('weather-panel');
+    this._newsPanel = document.getElementById('news-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
   }
@@ -191,6 +194,7 @@ export class PanelLayoutController {
     for (const panel of [
       this._cctvPanel,
       this._weatherPanel,
+      this._newsPanel,
       this._recentImageryPanel,
       this._streetLevelPanel,
     ]) {
@@ -206,6 +210,7 @@ export class PanelLayoutController {
         this._ppToggles,
         this._cctvPanel,
         this._weatherPanel,
+        this._newsPanel,
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,

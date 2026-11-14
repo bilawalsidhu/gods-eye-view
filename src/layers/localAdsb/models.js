@@ -1,7 +1,9 @@
 import * as Cesium from 'cesium';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
-import { civilAircraftModelSpec } from '../flights/modelSpec.js';
+import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
+import { createFleetModel } from '../../data/fleetModelInstances.js';
+import { loadFleetModelSet } from '../../data/fleetModels.js';
 import {
   FLEET_DR_INTERVAL_MS,
   MODEL_ALL_ADD_M,
@@ -16,19 +18,25 @@ import {
 } from '../flights/policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
-const specKey = (spec) => `${spec.url}@${spec.scale}`;
+const specOf = (marker) =>
+  aircraftLayerModelSpec({
+    typeCode: marker?.typeCode,
+    category: marker?.category,
+    callsign: marker?.record?.callsign,
+  });
 
 /**
  * 3D models for Local ADS-B aircraft under the DISPLAY rail's 3D toggle.
  *
  * Mirrors the public Flights fleet: models only below the altitude ceiling,
  * the same proximity/all caps and add/keep radii, the same visible-first
- * eligibility (`selectModelEligible`), the same per-class asset and scale
- * (`civilAircraftModelSpec`) and the same tint path (a MIX colour blend, here
+ * eligibility (`selectModelEligible`), the same fleet model per type, life
+ * size (`aircraftLayerModelSpec`) and the same tint path (a MIX colour blend, here
  * magenta, as Flights tints military amber). Each model owns its matrix. A
  * billboard stays the visual until its model is loaded AND placed; a grounded
  * aircraft's model rides the one-shot ground snap plus the class belly
- * offset, and without a resolved ground it stays a billboard.
+ * offset, and without a resolved ground it stays a billboard. Every fleet
+ * model loads once, up front, when the layer starts (`loadFleetModelSet`).
  * @param {object} options
  * @param {object} options.viewer Cesium viewer.
  * @param {Cesium.Color} options.color Model tint.
@@ -44,6 +52,9 @@ export function createLocalAdsbModels({
   groundSnap = null,
   loadModel = (options) => Cesium.Model.fromGltfAsync(options),
 }) {
+  void loadFleetModelSet({ resolveAsset }).catch(() => {
+    /* aircraft stay billboards */
+  });
   const collection = new Cesium.PrimitiveCollection();
   viewer.scene.primitives.add(collection);
   /** @type {Map<string, object>} id -> admitted model */
@@ -75,8 +86,9 @@ export function createLocalAdsbModels({
   }
 
   async function ensure(id, marker, cap) {
-    const spec = civilAircraftModelSpec(marker.klass);
-    const key = specKey(spec);
+    const spec = specOf(marker);
+    if (!spec.model) return;
+    const key = spec.key;
     const current = models.get(id);
     if (current && current._gevSpecKey === key) return;
     if (current) release(id);
@@ -85,17 +97,20 @@ export function createLocalAdsbModels({
     pending.set(id, loadGeneration);
     let model;
     try {
-      model = await loadModel({
-        url: resolveAsset(spec.url),
-        asynchronous: false,
-        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
-        minimumPixelSize: MODEL_MIN_PX,
-        scale: spec.scale,
-        color,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        colorBlendAmount: spec.blendAmount,
-        id,
-      });
+      model = await createFleetModel(
+        spec,
+        {
+          asynchronous: false,
+          environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+          minimumPixelSize: MODEL_MIN_PX,
+          scale: spec.scale,
+          color,
+          colorBlendMode: Cesium.ColorBlendMode.MIX,
+          colorBlendAmount: spec.blendAmount,
+          id,
+        },
+        { resolveAsset, load: loadModel },
+      );
     } catch {
       if (pending.get(id) === loadGeneration) pending.delete(id);
       return;
@@ -106,7 +121,7 @@ export function createLocalAdsbModels({
       generation !== loadGeneration ||
       !eligible.has(id) ||
       models.has(id) ||
-      specKey(civilAircraftModelSpec(marker.klass)) !== key;
+      specOf(marker).key !== key;
     if (pending.get(id) === loadGeneration) pending.delete(id);
     if (stale) {
       model.destroy?.();

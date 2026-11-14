@@ -1,0 +1,67 @@
+/**
+ * Aft-belly trail attachment points of the fleet models the aircraft layers
+ * draw, in raw glTF axes (X along the body, nose toward -X; Y up), metres
+ * before scale, node transforms applied. Each is the point of the model's
+ * centreline profile (its z = 0 slice) nearest its aft-belly bounding-box
+ * corner: on the hull, aft, and on the centreline (see modelVisualAnchor.js).
+ *
+ * Written by scripts/measure-fleet-trail-anchors.mjs; re-measured against the
+ * GLBs by fleetModels.test.mjs.
+ */
+export const FLEET_TRAIL_ANCHORS = Object.freeze({
+  a139: Object.freeze([6.8847, 0.2766, 0]),
+  a320: Object.freeze([17.2078, 0.7416, 0]),
+  a333: Object.freeze([29.7276, 1.1084, 0]),
+  a343: Object.freeze([30.0371, 1.2335, 0]),
+  a359: Object.freeze([31.0731, 1.1573, 0]),
+  a388: Object.freeze([34.3139, 1.9279, 0]),
+  as50: Object.freeze([5.2278, -0.0999, 0]),
+  at72: Object.freeze([12.8258, 0.6792, 0]),
+  b06: Object.freeze([4.62, -0.3002, 0]),
+  b407: Object.freeze([5.1264, -0.2797, 0]),
+  b738: Object.freeze([18.3819, 0.8391, 0]),
+  b744: Object.freeze([33.6232, 1.5411, 0]),
+  b763: Object.freeze([25.5464, 0.9889, 0]),
+  b77w: Object.freeze([34.4639, 1.2084, 0]),
+  b789: Object.freeze([29.0604, 1.0649, 0]),
+  balloon: Object.freeze([3.8215, -0.0009, 0]),
+  bcs3: Object.freeze([17.8658, 0.713, 0]),
+  be20: Object.freeze([6.6699, 0.5505, 0]),
+  blimp: Object.freeze([32.2493, -7.1382, 0]),
+  c17: Object.freeze([26.5207, 2.332, 0]),
+  c172: Object.freeze([4.0507, 0.4481, 0]),
+  c30j: Object.freeze([13.568, 0.9917, 0]),
+  c56x: Object.freeze([7.4627, 0.4526, 0]),
+  car: Object.freeze([2.3, 0.418, 0]),
+  cl35: Object.freeze([10.4607, 0.8247, 0]),
+  crj9: Object.freeze([17.8413, 0.8624, 0]),
+  dh8d: Object.freeze([15.7902, 0.7501, 0]),
+  e175: Object.freeze([14.697, 0.6077, 0]),
+  e55p: Object.freeze([7.6566, 0.503, 0]),
+  ec35: Object.freeze([5.1003, 0.1471, 0]),
+  ec45: Object.freeze([5.8004, 0.555, 0]),
+  fire_truck: Object.freeze([5.5, 0.6051, 0]),
+  generic_heli: Object.freeze([5.4997, 0.1604, 0]),
+  generic_plane: Object.freeze([16.5228, 0.712, 0]),
+  glf4: Object.freeze([13.4603, 0.8243, 0]),
+  glider: Object.freeze([3.3997, 0.1283, 0]),
+  h47: Object.freeze([7.7303, 0.0035, 0]),
+  h60: Object.freeze([7.6295, 0.1365, 0]),
+  h64: Object.freeze([6.9228, -0.5553, 0]),
+  k35r: Object.freeze([28.0221, -2.4508, 0]),
+  md11: Object.freeze([30.8002, 1.2291, 0]),
+  mq9: Object.freeze([5.8498, -0.062, 0]),
+  p28a: Object.freeze([3.3695, 0.3959, 0]),
+  pc12: Object.freeze([6.6416, 0.5288, 0]),
+  pushback: Object.freeze([3, 0.2499, 0]),
+  r44: Object.freeze([4.4219, -0.3001, 0]),
+  radio_mast: Object.freeze([1.2, 0, 0]),
+  s76: Object.freeze([6.6001, 0.1915, 0]),
+  sr22: Object.freeze([3.6762, 0.2376, 0]),
+  t38: Object.freeze([7.0246, -0.3791, 0]),
+  tex2: Object.freeze([4.7383, 0.2302, 0]),
+  tower: Object.freeze([1.2952, -0.0007, 0]),
+  ultralight: Object.freeze([3.2271, 0.3259, 0]),
+  v22: Object.freeze([7.9868, 0.2956, 0]),
+  van: Object.freeze([2.75, 0.418, 0]),
+});

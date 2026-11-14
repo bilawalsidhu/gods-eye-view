@@ -29,6 +29,8 @@ export function createState({ services }) {
     /** Stops following the manager's adoptions (see watchAdoptions). */
     unwatchAdoptions: null,
     subject: null,
+    /** The tracked flight's photo with the subject it belongs to, or null. */
+    subjectPhoto: null,
     results: null,
     visual: null,
     /** Whether layer views replace the panel's initial markup yet. */

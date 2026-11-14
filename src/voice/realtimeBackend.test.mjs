@@ -143,3 +143,17 @@ test('controller lifetime stops pending transport and releases resources through
   assert.equal(controller.stream, null);
   assert.equal(controller.isActive(), false);
 });
+
+test('a missing server key keeps its code, so the UI can point to Provider Settings', async () => {
+  const backend = createRealtimeBackend({
+    tokenTransport: async () =>
+      Response.json(
+        { error: 'OPENAI_API_KEY is not set', code: 'API_KEY_MISSING' },
+        { status: 503 },
+      ),
+  });
+  await assert.rejects(backend.requestToken(), {
+    message: 'OPENAI_API_KEY is not set',
+    code: 'API_KEY_MISSING',
+  });
+});

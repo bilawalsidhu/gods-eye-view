@@ -1,12 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
+import {
+  DEFAULT_CCTV_SOURCE_FILE,
+  CCTV_SOURCE_CACHE_MS,
+  WORLD_CCTV_SOURCE_COUNT,
+} from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
+import { loadOttawaSourcesFromOpenData } from './ottawa.js';
+import { loadQuebecSources, QUEBEC_CAMERA_SOURCE_COUNT } from './quebec.js';
 import { loadSpainSources } from './spain.js';
 import { loadTaiwanSources } from './taiwan.js';
+import { loadWorldCameraSources } from './worldCameras.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -76,6 +83,11 @@ const LIVE_PACKS = [
     name: 'drivebc',
     enabled: () => envEnabled('CCTV_DRIVEBC_ENABLED'),
     load: loadDriveBcSourcesFromOpenData,
+  },
+  {
+    name: 'ottawa',
+    enabled: () => envEnabled('CCTV_OTTAWA_ENABLED'),
+    load: loadOttawaSourcesFromOpenData,
   },
   {
     name: 'txdot',
@@ -183,6 +195,18 @@ const LIVE_PACKS = [
     name: 'houston',
     enabled: () => envOptIn('CCTV_HOUSTON_ENABLED'),
     load: loadHoustonSourcesFromOpenData,
+  },
+  {
+    name: 'quebec',
+    enabled: () => envEnabled('CCTV_QUEBEC_ENABLED'),
+    load: loadQuebecSources,
+    reservedCount: QUEBEC_CAMERA_SOURCE_COUNT,
+  },
+  {
+    name: 'world-cameras',
+    enabled: () => envEnabled('CCTV_WORLD_CAMERAS_ENABLED'),
+    load: loadWorldCameraSources,
+    reservedCount: WORLD_CCTV_SOURCE_COUNT,
   },
   {
     name: 'a22',
@@ -328,7 +352,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       : [];
     // Live packs first so file/env overrides win on duplicate IDs; each pack
     // keeps its own priority order and the catalog cap is shared fairly.
-    const normalizePack = (name, items) => ({
+    const normalizePack = (name, items, reservedCount = 0) => ({
       name,
       sources: items
         .filter((item) => item && typeof item === 'object')
@@ -338,6 +362,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
         ? items.available
         : items.length,
       region: items.region ?? null,
+      reservedCount,
     });
     const packs = [
       ...LIVE_PACKS.map((pack, index) =>
@@ -346,6 +371,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
           liveResults[index]?.status === 'fulfilled'
             ? liveResults[index].value
             : [],
+          pack.reservedCount,
         ),
       ),
       normalizePack('file', fromFile),
