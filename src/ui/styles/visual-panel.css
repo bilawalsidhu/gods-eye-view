@@ -240,7 +240,13 @@
 
 /* Settings inside a card: separated by hairlines, no boxes of their own. */
 #pp-toggles .pp-toggle-group .pp-slider-row.visible,
-#pp-toggles .pp-toggle-group .pp-slider-row:not([class*='cyber-sonar']):is(.visible, #scope-slider-row, #scope-opacity-row) {
+#pp-toggles
+  .pp-toggle-group
+  .pp-slider-row:not([class*='cyber-sonar']):is(
+    .visible,
+    #scope-slider-row,
+    #scope-opacity-row
+  ) {
   margin: 0;
   padding: 7px 12px;
   background: transparent;

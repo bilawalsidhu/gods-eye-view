@@ -1459,5 +1459,7 @@
   "src/ui/styles/left-tools.css",
   "src/ui/styles/panel-edge.css",
   "src/data/placementProvider.test.mjs",
-  "src/layers/vessels/placement.test.mjs"
+  "src/layers/vessels/placement.test.mjs",
+  "src/ui/styles/visual-panel.css",
+  "src/ui/styles/scope-off-shadows.css"
 ]
