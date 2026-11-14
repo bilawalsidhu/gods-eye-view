@@ -179,7 +179,9 @@ export class DisplayBindings {
       resetVisual: () => {
         this.shareLinkManager?.claimRestoreLane?.('visual');
         this.setStyle('normal', { userInitiated: true });
-        this._applyGlobalPostDefaults();
+        // The HUD layout follows the Normal style, as choosing it does: the
+        // Cyber HUD stays Cyber.
+        this._applyGlobalPostDefaults({ keepHudVariant: true });
         this._setDetectionAllocation('ELASTIC');
         this._setScope({ enabled: true, featherPct: 100, opacityPct: 100 });
         this._setModels3dEnabled(true);

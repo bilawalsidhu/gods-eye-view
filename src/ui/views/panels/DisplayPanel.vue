@@ -71,7 +71,7 @@ const allocationOptions = computed(() => [
   <p class="pp-section-heading">{{ t('Overlay') }}</p>
   <Teleport :to="cockpitPortal?.hud ?? 'body'" :disabled="!cockpitPortal?.hud">
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: hud?.visible }" id="hud-toggle" @click="act('toggleHud')" :title="t('Intelligence HUD (H)')">
+    <button class="pp-toggle-btn" :class="{ active: hud?.visible }" :aria-pressed="String(Boolean(hud?.visible))" id="hud-toggle" @click="act('toggleHud')" :title="t('Intelligence HUD (H)')">
       <span class="pp-icon">&#x25CE;</span>
       <span class="pp-label" translate="no">HUD</span>
     </button>
@@ -182,7 +182,7 @@ const allocationOptions = computed(() => [
     </div>
     <div class="pp-slider-row visible" id="scope-opacity-row">
       <span class="pp-slider-mini-label">{{ t('Opacity') }}</span>
-      <UiSlider class="pp-slider" id="scope-opacity-slider" @update:model-value="act('setScopeOpacity', $event)" min="0" max="100" :model-value="scopeOpacity" :disabled="!scopeOn" :aria-label="t('Scope opacity')" :title="t('How dark the scope shades the view outside the keyhole')" />
+      <UiSlider class="pp-slider" id="scope-opacity-slider" @update:model-value="act('setScopeOpacity', $event)" min="50" max="100" :model-value="scopeOpacity" :disabled="!scopeOn" :aria-label="t('Scope opacity')" :title="t('How dark the scope shades the view outside the keyhole')" />
       <span class="pp-slider-value" id="scope-opacity-value">{{ pct(scopeOpacity) }}</span>
     </div>
   </div>
@@ -198,7 +198,7 @@ const allocationOptions = computed(() => [
     </UiButton>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: view?.bloom.active }" id="bloom-toggle" @click="act('toggleBloom')" :title="t('Bloom / Glow')">
+    <button class="pp-toggle-btn" :class="{ active: view?.bloom.active }" :aria-pressed="String(Boolean(view?.bloom.active))" id="bloom-toggle" @click="act('toggleBloom')" :title="t('Bloom / Glow')">
       <span class="pp-icon">&#x2728;</span>
       <span class="pp-label">{{ t('Bloom') }}</span>
     </button>
@@ -208,7 +208,7 @@ const allocationOptions = computed(() => [
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: view?.sharpen.active }" id="sharpen-toggle" @click="act('toggleSharpen')" :title="t('Sharpening')">
+    <button class="pp-toggle-btn" :class="{ active: view?.sharpen.active }" :aria-pressed="String(Boolean(view?.sharpen.active))" id="sharpen-toggle" @click="act('toggleSharpen')" :title="t('Sharpening')">
       <span class="pp-icon">&#x1F50D;</span>
       <span class="pp-label">{{ t('Sharpen') }}</span>
     </button>

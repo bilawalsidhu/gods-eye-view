@@ -316,13 +316,13 @@ test('a shared scope opacity is restored and rides in the next share state', asy
   });
   let shown = null;
   owner.store = { publish: (view) => (shown = view.scope) };
-  await owner.restoreShareState({ scopeOpacityPct: 40 });
-  assert.equal(getScopeMaskOpacity(), 0.4);
-  assert.equal(shown.opacityPct, 40);
+  await owner.restoreShareState({ scopeOpacityPct: 60 });
+  assert.equal(getScopeMaskOpacity(), 0.6);
+  assert.equal(shown.opacityPct, 60);
   // A state without it leaves the opacity alone.
   await owner.restoreShareState({ scopeFeatherPct: 80 });
-  assert.equal(getScopeMaskOpacity(), 0.4);
-  assert.equal(shown.opacityPct, 40);
+  assert.equal(getScopeMaskOpacity(), 0.6);
+  assert.equal(shown.opacityPct, 60);
   Object.assign(owner.services, {
     getDetectionTuning: () => ({ allocationStrategy: 'ELASTIC' }),
     getDetectionMode: () => 'OFF',
@@ -332,7 +332,11 @@ test('a shared scope opacity is restored and rides in the next share state', asy
     getScopeTerminusOverride: () => null,
   });
   owner.readCelestialRing = () => null;
-  assert.equal(owner._readShareState().options.scopeOpacityPct, 40);
+  assert.equal(owner._readShareState().options.scopeOpacityPct, 60);
+  // A link asking for less than the floor opens at the floor, and says so.
+  await owner.restoreShareState({ scopeOpacityPct: 20 });
+  assert.equal(getScopeMaskOpacity(), 0.5);
+  assert.equal(owner._readShareState().options.scopeOpacityPct, 50);
 });
 
 test('a scene shot saved with the retired Snow style plays on Normal', async (t) => {

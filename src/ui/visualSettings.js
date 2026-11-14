@@ -46,6 +46,13 @@ import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
+/**
+ * The faintest the Scope mask goes. Below about half, the view reads as if
+ * Scope were off while labels still fade outside the keyhole and the HUD gets
+ * no backplates, so the slider stops here.
+ */
+export const SCOPE_OPACITY_MIN_PCT = 50;
+
 export class VisualSettings {
   async restoreShareState(state) {
     const { setScopeTerminusOverride, clampScopeTerminusPct } = this.services;
@@ -511,8 +518,11 @@ export class VisualSettings {
    * given stays as it is. `apply: false` only shows the mask's state.
    */
   _setScope({ enabled, featherPct, opacityPct } = {}, { apply = true } = {}) {
-    if (typeof opacityPct === 'number') {
-      const pct = Math.max(0, Math.min(100, Math.round(opacityPct)));
+    if (Number.isFinite(opacityPct)) {
+      const pct = Math.max(
+        SCOPE_OPACITY_MIN_PCT,
+        Math.min(100, Math.round(opacityPct)),
+      );
       if (apply) this.services.setScopeMaskOpacity?.(pct / 100);
       this._scopeOpacityShown = pct;
     }
@@ -846,7 +856,11 @@ export class VisualSettings {
     if (det.mode) this._setDetectionMode(String(det.mode).toUpperCase());
   }
 
-  _applyGlobalPostDefaults() {
+  /**
+   * @param {{keepHudVariant?: boolean}} [options] `keepHudVariant` leaves the
+   *   HUD layout to the style, as choosing a style does (Visual's reset).
+   */
+  _applyGlobalPostDefaults({ keepHudVariant = false } = {}) {
     const defaults = GLOBAL_POST_DEFAULTS;
     if (typeof defaults.bloom?.intensity === 'number') {
       this._setBloomIntensity(clampBloomIntensity(defaults.bloom.intensity), {
@@ -865,7 +879,7 @@ export class VisualSettings {
       this._setSharpenEnabled(defaults.sharpen.enabled);
     }
 
-    if (defaults.hudVariant) {
+    if (defaults.hudVariant && !keepHudVariant) {
       this._setHudVariant(defaults.hudVariant);
     }
     if (typeof defaults.hudVisible === 'boolean') {

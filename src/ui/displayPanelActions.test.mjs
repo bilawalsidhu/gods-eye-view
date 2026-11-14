@@ -246,7 +246,7 @@ test('the Visual panel’s scope opacity, reset and presets call their actions',
     ],
   });
   await nextTick();
-  input($('scope-opacity-slider'), 40);
+  input($('scope-opacity-slider'), 60);
   document.querySelector('#pp-toggles .pp-reset-btn').click();
   const presets = document.querySelector('#pp-toggles .visual-presets');
   presets.querySelector('[data-style="noir"]').click();
@@ -254,7 +254,7 @@ test('the Visual panel’s scope opacity, reset and presets call their actions',
   chips[0].click();
   chips[1].click();
   assert.deepEqual(calls, [
-    ['setScopeOpacity', 40],
+    ['setScopeOpacity', 60],
     ['resetVisual'],
     ['setStyle', 'noir'],
   ]);
@@ -290,7 +290,8 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
     elements: { _locationSearch: document.createElement('input') },
     operations: {
       setStyle: (style, options) => calls.push(['style', style, options]),
-      _applyGlobalPostDefaults: () => calls.push(['postDefaults']),
+      _applyGlobalPostDefaults: (options) =>
+        calls.push(['postDefaults', options]),
       _setDetectionAllocation: (value) => calls.push(['allocation', value]),
       _setScope: (scope) => calls.push(['scope', scope]),
       _setModels3dEnabled: (on) => calls.push(['models3d', on]),
@@ -310,10 +311,10 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
   bindings._initUI();
   t.after(() => bindings.destroy());
   calls.length = 0;
-  input($('scope-opacity-slider'), 35);
+  input($('scope-opacity-slider'), 65);
   assert.deepEqual(calls, [
     ['claim', 'visual'],
-    ['scope', { opacityPct: 35 }],
+    ['scope', { opacityPct: 65 }],
     ['share'],
   ]);
   calls.length = 0;
@@ -321,7 +322,7 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
   assert.deepEqual(calls, [
     ['claim', 'visual'],
     ['style', 'normal', { userInitiated: true }],
-    ['postDefaults'],
+    ['postDefaults', { keepHudVariant: true }],
     ['allocation', 'ELASTIC'],
     ['scope', { enabled: true, featherPct: 100, opacityPct: 100 }],
     ['models3d', true],
