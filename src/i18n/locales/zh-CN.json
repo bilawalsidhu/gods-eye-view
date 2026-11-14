@@ -3532,5 +3532,20 @@
   "Cable car": "缆索电车",
   "Monorail": "单轨列车",
   "Funicular": "缆索铁路",
-  "Gondola": "缆车"
+  "Gondola": "缆车",
+  "Tilt up toward the horizon": "向地平线方向抬高视角",
+  "Tilt down toward top-down view": "向俯视视角压低",
+  "Top-down view": "俯视视角",
+  "Look left": "向左看",
+  "Look right": "向右看",
+  "Look up": "向上看",
+  "Look down": "向下看",
+  "Map navigation": "地图导航",
+  "Tilt": "倾斜",
+  "Tilt: top-down (bottom) to near horizon (top)": "倾斜：俯视（底部）至接近地平线（顶部）",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "地图朝向。拖动以旋转，方向键转向，Home 键朝北",
+  "North, 0 degrees": "北，0 度",
+  "Look around": "环顾四周",
+  "{heading} degrees from north": "从北方起算 {heading} 度",
+  "{tilt} degrees from top-down": "偏离俯视 {tilt} 度"
 }

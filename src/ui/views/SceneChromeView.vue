@@ -19,6 +19,7 @@ import AwarenessDirection from './panels/AwarenessDirection.vue';
 import UiButton from '../kit/UiButton.vue';
 import GlobeActions from './panels/GlobeActions.vue';
 import RenderFailure from './panels/RenderFailure.vue';
+import NavControl from './panels/NavControl.vue';
 import WorldTimeline from './panels/WorldTimeline.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
@@ -121,4 +122,5 @@ const vToastText = {
   <ScreenAnnotations />
   <AwarenessDirection />
   <WorldTimeline />
+  <NavControl />
 </template>

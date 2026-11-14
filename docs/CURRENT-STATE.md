@@ -2617,6 +2617,41 @@ Feature owners retain bounds, steps, formatted values, input/change timing and
 listener cleanup. The radio tuning dial, imagery comparison divider and event
 comparison/progression controls keep their specialized presentation and behavior.
 
+## On-screen navigation control
+
+A Google Earth-style control sits at the bottom right. The `NavControl` view
+(`src/ui/views/panels/NavControl.vue`, with `UiButton` and `UiSlider` from the
+kit) renders the `gev-nav-control` store, and the framework-free owner in
+`src/ui/navControl/` publishes the heading, tilt and follow state to it and
+answers the view's actions through the store. The control has
+a compass ring that shows the heading and turns the map when dragged (arrow
+keys turn it, Home returns to north; every drag move asks the navigation
+policy again, so a drag ends when the Cockpit takes the camera and only a new
+press starts another), a north-up button, a tilt slider with
+up/down buttons and a top-down button, zoom in/out with press-and-hold repeat,
+and a four-way look-around pad. Steps ease over about 220 ms; a step that is
+still easing stops as soon as anything else moves the camera (a drag or wheel
+on the globe, a flight) or the followed entity changes; while an entity is
+followed, a drag or wheel does not stop a step, which lasts at most 650 ms. The tilt shown is read
+from the camera's target once the camera has been still for 1.5 s after a
+move, never inside `moveEnd` or the frames after it, so the depth read cannot
+delay the arrival work other `moveEnd` observers do (the 500 ms arrival check
+in `npm run test:track`); a button, ring or slider gesture reads it as soon as
+it ends.
+
+The control orbits the camera around the point under the centre of the view
+through the same `readCameraTargetFrame` / `setCameraTargetFrame` helpers as
+Tilt Map and North Up, and every action goes through the navigation policy
+(`runOrientation`), so it declines while the Cockpit owns the camera and
+releases a followed aircraft first. A centre pick outside a plausible surface
+band (below -1,500 m or above 25,000 m) is not used as the orbit target, so a
+zoom step never drives the camera under the ground while tiles are still
+streaming. The look-around buttons are disabled while an entity is tracked.
+The control is hidden in Cockpit, Scene playback, recording and Clean UI; on
+phones it is also hidden while a sheet is open, and on short landscape phones
+while the world timeline is showing. The owner's camera subscriptions are removed and the view
+withdrawn when the shell is destroyed. Its text is translated in every shipped locale.
+
 ## Shared control CSS ownership
 
 Shared styles own ordinary control surfaces and interaction states; feature CSS

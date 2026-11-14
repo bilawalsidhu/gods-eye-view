@@ -12,6 +12,11 @@
   --mobile-sheet-max-height: min(62vh, calc(100vh - 168px));
   --mobile-dock-sheet-max-height: 34vh;
   --mobile-rail-under-dock-max-height: 40vh;
+  --mobile-voice-height: 5.35rem;
+  /* Dock offset + voice height + gap (106px at a 16px root). The timeline lift is added where used. */
+  --mobile-view-switcher-bottom: calc(
+    var(--mobile-tab-space) + 10px + var(--mobile-voice-height) + 10.4px
+  );
 }
 
 /* Dynamic viewport units keep sheets inside the area a mobile browser's
@@ -378,7 +383,7 @@ body.mobile-shell #command-dock #gev-voice-control {
   flex: none;
   align-self: center;
   width: min(280px, 80vw);
-  height: 5.35rem;
+  height: var(--mobile-voice-height);
   margin: 0;
   transform: none;
 }
@@ -390,7 +395,7 @@ body.mobile-shell #command-dock #gev-voice-control {
 body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   #cesium-credits {
   right: auto;
-  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
+  bottom: calc(var(--mobile-view-switcher-bottom) + var(--world-timeline-lift, 0px)) !important;
   left: 10px;
   /* With the base rule's nowrap the credits run off the right edge, and a
      max-width alone wrapped them into a narrow column: the line needs wrapping
@@ -417,7 +422,15 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
 /* The view switcher clears the tab bar and the voice bar, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
   right: 12px;
-  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px));
+  bottom: calc(var(--mobile-view-switcher-bottom) + var(--world-timeline-lift, 0px));
+}
+
+/* Short phones need one switcher row, not a vertical stack reaching into
+   navigation and the top actions. Its actual height is still measured. */
+@media (orientation: landscape) and (max-height: 450px) {
+  body.mobile-shell:not(.cockpit-mode) #view-switcher {
+    grid-auto-flow: column;
+  }
 }
 
 body.mobile-shell #corner-actions {

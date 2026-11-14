@@ -3793,5 +3793,20 @@
   "Cable car": "Канатний трамвай",
   "Monorail": "Монорейка",
   "Funicular": "Фунікулер",
-  "Gondola": "Канатна дорога"
+  "Gondola": "Канатна дорога",
+  "Tilt up toward the horizon": "Нахилити до горизонту",
+  "Tilt down toward top-down view": "Нахилити до виду зверху",
+  "Top-down view": "Вид зверху",
+  "Look left": "Дивитися ліворуч",
+  "Look right": "Дивитися праворуч",
+  "Look up": "Дивитися вгору",
+  "Look down": "Дивитися вниз",
+  "Map navigation": "Навігація картою",
+  "Tilt": "Нахил",
+  "Tilt: top-down (bottom) to near horizon (top)": "Нахил: вид зверху (внизу) до майже горизонту (вгорі)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Напрямок карти. Перетягніть, щоб повернути, стрілки повертають, Home — на північ",
+  "North, 0 degrees": "Північ, 0 градусів",
+  "Look around": "Оглянутися навколо",
+  "{heading} degrees from north": "{heading} градусів від півночі",
+  "{tilt} degrees from top-down": "{tilt} градусів від виду зверху"
 }

@@ -3706,5 +3706,20 @@
   "Cable car": "חשמלית כבלים",
   "Monorail": "מונורייל",
   "Funicular": "פוניקולר",
-  "Gondola": "רכבל"
+  "Gondola": "רכבל",
+  "Tilt up toward the horizon": "הטה מעלה לכיוון האופק",
+  "Tilt down toward top-down view": "הטה מטה לכיוון תצוגה מלמעלה",
+  "Top-down view": "תצוגה מלמעלה",
+  "Look left": "הבט שמאלה",
+  "Look right": "הבט ימינה",
+  "Look up": "הבט למעלה",
+  "Look down": "הבט למטה",
+  "Map navigation": "ניווט במפה",
+  "Tilt": "הטייה",
+  "Tilt: top-down (bottom) to near horizon (top)": "הטייה: מתצוגה מלמעלה (בחלק התחתון) ועד כמעט לאופק (בחלק העליון)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "כיוון המפה. גרירה לסיבוב, מקשי החצים לפנייה, Home לכיוון צפון",
+  "North, 0 degrees": "צפון, 0 מעלות",
+  "Look around": "הסתכל סביב",
+  "{heading} degrees from north": "{heading} מעלות מצפון",
+  "{tilt} degrees from top-down": "{tilt} מעלות מתצוגה מלמעלה"
 }

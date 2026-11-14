@@ -3619,5 +3619,20 @@
   "Cable car": "Kabelspårvagn",
   "Monorail": "Enskensbana",
   "Funicular": "Bergbana",
-  "Gondola": "Kabinbana"
+  "Gondola": "Kabinbana",
+  "Tilt up toward the horizon": "Luta uppåt mot horisonten",
+  "Tilt down toward top-down view": "Luta nedåt mot vy rakt ovanifrån",
+  "Top-down view": "Vy rakt ovanifrån",
+  "Look left": "Se åt vänster",
+  "Look right": "Se åt höger",
+  "Look up": "Se uppåt",
+  "Look down": "Se nedåt",
+  "Map navigation": "Kartnavigering",
+  "Tilt": "Lutning",
+  "Tilt: top-down (bottom) to near horizon (top)": "Lutning: ovanifrån (nedtill) till nära horisonten (upptill)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Kartans kurs. Dra för att rotera, använd piltangenterna för att vrida och Home för norr",
+  "North, 0 degrees": "Norr, 0 grader",
+  "Look around": "Titta runt",
+  "{heading} degrees from north": "{heading} grader från norr",
+  "{tilt} degrees from top-down": "{tilt} grader från vy rakt ovanifrån"
 }
