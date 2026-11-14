@@ -1231,6 +1231,8 @@ get_entity_context, annotate_map and analyst_query. Analyst speech and the card
 share one bounded, lossless count/scope headline; combined flight, military and
 local ADS-B answers use the shared noun "aircraft"; lower bounds use "At least"
 and partial answers name the unanswered layers. `get_current_view_state` lists enabled layers only.
+The spoken view state and the HUD summary line round the camera height before
+choosing a unit, so 999.6 m reads "1 km up" and "1.0KM", not 1000 m.
 FIRMS and ALPR entity labels remain English in shared context and tool data;
 voice-card titles and pointer presentation translate those known labels at display
 time, while arbitrary names and callsigns remain unchanged.
