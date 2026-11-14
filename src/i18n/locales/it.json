@@ -1291,6 +1291,8 @@
   "AIS: {name}": "AIS: {name}",
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  VEL: {speed}  HDG: {heading}",
   "VESSEL": "NAVE",
+  "AID TO NAVIGATION": "AIUTO ALLA NAVIGAZIONE",
+  "VIRTUAL": "VIRTUALE",
   "{speed}KT": "{speed}KT",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS: LIVE",
@@ -3726,5 +3728,12 @@
   "Reset view reloads the app without the view restored from the address bar.": "Ripristina vista ricarica l’app senza la vista ripristinata dalla barra degli indirizzi.",
   "Reload": "Ricarica",
   "Retry": "Riprova",
-  "Reset view": "Ripristina vista"
+  "Reset view": "Ripristina vista",
+  "Trolleybus": "Filobus",
+  "Cable car": "Tram a fune",
+  "Monorail": "Monorotaia",
+  "Funicular": "Funicolare",
+  "Gondola": "Cabinovia",
+  "Move panels back beside the rail": "Riporta i pannelli accanto alla barra",
+  "Move panels over the rail, to the edge": "Sposta i pannelli sopra la barra, fino al bordo"
 }

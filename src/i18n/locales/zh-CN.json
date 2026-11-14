@@ -1229,6 +1229,8 @@
   "AIS: {name}": "AIS: {name}",
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "船舶",
+  "AID TO NAVIGATION": "助航标志",
+  "VIRTUAL": "虚拟",
   "{speed}KT": "{speed} kn",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS：实时",
@@ -3552,5 +3554,12 @@
   "Reset view reloads the app without the view restored from the address bar.": "“重置视图”会重新加载应用，不使用从地址栏恢复的视图。",
   "Reload": "重新加载",
   "Retry": "重试",
-  "Reset view": "重置视图"
+  "Reset view": "重置视图",
+  "Trolleybus": "无轨电车",
+  "Cable car": "缆索电车",
+  "Monorail": "单轨列车",
+  "Funicular": "缆索铁路",
+  "Gondola": "缆车",
+  "Move panels back beside the rail": "将面板移回侧栏旁",
+  "Move panels over the rail, to the edge": "将面板移到侧栏上方，贴靠边缘"
 }

@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  DEFAULT_AID_MODEL,
   FLEET_MODEL_BASE,
+  aidToNavigationModel,
   aircraftModelSpec,
   aisShipTypeCode,
   emitterCategory,
@@ -23,6 +25,7 @@ import {
   vesselModelSpec,
 } from './fleetModels.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
+import { TRANSIT_MODES } from './transitFeeds.js';
 import {
   centrelineSegments,
   distanceToSurface,
@@ -51,8 +54,17 @@ const sliceTypes = {
     A21N: ['a320', 44.51],
     A319: ['a320', 33.84],
     B38M: ['b738', 39.52],
+    ZVEH: ['car', 4.61],
+    GRND: ['radio_mast', 1.9],
   },
   helicopters: { EC35: ['ec35', 10.2] },
+  aircraft_callsign: {
+    ZVEH: [
+      { prefixes: ['FIRE'], model: 'fire_truck', length: 11.01 },
+      { prefixes: ['PUSH', 'TUG'], model: 'pushback', length: 6 },
+      { prefixes: ['DEICER', 'SQUID', 'SQB'], model: 'van', length: 5.51 },
+    ],
+  },
   categories: { A1: ['c172', 8.3] },
   vessels: [
     {
@@ -109,6 +121,33 @@ test('aircraft resolve by type, then emitter category, then the generic plane', 
   assert.deepEqual(resolveAircraft(sliceTypes, undefined, 'Q9'), {
     model: 'generic_plane',
     length: 36,
+  });
+});
+
+test('airport vehicles (ZVEH) by callsign, first rule wins, else the type: spaces and case ignored', () => {
+  const zveh = (callsign) =>
+    resolveAircraft(sliceTypes, 'ZVEH', undefined, callsign);
+  assert.deepEqual(zveh('FIRE 2'), { model: 'fire_truck', length: 11.01 });
+  assert.deepEqual(resolveAircraft(sliceTypes, 'zveh', undefined, ' fire2 '), {
+    model: 'fire_truck',
+    length: 11.01,
+  });
+  assert.equal(zveh('PUSH 14').model, 'pushback');
+  assert.equal(zveh('TUG3').model, 'pushback');
+  assert.deepEqual(zveh('DEICER 4'), { model: 'van', length: 5.51 });
+  assert.equal(zveh('SQUID20').model, 'van');
+  assert.equal(zveh('SQB9').model, 'van');
+  assert.equal(zveh('S Q B 9').model, 'van');
+  assert.deepEqual(zveh('LEADER 7'), { model: 'car', length: 4.61 });
+  assert.deepEqual(zveh(undefined), { model: 'car', length: 4.61 });
+  // Callsign rules belong to their type: a fire-named airliner is still an airliner.
+  assert.equal(
+    resolveAircraft(sliceTypes, 'A320', undefined, 'FIRE1').model,
+    'a320',
+  );
+  assert.deepEqual(resolveAircraft(sliceTypes, 'GRND', undefined, 'RX5'), {
+    model: 'radio_mast',
+    length: 1.9,
   });
 });
 
@@ -225,6 +264,46 @@ test('transit bodies mark the share of the route colour they take; other models 
   }
 });
 
+test('aircraft specs: airport vehicles by callsign, ground stations as a mast, as the set says', () => {
+  const zveh = (callsign) =>
+    aircraftModelSpec(set, { typeCode: 'ZVEH', category: 'UNKNOWN', callsign })
+      .model;
+  assert.equal(zveh('FIRE 2'), 'fire_truck');
+  assert.equal(zveh('PUSHBACK1'), 'pushback');
+  assert.equal(zveh('TUG 4'), 'pushback');
+  assert.equal(zveh('DEICER 4'), 'van');
+  assert.equal(zveh('SQUID20'), 'van');
+  assert.equal(zveh('SQB9'), 'van');
+  assert.equal(zveh('LEADER 7'), 'car');
+  assert.equal(zveh('AOPS'), 'car');
+  assert.equal(zveh(null), 'car');
+  const mast = aircraftModelSpec(set, { typeCode: 'GRND', callsign: 'RX5' });
+  assert.equal(mast.model, 'radio_mast');
+  assert.equal(mast.scale, 1);
+});
+
+test('a callsign rule outranks the class model of a type the map lacks', () => {
+  const ruled = {
+    ...set,
+    types: {
+      ...set.types,
+      aircraft_callsign: {
+        ...set.types.aircraft_callsign,
+        PUMA: [{ prefixes: ['FIRE'], model: 'fire_truck', length: 11.01 }],
+      },
+    },
+  };
+  assert.equal(
+    aircraftModelSpec(ruled, { typeCode: 'PUMA', callsign: 'FIRE 1' }).model,
+    'fire_truck',
+  );
+  // No rule matched: the class model, as before.
+  assert.equal(
+    aircraftModelSpec(ruled, { typeCode: 'PUMA', callsign: 'RESCUE1' }).model,
+    'generic_heli',
+  );
+});
+
 test('aircraft specs: by type, then class for an unlisted type, then emitter category', () => {
   assert.equal(aircraftModelSpec(set, { typeCode: 'A320' }).model, 'a320');
   assert.equal(aircraftModelSpec(set, { type: 'b744' }).model, 'b744');
@@ -303,6 +382,99 @@ test('vessel specs read AIS codes and text families, stretched to the reported b
   const unknown = vesselModelSpec(set, {});
   assert.equal(unknown.model, types.default_vessel);
   assert.equal(unknown.scale, 1);
+});
+
+test('aids to navigation are the buoy of the mark their type names', () => {
+  const cases = [
+    ['Cardinal Mark N', 'buoy_cardinal_north'],
+    ['Beacon, Cardinal E', 'buoy_cardinal_east'],
+    ['Cardinal Mark S', 'buoy_cardinal_south'],
+    ['Beacon, Cardinal W', 'buoy_cardinal_west'],
+    ['Port Hand Mark', 'buoy_lateral_port'],
+    ['Beacon, Port hand', 'buoy_lateral_port'],
+    ['Starboard Hand Mark', 'buoy_lateral_starboard'],
+    ['Preferred Channel Starboard hand', 'buoy_lateral_starboard'],
+    ['Safe Water', 'buoy_safe_water'],
+    ['Isolated danger', 'buoy_isolated_danger'],
+    ['Beacon, Special Mark', 'buoy_special'],
+    ['Special Mark', 'buoy_special'],
+    ['Light Vessel / LANBY / Rigs', 'buoy_special'],
+    ['RACON', 'buoy_special'],
+    ['Light, with Sectors', 'buoy_special'],
+    ['Reference point', 'buoy_special'],
+    ['Navigation aid', 'buoy_special'],
+  ];
+  for (const [type, model] of cases) {
+    assert.equal(aidToNavigationModel(type), model, type);
+    assert.ok(catalog[model], model);
+    const spec = vesselModelSpec(set, { type, mmsi: '993672001' });
+    assert.equal(spec.model, model, type);
+    assert.equal(spec.category, 'buoys', type);
+    assert.equal(spec.fixed, true, type);
+    // A buoy is drawn as built, whatever length the report gives.
+    assert.equal(spec.scale, 1, type);
+  }
+  assert.equal(
+    vesselModelSpec(set, { type: 'Safe Water', length: 120, beam: 30 }).scale,
+    1,
+  );
+  // An aid of no stated kind, known only by its MMSI, is the default can.
+  assert.ok(catalog[DEFAULT_AID_MODEL]);
+  const unnamed = vesselModelSpec(set, { type: '', mmsi: '993660123' });
+  assert.equal(unnamed.model, DEFAULT_AID_MODEL);
+  assert.equal(unnamed.fixed, true);
+  assert.equal(aidToNavigationModel('Fixed structure off shore'), undefined);
+  // A virtual aid is broadcast where nothing stands: it keeps its disc.
+  assert.equal(
+    vesselModelSpec(set, {
+      type: 'Cardinal Mark N',
+      mmsi: '993672001',
+      virtual: true,
+    }),
+    null,
+  );
+  // Vessels, including those that work on buoys, keep their hulls.
+  for (const vessel of [
+    { type: 'Buoy Tender', mmsi: '366999001', length: 60 },
+    { type: '70', mmsi: '366999002' },
+    { type: 'Tug', mmsi: '' },
+  ]) {
+    const spec = vesselModelSpec(set, vessel);
+    assert.notEqual(spec.category, 'buoys', vessel.type);
+    assert.equal(spec.fixed, undefined, vessel.type);
+  }
+});
+
+test('every transit mode but unknown draws its own model, and a route type a finer one', () => {
+  for (const mode of TRANSIT_MODES.filter((m) => m !== 'unknown')) {
+    assert.ok(types.transit.modes[mode], `${mode} has a model`);
+    assert.equal(
+      resolveTransit(types, { mode }).model,
+      types.transit.modes[mode][0],
+    );
+  }
+  for (const [mode, model] of [
+    ['trolleybus', 'trolleybus'],
+    ['cable_tram', 'cable_tram'],
+    ['aerial_lift', 'gondola'],
+    ['funicular', 'funicular'],
+    ['monorail', 'monorail'],
+  ])
+    assert.equal(resolveTransit(types, { mode }).model, model, mode);
+  // A route type outranks the mode: a coach and a high-speed set are still
+  // the bus and rail modes.
+  for (const [routeType, mode, model] of [
+    [200, 'bus', 'coach'],
+    [101, 'rail', 'high_speed'],
+    [106, 'rail', 'regional_dmu'],
+    [710, 'bus', 'double_decker'],
+  ])
+    assert.equal(resolveTransit(types, { routeType, mode }).model, model);
+  // A type the table lacks falls back to the mode.
+  assert.equal(
+    resolveTransit(types, { routeType: 300, mode: 'rail' }).model,
+    'commuter_emu',
+  );
 });
 
 test('transit specs: rail category and mode, then route type, then mode, then the default', () => {

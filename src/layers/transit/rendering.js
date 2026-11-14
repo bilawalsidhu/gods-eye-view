@@ -531,9 +531,15 @@ export function createRendering({ state, services, parts }) {
           groundLiftM,
         };
       }
-      if (item.mode !== entry.mode) {
+      if (item.mode !== entry.mode || item.routeType !== entry.routeType) {
         item.mode = entry.mode;
-        item.spec = transitModelSpec(set, { mode: entry.mode });
+        item.routeType = entry.routeType;
+        // The route type picks the finer model (a coach, a high-speed set);
+        // the mode is the fallback for a type the model table lacks.
+        item.spec = transitModelSpec(set, {
+          routeType: entry.routeType,
+          mode: entry.mode,
+        });
         item.tint =
           MODE_CESIUM_COLORS[entry.mode] || MODE_CESIUM_COLORS.unknown;
       }

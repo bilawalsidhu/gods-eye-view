@@ -291,6 +291,7 @@
     "FOV {value}°",
     "FT",
     "Folk",
+    "Funicular",
     "Funk",
     "GEO",
     "GOOGLE STREET VIEW",
@@ -411,7 +412,8 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "VIRTUAL"
   ],
   "fr": [
     "1 min/s",
@@ -500,6 +502,7 @@
     "MINI",
     "MISSION",
     "MM",
+    "Monorail",
     "MSG/S",
     "Metal",
     "Minimal",
@@ -570,6 +573,7 @@
     "TAGS · {tags}",
     "TEMP",
     "TLE",
+    "Trolleybus",
     "TYPE",
     "Tallinn",
     "Techno",
@@ -949,6 +953,7 @@
     "FOV {value}°",
     "FT",
     "Folk",
+    "Funicular",
     "Funk",
     "GEO",
     "GOOGLE STREET VIEW",
@@ -1067,7 +1072,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "VIRTUAL"
   ],
   "ru": [
     "1900–1945",

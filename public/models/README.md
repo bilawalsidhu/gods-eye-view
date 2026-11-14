@@ -19,6 +19,12 @@ How the layers use them:
   type's published length (a vessel to its reported AIS length and beam), so
   every model is drawn life size. Ground objects, balloons and obstacles in
   the `other` category are drawn at the size they are built.
+- An aid to navigation (a vessel record whose type names a buoy, beacon, IALA
+  mark, RACON or light, or whose MMSI is an aid station's `99MIDxxxx`) is
+  drawn as the `buoys` model of its mark (cardinal north, east, south or west,
+  port or starboard hand, safe water, isolated danger, special mark), a red
+  can when its type names no mark, at its built size and with no heading
+  (`vesselModelSpec`, `aidToNavigationModel`).
 - An aircraft model's origin is its axis; it stands that model's scaled
   clearance above the ground. A ship's origin is its waterline, and a transit
   or rail vehicle's the road or rail top (a monorail or gondola is raised by
