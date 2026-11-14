@@ -7604,6 +7604,9 @@ apply to `public/` assets or built-preview serving.
   Beyond that it falls through to the `SECTOR <lat> <lon>` readout. The POI
   catalogue covers eight cities, so a looser bound made the HUD announce
   landmarks on other continents.
+- A sun 0.5° or less below the horizon reads `SUN 0°` in the HUD summary,
+  and one less than 0.05° below reads `SUN: 0.0° EL` in the corner readout,
+  never `-0°` or `-0.0`.
 - Panoptic mode shows labels on ALL items (no stride skipping). Tracked/selected items keep bounding box but suppress label (skipLabel flag). Tracked items get enlarged bounding boxes (56×44 vs default 22×14).
 - The 3D aircraft toggle reveals `Proximity` and `All` modes and drives both commercial and military aircraft layers. It ships ON in `Proximity`, so the button paints lit and the mode row paints open from markup; the panel is therefore ~36 px taller than before, which Cockpit's Display/Radio strip absorbs through its existing primary-only corridor solver.
 - The host-painted tracked-target readout sits above the post-FX layer and follows tracked aircraft/satellites or selected mapped installations using each layer's display-position contract.
