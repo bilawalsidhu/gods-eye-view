@@ -7,3 +7,7 @@
   states the product's 0.05° source grid, and re-reads each month. GIBS tile
   URLs for this layer and Recent Imagery now come from one helper (Udaydsmls,
   #875).
+
+- When photoreal 3D tiles hide the globe-only filmstrip, the layer row shows
+  map-source guidance instead of a false ready state, while retaining the
+  playback state for globe maps (Udaydsmls, #875).

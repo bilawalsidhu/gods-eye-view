@@ -18,6 +18,11 @@ mispositions them; every GIBS tile URL, here and in Recent Imagery, is built by
 month answers 404, and an image load reads that the same way whether or not
 GIBS sends CORS headers on its 404s (it has not always).
 
+The filmstrip paints on the globe's imagery collection, not photoreal 3D tiles.
+When a map source hides the globe, the layer row shows the existing imagery-host
+guidance instead of reporting a visible year. Returning to a globe map restores
+its normal frame status; the playback state is not discarded by that guidance.
+
 Playback is driven from an on-map panel; the layer row carries no controls. The
 panel names the month most on screen, holds the play/pause control, shows NASA's
 colour scale as one gradient bar with each published stop at its own

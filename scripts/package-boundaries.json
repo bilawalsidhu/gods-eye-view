@@ -2012,6 +2012,7 @@
       "src/i18n/marker.js",
       "src/layers/temperature/labels.js",
       "src/maps/gibs.js",
+      "src/maps/imageryHost.js",
       "src/layers/temperature/controls.js",
       "src/layers/temperature/dates.js",
       "src/layers/temperature/index.js",
