@@ -217,7 +217,12 @@ function fixture(
               }),
             }
           : null;
-      onClick({ screenPosition: { x: 50, y: 50 }, id: picked });
+      // What is exactly under the click, as the layer reads it.
+      onClick({
+        screenPosition: { x: 50, y: 50 },
+        topHit: { set: 'wildlife', id: picked },
+        id: picked,
+      });
       await settle();
     },
     async publish(next) {
