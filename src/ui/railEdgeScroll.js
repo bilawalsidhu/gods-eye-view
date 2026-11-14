@@ -27,11 +27,19 @@ const NOTCH_DELTA = 100;
 /** The widest the strip gets, measured from the screen edge, whatever shape the rail takes. */
 const STRIP_MAX = 84;
 /**
+ * After a step, how long (ms) the rest of that gesture is still swallowed once
+ * the pointer has left the strip, so trackpad coasting does not go on to zoom
+ * the globe. Past it, the wheel belongs to whatever is under the pointer.
+ */
+const COAST_MAX_MS = 800;
+/** Pixels per wheel line, for mice that report lines rather than pixels. */
+const LINE_PX = 16;
+/**
  * Things in the strip that keep their own pointer and wheel behaviour: any
  * control, and every panel in either side's stack (a panel scrolls itself).
  */
 const OWN_CONTROLS =
-  'a, button, input, select, textarea, [role="dialog"], .ui-panel, #left-panel-stack > :not(.gev-panel-rail), #right-context-rail > :not(.gev-panel-rail), #first-run-launcher, #cesium-credits';
+  'a, button, input, select, textarea, dialog, [role="dialog"], .ui-panel, #left-panel-stack > :not(.gev-panel-rail), #right-context-rail > :not(.gev-panel-rail), #first-run-launcher, #cesium-credits, #world-timeline';
 
 /**
  * @param {Document} [doc]
@@ -54,16 +62,40 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   let peakSpeed = 0;
   let slowed = false;
   let frame = 0;
+  /** Set once removed, so frames already queued do nothing. */
+  let removed = false;
 
+  // Clean view and recording hide the rails with visibility and opacity,
+  // which keep their boxes, so a box alone does not mean the rail shows.
+  const showing = (node) =>
+    node.getBoundingClientRect().width > 0 &&
+    (typeof node.checkVisibility !== 'function' ||
+      node.checkVisibility({
+        visibilityProperty: true,
+        opacityProperty: true,
+      }));
+
+  // Which screen edge a rail is on comes from where it is, not its name: in a
+  // right-to-left language the left stack sits on the right.
   const rails = () =>
     ['left', 'right']
-      .map((side) => ({ side, rail: doc.querySelector(`.ui-rail--${side}`) }))
-      .filter(({ rail }) => rail && rail.getBoundingClientRect().width > 0);
+      .map((name) => doc.querySelector(`.ui-rail--${name}`))
+      .filter((rail) => rail && showing(rail))
+      .map((rail) => {
+        const box = rail.getBoundingClientRect();
+        const middle = doc.documentElement.clientWidth / 2;
+        return {
+          side: box.left + box.width / 2 < middle ? 'left' : 'right',
+          rail,
+        };
+      });
 
   const items = (rail) =>
     // Only items that show: a theme or mode may hide some, and the wheel must
     // not open those.
-    [...rail.querySelectorAll('.ui-rail__item')].filter((item) => !item.disabled && item.offsetWidth > 0);
+    [...rail.querySelectorAll('.ui-rail__item')].filter(
+      (item) => !item.disabled && showing(item),
+    );
 
   // ── The sliding highlight ──
   // Each rail draws it as a ::before under its items, placed by custom
@@ -73,6 +105,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   const gliding = new WeakSet();
 
   function glide(rail) {
+    if (removed) return;
     rail.classList.toggle('ui-rail--edge-hot', rail === hot);
     const on = rail.querySelector('.ui-rail__item[aria-pressed="true"]');
     if (!on?.offsetWidth) {
@@ -87,16 +120,30 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     // buttons shrinking over a few frames; the highlight waits until the open
     // button is an icon again (square) rather than fading in at a pill's
     // width and then shrinking.
-    if (!shown && (rail.classList.contains('ui-rail--expanded') || box.width > box.height + 2)) return;
+    if (
+      !shown &&
+      (rail.classList.contains('ui-rail--expanded') ||
+        box.width > box.height + 2)
+    )
+      return;
     // Appearing from nothing: jump into place, then fade in.
     rail.classList.toggle('ui-rail--glide-jump', !shown);
-    rail.style.setProperty('--rail-glide-x', `${box.left - railBox.left - rail.clientLeft}px`);
-    rail.style.setProperty('--rail-glide-y', `${box.top - railBox.top - rail.clientTop}px`);
+    rail.style.setProperty(
+      '--rail-glide-x',
+      `${box.left - railBox.left - rail.clientLeft}px`,
+    );
+    rail.style.setProperty(
+      '--rail-glide-y',
+      `${box.top - railBox.top - rail.clientTop}px`,
+    );
     rail.style.setProperty('--rail-glide-w', `${box.width}px`);
     rail.style.setProperty('--rail-glide-h', `${box.height}px`);
     rail.classList.add('ui-rail--glide');
     gliding.add(rail);
-    if (!shown) win.requestAnimationFrame(() => rail.classList.remove('ui-rail--glide-jump'));
+    if (!shown)
+      win.requestAnimationFrame(() =>
+        rail.classList.remove('ui-rail--glide-jump'),
+      );
   }
 
   // Follow the rails for a few frames after any change, as their items
@@ -105,6 +152,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     win.cancelAnimationFrame(frame);
     let left = frames;
     const tick = () => {
+      if (removed) return;
       watchRails();
       doc.querySelectorAll('.ui-rail').forEach(glide);
       if ((left -= 1) > 0) frame = win.requestAnimationFrame(tick);
@@ -117,7 +165,11 @@ export function installRailEdgeScroll(doc = globalThis.document) {
       ? new win.MutationObserver((records) => {
           // A rail item opened or closed. Nothing here writes aria-pressed,
           // and the work waits for the next frame, so this never feeds itself.
-          if (records.some((record) => record.target.classList?.contains('ui-rail__item')))
+          if (
+            records.some((record) =>
+              record.target.classList?.contains('ui-rail__item'),
+            )
+          )
             win.requestAnimationFrame(() => follow());
         })
       : null;
@@ -132,7 +184,9 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   // row (panels moved to the screen edge). Its highlight is placed again
   // whenever its size changes, so it is never left where an icon was.
   const sized =
-    typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => follow(2)) : null;
+    typeof win.ResizeObserver === 'function'
+      ? new win.ResizeObserver(() => follow(2))
+      : null;
   const watched = new WeakSet();
   const watchRails = () => {
     if (!sized) return;
@@ -147,7 +201,8 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   // ── The edge strip ──
   /** The rail whose strip holds the point, unless a control there owns it. */
   function railAt(x, target) {
-    if (doc.body.classList.contains('mobile-shell') || coarse?.matches) return null;
+    if (doc.body.classList.contains('mobile-shell') || coarse?.matches)
+      return null;
     for (const { side, rail } of rails()) {
       const box = rail.getBoundingClientRect();
       // From the screen edge to just past the rail, but never wider than a
@@ -168,6 +223,12 @@ export function installRailEdgeScroll(doc = globalThis.document) {
 
   function setHot(rail) {
     if (rail === hot) return;
+    // A held step belongs to the strip it was made in; leaving drops it, so
+    // coming back later does not set it off with no wheel turned.
+    if (heldStep) {
+      win.clearTimeout(heldStep);
+      heldStep = 0;
+    }
     hot?.classList.remove('ui-rail--edge-hot');
     hot = rail;
     travel = 0;
@@ -186,7 +247,9 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   function step(direction) {
     const list = items(hot);
     if (!list.length) return;
-    const current = list.findIndex((item) => item.getAttribute('aria-pressed') === 'true');
+    const current = list.findIndex(
+      (item) => item.getAttribute('aria-pressed') === 'true',
+    );
     // Past either end, carry on from the other.
     const nextIndex =
       current < 0
@@ -201,7 +264,9 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     if (panel) {
       panel.classList.remove('rail-switch-down', 'rail-switch-up');
       void panel.offsetWidth;
-      panel.classList.add(direction > 0 ? 'rail-switch-down' : 'rail-switch-up');
+      panel.classList.add(
+        direction > 0 ? 'rail-switch-down' : 'rail-switch-up',
+      );
       // The classes come off when the slide ends, or after a moment where
       // there is no slide to end (reduced motion).
       const settle = () => {
@@ -216,17 +281,20 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   }
 
   function onWheel(event) {
-    if (event.ctrlKey) return;
+    // Pinch zoom, and sideways or empty moves (trackpads send them mid-swipe),
+    // are left alone: they neither step nor turn a gesture round.
+    if (event.ctrlKey || !event.deltaY) return;
     const now = win.performance?.now?.() ?? Date.now();
     const inGesture = now - lastWheel <= GESTURE_GAP_MS;
     // Recheck: the pointer may not have moved since the panels changed.
-    const stillHot = Boolean(hot) && railAt(event.clientX, event.target) === hot;
+    const stillHot =
+      Boolean(hot) && railAt(event.clientX, event.target) === hot;
     if (!stillHot) {
       setHot(null);
       // The rest of a gesture that has already stepped is used up here, so
       // its coasting does not go on to zoom the globe or scroll what opened
       // under the pointer.
-      if (stepped && inGesture) {
+      if (stepped && inGesture && now - steppedAt <= COAST_MAX_MS) {
         event.preventDefault();
         event.stopPropagation();
         lastWheel = now;
@@ -235,15 +303,25 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     }
     event.preventDefault();
     event.stopPropagation();
-    const speed = Math.abs(event.deltaY);
+    // Line- and page-based wheels report far smaller numbers than pixels.
+    const deltaY =
+      event.deltaMode === 1
+        ? event.deltaY * LINE_PX
+        : event.deltaMode === 2
+          ? event.deltaY * win.innerHeight
+          : event.deltaY;
+    const speed = Math.abs(deltaY);
     // A new gesture: after a pause, after turning round, a mouse wheel notch,
     // or a fresh flick while the last one is still coasting. A flick is a
     // rise in speed after the gesture has clearly slowed, and not in the
     // moment after a step: a swipe is still speeding up when it first steps.
-    const turned = travel && Math.sign(event.deltaY) !== Math.sign(travel);
+    const turned = travel && Math.sign(deltaY) !== Math.sign(travel);
     const cooled = now - steppedAt > STEP_COOLDOWN_MS;
-    const notch = stepped && cooled && speed >= NOTCH_DELTA;
-    const flick = stepped && cooled && slowed && speed > Math.max(8, lastSpeed * 1.8);
+    // Every event from a line- or page-based wheel is a notch.
+    const notch =
+      stepped && cooled && (speed >= NOTCH_DELTA || event.deltaMode > 0);
+    const flick =
+      stepped && cooled && slowed && speed > Math.max(8, lastSpeed * 1.8);
     if (!inGesture || turned || notch || flick) {
       // A held step belongs to the motion it came from; a reversal or a new
       // flick replaces it rather than queueing behind it.
@@ -263,7 +341,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
       if (speed < peakSpeed * 0.5) slowed = true;
       return;
     }
-    travel += event.deltaY;
+    travel += deltaY;
     if (Math.abs(travel) < STEP_DELTA) return;
     stepped = true;
     const direction = Math.sign(travel);
@@ -294,6 +372,7 @@ export function installRailEdgeScroll(doc = globalThis.document) {
   follow();
 
   return () => {
+    removed = true;
     win.clearTimeout(heldStep);
     setHot(null);
     observer?.disconnect();
@@ -304,7 +383,11 @@ export function installRailEdgeScroll(doc = globalThis.document) {
     win.removeEventListener('wheel', onWheel, { capture: true });
     win.removeEventListener('resize', onResize);
     doc.querySelectorAll('.ui-rail').forEach((rail) => {
-      rail.classList.remove('ui-rail--glide', 'ui-rail--glide-jump', 'ui-rail--edge-hot');
+      rail.classList.remove(
+        'ui-rail--glide',
+        'ui-rail--glide-jump',
+        'ui-rail--edge-hot',
+      );
     });
   };
 }
