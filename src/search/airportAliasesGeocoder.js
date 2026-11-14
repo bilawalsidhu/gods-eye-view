@@ -12,6 +12,7 @@ const AIRPORT_ALIASES = Object.freeze({
     lat: 51.467739,
     lng: -0.4587801,
     name: 'London Heathrow Airport',
+    // i18n-ignore: place name data, not UI copy
     label: 'London Heathrow Airport, United Kingdom',
     types: ['airport'],
   },
