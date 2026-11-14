@@ -13,8 +13,8 @@
  * fixed and PTZ hardware (Sarix, Wisenet, AUTODOME) are labelled only.
  */
 
-/** Product lines made up entirely of PTZ cameras. */
-const PTZ_ONLY_LINES = [/\bspectra\b/i];
+/** PTZ-only families with verified maker and product-line provenance. */
+const PTZ_ONLY_LINES = [/^pelco spectra(?:\s|$)/i];
 
 /**
  * Whether a maker / product-line name is a PTZ-only line.
@@ -22,7 +22,7 @@ const PTZ_ONLY_LINES = [/\bspectra\b/i];
  * @returns {boolean}
  */
 export function isPtzOnlyLine(manufacturer) {
-  const text = String(manufacturer || '');
+  const text = String(manufacturer || '').replace(/\s+/g, ' ').trim();
   return PTZ_ONLY_LINES.some((re) => re.test(text));
 }
 

@@ -3,5 +3,6 @@
   the pack now serves as `manufacturer` on `/api/cctv/sources`. The HUD shows
   `HW <MAKER>` and the camera panel adds the label. Pelco Spectra is a PTZ-only
   line, so those cameras are labelled `(PTZ)`: their listed facing is at best a
-  home position. The maker never changes the pose or FOV estimate (bassem
+  home position. An unrelated maker whose name contains "Spectra" does not
+  imply PTZ. The maker never changes the pose or FOV estimate (bassem
   chagra, @ch-bas, #884).

@@ -174,6 +174,7 @@ test('Austin maker survives the /api/cctv/sources boundary into the browser cata
       austinRows([
         { id: '201', mfg: 'Spectra Enhanced' },
         { id: '202', mfg: '' },
+        { id: '203', mfg: 'Acme Spectra' },
       ]),
     );
   });
@@ -182,19 +183,29 @@ test('Austin maker survives the /api/cctv/sources boundary into the browser cata
   const served = new Map(body.sources.map((source) => [source.id, source]));
   assert.equal(served.get('201').manufacturer, 'Pelco Spectra Enhanced');
   assert.equal(served.get('202').manufacturer, '');
+  assert.equal(served.get('203').manufacturer, 'Acme Spectra');
 
   const cameras = browserCatalog().buildCatalogFromSources(body.sources);
   const byId = new Map(cameras.map((camera) => [camera.id, camera]));
   assert.equal(byId.get('201').manufacturer, 'Pelco Spectra Enhanced');
+  assert.equal(byId.get('203').manufacturer, 'Acme Spectra');
   assert.equal(
     hardwareHudToken(byId.get('201')),
     'HW PELCO SPECTRA ENHANCED (PTZ)',
   );
   assert.equal(hardwareHudToken(byId.get('202')), null);
+  // An unknown maker with the word "Spectra" has no PTZ provenance.
+  assert.equal(hardwareHudToken(byId.get('203')), 'HW ACME SPECTRA');
 });
 
 test('hardware labels flag only PTZ-only product lines', () => {
   assert.equal(isPtzOnlyLine('Pelco Spectra Enhanced'), true);
+  assert.equal(isPtzOnlyLine('Pelco Spectra'), true);
+  assert.equal(isPtzOnlyLine('  pelco   spectra Enhanced  '), true);
+  // Only the known Pelco family supports this inference; words alone do not.
+  assert.equal(isPtzOnlyLine('Acme Spectra'), false);
+  assert.equal(isPtzOnlyLine('Spectra'), false);
+  assert.equal(isPtzOnlyLine('Pelco Spectral'), false);
   // Lines that mix fixed and PTZ hardware are never called PTZ.
   assert.equal(isPtzOnlyLine('Pelco Sarix'), false);
   assert.equal(isPtzOnlyLine('Hanwha Wisenet'), false);
@@ -208,6 +219,8 @@ test('hardware labels flag only PTZ-only product lines', () => {
     hardwareLabel({ manufacturer: 'Pelco Spectra Enhanced' }),
     'Pelco Spectra Enhanced (PTZ)',
   );
+  assert.equal(hardwareLabel({ manufacturer: 'Acme Spectra' }), 'Acme Spectra');
+  assert.equal(hardwareHudToken({ manufacturer: 'Acme Spectra' }), 'HW ACME SPECTRA');
   assert.equal(hardwareLabel({ manufacturer: '  ' }), '');
   assert.equal(hardwareLabel(null), '');
   assert.equal(hardwareHudToken({ manufacturer: 'Advidia' }), 'HW ADVIDIA');
