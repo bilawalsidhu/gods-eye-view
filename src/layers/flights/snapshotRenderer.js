@@ -7,6 +7,30 @@ import {
 } from '../../data/motionModel.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import { followsClock } from './policy.js';
+import { newestReport, pushReport } from '../../data/aircraftMotionRegime.js';
+
+/**
+ * Note how late each report in a live snapshot is, and aim the display delay
+ * again, before any contact is planned with it: a layer drawing nothing yet
+ * takes the new delay at once.
+ */
+function noteDelivery(flightState, snapshot) {
+  const delay = flightState._displayDelay;
+  if (!delay) return;
+  const receiptMs = Date.now();
+  for (const observation of snapshot.records) {
+    const reportMs = observation.positionTimeMs;
+    if (!(Number.isFinite(reportMs) && reportMs > 0)) continue;
+    const history = flightState._positionHistory.get(observation.id);
+    const previous = history && newestReport(history);
+    delay.noteReport(
+      receiptMs,
+      reportMs,
+      previous ? Math.trunc(previous.epochMs) : undefined,
+    );
+  }
+  delay.settle(receiptMs, { jump: !flightState._icons.count });
+}
 
 /** Apply reconciled aircraft records to the layer's drawing and follow state. */
 export function createFlightSnapshotRenderer({
@@ -42,6 +66,9 @@ export function createFlightSnapshotRenderer({
     const viewerLonDeg = hasSubpoint ? pose.lon : null;
     const floorWarmPoints = [];
     records.beginSnapshot(snapshot.observedAtMs);
+    // Live, the display delay follows how late this delivery's reports are.
+    if (!replace && !followsClock(flightState))
+      noteDelivery(flightState, snapshot);
 
     // Classification and display policy consume source-independent observations.
     refreshMilitaryRegistryIfStale();
@@ -95,34 +122,37 @@ export function createFlightSnapshotRenderer({
       }
       const history = flightState._positionHistory.get(icao24);
       const newest = history[history.length - 1];
-      // Whole milliseconds, as the fix times are kept.
+      const report = newestReport(history);
+      // Whole milliseconds, as the fix times are kept. A report newer than
+      // the last report goes in, past any synthetic fix after it.
       if (
-        !newest ||
-        Math.trunc(fixEpochMs) > Math.trunc(motion._fixEpochMs(newest))
+        !report ||
+        Math.trunc(fixEpochMs) > Math.trunc(motion._fixEpochMs(report))
       ) {
         // Per-fix kinematics: the fix's own velocity/track ride along so the
         // extrapolation paths use the values that BELONG to the fix they
         // extend, not whatever the latest poll reported.
-        history.push({
-          ...motion._historyFix(
-            fixEpochMs,
-            position,
-            meta.velocity,
-            meta.true_track,
-          ),
-          // Drawn at an invented height: a trail seeded from history keeps no
-          // position for it.
-          inventedHeight: meta.renderAltitudeInvented === true,
-          // Whether this report was on the ground: a trail backfill joins it
-          // only across a landing or take-off it saw.
-          onGround: meta.onGround === true,
-        });
-        if (history.length > POSITION_HISTORY_LIMIT) {
-          history.shift();
-        }
+        pushReport(
+          history,
+          {
+            ...motion._historyFix(
+              fixEpochMs,
+              position,
+              meta.velocity,
+              meta.true_track,
+            ),
+            // Drawn at an invented height: a trail seeded from history keeps no
+            // position for it.
+            inventedHeight: meta.renderAltitudeInvented === true,
+            // Whether this report was on the ground: a trail backfill joins it
+            // only across a landing or take-off it saw.
+            onGround: meta.onGround === true,
+          },
+          POSITION_HISTORY_LIMIT,
+        );
         // Turn rate from the fix-track history — computed once per new fix
         // (≤5 samples), consumed by the extrapolation paths at tick rate.
-        meta.turnRateDps = turnRateFromFixHistory(history);
+        meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
         // Trail accumulation is separate from the 5-fix DR history (PRD F1)
         // so the visible trail keeps growing while tracked. Ground traffic
         // appends nothing — a touchdown freezes the existing trail.
@@ -132,6 +162,7 @@ export function createFlightSnapshotRenderer({
         if (isTracked)
           tracking._appendTrailFix(motion._copyPosition(position), fixEpochMs, {
             nullAltitude: meta.renderAltitudeInvented === true,
+            track: meta.true_track,
           });
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
@@ -164,7 +195,7 @@ export function createFlightSnapshotRenderer({
           if (synthetic) {
             history.push(synthetic);
             if (history.length > POSITION_HISTORY_LIMIT) history.shift();
-            meta.turnRateDps = turnRateFromFixHistory(history);
+            meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
           }
         }
       }

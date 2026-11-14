@@ -19,8 +19,8 @@ import {
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { julianToEpochMs } from '../../geo/julian.js';
 import { renderedFrames } from '../../data/renderedFrames.js';
-import { clone, distance, distanceSquared, vec } from '../../geo/vector.js';
-import { trailHeadStart } from '../../data/modelVisualAnchor.js';
+import { clone, distanceSquared, vec } from '../../geo/vector.js';
+import { trailHeadLine } from '../../data/modelVisualAnchor.js';
 import {
   isTrackingSelectionGesture,
   isTrackingClickGesture,
@@ -28,7 +28,6 @@ import {
 import { inputFor } from '../../input/dispatcher.js';
 import {
   TRAIL_MAX_POINTS,
-  DR_CORRECTION_MS,
   displayDelayMs,
   followsClock,
   STALE_ALPHA,
@@ -41,15 +40,11 @@ import {
   historyFixEpochMs,
   insertTrailFix,
   joinTrailBackfill,
-  recordTrailPoint,
   trailBackfillFixes,
   trailBodyCount,
-  trailBodyCountOutsideModel,
   trailBodySegments,
+  trailHeadCurvePoints,
   trailHeadStartFix,
-  trailRecordingBlocked,
-  TRAIL_RECORD_STEP_M,
-  TRAIL_RECORD_STEP_MS,
 } from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
@@ -566,7 +561,11 @@ export function createTracking({
    *   drawn after it (see `insertTrailFix`).
    */
 
-  function _appendTrailFix(position, epochMs, { nullAltitude = false } = {}) {
+  function _appendTrailFix(
+    position,
+    epochMs,
+    { nullAltitude = false, track = undefined } = {},
+  ) {
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     const timeMs = Number.isFinite(epochMs)
       ? epochMs
@@ -576,63 +575,31 @@ export function createTracking({
       _trailFloorPosition(position),
       timeMs,
       TRAIL_MAX_POINTS,
-      {
-        nullAltitude,
-        displayMs: flightState.now() - displayDelayMs(flightState),
-        settleMs: DR_CORRECTION_MS,
-      },
+      { nullAltitude, track },
     );
     _refreshTrailDisplay();
   }
 
   /**
    * Per-frame trail work, run before each frame draws whether or not the
-   * head is visible: record where the tracked icon is drawn (at most once a
-   * second or every 150 m, floored like the head) and move the body on as
-   * the display time passes reports. The head only reads the result.
+   * head is visible: move the body on as the display time passes reports.
+   * The head only reads the result.
    */
 
   function _trailTick() {
     if (!flightState._trackedIcao || !flightState._trail) return;
-    const displayMs = flightState.now() - displayDelayMs(flightState);
-    let changed = false;
-    if (
-      flightState._trailFixes.length &&
-      !parts.motion._isTrackWarmingUp() &&
-      !trailRecordingBlocked(flightState._trailFixes, displayMs)
-    ) {
-      const drawn = parts.motion._trackedDisplayPosition(
-        flightState._trackedIcao,
-      );
-      const last = flightState._trailRecordPosition;
-      if (
-        drawn &&
-        (!last ||
-          displayMs - flightState._trailRecordMs >= TRAIL_RECORD_STEP_MS ||
-          distance(last, drawn) >= TRAIL_RECORD_STEP_M)
-      ) {
-        flightState._trailRecordMs = displayMs;
-        flightState._trailRecordPosition = clone(drawn);
-        changed = recordTrailPoint(
-          flightState._trailFixes,
-          _trailFloorPosition(clone(drawn)),
-          displayMs,
-          TRAIL_MAX_POINTS,
-        );
-      }
-    }
-    if (changed || _trailBodyCountNow() !== flightState._trailBodyCount)
+    if (_trailBodyCountNow() !== flightState._trailBodyCount)
       _refreshTrailDisplay();
   }
 
   /**
-   * Renders the trail BODY — the accumulated fixes at or before the delayed display
-   * time (now − RENDER_DELAY_SEC). Newer fixes are AHEAD of the icon, so drawing them
-   * would push the trail in FRONT of the plane. The cheap per-frame trail head line
-   * bridges the last body point to the delayed dead-reckoned head, so the body
-   * rebuilds only on a real fix or when the display time passes one, never at motion
-   * cadence. A break lifts the pen: each segment is its own line, nothing between
-   * them.
+   * Renders the trail BODY — the reports at or before the delayed display time,
+   * joined along the curve the aircraft is drawn along. Newer reports are AHEAD of
+   * the icon, so drawing them would push the trail in FRONT of the plane. The
+   * per-frame head runs on along the same curve from the last body report to the
+   * icon, so the body rebuilds only on a real report or when the display time
+   * passes one, never at motion cadence. A break lifts the pen: each segment is
+   * its own line, nothing between them.
    */
 
   function _refreshTrailDisplay() {
@@ -644,18 +611,12 @@ export function createTracking({
     );
   }
 
-  /** Fixes at or before the time the aircraft is drawn (now − RENDER_DELAY_SEC),
-   *  less the newest recorded points inside its 3D model. */
+  /** Reports at or before the time the aircraft is drawn (now − the display delay). */
 
   function _trailBodyCountNow() {
-    return trailBodyCountOutsideModel(
+    return trailBodyCount(
       flightState._trailFixes,
-      trailBodyCount(
-        flightState._trailFixes,
-        flightState.now() - displayDelayMs(flightState),
-      ),
-      parts.motion._trackedModelCenterWorld(),
-      parts.motion._trackedModelEnvelopeM(),
+      flightState.now() - displayDelayMs(flightState),
     );
   }
 
@@ -679,10 +640,9 @@ export function createTracking({
       parts.motion._trackedTrailCached() ||
       parts.motion._trackedDisplayPosition(flightState._trackedIcao);
     if (!head) return [];
-    // The last body point (a report, or where the icon was drawn a moment
-    // ago) → the icon. No head across a break: a body point more than 150 km
-    // away, or too long ago or too far to be one path, stays detached; none
-    // while the aircraft holds at its last point.
+    // The last body report → the icon. No head across a break: a body point
+    // more than 150 km away, or too long ago or too far to be one path, stays
+    // detached; none while the aircraft holds at its last point.
     const last = trailHeadStartFix(
       flightState._trailFixes,
       head,
@@ -690,27 +650,24 @@ export function createTracking({
       flightState._trailBodyCount,
     );
     if (!last) return [];
-    const start = last.position;
     // Floor the head too (round 2): a grounded tracked contact's DR
     // display height is the pre-datum default — without this the last
-    // segment dives underground while taxiing.
+    // segment dives underground while taxiing. The model envelope is
+    // measured against the FLOORED endpoint, which is the one actually drawn.
     const end = _trailFloorPosition(clone(head));
-    // On a contact that has not moved this segment runs from inside the
-    // model out to its own anchor — a line through the fuselage. The END
-    // never gives, so a moving trail still terminates on the tail; the
-    // START is what slides, from nothing on a parked contact out to the
-    // whole segment once it has cleared its own envelope. Measured against
-    // the FLOORED endpoint, which is the one actually drawn.
-    // See trailHeadStart.
-    const from = trailHeadStart(
-      start,
+    return trailHeadLine(
+      last.position,
+      // Along the curve the icon is drawn along, to where it is now.
+      trailHeadCurvePoints(
+        flightState._trailFixes,
+        flightState._trailBodyCount,
+        flightState.now() - displayDelayMs(flightState),
+      ),
       end,
       parts.motion._trackedModelCenterWorld(),
       parts.motion._trackedModelEnvelopeM(),
       flightState._scratchTrailHead,
     );
-    if (!from) return [];
-    return [from, end];
   }
 
   /** Each drawn frame, before it draws: the trail moved on, then the live
@@ -730,11 +687,9 @@ export function createTracking({
   function _startTrail(icao24) {
     flightState._trailBackfillToken += 1;
     flightState._trailFixes = [];
-    flightState._trailRecordPosition = null;
-    flightState._trailRecordMs = -Infinity;
     const history = flightState._positionHistory.get(icao24) || [];
     // Seed every report. The body only draws those at or before the delayed
-    // display time (now − RENDER_DELAY_SEC); newer ones join it as the display
+    // display time (now − displayDelayMs); newer ones join it as the display
     // passes them. A synthetic forward fix (it carries `reportEpochMs`) is a
     // motion aid, never a report. A report drawn at an invented height keeps
     // no position and breaks the line.
@@ -748,7 +703,11 @@ export function createTracking({
         _trailFloorPosition(clone(fix.position)),
         historyFixEpochMs(fix),
         TRAIL_MAX_POINTS,
-        { nullAltitude: fix.inventedHeight === true, onGround: fix.onGround },
+        {
+          nullAltitude: fix.inventedHeight === true,
+          onGround: fix.onGround,
+          track: fix.track,
+        },
       );
     }
     if (!flightState._trail && flightState._viewer) {
@@ -899,8 +858,6 @@ export function createTracking({
   function _clearTrail() {
     flightState._trailBackfillToken += 1;
     flightState._trailFixes = [];
-    flightState._trailRecordPosition = null;
-    flightState._trailRecordMs = -Infinity;
     if (flightState._trail) flightState._trail.clear();
     flightState._trailHeadOff?.();
     flightState._trailHeadOff = null;

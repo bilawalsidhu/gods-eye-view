@@ -621,3 +621,31 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     track: Number.isFinite(next.track) ? next.track : previousTrack,
   };
 }
+
+/** @constant {number} The shortest ease (ms) from where a contact was drawn onto where a new report puts it. */
+export const RECOVER_MIN_MS = 3_000;
+/** @constant {number} An ease never moves a contact faster than its speed by more than this share... */
+export const RECOVER_MAX_EXTRA_SPEED = 0.3;
+/** @constant {number} ...unless that would take longer than this (ms). */
+export const RECOVER_MAX_MS = 20_000;
+/** @constant {number} Farther than this (m) from where a new report puts it, a contact jumps there. */
+export const RECOVER_SNAP_M = 5_000;
+/** @constant {number} Closer than this (m), it is simply drawn there. */
+export const RECOVER_MIN_M = 5;
+
+/**
+ * How long (ms) a contact drawn `errorM` off where a new report puts it eases
+ * onto that place: at least RECOVER_MIN_MS, and long enough that the ease
+ * adds at most RECOVER_MAX_EXTRA_SPEED of its speed, so it never looks like
+ * a jump, up to RECOVER_MAX_MS.
+ * @param {number} errorM
+ * @param {number} speedMps
+ * @returns {number}
+ */
+export function recoveryMs(errorM, speedMps) {
+  const extraMps = RECOVER_MAX_EXTRA_SPEED * Math.max(speedMps || 0, 10);
+  return Math.min(
+    RECOVER_MAX_MS,
+    Math.max(RECOVER_MIN_MS, (errorM / extraMps) * 1000),
+  );
+}

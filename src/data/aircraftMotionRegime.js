@@ -7,6 +7,7 @@ import {
   secondsDifference,
 } from '../geo/julian.js';
 import { clone, distance } from '../geo/vector.js';
+import { curvePieceAt, fixCurveCached } from './fixCurve.js';
 import {
   COAST_MAX_SPEED_MPS,
   courseBetweenCartesians,
@@ -76,12 +77,54 @@ export function historyFix(epochMs, position, velocity, track) {
   };
 }
 
+/**
+ * Whether a history fix is a forward synthetic fix (a motion aid built from
+ * a repeated report's new speed or course, `synthesizeForwardKinematicsFix`)
+ * rather than a report.
+ */
+export const isSyntheticFix = (fix) => Number.isFinite(fix?.reportEpochMs);
+
+/**
+ * Put a new report at the end of a contact's history: forward synthetic
+ * fixes after the previous report go (the report supersedes them), and past
+ * `limit` the oldest fixes go.
+ * @param {Array<object>} history Oldest first; mutated.
+ * @param {object} fix The report's history fix.
+ * @param {number} limit
+ */
+export function pushReport(history, fix, limit) {
+  while (history.length && isSyntheticFix(history[history.length - 1]))
+    history.pop();
+  history.push(fix);
+  while (history.length > limit) history.shift();
+}
+
+/** The newest report in a history (not a synthetic fix), or undefined. */
+export function newestReport(history) {
+  for (let i = history.length - 1; i >= 0; i--)
+    if (!isSyntheticFix(history[i])) return history[i];
+  return undefined;
+}
+
+/** The curve a contact is drawn along between two history fixes, or null. */
+export function historyCurve(a, b) {
+  return fixCurveCached(
+    a.position,
+    fixEpochMs(a),
+    a.track,
+    b.position,
+    fixEpochMs(b),
+    b.track,
+  );
+}
+
 /** A reusable result for `aircraftMotionRegime`. */
 export function createMotionRegime() {
   return {
     kind: 'fix',
     a: null,
     b: null,
+    piece: null,
     span: 0,
     speed: 0,
     trackFrom: 0,
@@ -100,8 +143,11 @@ export function createMotionRegime() {
  * Which motion an aircraft's history gives at `renderTime` — the one choice
  * the CPU dead reckoning and the icon planner (GPU segment) both draw from.
  *
- * - `between`: interpolate the bracketing pair `a`→`b`, no extrapolation
- *   error and no snap-back. The course of the DISPLAYED motion blends the
+ * - `between`: between the bracketing pair `a`→`b`, no extrapolation
+ *   error and no snap-back. Along their curve (`data/fixCurve`) when the
+ *   pair describes one: `piece` is the curve's piece at `renderTime`, a
+ *   contract `arc` segment with its times. Otherwise straight from `a` to
+ *   `b` (`piece` null), and the course of the DISPLAYED motion blends the
  *   time-interpolated reported track toward the chord by `blend`: the chord
  *   is only trustworthy when the segment covers real ground (at hover its
  *   direction is GPS jitter; on a slow tight turn it STEPS the whole
@@ -136,43 +182,59 @@ export function aircraftMotionRegime(
   result,
   { cachedGroundFloor } = {},
 ) {
-  for (let i = history.length - 1; i >= 1; i--) {
-    const a = history[i - 1];
-    const b = history[i];
+  // A synthetic fix a later report superseded is not on the path: the
+  // contact is drawn report to report, as its trail is.
+  let report = history.length - 1;
+  while (report >= 0 && isSyntheticFix(history[report])) report--;
+  let b = null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const a = history[i];
+    if (i < report && isSyntheticFix(a)) continue;
+    const pairB = b;
+    b = a;
+    if (!pairB) continue;
     if (
       !julianLessThanOrEquals(a.time, renderTime) ||
-      !julianLessThanOrEquals(renderTime, b.time)
+      !julianLessThanOrEquals(renderTime, pairB.time)
     )
       continue;
-    const span = secondsDifference(b.time, a.time);
-    const chordLenM = distance(a.position, b.position);
+    const span = secondsDifference(pairB.time, a.time);
+    const chordLenM = distance(a.position, pairB.position);
     const speed =
       span > 0 ? chordLenM / span : (info && info[fields.speed]) || 0;
     const fallbackTrack = (info && info[fields.track]) || 0;
     const trackFrom = Number.isFinite(a.track) ? a.track : fallbackTrack;
     const blend = info && info.klass === 'helicopter' ? 0 : speedRamp(speed);
+    const curve = span > 0 ? historyCurve(a, pairB) : null;
     result.kind = 'between';
     result.a = a;
-    result.b = b;
+    result.b = pairB;
+    result.piece = curve
+      ? curvePieceAt(curve, julianToEpochMs(renderTime))
+      : null;
     result.span = span;
     result.speed = speed;
     result.trackFrom = trackFrom;
-    result.trackTo = Number.isFinite(b.track) ? b.track : trackFrom;
+    result.trackTo = Number.isFinite(pairB.track) ? pairB.track : trackFrom;
     result.chordCourse =
-      blend > 0 ? courseBetweenCartesians(a.position, b.position) : null;
+      blend > 0 ? courseBetweenCartesians(a.position, pairB.position) : null;
     result.blend = blend;
     return result;
   }
   const newest = history[history.length - 1];
   const warming = julianLessThan(renderTime, history[0].time);
   result.kind = 'fix';
+  result.piece = null;
   result.fix = warming ? history[0] : newest;
   result.speed = fixSpeedMps(result.fix, info, fields);
   result.heading = fixTrackDeg(result.fix, info, fields);
-  result.turnRateDps = (info && info.turnRateDps) || 0;
+  // Past the newest report it flies straight on along its course: a turn
+  // rate averaged over earlier reports outlives the turn it measured, and
+  // coasting on it put contacts kilometres off a straight path.
+  result.turnRateDps = 0;
   result.minDt = -60;
   // A warm-up ends when real time reaches the oldest fix; a single fix keeps
-  // coasting forward on the same arc.
+  // coasting forward on the same line.
   result.maxDt =
     warming && history.length > 1
       ? 0

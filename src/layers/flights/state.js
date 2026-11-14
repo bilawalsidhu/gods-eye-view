@@ -1,7 +1,12 @@
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
 import { worldTimeFor } from '../../time/worldClock.js';
-import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
+import { createDisplayDelay } from '../../data/displayDelay.js';
+import {
+  ENRICH_AMBIENT_BUDGET_CEIL,
+  POLL_INTERVAL_MS,
+  RENDER_DELAY_SEC,
+} from './policy.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
@@ -14,6 +19,12 @@ export function createFlightState({ source, services }) {
   });
   /** The time contacts are drawn behind by the render delay, in epoch ms. */
   flightState.now = worldTimeFor('flights');
+  /** How far behind real time live contacts are drawn: follows how late the
+   *  feed's reports arrive (see displayDelayMs in policy.js). */
+  flightState._displayDelay = createDisplayDelay({
+    floorMs: RENDER_DELAY_SEC * 1000,
+    pollMs: POLL_INTERVAL_MS,
+  });
   /** Follows the world clock while the source declares a timeline (set by the
    *  layer); see followsClock and displayDelayMs in policy.js. */
   flightState.timeline = null;
@@ -154,24 +165,15 @@ export function createFlightState({ source, services }) {
 
   flightState._trailHeadOff = null;
 
-  /** @type {{position: {x: number, y: number, z: number}|null, timeMs: number, nullAltitude: boolean, breakBefore: boolean, drawn?: boolean}[]}
-   *  Chronological tracked-aircraft trail (oldest first): reports, and
-   *  (`drawn`) where the icon was drawn between them; `breakBefore` starts a
-   *  new segment. */
+  /** @type {{position: {x: number, y: number, z: number}|null, timeMs: number, nullAltitude: boolean, breakBefore: boolean, track?: number}[]}
+   *  Chronological tracked-aircraft trail (oldest first): reports, joined along
+   *  the curve the icon is drawn along; `breakBefore` starts a new segment. */
 
   flightState._trailFixes = [];
 
   /** @type {number} Body fixes drawn: those at or before the display time. */
 
   flightState._trailBodyCount = 0;
-
-  /** @type {{x: number, y: number, z: number}|null} Where the tracked icon was last recorded into the trail. */
-
-  flightState._trailRecordPosition = null;
-
-  /** @type {number} Display time (epoch ms) of that recording. */
-
-  flightState._trailRecordMs = -Infinity;
 
   /** @type {string|undefined} The stale cue last written into the tracked label (see `_staleCueTick`). */
 
@@ -328,9 +330,16 @@ export function createFlightState({ source, services }) {
 
   flightState._drCorrectionStartMs = 0;
 
+  /** How long (ms) the correction under way takes to ease out. */
+  flightState._drCorrectionMs = 0;
+
   flightState._drPrevRaw = { x: 0, y: 0, z: 0 };
 
   flightState._drPrevDisplay = { x: 0, y: 0, z: 0 };
+
+  /** How the tracked icon moved over the last frame, and that frame's length (s; 0 for none). */
+  flightState._drPrevStep = { x: 0, y: 0, z: 0 };
+  flightState._drPrevStepSec = 0;
 
   flightState._drPrevMs = 0;
 

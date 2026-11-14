@@ -14,9 +14,9 @@ const rgba = (css, alpha) =>
  * Renders aircraft as amber chevrons in one GPU icon set (iconSet.js), whose
  * shader dead-reckons and orients every row. Supports click-to-track: selecting an aircraft
  * spawns an Entity the camera follows, whose position is driven by a
- * dead-reckoning CallbackProperty. The whole fleet renders at
- * now - RENDER_DELAY_SEC so positions interpolate BETWEEN two known fixes
- * instead of extrapolating ahead and snapping back when the next poll lands.
+ * dead-reckoning CallbackProperty. The whole fleet renders at now − the
+ * display delay so positions run BETWEEN two known fixes instead of
+ * extrapolating ahead and snapping back when the next poll lands.
  */
 
 /** @constant {number} Milliseconds to wait before retrying after a transient error */
@@ -123,7 +123,7 @@ export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
 // ---------------------------------------------------------------------------
 // Track-history trail state (PRD WS-F F2/F4): a fading polyline behind the
 // tracked aircraft. The accumulation array is intentionally SEPARATE from
-// _positionHistory (capped at POSITION_HISTORY_LIMIT=5 for dead reckoning)
+// _positionHistory (capped at POSITION_HISTORY_LIMIT for drawing)
 // so the visible trail can grow to TRAIL_MAX_POINTS fixes.
 // ---------------------------------------------------------------------------
 
@@ -136,25 +136,33 @@ export const TRAIL_COLOR = '#FFB800';
 export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
-// Render-behind smoothing (mirrors flights.js): the fleet renders at
-// now - RENDER_DELAY_SEC so positions interpolate BETWEEN two known fixes
-// instead of extrapolating ahead and snapping back when the next poll lands.
-// Removing the delay reintroduces the back/forward oscillation and is a
-// regression.
+// Render-behind smoothing (mirrors flights): the fleet renders at now − the
+// display delay so positions run BETWEEN two known fixes instead of
+// extrapolating ahead and snapping back when the next poll lands. The delay
+// follows how late the feed really is (data/displayDelay.js), never under
+// RENDER_DELAY_SEC, and every consumer shares it. Removing the delay
+// reintroduces the back/forward oscillation and is a regression.
 // ---------------------------------------------------------------------------
 
-/** @constant {number} Display latency in seconds (= one poll interval). */
+/** @constant {number} The shortest display delay in seconds (one poll interval). */
 
 export const RENDER_DELAY_SEC = 15;
+
+/** @constant {number} How often the feed is polled (ms). */
+
+export const POLL_INTERVAL_MS = 15_000;
 
 /** Whether the layer shows the world clock's time instead of the live feed:
  *  its source declares a timeline and the clock is away from live. */
 export const followsClock = (state) => state.timeline?.active() === true;
 
-/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
- *  following the clock, whose snapshots are loaded ahead of the time. */
+/** How far behind the time contacts are drawn (ms): the feed's display
+ *  delay live, none following the clock, whose snapshots are loaded ahead
+ *  of the time. */
 export const displayDelayMs = (state) =>
-  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
+  followsClock(state)
+    ? 0
+    : (state._displayDelay?.currentMs ?? RENDER_DELAY_SEC * 1000);
 
 /** @constant {number} Polls an aircraft may miss before removal (transient adsb.lol dropouts). */
 

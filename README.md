@@ -532,7 +532,7 @@ _Walk the boneyard: rows of retired airframes, fully resolved in 3D._
 How the globe handles live data:
 
 - **World-stable icons.** Aircraft and ships point along their _true real-world heading_ at every camera angle — tracked or not, looking straight down or across the horizon — via per-frame screen-space course projection. No spinning, no viewport-locking.
-- **Smooth motion from choppy data.** Live feeds arrive every 15–30s; the globe renders one interval behind real time and interpolates between known fixes. Dead reckoning fills the gaps.
+- **Smooth motion from choppy data.** Live feeds arrive every 15–30s, often minutes late; the globe renders as far behind real time as the feed is late (at least one interval) and draws each aircraft along a smooth curve between its known fixes. Dead reckoning fills the gaps.
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.

@@ -155,6 +155,10 @@ test('a hidden contact shown again is where dead reckoning puts it now', (t) => 
   const coastMps = 250;
   const { flightState, icons, set } = setup({
     motion: {
+      // Shown at the first fix when first planned 2 s on: it eases onto the
+      // path toward where it is on it then.
+      _deadReckon: () => null,
+      _displayTimeAt: (ms) => Cesium.JulianDate.fromDate(new Date(ms)),
       // Between the two fixes until the newer one, then a coast past it.
       _motionRegime: (_history, _info, renderTime) => {
         const ms = Cesium.JulianDate.toDate(renderTime).getTime();

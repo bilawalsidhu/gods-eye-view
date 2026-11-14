@@ -7,7 +7,6 @@ import {
   COURSE_MAX_DPS,
   FLOOR_FAR_EVERY_TICKS,
   FLOOR_NEAR_M,
-  RENDER_DELAY_SEC,
   STALE_ALPHA,
   followsClock,
 } from './policy.js';
@@ -27,7 +26,7 @@ export function createIcons({ flightState, services, parts }) {
     services,
     parts,
     layerId: 'flights',
-    renderDelaySec: RENDER_DELAY_SEC,
+    displayDelay: flightState._displayDelay,
     followsClock: () => followsClock(flightState),
     staleAlpha: STALE_ALPHA,
     courseMaxDps: COURSE_MAX_DPS,

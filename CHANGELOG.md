@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Aircraft no longer jump ahead or back, and their trails no longer kink,
+  when the feed is late. The civil and military layers draw as far behind
+  real time as their feed is late (the 90th percentile of recent report
+  lags plus 5 s, at least 30 s civil and 15 s military, at most five
+  minutes), so an aircraft is placed between two real reports rather than
+  dead reckoned past them; the delay changes slowly, and the icons, the
+  renderer's live clock, labels, the HUD, detection, the tracked camera and
+  the trail all read the same one. Between two reports an aircraft flies
+  one smooth curve that leaves each report along its track, sent to the
+  renderer as `arc` segments; its trail is its reports joined along that
+  same curve, so the icon always sits on it. A late report a coasting
+  aircraft missed is eased onto, at most 30% faster than it flies; past
+  its newest report an aircraft coasts straight on (samehkhamis).
 - The Display panel has a Sky group on a renderer with a sky to set: the
   atmosphere, day and night (sun lighting by scene time), the sun, the
   moon, the stars and the Milky Way's brightness. The choice is kept for the

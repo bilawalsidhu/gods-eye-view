@@ -110,7 +110,7 @@ export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
 // ---------------------------------------------------------------------------
 // Track-history trail state (PRD WS-F F1/F4): a fading polyline behind the
 // tracked aircraft. The accumulation array is intentionally SEPARATE from
-// _positionHistory (capped at POSITION_HISTORY_LIMIT=5 for dead reckoning)
+// _positionHistory (capped at POSITION_HISTORY_LIMIT for drawing)
 // so the visible trail can grow to TRAIL_MAX_POINTS fixes.
 // ---------------------------------------------------------------------------
 
@@ -123,26 +123,36 @@ export const TRAIL_COLOR = '#00d4ff';
 export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
-// Render-behind smoothing (PRD WS-C C2 — approved product decision):
-// the fleet renders at now - RENDER_DELAY_SEC so positions interpolate
-// BETWEEN two known fixes instead of extrapolating ahead and snapping back
-// when the next poll lands. All consumers (labels, HUD, detection,
-// frame_overhead) share this delayed clock; removing the delay reintroduces
-// the back/forward oscillation and is a regression.
+// Render-behind smoothing (PRD WS-C C2 — approved product decision): the fleet
+// renders at now − the display delay so positions run BETWEEN two known
+// fixes instead of extrapolating ahead and snapping back when the next poll
+// lands. The delay follows how late the feed really is (data/displayDelay.js:
+// the 90th percentile of how long the display waits for each next report,
+// plus 5 s, changed slowly), never under RENDER_DELAY_SEC. All consumers
+// (labels, HUD, detection, frame_overhead, the tracked camera, trails and the
+// renderer's motion clock) share this one delayed clock; removing the delay
+// reintroduces the back/forward oscillation and is a regression.
 // ---------------------------------------------------------------------------
 
-/** @constant {number} Display latency in seconds (= one poll interval). */
+/** @constant {number} The shortest display delay in seconds (one poll interval). */
 
 export const RENDER_DELAY_SEC = 30;
+
+/** @constant {number} How often the feed is polled (ms). */
+
+export const POLL_INTERVAL_MS = 30_000;
 
 /** Whether the layer shows the world clock's time instead of the live feed:
  *  its source declares a timeline and the clock is away from live. */
 export const followsClock = (state) => state.timeline?.active() === true;
 
-/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
- *  following the clock, whose snapshots are loaded ahead of the time. */
+/** How far behind the time contacts are drawn (ms): the feed's display
+ *  delay live, none following the clock, whose snapshots are loaded ahead
+ *  of the time. */
 export const displayDelayMs = (state) =>
-  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
+  followsClock(state)
+    ? 0
+    : (state._displayDelay?.currentMs ?? RENDER_DELAY_SEC * 1000);
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 

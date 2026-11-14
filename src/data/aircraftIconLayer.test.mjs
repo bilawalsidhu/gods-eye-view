@@ -9,6 +9,7 @@ import {
 import { COAST_FLOOR_LIFT_M } from './motionModel.js';
 import { fromDegrees, toCartographicRadians } from '../geo/ellipsoid.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { createDisplayDelay } from './displayDelay.js';
 
 const WORLD_MS = Date.UTC(2026, 10, 1, 12, 0);
 
@@ -43,6 +44,48 @@ test('following the world clock, contacts draw at the world’s time on the scen
   following = false;
   icons._syncMotionClock();
   assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 30_000 });
+  icons._disposeIcons();
+});
+
+test('as the display delay moves, the renderer’s live clock and the layer’s display time move with it; the world clock ignores it', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
+  let following = false;
+  const state = { _viewer: viewer, now: () => Date.now() };
+  const delay = createDisplayDelay({ floorMs: 30_000, pollMs: 30_000 });
+  const icons = createAircraftIcons({
+    state,
+    services: { focus: { focusPassIsNeeded: () => false } },
+    parts: {},
+    layerId: 'flights',
+    displayDelay: delay,
+    followsClock: () => following,
+    courseMaxDps: 3,
+    cockpitContactSizePx: 8,
+  });
+  icons._createIcons(viewer);
+  const set = draw.find('flights-icons:');
+  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 30_000 });
+  // Reports 90 s old every 30 s: the delay heads for about two minutes.
+  for (let i = 0; i < 20; i++)
+    delay.noteReport(WORLD_MS, WORLD_MS - 90_000, WORLD_MS - 120_000);
+  delay.settle(WORLD_MS);
+  t.mock.timers.setTime(WORLD_MS + 10_000);
+  icons._syncMotionClock();
+  // 10 s at 0.2 s/s: 2 s more, on both the renderer's clock and the layer's.
+  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 32_000 });
+  assert.equal(icons._displayMs(), Date.now() - 32_000);
+  // Following the world clock: no delay, and it is not moved on meanwhile.
+  following = true;
+  t.mock.timers.setTime(WORLD_MS + 20_000);
+  icons._syncMotionClock();
+  assert.deepEqual(set.spec.motionClock, { kind: 'scene' });
+  assert.equal(icons._displayMs(), Date.now());
+  assert.equal(delay.currentMs, 32_000);
+  following = false;
+  icons._syncMotionClock();
+  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 34_000 });
   icons._disposeIcons();
 });
 

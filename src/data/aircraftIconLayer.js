@@ -2,13 +2,18 @@ import {
   COAST_FLOOR_LIFT_M,
   COURSE_HOLD_SPEED_MPS,
   courseSlewCapDps,
+  RECOVER_MIN_M,
+  RECOVER_SNAP_M,
+  recoveryMs,
 } from './motionModel.js';
+import { straightSegment } from './fixCurve.js';
 import {
   norm180,
   distance,
   clone,
   copyInto,
   toDegrees,
+  vec,
 } from '../geo/vector.js';
 import { fromRadians, toCartographicRadians } from '../geo/ellipsoid.js';
 import { horizonFrom, liftedForHorizon } from '../geo/horizon.js';
@@ -349,6 +354,14 @@ export function floorCoastArc(arc, t, cachedGroundFloor) {
 
 let instances = 0;
 
+/** A plan that ran out longer ago than this (ms) is not eased away from. */
+const RECOVER_STALE_PLAN_MS = 1_000;
+
+/** A display delay that never changes (ms). */
+function fixedDelay(ms) {
+  return { currentMs: ms, step: () => ms };
+}
+
 /**
  * An aircraft layer's contacts as one icon draw set: each item's motion
  * segment mirrors the layer's dead reckoning for the delayed display time,
@@ -369,7 +382,10 @@ let instances = 0;
  * @param {object} options.services The layer's services (`focus`).
  * @param {object} options.parts The layer's parts (`motion`, `rendering`).
  * @param {string} options.layerId Pick and focus owner id.
- * @param {number} options.renderDelaySec How far behind real time contacts draw.
+ * @param {{currentMs: number, step: (nowMs: number) => number}} [options.displayDelay]
+ *   How far behind real time contacts draw (`data/displayDelay`), stepped
+ *   once a frame; the renderer's motion clock follows it.
+ * @param {number} [options.renderDelaySec] A fixed delay instead.
  * @param {() => boolean} [options.followsClock] True while the layer follows
  *   the world clock: contacts draw at the world's time (`state.now()`, the
  *   scene's time) with no delay.
@@ -389,7 +405,8 @@ export function createAircraftIcons({
   services,
   parts,
   layerId,
-  renderDelaySec,
+  renderDelaySec = 0,
+  displayDelay = fixedDelay(renderDelaySec * 1000),
   followsClock = () => false,
   staleAlpha = 0.45,
   courseMaxDps,
@@ -400,29 +417,40 @@ export function createAircraftIcons({
   onForget = () => {},
 }) {
   const { focusPassIsNeeded } = services.focus;
-  const delayMs = renderDelaySec * 1000;
   // The near-image switch the rows were last written with (CSS px).
   let switchPx = nearImageSwitchPx(1);
 
   /** The delayed instant (epoch ms) every untracked contact is drawn at. */
   const _displayMs = () =>
-    followsClock() ? state.now() : Date.now() - delayMs;
-  /** The live draw set, and whether its motion clock is the scene's. */
+    followsClock() ? state.now() : Date.now() - displayDelay.currentMs;
+  /** The live draw set, whether its motion clock is the scene's, and the
+   *  delay its live clock was last given. */
   let liveSet = null;
   let sceneClock = false;
+  let sentDelayMs = NaN;
 
   /** The motion clock for whether the layer follows the world clock. */
   const motionClock = (scene) =>
-    scene ? { kind: 'scene' } : { kind: 'live', delayMs };
+    scene
+      ? { kind: 'scene' }
+      : { kind: 'live', delayMs: displayDelay.currentMs };
 
   /**
-   * Put the set's motion on the scene's clock (the world's time) while the
-   * layer follows the world clock, on the delayed live clock otherwise.
+   * Once a frame: move the display delay on, and put the set's motion on
+   * the scene's clock (the world's time) while the layer follows the world
+   * clock, on the delayed live clock otherwise, with the delay as it is now.
    */
   function _syncMotionClock() {
     const scene = followsClock();
-    if (!liveSet || scene === sceneClock) return;
+    if (!scene) displayDelay.step(Date.now());
+    if (!liveSet) return;
+    if (
+      scene === sceneClock &&
+      (scene || sentDelayMs === displayDelay.currentMs)
+    )
+      return;
     sceneClock = scene;
+    sentDelayMs = scene ? NaN : displayDelay.currentMs;
     liveSet.setOptions({ motionClock: motionClock(scene) });
   }
 
@@ -443,6 +471,7 @@ export function createAircraftIcons({
     set.setColumns?.({ ids: [] });
     liveSet = set;
     sceneClock = followsClock();
+    sentDelayMs = sceneClock ? NaN : displayDelay.currentMs;
     switchPx = _imageSwitchPx(viewer);
     state._icons = createContactIcons(set, {
       capabilities: rendererOf(viewer)?.capabilities ?? null,
@@ -537,7 +566,15 @@ export function createAircraftIcons({
     let pos;
     let course;
     let expiresAt = Infinity;
-    if (regime.kind === 'between') {
+    if (regime.kind === 'between' && regime.piece) {
+      // Along the curve between the two reports, a piece at a time.
+      const segment = regime.piece.segment;
+      speed = segment.speedMps;
+      motion = { ...segment, fix: clone(segment.fix) };
+      pos = clone(segment.fix);
+      course = motionCourse(motion, undefined, t);
+      expiresAt = regime.piece.t1;
+    } else if (regime.kind === 'between') {
       const { a, b, span, trackFrom, trackTo, chordCourse } = regime;
       speed = regime.speed;
       const blend = chordCourse == null ? 0 : regime.blend;
@@ -595,6 +632,40 @@ export function createAircraftIcons({
           }
           expiresAt = Math.min(expiresAt, floored.expiresAt);
         }
+      }
+    }
+    // A new report that puts a moving contact somewhere else than it is
+    // drawn now (it was coasting past its newest report): it eases from
+    // where it is onto the new path instead of jumping, unless that is
+    // farther than a jump would be anyway.
+    // Only a row on screen whose plan is still running (a hidden row, or one
+    // whose motion ran out long ago, is simply drawn where it is now).
+    if (
+      fromCourseDeg == null &&
+      icons.shown(icao24) &&
+      icons.expires(icao24) > t - RECOVER_STALE_PLAN_MS
+    ) {
+      const prev = icons.item(icao24);
+      const drawn = motionPosition(prev.motion, prev.pos, t);
+      const next = motionPosition(motion, pos, t);
+      const errorM = distance(drawn, next);
+      if (
+        errorM > RECOVER_MIN_M &&
+        errorM < RECOVER_SNAP_M &&
+        speed >= COURSE_HOLD_SPEED_MPS &&
+        !same(prev.motion, motion)
+      ) {
+        const end = t + recoveryMs(errorM, speed);
+        // Where the new path has it by then, past this plan if need be.
+        const target = parts.motion._deadReckon(
+          icao24,
+          vec(),
+          parts.motion._displayTimeAt(end),
+        );
+        motion = straightSegment(drawn, t, end, target ?? next);
+        pos = clone(drawn);
+        course = motionCourse(motion, undefined, t);
+        expiresAt = end;
       }
     }
     // Below hover speed the nose holds what is on screen (or, for a new row,

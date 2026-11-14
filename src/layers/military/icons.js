@@ -2,7 +2,6 @@ import { createAircraftIcons } from '../../data/aircraftIconLayer.js';
 import {
   COCKPIT_CONTACT_SIZE_PX,
   COURSE_MAX_DPS,
-  RENDER_DELAY_SEC,
   STALE_ALPHA,
   followsClock,
 } from './policy.js';
@@ -14,7 +13,7 @@ export function createIcons({ flightState, services, parts }) {
     services,
     parts,
     layerId: 'military',
-    renderDelaySec: RENDER_DELAY_SEC,
+    displayDelay: flightState._displayDelay,
     followsClock: () => followsClock(flightState),
     staleAlpha: STALE_ALPHA,
     courseMaxDps: COURSE_MAX_DPS,

@@ -221,6 +221,39 @@ export function trailHeadStart(start, anchor, center, radiusM, result) {
 }
 
 /**
+ * The live head line from the last trail report through `points` (on the
+ * way to the aircraft) to `head`, as drawn: points inside the model's
+ * envelope are left out, and the link into the model slides as
+ * `trailHeadStart` decides (nothing on a contact that has not moved).
+ * @param {{x:number,y:number,z:number}} start The last body report.
+ * @param {Array<{x:number,y:number,z:number}>} points Between it and the head.
+ * @param {{x:number,y:number,z:number}} head The aircraft's trail anchor.
+ * @param {{x:number,y:number,z:number}|null} center Model origin, or null.
+ * @param {number|null} radiusM Rendered bounding radius.
+ * @param {{x:number,y:number,z:number}} result Scratch for the slid start.
+ * @returns {Array<{x:number,y:number,z:number}>} Empty when nothing is drawn.
+ */
+export function trailHeadLine(start, points, head, center, radiusM, result) {
+  const outside = (p) =>
+    !center ||
+    !(radiusM > 0) ||
+    Math.hypot(p.x - center.x, p.y - center.y, p.z - center.z) >= radiusM;
+  const line = [start];
+  for (const p of points) if (outside(p)) line.push(p);
+  // On a contact that has not moved the last link runs from inside the model
+  // out to its own anchor — a line through the fuselage. The END never gives,
+  // so a moving trail still terminates on the tail; the START is what
+  // slides, from nothing on a parked contact out to the whole link once it
+  // has cleared its own envelope.
+  const from = trailHeadStart(line.pop(), head, center, radiusM, result);
+  if (!from)
+    return line.length ? [...line, { x: head.x, y: head.y, z: head.z }] : [];
+  line.push(from === result ? { x: from.x, y: from.y, z: from.z } : from);
+  line.push({ x: head.x, y: head.y, z: head.z });
+  return line;
+}
+
+/**
  * Transform a model-local visual centre into world coordinates without
  * allocating. `modelMatrix` continues to own the model origin (including
  * ground snapping); bracket/readout and trail consumers supply their own

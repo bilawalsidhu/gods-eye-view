@@ -17,6 +17,7 @@ import {
   LANDED_SPEED_MAX_MPS,
   FOCUS_EVIDENCE_DEV,
   FLEET_DR_INTERVAL_MS,
+  POLL_INTERVAL_MS,
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
@@ -311,7 +312,7 @@ export function createQueries({
       parts.testing._clearDisplayFloorStateForTest,
 
     /** @type {number} Polling interval (ms) between update() calls */
-    updateInterval: 30000,
+    updateInterval: POLL_INTERVAL_MS,
 
     /**
      * Live layer params.

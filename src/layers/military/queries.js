@@ -15,6 +15,7 @@ import {
 import {
   LANDED_ALT_MAX_FT,
   LANDED_SPEED_MAX_MPS,
+  POLL_INTERVAL_MS,
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
@@ -234,7 +235,7 @@ export function createQueries({
     source: flightState.feed._lastSource,
 
     /** @type {number} Polling interval in ms between API fetches */
-    updateInterval: 15000,
+    updateInterval: POLL_INTERVAL_MS,
 
     /** @deprecated Compatibility alias for {@link enable}. */
     show(viewer) {

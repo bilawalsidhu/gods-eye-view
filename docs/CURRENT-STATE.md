@@ -1771,31 +1771,29 @@ A tracked civil or military aircraft's trail (`src/data/trailContinuity.js`) lif
 the pen, drawing nothing, between two points more than 48 minutes or over 1,500 kt
 apart (a parked aircraft within 0.1 nm keeps one line for up to three hours) and at a
 waypoint with no altitude; a ground waypoint is drawn on the ground. The head joins the
-aircraft only within 150 km. Each trail keeps up to 2,000 points, a full day of history
-at one fix per minute plus the live session; past that the oldest recorded points go
-first, and the oldest reports only once none are left. The renderer
+aircraft only within 150 km. Each trail keeps up to 2,000 reports, a full day of history
+at one fix per minute plus the live session; past that the oldest go first. The renderer
 (`src/data/trailRenderer.js`) freezes every chunk of 128 points except the newest into
 static geometry, so a long trail costs about as much per frame as a short one;
 `scripts/qa-trail-freeze.mjs` checks that a freeze never shows a blank frame.
-While an aircraft is tracked, its trail between reports is the path its icon was
-drawn along: the displayed position is recorded about once a second or every 150 m
-(`recordTrailPoint`). Recorded points are thinned by shape: one stays only where
-dropping it would move the line more than 30 m across the track or in height from any
-position it stood for, or leave a straight piece longer than 10 km, so straight flight
-adds a vertex every 10 km at most and a turn keeps its curve. A recorded point that
-would turn the line back sharper than 120° over a short step is dropped. Reports stay
-in the trail as anchors, in time order. Recorded points never join two reports that are
-not one flight under the 48-minute and 1,500 kt rules; the points between them go and
-nothing is recorded across such a pair. A report for a time the display has already
-passed replaces what was drawn after it, and nothing is recorded until the icon has
-eased onto it, so the line reads arc, report, corrected path. History from before tracking started, and the backfill, run report to report.
+A trail holds the aircraft's reports and nothing else, in time order: what the icon was
+drawn at between them is never kept, so a late report cannot leave a kink. Between two
+reports that are one flight and both carry a track, the icon is drawn along, and the
+trail drawn through, one curve (`src/data/fixCurve.js`): a biarc, two constant-rate
+turns sent to the renderer as contract `arc` segments, passing through both reports and
+leaving each along its reported track, so the icon sits on its trail with no offset.
+Pairs with no track, slower than 40 m/s, or with a track more than 75° off the line
+between them are joined straight. The trail samples the curve at least every degree of
+turn. History from before tracking started, and the backfill, run report to report the
+same way.
 The trail never runs past the icon or through its 3D model, and the head runs from the
 newest kept point outside the model to the icon (to the model's tail when the model is
-the visual). A contact with no new report coasts along its reported track for 5 minutes
-past its last real report, at no more than 1,500 kt and never below known ground, then stops;
+the visual). A contact with no new report coasts straight on along its reported track for 5 minutes
+past its last real report (no turn: a turn rate measured over earlier reports outlives
+the turn), at no more than 1,500 kt and never below known ground, then stops;
 one that
 went quiet on the ground, or within 150 m of a known ground floor, holds at its last
-report, records nothing and draws no head (with the ground unknown, a low barometric
+report and draws no head (with the ground unknown, a low barometric
 altitude alone does not hold it). The hold-or-coast choice is made once per report (`staleHoldsForFix`
 in `src/data/motionModel.js`), and the forward fix built when a repeated position carries
 new speed or course follows the same rules and is never a trail report. A live report
@@ -6662,7 +6660,7 @@ silently demoting every later lookup for the session.
 
 ### Motion & Symbology Correctness (June 10, 2026)
 
-- **Flights (commercial + military)** render one poll interval behind real time (30s/15s) and interpolate between two known feed-stamped fixes (OpenSky `time_position`; adsb.lol `receipt − seen_pos`). The display latency is an intentional product decision — do not "fix" it away. The whole fleet dead-reckons at ~12Hz (1m² write gating); aircraft get a 3-poll grace period (faded icon) before removal, except the tracked aircraft, which is kept until 10 minutes after its newest fix. When a position epoch pauses, both layers coast for five minutes on the last speed and heading (at most 1,500 kt), then stop dimmed as SIGNAL LOST; contacts on or near known ground hold instead. Source backoff marks each contact and the cockpit `STALE` and dims the tracked aircraft, as a missed update does; the cockpit then holds the exact layer position instead of continuing inertial flight. Repeated-position kinematic changes create a forward-only synthetic fix rather than mutating history, and grounded history is lifted only when no owned 3D model already controls its datum. A nominally successful worldwide OpenSky response whose own snapshot epoch is more than two minutes old prefers the existing 250-nm viewport-scoped adsb.lol fallback and labels the source/coverage accordingly when that upstream is available. If the fallback is also unavailable, the layer's freshness/error fields use the source epoch—never the cache receipt time—so the UI reports an old snapshot rather than “just now.”
+- **Flights (commercial + military)** render behind real time and interpolate between two known feed-stamped fixes (OpenSky `time_position`; adsb.lol `receipt − seen_pos`). The delay (`src/data/displayDelay.js`) follows how late the feed is: the 90th percentile of the newest 256 lags (a report's receipt time less the same contact's previous report time) plus 5 s, never under the layer's floor (30 s civil, 15 s military) nor over five minutes, so the anonymous OpenSky feed, whose reports arrive about 90 s old every 30 s, draws about two minutes behind. Before 16 lags, first reports' ages plus a poll interval stand in. The delay moves toward that aim by at most 0.2 s per second up and 0.05 s per second down (an aim within 2 s leaves it be), and takes it at once only while nothing is drawn; deliveries following the world clock, or replacing the world at another time, leave it alone and draw with no delay. Every consumer (icons, the renderer's live motion clock, labels, HUD, detection, the tracked camera and trail) reads the one delay. When a newer report puts a moving contact elsewhere than it is drawn (it was coasting past its newest report), it eases onto the new path over at least 3 s, at most 30% faster than its speed and within 20 s, from where it would have been that frame; more than 5 km off, it jumps. The display latency is an intentional product decision — do not "fix" it away. The whole fleet dead-reckons at ~12Hz (1m² write gating); aircraft get a 3-poll grace period (faded icon) before removal, except the tracked aircraft, which is kept until 10 minutes after its newest fix. When a position epoch pauses, both layers coast for five minutes on the last speed and heading (at most 1,500 kt), then stop dimmed as SIGNAL LOST; contacts on or near known ground hold instead. Source backoff marks each contact and the cockpit `STALE` and dims the tracked aircraft, as a missed update does; the cockpit then holds the exact layer position instead of continuing inertial flight. Repeated-position kinematic changes create a forward-only synthetic fix rather than mutating history, and grounded history is lifted only when no owned 3D model already controls its datum. A nominally successful worldwide OpenSky response whose own snapshot epoch is more than two minutes old prefers the existing 250-nm viewport-scoped adsb.lol fallback and labels the source/coverage accordingly when that upstream is available. If the fallback is also unavailable, the layer's freshness/error fields use the source epoch—never the cache receipt time—so the UI reports an old snapshot rather than “just now.”
 - **World-space headings at every angle** (`src/data/screenRotation.js`; the scene-reading helpers in `src/render/cesium/iconOrientation.js`): aircraft/vessel icon rotation uses the camera right/up basis per tick (alignedAxis always ZERO), which is exact at screen center and for orthographic/nadir views and remains stable through >180° tracked orbits. Perspective rays vary across the viewport, so off-center contacts at oblique pitch can diverge from an exact finite-difference window projection; a regression test pins that known regime, and field evidence decides whether to adopt exact projection with the basis method as fallback. Fleet rotations refresh on camera-pose change; tracked entities per frame. Billboards are horizon-culled via a shared EllipsoidalOccluder.
 - **Military/OpenSky reconciliation** (`src/data/militaryRegistry.js`): known-military ICAOs render amber in the flights layer (60s self-poll of the cached mil endpoint when the military layer is off) and are suppressed there while the military layer renders them.
 - **Satellites**: core catalog from CelesTrak's stations, visual, GPS, GLONASS, Galileo, GEO, resource, weather, planet, SAR and science groups, tracking lands ~726km out via `viewFrom` (tracked entity owns a point graphic so the tracking camera engages), rings realign via primitive modelMatrix (no per-second rebuild flicker), optional `setParams({catalog:'dense'})` Starlink mode.

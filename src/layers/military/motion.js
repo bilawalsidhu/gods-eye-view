@@ -1,11 +1,16 @@
 import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import { renderedFrames } from '../../data/renderedFrames.js';
+import {
+  motionCourse,
+  motionPosition,
+} from '../../render/motion/iconMotion.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { eastNorthUp, framePoint } from '../../geo/frames.js';
 import {
   addSeconds,
   julianLessThan,
   julianFromEpochMs,
+  julianToEpochMs,
   secondsDifference,
 } from '../../geo/julian.js';
 import {
@@ -25,6 +30,8 @@ import {
   staleHoldsForFix,
   arcOffsetEnu,
   courseSlewCapDps,
+  RECOVER_SNAP_M,
+  recoveryMs,
   limitCourseStep,
 } from '../../data/motionModel.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
@@ -102,8 +109,8 @@ export function createMotion({
   /**
    * Dead-reckon an aircraft's current position using ENU (East-North-Up) frame math.
    *
-   * Renders one poll interval behind real time so positions interpolate between
-   * two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale). When the
+   * Renders behind real time, as late as the feed is (displayDelayMs), so
+   * positions interpolate between two KNOWN fixes whenever possible. When the
    * newest fix is older than the delayed render time (stale position), projects
    * forward using the aircraft's ground speed and track through the freshest
    * source contact plus a bounded grace window.
@@ -113,7 +120,7 @@ export function createMotion({
    * @returns {{x: number, y: number, z: number}|null} Estimated current ECEF position, or null if no history
    */
 
-  function _deadReckon(icao24, result) {
+  function _deadReckon(icao24, result, sampledRenderTime) {
     const history = flightState._positionHistory.get(icao24);
     const info = flightState.records.data.get(icao24);
     if (!history || history.length === 0) {
@@ -124,15 +131,26 @@ export function createMotion({
     }
 
     const out = result || vec();
-    // Render one poll interval behind real time so we interpolate between
-    // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
-    const renderTime = addSeconds(
-      julianFromEpochMs(flightState.now()),
-      -displayDelayMs(flightState) / 1000,
-      flightState._scratchRenderTime,
-    );
+    // Render behind real time, as late as the feed is (displayDelayMs), so we
+    // interpolate between two KNOWN fixes whenever possible.
+    const renderTime =
+      sampledRenderTime ??
+      addSeconds(
+        julianFromEpochMs(flightState.now()),
+        -displayDelayMs(flightState) / 1000,
+        flightState._scratchRenderTime,
+      );
 
     const regime = _motionRegime(history, info, renderTime);
+    if (regime.kind === 'between' && regime.piece) {
+      // Along the curve between the two reports, as the icon and the trail.
+      const ms = julianToEpochMs(renderTime);
+      const segment = regime.piece.segment;
+      flightState._drCourseDeg = motionCourse(segment, undefined, ms);
+      flightState._drSpeedMps = segment.speedMps;
+      flightState._drCourseHold = segment.speedMps < COURSE_HOLD_SPEED_MPS;
+      return copyInto(motionPosition(segment, null, ms), out);
+    }
     if (regime.kind === 'between') {
       const { a, b, span } = regime;
       const t = span > 0 ? secondsDifference(renderTime, a.time) / span : 1.0;
@@ -244,7 +262,7 @@ export function createMotion({
   }
 
   /**
-   * True while the tracked aircraft's delayed display time (now − RENDER_DELAY_SEC)
+   * True while the tracked aircraft's delayed display time (now − displayDelayMs)
    * predates its oldest real fix — _deadReckon is extrapolating backward with no real
    * history yet behind the displayed icon, so the trail must draw nothing.
    * @returns {boolean}
@@ -332,35 +350,64 @@ export function createMotion({
     // which plays faster than the wall clock when following it at a rate.
     const worldMs = followsClock(flightState) ? flightState.now() : nowMs;
     const info = flightState.records.data.get(icao24);
+    const dtSec = Math.max(
+      0.001,
+      (worldMs - flightState._drPrevWorldMs) / 1000,
+    );
+    let snapped = false;
     if (sameTrack) {
-      const dtSec = Math.max(
-        0.001,
-        (worldMs - flightState._drPrevWorldMs) / 1000,
-      );
       const speed = (info && info.speedMps) || 0;
-      // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
-      const plausible = speed * dtSec * 4 + 25;
+      // Plausible single-frame motion (m): its speed × frame Δt, half again
+      // for slack, plus 5 m. More is a jump (a new report put it elsewhere).
+      const plausible = speed * dtSec * 1.5 + 5;
       if (distance(raw, flightState._drPrevRaw) > plausible) {
-        // Discontinuity — re-anchor so the DISPLAYED position stays continuous, then decay.
-        copyInto(
-          sub(flightState._drPrevDisplay, raw),
-          flightState._drCorrection,
-        );
+        // Discontinuity — re-anchor so the DISPLAYED position stays continuous,
+        // then ease onto the new path no faster than a little over its speed;
+        // farther off than RECOVER_SNAP_M it is a break, and it jumps.
+        // From where the icon would be this frame had it carried on as it
+        // was moving, not from where it was last frame: it never stands
+        // still for a frame.
+        const anchor =
+          flightState._drPrevStepSec > 0
+            ? add(
+                flightState._drPrevDisplay,
+                scale(
+                  flightState._drPrevStep,
+                  dtSec / flightState._drPrevStepSec,
+                ),
+              )
+            : flightState._drPrevDisplay;
+        const errorM = distance(anchor, raw);
+        snapped = errorM >= RECOVER_SNAP_M;
+        copyInto(snapped ? vec() : sub(anchor, raw), flightState._drCorrection);
         flightState._drCorrectionStartMs = nowMs;
+        flightState._drCorrectionMs = Math.max(
+          DR_CORRECTION_MS,
+          recoveryMs(errorM, speed),
+        );
       }
     } else {
       copyInto(vec(), flightState._drCorrection);
       flightState._drCorrectionStartMs = nowMs - DR_CORRECTION_MS; // fully decayed
+      flightState._drCorrectionMs = DR_CORRECTION_MS;
     }
 
     const elapsed = nowMs - flightState._drCorrectionStartMs;
-    const factor =
-      elapsed >= DR_CORRECTION_MS ? 0 : 1 - elapsed / DR_CORRECTION_MS;
+    const easeMs = flightState._drCorrectionMs ?? DR_CORRECTION_MS;
+    const factor = elapsed >= easeMs ? 0 : 1 - elapsed / easeMs;
     const display = copyInto(
       add(raw, scale(flightState._drCorrection, factor)),
       flightState._trackedPosHolder,
     );
 
+    // How the icon moved this frame, to carry it on through a re-anchor.
+    if (sameTrack && !snapped) {
+      copyInto(
+        sub(display, flightState._drPrevDisplay),
+        flightState._drPrevStep,
+      );
+      flightState._drPrevStepSec = dtSec;
+    } else flightState._drPrevStepSec = 0;
     copyInto(raw, flightState._drPrevRaw);
     copyInto(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;
