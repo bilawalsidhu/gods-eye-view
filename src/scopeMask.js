@@ -549,7 +549,10 @@ export function getScopeMaskFeather() {
  * @returns {void}
  */
 export function setScopeMaskOpacity(ratio) {
-  _maskOpacity = Math.max(0, Math.min(1, Number.isFinite(Number(ratio)) ? Number(ratio) : 1));
+  _maskOpacity = Math.max(
+    0,
+    Math.min(1, Number.isFinite(Number(ratio)) ? Number(ratio) : 1),
+  );
   if (_canvas) _canvas.style.opacity = String(_maskOpacity);
 }
 

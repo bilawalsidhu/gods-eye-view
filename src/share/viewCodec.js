@@ -781,7 +781,12 @@ export function normalizeShareViewState(input = {}) {
   state.scopeFeatherPct = finite(source.scopeFeatherPct)
     ? clampScopeFeatherPct(Number(source.scopeFeatherPct))
     : d.scopeFeatherPct;
-  state.scopeOpacityPct = intOr(source.scopeOpacityPct, d.scopeOpacityPct, 0, 100);
+  state.scopeOpacityPct = intOr(
+    source.scopeOpacityPct,
+    d.scopeOpacityPct,
+    0,
+    100,
+  );
   state.scopeTerminusPct = intOr(
     source.scopeTerminusPct,
     null,

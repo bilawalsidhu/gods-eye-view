@@ -137,7 +137,8 @@ export class VisualSettings {
     this._setScope({
       enabled: scopeEnabled,
       featherPct: scopeFeatherPct,
-      opacityPct: typeof scopeOpacityPct === 'number' ? scopeOpacityPct : undefined,
+      opacityPct:
+        typeof scopeOpacityPct === 'number' ? scopeOpacityPct : undefined,
     });
     // null restores the altitude-adaptive ramp; a number pins the terminus
     // (clamped to the supported 94..100 band, same as the `sce` hash key).
