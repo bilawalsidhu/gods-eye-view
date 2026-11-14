@@ -1,6 +1,9 @@
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
-import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
+import {
+  createOpenFreeMapSource,
+  openFreeMapTileJsonUrl,
+} from '../sources/openFreeMap.js';
 import {
   createFlightSource,
   createMilitarySource,
@@ -30,14 +33,19 @@ export { createReferenceSources as createStandaloneReferenceSources } from '../s
 /** Select standalone providers without starting their acquisition. */
 export function createStandaloneLayerSources(
   overrides = {},
-  { createMapTiles = createOpenFreeMapSource } = {},
+  {
+    createMapTiles = createOpenFreeMapSource,
+    tileJsonUrl = openFreeMapTileJsonUrl(),
+  } = {},
 ) {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
     throw new TypeError('Source overrides must be an object');
   const trafficTiles = createMapTiles({
+    tileJsonUrl,
     selectDecoded: ({ roads }) => ({ roads }),
   });
   const installationTiles = createMapTiles({
+    tileJsonUrl,
     selectDecoded: ({ military }) => ({ military }),
   });
   const defaults = {

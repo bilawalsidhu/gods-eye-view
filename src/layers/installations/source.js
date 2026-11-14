@@ -4,7 +4,10 @@ import {
   militaryNamesInView,
   nameMilitaryFragment,
 } from '../../data/militaryNames.js';
-import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
+import {
+  createOpenFreeMapSource,
+  openFreeMapTileJsonUrl,
+} from '../../sources/openFreeMap.js';
 import {
   mergeMilitaryFragments,
   militaryNameInView,
@@ -91,8 +94,10 @@ export function createInstallationSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   tileFetchImpl = (...args) => globalThis.fetch(...args),
   loadNames = loadMilitaryNames,
+  tileJsonUrl = openFreeMapTileJsonUrl(),
   mapTiles = createOpenFreeMapSource({
     fetchImpl: tileFetchImpl,
+    tileJsonUrl,
     selectDecoded: ({ military }) => ({ military }),
   }),
 } = {}) {

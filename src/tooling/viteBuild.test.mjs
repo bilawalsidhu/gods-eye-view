@@ -16,6 +16,7 @@ import * as providers from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { makeFixtureRoot } from './fixtureRoot.mjs';
 
+const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 const nominatimStorageDir = await makeFixtureRoot('gev-build-composition-');
 test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
 
@@ -186,6 +187,172 @@ test('standalone config passes a validated Photon setting into the browser defin
     if (previous === undefined) delete process.env.PHOTON_URL;
     else process.env.PHOTON_URL = previous;
   }
+});
+
+const TILEJSON_DEFINE = 'import.meta.env.OPENFREEMAP_TILEJSON_URL';
+
+test('the OpenFreeMap TileJSON setting reaches the browser only as an https URL or a site path', () => {
+  const defineFor = (value) =>
+    createBrowserViteConfig({ openFreeMapTileJsonUrl: value }).define[
+      TILEJSON_DEFINE
+    ];
+  for (const unset of [undefined, null, '', '  '])
+    assert.equal(defineFor(unset), undefined, JSON.stringify(unset));
+  assert.equal(
+    defineFor('https://tiles.example.test/planet'),
+    '"https://tiles.example.test/planet"',
+  );
+  assert.equal(defineFor('/tiles/planet'), '"/tiles/planet"');
+  assert.equal(defineFor(' /tiles/planet '), '"/tiles/planet"');
+  for (const invalid of [
+    'http://tiles.example.test/planet',
+    'https://user:secret@tiles.example.test/planet',
+    'https://tiles.example.test/planet?key=1',
+    'https://tiles.example.test/planet#frag',
+    'tiles.example.test/planet',
+    'tiles/planet',
+    '//tiles.example.test/planet',
+    '/tiles/planet?key=1',
+    '/tiles\\planet',
+    'ftp://tiles.example.test/planet',
+    'off',
+  ])
+    assert.throws(
+      () => defineFor(invalid),
+      (error) => {
+        assert.match(error.message, /OPENFREEMAP_TILEJSON_URL/, invalid);
+        assert.ok(!error.message.includes('secret'), 'no echoed credentials');
+        return true;
+      },
+      invalid,
+    );
+});
+
+test('standalone config reads OPENFREEMAP_TILEJSON_URL and refuses an invalid value', () => {
+  const previous = process.env.OPENFREEMAP_TILEJSON_URL;
+  const config = () =>
+    standaloneConfig({ mode: 'test' }, { nominatimStorageDir });
+  try {
+    process.env.OPENFREEMAP_TILEJSON_URL = 'https://tiles.example.test/planet';
+    assert.equal(
+      config().define[TILEJSON_DEFINE],
+      '"https://tiles.example.test/planet"',
+    );
+    process.env.OPENFREEMAP_TILEJSON_URL = 'http://tiles.example.test/planet';
+    assert.throws(config, /OPENFREEMAP_TILEJSON_URL/);
+  } finally {
+    if (previous === undefined) delete process.env.OPENFREEMAP_TILEJSON_URL;
+    else process.env.OPENFREEMAP_TILEJSON_URL = previous;
+  }
+});
+
+/**
+ * Load the real source factories through Vite with the build's define applied,
+ * and report which TileJSON address each one asks for first.
+ */
+async function requestedTileJsons(setting) {
+  const config = createBrowserViteConfig({ openFreeMapTileJsonUrl: setting });
+  const server = await createServer({
+    root: repositoryRoot,
+    cacheDir: path.join(nominatimStorageDir, 'tilejson-vite'),
+    optimizeDeps: { noDiscovery: true, include: [] },
+    configFile: false,
+    envFile: false,
+    appType: 'custom',
+    logLevel: 'silent',
+    define: config.define,
+    server: { middlewareMode: true, watch: null },
+  });
+  const originalLocation = globalThis.location;
+  globalThis.location = { origin: 'https://globe.example.test' };
+  try {
+    const [traffic, installations, outlines, layerSources, openFreeMap] =
+      await Promise.all(
+        [
+          '/src/layers/traffic/source.js',
+          '/src/layers/installations/source.js',
+          '/src/sources/openFreeMapOutlines.js',
+          '/src/standalone/layerSources.js',
+          '/src/sources/openFreeMap.js',
+        ].map((id) => server.ssrLoadModule(id)),
+      );
+    const firstRequest = async (run) => {
+      const asked = [];
+      const fetchImpl = async (url) => {
+        asked.push(String(url));
+        throw new Error('stop after the TileJSON request');
+      };
+      await run(fetchImpl).catch(() => {});
+      return asked[0];
+    };
+    const mapTileOptions = [];
+    layerSources.createStandaloneLayerSources(
+      {},
+      {
+        createMapTiles(options) {
+          mapTileOptions.push(options.tileJsonUrl);
+          return openFreeMap.createOpenFreeMapSource(options);
+        },
+      },
+    );
+    return {
+      traffic: await firstRequest((tileFetchImpl) =>
+        traffic.createTrafficSource({ tileFetchImpl }).prefetch(),
+      ),
+      installations: await firstRequest((tileFetchImpl) =>
+        installations
+          .createInstallationSource({
+            tileFetchImpl,
+            fetchImpl: async () =>
+              Response.json({
+                code: 'OVERPASS_NOT_CONFIGURED',
+                retryable: false,
+              }),
+            loadNames: async () => [],
+          })
+          .getMappedSites({
+            south: 30.3,
+            west: -97.77,
+            north: 30.32,
+            east: -97.75,
+          }),
+      ),
+      outlines: await firstRequest((fetchImpl) =>
+        outlines.createOpenFreeMapOutlineSource({ fetchImpl }).getMetadata(),
+      ),
+      standalone: mapTileOptions,
+    };
+  } finally {
+    globalThis.location = originalLocation;
+    await server.close();
+  }
+}
+
+test('traffic, installations, outlines and the standalone catalog follow the OpenFreeMap TileJSON setting', async () => {
+  const publicTileJson = 'https://tiles.openfreemap.org/planet';
+  const expectAll = (found, expected, label) => {
+    assert.deepEqual(
+      found,
+      {
+        traffic: expected,
+        installations: expected,
+        outlines: expected,
+        standalone: [expected, expected],
+      },
+      label,
+    );
+  };
+  expectAll(await requestedTileJsons(undefined), publicTileJson, 'unset');
+  expectAll(
+    await requestedTileJsons('https://tiles.example.test/planet'),
+    'https://tiles.example.test/planet',
+    'https url',
+  );
+  expectAll(
+    await requestedTileJsons('/tiles/planet'),
+    'https://globe.example.test/tiles/planet',
+    'site path resolves against the page',
+  );
 });
 
 test('directories the server writes while it runs are kept out of the dev watcher', () => {

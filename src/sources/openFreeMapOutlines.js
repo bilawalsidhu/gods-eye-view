@@ -3,6 +3,7 @@ import { VectorTile } from '@mapbox/vector-tile';
 import {
   clipTileLine,
   createOpenFreeMapSource,
+  openFreeMapTileJsonUrl,
   registerOpenFreeMapProjection,
 } from './openFreeMap.js';
 import { tileToBBox } from '../data/tomtomTiles.js';
@@ -288,6 +289,7 @@ function decodePolygons(
 export function createOpenFreeMapOutlineSource(options = {}) {
   return createOpenFreeMapSource({
     projection: 'outlines',
+    tileJsonUrl: openFreeMapTileJsonUrl(),
     maxEntries: 32,
     maxCacheBytes: 8 * 1024 * 1024,
     ...options,
