@@ -8,6 +8,7 @@ import { useCockpitStore } from '../stores/cockpit.js';
 import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
 import { useContextStore } from '../stores/context.js';
 import { useSceneStore } from '../stores/scenes.js';
+import ChesterCountyPanel from './panels/ChesterCountyPanel.vue';
 import AwarenessPanel from './panels/AwarenessPanel.vue';
 import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
 import MissionDetail from './panels/MissionDetail.vue';
@@ -34,6 +35,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
 <template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail" class="ui-scroll" v-class-toggle="{ 'bhote-event-active': !!bhotePanel }">
+    <ChesterCountyPanel />
     <RailPanel id="weather-panel" hidden :title="t('WEATHER')" sideways rail-scroller>
       <template #badge><span id="weather-panel-count" :aria-label="t('Active weather products')">0</span></template>
       <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>

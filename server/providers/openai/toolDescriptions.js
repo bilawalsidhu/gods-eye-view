@@ -108,7 +108,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_layer_visibility: {
     description:
-      "Enable or disable one God's Eye View data layer. Every shipped layer is in the enum; never tell the user a listed layer does not exist.",
+      "Enable or disable one God's Eye View data layer. Every shipped layer is in the enum.",
     $position: 1,
     parameters: {
       properties: {

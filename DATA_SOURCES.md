@@ -689,3 +689,98 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+## Chester County, Pennsylvania incidents
+
+Chester County DES [WebCAD](https://www.chesco.org/3963/WebCad-Active-Incidents)
+supplies public Fire, EMS and Traffic summaries every 60 seconds. © Chester
+County; no open redistribution license identified for incident records.
+[County copyright](https://www.chesco.org/copyright).
+
+Approximate intersections are derived from county [Road Centerlines](https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Road_Centerlines/FeatureServer/0);
+numbered addresses use [Site Address Points](https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Site_Address_Points/FeatureServer/0).
+The road [item metadata](https://www.arcgis.com/sharing/rest/content/items/bfdabcd1cdd545e5b7d3a6993dd2b8b5?f=pjson)
+and address [item metadata](https://www.arcgis.com/sharing/rest/content/items/37aa8563d1fb415db286f06198b0140d?f=pjson)
+link CC BY-NC-SA 3.0. Derived locations are approximate; road abbreviation
+normalization and nearby junction-node clustering are the modifications.
+Attribution: © Chester County GIS, CC BY-NC-SA 3.0. These datasets and derivatives
+are not covered by the code's MIT license. Runtime memory cache only; no source
+records or GIS geometry are bundled. Observe the noncommercial/share-alike terms
+and obtain appropriate permission for any incident-data redistribution.
+See `docs/CHESTER-COUNTY-EMS.md`.
+
+County [Common Place](https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Common_Place/FeatureServer/1)
+provides approximate named-place positions from primary, nonsensitive records.
+© Chester County GIS; [item metadata](https://www.arcgis.com/sharing/rest/content/items/f4fbc771e67a4ce7be14d538c2af8571?f=pjson)
+has no open license identified. It is not covered by the road/address CC license
+or the code MIT license. Runtime only; no source records are bundled. A documented
+Tredyffrin junction name correction is an additional road matching modification.
+
+The county incident layer also reads category-specific WebCAD
+`livecadcomments-fire.asp`, `livecadcomments-ems.asp` and
+`livecadcomments-traffic.asp` links published by that active feed, on selection
+only. Public unit IDs, status text and entry timestamps retain the same county
+copyright terms. No live detail pages or unit records are bundled or archived.
+
+## Montgomery County, Pennsylvania public incidents (County EMS)
+
+The optional County EMS layer also reads Montgomery County's
+[official WebCAD page](https://www.montgomerycountypa.gov/departments/department-public-safety/webcad-active-incidents),
+[public incident/unit list](https://webapp07.montcopa.org/eoc/cadinfo/livecad-incidents.asp),
+and its [read-only active CAD map view](https://gis.montcopa.org/arcgis/rest/services/Hosted/Montgomery_County_Active_CAD_Incidents_View/FeatureServer/0).
+The county [offers its incident RSS for readers and aggregators](https://www.montgomerycountypa.gov/departments/department-public-safety/webcad-active-incidents/webcad-incident-status-rss-feed).
+No open redistribution licence was identified; © Montgomery County, PA.
+Records and county map coordinates are fetched at runtime only. No incident or
+GIS dataset is redistributed. Positions are approximate; unit times without
+dates remain undated. Traffic is not a complete police-call feed.
+
+## Lancaster County public incidents (County EMS)
+
+Sources: [LCWC official incident list](https://www.lcwc911.us/live-incident-list)
+and the public incident layers embedded by the
+[official live map](https://www.lcwc911.us/live-incident-map), through its published
+[ArcGIS public map service](https://utility.arcgis.com/usrsvcs/servers/a1f6aa7faab44b1582029509c46dce86/rest/services/Maps/Public_LiveFeeds/MapServer).
+Only public records (IsPublic=1) are read. © County of Lancaster / LCWC;
+no open redistribution licence identified. Assigned units have no published
+movement times/statuses. Unmatched public list reports retain null coordinates.
+Records/geometry load at runtime; repository fixtures are synthetic.
+
+## Delaware County community dispatch pages (County EMS)
+
+Source: [Delco Dispatch](https://delcodispat.ch/d/pa/delco), using the anonymous
+newest-page endpoint called by its public web client. Attribution: Delco Dispatch;
+no open redistribution licence identified. This is community paging, not an
+official active-incident or closed-call feed. Reads are limited to the newest
+20 public pages within two hours, without archive pagination. Private-flagged
+pages, raw messages/notes, apartment details and radio metadata are excluded.
+Public coordinates are approximate. Received timestamps assume Eastern time
+because no zone is published. Assigned units have no movement-status times.
+Only normalized summaries load at runtime; no live archive is bundled.
+
+## Dauphin, Pike, York and Adams County public reports (County EMS)
+
+Sources: [Dauphin WebCAD](https://dpswebcad.dauphincounty.gov/webcad/),
+[Pike public completed-incidents press feed](https://webcad.pikepa.org/pages/public/FeedReader.asp),
+[York active incident list and listed public unit details](https://ycdes.org/webcad/default.aspx),
+and [Adams active incidents](https://incidents.adamscountypa.gov/) (public /api/calls).
+Attribution remains with each county's emergency/public safety department.
+No open redistribution licence identified. Records load at runtime only.
+Pike reads only today's completed reports, is off by default and is never
+represented as active. These sources have no published map coordinates;
+reports stay in the list. Adams unknown natures are excluded and counted,
+and a degraded/offline monitor cannot produce a fresh empty snapshot.
+No raw notes or live records ship in the repository.
+
+## Lebanon County pager via 717 Alerts (County EMS)
+
+Sources: [Lebanon DES pager monitor](https://www.lcdes.org/monitor.html), through
+user-provided alternate [717 Alerts Lebanon](https://717alerts.com/county/lebanon)
+and the public live snapshot invoked by its browser client. No login/key is used.
+Direct DES monitor HTTPS currently has an incomplete certificate chain for Node;
+TLS verification is not bypassed. The alternate is an independent aggregator
+([terms](https://717alerts.com/terms)), not the county. No open redistribution
+licence identified; attribution: Lebanon County DES pager / 717 Alerts.
+Only recent two-hour summaries excluding resolved/redacted reports are retained.
+Active status remains unknown. No raw pager narratives, notes, radio/audio,
+private metadata or municipality-center pins are forwarded; EMS has no map pin.
+Published non-centroid fire/traffic points are approximate. Runtime data only;
+no incident archive or live fixtures are redistributed.
