@@ -1,14 +1,20 @@
+import { forgetPlacedAircraft } from './placed.js';
+
 /**
  * What the layer drops when the world clock moves it to another time (its
  * source declares a timeline; see src/time/snapshotTimeline.js).
  */
-export function createClockFollow({ flightState, parts }) {
+export function createClockFollow({ flightState, services, parts }) {
   /**
    * Forget how every contact moved, before the snapshot at another time takes
    * the place of every contact: their fixes, courses, floors and the tracked
    * trail belong to the time the clock left.
    */
   function resetMotion() {
+    forgetPlacedAircraft(
+      services?.placement,
+      flightState._positionHistory.keys(),
+    );
     flightState.records.reset();
     flightState._positionHistory.clear();
     flightState._displayCourse.clear();

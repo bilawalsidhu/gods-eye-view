@@ -16,9 +16,11 @@ import { fleetModelServices } from './fleetModels.js';
  * Construct one layer using the application scene owners and a supplied
  * source. `displayParams` reads the Flights layer's DISPLAY-rail 3D
  * preference, under which nearby vessels are drawn as fleet models.
+ * `placement`: a host-supplied placement for its live vessels, or null.
  */
 export function createApplicationVessels({
   source,
+  placement = null,
   options = {},
   displayParams = null,
   resolveAsset,
@@ -38,6 +40,7 @@ export function createApplicationVessels({
       worldFocus,
       render,
       readouts,
+      placement,
       fleet: fleetModelServices({
         display: displayParams,
         ...(resolveAsset ? { resolveAsset } : {}),

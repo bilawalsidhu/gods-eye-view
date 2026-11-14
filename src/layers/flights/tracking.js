@@ -1289,6 +1289,7 @@ export function createTracking({
         flightState._billboards.delete(icao24);
         parts.rendering._releaseModel(icao24); // military-suppression: drop any 3D model too
         flightState.records.data.delete(icao24);
+        services.placement?.forget(icao24);
         flightState._cullPositions.delete(icao24);
         flightState._positionHistory.delete(icao24);
         flightState._displayCourse.delete(icao24);

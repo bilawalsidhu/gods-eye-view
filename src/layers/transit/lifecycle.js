@@ -147,6 +147,7 @@ export function createLifecycle({ state, services, parts }) {
         entry.detectContact = null;
         parts.rendering.cancelWake(entry);
         destroyTrack(entry.track);
+        entry.placement?.forget(entry.key);
       }
       state._vehicles.clear();
       parts.height.clear();
@@ -242,6 +243,7 @@ export function createLifecycle({ state, services, parts }) {
         entry.detectContact = null;
         parts.rendering.cancelWake(entry);
         destroyTrack(entry.track);
+        entry.placement?.forget(entry.key);
       }
       state._vehicles.clear();
       parts.rendering.stopModels();

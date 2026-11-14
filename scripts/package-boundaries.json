@@ -1588,7 +1588,8 @@
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
       "src/time/julian.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/layers/flights/placed.js"
     ],
     "external": ["cesium"]
   },
@@ -1661,7 +1662,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/layers/flights/placed.js"
     ],
     "external": ["cesium"]
   },
@@ -3824,7 +3826,9 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/layers/flights/placed.js",
+      "src/data/placementProvider.js"
     ],
     "external": [
       "hls.js",
@@ -4542,7 +4546,9 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/flights/placed.js",
+      "src/data/placementProvider.js"
     ],
     "external": [
       "hls.js",

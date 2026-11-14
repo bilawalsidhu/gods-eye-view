@@ -12,6 +12,8 @@ import {
 } from './policy.js';
 import { FLOOR_WARM_PER_POLL } from './policy.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
+import { layerPlacement } from '../../data/placementProvider.js';
+import { PLACED_WAKE_MS } from './movement.js';
 import {
   FUTURE_STAMP_TOLERANCE_MS,
   ORDER_REJECTS_BEFORE_RESET,
@@ -183,6 +185,8 @@ function harness(
     // Fleet-model services (testSupport/fleetModelFakes.mjs), with a camera
     // looking straight down for them; without them vehicles stay icons.
     fleet = null,
+    // A host-supplied placement (../../data/placementProvider.js), or none.
+    placement = null,
   } = {},
 ) {
   const viewRect = { ...view };
@@ -291,6 +295,7 @@ function harness(
     source,
     services: {
       ...(fleet ? { fleet } : {}),
+      ...(placement ? { placement: layerPlacement(placement, 'transit') } : {}),
       ground,
       mesh: {
         sampleMeshFloorCells(scene, points, options) {
@@ -1156,6 +1161,110 @@ test('a parked fleet that keeps reporting the same position stops asking for fra
     'only the vehicle that actually moved is animating',
   );
 });
+test('a vehicle a placement holds still stops asking for frames, and moves on when the placement does', async (t) => {
+  // The placement parks bus-1 at a terminal until `spot` moves.
+  let spot = { lat: 42.3605, lon: -71.0605 };
+  let asked = 0;
+  const app = harness(t, {
+    placement: {
+      layer: () => ({
+        place: () => {
+          asked += 1;
+          return { ...spot, courseDeg: 0, speedMps: 0 };
+        },
+      }),
+    },
+  });
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, reported())],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  assert.equal(entry.placed, true);
+  for (let i = 0; i < 3; i += 1) {
+    app.advance(16);
+    app.frame();
+  }
+  assert.equal(app.state()._moving.has(entry), false, 'parked: not animating');
+  assert.equal(app.holds().includes('transit'), false, 'and the loop idles');
+  assert.notEqual(entry.wakeTimer, null, 'a wake asks the placement again');
+  assert.ok(Math.abs(lat(entry) - 42.3605) < 1e-6, 'drawn where placed');
+
+  // Asked again while it stays put: still idle, the wake re-armed.
+  const before = asked;
+  app.advance(PLACED_WAKE_MS);
+  assert.ok(asked > before, 'the wake asked the placement');
+  assert.equal(app.state()._moving.has(entry), false);
+  assert.equal(app.holds().includes('transit'), false);
+
+  // The placement moves it: the next wake picks that up and the loop runs.
+  spot = { lat: 42.361, lon: -71.0605 };
+  app.advance(PLACED_WAKE_MS);
+  assert.equal(app.state()._moving.has(entry), true, 'moving again');
+  assert.ok(app.holds().includes('transit'), 'and holds the loop');
+  assert.ok(Math.abs(lat(entry) - 42.361) < 1e-6);
+  for (let i = 0; i < 3; i += 1) {
+    spot = { lat: spot.lat + 1e-5, lon: spot.lon };
+    app.advance(16);
+    app.frame();
+    assert.equal(app.state()._moving.has(entry), true, 'while it moves');
+  }
+
+  // It stops again: the next frame that sees it unchanged lets go.
+  app.advance(16);
+  app.frame();
+  assert.equal(app.state()._moving.has(entry), false, 'stopped again');
+  assert.equal(app.holds().includes('transit'), false);
+});
+
+test('a vehicle a placement draws is shown from a high camera, as one it does not', async (t) => {
+  // Far above the ground no floor is asked for, so the fixes carry no height
+  // and the vehicle stands on the ellipsoid, placed or not.
+  const app = harness(t, {
+    at: { lat: 52.09, lon: 5.12 },
+    altitude: 1_500_000,
+    view: { west: -78.084, south: 20, east: 88.084, north: 84 },
+    placement: {
+      layer: () => ({
+        place: (id) =>
+          id.endsWith('nl-1')
+            ? { lat: 52.091, lon: 5.12, courseDeg: 0, speedMps: 0 }
+            : null,
+      }),
+    },
+  });
+  const now = Date.now();
+  app.serve('ovapi-nl', () => ({
+    status: 200,
+    body: snapshot(
+      'ovapi-nl',
+      'OVapi',
+      [
+        vehicle('nl-1', 52.09, 5.12, now / 1000),
+        vehicle('nl-2', 51.92, 4.48, now / 1000),
+      ],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.advance(250);
+  app.frame();
+  const placed = app.vehicles().find((entry) => entry.placed === true);
+  assert.ok(placed, 'one vehicle is placed');
+  const shown = app.vehicles().filter((entry) => entry.marker?.show !== false);
+  assert.equal(shown.length, 2, 'both vehicles are drawn');
+  assert.ok(Math.abs(lat(placed) - 52.091) < 1e-6, 'where placed');
+});
+
 test('the last vehicle leaving mid-segment takes the render hold with it', async (t) => {
   const app = harness(t);
   const fetchedAt = Date.now();
