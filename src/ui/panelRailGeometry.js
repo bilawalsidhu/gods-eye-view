@@ -1,3 +1,6 @@
+export const MOBILE_SHELL_MEDIA_QUERY =
+  '(max-width: 720px), (max-width: 1023px) and (max-height: 520px)';
+
 /**
  * Resolve a vertically centered panel slot inside a HUD rail while respecting
  * live rectangles that intersect that rail above or below the viewport center.

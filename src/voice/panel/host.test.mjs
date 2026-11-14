@@ -12,6 +12,7 @@ import { createProviderCommands } from '../providerCommands.js';
 import { createVoicePanelHost } from './host.js';
 import { createTestVoiceUi } from '../../testSupport/voiceUi.mjs';
 import { mountVoiceView } from '../../testSupport/voiceView.mjs';
+import { MOBILE_SHELL_MEDIA_QUERY } from '../../ui/panelRailGeometry.js';
 
 const $ = (selector) => globalThis.document.querySelector(selector);
 const exists = (selector) => $(selector) !== null;
@@ -1170,6 +1171,88 @@ function dockWing(t) {
     close: () => wing.classList.add('collapsed'),
   };
 }
+
+for (const [width, height, phone] of [
+  [844, 390, true],
+  [1024, 768, false],
+]) {
+  test(`Voice Settings follows the mic on landscape phones, not desktop (${width}x${height})`, async (t) => {
+    const f = mounted(t, { view: true });
+    const view = globalThis.document.defaultView;
+    for (const [key, value] of [
+      ['innerWidth', width],
+      ['innerHeight', height],
+    ]) {
+      const descriptor = Object.getOwnPropertyDescriptor(view, key);
+      Object.defineProperty(view, key, { configurable: true, value });
+      t.after(() =>
+        descriptor
+          ? Object.defineProperty(view, key, descriptor)
+          : delete view[key],
+      );
+    }
+    t.mock.method(view, 'matchMedia', (query) => ({
+      matches: query === MOBILE_SHELL_MEDIA_QUERY && phone,
+    }));
+    await f.settle();
+    const root = $('#gev-voice-control');
+    const panel = $('#gev-voice-panel');
+    const rect = (left, top, width, height) => ({
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      width,
+      height,
+    });
+    root.getBoundingClientRect = () => rect(780, 278, 54, 54);
+    panel.getBoundingClientRect = () => rect(0, 0, 352, 166);
+    // The full-width dock does not define a landscape panel's centre.
+    globalThis.document.body.firstElementChild.id = 'command-dock';
+    globalThis.document.body.firstElementChild.getBoundingClientRect = () =>
+      rect(0, 278, width, 54);
+    globalThis.document.body.style.setProperty('--mobile-left-inset', '44px');
+    globalThis.document.body.style.setProperty('--mobile-right-inset', '44px');
+    await f.settle();
+    f.commands.voicePanel.select('settings');
+    await f.settle();
+    assert.equal(panel.dataset.placement, 'compact');
+    assert.equal(panel.style.width, '', 'landscape keeps the compact CSS size');
+    // Phone is clamped inside the right notch; desktop retains dock centring.
+    const expectedLeft = phone
+      ? width - 352 - 8 - 44 - 780
+      : width / 2 - 352 / 2 - 780;
+    assert.equal(parseFloat(panel.style.left), expectedLeft);
+    assert.equal(f.commands.getVoicePanelState().settingsOpen, true);
+  });
+}
+
+test('Voice Settings keeps the portrait sheet width on a short portrait phone (390x500)', async (t) => {
+  const f = mounted(t, { view: true });
+  const view = globalThis.document.defaultView;
+  for (const [key, value] of [
+    ['innerWidth', 390],
+    ['innerHeight', 500],
+  ]) {
+    const descriptor = Object.getOwnPropertyDescriptor(view, key);
+    Object.defineProperty(view, key, { configurable: true, value });
+    t.after(() =>
+      descriptor
+        ? Object.defineProperty(view, key, descriptor)
+        : delete view[key],
+    );
+  }
+  t.mock.method(view, 'matchMedia', (query) => ({
+    matches: query === MOBILE_SHELL_MEDIA_QUERY,
+  }));
+  await f.settle();
+  globalThis.document.body.style.setProperty('--mobile-left-inset', '0px');
+  globalThis.document.body.style.setProperty('--mobile-right-inset', '0px');
+  f.commands.voicePanel.select('settings');
+  await f.settle();
+  // Short but upright: the full-width sheet, not the landscape corner panel.
+  assert.equal($('#gev-voice-panel').style.width, `${390 - 16}px`);
+});
 
 test('reaching for a dock wing minimizes a centred chat or voice panel', async (t) => {
   const f = mounted(t, { view: true });

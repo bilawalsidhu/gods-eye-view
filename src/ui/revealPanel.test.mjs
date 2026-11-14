@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { StyleManager } from './applicationShell.js';
+import { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 
 function reveal({ phone }) {
   const sheets = [];
@@ -12,7 +13,7 @@ function reveal({ phone }) {
     getElementById: (id) => (id === 'street-level-panel' ? panel : null),
   };
   globalThis.matchMedia = (query) => ({
-    matches: phone && query === '(max-width: 720px)',
+    matches: phone && query === MOBILE_SHELL_MEDIA_QUERY,
   });
   try {
     StyleManager.prototype.revealPanel.call(

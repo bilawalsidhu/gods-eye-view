@@ -2745,7 +2745,9 @@ each side's panels from the DOM; `PanelChrome` remains the disclosure owner.
 
 ## Phone layout
 
-At 720px and narrower, `src/ui/mobileShell.js` keeps the globe full screen and
+At 720px and narrower, and in short landscape up to 1023px wide and 520px high
+(`MOBILE_SHELL_MEDIA_QUERY` in `src/ui/panelRailGeometry.js`, shared with both
+rails), `src/ui/mobileShell.js` keeps the globe full screen and
 shows a bottom tab bar: Layers (Data Layers, with Authoring collapsed below),
 Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
 Recent Imagery when shown), Search (Location) and More (Visual Presets and Map
@@ -2784,6 +2786,18 @@ chooses what shows. The Cesium and Google attribution stays visible above the
 voice control, and above an open sheet. The page draws under the notch and
 system bars (`viewport-fit=cover`) and the shell's chrome uses safe-area insets.
 Wider viewports are unchanged, and crossing to them closes any open sheet.
+
+In phone landscape (520px high or less) the tab bar is 48px and sheets cap
+their height so the globe stays visible; the dock and rails take the left and
+right safe-area insets. The voice control collapses to the mic button in the
+bottom-right corner. Voice Settings (including the provider picker) and the
+error tray open above it, right-aligned; the assistant panel layout uses the
+same phone query rather than placing Settings over the globe's centre. The
+provider picker stays inside main's store-backed Settings panel, not in the
+retired floating chooser. The attribution
+drops back to just above the tab bar. `node scripts/qa-phone-landscape.mjs`
+checks the gate, sheet fit and scroll, insets and the mic anchor across phone,
+tablet and desktop viewports.
 
 ## Surface keyboard lifecycle
 
