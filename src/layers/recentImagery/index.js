@@ -549,6 +549,8 @@ export function createRecentImageryLayer({
             : (slotId === 'a') !== _swapped
               ? 'left'
               : 'right',
+          // Keep every half except those confirmed empty by the probe.
+          availableBoxes: thumbnails.get(candidate.key)?.availableBoxes ?? null,
         });
       } else {
         renderer.hideSlot(slotId);
@@ -830,7 +832,9 @@ export function createRecentImageryLayer({
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
-        if (drapesChanged && !pruned && !followed) syncRender();
+        // The key can stay the same while a new probe changes its boxes.
+        // showSlot itself avoids rebuilding an unchanged drape.
+        if (!pruned && !followed) syncRender();
         notify('thumbnail');
         if (pruned || followed || drapesChanged) notify();
       });

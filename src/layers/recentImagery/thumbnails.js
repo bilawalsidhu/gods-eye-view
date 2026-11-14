@@ -15,6 +15,7 @@ const EMPTY = Object.freeze({
   status: 'unknown',
   objectUrl: null,
   acquisitionTime: null,
+  availableBoxes: null,
   loading: false,
 });
 
@@ -90,6 +91,8 @@ export function createThumbnailLoader({
     let status = 'error';
     let objectUrl = null;
     let acquisitionTime = null;
+    // Halves not confirmed empty; null when no per-half probe is available.
+    let availableBoxes = null;
     let cancelled = false;
     try {
       const response = await requestThumbnail(entry.candidate, entry.box, {
@@ -102,6 +105,7 @@ export function createThumbnailLoader({
         const present = String(
           response.headers?.get?.('Data-Present') ?? '',
         ).toLowerCase();
+        availableBoxes = response.presentBoxes ?? null;
         acquisitionTime = response.headers?.get?.('Acquisition-Time') || null;
         if (present === 'false') {
           status = 'empty';
@@ -133,6 +137,7 @@ export function createThumbnailLoader({
     if (status !== 'error' || entry.status !== 'present') {
       entry.status = status;
       entry.acquisitionTime = acquisitionTime;
+      entry.availableBoxes = availableBoxes;
     }
     entry.objectUrl = objectUrl;
     touch(entry);
@@ -237,7 +242,7 @@ export function createThumbnailLoader({
     /**
      * Read a day's state. A read is not a use: it never changes residency.
      * @param {string} key Candidate key.
-     * @returns {{ status: 'unknown'|'present'|'empty'|'error', objectUrl: string | null, acquisitionTime: string | null, loading: boolean }}
+     * @returns {{ status: 'unknown'|'present'|'empty'|'error', objectUrl: string | null, acquisitionTime: string | null, availableBoxes: Array<object> | null, loading: boolean }}
      */
     get(key) {
       const entry = entries.get(key);
@@ -246,6 +251,7 @@ export function createThumbnailLoader({
         status: entry.status,
         objectUrl: entry.objectUrl,
         acquisitionTime: entry.acquisitionTime,
+        availableBoxes: entry.availableBoxes ?? null,
         loading: entry.loading,
       };
     },

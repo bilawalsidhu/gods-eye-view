@@ -236,7 +236,7 @@ test('an area handle searches its bounding box; the view and pointer have their 
   assert.equal(unknown.code, 'AREA_UNKNOWN');
 });
 
-test('a mixed antimeridian area gets the deliberate imagery date-line refusal', async () => {
+test('a mixed antimeridian area is searched as its short-arc box', async () => {
   const square = (w, s, e, n) => [
     [w, s],
     [e, s],
@@ -251,6 +251,7 @@ test('a mixed antimeridian area gets the deliberate imagery date-line refusal', 
     [178, 1],
     [178, 0],
   ];
+  const layer = fakeLayer();
   const store = createAreaStore();
   const area = store.put({
     geometry: [[crossing], [square(-176, 0.2, -174, 0.8)]],
@@ -258,11 +259,33 @@ test('a mixed antimeridian area gets the deliberate imagery date-line refusal', 
     source: 'osm',
   });
   assert.deepEqual(area.bbox, [178, 0, -174, 1]);
-  const result = await findImagery(deps(fakeLayer(), { area }).value, {
+  const result = await findImagery(deps(layer, { area }).value, {
     areaId: area.areaId,
   });
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'DATELINE');
+  assert.equal(result.ok, true, 'the guard is lifted');
+  assert.deepEqual(layer.calls.find((c) => c[0] === 'setBox')[1], {
+    west: 178,
+    south: 0,
+    east: -174,
+    north: 1,
+  });
+});
+
+test('a small area across the date line is pinned at its short-arc centre', async () => {
+  const layer = fakeLayer();
+  await findImagery(
+    deps(layer, {
+      area: {
+        areaId: 'd',
+        name: 'Dateline Islet',
+        bbox: [179.998, 0, -179.998, 0.01],
+      },
+    }).value,
+    { areaId: 'd' },
+  );
+  const [, lon, lat] = layer.calls.find((c) => c[0] === 'boxFromPinAt');
+  assert.ok(Math.abs(Math.abs(lon) - 180) < 1e-9, `pin lon ${lon}, not 0`);
+  assert.equal(lat, 0.005);
 });
 
 test('a box the layer refuses is refused with its reason, and the layer is turned on first', async () => {

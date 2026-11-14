@@ -82,8 +82,29 @@ test('overview fallback, empty results and invalid areas are reported', async ()
   );
   await assert.rejects(
     none.call('get_recent_imagery', { area: { bbox: [170, 0, -170, 5] } }),
-    /antimeridian/,
+    /too large for imagery/,
   );
+  const crossing = imagery({
+    candidate: {
+      product: 'S30',
+      day: '2026-10-01',
+      cloud: { min: 1, max: 2 },
+      coverage: 'full',
+    },
+    reason: 'clear',
+    errors: [],
+  });
+  const wrapped = composeCatalog({
+    tools: coreTools,
+    services: { imagery: crossing },
+  });
+  await assert.rejects(
+    wrapped.call('get_recent_imagery', {
+      area: { bbox: [179, 0, -179, 1] },
+    }),
+    /snapshot cannot cross the dateline/,
+  );
+  assert.equal(crossing.snapshots.length, 0);
   await assert.rejects(
     none.call('get_recent_imagery', { area: { bbox: [0, 85.5, 1, 86] } }),
     /±85° latitude/,

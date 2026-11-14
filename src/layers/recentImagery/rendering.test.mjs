@@ -227,3 +227,73 @@ test('replacement imagery uses source-owned tile URLs and credit and tears down 
   assert.equal(globe.layers.length, 0);
   assert.equal(layer.destroyed, true);
 });
+
+test('a dateline box drapes one layer on each side of ±180 and removes both', () => {
+  const { renderer, globe } = fixture();
+  const box = { west: 179, south: 0, east: -179, north: 1 };
+  assert.equal(
+    renderer.showSlot('a', S30, box, { alpha: 0.4, splitDirection: 'left' }),
+    true,
+  );
+  assert.equal(renderer.ownedCount(), 1);
+  assert.equal(globe.layers.length, 2);
+  assert.deepEqual(
+    globe.layers.map((item) => item.provider.options.rectangle),
+    [
+      { west: 179, south: 0, east: 180, north: 1 },
+      { west: -180, south: 0, east: -179, north: 1 },
+    ],
+  );
+  assert.equal(globe.layers[0].alpha, 0.4);
+  assert.equal(globe.layers[1].alpha, 0.4);
+  assert.equal(globe.layers[0].splitDirection, -1);
+  assert.equal(globe.layers[1].splitDirection, -1);
+  renderer.setAlpha('a', 0.2);
+  assert.equal(globe.layers[0].alpha, 0.2);
+  assert.equal(globe.layers[1].alpha, 0.2);
+  renderer.showSlot('a', S30, box, { alpha: 0.2 });
+  assert.equal(globe.layers.length, 2, 'the same box does not remount');
+  renderer.hideSlot('a');
+  assert.equal(globe.layers.length, 0);
+});
+
+test('a dateline provider that fails on the second half adds no layer', () => {
+  let built = 0;
+  const base = fakeCesium();
+  const Provider = base.UrlTemplateImageryProvider;
+  base.UrlTemplateImageryProvider = class extends Provider {
+    constructor(options) {
+      built += 1;
+      if (built === 2) throw new Error('provider failed');
+      super(options);
+    }
+  };
+  const renderer = createRecentImageryRenderer({
+    cesium: base,
+    requestRender: () => {},
+  });
+  const globe = fakeCollection();
+  renderer.rebind({ collection: globe, kind: 'globe' });
+  assert.throws(
+    () =>
+      renderer.showSlot('a', S30, {
+        west: 179,
+        south: 0,
+        east: -179,
+        north: 1,
+      }),
+    /provider failed/,
+  );
+  assert.equal(globe.layers.length, 0);
+  assert.equal(renderer.ownedCount(), 0);
+});
+
+test('a box that is not a box adds no layer and drapes nothing', () => {
+  const { renderer, globe, renders } = fixture();
+  for (const bad of [{ west: NaN, south: 0, east: 1, north: 1 }, { west: 0 }]) {
+    assert.equal(renderer.showSlot('a', S30, bad), false);
+  }
+  assert.equal(globe.layers.length, 0);
+  assert.equal(renderer.ownedCount(), 0);
+  assert.deepEqual(renders, []);
+});

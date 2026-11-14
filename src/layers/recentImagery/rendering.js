@@ -1,13 +1,16 @@
 /**
- * Draped-imagery renderer for the Recent Imagery layer: at most two GIBS
- * imagery layers (slot `a`, left of a swipe; slot `b`, right) on whichever
- * host the map stack offers. Against the basemap slot `a` splits left and
- * slot `b` stays empty. Every layer is removed from the collection that owns it, so a
- * host switch or a replaced image never strands one. Tile requests pass a
- * small semaphore of our own; Cesium's global request limits stay untouched.
+ * Draped-imagery renderer for the Recent Imagery layer: at most two slots
+ * (slot `a`, left of a swipe; slot `b`, right) on whichever host the map
+ * stack offers. A box that crosses the dateline drapes two imagery layers
+ * in that slot, one on each side of ±180, each a plain west <= east
+ * rectangle (see `nonCrossingBoxes`). Against the
+ * basemap slot `a` splits left and slot `b` stays empty. Every layer is
+ * removed from the collection that owns it, so a host switch or a replaced
+ * image never strands one. Tile requests pass a small semaphore of our own;
+ * Cesium's global request limits stay untouched.
  */
 import * as Cesium from 'cesium';
-import { PRODUCTS, gibsTemplate } from './model.js';
+import { PRODUCTS, gibsTemplate, nonCrossingBoxes } from './model.js';
 
 const SLOT_IDS = ['a', 'b'];
 const SPLIT_ENUM = { left: 'LEFT', right: 'RIGHT', none: 'NONE' };
@@ -25,6 +28,15 @@ function clampAlpha(value) {
 
 const boxKey = (box) =>
   [box.west, box.south, box.east, box.north].map(Number).join(',');
+
+/** Comparable per-half availability signature; unknown differs from empty. */
+const boxesKey = (list) =>
+  Array.isArray(list)
+    ? list
+        .map((box) => boxKey(box))
+        .sort()
+        .join(';')
+    : 'unknown';
 
 /**
  * Gate a provider's `requestImage` through the semaphore. Returning
@@ -80,7 +92,7 @@ export function createRecentImageryRenderer({
   let host = NO_HOST;
   let destroyed = false;
   const admission = { limit: maxTileRequests, inFlight: 0 };
-  /** @type {Record<'a'|'b', null | { layer: object, collection: object, candidate: object, box: object, alpha: number, split: string }>} */
+  /** @type {Record<'a'|'b', null | { layers: Array<object>, collection: object, candidate: object, box: object, alpha: number, split: string }>} */
   const owned = { a: null, b: null };
 
   // One timer for both slots: any number of upstream deferrals while it is
@@ -124,33 +136,67 @@ export function createRecentImageryRenderer({
     const record = owned[slotId];
     if (!record) return false;
     owned[slotId] = null;
-    try {
-      record.collection.remove(record.layer, true);
-    } catch {
-      /* the collection is already gone */
+    for (const layer of record.layers) {
+      try {
+        record.collection.remove(layer, true);
+      } catch {
+        /* the collection is already gone */
+      }
     }
     return true;
   }
 
   function applyLook(record) {
-    record.layer.alpha = record.alpha;
-    record.layer.splitDirection =
+    const alpha = record.alpha;
+    const splitDirection =
       cesium.SplitDirection?.[SPLIT_ENUM[record.split] || 'NONE'] ?? 0;
+    for (const layer of record.layers) {
+      layer.alpha = alpha;
+      layer.splitDirection = splitDirection;
+    }
   }
 
-  function mount(slotId, { candidate, box, alpha, split }) {
-    const layer = host.collection.addImageryProvider(
-      createProvider(candidate, box),
-    );
+  function mount(slotId, { candidate, box, alpha, split, availableBoxes }) {
+    // [] means "not a box": add no layer rather than drape the raw box.
+    const parts = nonCrossingBoxes(box);
+    if (!parts.length) return false;
+    // Skip confirmed-empty halves; a failed probe is not proof of emptiness.
+    // No evidence drapes the whole box, as before. Evidence for a different
+    // box leaves the slot empty rather than applying stale availability.
+    const allowed = Array.isArray(availableBoxes)
+      ? parts.filter((part) =>
+          availableBoxes.some((half) => half && boxKey(half) === boxKey(part)),
+        )
+      : parts;
+    if (!allowed.length) return false;
+    // Build every provider before adding any layer, so a throw on the second
+    // half of a dateline box cannot leave the first layer untracked.
+    const providers = allowed.map((part) => createProvider(candidate, part));
+    const layers = [];
+    try {
+      for (const provider of providers)
+        layers.push(host.collection.addImageryProvider(provider));
+    } catch (error) {
+      for (const layer of layers) {
+        try {
+          host.collection.remove(layer, true);
+        } catch {
+          /* the collection is already gone */
+        }
+      }
+      throw error;
+    }
     owned[slotId] = {
-      layer,
+      layers,
       collection: host.collection,
       candidate,
       box,
       alpha,
       split,
+      availableBoxes,
     };
     applyLook(owned[slotId]);
+    return true;
   }
 
   return {
@@ -167,7 +213,7 @@ export function createRecentImageryRenderer({
       slotId,
       candidate,
       box,
-      { alpha = 1, splitDirection = 'none' } = {},
+      { alpha = 1, splitDirection = 'none', availableBoxes = null } = {},
     ) {
       if (destroyed || !candidate?.key || !box) return false;
       if (!host.collection) {
@@ -180,7 +226,8 @@ export function createRecentImageryRenderer({
         current &&
         current.collection === host.collection &&
         current.candidate.key === candidate.key &&
-        boxKey(current.box) === boxKey(box)
+        boxKey(current.box) === boxKey(box) &&
+        boxesKey(current.availableBoxes) === boxesKey(availableBoxes)
       ) {
         if (current.alpha !== look.alpha || current.split !== look.split) {
           Object.assign(current, look);
@@ -189,8 +236,11 @@ export function createRecentImageryRenderer({
         }
         return true;
       }
-      removeOwned(slotId);
-      mount(slotId, { candidate, box, ...look });
+      const removed = removeOwned(slotId);
+      if (!mount(slotId, { candidate, box, ...look, availableBoxes })) {
+        if (removed) requestRender('recent-imagery-hide');
+        return false;
+      }
       requestRender('recent-imagery-show');
       return true;
     },
@@ -248,7 +298,7 @@ export function createRecentImageryRenderer({
       return out;
     },
 
-    /** Number of layers this renderer owns (never above two). */
+    /** Number of slots this renderer owns (never above two). A dateline box uses two imagery layers in its slot. */
     ownedCount() {
       return SLOT_IDS.filter((slotId) => owned[slotId]).length;
     },

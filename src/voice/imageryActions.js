@@ -17,7 +17,12 @@
  * @module voice/imageryActions
  */
 
-import { PRODUCTS, rankLatest } from '../layers/recentImagery/model.js';
+import {
+  PRODUCTS,
+  boxCentre,
+  lonSpanDeg,
+  rankLatest,
+} from '../layers/recentImagery/model.js';
 import {
   displacedLayerResult,
   watchExplicitLayerOff,
@@ -203,19 +208,18 @@ export async function findImagery(
         `No area "${args.areaId}" on this page — call resolve_area again.`,
       );
     const [west, south, east, north] = record.bbox;
-    if (west > east)
-      return fail(
-        'DATELINE',
-        `${record.name} crosses the date line; the imagery box needs one side of it.`,
-      );
     // 30 m pixels over a landmark-sized area show a handful of blobs: a small
     // area gets the layer's own 10 km box around its centre instead.
+    // west > east is the short arc across the date line: measure and centre
+    // it with the layer's own helpers, never (west + east) / 2.
     const small =
       (north - south) * 111 < 5 &&
-      (east - west) * 111 * Math.cos((((north + south) / 2) * Math.PI) / 180) <
+      lonSpanDeg(west, east) *
+        111 *
+        Math.cos((((north + south) / 2) * Math.PI) / 180) <
         5;
     box = small
-      ? { pin: { lon: (west + east) / 2, lat: (south + north) / 2 } }
+      ? { pin: boxCentre({ west, south, east, north }) }
       : { west, south, east, north };
     areaName = record.name;
   } else if (where === 'point') {
