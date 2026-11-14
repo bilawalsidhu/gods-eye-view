@@ -1,4 +1,5 @@
 import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
+import { aidToNavigationTypeName } from '../../../src/data/vesselTypes.js';
 export const AISSTREAM_CACHE_MAX = 50000;
 export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
 // Per-MMSI recent-path ring buffers (PRD WS-F F3). Float32 lat/lon (~1m
@@ -118,7 +119,12 @@ export function ingestAisStreamEnvelope(envelope) {
     name: vesselNameFromAis(metadata, message, staticData) || `MMSI ${mmsi}`,
     mmsi,
     imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
-    type: vesselTypeFromAis(message, staticData),
+    // An aid-to-navigation report's type is the kind of aid (0 to 31), not
+    // a ship type: it is carried as the aid's name ("Cardinal Mark N").
+    type:
+      messageType === 'AidsToNavigationReport'
+        ? aidToNavigationTypeName(message.Type)
+        : vesselTypeFromAis(message, staticData),
     destination: stringValue(message.Destination ?? staticData.destination),
     length: staticData.length ?? null,
     beam: staticData.beam ?? null,

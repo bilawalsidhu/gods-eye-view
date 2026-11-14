@@ -515,3 +515,27 @@ test('AIS feed rows stay keyed by their MMSI', async () => {
     ['235000001', '235000001'],
   );
 });
+
+test('an aid to navigation is drawn as a disc, a vessel as its chevron', async () => {
+  const aid = {
+    ...observation('993672001'),
+    mmsi: '993672001',
+    type: 'Port Hand Mark',
+    speedMps: 0,
+  };
+  const ship = { ...observation('366999002'), type: 'Cargo' };
+  const { layer, primitives } = setup({
+    async getSnapshot() {
+      return snapshot([aid, ship]);
+    },
+  });
+  await layer.update();
+  const svgOf = (id) => {
+    const primitive = [...primitives].find((p) => p.id?.id === id);
+    assert.ok(primitive, id);
+    return atob(primitive.image.split(',')[1]);
+  };
+  assert.match(svgOf('993672001'), /<circle/);
+  assert.doesNotMatch(svgOf('993672001'), /<path/);
+  assert.match(svgOf('366999002'), /<path/);
+});

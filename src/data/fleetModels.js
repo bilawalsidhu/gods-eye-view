@@ -11,6 +11,9 @@
  * vehicle's road or rail top), and is drawn life size: a type's published
  * length over the model's built length is its scale.
  *
+ * An aid to navigation (a buoy, beacon, mark, RACON or light) is drawn as
+ * the set's buoy of its IALA mark, by the mark its type names.
+ *
  * The resolvers are plain functions over the parsed JSON; `loadFleetModelSet`
  * fetches the JSON and every GLB once, up front, so no model is fetched
  * mid-session.
@@ -18,6 +21,7 @@
 
 import { classifyAircraft } from './aircraftClass.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
+import { isAidToNavigation } from './vesselTypes.js';
 
 /** Where the model set is served, relative to the application base. */
 export const FLEET_MODEL_BASE = '/models/fleet/';
@@ -83,6 +87,44 @@ const TEXT_SHIP_TYPES = [
   [/sail/i, 36],
   [/pleasure|yacht/i, 37],
 ];
+
+/**
+ * The buoy an aid to navigation is drawn as, by the mark its type names
+ * ("Cardinal Mark N", "Beacon, Port hand", "Safe Water"): the first pattern
+ * that matches. Beacons, lights, RACONs and reference points with no mark of
+ * their own are the special mark.
+ */
+const AID_MODELS = [
+  [/cardinal\b.*\bn(orth)?$/i, 'buoy_cardinal_north'],
+  [/cardinal\b.*\be(ast)?$/i, 'buoy_cardinal_east'],
+  [/cardinal\b.*\bs(outh)?$/i, 'buoy_cardinal_south'],
+  [/cardinal\b.*\bw(est)?$/i, 'buoy_cardinal_west'],
+  [/isolated danger/i, 'buoy_isolated_danger'],
+  [/safe water/i, 'buoy_safe_water'],
+  [/port hand/i, 'buoy_lateral_port'],
+  [/starboard hand/i, 'buoy_lateral_starboard'],
+  [/special mark|light vessel|lanby/i, 'buoy_special'],
+  [
+    /^(beacon|light\b|leading light|racon|reference point|navigation aid)/i,
+    'buoy_special',
+  ],
+];
+
+/** The buoy an aid to navigation whose type names no mark is drawn as. */
+export const DEFAULT_AID_MODEL = 'can_red';
+
+/**
+ * The buoy model of an aid to navigation's type, else undefined when the
+ * type names no mark.
+ * @param {string|null} [type]
+ * @returns {string|undefined}
+ */
+export function aidToNavigationModel(type) {
+  const text = String(type ?? '').trim();
+  for (const [pattern, model] of AID_MODELS)
+    if (pattern.test(text)) return model;
+  return undefined;
+}
 
 /**
  * The model for an aircraft of ICAO type `type` (A320, B738, R44), ADS-B
@@ -397,13 +439,26 @@ export function aircraftModelSpec(
 
 /**
  * The model a vessel is drawn with, from its AIS ship type (a code or a text
- * family), reported length and beam (metres) and name.
+ * family), reported length and beam (metres) and name. An aid to navigation
+ * ({@link isAidToNavigation}: its type names a buoy, beacon, mark, RACON or
+ * light, or its MMSI is an aid's) is the buoy of its mark
+ * ({@link aidToNavigationModel}), else {@link DEFAULT_AID_MODEL}, drawn as
+ * built and flagged `fixed`: it has no heading to turn to.
  * @param {{catalog: object, types: object}} set
- * @param {{type?: string|number|null, length?: number|null,
- *   beam?: number|null, name?: string|null}} vessel
- * @returns {object} {@link fleetModelSpec}
+ * @param {{type?: string|number|null, mmsi?: string|number|null,
+ *   length?: number|null, beam?: number|null, name?: string|null}} vessel
+ * @returns {object} {@link fleetModelSpec}, with `fixed` for an aid
  */
-export function vesselModelSpec(set, { type, length, beam, name } = {}) {
+export function vesselModelSpec(set, { type, mmsi, length, beam, name } = {}) {
+  if (isAidToNavigation({ type, mmsi })) {
+    const model = aidToNavigationModel(type);
+    const known = model && set.catalog[model] ? model : DEFAULT_AID_MODEL;
+    if (set.catalog[known])
+      return Object.freeze({
+        ...fleetModelSpec(set, known, null),
+        fixed: true,
+      });
+  }
   // A beam counts only beside a reported length: a vessel drawn at its type's
   // typical length keeps the model's proportions.
   const reported = hullLength(length ?? undefined);
@@ -460,6 +515,8 @@ export function namedFleetModels(types) {
     transit.default[0],
     ...Object.keys(transit.elevation),
     ...Object.values(CLASS_MODELS),
+    ...AID_MODELS.map(([, model]) => model),
+    DEFAULT_AID_MODEL,
   ]);
 }
 

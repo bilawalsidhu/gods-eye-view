@@ -28,6 +28,10 @@ import {
   vesselModelSpec,
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
+import { isAidToNavigation } from '../../data/vesselTypes.js';
+
+/** An aid to navigation's disc: a bone white apart from every ship type's colour. */
+const AID_ICON_CSS = '#d9d2c0';
 
 /** How often vessels move on as the world clock plays (wall ms). */
 const FOLLOW_POSITION_MS = 250;
@@ -182,12 +186,14 @@ export function createRendering({
    * Best available real-world direction of travel for a vessel, degrees
    * clockwise from north (true heading preferred, course-over-ground fallback).
    * Screen rotation is computed from this by the shared projected-rotation
-   * pass in updateVisibility — never directly from the compass value.
+   * pass in updateVisibility — never directly from the compass value. An aid
+   * to navigation is fixed, so it has none.
    * @param {Object} record - Vessel record.
    * @returns {number} Course in degrees (0 when unknown).
    */
 
   function vesselCourseDeg(record) {
+    if (isAidToNavigation(record)) return 0;
     const direction = record.heading ?? record.course;
     return Number.isFinite(direction) ? direction : 0;
   }
@@ -195,6 +201,7 @@ export function createRendering({
   /**
    * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
    * The shape points north (up) so billboard rotation maps directly to heading.
+   * An aid to navigation, which has no heading, is a ringed disc instead.
    * One icon is generated per color+variant and reused across all billboards.
    * @param {Object} record - Vessel record (drives per-type tint).
    * @param {boolean} selected - True for the white/brighter selected variant.
@@ -202,16 +209,25 @@ export function createRendering({
    */
 
   function shipIcon(record, selected) {
-    const cssColor = selected ? '#ffffff' : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}`;
+    const aid = isAidToNavigation(record);
+    const cssColor = selected
+      ? '#ffffff'
+      : aid
+        ? AID_ICON_CSS
+        : vesselTypeCss(record.type);
+    const key = `${cssColor}:${selected ? 'selected' : 'normal'}:${aid ? 'aid' : 'ship'}`;
     if (vesselState.shipIconCache.has(key))
       return vesselState.shipIconCache.get(key);
 
     const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
     const strokeWidth = selected ? 1.1 : 0.7;
+    const shape = aid
+      ? `<circle r="8" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth * 2}"/>
+      <circle r="3" fill="${stroke}"/>`
+      : `<path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
     <g transform="translate(16,16)">
-      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
+      ${shape}
     </g>
   </svg>`;
     const icon = 'data:image/svg+xml;base64,' + btoa(svg);
@@ -265,13 +281,14 @@ export function createRendering({
     let item = modelItems.get(record.id);
     if (!item || item.record !== record)
       item = { record, pickId: record, tint: null, modelOwnsVisual: false };
-    const specKey = `${record.type}|${record.length}|${record.beam}|${record.name}`;
+    const specKey = `${record.type}|${record.mmsi}|${record.length}|${record.beam}|${record.name}`;
     if (item.specKey !== specKey) {
       item.specKey = specKey;
       item.spec = vesselModelSpec(set, record);
     }
     item.position = getVisual(record).waterline;
-    item.headingDeg = vesselCourseDeg(record);
+    // An aid to navigation is a fixed mark: it does not turn to a heading.
+    item.headingDeg = item.spec?.fixed ? 0 : vesselCourseDeg(record);
     item.show = record.id !== state.cockpitSubjectId;
     return item;
   }

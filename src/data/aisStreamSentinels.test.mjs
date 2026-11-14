@@ -316,3 +316,29 @@ test('a Class B report carries its dimensions in part B', () => {
   assert.equal(row.length, 12);
   assert.equal(row.beam, 4);
 });
+
+test('an aid-to-navigation report is a row named by its kind of aid, not a ship type', () => {
+  assert.equal(
+    ingestAisStreamEnvelope({
+      MessageType: 'AidsToNavigationReport',
+      Message: {
+        AidsToNavigationReport: {
+          UserID: 993672001,
+          Type: 20,
+          Name: 'SF APPROACH N',
+        },
+      },
+      MetaData: {
+        MMSI: '993672001',
+        latitude: 37.79,
+        longitude: -122.52,
+        time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+      },
+    }),
+    true,
+  );
+  const row = rowFor('993672001');
+  assert.equal(row.type, 'Cardinal Mark N');
+  assert.equal(row.name, 'SF APPROACH N');
+  assert.equal(row.speed, null);
+});
