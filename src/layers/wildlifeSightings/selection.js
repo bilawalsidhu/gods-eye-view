@@ -498,7 +498,13 @@ export function createSelection({ state, services, parts }) {
         return;
       }
       // A sighting icon's item id is its pick id, `wildlife:<stableId>`.
-      const id = click.id;
+      // Read from what is exactly under the click, as the scene's pick was:
+      // a touch's wider contact search would select a sighting the tap
+      // missed, or keep one open for a tap near another layer's contact.
+      const picked = click.topHit;
+      const id = picked
+        ? (services.picking?.resolvePickId?.(picked) ?? picked.id ?? null)
+        : null;
       if (
         typeof id === 'string' &&
         id.startsWith('wildlife:') &&

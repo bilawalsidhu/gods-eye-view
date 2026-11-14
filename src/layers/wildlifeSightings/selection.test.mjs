@@ -99,9 +99,13 @@ function fixture(sighting = row, extraServices = {}) {
       for (const id of ids) painted.add(id);
       selection.photoCardsChanged();
     },
-    click(id = `wildlife:${sighting.stableId}`) {
-      // The input dispatcher hands the pick's registry-resolved id.
-      click({ screenPosition: { x: 10, y: 20 }, id: id ?? undefined });
+    click(id = `wildlife:${sighting.stableId}`, { touchId } = {}) {
+      // The exact top hit, and the id a touch's wider contact search finds.
+      click({
+        screenPosition: { x: 10, y: 20 },
+        topHit: id ? { set: 'wildlife', id } : null,
+        id: touchId ?? id ?? undefined,
+      });
     },
   };
 }
@@ -298,6 +302,17 @@ test('empty clicks and layer removal release the selected row and its overlay', 
   assert.equal(f.state.selectedId, null);
   assert.equal(f.seen.at(-1).value, null);
   assert.equal(f.entries.size, 0);
+});
+
+test('a tap selects only a sighting exactly under it, not one the touch search found near it', () => {
+  const f = fixture();
+  f.selection.install();
+  f.click(null, { touchId: `wildlife:${row.stableId}` });
+  assert.equal(f.state.selectedId, null);
+  f.click();
+  assert.ok(f.state.selectedId);
+  f.click(null, { touchId: 'other:aircraft' });
+  assert.equal(f.state.selectedId, null, 'a tap near another contact clears');
 });
 
 test('each sighting in context carries the point voice projects to find what is in view', () => {

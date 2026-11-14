@@ -204,7 +204,9 @@ function harness(
         clicks.callback = (click) =>
           fn({
             screenPosition: click.position,
-            id: picked?.id ?? picked?.primitive?.id ?? null,
+            topHit: picked
+              ? { set: 'wildlife', id: picked.id ?? picked.primitive?.id }
+              : null,
           });
         return () => {
           clicks.destroyed = true;
