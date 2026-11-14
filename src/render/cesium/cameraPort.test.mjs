@@ -305,6 +305,26 @@ test('setFov holds the vertical angle across resizes, and waits for a first one'
   assert.throws(() => port.setFov({ vertical: NaN }), RangeError);
 });
 
+test('setFov(null) gives the angle back: Cesium’s own fov again, kept as Cesium keeps it', () => {
+  const { scene, camera } = headlessCamera();
+  scene.postUpdate = new Cesium.Event();
+  scene.requestRender = () => {};
+  camera.frustum.aspectRatio = 16 / 9;
+  const own = camera.frustum.fov;
+  const { port } = createCesiumCamera({ scene, camera, report: () => {} });
+  port.setFov({ vertical: 0.5 });
+  port.setFov({ vertical: 0.3 });
+  scene.postUpdate.raiseEvent(scene);
+  port.setFov(null);
+  assert.equal(camera.frustum.fov, own, 'the fov it had before the first hold');
+  // Rotated to portrait: Cesium keeps its fov, which is now the vertical
+  // angle, rather than the held one.
+  camera.frustum.aspectRatio = 9 / 16;
+  scene.postUpdate.raiseEvent(scene);
+  assert.equal(camera.frustum.fov, own);
+  assert.ok(Math.abs(camera.frustum.fovy - own) < 1e-12);
+});
+
 test('a pose measures heading, pitch and roll as Cesium does, and leaves the camera as it was', () => {
   const { camera, port } = headlessPort();
   const bits = () =>

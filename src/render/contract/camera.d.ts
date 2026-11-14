@@ -240,7 +240,12 @@ export interface CameraPort {
    * sent many times over.
    */
   setView(view: ViewSpec): void;
-  setFov(fov: { vertical: number }): void;
+  /**
+   * Hold the vertical field of view, across resizes, until `null` gives the
+   * field of view back to the renderer: it is then as it was before the
+   * first hold, and follows the view's shape as the renderer's own does.
+   */
+  setFov(fov: { vertical: number } | null): void;
   /**
    * The geodetic rectangle in view: the bounds of the canvas corners on the
    * ellipsoid, a corner that misses it taken where the horizon is, and the

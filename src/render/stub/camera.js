@@ -798,8 +798,9 @@ export function createStubCamera({
   const port = {
     pose,
     setView,
-    setFov({ vertical }) {
-      fovy = vertical;
+    setFov(fov) {
+      // null: the stub's own angle again, the wider one kept as it was.
+      fovy = fov === null ? null : fov.vertical;
       requestRender('camera');
     },
     viewRectangle: () => null,

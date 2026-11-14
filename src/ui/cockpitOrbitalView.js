@@ -72,11 +72,10 @@ const IDLE_TRANSITION = Object.freeze({
 const NADIR_LOOK = Object.freeze({ yawDeg: 0, pitchDeg: 0 });
 
 /**
- * Start an orbital session's state. Keeps the camera's own field of view so
- * the exit can put it back exactly.
+ * Start an orbital session's state. The exit gives the field of view back
+ * to the renderer, as it was before the session.
  */
 export function beginOrbital() {
-  const fovy = cameraOf(this.viewer).pose().fovy;
   const state = {
     imagery: acquireOrbitImagery(this.services),
     zoom: ORBITAL_DEFAULT_ZOOM,
@@ -85,8 +84,6 @@ export function beginOrbital() {
     // A zoom step in flight: the magnification it started from and when.
     transition: null,
     previousUp: null,
-    // The vertical field of view the camera had, put back on exit.
-    savedFov: Number.isFinite(fovy) ? fovy : null,
     altitudeM: null,
     verticalFov: null,
     lastBriefMs: 0,
@@ -116,8 +113,8 @@ export function endOrbital() {
   if (!state) return;
   this.orbital = null;
   state.placeTracker?.reset();
-  if (state.savedFov !== null)
-    cameraOf(this.viewer).setFov({ vertical: state.savedFov });
+  // The renderer's own field of view again, following the view's shape.
+  cameraOf(this.viewer).setFov(null);
   // Back to the map the operator had, unless they picked another meanwhile.
   state.imagery?.release?.()?.catch?.(() => {});
   this.publishOrbital(null);

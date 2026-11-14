@@ -917,9 +917,10 @@ export function cameraChecks() {
     {
       id: 'camera.fov',
       port: 'camera',
-      title: 'setFov sets the vertical field of view',
+      title: 'setFov sets the vertical field of view; null gives it back',
       async run(h) {
         const r = await fresh(h);
+        const own = r.camera.pose().fovy;
         r.camera.setFov({ vertical: 0.5 });
         near(r.camera.pose().fovy, 0.5, 1e-12, 'fovy');
         near(
@@ -928,6 +929,8 @@ export function cameraChecks() {
           1e-9,
           'aspect',
         );
+        r.camera.setFov(null);
+        near(r.camera.pose().fovy, own, 1e-9, 'the renderer’s own again');
         r.destroy();
       },
     },

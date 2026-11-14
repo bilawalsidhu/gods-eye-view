@@ -240,6 +240,8 @@ export function createCesiumCamera({
    * view, it waits.
    */
   let heldFovy = null;
+  /** Cesium's own `fov` before the first hold, put back on release. */
+  let ownFov = null;
   function applyFov() {
     const frustum = camera.frustum;
     const aspect = frustum?.aspectRatio;
@@ -388,10 +390,22 @@ export function createCesiumCamera({
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
       scene.requestRender();
     },
-    setFov({ vertical }) {
+    setFov(fov) {
+      const frustum = camera.frustum;
+      if (fov === null) {
+        // Given back: Cesium's own angle again, kept as it keeps it.
+        if (heldFovy !== null && ownFov !== null && 'fov' in frustum)
+          frustum.fov = ownFov;
+        heldFovy = null;
+        ownFov = null;
+        scene.requestRender();
+        return;
+      }
+      const { vertical } = fov;
       // Cesium would take a bad angle and draw a garbage projection.
       if (!(vertical > 0 && vertical < Math.PI))
         throw new RangeError(`no vertical field of view of ${vertical}`);
+      if (heldFovy === null && 'fov' in frustum) ownFov = frustum.fov;
       heldFovy = vertical;
       applyFov();
       scene.requestRender();
