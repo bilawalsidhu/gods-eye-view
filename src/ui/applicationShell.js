@@ -644,6 +644,9 @@ export class StyleManager extends ShellFacade {
     this._publishActiveStyle();
     this._updateLocationMiniStatus();
 
+    this._visualSettings.restoreLocalPreferences({
+      sharedView: !!this._initialShareState,
+    });
     this._shareRestoration.start();
 
     // Keep the parameter panel from overlapping toggle controls.
@@ -935,6 +938,7 @@ export class StyleManager extends ShellFacade {
 
   _syncShareState() {
     if (this._disposed) return;
+    this._visualSettings?.persistLocalPreferences();
     this._shareState.publish({ type: 'settings-changed' });
   }
 

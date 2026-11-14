@@ -713,6 +713,22 @@ Regression coverage lives in `src/tools/area.test.mjs`,
 `src/tools/queries/environment.test.mjs` and
 `src/layers/perimeters/cards.test.mjs`.
 
+## Saved Display preferences
+
+Display choices save automatically in this browser and restore after a restart:
+HUD layout and visibility, sonar on/off and tuning, active visual style and its
+sliders, bloom, sharpen, detection, scope, celestial ring and map source. An
+explicit sonar OFF remains OFF after reload and when opening a shared view.
+Shared views take precedence over locally saved visual/map fields. Existing
+panel docking, pinning and disclosure preferences remain with the panel controls.
+
+Preferences belong to the app's browser origin (scheme, hostname and port);
+private browsing or clearing site data can remove them. Storage failures do not
+prevent startup or disable the controls. The key is
+`gev:display-preferences:v1`; removing it resets saved Display choices.
+
+`node scripts/qa-display-preferences.mjs` checks real controls and fresh starts.
+
 ## Scope display controls
 
 Display's native Scope checkbox defaults ON with feather at 100%, adjustable
