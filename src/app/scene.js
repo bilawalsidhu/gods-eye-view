@@ -15,6 +15,8 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
+import { isEmbeddedInline } from './embed.js';
+import { installRenderFailureNotice } from '../ui/renderFailure.js';
 import { worldClock, worldTimeFor } from '../time/worldClock.js';
 import { followWorldTime } from '../time/viewerClock.js';
 import { onLocaleChange, t } from '../i18n/index.js';
@@ -55,11 +57,17 @@ export async function createApplicationScene({
   const viewer = createApplicationViewer({
     container: 'cesiumContainer',
     creditContainer,
+    // The render failure notice below replaces Cesium's dead-end panel.
+    showRenderLoopErrors: false,
   });
   defer(() => {
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  // An inline panel must not reload or navigate its host's page.
+  defer(
+    installRenderFailureNotice(viewer, { allowReload: !isEmbeddedInline() }),
+  );
   defer(installTrackpadPinchZoom(viewer));
   defer(
     followWorldTime(viewer, worldTimeFor('sky'), {

@@ -3966,5 +3966,12 @@
   "Confirm: remove every added entry from Data Layers": "تأكيد: إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Remove every added entry from Data Layers": "إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Showing {shown} of {total}": "عرض {shown} من {total}",
-  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات"
+  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات",
+  "The globe stopped drawing": "توقفت الكرة الأرضية عن الرسم",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "استعاد المتصفح رسومات الكرة الأرضية ثلاثية الأبعاد. لا تزال الطبقات وعناصر التحكم تعمل، لكن الخريطة لن تُرسم حتى تُعاد تحميل الصفحة.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "توقف العرض بعد خطأ. لا تزال الطبقات وعناصر التحكم تعمل، لكن الخريطة لا يتم تحديثها.",
+  "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
+  "Reload": "إعادة التحميل",
+  "Retry": "إعادة المحاولة",
+  "Reset view": "إعادة ضبط العرض"
 }

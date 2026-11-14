@@ -400,6 +400,27 @@ test('Enter finishes from the canvas and the label field, never from a focused b
   }
 });
 
+test('Enter on the globe canvas finishes, as after the render failure notice hands focus back', async () => {
+  const h = harness();
+  try {
+    h.act('toggleDraw');
+    h.tool.setShape('area');
+    h.tool.addVertex(-97.75, 30.26);
+    h.tool.addVertex(-97.74, 30.26);
+    h.tool.addVertex(-97.74, 30.27);
+
+    // src/ui/views/panels/RenderFailure.vue focuses the canvas when the globe
+    // draws again and the control that had focus is gone.
+    h.documentDouble.emit('keydown', { key: 'Enter', target: h.viewer.scene.canvas });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(h.annotations.calls.annotate.length, 1, 'Enter on the canvas finishes');
+    assert.equal(h.annotations.calls.annotate[0].specs[0].type, 'area');
+  } finally {
+    h.restore();
+  }
+});
+
 test('the live preview hangs at the height the click landed on', async () => {
   const h = harness();
   try {
