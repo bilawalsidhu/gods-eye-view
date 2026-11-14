@@ -168,3 +168,41 @@ test('a viewer with nothing to draw with is refused at init, and init can be ret
   layer.destroy();
   unbind();
 });
+
+test('a double-click follows a disc, framed to fit it, as its entity was', async (t) => {
+  const { bindRenderer } = await import('../../render/rendererOf.js');
+  const { createStubRenderer } = await import('../../render/stub/index.js');
+  const { resetPointerOwnership } = await import('../../input/dispatcher.js');
+  resetPointerOwnership?.();
+  const renderer = createStubRenderer();
+  const viewer = { isDestroyed: () => false };
+  const unbind = bindRenderer(viewer, renderer);
+  const layer = createEarthquakesLayer({
+    source: { getSnapshot: async () => [row] },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  t.after(() => {
+    layer.destroy(viewer);
+    unbind();
+    renderer.destroy();
+    resetPointerOwnership?.();
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  await layer.update(viewer);
+  const set = renderer.testing
+    .sets()
+    .find((id) => id.startsWith('earthquakes:'));
+  renderer.testing.scriptPicks(() => [
+    { set, id: 'earthquake:event-a', surface: false },
+  ]);
+  renderer.testing.pointer('dblclick', 10, 10);
+  const followed = renderer.camera.followed;
+  assert.ok(followed, 'the disc is followed');
+  assert.equal(followed.key, `${set}:earthquake:event-a`);
+  const p = followed.position(0);
+  const lon = (Math.atan2(p.y, p.x) * 180) / Math.PI;
+  assert.ok(Math.abs(lon - row.lon) < 1e-9, String(lon));
+  layer.disable(viewer);
+  assert.equal(renderer.camera.followed, null, 'hiding the layer stops it');
+});

@@ -1,5 +1,7 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { drawOf } from '../../render/rendererOf.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { drawOf, findInput } from '../../render/rendererOf.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -32,13 +34,20 @@ let instances = 0;
  * Given a Cesium viewer with no renderer bound, the
  * caller loads the package's `./render/cesium/unbound` export first.
  */
-export function createEarthquakesLayer({ source, overlayHost } = {}) {
+export function createEarthquakesLayer({
+  source,
+  overlayHost,
+  inputFor = defaultInputFor,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Earthquakes require a snapshot source');
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
   let _viewer = null;
   let _request = null;
   let _discs = null;
+  // Each drawn disc's centre and radius, for a double-click to follow.
+  let _discsById = new Map();
+  let _stockFollow = null;
   // What the discs were drawn from, so analyst reads come from the app, not the drawing.
   let _events = [];
   let _count = 0;
@@ -60,6 +69,26 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         show: false,
       });
       _viewer = viewer;
+      // A double-click follows a disc, framed to fit it, as the default
+      // renderer followed the discs' entities (a scene that takes no input
+      // has no double-click).
+      _stockFollow =
+        findInput(viewer) &&
+        followOnDoubleClick({
+          viewer,
+          inputFor,
+          name: 'earthquakes',
+          enabled: () => _enabled,
+          targetFor: (hit) => {
+            const disc = hit.set === _discs?.id && _discsById.get(hit.id);
+            if (!disc) return null;
+            return {
+              key: `${hit.set}:${hit.id}`,
+              position: () => ({ ...disc.center }),
+              sphere: { center: disc.center, radius: disc.radius },
+            };
+          },
+        });
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -80,6 +109,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _request?.abort();
       _request = null;
       _enabled = false;
+      _stockFollow?.stop();
       if (_discs) _discs.show = false;
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
@@ -96,6 +126,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           return false;
 
         const nextDiscs = [];
+        const nextById = new Map();
         const nextEvents = [];
         let count = 0;
         const overlayEntries = [];
@@ -119,6 +150,10 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
 
           const position = fromDegrees(lon, lat);
           nextEvents.push({ usgsId, mag, place, time, depthKm, lon, lat });
+          nextById.set(`earthquake:${stableId}`, {
+            center: position,
+            radius: baseRadius,
+          });
           // A filled disc on the ground, with static axes: re-tessellating
           // clamped ground geometry every frame is what once cost 30 fps.
           // No outline: clamped to the ground, Cesium never drew one.
@@ -145,6 +180,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         }
 
         _discs.set(nextDiscs);
+        _discsById = nextById;
         _events = nextEvents;
         if (_enabled) {
           overlayHost.setEntries(
@@ -181,8 +217,11 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _enabled = false;
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
+      _stockFollow?.destroy();
+      _stockFollow = null;
       _discs?.dispose();
       _discs = null;
+      _discsById = new Map();
       _events = [];
       _count = 0;
       _lastUpdate = null;
