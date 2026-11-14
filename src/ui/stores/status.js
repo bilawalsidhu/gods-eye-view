@@ -7,7 +7,9 @@ import { markRaw, shallowRef } from 'vue';
  * road network chip, CctvControls the camera grid chip; the toast shows
  * what any owner's createToast() (src/ui/toast.js) publishes, and the title
  * bar the FPS readout createFrameRateMonitor() publishes. Each label keeps its
- * last text while hidden, so the next change flaps from what was shown.
+ * last text while hidden, so the next change flaps from what was shown. The
+ * render failure notice is what installRenderFailureNotice()
+ * (src/ui/renderFailure.js) publishes while the globe cannot draw.
  */
 export const useStatusStore = defineStore('gev-status', () => {
   /**
@@ -31,6 +33,13 @@ export const useStatusStore = defineStore('gev-status', () => {
    * counts frames.
    */
   const fps = shallowRef(null);
+
+  /**
+   * The globe's render failure, `{reason, detail, retry, reset}`; null while
+   * the globe draws. `reason` is 'render-error' or 'context-lost', and `retry`
+   * and `reset` are null where that action is not offered.
+   */
+  const renderFailure = shallowRef(null);
 
   /** @param {?object} next A fresh presentation of the loading status. */
   function publishLoading(next) {
@@ -57,6 +66,11 @@ export const useStatusStore = defineStore('gev-status', () => {
     fps.value = next && markRaw(next);
   }
 
+  /** @param {?object} next A fresh presentation of the render failure. */
+  function publishRenderFailure(next) {
+    renderFailure.value = next && markRaw(next);
+  }
+
   return {
     fps,
     publishFps,
@@ -68,5 +82,7 @@ export const useStatusStore = defineStore('gev-status', () => {
     publishTraffic,
     cctv,
     publishCctv,
+    renderFailure,
+    publishRenderFailure,
   };
 });

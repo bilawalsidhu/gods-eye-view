@@ -72,6 +72,8 @@ export function createIngestion({ state, services, parts, source }) {
   function removeVehicle(key) {
     const entry = state._vehicles.get(key);
     if (!entry) return;
+    // A first-person view on it loses its subject (cockpitSubject.js).
+    if (state._cockpitSubjectKey === key) state._cockpitSubjectKey = null;
     if (state._selectedKey === key) parts.selection.clearSelection();
     if (entry.marker) entry.markerCollection?.remove(entry.marker);
     entry.marker = null;

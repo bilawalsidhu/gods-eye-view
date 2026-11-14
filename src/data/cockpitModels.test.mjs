@@ -28,11 +28,13 @@ for (const layer of LAYERS) {
   const source = readLayerSource(layer.path);
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
-    const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
-    assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
+    const calls = [...source.matchAll(/_createModel\(\s*\w+,\s*\{([\s\S]*?)\n\s*\}\)/g)];
+    assert.ok(calls.length >= 2, `expected fleet and tracked model calls; found ${calls.length}`);
+    assert.doesNotMatch(source, /Cesium\.Model\.fromGltfAsync\(/,
+      'every model is built from the loaded fleet set through _createModel');
     for (const [index, call] of calls.entries()) {
       assert.match(call[1], /\basynchronous:\s*false\b/,
-        `Model.fromGltfAsync call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
+        `_createModel call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
     }
   });
 

@@ -47,11 +47,31 @@ export function pathWindowM(dtMs) {
   return window > PATH_WINDOW_MAX_M ? NaN : window;
 }
 
+/** Arc moved between two reports before it says which way a train runs (m). */
+const DIRECTION_MIN_M = 1;
+
+/** +1 or -1 for an arc step longer than DIRECTION_MIN_M, else `known`. */
+function directionOf(step, known) {
+  return Number.isFinite(step) && Math.abs(step) > DIRECTION_MIN_M
+    ? Math.sign(step)
+    : known;
+}
+
 function createBinding(shapeIndex, path, via, s, fix) {
   return {
     shapeIndex,
     path,
     via,
+    /**
+     * Which way the drawn train runs along the shape: +1 along it, -1
+     * against it, 0 until two reports or a playback segment tell. Kept until
+     * a rebind. Once playback has placed the train, only playback changes
+     * it: the newest reports run ahead of the drawn train, so a reversal
+     * they show turns it when playback reaches it.
+     */
+    direction: 0,
+    /** The direction the last placed playback segment ran, 0 before one. */
+    drawDirection: 0,
     /** Arc and time of the newest report. */
     fixS: s,
     fixT: fix.t,
@@ -139,6 +159,8 @@ export function followFix(binding, fix) {
     pathWindowM(fix.t - binding.fixT),
   );
   if (!hit || hit.offsetM > PATH_OFF_TRACK_M) return false;
+  if (!binding.drawDirection)
+    binding.direction = directionOf(hit.s - binding.fixS, binding.direction);
   binding.fixS = hit.s;
   binding.fixT = fix.t;
   binding.fixLat = fix.lat;
@@ -230,6 +252,13 @@ export function placeOnPath(binding, sample, segment, out) {
     cache.sFrom = sFrom;
     cache.sTo = sTo;
     cache.ok = Number.isFinite(sFrom) && Number.isFinite(sTo);
+    if (cache.ok) {
+      binding.drawDirection = directionOf(
+        sTo - sFrom,
+        binding.drawDirection || binding.direction || 0,
+      );
+      binding.direction = binding.drawDirection;
+    }
   }
   if (!cache.ok) return false;
   const f = Number.isFinite(sample.fraction)

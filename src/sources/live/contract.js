@@ -12,7 +12,9 @@
  * snapshots. A vessel record's `id` is whatever its source gives, such as a
  * provider id; its `mmsi` is an optional attribute ('' or absent when
  * unknown), never its key, since vessels can share an MMSI. A source that
- * only has MMSIs uses the MMSI as the id.
+ * only has MMSIs uses the MMSI as the id. A vessel record's `virtual` is true
+ * for a virtual aid to navigation, a mark broadcast where nothing physical
+ * stands (AIS message 21's virtual flag), else false; any source may set it.
  *
  * A source may also declare a timeline (see readSnapshotTimeline): it can
  * answer a snapshot at a given time, so the layer follows the world clock.

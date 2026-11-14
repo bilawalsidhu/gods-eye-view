@@ -1706,7 +1706,7 @@ Applications supply the existing floor/snap, geoid, picking, sprite, camera,
 trail, focus, readout, context, aircraft presentation and render services.
 The factory never constructs a second application registry. Configure a source
 before initialization; replacing it while initialized is rejected. Model loads
-use the supplied asset resolver, including the preload path. Enrichment receives
+use the supplied asset resolver, including the up-front fleet set load. Enrichment receives
 an abort signal and cannot update a later lifecycle after destruction. Existing
 camera, terrain floor, trail, selection and measured model-size policies remain.
 
@@ -2208,6 +2208,83 @@ the subject (tracking stopped, Satellites off) or tracking another target
 ends the view without refocusing. `src/ui/cockpitOrbitalView.test.mjs`
 covers entry, camera, zoom, look, HUD and exit.
 
+### Application subjects
+
+An application can add its own first-person subjects beside the aircraft,
+vessel and satellite: `services.cockpitSubjects` to `createApplicationControls`,
+a list of subject providers (`src/cockpitSubjectProviders.js`, checked once by
+the coordinator; a malformed one, or one with a member that throws when read,
+is left out with a warning and the rest are kept). A provider names
+its layer, an entry face and labels in the page's language, and supplies four
+operations: `candidate()` (what entry would ride now), `hold(id)`,
+`read(nowMs, ctx)` (a camera frame each update) and `hud(frame, ctx)` (a HUD
+view model), with `release(id, {restore})` on exit. Entry needs the provider's
+layer on, no Context change in flight and the provider's own
+`isEntryAllowed(candidate)`; voice stays aircraft-only and is refused, with
+the reason, while a provider's view is in use.
+
+The built-in kinds keep their fixed entry order (a tracked aircraft, then the
+tracked satellite, then the selected vessel), so without providers entry is
+unchanged. A provider's candidate takes entry only when it was selected after
+every built-in subject present, by when the Cockpit first saw it or saw it
+selected again (its `selectedAt` changing): a train picked after an aircraft
+was tracked takes entry, and an aircraft tracked after it takes it back.
+Providers' candidates are ordered most recently selected first, then by
+priority; one first seen together with a built-in subject comes after it. The
+first in that order decides alone: when its gate is shut there is no entry
+rather than the next subject's.
+
+A frame places the eye `eye.upM` above `heightM` (the shared floor where the
+frame gives none, or where it last stood while that floor is cold; with
+neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
+at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
+subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
+turn off the floor clamps (`groundClamp: false`, for a subject inside a
+structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
+layer that already moves it smoothly; a frame with no `speedMps` is always
+exact, since an inertial anchor runs on at the frame's speed); `cameraIntervalMs: 0` updates the
+camera every rendered frame. A frame that is null, malformed or for another
+subject ends the view (`restoreTracking: false`), as an aircraft tracked
+meanwhile and the provider's layer turning off do; the exit control asks the
+provider to restore its subject. The generic HUD shows the provider's kicker,
+title, meta line, speed with its unit and tag, readout cards, always-visible
+source rows, banner, route card and Live Signals rows, a veil that darkens the
+picture under the HUD (with passing light streaks, which stop under reduced
+motion), arrow-key look-around when the provider asks for it, and a progress
+line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
+labels never overlap). Core translates none of the provider's text: a host
+words it for the page's language (`gods-eye-view/i18n`:
+`getLocale`, `onLocaleChange`). Its entry face, labels and look may be
+functions, read again when they are shown and on a change of language, as the
+HUD view is.
+
+The Rail layer offers a read API for such a view: `getSelectedTrain()` and
+`getCockpitSubject()` (a snapshot of the train: where it is along its line,
+which way it runs (`pathBinding.js` learns it), its rail height, speed as
+reported or derived, position source, feed credit and stops, and
+`selectedAtMs`, when the user last selected it by a click or `focusTrain`,
+even again; null after a deselection and for a train only a hold selected),
+`setCockpitSubject(key)` (its marker, 3D model and card hidden, the selection kept, its
+feed held, clicks and Escape left to the view; the held copy stays the one
+drawn of its train while held, another feed's copy hidden, and it keeps
+moving, still selected, when its category is turned off) and
+`focusTrain(key)` (false for a train the layer does not draw); its pure path
+module is exported as `gods-eye-view/layers/rail/paths`. That export
+and these read APIs are experimental and may change without notice. A snapshot read again while nothing in it changed is
+the one read before, and its `path.line` is a frozen copy. Transit
+offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
+`setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
+out of the camera's view, and its sprite, 3D model, card, trail and detection
+box are hidden; released, it is out of play until a visibility sweep finds it in
+view. Its snapshot's `position.groundHeightM` is the floor where playback draws
+it (the drawn marker's height while it is placed, else its segment's two
+reports' floors at the playback fraction), not the newest report's, and null while that floor is unknown. Rail's `path.direction` is the
+way the drawn train runs: once playback has placed it, a report that runs back
+turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+`src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
+`src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
+cover them.
+
 ## Context coordination
 
 Context controls own Contacts/Space Missions state, entry and exit transactions,
@@ -2224,8 +2301,21 @@ Frame loading, calibration editing and status display have separate modules;
 providers, camera placement and navigation policy retain their existing owners.
 Changing cameras invalidates old image callbacks and cancels an unfinished
 calibration edit. Failed refreshes preserve settled pixels for the same camera,
-while a newly selected camera never shows the prior camera's image. Disposal
+while a newly selected camera never shows the prior camera's image. A frame is
+shown without a fade once it is decoded (or after one second if its decode never
+settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
+
+The panel opens when a camera becomes active and collapses when the layer is
+switched off, from its own switch or anywhere else. The panel chrome applies
+the collapse, so a panel the desktop accordion only folded has its saved and
+shared state closed too. Clear selected data layers and Context isolation
+(Contacts, Space Missions) switch the layer off without the user asking: the
+panel and its share preference stay as they are, and the layer comes back to an
+open panel. Only the switch-off isolation makes counts (`suspendsLayer`, true
+while `_clearLayersOutsideContextMode` switches the layer off): the user
+switching CCTV off inside Contacts closes the panel as anywhere else. A panel opened by hand while the layer is off stays open, and its
+meta line reads the catalog count, not the last active camera.
 
 ## UI disposal
 
@@ -2418,8 +2508,9 @@ is validated against Cesium 1.138.0 and must be revalidated on upgrades.
 
 `scripts/qa-anime-sky.mjs` checks asset readiness, visible Normal sky and
 Anime band coverage against a Vite dev server.
-`scripts/qa-sky-model-lighting.mjs` compares a lit `airplane.glb` against
-black and white environment maps in isolated scenes.
+`scripts/qa-sky-model-lighting.mjs` compares a lit fleet airliner
+(`public/models/fleet/aircraft/a320.glb`) against black and white environment
+maps in isolated scenes.
 
 ## Model atmosphere on Apple Metal
 
@@ -2439,6 +2530,53 @@ Detection is a WebGL2 link probe of the same out-parameter/varying pattern, so a
 future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
+
+## Render failure notice
+
+When the globe stops drawing, the scene chrome says so instead of leaving a
+black globe behind working controls. `installRenderFailureNotice()`
+(`src/ui/renderFailure.js`) listens for Cesium's `renderError` and the canvas'
+`webglcontextlost`, logs the error, and publishes a notice that
+`RenderFailure.vue` shows as an alert dialog with focus on its first action.
+The app's viewer uses `showRenderLoopErrors: false`, so Cesium's dead-end
+"Rendering has stopped" panel no longer appears; `applicationViewerOptions()`
+keeps it by default for other callers.
+
+- **Retry** restarts the render loop. The notice stays until a frame starts
+  and ends without an error: Cesium raises `postRender` after a failed frame
+  too.
+- **Reload**, after a lost context, reloads the page; the address keeps the
+  view.
+- **Reset view** opens `appRootUrl()`, without the hash or `/share/<code>`
+  path; the query, such as `?lang=`, is kept.
+
+Pitfalls:
+
+- An error thrown outside Scene's error handling (a frame listener, `onTick`,
+  a resize) stops the loop without a `renderError`. The notice wraps the
+  widget's `render()` and `resize()` and raises it as one, once even with
+  `rethrowRenderErrors`.
+- A throwing listener leaves its Cesium event mid-raise, with listener changes
+  only queued. The wrapper finishes those raises first (`finishRaise()` over
+  `frameEvents()`), so a layer turned off or on meanwhile behaves.
+- A render error marks the loop stopped while its next frame is still queued.
+  The wrapper keeps the loop marked running, so a Retry or a shown tab
+  (`src/app/tools.js`) before that frame starts no second loop.
+- After a lost context, later render errors are only logged, so the notice
+  keeps saying why. The listener neither prevents nor restores the loss.
+- When the globe draws again, focus goes back where it was, or to the globe's
+  canvas, which the map's keys read as the map; the canvas is focusable only
+  until focus leaves or the globe is pressed. Focus the user moved stays put.
+- The notice sits above floating panels such as the Québec camera viewer, and
+  its buttons are 44 px tall on touch screens.
+
+An inline conversation panel never reloads or navigates its host's page: it
+offers Retry after a render error only, and no notice after a lost context,
+where the panel runtime's own notice applies (`src/app/globePanelRuntime.js`).
+Its timer (`keepPanelRendering()`) draws only while the render loop is on and
+logs nothing itself, so each render error is logged once, by the notice. An
+error a timer frame throws is caught there: it has already been raised as a
+render error.
 
 ## Map Source control ownership
 
@@ -3199,6 +3337,15 @@ stays in view or tracked; an answer, found or not, and a permanent refusal
 stay final for the session. A route belongs to the callsign it was looked up
 for, so a callsign change drops the old route. See `DATA_SOURCES.md`.
 
+A selected vessel gets a photo the same way. The browser asks Open Vessel
+Photos for it by MMSI (`fetchOpenVesselPhoto` in
+`src/sources/live/standalone.js`, read by `src/data/openVesselPhoto.js`), once
+per MMSI (`src/layers/vessels/photos.js`), and the CONTACTS view shows it under
+the vessel's name and MMSI ("NAME · MMSI 366999709") with the photographer,
+the photo's open licence and a link to the vessel's page. A vessel without an
+MMSI is never looked up; a miss stays final for the session, and a failed
+lookup is asked again after five minutes.
+
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
 plugins and shared request helpers. Importing it starts no sockets or timers.
 The existing aircraft normalizer is separately available through the portable
@@ -3595,20 +3742,22 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   24.09 m aft (70 % of the model's rendered envelope, so inside it), 2.22 m
 >   below centre (6 %), and 2e-9 m off the centreline.
 > - **The tracked trail attaches to REAL HULL, aft and below (2026-08-23):**
->   `MODEL_TRAIL_ANCHOR_NATIVE` (`src/data/modelVisualAnchor.js`) holds, per GLB
->   and in RAW glTF coordinates (see the transform-chain entry below), the point
->   of the hull's CENTRELINE PROFILE (its y = 0 slice) closest to the aft-belly
->   AABB corner. It is NOT the corner: a bounding-box corner is empty
->   space, 4.80 m off the nearest triangle on `airplane.glb` and 6.14 m on
->   `jet.glb`, so the trail ended in mid air beside the aircraft. The head segment
+>   `FLEET_TRAIL_ANCHORS` (`src/data/fleetTrailAnchors.js`, generated by
+>   `scripts/measure-fleet-trail-anchors.mjs`) holds, per fleet aircraft and
+>   helicopter model and in RAW glTF coordinates (see the transform-chain entry
+>   below), the point of the hull's CENTRELINE PROFILE (its centreline slice)
+>   closest to the aft-belly AABB corner. It is NOT the corner: a bounding-box
+>   corner is empty space (4.80 m off the nearest triangle on the airliner
+>   asset this was first measured on, 6.14 m on the jet), so the trail ended in
+>   mid air beside the aircraft. The head segment
 >   is drawn from a point behind the aircraft to this anchor, so the anchor must
 >   stay aft (83–96 % of each aft extreme) or the segment enters at the tail and
->   stops inside the fuselage. `modelScale.test.mjs` reads the POSITION BUFFERS —
+>   stops inside the fuselage. `fleetModels.test.mjs` reads the POSITION BUFFERS —
 >   real vertices and triangles, because accessor min/max cannot tell a corner
 >   from a surface — and re-derives on-hull, aft, lowest-at-its-station,
 >   on-centreline, and the construction itself. Re-measure, never re-guess.
 > - **The trail anchor rides CESIUM'S transform chain, not a hand-rolled one
->   (2026-08-23 regression fix):** `MODEL_TRAIL_ANCHOR_NATIVE` stores RAW
+>   (2026-08-23 regression fix):** `FLEET_TRAIL_ANCHORS` stores RAW
 >   glTF coordinates and `modelAnchorWorld()` assembles
 >   `modelMatrix × components.transform × axisCorrection` — the same chain
 >   `ModelSceneGraph` renders with, built from Cesium's own exported
@@ -3643,7 +3792,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   ENVELOPE, and between them the drawn start slides along the segment so the
 >   visible length grows CONTINUOUSLY from zero. Three earlier cuts are recorded
 >   because their shape matters: testing segment LENGTH against the radius HID
->   real trail (58 m aft of `airplane.glb`'s 34.41 m envelope gives a 33.98 m
+>   real trail (58 m aft of an airliner's 34.41 m envelope gives a 33.98 m
 >   segment, suppressed, though ~23.6 m of it is open air); CLIPPING at the
 >   envelope and keeping only what lay outside stopped a moving trail visibly
 >   SHORT of the aircraft, since a bounding sphere encloses a lot of empty space
@@ -4819,8 +4968,9 @@ activeCameraCardEnabled: true })` may publish it through the retained
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`
->   across the cockpit. The grounded `airplane.glb` belly offset is calibrated
->   to the current asset's measured Y-up bounds (`0.063` native units).
+>   across the cockpit. A grounded aircraft stands its fleet model's scaled
+>   clearance (the catalog's `clearance`, measured below the model's origin)
+>   above the ground.
 >   Contact Previous/Next and Live Signals aircraft handoffs now
 >   re-seed the first-person camera anchor at the selected flight immediately;
 >   bounded feed-correction smoothing remains scoped to the same aircraft.
@@ -5069,6 +5219,10 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   views re-render, code that published translated text words it again through
   `onLocaleChange`, and `<html lang>`/`dir` and the page's `data-i18n` markup
   follow. Nothing is lost; a toast already on screen keeps its words.
+  An application that offers the language elsewhere (a menu) uses the
+  `./i18n` entry (`src/i18n/page.js`): `startPageLocale` at boot,
+  `followPageLocale` for the markup and `switchLocale`, which does what a
+  picker choice does, with `localePicker: false`.
 - **Right to left.** Arabic (`ar`) and Hebrew (`he`) are in `RTL_LOCALES`, so
   `<html dir="rtl">`: the title, style indicator, both panel stacks and their
   icon rails swap sides through logical properties (`inset-inline-*`,
@@ -6603,6 +6757,10 @@ silently demoting every later lookup for the session.
   far cap, retargeting the existing video/canvas texture pipeline. Stills are drawn at their source aspect, centered on the placeholder dark (`#01070c`), instead of being stretched to the 16:9 canvas. Manual calibration only —
   auto-calibration and the drape mesh pipeline are deleted. A one-shot activation obstruction
   probe (`pickFromRay` on camera activation, clamping the plane short of the first hit) remains;
+  a hit at or beyond the camera's range counts as a miss, and on a globe map the plane also clamps
+  short of the globe's terrain along the axis (flat ground at the mount's ground when terrain is
+  missed or met beyond the range), whichever is nearer, so it never stands at the full range there
+  (about a kilometre wide and hundreds of metres up);
   ground placement is superseded by the shared-floor v3 behavior below. Calibration persists to
   `godsEyeView.cctv.calibration.v2` (wiped clean, no v1 import); a panel-only CAL badge shows
   `CALIBRATED`/`CURATED`/`RAW PRIOR` (no in-world tint). Panel is titled "CCTV" (not "CCTV
@@ -7304,8 +7462,9 @@ pins and share links already supply complete boxes.
   normal four-samples-per-250-ms budget. Retry timestamps more than the maximum
   30-second backoff ahead of the current clock are ignored. A smaller rollback
   can retain a bounded retry delay of up to 30 seconds.
-- Commercial and military aircraft use the same high-level FLEET model regime: 2D billboards when zoomed out, optional glTF models when closer, controlled by the DISPLAY rail `3D` toggle and `Proximity` / `All` modes. Since 2026-08-16 (Hangar fleet) models are PER-CLASS: real CC-BY GLBs for light/bizjet/turboprop/widebody/helicopter/uav (`CLASS_MODEL_REAL` in `src/data/aircraftClass.js` — meters-baked, scale 1, per-model belly/radius; provenance in `public/models/README.md`), the shared `airplane.glb` for the remaining civilian classes, and the military layer maps weight classes (real GLBs / 747 heavies / `jet.glb` fastjets, per-model heading offsets, flat amber or emergency red). Textured civilians carry a HEAVY tint, not a light one: `MODEL_COLOR_BLEND_AMOUNT` is `0.94` in BOTH layers under Cesium's `ColorBlendMode.MIX`, so the class colour supplies 94% of the surface and the asset's own texture ~6%. The visual direction is clean light silhouettes with only a weak diffuse contribution from the approved textures, so liveries deliberately do NOT read. IR boost raises the blend to a full `1.0`. Under NVG/FLIR (map preset or Cockpit vision) models render unlit flat-white at full alpha and scene fog is disabled (fog otherwise blacks out distant models with the globe hidden); state restores on exit.
-- **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). With the class colour supplying 94% of the surface, the models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; the two preload calls only warm the glTF cache and are never drawn.
+- Commercial and military aircraft use the same high-level FLEET model regime: 2D billboards when zoomed out, optional glTF models when closer, controlled by the DISPLAY rail `3D` toggle and `Proximity` / `All` modes. Every model is one of the project's procedural fleet models (`public/models/fleet/`, MIT, 122 GLBs, about 2 MB in all; `public/models/README.md`), chosen per aircraft by `aircraftModelSpec` (`src/data/fleetModels.js`): the first of its ICAO type's callsign rules in `types.json` (`aircraft_callsign`) its callsign matches, else its type's entry, else the model of its `classifyAircraft` class for a type the map lacks, else its ADS-B emitter category's, else the default airliner. It is drawn LIFE SIZE: the type's published length over the model's built length (`src/layers/flights/modelSpec.js`, shared by Flights, Military Flights and Local ADS-B), and a grounded aircraft stands the model's scaled clearance above the ground. An airport ground vehicle (feed type `ZVEH`) is a fire truck (`FIRE…`), pushback tug (`PUSH…`, `TUG…`), van (`DEICER…`, `SQUID…`, `SQB…`) or else a car by its callsign, and a ground station (`GRND`) is an 11.8 m radio mast; these models (catalog category `other`) are drawn at their built size, and such a contact with no altitude stands on the ground instead of at the airborne default (`src/layers/flights/records.js`). `classifyAircraft` still picks the 2D icons. The whole set loads once, up front, when a layer that draws it starts (`loadFleetModelSet`, which logs `[Fleet] N/122 models (X MB) loaded in N ms`); models are built from those bytes, never fetched mid-session, and an aircraft stays its billboard until the set has loaded. Every aircraft model draws its mesh's own colours (`aircraftModelBlend`, `src/data/aircraftModelLighting.js`): Cesium's `ColorBlendMode.HIGHLIGHT` with white, in Flights, Military Flights and Local ADS-B alike; the tracked colour (cyan, or amber in Military Flights) and the emergency red multiply into the mesh, so its paint still shows. IR boost draws them flat white (`MIX` at `1.0`). Under NVG/FLIR (map preset or Cockpit vision) models render unlit flat-white at full alpha and scene fog is disabled (fog otherwise blacks out distant models with the globe hidden); state restores on exit.
+- Vessels, Transit and Rail draw fleet models under the same DISPLAY rail `3D` toggle, at the same altitude ceiling, caps and add/keep radii as the aircraft (`FLEET_MODEL_POLICY`, `src/layers/flights/policy.js`; `createFleetModelLayer`, `src/data/fleetModelInstances.js`). A vessel's model follows its AIS ship type and is drawn at its reported length and beam (AIS static dimensions A+B and C+D, now carried on vessel rows as `length` and `beam`), standing at the sea surface, heading by true heading then course. An aid to navigation is not a hull: a vessel record whose type names a buoy, beacon, mark, RACON or light, or whose MMSI is an aid-to-navigation station's (`99MIDxxxx`), is `isAidToNavigation` (`src/data/vesselTypes.js`) and is drawn as the set's `buoys` model of the IALA mark its type names (`aidToNavigationModel`, `src/data/fleetModels.js`: cardinal N/E/S/W, port or starboard hand, preferred channel by its side, safe water, isolated danger, special mark; a beacon, light, light vessel, RACON or reference point with no mark of its own is the special mark), else a red can (`DEFAULT_AID_MODEL`), at its built size and facing north whatever heading it reports. A type is an aid's when it is one of the 32 kinds an aid report names or uses a word for one (buoy, beacon, cardinal, safe water, RACON, lighthouse and so on); a vessel that works on aids (`Buoy Tender`, `Buoy Layer`) is not one. Its icon is a bone-white ringed disc (`AID_TO_NAVIGATION_STYLE`, `src/data/vesselLabels.js`) instead of a chevron, never rotated, and its card, selected card and HUD readout (`src/layers/vessels/cards.js`) show its kind alone, whole, in that colour: no speed or heading, since a fixed mark has neither. AISStream subscribes to `AidsToNavigationReport` (message 21) by default, and the server names each report's aid type code (0 to 31) as its kind (`aidToNavigationTypeName`: `20` is `Cardinal Mark N`) rather than reading it as a ship type, and its name runs on into the report's `NameExtension`. A virtual aid (the report's `VirtualAtoN` flag: a mark broadcast where nothing physical stands) carries `virtual: true` on its row, and on its vessel source record (the live-source contract's `virtual`, `src/sources/live/contract.js`, false unless a source says true; any source may set it). It keeps its disc but never gets a model (`vesselModelSpec` returns null for it, and the vessel layer gathers no model item for it), and its card and readout add `VIRTUAL` after its kind. `aisStreamRows` (`server/providers/vessels/ais-store.js`) puts every vessel ahead of every aid, so a capped request (the layer asks for 12,000 rows) never gives up a ship for a buoy. The `vessels_in_area` tool (and the brief built on it) counts ships only: it leaves aids out of its rows, counts, breakdowns and speed stats. A transit vehicle's model follows its layer mode (bus, tram, subway, rail or ferry; a vehicle of `unknown` mode keeps its icon), a train's its rail category and mode (rail, metro or tram). Neither the transit nor the rail sources carry a GTFS `route_type` or a finer mode (monorail, gondola, funicular, cable car), so the set's models for those and their `transit.elevation` lifts are not reached by any live source today. Both stand on the road or rail top they are drawn on, without the 1.5 m `GROUND_FLOOR_LIFT_M` their icons carry, and are painted in their mode or category colour where the model's `_TINT` attribute marks it. A vessel model is clipped at its waterline (one clipping plane per model, at the model origin's horizontal plane), so its hull below the water never shows through a plain globe, which Cesium does not depth-test models against. Under the NVG/FLIR styles (the Flights `irBoost` parameter) these models render unlit flat white, as aircraft models do. Each vehicle's icon stays the visual until its model is loaded, ready and placed; a model is picked as its icon is, and a vehicle drawn as its model keeps its selection card and its place in the detection overlay.
+- **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). The models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; every model is built from the fleet set loaded up front, so there is no separate preload.
 - The DISPLAY-rail `3D` toggle is the user-facing activation path for both aircraft layers. Their small approved GLBs build their render resources without Cesium's frame-spread job queue, preventing continuous Photorealistic 3D Tiles streaming from starving model readiness; model caps, tracking, camera, and fallback billboards are unchanged.
 - **The `3D` toggle DEFAULTS ON in `proximity` on a first run.** Proximity is itself the budget — models appear only below `MODEL_ALT_CEIL_M` and only for the nearest `MODEL_MAX` in view — so the default costs nothing at globe scale, and `all` remains a deliberate opt-in. A fresh boot runs NO layer-state restoration (`LayerStateCoordinator.start()` returns early with neither a share payload nor stored state), so four independent initializers decide what a first-run operator sees and must agree: `booleanOption('models3d', 'e', true)` in `src/data/layerState.js`, `_models3dEnabled = true` in BOTH flight layers, `this._models3dEnabled = true` in `src/ui/aircraftDisplay.js`, and the `active` / `visible` classes on `#models3d-toggle` / `#models3d-mode-row` in `index.html`. All four are pinned together in `src/data/layerState.test.mjs`. Explicit state still wins: because the codec omits default-valued options, `models3d: false` is now what travels in a link (`lo=…f.e.0`) and restores OFF at both aircraft layers. **Consequence for returning users:** a stored `gev:layer-state:v2` blob is a FULL options snapshot, so a session that wrote one before this change carries `models3d:false` and keeps 3D off until the operator flips it (or clears the key) — the durable snapshot is treated as the recipient's own state, by design.
 - **Consequence of the flip on the recorded tracked/fleet inversion:** the 150–800 km band where surrounding contacts draw as models while the SELECTED one is still a glyph is now what an operator sees WITHOUT arming anything. The inversion itself is unchanged and still deliberate (see `src/data/trackedModelRegime.js`); only its reachability changed.

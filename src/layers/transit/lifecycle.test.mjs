@@ -7,9 +7,11 @@ import {
   FEED_STALE_AFTER_MS,
   MISSED_POLLS_TO_DROP,
   TRANSIT_POLL_MS,
+  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
   VEHICLE_MAX_FIX_AGE_MS,
 } from './policy.js';
 import { FLOOR_WARM_PER_POLL } from './policy.js';
+import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
 import {
   FUTURE_STAMP_TOLERANCE_MS,
   ORDER_REJECTS_BEFORE_RESET,
@@ -62,6 +64,25 @@ function snapshot(
     truncated: false,
     count: vehicles.length,
     vehicles,
+  };
+}
+
+/** A camera's place and frame looking straight down from `altitude` over `at`. */
+function lookingDown(at, altitude) {
+  const positionWC = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, altitude);
+  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
+    positionWC,
+    new Cesium.Cartesian3(),
+  );
+  return {
+    positionWC,
+    directionWC: Cesium.Cartesian3.negate(up, new Cesium.Cartesian3()),
+    upWC: Cesium.Cartesian3.UNIT_Z,
+    frustum: {
+      computeCullingVolume: () => ({
+        computeVisibility: () => Cesium.Intersect.INSIDE,
+      }),
+    },
   };
 }
 
@@ -159,6 +180,9 @@ function harness(
       east: at.lon + 0.1,
       north: at.lat + 0.1,
     },
+    // Fleet-model services (testSupport/fleetModelFakes.mjs), with a camera
+    // looking straight down for them; without them vehicles stay icons.
+    fleet = null,
   } = {},
 ) {
   const viewRect = { ...view };
@@ -219,6 +243,7 @@ function harness(
           viewRect.north,
         );
       },
+      ...(fleet ? lookingDown(at, altitude) : {}),
     },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
@@ -265,6 +290,7 @@ function harness(
   const layer = createTransitLayer({
     source,
     services: {
+      ...(fleet ? { fleet } : {}),
       ground,
       mesh: {
         sampleMeshFloorCells(scene, points, options) {
@@ -725,6 +751,27 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 1);
+});
+
+test('a held vehicle with no floor yet tells its view no height', async (t) => {
+  // Not the ellipsoid: a first-person view waits for the surface instead.
+  const app = harness(t, { floorAt: () => undefined });
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const entry = app.vehicles()[0];
+  assert.equal(entry.heightPending, true, 'it has nothing to stand on');
+  assert.ok(app.layer.setCockpitSubject(entry.key) !== false);
+  assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
 });
 
 test('a vehicle waits for its floor rather than standing on the ellipsoid', async (t) => {
@@ -1774,10 +1821,18 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
   assert.ok(Math.abs(entry.heightM - 101.5) < 1, 'the destination is uphill');
   const height = () =>
     Cesium.Cartographic.fromCartesian(entry.marker.position).height;
+  // A first-person view reads the floor where the vehicle is drawn, not the
+  // newest report's floor uphill.
+  app.layer.setCockpitSubject(entry.key);
+  const floor = () => app.layer.getCockpitSubject().position.groundHeightM;
   app.run(400);
   assert.ok(
     height() < 30,
     `still on the ground it is drawn on, got ${height().toFixed(1)} m`,
+  );
+  assert.ok(
+    Math.abs(floor() + 1.5 - height()) < 1,
+    `its snapshot stands where it is drawn, got ${floor().toFixed(1)} m`,
   );
 
   // Halfway along the segment it is halfway up; at the end, on the high ground.
@@ -1792,6 +1847,7 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
     Math.abs(height() - 101.5) < 1.5,
     `and arrives on the high ground, got ${height().toFixed(1)} m`,
   );
+  assert.ok(Math.abs(floor() - 100) < 1.5, 'and so does its snapshot');
 });
 test('a lone impossible fix leaves the displayed vehicle and health untouched', async (t) => {
   const app = harness(t, { floorAt: () => 5 });
@@ -4141,4 +4197,210 @@ test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) 
     app.layer.getStats().statusMessage,
     'Fly below 2,850 km to a covered region',
   );
+});
+
+/** A bus running north a step a poll, polled `polls` times; its key. */
+async function busRunningNorth(app, polls = 4, extra = {}) {
+  let step = 0;
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [
+        vehicle('bus-1', 42.36 + step * 0.001, -71.06, reported(), {
+          stopId: 'place-1',
+          status: 'IN_TRANSIT_TO',
+          ...extra,
+        }),
+      ],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  for (let i = 0; i < polls; i += 1) {
+    step += 1;
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+    app.settle();
+  }
+  return 'mbta:bus-1';
+}
+
+test('the selected vehicle reads as a snapshot of its place, motion and source', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app, 4, { speedMps: 9 });
+  assert.equal(app.layer.getSelectedVehicle(), null);
+  app.layer._transitPartsForTest().selection.selectVehicle(key);
+  const view = app.layer.getSelectedVehicle();
+  assert.ok(Object.isFrozen(view));
+  assert.equal(view.key, key);
+  assert.equal(view.feedId, 'mbta');
+  assert.equal(view.id, 'bus-1');
+  assert.equal(view.routeId, '1');
+  assert.equal(typeof view.mode, 'string');
+  assert.ok(view.feed.attribution, 'the feed names its credit');
+  assert.equal(view.motion.reportedSpeedMps, 9);
+  assert.equal(view.motion.speedSource, 'reported');
+  assert.equal(view.provenance.positionSource, 'gps');
+  assert.deepEqual(view.stop, { stopId: 'place-1', status: 'IN_TRANSIT_TO' });
+  const entry = app.vehicles()[0];
+  // Where it is drawn, without the shared lift (read back from the marker).
+  assert.ok(
+    Math.abs(view.position.groundHeightM - (entry.heightM - 1.5)) < 1e-3,
+  );
+  assert.ok(Number.isFinite(view.position.latitude));
+});
+
+test('a vehicle read again while nothing changed is the snapshot read before', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  app.layer._transitPartsForTest().selection.selectVehicle(key);
+  const first = app.layer.getSelectedVehicle();
+  assert.equal(app.layer.getSelectedVehicle(), first, 'the same snapshot');
+  // It moves on: a new snapshot at its new place, what did not change kept.
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  const moved = app.layer.getSelectedVehicle();
+  assert.notEqual(moved, first, 'a new snapshot');
+  assert.ok(Object.isFrozen(moved) && Object.isFrozen(moved.position));
+  assert.ok(moved.position.latitude > first.position.latitude, 'moved');
+  assert.equal(moved.feed, first.feed);
+  assert.equal(moved.stop, first.stop);
+  assert.equal(moved.provenance, first.provenance);
+  assert.equal(app.layer.getSelectedVehicle(), moved);
+});
+
+test('a held vehicle draws no 3D model either; let go, its model draws again', async (t) => {
+  const models = await fleetModelFakes(t);
+  const app = harness(t, { fleet: models.fleet, altitude: 1_000 });
+  const key = await busRunningNorth(app);
+  const [entry] = app.vehicles();
+  assert.notEqual(entry.mode, 'unknown', 'a mode its model is chosen by');
+  // The throttled sweep runs; a model's load answers off the frame and the
+  // next frames place it.
+  const frames = async () => {
+    app.advance(250);
+    app.settle();
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    app.settle();
+  };
+  await frames();
+  assert.equal(models.drawn(key).length, 1, 'near the camera: its model');
+  assert.equal(entry.modelOwnsVisual, true);
+  assert.equal(entry.marker.show, false, 'its icon hands over');
+
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  app.frame();
+  // The view's eye is inside the vehicle.
+  assert.equal(models.drawn(key).length, 0, 'no model');
+  assert.equal(entry.modelOwnsVisual, false);
+  assert.equal(entry.marker.show, false, 'and no icon');
+  await frames();
+  assert.equal(models.drawn(key).length, 0, 'not on a later frame either');
+  assert.equal(entry.marker.show, false);
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  await frames();
+  assert.equal(models.drawn(key).length, 1, 'let go: its model again');
+  assert.equal(entry.modelOwnsVisual, true);
+  assert.equal(entry.marker.show, false);
+});
+
+test('selectedAtMs is the user’s selection time; a hold and a deselection leave none', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  // A vehicle only a hold selected reports none.
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  assert.equal(app.layer.getCockpitSubject().selectedAtMs, null);
+  app.layer.setCockpitSubject(null);
+  assert.equal(app.layer.setCockpitSubject(null), true, 'twice is harmless');
+  assert.equal(app.state()._selectedKey, key);
+  // The user's selection stamps it, again on a re-selection.
+  assert.equal(app.layer.focusVehicle(key), true);
+  const first = app.layer.getSelectedVehicle().selectedAtMs;
+  assert.ok(Number.isFinite(first));
+  app.run(1000);
+  app.layer.focusVehicle(key);
+  assert.ok(app.layer.getSelectedVehicle().selectedAtMs > first);
+  // Deselected, then held: none.
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, null);
+  assert.equal(app.state()._selectedAtMs, null);
+  app.layer.setCockpitSubject(key);
+  assert.equal(app.layer.getCockpitSubject().selectedAtMs, null);
+});
+
+test('a held vehicle hides, keeps moving out of view, and lets go when it goes', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  assert.equal(app.layer.setCockpitSubject('mbta:nope'), false);
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  assert.equal(app.state()._selectedKey, key, 'holding selects it');
+  assert.equal(app.layer.getCockpitSubject().key, key);
+  assert.equal(
+    app.overlaySources.has(TRANSIT_SELECTED_OVERLAY_SOURCE_ID),
+    false,
+    'no card',
+  );
+  const [entry] = app.vehicles();
+  app.frame();
+  assert.equal(entry.marker.show, false);
+  // The camera's view leaves it, as a view from inside it does: it plays on.
+  app.lookAt({ west: 10, south: 10, east: 11, north: 11 });
+  app.settle();
+  assert.equal(
+    app.layer._transitPartsForTest().rendering.vehicleInView(entry),
+    true,
+  );
+  const before = app.layer.getCockpitSubject().position.latitude;
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  assert.ok(
+    app.layer.getCockpitSubject().position.latitude > before,
+    'still moving',
+  );
+  // Escape and clicks are the view's while it holds the vehicle.
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, key);
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  assert.equal(app.layer.getCockpitSubject(), null);
+  // Let go, it is out of play until a sweep finds it in view.
+  assert.equal(app.state()._visible.has(entry), false, 'out of play');
+  app.lookAt({
+    west: -71.2,
+    south: 42.2,
+    east: -70.9,
+    north: 42.5,
+  });
+  app.advance(250);
+  app.settle();
+  assert.equal(entry.marker.show, true, 'shown again');
+  assert.equal(app.layer.focusVehicle('mbta:nope'), false);
+  assert.equal(app.layer.focusVehicle(key), true);
+
+  app.layer.setCockpitSubject(key);
+  app.silence('mbta');
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot('mbta', 'MBTA', [], { fetchedAt: Date.now() }),
+  }));
+  for (let i = 0; i < MISSED_POLLS_TO_DROP + 1; i += 1) {
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+  }
+  assert.equal(app.vehicles().length, 0, 'the vehicle is gone');
+  assert.equal(app.state()._cockpitSubjectKey, null);
+  assert.equal(app.layer.getCockpitSubject(), null);
 });

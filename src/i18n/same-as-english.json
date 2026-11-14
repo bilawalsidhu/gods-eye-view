@@ -247,7 +247,9 @@
     "NORAD: {id}",
     "COMMUNITY",
     "Regional",
-    "OPT-IN"
+    "OPT-IN",
+    "{minutes} min",
+    "1 min/s"
   ],
   "es": [
     "1 min/s",
@@ -409,7 +411,8 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "VIRTUAL"
   ],
   "fr": [
     "1 min/s",
@@ -625,11 +628,13 @@
     "▲ {frp} MW",
     "SATELLITE",
     "Photo © {photographer}",
+    "Photo · {licence}",
     "PACK",
     "{count} packs",
     "Orthophoto",
     "Oblique",
-    "Type"
+    "Type",
+    "{range} NM"
   ],
   "it": [
     "1 min/s",
@@ -1063,7 +1068,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "VIRTUAL"
   ],
   "ru": [
     "1900–1945",
