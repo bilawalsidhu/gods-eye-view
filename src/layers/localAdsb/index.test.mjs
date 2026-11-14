@@ -508,6 +508,14 @@ test('the trail head runs from the last fix to the marker every frame, dimmed be
     Math.abs(toLonLatH(heads()[0].positions[1]).lat - after) < 1e-9,
     'the head follows the marker',
   );
+  // The next frame too, as the entity's head was rebuilt every frame.
+  clock.now = 101_016;
+  listeners.get('preRender')();
+  assert.deepEqual(
+    heads()[0].positions[1],
+    iconOf(draw, 'local-adsb:abc123').pos,
+    'the head ends on the icon a frame later',
+  );
 
   // A frame where nothing moved leaves the head alone.
   const writes = trailSet().writes;

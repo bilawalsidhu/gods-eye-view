@@ -65,8 +65,6 @@ const MARKER_SPRITE = Object.freeze({
 });
 /** Markers and rings show within 2,000 km of the eye. */
 const MARKER_RANGE = Object.freeze([0, 2_000_000]);
-/** The longest the moving trail head waits to be drawn anew, ms. */
-const HEAD_REDRAW_MS = 100;
 /** Draw sets made, so each layer instance's sets have ids of their own. */
 let instances = 0;
 /** Trail lines pass through their aircraft; a click never stops on one. */
@@ -417,12 +415,9 @@ export function createLocalAdsbLayer({
 
   /**
    * The live head: the last heard fix to the extrapolated marker, dimmed
-   * where the surface hides it. Nothing while either end is unknown.
-   *
-   * A line dimmed behind the surface is built anew when it moves, so the
-   * head is redrawn when its fix changes, and otherwise at most
-   * `HEAD_REDRAW_MS` apart while the aircraft flies on; a still aircraft
-   * costs nothing a frame.
+   * where the surface hides it, drawn each frame as the aircraft moves (the
+   * trail skips a head that has not moved). Nothing while either end is
+   * unknown.
    */
   function drawTrailHead() {
     if (!selectedTrail?.trail?.setHead) return;
@@ -430,15 +425,6 @@ export function createLocalAdsbLayer({
     const from = selectedTrail.lastFix;
     const positions =
       current?.position && from ? [from, { ...current.position }] : [];
-    const at = now();
-    if (
-      positions.length &&
-      from === selectedTrail.drawnFrom &&
-      at - selectedTrail.drawnAt < HEAD_REDRAW_MS
-    )
-      return;
-    selectedTrail.drawnFrom = from;
-    selectedTrail.drawnAt = at;
     // The trail's head line: 'gev-trail' ids, claimed by the trail pick
     // owner so a click on it never reads as empty space; dimmed where the
     // surface hides it. A head that has not moved is not drawn again.
@@ -464,9 +450,6 @@ export function createLocalAdsbLayer({
       trail: createTrail(viewer, { color: LOCAL_ADSB_COLOR, width: 2.5 }),
       // Live head: last heard fix → the extrapolated marker, every frame.
       lastFix: null,
-      // From which fix and when the head was last drawn.
-      drawnFrom: null,
-      drawnAt: -Infinity,
     };
     refreshTrail();
     drawTrailHead();
