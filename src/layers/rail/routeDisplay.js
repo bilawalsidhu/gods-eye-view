@@ -83,6 +83,8 @@ export function createRouteDisplay({
   let releaseTimer = null;
   /** The selected line's set and the stop dots' set, made on first use. */
   let routeSet = null;
+  /** Route sets made, for ids of their own. */
+  let routeBuilds = 0;
   let stopSet = null;
   /** The stop dots drawn now, as pushed to their set. */
   let stopItems = [];
@@ -285,7 +287,11 @@ export function createRouteDisplay({
 
   function dropRoute() {
     if (!state._route) return;
-    routeSet?.clear();
+    // Let the set go: the next route's is made anew, on top of every line
+    // drawn before it (a feed's network loaded since), as each route's
+    // primitive was added when it was drawn.
+    routeSet?.dispose();
+    routeSet = null;
     state._route = null;
   }
 
@@ -326,7 +332,7 @@ export function createRouteDisplay({
         }
       }
       if (positions.length < 2) return;
-      routeSet ||= lineSet(`rail:${instance}:route`);
+      routeSet ||= lineSet(`rail:${instance}:route:${++routeBuilds}`);
       if (!routeSet) return;
       routeSet.show = true;
       const ahead = categoryColor(entry.category, 1);
