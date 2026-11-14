@@ -3605,5 +3605,12 @@
   "Confirm: remove every added entry from Data Layers": "Bekräfta: ta bort alla tillagda poster från Datalager",
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
   "Showing {shown} of {total}": "Visar {shown} av {total}",
-  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET"
+  "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "The globe stopped drawing": "Globen ritas inte längre",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "Webbläsaren tog tillbaka globens 3D-grafik. Lager och reglage fungerar fortfarande, men kartan kan inte ritas förrän sidan laddas om.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "Renderingen stoppades efter ett fel. Lager och reglage fungerar fortfarande, men kartan uppdateras inte.",
+  "Reset view reloads the app without the view restored from the address bar.": "”Återställ vy” laddar om appen utan vyn som återställdes från adressfältet.",
+  "Reload": "Ladda om",
+  "Retry": "Försök igen",
+  "Reset view": "Återställ vy"
 }
