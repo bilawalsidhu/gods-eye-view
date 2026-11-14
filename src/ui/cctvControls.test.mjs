@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CctvControls } from './cctvControls.js';
+import { CCTV_FRAME_DECODE_WAIT_MS } from './cctvFrames.js';
 
 function element() {
   const classes = new Set();
@@ -57,6 +58,50 @@ test('a late image completion cannot replace a newer camera preview', (t) => {
   stale();
   assert.equal(controls._frame.src, 'second.jpg');
   assert.equal(controls._frame.cameraId, 'b');
+});
+
+test('a camera frame settles once decoded, and a stale decode cannot land', async (t) => {
+  const { controls, requests } = fixture(t);
+  const decodes = [];
+  const queue = (src, id) => {
+    controls._queueCctvFrame(src, id, true);
+    const request = requests.at(-1);
+    request.decode = () =>
+      new Promise((resolve) => decodes.push({ src, resolve }));
+    return request;
+  };
+  const first = queue('first.jpg', 'a');
+  first.onload();
+  assert.equal(controls._frame.hasFrame, false);
+  const second = queue('second.jpg', 'b');
+  second.onload();
+  decodes[1].resolve();
+  await Promise.resolve();
+  decodes[0].resolve();
+  await Promise.resolve();
+  assert.equal(controls._frame.src, 'second.jpg');
+  assert.equal(controls._frame.cameraId, 'b');
+  assert.equal(controls._frame.hasFrame, true);
+});
+
+test('a loaded frame shows when its decode rejects or never settles', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { controls, requests } = fixture(t);
+  controls._queueCctvFrame('broken.jpg', 'a', true);
+  requests[0].decode = () => Promise.reject(new Error('EncodingError'));
+  requests[0].onload();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(controls._frame.src, 'broken.jpg');
+  assert.equal(controls._frame.hasFrame, true);
+
+  controls._queueCctvFrame('hidden.jpg', 'b', true);
+  requests[1].decode = () => new Promise(() => {});
+  requests[1].onload();
+  assert.equal(controls._frame.hasFrame, false);
+  t.mock.timers.tick(CCTV_FRAME_DECODE_WAIT_MS);
+  assert.equal(controls._frame.src, 'hidden.jpg');
+  assert.equal(controls._frame.hasFrame, true);
 });
 
 test('failed refresh preserves settled pixels, but changing cameras clears them', (t) => {

@@ -24,14 +24,16 @@ export function createSelection({ state, services, parts }) {
    * (the tracked-aircraft readout uses the same), so the anchor moves with the
    * sprite at frame rate, through poll arrivals, settling, a late floor and a
    * reset alike, with no per-frame work here. Null when there is nothing to
-   * anchor to: a hidden or removed marker draws no card.
+   * anchor to: a hidden or removed marker draws no card, unless the vehicle's
+   * 3D model is drawing it in the marker's place.
    * @param {object} entry
    * @returns {() => Cesium.Cartesian3|null}
    */
   function anchorFor(entry) {
     return () => {
       const marker = entry.marker;
-      const p = marker?.show !== false ? marker?.position : null;
+      const drawn = marker?.show !== false || entry.modelOwnsVisual === true;
+      const p = drawn ? marker?.position : null;
       return p &&
         Number.isFinite(p.x) &&
         Number.isFinite(p.y) &&
