@@ -655,28 +655,37 @@ Map source, the map source chips (`VisualPresets.vue`); Overlay, the HUD,
 detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
 Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control
 is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
-on/off pill worded in the current language. The presets and chips call the
+on/off pill worded in the current language (Clean UI, an action, has none;
+the buttons carry their state as `aria-pressed`). Under the Cyber HUD the
+cards keep Cyber's own red skin. The presets and chips call the
 same Display store actions as the dock's Visual Presets tray, which stays on
 desktop and phone as before, along with Location; voice `Visual Presets`
 still opens that tray. On a phone the More sheet shows that tray right above
-Visual, so Visual leaves out its own presets and chips there. In Cockpit the groups Cockpit's Display popover takes
+Visual, so Visual leaves out its own presets and chips there. In Cockpit the
+groups Cockpit's Display popover takes
 leave the panel as before and keep their own styling there.
 
-Scope has an Opacity slider (`#scope-opacity-slider`, 0–100%, default 100%)
+Scope has an Opacity slider (`#scope-opacity-slider`, 50–100%, default 100%;
+`SCOPE_OPACITY_MIN_PCT` in `src/ui/visualSettings.js`, since a fainter mask
+reads as Scope off while labels still fade outside the keyhole)
 that fades the whole mask (`setScopeMaskOpacity` in `src/scopeMask.js`, the
 canvas's CSS opacity) without repainting it or changing the altitude
 terminus; it is disabled while Scope is off and keeps its value. Share links
 carry it as `sco` in the long form and field 30 in the compact form, written
 only below 100%, so links made before it keep their codes and open at full
-opacity, and a link without it sets the opacity back to 100%. Scenes do not
+opacity, and a link without it sets the opacity back to 100%; a link asking
+for less than 50% opens at 50%. Scenes do not
 save it: a scene shot leaves the opacity as it is.
 
 Reset to default (`resetVisual` in `src/ui/displayBindings.js`) brings back
 the out-of-the-box look: the Normal style, the first-run post defaults
-(bloom off, sharpen on at 49%, the Tactical HUD shown, Dense detection at 75%
+(bloom off, sharpen on at 49%, the HUD shown, Dense detection at 75%
 with its fade and outside opacity, the celestial ring off), Elastic
 allocation, Scope on at 100% feather and 100% opacity, and 3D aircraft on in
-Proximity. It leaves the map source, the pinned scope terminus, Sonar's
+Proximity. The HUD layout follows the Normal style, as choosing it does: the
+Tactical HUD, except that the Cyber HUD stays Cyber. Inside Contacts, which
+lends detection for the session, the reset's detection becomes what leaving
+Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
 settings, other styles' parameters, the layers and the panels alone.
 
 With Scope off the side rails, open panels and the dock's trays carry a soft
