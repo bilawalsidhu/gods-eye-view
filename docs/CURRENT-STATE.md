@@ -7283,6 +7283,15 @@ request viewbox and continues searching without that geographic preference.
   arrays retain their existing resolution. A failed Alps pack load reports a
   search failure rather than caching an unrelated peak as the range, and the
   bundled loader retains its normal retry cooldown.
+- The shared default place search resolves an exact `Heathrow` query to
+  London Heathrow Airport from a small bundled airport-alias table
+  (`src/search/airportAliasesGeocoder.js`) before network geocoders, so a
+  keyless search no longer lands on the Florida locality of that name (#1646).
+  Navigation uses a small viewport around the airport. Matching is exact after
+  case folding, ignoring surrounding punctuation and extra spaces; coordinates,
+  supplied presets and the Alps lookup keep priority, and any other query,
+  including qualified forms, falls through to the existing geocoders. A custom
+  geocoder list skips the alias.
 - County queries rank eligible US counties and international admin-1 units together, retaining exact aliases and country/state qualifiers.
 - Bundled administrative outlines (`src/data/adminBoundaries.js`): states and
   provinces worldwide (Natural Earth admin-1,

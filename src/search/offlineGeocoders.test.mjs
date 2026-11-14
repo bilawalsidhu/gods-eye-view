@@ -10,6 +10,7 @@ import { createCoordinateGeocoder } from './coordinateGeocoder.js';
 import { createPresetGeocoder } from './presetGeocoder.js';
 import { createPlaceSearch } from './placeSearch.js';
 import { createDefaultPlaceSearch } from './defaults.js';
+import { createAirportAliasesGeocoder } from './airportAliasesGeocoder.js';
 
 const PRESETS = {
   austin: {
@@ -238,4 +239,25 @@ test('unsupported geo URIs reach the next search provider unchanged', async () =
     assert.equal((await search.geocode(query)).place, null);
   }
   assert.deepEqual(received, queries);
+});
+
+test('Heathrow resolves to London Heathrow Airport offline, not a Florida locality', async () => {
+  const geocoder = createAirportAliasesGeocoder();
+  const { place, answered } = await geocoder.geocode('Heathrow');
+
+  assert.equal(answered, true);
+  assert.equal(place.name, 'London Heathrow Airport');
+  assert.ok(Math.abs(place.lat - 51.467739) < 0.001);
+  assert.ok(Math.abs(place.lng + 0.4587801) < 0.001);
+  assert.deepEqual(place.types, ['airport']);
+  assert.equal(place.exact, true);
+  assert.ok(place.viewport.southwest.lat < place.lat);
+  assert.ok(place.viewport.northeast.lat > place.lat);
+});
+
+test('an unknown short name is left for the network geocoders', async () => {
+  const geocoder = createAirportAliasesGeocoder();
+  const { place, answered } = await geocoder.geocode('Springfield');
+  assert.equal(answered, true);
+  assert.equal(place, null);
 });

@@ -8,6 +8,7 @@ import { createPhotonGeocoder } from '../keylessGeocoder.js';
 import { createCoordinateGeocoder } from './coordinateGeocoder.js';
 import { createPresetGeocoder } from './presetGeocoder.js';
 import { createAlpsGeocoder } from './alpsGeocoder.js';
+import { createAirportAliasesGeocoder } from './airportAliasesGeocoder.js';
 
 /**
  * Coordinates, bundled names and the unqualified Alps first — all offline —
@@ -43,6 +44,7 @@ export function createDefaultPlaceSearch({
       createCoordinateGeocoder(),
       ...(presets ? [createPresetGeocoder({ presets })] : []),
       createAlpsGeocoder(),
+      createAirportAliasesGeocoder(),
       ...(selected
         ? [selected]
         : [
