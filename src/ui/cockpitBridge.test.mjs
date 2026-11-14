@@ -101,6 +101,9 @@ function vesselLayer(record) {
  * heights come from `scene.sampleHeight` (loaded tiles, at once) and
  * `scene.sampleHeightMostDetailed` (the full-detail read), per probe.
  */
+/** The surfaces the bridge's height reads asked for, in order. */
+const surfacesAsked = [];
+
 function sceneQuery(viewer, ports) {
   const scene = () => viewer.scene;
   const cartographic = ({ lon, lat }) =>
@@ -109,11 +112,13 @@ function sceneQuery(viewer, ports) {
     ...ports.query,
     project: (position) =>
       scene().cartesianToCanvasCoordinates?.(position, {}) ?? null,
-    sampleHeightNow(point) {
+    sampleHeightNow(point, options = {}) {
+      surfacesAsked.push(options.against ?? 'surface');
       const height = scene().sampleHeight?.(cartographic(point));
       return Number.isFinite(height) ? height : null;
     },
-    sampleHeight(points, { mostDetailed = false } = {}) {
+    sampleHeight(points, { mostDetailed = false, against = 'surface' } = {}) {
+      surfacesAsked.push(against);
       if (
         !mostDetailed ||
         typeof scene().sampleHeightMostDetailed !== 'function'
@@ -971,6 +976,7 @@ test('a bridge on a river above sea level rides the water, not the geoid', async
   clock.set(START_MS);
   const record = { ...RECORD, lastPositionEpoch: START_MS / 1000 };
   const river = fixture(t, { record });
+  surfacesAsked.length = 0;
   const probed = [];
   // The ship's own model reads 40 m; the ring finds the river at 27 m and
   // a quay at 33 m.
@@ -994,6 +1000,10 @@ test('a bridge on a river above sea level rides the water, not the geoid', async
     0.5,
   );
   assert.equal(probed[0], 9, 'the ship and eight probes around it');
+  // The drawn surface, the globe's terrain included, as the scene's own
+  // sample read it.
+  assert.ok(surfacesAsked.length > 0);
+  assert.deepEqual([...new Set(surfacesAsked)], ['surface']);
   const reads = probed.length;
   frames(river.cockpit, clock, river.shots, 20);
   await settle();

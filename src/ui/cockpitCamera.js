@@ -197,7 +197,9 @@ function vesselSurfaceM(info, nowMs, at = info) {
 function readWaterline(read, query, probes, seaM) {
   read.inFlight = true;
   // An async read: a failure arrives as a rejection, never a throw here.
-  query.batch(probes, { against: 'tiles' }).then(
+  // The drawn surface, globe included, as the scene's own sample read it:
+  // a lake on a globe map stands on its terrain.
+  query.batch(probes).then(
     (samples) => {
       if (this.vesselWaterline !== read) return;
       read.inFlight = false;
@@ -222,9 +224,7 @@ function readWaterline(read, query, probes, seaM) {
  */
 function loadedWaterlineM(query, probes, seaM) {
   try {
-    const heights = probes.map((probe) =>
-      query.now(probe, { against: 'tiles' }),
-    );
+    const heights = probes.map((probe) => query.now(probe));
     if (!heights.some(Number.isFinite)) return null;
     return vesselWaterlineM(seaM, heights);
   } catch {
