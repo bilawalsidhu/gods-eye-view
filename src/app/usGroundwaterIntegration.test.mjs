@@ -300,7 +300,7 @@ test('main GEV catalog exposes the bundled well snapshot through its layer lifec
   const layer = catalog.get('us-groundwater');
   assert.ok(layer);
   assert.equal(catalog.getSourceAvailability('us-groundwater').available, true);
-  assert.equal(catalog.metadata.find(({ id }) => id === layer.id)?.token, '8');
+  assert.equal(catalog.metadata.find(({ id }) => id === layer.id)?.token, '03');
   const viewer = fixtureViewer();
   let renderRequests = 0;
   viewer.viewer.scene.requestRender = () => {
