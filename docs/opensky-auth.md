@@ -66,7 +66,8 @@ curl -si http://localhost:4173/api/flights | grep -iE 'HTTP/|X-OpenSky-Auth'
 Useful reasons:
 
 - `oauth_invalid_or_missing`: OAuth client not found/usable
-- `oauth_invalid_credentials`: OAuth client rejected by OpenSky
+- `oauth_invalid_credentials`: OAuth client rejected by OpenSky. The proxy
+  drops the rejected token, so the next poll signs in again
 - `missing_oauth_creds`: auto mode found no OAuth client
 - `basic_retired`: basic mode requested; answered anonymously
 - `rate_limited`: OpenSky throttling
