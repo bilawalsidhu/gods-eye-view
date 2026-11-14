@@ -493,7 +493,7 @@
   "Remove {title} from this app's saved keys": "Remover {title} das chaves salvas deste app",
   "Project keys: {status}": "Chaves do projeto: {status}",
   "your app configuration": "sua configuração do app",
-  "your local .env": "seu .env local",
+  "your local .env.local": "seu .env.local local",
   "Saving…": "Salvando…",
   "Save failed: {detail}": "Falha ao salvar: {detail}",
   "Paste at least one key first.": "Cole pelo menos uma chave primeiro.",

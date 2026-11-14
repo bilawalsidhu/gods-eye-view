@@ -184,7 +184,7 @@
   "Saved to {store}. Restarting — this page reloads itself.": "تم الحفظ في {store}. جارٍ إعادة التشغيل — ستُحمَّل هذه الصفحة من جديد تلقائيًا.",
   "Removed from {store}. Restarting — this page reloads itself.": "تمت الإزالة من {store}. جارٍ إعادة التشغيل — ستُحمَّل هذه الصفحة من جديد تلقائيًا.",
   "your app configuration": "إعدادات التطبيق لديك",
-  "your local .env": "ملف .env المحلي لديك",
+  "your local .env.local": "ملف .env.local المحلي لديك",
   "Remove this key from your saved configuration?": "إزالة هذا المفتاح من إعداداتك المحفوظة؟",
   "This map stack": "حزمة الخرائط هذه",
   "{label} is unavailable": "{label} غير متاحة",

@@ -386,7 +386,7 @@
   "Free key — register, paste, done": "מפתח חינמי — להירשם, להדביק, סיימת",
   "Project keys: {status}": "מפתחות פרויקט: {status}",
   "your app configuration": "תצורת האפליקציה שלך",
-  "your local .env": "קובץ ה-.env המקומי שלך",
+  "your local .env.local": "קובץ ה-.env.local המקומי שלך",
   "Saving…": "שומר…",
   "Save failed: {detail}": "השמירה נכשלה: {detail}",
   "Paste at least one key first.": "הדבק קודם מפתח אחד לפחות.",

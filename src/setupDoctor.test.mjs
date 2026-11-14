@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -11,7 +11,9 @@ import {
   hasRequiredDependencies,
   isConfiguredValue,
   npmProcessSpec,
+  readDoctorDotenvSource,
   readDoctorDotenvValue,
+  secretsInSettingsFile,
   resolveOpenSkyAuthMode,
   resolveOpenSkyCredentialsFile,
   resolveCredential,
@@ -150,7 +152,7 @@ test('Pinokio-scoped diagnosis does not count dotenv values shadowed by blank ap
         rootDir: root,
         keychainLookup: () => false,
       }),
-      { configured: true, source: 'dotenv files' },
+      { configured: true, source: '.env.local' },
     );
     assert.deepEqual(
       resolveCredential(spec, {
@@ -426,6 +428,69 @@ test('doctor counts OPENSKY_CREDENTIALS_FILE as OAuth credentials, from the envi
       }),
       false,
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor names the dotenv file a credential came from; the later file wins', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-source-'));
+  const secrets = path.join(root, '.env.local');
+  try {
+    writeFileSync(path.join(root, '.env'), 'OPENAI_API_KEY=from-settings\nPORT=1\n');
+    assert.deepEqual(readDoctorDotenvSource('OPENAI_API_KEY', root), { value: 'from-settings', file: '.env' });
+    writeFileSync(secrets, 'OPENAI_API_KEY=from-secrets\n');
+    assert.deepEqual(readDoctorDotenvSource('OPENAI_API_KEY', root), { value: 'from-secrets', file: '.env.local' });
+    assert.deepEqual(readDoctorDotenvSource('NOT_SET', root), { value: '', file: null });
+    assert.deepEqual(
+      resolveCredential(credential('OPENAI_API_KEY'), { environment: {}, rootDir: root, keychainLookup: () => false }),
+      { configured: true, source: '.env.local' },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor still diagnoses when the secrets file is unreadable to it', (t) => {
+  if (process.platform === 'win32' || process.getuid?.() === 0) return t.skip('needs a non-root POSIX account');
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-denied-'));
+  const secrets = path.join(root, '.env.local');
+  try {
+    writeFileSync(path.join(root, '.env'), 'PORT=1\n');
+    writeFileSync(secrets, 'OPENAI_API_KEY=hidden\n');
+    chmodSync(secrets, 0o000);
+    assert.deepEqual(readDoctorDotenvSource('OPENAI_API_KEY', root), { value: '', file: null });
+    assert.equal(readDoctorDotenvValue('PORT', root), '1');
+  } finally {
+    chmodSync(secrets, 0o600);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor lists secrets still in .env by name and warns without values', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-settings-'));
+  try {
+    assert.deepEqual(secretsInSettingsFile(root), []);
+    writeFileSync(
+      path.join(root, '.env'),
+      'PORT=1\nOPENAI_API_KEY=sk-in-settings\n# TOMTOM_API_KEY=tt-old\n# FIRMS_MAP_KEY=\n',
+    );
+    const names = secretsInSettingsFile(root);
+    assert.deepEqual(names, ['OPENAI_API_KEY', 'TOMTOM_API_KEY']);
+    const base = {
+      ready: true,
+      node: { level: 'ok', version: '24.14.0', summary: 'supported' },
+      npm: { available: true, version: '11.0.0' },
+      dependenciesInstalled: true,
+      credentials: Object.fromEntries(CREDENTIALS.map((spec) => [spec.name, { configured: false }])),
+      capabilities: buildCapabilitySummary({}),
+    };
+    const warned = formatSetupReport({ ...base, secretsInSettings: names });
+    assert.match(warned, /\[WARN\] \.env still holds secrets: OPENAI_API_KEY, TOMTOM_API_KEY/);
+    assert.match(warned, /Move them: npm run env:init$/m);
+    assert.doesNotMatch(warned, /sk-in-settings|tt-old/);
+    assert.doesNotMatch(formatSetupReport({ ...base, secretsInSettings: [] }), /still holds secrets/);
+    assert.doesNotMatch(formatSetupReport(base), /still holds secrets/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -175,7 +175,7 @@
   "REMOVE": "ENTFERNEN",
   "Remove {title} from this app's saved keys": "{title} aus den gespeicherten Schlüsseln dieser App entfernen",
   "your app configuration": "der App-Konfiguration",
-  "your local .env": "der lokalen .env",
+  "your local .env.local": "der lokalen .env.local",
   "Saving…": "Speichern…",
   "Save failed: {detail}": "Speichern fehlgeschlagen: {detail}",
   "Paste at least one key first.": "Zuerst mindestens einen Schlüssel einfügen.",

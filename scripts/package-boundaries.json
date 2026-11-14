@@ -645,6 +645,7 @@
       "server/providers/common/source-root.js",
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
+      "src/secretEnv.mjs",
       "src/localRequestGate.mjs",
       "server/standalone/key-setup-hardening.mjs"
     ],

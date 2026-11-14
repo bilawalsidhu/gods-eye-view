@@ -493,7 +493,7 @@
   "Remove {title} from this app's saved keys": "Supprimer {title} des clés enregistrées de l'application",
   "Project keys: {status}": "Clés du projet : {status}",
   "your app configuration": "la configuration de votre application",
-  "your local .env": "votre .env local",
+  "your local .env.local": "votre .env.local local",
   "Saving…": "Enregistrement…",
   "Save failed: {detail}": "Échec de l'enregistrement : {detail}",
   "Paste at least one key first.": "Collez d'abord au moins une clé.",

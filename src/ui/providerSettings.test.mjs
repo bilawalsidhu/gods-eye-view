@@ -235,7 +235,7 @@ test('saving posts the pasted keys, clears the fields and shows the result', asy
   assert.equal(apply.getAttribute('aria-disabled'), 'false');
   assert.equal(
     text('[data-key-setup-status]'),
-    'Saved to your local .env. Restarting — this page reloads itself.',
+    'Saved to your local .env.local. Restarting — this page reloads itself.',
   );
   assert.equal($('input[data-env-var="GOOGLE_MAPS_API_KEY"]').value, '');
   assert.equal(

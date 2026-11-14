@@ -9,6 +9,16 @@
 # Do not enter credentials in Pinokio 8.0.40's native Configure panel: that
 # release saves this nested layout to the wrong path and logs submitted values.
 
+# ============================================================================ #
+#                                                                              #
+#       SECTION 1: SECRETS   -->  keep them in this file                       #
+#                                                                              #
+#       Every value in this section is a credential. Users, scripts and        #
+#       AI assistants: never read, print, log or commit these values.          #
+#       Under Pinokio this one file holds keys and settings; in a plain        #
+#       checkout keys go in .env.local and settings in .env.                   #
+#                                                                              #
+# ============================================================================ #
 # Browser: 3D tiles and geocoding; server: Places and Street View.
 # GOOGLE_MAPS_API_KEY=
 # GOOGLE_MAPS_SERVER_API_KEY=
@@ -20,7 +30,27 @@
 # OPENSKY_CLIENT_ID=
 # OPENSKY_CLIENT_SECRET=
 # LL2_API_TOKEN=
+# Gemini Live voice (GEV MIC provider chooser); server-only.
+# GEMINI_API_KEY=
+# Mapillary imagery for the Street Level layer; client-exposed by design.
+# MAPILLARY_CLIENT_TOKEN=
+# Optional: raise rate limits / unlock optional camera packs.
+# GITHUB_TOKEN=
+# TFL_APP_KEY=
+# ONTARIO_511_API_KEY=
+# OTTAWA_CAMERA_CERTIFICATE=
+# News layer, used only without a news server (see .env.example).
+# LIVEUAMAP_API_KEY=
+# WORLDNEWSAPI_KEY=
 
+# ============================================================================ #
+#                                                                              #
+#       SECTION 2: SETTINGS  -->  also in this file                            #
+#                                                                              #
+#       Non-secret configuration. Everything in this section is safe to        #
+#       review and share.                                                      #
+#                                                                              #
+# ============================================================================ #
 # Keep sharing off. The current supported Pinokio release logs successful
 # tunnel-login passcodes, so the launcher refuses to create a tunnel.
 PINOKIO_SHARE_CLOUDFLARE=false

@@ -40,7 +40,7 @@ These are designed to be used directly in the browser (like a Mapbox public toke
 
 **Places, Geocoding and the Street View Static fallback never needed to be on that list** (#33, #363): they're called from the server-side proxies in the table above, which use `GOOGLE_MAPS_SERVER_API_KEY` when it's set. Splitting it from the browser-exposed key lets each key's Google Cloud restriction actually match what it does — the browser key referrer-restricted to Map Tiles + Maps JavaScript API, the server key IP-restricted (never a referrer, since it never leaves your server) to Places + Geocoding + Street View Static — instead of one key that has to be either over-permissioned or broken for one of its jobs. A single shared `GOOGLE_MAPS_API_KEY` still works if you don't split them, but then it cannot carry a referrer restriction at all: the web services refuse one, and search would be the half that breaks.
 
-Never commit real keys. `.env` is gitignored; only `.env.example` (placeholder names) is tracked. On macOS `dev-fresh.sh` can read keys from the Keychain; plain Vite uses env vars or a local `.env`, and Pinokio uses its ignored app `ENVIRONMENT` file.
+Never commit real keys. Keys belong in `.env.local` and settings in `.env` (`npm run env:init` creates both, the keys file owner-only); both are gitignored, and only `.env.example` (placeholder names) is tracked. On macOS `dev-fresh.sh` can read keys from the Keychain; plain Vite uses env vars or the local dotenv files, and Pinokio uses its ignored app `ENVIRONMENT` file.
 
 The official Pinokio launcher stores optional values in its ignored local
 `pinokio/ENVIRONMENT` file and Vite explicitly denies that filename. Add,
@@ -54,7 +54,7 @@ option when launching through `./scripts/dev-fresh.sh`.
 
 ### Configuring separate Google keys locally
 
-Terminal development uses one ignored repository-root `.env` for both
+Terminal development uses one ignored repository-root `.env.local` for both
 `GOOGLE_MAPS_API_KEY` (browser) and `GOOGLE_MAPS_SERVER_API_KEY` (server).
 The tracked `.env.example` documents both without credentials. Vite injects
 only the browser key; sharing an environment file does not expose the server

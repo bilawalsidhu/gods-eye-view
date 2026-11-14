@@ -479,7 +479,7 @@
   "Remove {title} from this app's saved keys": "從本應用已保存的密鑰中移除 {title}",
   "Project keys: {status}": "項目密鑰：{status}",
   "your app configuration": "你的應用配置",
-  "your local .env": "你的本地 .env",
+  "your local .env.local": "你的本地 .env.local",
   "Saving…": "正在保存…",
   "Save failed: {detail}": "保存失敗：{detail}",
   "Paste at least one key first.": "請先粘貼至少一個密鑰。",

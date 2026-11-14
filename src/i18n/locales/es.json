@@ -948,7 +948,7 @@
   "Saved to {store}. Restarting — this page reloads itself.": "Guardado en {store}. Reiniciando — esta página se recarga sola.",
   "Removed from {store}. Restarting — this page reloads itself.": "Eliminado de {store}. Reiniciando — esta página se recarga sola.",
   "your app configuration": "tu configuración de la app",
-  "your local .env": "tu .env local",
+  "your local .env.local": "tu .env.local local",
   "Remove this key from your saved configuration?": "¿Eliminar esta clave de tu configuración guardada?",
   "This map stack": "Este conjunto de mapas",
   "{label} is unavailable": "{label} no está disponible",

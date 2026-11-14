@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report. Reproduction steps and relevant errors help us investigate. If installation failed before you could run a command, say which command failed and why. Redact API keys, tokens, and personal information; do not paste your .env file.
+        Thanks for the report. Reproduction steps and relevant errors help us investigate. If installation failed before you could run a command, say which command failed and why. Redact API keys, tokens, and personal information; do not paste your .env.local or .env file.
   - type: textarea
     id: what
     attributes:

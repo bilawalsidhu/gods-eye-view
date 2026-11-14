@@ -137,9 +137,16 @@ CVE-2026-111497. The setup doctor warns about Node 25, which is end-of-life.
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
 cd gods-eye-view
 npm ci
+npm run env:init
 npm run doctor
 npm run dev
 ```
+
+`env:init` never replaces a file. Keys go in `.env.local`, settings in
+`.env`; both are gitignored. Upgrading with keys still in `.env`? The same
+command moves each key line into its placeholder in `.env.local` and takes
+it out of `.env`, printing names only (`npm run env:init -- --dry-run`
+previews).
 
 Open **`http://localhost:4173`**. Choose **Live Contacts**, **Space Missions**,
 **Environmental**, or **Explore Manually** from the first-run panel.
@@ -168,15 +175,16 @@ docker compose up
 
 Open **`http://localhost:4173`** as above. Everything the app saves stays in the folder you cloned, so `docker compose down` never loses anything:
 
-- `.env` - your API keys, whether saved from Provider Settings or typed in by hand
+- `.env.local` - your API keys, whether saved from Provider Settings or typed in by hand
+- `.env` - your settings
 - `.gev-cache/` - downloaded map and satellite data, so later starts are faster
 - `.gev-logs/` - logs
 
-Back up that folder and you've backed up everything; delete `.env` to forget your keys. Source edits still hot-reload. The port is published to `127.0.0.1` only, so the default matches the native one.
+Back up that folder and you've backed up everything; delete `.env.local` to forget your keys. Source edits still hot-reload. The port is published to `127.0.0.1` only, so the default matches the native one.
 
 The local MCP server and ChatGPT OAuth voice are not available under Docker; use an OpenAI API key for voice.
 
-Publishing it wider is the [Sharing an instance](#-sharing-an-instance) opt-in, and it hands out **Provider Settings** too: the launcher trusts the container gateway as this machine, and a wider publish delivers everyone else from that same address. For an instance you mean to share, put the keys in `.env` by hand instead. [SECURITY.md](SECURITY.md) has the detail.
+Publishing it wider is the [Sharing an instance](#-sharing-an-instance) opt-in, and it hands out **Provider Settings** too: the launcher trusts the container gateway as this machine, and a wider publish delivers everyone else from that same address. For an instance you mean to share, put the keys in `.env.local` by hand instead. [SECURITY.md](SECURITY.md) has the detail.
 
 When you widen the publish, also set `GEV_KEY_SETUP_TRUSTED_PEERS=none` so the launcher trusts no gateway address.
 
@@ -212,7 +220,7 @@ Keep the `env`: bash treats `UID` as read-only, so a plain `UID=1026` in front o
 
 On SELinux hosts (Fedora, RHEL), compose mounts the checkout with `:z` so the container may read it; Docker may relabel the checkout for container access, which can take a moment on a large checkout. Without that, the start fails with `Cannot find module '/app/scripts/docker-start.mjs'`.
 
-Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings and the News layer refuse proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)). The map routes compare the browser's `Origin` with the `Host` the server sees, so the proxy must pass the original `Host` and, when it terminates TLS, `X-Forwarded-Proto`. Caddy does both by default; for nginx add `proxy_set_header Host $http_host;`, `proxy_set_header X-Forwarded-Proto $scheme;` and `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. On an install outside Docker, that forwarding header also rate-limits the proxy's users apart from your own browser. Under the default Docker bridge network every client on the host, your browser included, reaches the container from its gateway address and shares one Overpass bucket.
+Behind a reverse proxy, put your keys in `.env.local` or pass them as environment variables - Provider Settings and the News layer refuse proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)). The map routes compare the browser's `Origin` with the `Host` the server sees, so the proxy must pass the original `Host` and, when it terminates TLS, `X-Forwarded-Proto`. Caddy does both by default; for nginx add `proxy_set_header Host $http_host;`, `proxy_set_header X-Forwarded-Proto $scheme;` and `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. On an install outside Docker, that forwarding header also rate-limits the proxy's users apart from your own browser. Under the default Docker bridge network every client on the host, your browser included, reaches the container from its gateway address and shares one Overpass bucket.
 
 </details>
 
@@ -221,7 +229,7 @@ Behind a reverse proxy, put your keys in `.env` or pass them as environment vari
 
 The launcher reads the IPv4 default gateway, so an IPv6-only Docker network
 finds none: it logs `No default gateway; Provider Settings stays loopback-only`
-and the panel refuses every save. Put your keys in `.env` by hand there, or name
+and the panel refuses every save. Put your keys in `.env.local` by hand there, or name
 the gateway yourself with `GEV_KEY_SETUP_TRUSTED_PEERS` after reading
 [SECURITY.md](SECURITY.md).
 
@@ -238,7 +246,7 @@ the container.
 
 Codespaces requires a GitHub account. Overpass queries, the News layer and OpenAI
 voice token requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
-in `.env` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
+in `.env.local` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
 
 The codespace runs the dev server in a cloud workspace, so Node and the dependencies
 never touch your machine. The globe still renders in your own browser, so it
@@ -259,7 +267,7 @@ quotas apply.
 4. Open the **Ports** tab, find `4173`, and click the globe icon to open it in
    the browser. The port is private by default, so the URL asks for your GitHub
    login. Keep it private: a public port lets anyone use the app and the keys
-   in your `.env`.
+   in your `.env.local`.
 
 `GEV_ALLOWED_HOSTS` there is required, not optional. The dev server answers only
 the hostnames it trusts, and a forwarded port arrives on
@@ -270,7 +278,7 @@ ignored on purpose, so pass that exact name.
 ⚠️ **A codespace is reachable from the internet.** Treat it as the
 wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
 Settings is unavailable on the forwarded URL. Never commit your workspace
-`.env`. [SECURITY.md](SECURITY.md) has the threat model.
+`.env.local` or `.env`. [SECURITY.md](SECURITY.md) has the threat model.
 
 ### Then power it up — in the app, not in a file
 
@@ -282,7 +290,7 @@ chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
 reopens the same panel.
 
 - **Where keys land:** Pinokio → the app's ignored `pinokio/ENVIRONMENT`; a
-  terminal clone → the repo-root `.env`. Either file is made owner-only
+  terminal clone → the repo-root `.env.local`. Either file is made owner-only
   _before_ a secret is written into it. These are local plaintext files,
   excluded from Git; the app uses your keys to contact the providers.
 - **Keys you already have stay yours:** values from your shell or the macOS
@@ -362,7 +370,7 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 ## 🎙️ Talk to It
 
-The standalone app offers **OpenAI** and **Gemini** under **AI Provider** in Settings, one choice shared by voice and chat. OpenAI is the initial default; your choice is saved in this browser. To use Gemini, add `GEMINI_API_KEY` in Provider Settings or your local `.env` file, then select Gemini. `GEMINI_LIVE_MODEL` defaults to `gemini-3.8-live`. The permanent key stays on the local server, which issues a constrained, single-use session credential.
+The standalone app offers **OpenAI** and **Gemini** under **AI Provider** in Settings, one choice shared by voice and chat. OpenAI is the initial default; your choice is saved in this browser. To use Gemini, add `GEMINI_API_KEY` in Provider Settings or your local `.env.local` file, then select Gemini. `GEMINI_LIVE_MODEL` defaults to `gemini-3.8-live`. The permanent key stays on the local server, which issues a constrained, single-use session credential.
 
 Changing provider ends the current conversation. If voice is on, the new provider starts with the same open-mic or push-to-talk mode; a held Space key is not carried over. Gemini uses the same map actions and captions, but has no OpenAI cost meter or MINI tier. When Gemini reports that its session has expired, start voice again for a new conversation. The AI Provider setting does not change the OpenAI-backed AI HUD summary.
 
@@ -487,7 +495,7 @@ _The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED
 
 > Street-level photos from any provider in one panel. This build ships **Mapillary** (a free client token), **Google Street View** (your Google Maps key), **KartaView** and **Panoramax** (no key).
 
-**Setup.** At [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers), register an application with **Read** access and copy its **Client Token** (`MLY|…`). Paste it into **POWER UP → Mapillary**, or set `MAPILLARY_CLIENT_TOKEN` in `.env` and restart. Without it Street Level starts on **KartaView** instead, and the Mapillary chip says which key to add. **Google Street View** uses `GOOGLE_MAPS_API_KEY` with the **Maps JavaScript API** enabled for it in Google Cloud; its chip starts off, since every panorama is billed to the key. **KartaView** and **Panoramax** need nothing: their public APIs are keyless.
+**Setup.** At [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers), register an application with **Read** access and copy its **Client Token** (`MLY|…`). Paste it into **POWER UP → Mapillary**, or set `MAPILLARY_CLIENT_TOKEN` in `.env.local` and restart. Without it Street Level starts on **KartaView** instead, and the Mapillary chip says which key to add. **Google Street View** uses `GOOGLE_MAPS_API_KEY` with the **Maps JavaScript API** enabled for it in Google Cloud; its chip starts off, since every panorama is billed to the key. **KartaView** and **Panoramax** need nothing: their public APIs are keyless.
 
 **Use.** Turn on **Street Level** under DATA LAYERS → Cameras, or with the pill in the STREET LEVEL panel header. Each provider has a chip in its own colour (Mapillary green), and one is lit at a time: lighting one switches the others off. Mapillary, which is free, is lit by default when its token is set; otherwise KartaView is. Zoom in to street level (below 60 km) for the coverage lines; from orbit the panel says to zoom in. The **IMAGERY** (ALL / 360° / FLAT) and **SINCE** filters apply to Mapillary, KartaView and Panoramax; Street View panoramas are all 360°, so with Street View lit the filters are hidden. Click a coverage line for its image cones and a cone to open the photo. Light **KARTAVIEW** (purple) and zoom in below about 6 km: its lines are the streets KartaView has photos of, and a click on one opens the photo nearest the click, flat or 360° (drag to look around), with cones along its drive; **‹ ›** or ← → step through the drive (Shift+← →, ↑ ↓ and + − look around a 360° photo; pinch zooms on a phone). Photos KartaView has archived are skipped, and where all are archived the panel says so. For KartaView, **SINCE** goes by upload date, as KartaView's own map does (it can filter by nothing else), and the panel notes it beside the SINCE value (ANY DATE (by upload date)); KartaView filters its lines on its own server, and a filtered area KartaView has not drawn before can take several seconds. Light **PANORAMAX** (orange) for the open, federated commons (strongest in France and Belgium): below about 60 km its lines are sequences. A click on a line opens that sequence's picture nearest the click without moving the camera, flat or 360°, with cones along the sequence around it; **‹ ›** or ← → step through it, and both filters apply. Its caption names the picture's authors (or the instance holding it) and licence (mostly CC BY-SA 4.0; pictures on the IGN instance are Licence Ouverte 2.0). On the **Google 3D** map (Google's terms keep Street View off other maps, where it does not appear), light **GOOGLE STREET VIEW** and click a street from below 3 km, or press **OPEN STREET VIEW** for the view centre, to open Google's panorama there; step along its arrows. Above the photo: **EXPAND** (full screen; Esc leaves) and **FIT / FILL** (Mapillary, and flat KartaView and Panoramax photos). The caption links to the image on the provider's site, and the globe credits each provider that is on ("© Mapillary contributors, CC BY-SA 4.0", "Street View imagery © Google", "© KartaView contributors, CC BY-SA 4.0", "© Panoramax contributors, licence per picture"). KartaView's own photo pages fail for signed-out visitors, so its link opens the full-size photo.
 
@@ -621,7 +629,7 @@ advanced `dev-fresh.sh` configuration.
 For headless machines, coding agents, or scripted setups:
 
 ```bash
-# Put keys in .env (see .env.example), or pass them as env vars:
+# Put keys in .env.local (SECTION 1 of .env.example), or pass them as env vars:
 OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
 
 # On macOS, store any of them in the Keychain and dev-fresh.sh pulls them in:

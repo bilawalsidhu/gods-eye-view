@@ -81,29 +81,7 @@ resolve_opensky_credentials() {
 
   OPENSKY_CLIENT_ID="${OPENSKY_CLIENT_ID:-}"
   OPENSKY_CLIENT_SECRET="${OPENSKY_CLIENT_SECRET:-}"
-  OPENSKY_USERNAME="${OPENSKY_USERNAME:-}"
-  OPENSKY_PASSWORD="${OPENSKY_PASSWORD:-}"
 
-  if [[ "${OPENSKY_AUTH_MODE}" == "basic" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -z "${OPENSKY_USERNAME}" ]]; then
-    for svc in "opensky-network" "opensky"; do
-      for acct in "username" "user" "login" "email" "default"; do
-        OPENSKY_USERNAME="$(read_keychain_secret "${svc}" "${acct}")"
-        if [[ -n "${OPENSKY_USERNAME}" ]]; then
-          break 2
-        fi
-      done
-    done
-  fi
-  if [[ "${OPENSKY_AUTH_MODE}" == "basic" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -z "${OPENSKY_PASSWORD}" ]]; then
-    for svc in "opensky-network" "opensky"; do
-      for acct in "password" "pass" "token" "secret" "default"; do
-        OPENSKY_PASSWORD="$(read_keychain_secret "${svc}" "${acct}")"
-        if [[ -n "${OPENSKY_PASSWORD}" ]]; then
-          break 2
-        fi
-      done
-    done
-  fi
   if [[ "${OPENSKY_AUTH_MODE}" == "oauth" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
     load_opensky_oauth_from_file "${OPENSKY_CREDENTIALS_FILE}"
   fi
@@ -128,20 +106,13 @@ resolve_opensky_credentials() {
     done
   fi
 
+  # OpenSky retired username/password (Basic) sign-in on 2026-03-18 and the
+  # server no longer sends it, so no OPENSKY_USERNAME / OPENSKY_PASSWORD is
+  # looked up or passed on; basic mode loads flights anonymously.
   case "${OPENSKY_AUTH_MODE}" in
-    basic)
+    basic|anon)
       OPENSKY_CLIENT_ID=""
       OPENSKY_CLIENT_SECRET=""
-      ;;
-    oauth)
-      OPENSKY_USERNAME=""
-      OPENSKY_PASSWORD=""
-      ;;
-    anon)
-      OPENSKY_CLIENT_ID=""
-      OPENSKY_CLIENT_SECRET=""
-      OPENSKY_USERNAME=""
-      OPENSKY_PASSWORD=""
       ;;
   esac
 }
@@ -164,11 +135,7 @@ if [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
 fi
 case "${OPENSKY_AUTH_MODE}" in
   basic)
-    if [[ -n "${OPENSKY_USERNAME}" && -n "${OPENSKY_PASSWORD}" ]]; then
-      echo "OpenSky basic auth: configured"
-    else
-      echo "OpenSky basic auth: missing credentials"
-    fi
+    echo "OpenSky basic auth: retired by OpenSky — flights load anonymously (use OAuth)"
     ;;
   oauth)
     if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
@@ -180,8 +147,6 @@ case "${OPENSKY_AUTH_MODE}" in
   auto)
     if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
       echo "OpenSky auto auth: OAuth configured"
-    elif [[ -n "${OPENSKY_USERNAME}" && -n "${OPENSKY_PASSWORD}" ]]; then
-      echo "OpenSky auto auth: basic configured"
     else
       echo "OpenSky auto auth: no credentials found"
     fi
@@ -198,6 +163,4 @@ OPENSKY_AUTH_MODE="${OPENSKY_AUTH_MODE}" \
 OPENSKY_CREDENTIALS_FILE="${OPENSKY_CREDENTIALS_FILE}" \
 OPENSKY_CLIENT_ID="${OPENSKY_CLIENT_ID}" \
 OPENSKY_CLIENT_SECRET="${OPENSKY_CLIENT_SECRET}" \
-OPENSKY_USERNAME="${OPENSKY_USERNAME}" \
-OPENSKY_PASSWORD="${OPENSKY_PASSWORD}" \
 npm run dev -- --host "${HOST}" --port "${PORT}"

@@ -175,7 +175,7 @@
   "REMOVE": "TA BORT",
   "Remove {title} from this app's saved keys": "Ta bort {title} från appens sparade nycklar",
   "your app configuration": "appens konfiguration",
-  "your local .env": "den lokala .env-filen",
+  "your local .env.local": "den lokala .env.local-filen",
   "Saving…": "Sparar …",
   "Save failed: {detail}": "Det gick inte att spara: {detail}",
   "Paste at least one key first.": "Klistra in minst en nyckel först.",

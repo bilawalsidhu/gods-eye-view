@@ -59,7 +59,7 @@ let _aisAdapter = null;
 let _aisWatchdogPolicy = null;
 /** @type {number|null} */
 let _aisStreamTickTimer = null;
-/** Set by dispose so the next ensure() re-derives budgets from a reloaded .env. */
+/** Set by dispose so the next ensure() re-derives budgets from reloaded dotenv files. */
 let _aisNeedsRearm = false;
 /** @type {Function|null|undefined} `ws` constructor; null = unavailable, undefined = not yet probed. */
 let _aisWebSocketImpl;
@@ -210,8 +210,8 @@ function aisWebSocketImpl() {
  * Resolve the watchdog policy from the environment, once.
  *
  * Read lazily because module evaluation happens before Vite's loadEnv() copies
- * .env into process.env — the reverted watchdog read these at import time and
- * silently ignored every .env value, including its own kill switch.
+ * the dotenv files into process.env — the reverted watchdog read these at import time and
+ * silently ignored every dotenv value, including its own kill switch.
  *
  * A custom subscription (one harbor, one message type) can be legitimately
  * silent for minutes, so the silence watch only self-arms for the default
@@ -297,7 +297,7 @@ function aisKeyFingerprint() {
 function ensureAisStreamConnection() {
   const adapter = aisAdapter();
   if (_aisNeedsRearm) {
-    // Post-dispose re-arm, now that the restarted server's .env is loaded. The
+    // Post-dispose re-arm, now that the restarted server's dotenv files are loaded. The
     // adapter keeps its generation namespace across this.
     _aisNeedsRearm = false;
     adapter.setWatchdogOptions(aisWatchdogBudgets());
@@ -350,7 +350,7 @@ function startAisStreamWatchdogTick() {
  * Vite restarts the dev server in-process on a config change while module
  * state survives, so without this each reload stacked another interval and
  * another reconnect chain. The cached policy is dropped too, so a restart
- * re-reads .env.
+ * re-reads the dotenv files.
  *
  * The adapter instance itself is deliberately KEPT: it owns the socket
  * generation namespace, which must stay monotonic across restarts so a

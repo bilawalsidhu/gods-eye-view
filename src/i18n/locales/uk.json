@@ -500,7 +500,7 @@
   "Remove {title} from this app's saved keys": "Видалити {title} зі збережених ключів застосунку",
   "Project keys: {status}": "Ключі проєкту: {status}",
   "your app configuration": "вашої конфігурації застосунку",
-  "your local .env": "вашого локального .env",
+  "your local .env.local": "вашого локального .env.local",
   "Saving…": "Збереження…",
   "Save failed: {detail}": "Не вдалося зберегти: {detail}",
   "Paste at least one key first.": "Спочатку вставте принаймні один ключ.",

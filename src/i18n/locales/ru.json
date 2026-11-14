@@ -157,7 +157,7 @@
   },
   "POWERED UP": "ЗАПУЩЕНО",
   "your app configuration": "ваша конфигурация приложения",
-  "your local .env": "ваш локальный .env",
+  "your local .env.local": "ваш локальный .env.local",
   "Saving…": "Сохранение…",
   "Save failed ({status}).": "Не удалось сохранить ({status}).",
   "Save failed: {detail}": "Не удалось сохранить: {detail}",

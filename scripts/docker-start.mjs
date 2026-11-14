@@ -111,7 +111,7 @@ async function start() {
     String(process.env.GEV_KEY_SETUP_TRUSTED_PEERS ?? '').trim(),
   );
   const trustedPeers = resolveTrustedPeers({ routeTable: readRouteTable() });
-  // Set even an empty list before Vite loads .env: the resolved launcher policy
+  // Set even an empty list before Vite loads the dotenv files: the resolved policy
   // must remain authoritative when there is no trusted gateway.
   process.env.GEV_KEY_SETUP_TRUSTED_PEERS = trustedPeers;
   if (trustedPeers) {

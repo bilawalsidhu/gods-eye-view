@@ -3173,7 +3173,7 @@ Local Places nearby/text search and the CCTV Street View fallback prefer
 `GOOGLE_MAPS_SERVER_API_KEY`, falling back to `GOOGLE_MAPS_API_KEY` when the
 server key is blank or absent. Only the browser key is injected into client
 code. POWER UP presents one Google Maps entry for the browser key. The optional
-server key is configured manually in the same ignored root `.env`, or Pinokio's
+server key is configured manually in the same ignored root `.env.local`, or Pinokio's
 ignored `pinokio/ENVIRONMENT`; it is omitted from Provider Settings and its
 missing-key count. Existing server keys and the single-key fallback remain
 supported. `.env.example` and `pinokio/_ENVIRONMENT` document both entries.
@@ -7504,11 +7504,11 @@ apply to `public/` assets or built-preview serving.
 - Network access: local-only by default (`HOST=localhost` in dev-fresh.sh); LAN is an explicit opt-in via `HOST=0.0.0.0` (launcher prints a key-exposure warning + LAN URL; see SECURITY.md)
 - OpenSky default mode: OAuth (`OPENSKY_AUTH_MODE=oauth`; `anon` works without credentials)
 - Setup doctor resolves `OPENSKY_AUTH_MODE` from the environment and dotenv files. Explicit `anon` and OAuth mode without a client pair report keyless anonymous access (rate-limited); a complete OAuth pair retains the existing presence-only capability wording. Basic and auto modes report the selected mode without guessing which credentials runtime will accept. The proxy's auth behavior is unchanged.
-- Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env`)
-- OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from `.env` too
-- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (`.env` only)
+- Google key expected in Keychain service `google-maps-api` (or `GOOGLE_MAPS_API_KEY`, or `.env.local` / `.env`)
+- OpenSky credentials expected in Keychain service `opensky-network` (or env, or `.env.local` / `.env`); `OPENSKY_AUTH_MODE` and `OPENSKY_CREDENTIALS_FILE` read from the dotenv files too
+- Optional-key precedence in `dev-fresh.sh` is uniform — explicit shell env, then `.env.local` / `.env`, then Keychain: `OPENAI_API_KEY` (Keychain `openai-api`/`api-key` — voice + HUD summary), `AISSTREAM_API_KEY` (`aisstream-api`/`api-key` — live vessels), `CESIUM_ION_TOKEN` (`cesium-ion`/`token` — Bing stacks), `TOMTOM_API_KEY` (`tomtom-api`/`api-key` — live traffic flow), `FIRMS_MAP_KEY` (`firms-map`/`map-key` — live fires), `LL2_API_TOKEN` (dotenv files only)
 - An empty string is not "unset" on either side of the launcher, and both sides are handled. `scripts/read-dotenv-value.mjs` hides the requested key from `process.env` for the duration of the read (Vite's `loadEnv` otherwise lets an inherited empty export win over the parsed files) and restores it after. A key the launcher resolves to nothing is then removed from the dev server's environment outright (`env -u`), not merely omitted — the child inherits this shell's environment, and Vite backfills `.env` only over undefined variables, so an empty export in either place would shadow a configured key. `CCTV_CALTRANS_DISTRICTS` is the deliberate exception: empty is its documented Caltrans kill switch and is passed through as-is
-- `.env` supported via `.env.example` template
+- `.env.local` (keys, SECTION 1) and `.env` (settings, SECTION 2) created from `.env.example` by `npm run env:init`
 
 ### Proxy/Security Baseline
 

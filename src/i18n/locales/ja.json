@@ -479,7 +479,7 @@
   "Remove {title} from this app's saved keys": "{title}をこのアプリの保存済みキーから削除",
   "Project keys: {status}": "プロジェクトのキー：{status}",
   "your app configuration": "アプリの設定",
-  "your local .env": "ローカルの.env",
+  "your local .env.local": "ローカルの.env.local",
   "Saving…": "保存中…",
   "Save failed: {detail}": "保存に失敗しました：{detail}",
   "Paste at least one key first.": "まず、キーを1つ以上貼り付けてください。",
