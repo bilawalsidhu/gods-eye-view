@@ -564,6 +564,8 @@ function createCableHarness({
   // event-dirty behavior with no wall-clock coupling.
   let clockMs = 0;
   let clickHandler = null;
+  let doubleHandler = null;
+  let picked = null;
   const layer = createTeleGeographySubmarineCableLayer({
     overlayHost: {
       setVisible: (...args) => hostCalls.push(['visible', ...args]),
@@ -577,6 +579,14 @@ function createCableHarness({
           if (clickHandler === fn) clickHandler = null;
         };
       },
+      onPointer: (type, fn) => {
+        if (type !== 'dblclick') return () => {};
+        doubleHandler = fn;
+        return () => {
+          if (doubleHandler === fn) doubleHandler = null;
+        };
+      },
+      stockEnabled: (name) => name === 'dblclickFollow',
     }),
     source,
     mapStackEventTarget,
@@ -607,8 +617,13 @@ function createCableHarness({
   camera.port.cancelFlight = () => flights.push('cancel');
   camera.port.flyTo = (destination, options) =>
     flights.push({ destination, options });
+  camera.port.followed = null;
+  camera.port.follow = (target) => (camera.port.followed = target ?? null);
+  const zooms = [];
+  camera.port.flyToBounds = (sphere) => zooms.push(sphere);
   const { draw } = bindFakeDraw(viewer, {
     camera: camera.port,
+    query: { pick: () => picked },
     frame: fakeSceneFrame(viewer),
   });
   layer.init(viewer);
@@ -637,6 +652,13 @@ function createCableHarness({
     click(drawHit) {
       clickHandler?.({ drawHit, pick: null });
     },
+    /** A double-click over a drawn item; what the camera then does. */
+    dblclick(hit) {
+      picked = hit;
+      doubleHandler?.({ position: { x: 1, y: 1 } });
+    },
+    followed: () => camera.port.followed,
+    zooms,
     async load() {
       layer.enable(viewer);
       source.releaseAll?.();
@@ -1338,5 +1360,28 @@ test('every bundled cable segment is drawn with its source feature', async () =>
     });
   }
   assert.equal(env.set('references').items.size, features.length);
+  env.layer.destroy();
+});
+
+test('a double-click follows a landing point or reference and zooms to a cable, as their entities did', async () => {
+  const env = await loadedHarness();
+  const [lineId] = env.set('lines').items.keys();
+  const [pinId] = env.set('pins').items.keys();
+  const [cableRef] = env.set('references').items.keys();
+  const surface = { surface: false };
+  env.dblclick({ set: env.set('pins').spec.id, id: pinId, ...surface });
+  assert.ok(env.followed(), 'a landing point is followed');
+  env.dblclick({ set: env.set('stems').spec.id, id: cableRef, ...surface });
+  assert.equal(
+    env.followed().key,
+    `${env.set('references').spec.id}:${cableRef}`,
+    'a stem follows its reference, one entity before',
+  );
+  env.dblclick({ set: env.set('lines').spec.id, id: lineId, ...surface });
+  assert.equal(env.followed(), null, 'a cable is zoomed to');
+  assert.ok(env.zooms.at(-1)?.radius > 0);
+  env.dblclick({ set: env.set('pins').spec.id, id: pinId, ...surface });
+  env.layer.disable();
+  assert.equal(env.followed(), null, 'hidden, its entities went: no follow');
   env.layer.destroy();
 });

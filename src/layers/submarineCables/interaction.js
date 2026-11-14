@@ -1,5 +1,6 @@
 import { toRadians } from '../../geo/vector.js';
 import { cameraOf } from '../../render/rendererOf.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
 
 export function createInteraction({ state, parts, inputFor }) {
   function beginInteraction(viewer) {
@@ -9,6 +10,15 @@ export function createInteraction({ state, parts, inputFor }) {
       const record = resolvePickRecord(event.drawHit);
       if (!record?.reference) return;
       flyToReference(viewer, record.reference);
+    });
+    // A double-click follows a landing point or reference and zooms to a
+    // cable, as the default renderer did for their entities.
+    state._stockFollow = followOnDoubleClick({
+      viewer,
+      inputFor,
+      name: 'submarine-cables',
+      enabled: () => state._enabled,
+      targetFor: (hit) => parts.rendering.followTargetFor(hit),
     });
   }
 
