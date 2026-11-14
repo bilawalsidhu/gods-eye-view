@@ -3525,5 +3525,6 @@
   "Reset view reloads the app without the view restored from the address bar.": "“重置视图”会重新加载应用，不使用从地址栏恢复的视图。",
   "Reload": "重新加载",
   "Retry": "重试",
-  "Reset view": "重置视图"
+  "Reset view": "重置视图",
+  "PennDOT Traffic Cams": "PennDOT 交通摄像头"
 }

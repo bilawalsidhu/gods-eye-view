@@ -37,11 +37,16 @@ const CHECKER_PATH = fileURLToPath(
 const NEXT_PATH = fileURLToPath(
   new URL('../../scripts/next-layer-state-token.mjs', import.meta.url),
 );
-const reservationRows = JSON.parse(
+const currentReservationRows = JSON.parse(
   readFileSync(
     new URL('./layerStateTokenReservations.json', import.meta.url),
     'utf8',
   ),
+);
+
+// Keep the historical competing-PR fixtures anchored before PennDOT.
+const reservationRows = currentReservationRows.filter(
+  ([id]) => id !== 'penndot-traffic-cams',
 );
 
 test('pre-ledger published ownership is independent of the candidate mapping', () => {
@@ -114,6 +119,11 @@ function writeCodecFixture(cwd, rows, entries) {
     );
   let source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
   // Layers published after the fixture's ledger are not in its registry.
+  if (!rows.some(([id]) => id === 'penndot-traffic-cams'))
+    source = source.replace(
+      /  Object\.freeze\(\{\s*id: 'penndot-traffic-cams',[\s\S]*?\}\),\n/,
+      '',
+    );
   if (!rows.some(([id]) => id === 'wildlife-sightings'))
     source = source.replace(
       /  Object\.freeze\(\{\s*id: 'wildlife-sightings',[\s\S]*?\}\),\n/,
@@ -154,10 +164,10 @@ function writeCodecFixture(cwd, rows, entries) {
 
 test('reservation ledger is complete, pinned, and rejects duplicate or malformed rows', () => {
   assert.deepEqual(
-    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...parseLayerStateTokenReservations(currentReservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 39);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 40);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -173,6 +183,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       news: '00',
       shipwrecks: '01',
       rail: '02',
+      'penndot-traffic-cams': '05',
     },
   );
   assert.throws(

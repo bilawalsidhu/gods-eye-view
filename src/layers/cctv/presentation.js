@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 import { isolate, msg, t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
@@ -300,9 +301,11 @@ export function createPresentation({
     Object.defineProperty(payload, 'cameras', {
       enumerable: true,
       get() {
-        cameras ??= layerState._records.map((record) =>
-          getPublicCameraState(record, activeId),
-        );
+        cameras ??= layerState._records
+          .filter(({ camera }) =>
+            cameraIsEnabled(camera, layerState._cameraCategories),
+          )
+          .map((record) => getPublicCameraState(record, activeId));
         return cameras;
       },
     });

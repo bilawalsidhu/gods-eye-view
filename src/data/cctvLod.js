@@ -51,8 +51,8 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
 
 /**
  * Returns the bounded ambient-card budget for the current viewer height.
- * Card counts stay inside the 20..40 range (owner round 2): street level
- * keeps the overlay sparse, metro scale earns the full ring.
+ * Street and city views keep the established 20..40 range. Wider regional
+ * views reduce thumbnails, then leave only markers and the selected feed.
  *
  * @param {number} cameraHeightM
  * @returns {{cardLimit:number}}
@@ -61,6 +61,8 @@ export function cctvLodBudgets(cameraHeightM) {
   const height = Number.isFinite(cameraHeightM)
     ? Math.max(0, cameraHeightM)
     : CITY_HEIGHT_M;
+  if (height >= 100_000) return { cardLimit: 0 };
+  if (height >= 50_000) return { cardLimit: 8 };
   if (height <= STREET_HEIGHT_M) {
     return { cardLimit: CCTV_AMBIENT_CARD_MIN };
   }
@@ -295,6 +297,7 @@ export function selectCctvLod(
   { cameraHeightM, incumbentIds, viewW, viewH } = {},
 ) {
   const budgets = cctvLodBudgets(cameraHeightM);
+  if (budgets.cardLimit === 0) return { cardIds: [], budgets };
   const incumbents =
     incumbentIds instanceof Set ? incumbentIds : new Set(incumbentIds || []);
   const screened = hasFiniteCctvViewport(viewW, viewH);

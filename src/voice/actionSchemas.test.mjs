@@ -58,8 +58,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
+    // Statewide 511PA cameras join as their own enabled layer and the
+    // penndot layer enum/aliases ride the generated manifest.
     // show_street_level (map, source, photo) adds one tool.
-    '0c27f62062001e6a07241cd301c3d357f55e9b74f66cd2904d16590510337468',
+    'a61d4a298ef1e5e3949ad24387e4044570a7cb988b73be32e0820a5007b20826',
   );
 });
 

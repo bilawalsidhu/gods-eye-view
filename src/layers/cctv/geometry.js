@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
 import {
@@ -510,20 +511,24 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     // invent an arbitrary catalog-order cohort.
     if (!activeRecord) return new Set();
 
-    const ranked = layerState._records.map((record) => {
-      if (record === activeRecord) {
-        return { record, distKm: -1 };
-      }
-      return {
-        record,
-        distKm: parts.model.haversineKm(
-          activeRecord.camera.lat,
-          activeRecord.camera.lon,
-          record.camera.lat,
-          record.camera.lon,
-        ),
-      };
-    });
+    const ranked = layerState._records
+      .filter(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      )
+      .map((record) => {
+        if (record === activeRecord) {
+          return { record, distKm: -1 };
+        }
+        return {
+          record,
+          distKm: parts.model.haversineKm(
+            activeRecord.camera.lat,
+            activeRecord.camera.lon,
+            record.camera.lat,
+            record.camera.lon,
+          ),
+        };
+      });
 
     ranked.sort((a, b) => a.distKm - b.distKm);
 

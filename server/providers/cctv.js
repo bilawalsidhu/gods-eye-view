@@ -19,6 +19,10 @@ import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
+import {
+  createPennDotStreamResolver,
+  fetchPennDotMedia,
+} from './cctv/penndot.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import { googleServerApiKey } from './places/google-key.js';
@@ -45,7 +49,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
    * for any catalog the proxy can actually serve. */
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
-  const puller = createHlsPuller();
+  const resolvePennDot = createPennDotStreamResolver();
+  const puller = createHlsPuller({
+    fetchImpl: fetchPennDotMedia,
+    resolveUrl: resolvePennDot,
+  });
   /**
    * Bounded transient image reuse keeps cadence-limited providers (World
    * stills, Ottawa's once-a-minute API) inside their refresh floor. The byte
@@ -341,9 +349,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
 
         if (url.pathname.startsWith('/media/')) {
-          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(
-            url.pathname,
-          );
+          const match =
+            /^\/media\/([^/]+)(?:\/((seg|init)_(\d+)\.(ts|mp4)))?$/.exec(
+              url.pathname,
+            );
           if (!match) {
             res.writeHead(404);
             res.end();
@@ -400,14 +409,24 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
             if (match[2]) {
-              const body = puller.getSegment(
-                cameraId,
-                url.searchParams.get('session'),
-                Number(match[3]),
-                leaseId,
-              );
+              const body =
+                match[3] === 'init'
+                  ? match[5] === 'mp4' &&
+                    puller.getInitSegment(
+                      cameraId,
+                      url.searchParams.get('session'),
+                      Number(match[4]),
+                      leaseId,
+                    )
+                  : puller.getSegment(
+                      cameraId,
+                      url.searchParams.get('session'),
+                      Number(match[4]),
+                      leaseId,
+                      match[5],
+                    );
               res.writeHead(body ? 200 : 404, {
-                'Content-Type': 'video/mp2t',
+                'Content-Type': match[5] === 'mp4' ? 'video/mp4' : 'video/mp2t',
                 'Cache-Control': 'no-store',
               });
               res.end(body || undefined);

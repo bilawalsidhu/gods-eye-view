@@ -1,41 +1,162 @@
 [
-  ["air-quality", "4"],
-  ["ais-live-vessels", "a"],
-  ["alpr-cameras", "p"],
-  ["bhote-koshi-2026", "h"],
-  ["bhote-koshi-locator", "z"],
-  ["bikeshare", "b"],
-  ["cctv", "c"],
-  ["directions", "n"],
-  ["drone-airspace", "8"],
-  ["earthquakes", "e"],
-  ["fire-perimeters", "2"],
-  ["flights", "f"],
-  ["gnss-integrity", "3"],
-  ["local-dams", "q"],
-  ["local-datacenters", "d"],
-  ["local-firms", "w"],
-  ["military", "m"],
-  ["military-awareness", "g"],
-  ["military-installations", "i"],
-  ["news", "00"],
-  ["radio", "r"],
-  ["rail", "02"],
-  ["recent-imagery", "1"],
-  ["rocket-launches", "x"],
-  ["s2-ghostmaps", "5"],
-  ["satellites", "s"],
-  ["sea-marks", "6"],
-  ["shipwrecks", "01"],
-  ["ski-pistes", "7"],
-  ["street-level", "0"],
-  ["telegeography-submarine-cables", "u"],
-  ["traffic", "t"],
-  ["transit", "j"],
-  ["weather-cyclones", "y"],
-  ["weather-lightning", "l"],
-  ["weather-radar", "v"],
-  ["weather-satellite", "o"],
-  ["wildlife-sightings", "9"],
-  ["wind", "k"]
+  [
+    "air-quality",
+    "4"
+  ],
+  [
+    "ais-live-vessels",
+    "a"
+  ],
+  [
+    "alpr-cameras",
+    "p"
+  ],
+  [
+    "bhote-koshi-2026",
+    "h"
+  ],
+  [
+    "bhote-koshi-locator",
+    "z"
+  ],
+  [
+    "bikeshare",
+    "b"
+  ],
+  [
+    "cctv",
+    "c"
+  ],
+  [
+    "directions",
+    "n"
+  ],
+  [
+    "drone-airspace",
+    "8"
+  ],
+  [
+    "earthquakes",
+    "e"
+  ],
+  [
+    "fire-perimeters",
+    "2"
+  ],
+  [
+    "flights",
+    "f"
+  ],
+  [
+    "gnss-integrity",
+    "3"
+  ],
+  [
+    "local-dams",
+    "q"
+  ],
+  [
+    "local-datacenters",
+    "d"
+  ],
+  [
+    "local-firms",
+    "w"
+  ],
+  [
+    "military",
+    "m"
+  ],
+  [
+    "military-awareness",
+    "g"
+  ],
+  [
+    "military-installations",
+    "i"
+  ],
+  [
+    "news",
+    "00"
+  ],
+  [
+    "penndot-traffic-cams",
+    "05"
+  ],
+  [
+    "radio",
+    "r"
+  ],
+  [
+    "rail",
+    "02"
+  ],
+  [
+    "recent-imagery",
+    "1"
+  ],
+  [
+    "rocket-launches",
+    "x"
+  ],
+  [
+    "s2-ghostmaps",
+    "5"
+  ],
+  [
+    "satellites",
+    "s"
+  ],
+  [
+    "sea-marks",
+    "6"
+  ],
+  [
+    "shipwrecks",
+    "01"
+  ],
+  [
+    "ski-pistes",
+    "7"
+  ],
+  [
+    "street-level",
+    "0"
+  ],
+  [
+    "telegeography-submarine-cables",
+    "u"
+  ],
+  [
+    "traffic",
+    "t"
+  ],
+  [
+    "transit",
+    "j"
+  ],
+  [
+    "weather-cyclones",
+    "y"
+  ],
+  [
+    "weather-lightning",
+    "l"
+  ],
+  [
+    "weather-radar",
+    "v"
+  ],
+  [
+    "weather-satellite",
+    "o"
+  ],
+  [
+    "wildlife-sightings",
+    "9"
+  ],
+  [
+    "wind",
+    "k"
+  ]
 ]

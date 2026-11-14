@@ -203,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 39);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 39);
+  assert.equal(REGISTERED_LAYER_IDS.length, 40);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 40);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -603,6 +603,15 @@ test('Radio genre ids with spaces and ampersands round-trip through v2', () => {
     const decoded = decodeLayerStateParams(new URLSearchParams(encode(state)));
     assert.equal(decoded.options.radio.filter, filter);
   }
+});
+
+test('PennDOT can restore independently while retaining shared camera viewer settings', () => {
+  const decoded = decodeLayerStateParams(
+    new URLSearchParams('v=2&l=05&lo=05.c.v_05.p.0'),
+  );
+  assert.deepEqual(decoded.enabledLayerIds, ['penndot-traffic-cams']);
+  assert.equal(decoded.options.cctv.coverageMode, 'viewshed');
+  assert.equal(decoded.options.cctv.showProjection, false);
 });
 
 test('mirrored option owners decode into the owner owner-options bucket', () => {

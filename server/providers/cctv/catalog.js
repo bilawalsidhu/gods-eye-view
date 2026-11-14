@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   DEFAULT_CCTV_SOURCE_FILE,
   CCTV_SOURCE_CACHE_MS,
+  DEFAULT_PENNDOT_MAX_SOURCES,
   WORLD_CCTV_SOURCE_COUNT,
 } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
@@ -12,6 +13,7 @@ import { loadLithuaniaSources } from './lithuania.js';
 import { loadOttawaSourcesFromOpenData } from './ottawa.js';
 import { loadQuebecSources, QUEBEC_CAMERA_SOURCE_COUNT } from './quebec.js';
 import { loadTaiwanSources } from './taiwan.js';
+import { loadPennDotSources } from './penndot.js';
 import { loadWorldCameraSources } from './worldCameras.js';
 import {
   loadAustinSourcesFromOpenData,
@@ -57,6 +59,16 @@ const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
  * terms are unconfirmed.
  */
 const LIVE_PACKS = [
+  {
+    name: '511pa',
+    // PennDOT requires a video-sharing agreement for direct feed use.
+    enabled: () => envOptIn('CCTV_511PA_ENABLED'),
+    load: loadPennDotSources,
+    // Statewide-scale feed (up to DEFAULT_PENNDOT_MAX_SOURCES): when opted in,
+    // reserve its full own-cap above the shared floor instead of thinning it
+    // round-robin to a few hundred cameras.
+    reservedCount: DEFAULT_PENNDOT_MAX_SOURCES,
+  },
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
   {
     name: 'caltrans',

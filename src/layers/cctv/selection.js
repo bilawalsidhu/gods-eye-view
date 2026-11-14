@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import {
   bindTrackingClickGesture,
   isTrackingClickGesture,
@@ -23,10 +24,16 @@ export function createSelection({
   function getActiveRecord() {
     if (!layerState._activeCameraId) return null;
     if (layerState._recordById.has(layerState._activeCameraId)) {
-      return layerState._recordById.get(layerState._activeCameraId);
+      const record = layerState._recordById.get(layerState._activeCameraId);
+      return cameraIsEnabled(record.camera, layerState._cameraCategories)
+        ? record
+        : null;
     }
     // Sync _activeCameraId when falling back to first record to prevent ID mismatch
-    const fallback = layerState._records[0] || null;
+    const fallback =
+      layerState._records.find(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      ) || null;
     if (fallback && fallback.camera?.id) {
       layerState._activeCameraId = fallback.camera.id;
     }
@@ -65,6 +72,8 @@ export function createSelection({
     if (!cameraId || !layerState._recordById.has(cameraId))
       return CCTV_ACTIVATION_RESULT.NOT_FOUND;
     const record = layerState._recordById.get(cameraId);
+    if (!cameraIsEnabled(record.camera, layerState._cameraCategories))
+      return CCTV_ACTIVATION_RESULT.NOT_FOUND;
     const previousActiveRecord = getActiveRecord();
     // Re-selecting the already-active camera is a no-op: re-running the
     // activation path re-probes and rewrites the plane entity's geometry, and

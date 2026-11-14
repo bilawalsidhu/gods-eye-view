@@ -1194,7 +1194,9 @@ export class StyleManager extends ShellFacade {
       cctv: cctvLayer,
       viewer: this.viewer,
       actions: {
-        isEnabled: () => this._dataManager?.isEnabled('cctv'),
+        isEnabled: () =>
+          this._dataManager?.isEnabled('cctv') ||
+          this._dataManager?.isEnabled('penndot-traffic-cams'),
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('cctv', params, options),
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
@@ -1224,20 +1226,29 @@ export class StyleManager extends ShellFacade {
       this._showToast(t('CCTV layer unavailable'));
       return false;
     }
-    const enabled = this._dataManager.isEnabled('cctv');
+    const cameraIds = ['cctv', 'penndot-traffic-cams'].filter((id) =>
+      this._dataManager.layers.has(id),
+    );
+    const enabled = cameraIds.some((id) => this._dataManager.isEnabled(id));
     const target = typeof forceState === 'boolean' ? forceState : !enabled;
     if (target === enabled) return true;
     await runCctvLayerEnableTransition({
       target,
       setEnabled: (next) =>
-        this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
+        next
+          ? this._dataManager.setEnabled('cctv', true, { origin: 'user' })
+          : Promise.all(
+              cameraIds.map((id) =>
+                this._dataManager.setEnabled(id, false, { origin: 'user' }),
+              ),
+            ),
       readOwnership: () => ({
         trackedEntity: this.viewer?.trackedEntity,
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () =>
         !this._disposed &&
-        this._dataManager.isEnabled('cctv') &&
+        cameraIds.some((id) => this._dataManager.isEnabled(id)) &&
         !this._cctvControls?.getState()?.activeCameraId,
       activate: () => cctvLayer.focusNearest({ focus: false }),
       fly: (cameraId) =>

@@ -3699,5 +3699,6 @@
   "Reset view reloads the app without the view restored from the address bar.": "Redefinir vista recarrega o app sem a vista restaurada da barra de endereços.",
   "Reload": "Recarregar",
   "Retry": "Tentar novamente",
-  "Reset view": "Redefinir vista"
+  "Reset view": "Redefinir vista",
+  "PennDOT Traffic Cams": "Câmeras de trânsito PennDOT"
 }
