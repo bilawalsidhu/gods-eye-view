@@ -658,7 +658,8 @@ is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
 on/off pill worded in the current language. The presets and chips call the
 same Display store actions as the dock's Visual Presets tray, which stays on
 desktop and phone as before, along with Location; voice `Visual Presets`
-still opens that tray. In Cockpit the groups Cockpit's Display popover takes
+still opens that tray. On a phone the More sheet shows that tray right above
+Visual, so Visual leaves out its own presets and chips there. In Cockpit the groups Cockpit's Display popover takes
 leave the panel as before and keep their own styling there.
 
 Scope has an Opacity slider (`#scope-opacity-slider`, 0–100%, default 100%)
