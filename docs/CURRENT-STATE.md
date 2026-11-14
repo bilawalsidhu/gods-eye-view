@@ -2277,8 +2277,8 @@ offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 out of the camera's view, and its sprite, 3D model, card, trail and detection
 box are hidden; released, it is out of play until a visibility sweep finds it in
 view. Its snapshot's `position.groundHeightM` is the floor where playback draws
-it (its segment's two reports' floors at the playback fraction), not the newest
-report's, and null while that floor is unknown. Rail's `path.direction` is the
+it (the drawn marker's height while it is placed, else its segment's two
+reports' floors at the playback fraction), not the newest report's, and null while that floor is unknown. Rail's `path.direction` is the
 way the drawn train runs: once playback has placed it, a report that runs back
 turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,

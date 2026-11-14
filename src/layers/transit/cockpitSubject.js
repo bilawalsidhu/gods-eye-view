@@ -1,3 +1,4 @@
+import * as Cesium from 'cesium';
 import {
   getRegisteredTransitFeed,
   transitRouteLabel,
@@ -77,9 +78,12 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     return reuse(previous, next);
   }
 
+  const scratchCartographic = new Cesium.Cartographic();
   /**
-   * The floor under the vehicle where playback draws it: its segment's two
-   * reports' floors at the playback fraction, without the shared lift. Null
+   * The floor under the vehicle where playback draws it, without the shared
+   * lift: the drawn marker's height while the frame pass places it (in view,
+   * or held), which near the ground follows the terrain between reports;
+   * else its segment's two reports' floors at the playback fraction. Null
    * while either floor is unknown, as on cold terrain, so a view waits for
    * the surface. Not `entry.heightM`, the floor at the newest report, which
    * playback has not reached yet.
@@ -87,6 +91,19 @@ export function createTransitCockpitSubject({ state, parts, services }) {
   function drawnFloorOf(entry) {
     const segment = entry.segment;
     if (!segment || entry.heightPending) return null;
+    const placed =
+      entry.surfaceReady === true &&
+      entry.hasRendered &&
+      entry.marker?.position &&
+      (state._visible.has(entry) || entry.key === state._cockpitSubjectKey);
+    if (placed) {
+      const drawn = Cesium.Cartographic.fromCartesian(
+        entry.marker.position,
+        undefined,
+        scratchCartographic,
+      );
+      if (drawn) return drawn.height - liftM;
+    }
     const from = segment.from?.h;
     const to = segment.to?.h;
     if (!Number.isFinite(from) || !Number.isFinite(to)) return null;

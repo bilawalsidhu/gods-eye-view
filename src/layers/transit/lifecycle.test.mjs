@@ -4247,7 +4247,10 @@ test('the selected vehicle reads as a snapshot of its place, motion and source',
   assert.equal(view.provenance.positionSource, 'gps');
   assert.deepEqual(view.stop, { stopId: 'place-1', status: 'IN_TRANSIT_TO' });
   const entry = app.vehicles()[0];
-  assert.equal(view.position.groundHeightM, entry.heightM - 1.5);
+  // Where it is drawn, without the shared lift (read back from the marker).
+  assert.ok(
+    Math.abs(view.position.groundHeightM - (entry.heightM - 1.5)) < 1e-3,
+  );
   assert.ok(Number.isFinite(view.position.latitude));
 });
 
