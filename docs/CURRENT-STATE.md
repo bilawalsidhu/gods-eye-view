@@ -145,6 +145,16 @@ voice follow-ups match on them and bikeshare uses the raw station name as its
 ID. The text is still untrusted: normalization does not prevent prompt
 injection.
 
+Screen annotations skip hidden records and, before surface sampling, reject an
+unsettled anchor only when its whole accepted height range (-430 to 9000 m) is
+behind the camera or below the globe horizon; a settled height is tested as the
+actual point. Anchors outside the conservative frustum still project at their
+cached or zero height, so a partly visible arrow keeps its connector, but do
+not sample. Unresolved visible heights share a 32-sample projection-pass budget,
+served oldest-refused first, retry at most once per second per anchor on
+rendered frames, and retain no extra timer or listener. Validated heights remain
+settled in the bounded cache.
+
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP
 413 before disk-cache loading or upstream work; malformed coordinates remain 400.
