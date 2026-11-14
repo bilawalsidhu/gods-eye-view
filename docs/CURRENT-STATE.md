@@ -8298,6 +8298,12 @@ Cesium's multipart suffixes. Each segment gets its own feature's styling, click
 destination and horizon-culling reference, and each source feature has one
 reference stem. The source collections are not modified.
 
+Landing markers are ground-clamped billboards, and Cesium reads the terrain
+height as it creates each one. They start hidden and the horizon sweep shows
+the visible ones 48 per rendered frame (`CABLE_LANDING_REVEALS_PER_FRAME`),
+so switching the layer on does not do every read in one task; hiding is still
+immediate.
+
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution
 are unchanged. The cable dataset remains CC BY-NC-SA 3.0 and is not covered by

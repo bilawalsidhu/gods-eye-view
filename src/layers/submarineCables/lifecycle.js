@@ -38,12 +38,10 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
             // never emit moveEnd — reach the motion fallback. No render is
             // requested for a fallback sweep: it only fires while the camera is
             // already moving, so frames are flowing by construction.
-            if (
-              !state._enabled ||
-              !state._loaded ||
-              !state._referenceSweepGate.shouldRun(viewer.camera)
-            )
-              return;
+            if (!state._enabled || !state._loaded) return;
+            // Landing markers left over from the last sweep, a few per frame.
+            parts.rendering.revealLandingMarkers();
+            if (!state._referenceSweepGate.shouldRun(viewer.camera)) return;
             parts.rendering.updateReferenceVisibility();
           },
         );

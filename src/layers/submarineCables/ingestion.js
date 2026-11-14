@@ -185,6 +185,10 @@ export function createIngestion({ state, parts, source }) {
         if (!reference) return;
 
         parts.rendering.styleLandingEntity(entity, feature);
+        // Hidden until the sweep reveals it: a shown landing marker reads the
+        // terrain height as Cesium creates it, and all of them at once froze
+        // the page (see CABLE_LANDING_REVEALS_PER_FRAME).
+        entity.show = false;
         parts.interaction.registerPickEntity(entity, {
           kind: 'landing-point',
           reference,
@@ -193,6 +197,7 @@ export function createIngestion({ state, parts, source }) {
         state._surfaceRecords.push({
           entity,
           base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
+          staged: true,
         });
         if (landingReferences.has(index)) return;
         landingReferences.add(index);

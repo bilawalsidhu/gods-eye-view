@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../mapStackController.js';
+import { CABLE_LANDING_REVEALS_PER_FRAME } from '../layers/submarineCables/policy.js';
 import {
   CABLE_LABEL_DEPTH_DECISION,
   CABLE_OVERLAY_COLLISION_CAPACITY,
@@ -1999,6 +2000,65 @@ test('every bundled cable segment is associated with its source feature', async 
       });
     }
     assert.equal(env.dataSources[2].entities.values.length, features.length);
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
+
+test('landing markers are revealed a few per frame, never all in one', async () => {
+  // Node has no canvas for GeoJSON point pins, so short lines stand in for
+  // the markers (see createRealCableLayerHarness); the staging is the same.
+  const count = CABLE_LANDING_REVEALS_PER_FRAME * 2 + 10;
+  const landingPoints = Array.from({ length: count }, (_, i) => {
+    const lon = -45 + (i % 20) * 0.5;
+    const lat = 30 + Math.floor(i / 20);
+    return {
+      type: 'Feature',
+      id: `landing-${i}`,
+      properties: { id: `landing-${i}`, name: `Landing ${i}` },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [lon, lat],
+          [lon + 0.01, lat + 0.01],
+        ],
+      },
+    };
+  });
+  const env = await createRealCableLayerHarness({
+    source: geometrySource([], landingPoints),
+  });
+  try {
+    let renderRequests = 0;
+    env.viewer.scene.requestRender = () => {
+      renderRequests++;
+    };
+    const entities = env.dataSources[1].entities.values;
+    const shown = () => entities.filter((entity) => entity.show).length;
+    assert.equal(entities.length, count);
+    assert.equal(shown(), 0, 'nothing is shown before the first sweep');
+
+    env.raiseSweep();
+    assert.equal(shown(), CABLE_LANDING_REVEALS_PER_FRAME);
+    assert.ok(renderRequests > 0, 'another frame is asked for');
+    env.raiseSweep();
+    assert.equal(shown(), CABLE_LANDING_REVEALS_PER_FRAME * 2);
+    env.raiseSweep();
+    assert.equal(shown(), count, 'every visible marker ends up shown');
+
+    renderRequests = 0;
+    env.raiseSweep();
+    assert.equal(renderRequests, 0, 'a finished reveal asks for no frames');
+
+    // Markers over the horizon are hidden at once and are not revealed.
+    env.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+      140,
+      -35,
+      4_500_000,
+    );
+    for (const fn of env.listeners.moveEnd) fn();
+    env.raiseSweep();
+    assert.equal(shown(), 0);
   } finally {
     env.layer.destroy(env.viewer);
   }
