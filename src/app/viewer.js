@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
+import {
+  guardDegenerateRotation,
+  installRenderRecovery,
+} from './renderRecovery.js';
 import { StarrySky } from '../sky/starrySky.js';
 import {
   FREE_LOOK_MAX_HEIGHT_METERS,
@@ -427,6 +431,11 @@ export function createApplicationViewer({
     if (globalThis.matchMedia?.('(pointer: coarse)').matches)
       viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
     limitZoomOut(viewer);
+    // Cesium's wheel zoom can hand the camera a zero rotation axis and stop
+    // the render loop for good; and whatever else stops it, restart it rather
+    // than leave the globe dead until a reload. See app/renderRecovery.js.
+    guardDegenerateRotation(viewer.camera);
+    installRenderRecovery(viewer);
     // Before any tile builds a draw command: Cesium's per-vertex model
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.

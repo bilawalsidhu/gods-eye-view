@@ -211,6 +211,7 @@
     "modules": [
       "src/app/viewer.js",
       "src/app/atmosphereCompat.js",
+      "src/app/renderRecovery.js",
       "src/globeInView.js",
       "src/sky/starrySky.js",
       "src/sky/stars.js",
@@ -2638,6 +2639,7 @@
       "src/sky/starrySky.js",
       "src/sky/stars.js",
       "src/app/atmosphereCompat.js",
+      "src/app/renderRecovery.js",
       "src/bloom.js",
       "src/camera.js",
       "src/cameraGroundGuard.js",
