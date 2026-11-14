@@ -116,7 +116,7 @@ export function createTracking({
     const altFt = Math.round((described.altitudeM || 0) * 3.28084);
     const route =
       described.route && _routeIsPlausible(icao24, described.route)
-        ? `${described.route.origin.code} → ${described.route.destination.code}`
+        ? `${described.route.origin.code} → ${described.route.destination.code} (unverified reference route)`
         : null;
     return {
       id: icao24,
@@ -972,7 +972,9 @@ export function createTracking({
           .join(' · ');
     if (ident) lines.push(ident);
     if (info.route && _routeIsPlausible(icao24, info.route)) {
-      lines.push(`${info.route.origin.code} → ${info.route.destination.code}`);
+      lines.push(
+        `${info.route.origin.code} → ${info.route.destination.code} · REFERENCE (UNVERIFIED)`,
+      );
     }
     return lines.join('\n');
   }

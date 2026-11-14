@@ -208,6 +208,12 @@ export function createQueries({
           ? {
               origin: { ...info.route.origin },
               destination: { ...info.route.destination },
+              source: info.route.source || 'adsbdb',
+              retrievedAtMs: Number.isFinite(info.route.retrievedAtMs)
+                ? info.route.retrievedAtMs
+                : null,
+              operatingDate: null,
+              verification: 'unverified-reference',
             }
           : null,
       // The airframe's Planespotters photo for the Context panel; a military
