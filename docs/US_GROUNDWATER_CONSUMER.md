@@ -8,10 +8,10 @@ verified PR reconciliation baseline is GEV main `3ad3cc2ab773bb2d694a1e1605cf7ff
 ## Data and interpretation
 
 The default public release is:
-`https://data.rainfolk.org/usgwd/8fa0f2843ef51c51f07da74644f9f5a2cf56c45563dc12f48dfaaca5e6aa6fe2/index.json`.
-It contains 12,171,830 mapped historical source records across 48 states, from
-13,980,064 retained records; 1,808,234 records have no admitted map position.
-Nebraska and South Carolina are absent. State presence does not imply complete
+`https://data.rainfolk.org/usgwd/e6dc61db1500b491671cf094602e2257814c5507e99618d717fbb4f6082d8291/index.json`.
+It contains 12,452,285 mapped historical source records across all 50 states, from
+14,260,581 retained records; 1,808,296 records have no admitted map position.
+State presence does not imply complete
 within-state coverage. These are source records, not independently surveyed or
 deduplicated physical wells. Empty areas do not establish that no wells exist.
 

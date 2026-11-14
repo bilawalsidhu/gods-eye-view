@@ -3,10 +3,10 @@
 ## Water Wells: USGWD via Rainfolk
 
 Water Wells fetches the published immutable Rainfolk release at runtime:
-`https://data.rainfolk.org/usgwd/8fa0f2843ef51c51f07da74644f9f5a2cf56c45563dc12f48dfaaca5e6aa6fe2/index.json`.
-It contains 12,171,830 mapped historical source records across 48 states;
-Nebraska and South Carolina are absent from this release. This is incomplete
-coverage, not a count of distinct physical wells or current operating wells.
+`https://data.rainfolk.org/usgwd/e6dc61db1500b491671cf094602e2257814c5507e99618d717fbb4f6082d8291/index.json`.
+It contains 12,452,285 mapped historical source records across all 50 states.
+Within-state coverage is incomplete. This is not a count of distinct physical
+wells or current operating wells.
 
 Original dataset: USGWD, compiled by Chung-Yi Lin, Alexandra Miller, Musab Waqar and Landon T. Marston,
 [A Database of Groundwater Wells in the United States (USGWD)](https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55),

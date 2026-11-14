@@ -2,7 +2,7 @@ import { createSpatialWellSource } from './spatialSource.js';
 
 export const RAINFOLK_WELL_DATA_ORIGIN = 'https://data.rainfolk.org';
 export const RAINFOLK_WELL_RELEASE =
-  '8fa0f2843ef51c51f07da74644f9f5a2cf56c45563dc12f48dfaaca5e6aa6fe2';
+  'e6dc61db1500b491671cf094602e2257814c5507e99618d717fbb4f6082d8291';
 
 /** Published immutable historical records; changing release is explicit host configuration. */
 export function createRainfolkWellSource({

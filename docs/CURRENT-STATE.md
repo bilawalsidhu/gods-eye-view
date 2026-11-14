@@ -1,7 +1,7 @@
 # God's Eye View Current State
 
 The optional Infrastructure **Water Wells** layer loads the published Rainfolk
-48-state historical USGWD release on demand. It shows true source-location points
+50-state historical USGWD release on demand. It shows true source-location points
 below 50 km and uses the native inspector for available depth, reported capacity,
 construction years and source identity. Count grids remain internal; there are no
 numeric cluster badges, group cards or automatic drilldown flights. Coincident

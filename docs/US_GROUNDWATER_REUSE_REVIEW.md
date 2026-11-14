@@ -1,6 +1,6 @@
 # Bounded USGWD reuse reconciliation
 
-Scope: Rainfolk immutable public release `8fa0f2843ef51c51f07da74644f9f5a2cf56c45563dc12f48dfaaca5e6aa6fe2`, 48 states. Reviewed 2026-11-02. This is a source/projection audit and a documented interpretation, not a legal guarantee, anonymity certification or new permission agreement.
+Scope: Rainfolk immutable public release `e6dc61db1500b491671cf094602e2257814c5507e99618d717fbb4f6082d8291`, 50 states. Reviewed 2026-11-02 for the first 48 states; Nebraska and South Carolina reviewed 2026-11-13. This is a source/projection audit and a documented interpretation, not a legal guarantee, anonymity certification or new permission agreement.
 
 ## Licence and publication context
 
@@ -27,7 +27,9 @@ Exact state quotations remain in [the supplied notices](US_GROUNDWATER_SOURCE_NO
 
 ## Retained-field audit
 
-A read-only scan covered all 13,980,064 rows of the 48 CSV inputs used by this release (2,936,805,482 bytes). Every input SHA-256 matched the immutable release's per-state acquisition metadata. This is a source-input superset of the 12,171,830 mapped records, not a scan of every remote response or independent verification of the wells.
+A read-only scan covered all 13,980,064 rows of the 48 CSV inputs used for the first 48 states (2,936,805,482 bytes). Every input SHA-256 matched the immutable release's per-state acquisition metadata. This is a source-input superset of the 12,171,830 mapped records in those states, not a scan of every remote response or independent verification of the wells.
+
+The 50-state release added Nebraska and South Carolina on 2026-11-13, and the same read-only checks covered both inputs: 257,239 Nebraska rows (USGWD CSV, SHA-256 `b53fb6e5ac3fa3a1a139612e37efb1d4a98a00ec51ac41d00f1bb1aa61cc8bc0`, matching publisher MD5 `985bb61e2f293968fe5a997ded6b7c33`) and 23,278 South Carolina rows. South Carolina's published CSV fails its own publisher checksum, so the input is the attribute table of the checksum-verified geospatial file (archive MD5 `aa4afbfefff2ff31ba808256051d139f`; derived CSV SHA-256 `a3b6ae8a563097d20eb053115d56fdd20cf4f9beef7a81bee577a7310a7ad708`). Every record ID in both states matched the two-letter-prefix-plus-digits shape. No email-like, street-address-like or formatted-phone-like values were detected in raw state identifiers or quantity columns, and no raw state identifier had three or more words or a company-suffix-like token. All nonmissing Nebraska quantity strings were numeric. South Carolina has 40,880 nonnumeric quantity values; every one is a DBF all-asterisk empty marker, not prose.
 
 Every catalog-generated source record ID matched a two-letter state prefix followed by digits (13,980,064 matches, zero other shapes). The audit also examined raw state identifiers and the five source quantity columns that can contribute raw error strings. It emitted counts and row references, never source values. No email-like, street-address-like or formatted-phone-like values were detected in those slots. All nonmissing quantity strings were numeric forms, including nonfinite markers, so no arbitrary prose was found in raw quantity-error candidates. Years and location flags are separately constrained by normalization; record provenance contains hashes and row numbers, not operator paths/contact information.
 
@@ -37,7 +39,7 @@ No concrete email/address/phone exposure, restored owner field, or explicit proh
 
 ## Local changes and recommendation
 
-The contribution preserves the full Rainfolk MIT notice separately from data CC BY terms, all 48 source-attribution entries, and the 54 relevant Table S2 notice rows. Native Data attribution now directly links the publisher's state credits/notices, supplementing its dataset/licence/change notice. No new map warning, badge or owner data was added. No dataset/export change or re-upload is justified by a confirmed exposure from this audit. No R2 file, CORS policy, remote branch or public PR was changed.
+The contribution preserves the full Rainfolk MIT notice separately from data CC BY terms, all 50 source-attribution entries, and the 57 relevant Table S2 notice rows. Native Data attribution now directly links the publisher's state credits/notices, supplementing its dataset/licence/change notice. No new map warning, badge or owner data was added. No dataset/export change or re-upload is justified by a confirmed exposure from this audit. No R2 file, CORS policy, remote branch or public PR was changed.
 
 The existing feed attribution links the catalog; CC BY permits reasonable linked attribution, so the earlier absence of copied S2 text is not automatically a licence violation. The direct notice link and local documentation make the path clearer. Recommended next step is private PR wording/source review with these notices retained, rather than treating all historical agency correspondence as a new permission gate. Alaska's narrow wording and semantic identifier uncertainty remain honestly disclosed; obtain focused clarification if a stronger assurance is required. Existing user-approval, CORS and interactive/test readiness gates remain separate.
 

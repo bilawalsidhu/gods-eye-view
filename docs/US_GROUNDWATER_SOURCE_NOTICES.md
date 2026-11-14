@@ -1,6 +1,6 @@
 # Supplied USGWD state notices
 
-These notices are transcribed from USGWD Table S2, “Summary table of when the data was collected, the person and organization that primarily assisted with the data collection, disclaimers and representation estimations for each state.” They cover the 48 states included in the configured public Rainfolk release. The original workbook remains authoritative.
+These notices are transcribed from USGWD Table S2, “Summary table of when the data was collected, the person and organization that primarily assisted with the data collection, disclaimers and representation estimations for each state.” They cover the 50 states included in the configured public Rainfolk release. The original workbook remains authoritative.
 
 Original compilation: Chung-Yi Lin, Alexandra Miller, Musab Waqar and Landon T. Marston, [USGWD](https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Rainfolk normalizes fields, applies an approximate datum conversion and spatially packages selected records. This document transcribes attribution, disclaimer and representation columns, omitting the separate point-of-contact column. Text within the supplied notices is retained, including credit/contact instructions that are part of a notice.
 
@@ -372,6 +372,18 @@ Disclaimer and/or data-sharing requirements (Table S2, column E):
 
 Representation (Table S2, column F): Uncertain
 
+## Nebraska
+
+Acknowledgment: Nebraska Department of Natural Resources
+
+Catalog collected: 2022-10-05
+
+Disclaimer and/or data-sharing requirements (Table S2, column E):
+
+None
+
+Representation (Table S2, column F): Uncertain
+
 ## Nevada
 
 Acknowledgment: State of Nevada Division of Water Resources
@@ -527,6 +539,30 @@ Disclaimer and/or data-sharing requirements (Table S2, column E):
 "I do want to stress how many of the addresses are potential matches for reports and may not be accurate." Rhode Island is in the process of digitizing hand-written well logs. We have only included records digitized to date. These records represent an incomplete sample of all groundwater wells in Rhode Island.
 
 Representation (Table S2, column F): Uncertain
+
+## South Carolina (Part 1)
+
+Acknowledgment: South Carolina Department of Natural Resources
+
+Catalog collected: 2023-03-02
+
+Disclaimer and/or data-sharing requirements (Table S2, column E):
+
+None
+
+Representation (Table S2, column F): "The Coastal Plain dataset probably represents only about 10 percent of all the wells in the Coastal Plain counties"
+
+## South Carolina (Part 2)
+
+Acknowledgment: South Carolina Department of Natural Resources
+
+Catalog collected: 2023-03-03
+
+Disclaimer and/or data-sharing requirements (Table S2, column E):
+
+None
+
+Representation (Table S2, column F): "I doubt it contains even half the wells that actually exist in those counties"
 
 ## South Dakota
 
