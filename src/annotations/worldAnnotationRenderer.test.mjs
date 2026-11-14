@@ -446,3 +446,33 @@ test('a mark removed and added again draws afresh; two renderers on one viewer k
   assert.equal(route._draw, null, 'a destroyed renderer draws nothing more');
   assert.equal([...draw.sets.values()].filter((r) => !r.disposed).length, 0);
 });
+
+test('a double-click follows a pin and zooms to an area, as their entities were; a removed pin ends it', async (t) => {
+  const { createStubRenderer } = await import('../render/stub/index.js');
+  const renderer = createStubRenderer();
+  const v = { isDestroyed: () => false };
+  const unbind = bindRenderer(v, renderer);
+  const r = createWorldAnnotationRenderer(v);
+  t.after(() => {
+    r.destroy();
+    unbind();
+    renderer.destroy();
+  });
+  const [, area, pin] = marks();
+  r.add(area);
+  r.add(pin);
+  const setOf = (anno, kind) => anno._draw[kind].id;
+  let hit = null;
+  renderer.testing.scriptPicks(() => (hit ? [hit] : []));
+  hit = { set: setOf(pin, 'points'), id: 'marker', surface: false };
+  renderer.testing.pointer('dblclick', 10, 10);
+  assert.ok(renderer.camera.followed, 'the pin is followed');
+  hit = { set: setOf(area, 'shapes'), id: 'fill:0', surface: false };
+  renderer.testing.pointer('dblclick', 10, 10);
+  assert.equal(renderer.camera.followed, null, 'the area is zoomed to');
+  hit = { set: setOf(pin, 'shapes'), id: 'ring', surface: false };
+  renderer.testing.pointer('dblclick', 10, 10);
+  assert.ok(renderer.camera.followed, 'its ring follows it too');
+  r.remove(pin);
+  assert.equal(renderer.camera.followed, null, 'removed: no longer followed');
+});

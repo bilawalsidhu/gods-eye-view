@@ -6,9 +6,12 @@ import {
   drawOf,
   findCamera,
   findFrame,
+  findInput,
   frameOf,
 } from '../render/rendererOf.js';
 import { heightsOf } from '../queries/heights.js';
+import { drawnItemTarget, followOnDoubleClick } from '../data/stockFollow.js';
+import { inputFor } from '../input/dispatcher.js';
 
 /**
  * World-space annotation renderer (Direction A).
@@ -99,6 +102,8 @@ export function createWorldAnnotationRenderer(viewer) {
   const groundQueue = [];
   let offGroundFrame = null;
   let destroyed = false;
+  /** The follow a double-click on a mark started (see the end). */
+  let stockFollow = null;
   // Marks with a target ring, and the radius they are drawn at.
   const ringed = new Set();
   let offRingFrame = null;
@@ -470,6 +475,9 @@ export function createWorldAnnotationRenderer(viewer) {
   }
 
   function remove(anno) {
+    // Its entities went, and with them a follow of one.
+    const prefix = anno?._draw?.prefix;
+    if (prefix) stockFollow?.retain((key) => !key.startsWith(`${prefix}:`));
     pendingGround.get(anno)?.finish('cancelled');
     hideOsmCredit(viewer, anno);
     osmAnnotations.delete(anno);
@@ -512,6 +520,8 @@ export function createWorldAnnotationRenderer(viewer) {
 
   function destroy() {
     destroyed = true;
+    stockFollow?.destroy();
+    stockFollow = null;
     for (const task of [...pendingGround.values()]) task.finish('cancelled');
     for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
     osmAnnotations.clear();
@@ -524,6 +534,41 @@ export function createWorldAnnotationRenderer(viewer) {
     }
     drawn.clear();
   }
+
+  /**
+   * What a double-click on a hit follows or zooms to, as the default
+   * renderer did for a mark's entities: a pin's ring or marker is followed,
+   * an area, building or line zoomed to.
+   */
+  function followTargetFor(hit) {
+    if (hit.surface) return null;
+    for (const anno of drawn) {
+      const sets = anno._draw;
+      const was = anno._drawn;
+      if (!sets || !was || anno.hidden) continue;
+      const kind = ['shapes', 'lines', 'points'].find(
+        (name) => sets[name]?.id === hit.set,
+      );
+      if (!kind) continue;
+      const item = was.items[kind]
+        .map((make) => make(was.alpha))
+        .find((candidate) => candidate.id === hit.id);
+      return drawnItemTarget(hit.set, item);
+    }
+    return null;
+  }
+
+  // A double-click on a mark, as the default renderer's own followed its
+  // entities (a scene that takes no input has none).
+  stockFollow = findInput(viewer)
+    ? followOnDoubleClick({
+        viewer,
+        inputFor,
+        name: 'annotations',
+        enabled: () => !destroyed,
+        targetFor: followTargetFor,
+      })
+    : null;
 
   return { add, remove, sync, destroy };
 }
