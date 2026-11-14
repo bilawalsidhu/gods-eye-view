@@ -202,7 +202,7 @@
    checkbox, which already says it). */
 #pp-toggles .pp-toggle-group > button.pp-toggle-btn::after,
 #pp-toggles .pp-panel-body > button.pp-toggle-btn::after {
-  content: 'OFF';
+  content: var(--pp-pill-off, 'OFF');
   margin-inline-start: auto;
   padding: 2px 8px;
   color: rgba(199, 214, 222, 0.5);
@@ -216,7 +216,7 @@
 #pp-toggles .pp-toggle-group > button.pp-toggle-btn.active::after,
 #pp-toggles .pp-toggle-group > button.pp-toggle-btn[aria-pressed='true']::after,
 #pp-toggles .pp-panel-body > button.pp-toggle-btn.active::after {
-  content: 'ON';
+  content: var(--pp-pill-on, 'ON');
   color: #7af0ff;
   border-color: rgba(54, 220, 255, 0.5);
   background: rgba(54, 220, 255, 0.1);

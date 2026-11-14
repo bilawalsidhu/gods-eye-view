@@ -23,6 +23,12 @@ const { view, models3d, parameters, cockpitPortal } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
+// The words of the on/off pill each card header draws (visual-panel.css), as
+// CSS strings.
+const pillWords = computed(() => ({
+  '--pp-pill-on': JSON.stringify(t('ON')),
+  '--pp-pill-off': JSON.stringify(t('OFF')),
+}));
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
 const sonarOn = computed(() => sonar.value?.enabled ?? true);
@@ -54,12 +60,12 @@ const allocationOptions = computed(() => [
 <!-- Post-processing toggles (top-right) -->
 <div id="pp-toggles" v-panel-state="'pp-toggles'" class="panel-collapsible collapsed ui-scroll" data-panel-id="pp-toggles">
   <div class="compact pp-header-row">
-    <span class="pp-header-label">{{ t('VISUAL') }}</span>
+    <span class="pp-header-label">{{ t('VISUAL', { context: 'panel' }) }}</span>
     <span class="panel-divider" aria-hidden="true"></span>
     <UiPanelEdge />
-    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('VISUAL')" sideways start-collapsed />
+    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('VISUAL', { context: 'panel' })" sideways start-collapsed />
   </div>
-  <div class="pp-panel-body ui-scroll" data-rail-scroller>
+  <div class="pp-panel-body ui-scroll" data-rail-scroller :style="pillWords">
   <VisualPresets />
   <!-- Cockpit shows these four groups in its Display popover: each teleports to the slot the Cockpit display portal publishes. While disabled a Teleport stays in place; its 'body' target only keeps server rendering from dropping it. -->
   <p class="pp-section-heading">{{ t('Overlay') }}</p>

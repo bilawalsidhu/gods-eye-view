@@ -3534,5 +3534,13 @@
   "Funicular": "ケーブルカー",
   "Gondola": "ゴンドラ",
   "Move panels back beside the rail": "パネルをレールの横に戻す",
-  "Move panels over the rail, to the edge": "パネルをレールの上、画面端へ移動"
+  "Move panels over the rail, to the edge": "パネルをレールの上、画面端へ移動",
+  "panel|VISUAL": "ビジュアル",
+  "Look": "見た目",
+  "Overlay": "オーバーレイ",
+  "Effects": "エフェクト",
+  "Scope opacity": "スコープの不透明度",
+  "How dark the scope shades the view outside the keyhole": "キーホール外のビューをスコープがどれだけ暗くするか",
+  "Reset to default": "既定に戻す",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "ビジュアルを既定に戻す：標準の見た目、HUD、スコープ、ラベル、エフェクト"
 }

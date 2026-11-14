@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { t } from '../../../i18n/index.js';
+import { msg, t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
 import { useDisplayStore } from '../../stores/display.js';
 
@@ -11,12 +11,48 @@ const display = useDisplayStore();
 const { style, mapSource, mapSourceControls } = storeToRefs(display);
 
 const STYLES = [
-  { name: 'normal', icon: '◯', label: 'Normal', key: '1' },
-  { name: 'retro', icon: '▦', label: 'CRT', key: '2' },
-  { name: 'surveillance', icon: '🌙', label: 'NVG', key: '3' },
-  { name: 'thermal', icon: '🌡️', label: 'FLIR', key: '4' },
-  { name: 'anime', icon: '✦', label: 'Anime', key: '5' },
-  { name: 'noir', icon: '◐', label: 'Noir', key: '6' },
+  {
+    name: 'normal',
+    icon: '◯',
+    label: msg('Normal'),
+    key: '1',
+    title: msg('Show the globe without a visual filter.'),
+  },
+  {
+    name: 'retro',
+    icon: '▦',
+    label: msg('CRT'),
+    key: '2',
+    title: msg('Emulate a green phosphor CRT with scanlines and screen curvature.'),
+  },
+  {
+    name: 'surveillance',
+    icon: '🌙',
+    label: msg('NVG'),
+    key: '3',
+    title: msg('Simulate night-vision goggles with green intensification and a tube vignette.'),
+  },
+  {
+    name: 'thermal',
+    icon: '🌡️',
+    label: msg('FLIR'),
+    key: '4',
+    title: msg('Simulate FLIR-style thermal contrast. Turn up Ironbow for color.'),
+  },
+  {
+    name: 'anime',
+    icon: '✦',
+    label: msg('Anime'),
+    key: '5',
+    title: msg('Apply bright cel-shaded color and illustrated outlines.'),
+  },
+  {
+    name: 'noir',
+    icon: '◐',
+    label: msg('Noir'),
+    key: '6',
+    title: msg('Apply high-contrast monochrome film-noir grading.'),
+  },
 ];
 
 function selectMapSource(chip) {
@@ -36,6 +72,7 @@ function selectMapSource(chip) {
         :pressed="(style?.name ?? 'normal') === preset.name"
         pressed-class="active"
         :data-style="preset.name"
+        :title="t(preset.title)"
         @click="display.act('setStyle', preset.name)"
       >
         <span class="visual-presets__icon" aria-hidden="true">{{ preset.icon }}</span>
