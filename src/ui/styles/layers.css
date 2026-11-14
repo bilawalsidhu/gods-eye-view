@@ -142,6 +142,7 @@
     top var(--transition-fast),
     max-height var(--transition-fast);
 }
+#right-context-rail > #vessel-panel,
 #right-context-rail > #pp-toggles,
 #right-context-rail > #cctv-panel,
 #right-context-rail > #street-level-panel,
@@ -158,6 +159,7 @@
   max-height: 100%;
   pointer-events: auto;
 }
+#right-context-rail #vessel-panel,
 #right-context-rail #cctv-panel,
 #right-context-rail #street-level-panel,
 #right-context-rail #weather-panel,
@@ -285,6 +287,7 @@ body.recording-mode .gev-panel-rail {
 #right-context-rail.layout-focus.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
+#right-context-rail.layout-focus > #vessel-panel:not(.collapsed),
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
 #right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
 #right-context-rail.layout-focus > #street-level-panel:not(.collapsed),
@@ -300,6 +303,9 @@ body.recording-mode .gev-panel-rail {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+#right-context-rail.layout-focus
+  > #vessel-panel:not(.collapsed)
+  .vessel-panel-inner,
 #right-context-rail.layout-focus
   > #weather-panel:not(.collapsed)
   .weather-panel-inner,

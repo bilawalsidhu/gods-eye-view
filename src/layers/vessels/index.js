@@ -11,6 +11,7 @@ import { createPhotos } from './photos.js';
 import { createTesting } from './testing.js';
 import { createEvidence } from './evidence.js';
 import { createQueries } from './queries.js';
+import { createVesselDisplayFilters } from './displayFilters.js';
 import { followsClock } from './policy.js';
 import { createSnapshotTimeline } from '../../time/snapshotTimeline.js';
 import { worldClock } from '../../time/worldClock.js';
@@ -20,6 +21,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   const parts = {};
   const layer = {};
   const context = { vesselState, services, parts, layer, options };
+  parts.display = createVesselDisplayFilters(context);
   parts.lifecycle = createLifecycle(context);
   parts.rendering = createRendering(context);
   parts.selection = createSelection(context);
@@ -83,6 +85,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   Object.assign(
     layer,
     parts.queries.methods,
+    parts.display.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
   );

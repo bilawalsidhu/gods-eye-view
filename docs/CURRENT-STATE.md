@@ -210,6 +210,26 @@ Clicking the card opens the Wikipedia article (else the Wikidata item), the
 wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
 not toggle this layer yet (prompt budget, as for the airspace layer).
 
+## Vessel display filters and roster
+
+Live Vessels exposes independent Declutter, Underway only, Vessel types and Speed
+range toggles in Data Layers. The right-side Vessels app provides detailed
+settings and a searchable 50-row paged list of every matching loaded MMSI,
+including contacts hidden by decluttering. It and its menu button hide when the
+feed is off; filter preferences persist in this browser. Selected vessels bypass
+filters. The display policy culls outside a padded camera view and thins wide
+views with stable Earth-fixed cells on the existing visibility cadence. The list
+refreshes only while its app is open and the document is visible; source polling,
+records, history and analyst queries are unchanged. Underway means a reported
+speed above 1 knot; unknown speeds cannot match an enabled speed filter.
+
+Unselected civilian and unknown vessels retain map icons and detection brackets
+without nameplates or detail cards. Selection publishes one protected full-detail
+card. Explicit military AIS types, including code 35, retain ambient detection
+names. See [Vessel filters](VESSEL-FILTERS.md). Feature gates:
+`node scripts/qa-vessel-filters.mjs` and `node scripts/qa-vessel-labels.mjs`.
+
+
 ## Wildlife Sightings — iNaturalist and Acartia
 
 **Wildlife Sightings** (`wildlife-sightings`, share-link token `9`) is off by
@@ -4889,20 +4909,14 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   shared Outside floor instead of bypassing edge fade through the former
 >   cockpit/celestial gate.
 > - **Vessel card ownership:** `aisLiveVessels.js` retains the 800 ms visibility
->   pass, 118 px one-winner grid, priority ranking, 150 px greedy separation,
->   type/detail formatting, and the AIS positions produced by its unchanged sea
->   datum path. It publishes ambient tactical cards and one protected selected
->   card into the host. `vesselLabels.js` is formatting/policy-only: no vessel
->   canvas, projection, paint loop, or post-render listener remains. Ambient
->   vessels share `ambient-card`; the selected entry paints in the selected lane,
->   bypasses the ambient cohort/distance fade, and its protected rectangle
->   excludes sibling ambient cards. Tracked readout still excludes AIS, avoiding
->   a duplicate card for the same selection. Disable and destroy clear the host
->   source. This is not a pixel-for-pixel port: shared cross-source collision,
->   UI exclusion, and horizon culling can admit fewer cards than the isolated
->   canvas, and the shared always-on keyhole policy now applies the shipped
->   Outside floor in ordinary map mode instead of using the interim active-mask
->   gate.
+>   cadence, type/detail formatting and sea-datum placement. Display filters
+>   select map icons independently of the full source record set. It publishes
+>   only one protected selected detail card into the host; unselected vessels
+>   have no ambient name/speed/type cards. `vesselLabels.js` remains a formatting
+>   and policy helper with no canvas, paint loop or post-render listener.
+>   The selected entry bypasses ambient quotas and reserves its protected
+>   rectangle against sibling cards. Tracked readout still excludes AIS to
+>   avoid a duplicate selection card. Disable and destroy clear the host source.
 > - **Tracked-readout ownership:** `trackedReadout.js` is now a presentation-model
 >   bridge only; it owns no canvas, projection, post-render listener, layout,
 >   keyhole fade, or paint path. Civilian flights, military flights, satellites,
@@ -7076,7 +7090,7 @@ and unreachable upstream (502/504) separately from road geometry.
   warm vessels survive later zero-position refreshes as stale/degraded data,
   while disable/re-enable owns a new timer and superseded responses remain
   inert.
-- Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug); screen-space label clustering caps active labels at `VITE_AIS_LIVE_LABEL_MAX_ROWS` (default 900).
+- Client render cap `VITE_AIS_LIVE_MAX_ROWS` (default 12,000); type-colored ship icons (tanker/cargo/passenger/fishing/tug). Display filters control icon density and manual type/speed selection without deleting records. Detail cards are selection-only; civilian and unknown detection names are suppressed while explicit military types retain ambient detection names.
 - Click-to-inspect wired into the voice context store.
 
 ### Voice Control (June 2026)

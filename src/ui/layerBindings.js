@@ -236,6 +236,7 @@ export class LayerBindings {
   attachDataManager(dataManager) {
     if (this._disposed) return;
     this._dataManager = dataManager || null;
+    this.readControls().vesselPanel?.connect(this._dataManager);
     this.hud.attachDataManager(this._dataManager);
     this._updateTrafficSyncChip();
     if (this._dataManagerUnsubscribe) {
