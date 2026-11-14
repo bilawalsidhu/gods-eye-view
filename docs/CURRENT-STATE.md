@@ -1563,7 +1563,10 @@ and follows redirects only on the camera's origin. Catalog image URLs, and
 redirects on those hosts, are pinned by parsed URL to the agency's image
 directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
-request skips the key-bearing Street View fallback and gets the placeholder.
+request skips the key-bearing Street View fallback and gets the placeholder. The
+Street View fallback serves only catalog cameras, at the catalog position,
+heading, field of view and pitch, never coordinates a request supplies, and it
+shares the per-client Google budget (`GEV_RATELIMIT_GOOGLE_PER_MIN`, default 120).
 
 The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
 keeps one camera per ground cell sized to the view, preferring a healthy feed,

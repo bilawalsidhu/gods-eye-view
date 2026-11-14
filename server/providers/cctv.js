@@ -22,7 +22,22 @@ import { createHlsPuller } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import { googleServerApiKey } from './places/google-key.js';
+import { clientKey, makeCostRateLimiter } from './common/rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
+let _streetViewRateLimiter;
+/**
+ * Per-IP budget for the Street View fallback, on the same setting as the
+ * other Google routes (GEV_RATELIMIT_GOOGLE_PER_MIN; 0 disables it).
+ */
+function streetViewRateLimiter() {
+  if (_streetViewRateLimiter === undefined)
+    _streetViewRateLimiter = makeCostRateLimiter(
+      process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
+      120,
+    );
+  return _streetViewRateLimiter;
+}
+
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
  * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
@@ -635,13 +650,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
-        const heading = Number(
-          url.searchParams.get('heading') || source?.headingDeg,
-        );
-        const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
-        const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
@@ -731,18 +739,26 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // request (whose client this server cannot see) gets the placeholder,
         // as if no key were configured. Any forwarding header counts, even an
         // empty one.
+        // It is also only for catalog cameras, framed from the catalog (never
+        // a spot the query names), within the per-IP Google budget.
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
-        const sv = forwarded
-          ? null
-          : await streetViewFallback({
-              lat,
-              lon,
-              heading,
-              fov,
-              pitch,
-            });
+        const googleBudget = googleServerApiKey()
+          ? streetViewRateLimiter()
+          : null;
+        const sv =
+          forwarded ||
+          !source ||
+          (googleBudget && !googleBudget(clientKey(req)))
+            ? null
+            : await streetViewFallback({
+                lat: Number(source.lat),
+                lon: Number(source.lon),
+                heading: Number(source.headingDeg),
+                fov: Number(source.fovDeg),
+                pitch: Number(source.pitchDeg ?? -10),
+              });
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
