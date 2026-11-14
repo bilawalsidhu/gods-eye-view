@@ -45,7 +45,10 @@ import {
   STALE_ALPHA,
   displayDelayMs,
 } from './policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -192,11 +195,12 @@ export function createRendering({
    * @returns {void}
    */
 
-  /** Model tint, mirroring the billboard color rules. */
+  /** Model colour: the mesh's own (white), tinted cyan while tracked and red
+   *  while broadcasting an emergency. */
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return Cesium.Color.CYAN;
-    return _fleetBillboardColor(icao24);
+    return _isEmergency(icao24) ? EMERGENCY_TINT : Cesium.Color.WHITE;
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -526,10 +530,7 @@ export function createRendering({
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // Launch presentation keeps the code-side tint dominant for every approved
-        // model; IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : spec.blendAmount,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
@@ -748,10 +749,7 @@ export function createRendering({
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // The tracked aircraft uses the same dominant light tint as the fleet;
-        // IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : trackedSpec.blendAmount,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
