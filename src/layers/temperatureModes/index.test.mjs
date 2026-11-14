@@ -265,6 +265,33 @@ test('disable and destroy release every controller and the row listener', () => 
   assert.deepEqual(ocean.calls.at(-1), ['destroy']);
 });
 
+test('a map switch repaints the land card, which has no listener of its own', () => {
+  // Given: land showing, with a row listener, on a page that announces map changes
+  const land = fakeLand();
+  const air = fakeController('air', {});
+  const ocean = fakeController('ocean', {});
+  const eventTarget = new EventTarget();
+  const layer = createTemperatureLayer({ land, air, ocean, eventTarget });
+  layer.init('viewer');
+  let repaints = 0;
+  layer.setRowControlsListener(() => repaints++);
+  // When the map source changes under land, the card re-reads its status
+  eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
+  assert.equal(repaints, 1);
+  // Air and ocean repaint themselves, so a second notice would be noise
+  layer.setParams({ mode: 'air' });
+  const before = repaints;
+  eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
+  assert.equal(repaints, before);
+  // And destroy stops listening
+  layer.setParams({ mode: 'land' });
+  layer.destroy();
+  layer.setRowControlsListener(() => repaints++);
+  const afterDestroy = repaints;
+  eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
+  assert.equal(repaints, afterDestroy);
+});
+
 test('missing controllers are a construction error, not a silent half layer', () => {
   assert.throws(() => createTemperatureLayer({ air: {} }), TypeError);
   assert.throws(

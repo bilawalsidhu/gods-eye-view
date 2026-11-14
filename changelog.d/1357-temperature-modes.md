@@ -6,5 +6,7 @@
   so two colour fields never stack. Land and sea tiles are smoothed in the
   browser: GIBS draws each grid cell as a hard square with a stair-stepped
   coastline, so cells are blended into gradients and coastlines redrawn along
-  the smooth contour, across tile seams; readouts still use the raw tiles
-  (KnottyDyes, #1357).
+  the smooth contour, across tile seams; readouts still use the raw tiles.
+  On a map source that hides the globe, Land surface says so in the layer row
+  instead of reporting ready, and its year shows again on a globe map; kvnloo
+  found the silent case (KnottyDyes, #1357).

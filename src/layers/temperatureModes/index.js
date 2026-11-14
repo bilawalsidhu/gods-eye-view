@@ -33,7 +33,12 @@ function landControls(land) {
  * controllers. Exactly one controller is enabled at a time; the others stay
  * initialised but idle, so switching modes never stacks two colour fields.
  */
-export function createTemperatureLayer({ land, air, ocean } = {}) {
+export function createTemperatureLayer({
+  land,
+  air,
+  ocean,
+  eventTarget = globalThis.window,
+} = {}) {
   if (!land || !air || !ocean)
     throw new TypeError('Temperature requires land, air and ocean controllers');
   const children = { land, air, ocean };
@@ -42,6 +47,12 @@ export function createTemperatureLayer({ land, air, ocean } = {}) {
   let viewer = null;
   let listener = null;
   const notify = () => listener?.();
+  // Air and ocean repaint their own cards on a map switch. Land has no row
+  // listener, and whether its frames show depends on the map source, so the
+  // card re-reads its status here.
+  const onMapStack = () => {
+    if (ownerOf(mode) === 'land') notify();
+  };
   const ownerOf = (id) => TEMPERATURE_MODES.find((m) => m.id === id).owner;
   const active = () => children[ownerOf(mode)];
   const pick = (params, keys) =>
@@ -110,6 +121,7 @@ export function createTemperatureLayer({ land, air, ocean } = {}) {
       land.init(nextViewer);
       air.init(nextViewer);
       ocean.init(nextViewer);
+      eventTarget?.addEventListener('gev:map-stack-changed', onMapStack);
     },
     attachShellServices(services) {
       air.attachShellServices?.(services);
@@ -159,6 +171,7 @@ export function createTemperatureLayer({ land, air, ocean } = {}) {
     },
     destroy() {
       layer.disable();
+      eventTarget?.removeEventListener('gev:map-stack-changed', onMapStack);
       land.destroy(viewer);
       air.destroy();
       ocean.destroy();

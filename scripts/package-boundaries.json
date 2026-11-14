@@ -1989,6 +1989,7 @@
       "src/maps/gibs.js",
       "src/maps/gibsSmoothing.js",
       "src/layers/temperature/controls.js",
+      "src/layers/weather/imageryHost.js",
       "src/layers/temperature/dates.js",
       "src/layers/temperature/index.js",
       "src/layers/temperature/ingestion.js",
