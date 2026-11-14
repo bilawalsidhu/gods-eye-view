@@ -275,10 +275,13 @@ export function createEclipsePathsLayer({
 
   /** The limit of the partial eclipse, drawn once it has been worked out. */
   function drawLimit(eclipse) {
-    _limitFor = eclipse;
+    // Each request has its own identity: choosing the same eclipse again
+    // before this one runs (A, B, A) leaves this one stale.
+    const request = {};
+    _limitFor = request;
     defer(() => {
       if (!_enabled || !_dataSource || selected() !== eclipse) return;
-      if (_limitFor !== eclipse) return;
+      if (_limitFor !== request) return;
       const geometry = geometryOf(eclipse);
       geometry.limit ??= visibilityLimit(eclipse);
       const color = Cesium.Color.fromCssColorString(KIND_COLORS[eclipse.kind]);

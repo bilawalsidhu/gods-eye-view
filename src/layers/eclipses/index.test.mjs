@@ -530,6 +530,21 @@ test('the limit of the partial eclipse is drawn a beat after the path, for the e
   assert.equal(limits().length, count);
 });
 
+test('returning to an eclipse before its deferred limit runs draws it only once', async () => {
+  const h = await enabled();
+  h.layer.setParams({ eclipse: '2027-08-02' });
+  h.layer.setParams({ eclipse: '2028-07-22' });
+  h.layer.setParams({ eclipse: '2027-08-02' });
+  // The first request for 2027-08-02 is stale, though that eclipse is chosen
+  // again.
+  assert.doesNotThrow(() => h.settle());
+  const limits = h
+    .entityIds()
+    .filter((id) => id.startsWith('eclipse-path:limit:'));
+  assert.ok(limits.length > 0);
+  assert.equal(new Set(limits).size, limits.length);
+});
+
 test('following keeps the camera over the shadow while the eclipse plays', async () => {
   const h = await enabled();
   h.layer.setParams({ eclipse: '2027-08-02' });
