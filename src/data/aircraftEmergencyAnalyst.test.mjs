@@ -470,7 +470,8 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     );
     flightState._trackedIcao = null;
     flightState.records.data.set('civil', { emergency: null });
-    assert.equal(rendering._modelColor('civil'), normal);
+    // An ordinary model draws its mesh's own colours, whatever the billboard's.
+    assert.deepEqual([...rendering._modelColor('civil')], [1, 1, 1, 1]);
   }
 });
 

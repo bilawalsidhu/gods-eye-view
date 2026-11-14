@@ -217,6 +217,17 @@ export function createSceneFrame(viewer) {
   const removers = PHASES.map((phase) =>
     scene[phase].addEventListener(onPhase(phase)),
   );
+  // A render error stops Cesium's own loop until something starts it again
+  // (the render failure notice's Retry): `stopped` in the diagnostics.
+  let failed = false;
+  const offError = scene.renderError?.addEventListener(() => {
+    failed = true;
+  });
+  if (offError) removers.push(offError);
+  const stopped = () => {
+    if (failed && viewer.useDefaultRenderLoop !== false) failed = false;
+    return failed;
+  };
 
   const port = {
     on(phase, cb) {
@@ -254,6 +265,7 @@ export function createSceneFrame(viewer) {
       pendingReasons: [...pendingReasons],
       holds: [...holds].flatMap(([reason, n]) => Array(n).fill(reason)),
       suspended,
+      stopped: stopped(),
       targetFps: viewer.targetFrameRate > 0 ? viewer.targetFrameRate : 0,
     }),
     suspend(hidden) {

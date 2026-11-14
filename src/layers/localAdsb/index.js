@@ -770,7 +770,6 @@ export function createLocalAdsbLayer({
         camera: findCamera(viewer),
         setId: `${prefix}:models`,
         seeThrough: [sets.markers.id, sets.rings.id],
-        color: LOCAL_ADSB_COLOR,
         resolveAsset,
         groundSnap: services.groundSnap?.createGroundSnap?.() || null,
       });

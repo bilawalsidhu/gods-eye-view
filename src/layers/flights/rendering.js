@@ -82,11 +82,12 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model tint, mirroring the billboard color rules. */
+  /** Model colour: the mesh's own (white), tinted cyan while tracked and red
+   *  while broadcasting an emergency. */
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return TRACKED_CYAN;
-    return _fleetBillboardColor(icao24);
+    return _isEmergency(icao24) ? EMERGENCY_TINT : policy.MODEL_WHITE;
   }
 
   const models = createAircraftModels({

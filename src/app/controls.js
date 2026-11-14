@@ -16,6 +16,8 @@ import { t } from '../i18n/index.js';
  * picker, for a host that offers its own language choice (`switchLocale` from
  * the `./i18n` entry). `startView` is where the camera starts (the whole
  * planet by default; a host may pass a city); a shared view flies from there.
+ * `services.cockpitSubjects` adds the application's own first-person subjects
+ * to the Cockpit (src/cockpitSubjectProviders.js).
  */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations, viewerDrawsEntity },

@@ -168,6 +168,22 @@ test('readsb units and position/contact ages are normalized once against the sou
   );
 });
 
+test('a readsb aircraft with no track takes its true heading, never its magnetic one', () => {
+  const course = (extra) =>
+    normalizeReadsbAircraft(
+      { hex: 'a4418c', lat: 37.6, lon: -122.38, alt_baro: 'ground', ...extra },
+      now,
+    ).courseDeg;
+  assert.equal(
+    course({ track: 56.25, true_heading: 40 }),
+    56.25,
+    'track first',
+  );
+  assert.equal(course({ true_heading: 185.62 }), 185.62, 'true heading');
+  assert.equal(course({ mag_heading: 278.44 }), null, 'not magnetic');
+  assert.equal(course({}), null, 'none');
+});
+
 test('readsb vertical rate falls back to the GNSS rate when no baro rate is sent', () => {
   // readsb reports the rate under geom_rate when the aircraft's source is
   // GNSS; 26 of 157 positioned rows in a live /v2/mil fetch had only that.

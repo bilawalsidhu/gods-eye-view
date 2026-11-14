@@ -58,6 +58,49 @@ export function closeRenderLoopLatch(viewer) {
 }
 
 /**
+ * Whether the widget's render loop is marked running. The render failure
+ * notice keeps it marked while a frame it wraps throws, so a Retry before the
+ * loop's queued frame starts no second loop.
+ * @param {object} widget CesiumWidget.
+ * @returns {boolean}
+ */
+export function renderLoopRunning(widget) {
+  return widget?._renderLoopRunning === true;
+}
+
+/**
+ * Mark the widget's render loop running again (see `renderLoopRunning`).
+ * @param {object} widget CesiumWidget.
+ */
+export function markRenderLoopRunning(widget) {
+  if (widget) widget._renderLoopRunning = true;
+}
+
+/**
+ * Finish a raise a throwing listener cut short. Until a raise ends, Cesium's
+ * `Event` only queues added and removed listeners (`_toAdd`, `_toRemove`);
+ * apply that queue to `_listeners` and end the raise
+ * (`_invokingListeners`). Used by the render failure notice.
+ * @param {object} event Cesium Event.
+ */
+export function finishEventRaise(event) {
+  if (!event?._invokingListeners) return;
+  event._invokingListeners = false;
+  for (const [listener, scopes] of event._toAdd) {
+    const added = event._listeners.get(listener) ?? new Set();
+    scopes.forEach((scope) => added.add(scope));
+    event._listeners.set(listener, added);
+  }
+  event._toAdd.clear();
+  for (const [listener, scopes] of event._toRemove) {
+    const left = event._listeners.get(listener);
+    scopes.forEach((scope) => left?.delete(scope));
+    if (left?.size === 0) event._listeners.delete(listener);
+  }
+  event._toRemove.clear();
+}
+
+/**
  * Whether the scene has a render pending that its next tick will draw in
  * request-render mode: a request, or a depth-buffer or HDR change. With
  * `cameraMovedSinceRender` and the time check, this is the test

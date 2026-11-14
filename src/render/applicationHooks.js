@@ -17,6 +17,9 @@
  * - `ownCreditDisplay`: true when the renderer shows its credits in a
  *   display of its own; otherwise the application shows what its credits
  *   port lists (`src/ui/creditsView.js`).
+ * - `renderFailureNotice({allowReload, store})`: a recoverable notice,
+ *   published to `store`, when the renderer stops drawing
+ *   (`src/render/cesium/renderFailure.js`); returns its removal.
  *
  * A plugin hands them as its `applicationHooks(renderer)`
  * (`ApplicationHooks`, `contract/renderer.d.ts`); the application scene

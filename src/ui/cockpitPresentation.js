@@ -184,11 +184,15 @@ const COCKPIT_ENTRY_FACES = Object.freeze({
 });
 
 /**
- * The entry's glyph and localized label for the subject it would ride.
- * @param {'aircraft'|'vessel'|'satellite'|null|undefined} kind
+ * The entry's glyph and localized label for the subject it would ride. An
+ * application provider's subject brings its own face, already in the page's
+ * language (`presence.entryFace`).
+ * @param {string|null|undefined} kind
+ * @param {{icon: string, label: string}|null} [face]
  * @returns {{icon: string, label: string}}
  */
-export function cockpitEntryFace(kind) {
-  const face = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
-  return { icon: face.icon, label: t(face.label) };
+export function cockpitEntryFace(kind, face = null) {
+  if (face?.icon && face?.label) return { icon: face.icon, label: face.label };
+  const known = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
+  return { icon: known.icon, label: t(known.label) };
 }

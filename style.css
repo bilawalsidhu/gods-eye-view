@@ -9,6 +9,7 @@
 @import './src/ui/styles/status.css';
 @import './src/ui/styles/cockpit.css';
 @import './src/ui/styles/cockpitBridge.css';
+@import './src/ui/styles/cockpitSubject.css';
 @import './src/ui/styles/cockpitRadar.css';
 @import './src/ui/styles/cockpitOrbital.css';
 @import './src/ui/styles/cockpitOrbitalFocus.css';

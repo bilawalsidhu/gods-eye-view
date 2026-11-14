@@ -84,10 +84,9 @@ export const MODEL_ALL_KEEP_M = 450000;
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
 // every fleet model is nose -X: opposite the renderer's heading 0
-// Owner launch-polish direction: models should read as clean light silhouettes,
-// with only a weak diffuse contribution from the models' own colours.
 
-export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
+/** A model's colour where it draws its mesh's own (`aircraftModelBlend`). */
+export const MODEL_WHITE = rgba('#FFFFFF');
 
 /** The tracked contact's tint, and its billboard once a model takes over. */
 export const TRACKED_CYAN = rgba('#00FFFF');

@@ -35,6 +35,7 @@ import { trimStaleSceneCommands } from './sceneCommandRelease.js';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
 import { onLocaleChange } from '../../i18n/index.js';
 import { cesiumViewerOf, recordViewer } from './viewers.js';
+import { installRenderFailureNotice } from './renderFailure.js';
 
 export { cesiumViewerOf };
 
@@ -101,7 +102,13 @@ export function createCesiumRendererPlugin({
       let releaseFreeLook = () => {};
       let offLocale = () => {};
       try {
-        viewer = createViewer({ container, creditContainer });
+        viewer = createViewer({
+          container,
+          creditContainer,
+          // The application's notice (`renderFailureNotice`) replaces
+          // Cesium's dead-end panel when rendering stops.
+          showRenderLoopErrors: false,
+        });
         capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
         ports = createCesiumPorts(viewer, {
           capabilities,
@@ -196,6 +203,10 @@ export function createCesiumRendererPlugin({
         viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
         // QA scripts drive and read the viewer itself.
         qaHandles: { viewer },
+        // A recoverable notice when the globe stops drawing
+        // (renderFailure.js).
+        renderFailureNotice: (options) =>
+          installRenderFailureNotice(viewer, options),
       };
     },
   });

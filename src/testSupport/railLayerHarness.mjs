@@ -5,6 +5,8 @@
 // height, layer stats, selected route lines).
 import { createRailLayer } from '../layers/rail/index.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
+import { eastNorthUp } from '../geo/frames.js';
+import { scale } from '../geo/vector.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
 import { CAMERA_DEBOUNCE_MS } from '../layers/rail/policy.js';
@@ -67,7 +69,7 @@ const headersOf = (values = {}) => ({
  *   catalog?: object[]|Promise<object[]>|Function|false,
  *   ground?: object,
  *   stops?: object|null, scheduleStops?: boolean,
- *   paths?: Record<string, object>|null}} [options]
+ *   paths?: Record<string, object>|null, fleet?: object|null}} [options]
  *   `ground`: a floor service in place of the always-cold stub; `catalog`:
  *   the server's feed catalog (it may list fewer feeds than are bundled; a
  *   promise answers when it settles, a function is called per request and
@@ -77,8 +79,16 @@ const headersOf = (values = {}) => ({
  *   layer's own provider, its schedule tier, in its place;
  *   `paths`: feed id → the path pack the proxy serves, or a
  *   failure status it answers with (404 for any other feed; without it the
- *   source has no path route at all).
+ *   source has no path route at all); `fleet`: the fleet-model services
+ *   (testSupport/fleetModelFakes.mjs), with a camera that looks straight
+ *   down for them (none by default: trains stay icons).
  */
+/** The frame of an eye over `view`'s place looking straight down. */
+function lookingDown(view) {
+  const enu = eastNorthUp(fromDegrees(view.lon, view.lat, 0));
+  return { direction: scale(enu.z, -1), up: enu.y, right: enu.x };
+}
+
 export function railLayerHarness(
   t,
   {
@@ -89,6 +99,7 @@ export function railLayerHarness(
     stops = null,
     scheduleStops = false,
     paths = null,
+    fleet = null,
   } = {},
 ) {
   const T0 = RAIL_HARNESS_T0;
@@ -147,9 +158,13 @@ export function railLayerHarness(
       position: view.position
         ? { ...view.position }
         : fromDegrees(view.lon, view.lat, view.altitude),
-      direction: { x: 0, y: 0, z: -1 },
-      up: { x: 0, y: 1, z: 0 },
-      right: { x: 1, y: 0, z: 0 },
+      ...(fleet
+        ? lookingDown(view)
+        : {
+            direction: { x: 0, y: 0, z: -1 },
+            up: { x: 0, y: 1, z: 0 },
+            right: { x: 1, y: 0, z: 0 },
+          }),
       fovy: Math.PI / 3,
       aspectRatio: 1,
       near: 1,
@@ -370,6 +385,7 @@ export function railLayerHarness(
         cachedGroundFloor: () => null,
         warmGroundFloor() {},
       },
+      ...(fleet ? { fleet } : {}),
       camera: {
         framing: WORLD_FOCUS_FRAMING.train,
         requestWorldFocus(detail) {

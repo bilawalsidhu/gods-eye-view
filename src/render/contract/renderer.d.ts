@@ -58,6 +58,35 @@ export interface ApplicationHooks {
   viewerDrawsEntity?(entity: unknown): boolean;
   /** Values QA scripts read from the page's debug handle. */
   qaHandles?: Readonly<Record<string, unknown>>;
+  /**
+   * Show a recoverable notice when the renderer stops drawing (an error, a
+   * lost context), with Retry and, if `allowReload`, Reset, by publishing it
+   * to `store`. Returns its removal.
+   */
+  renderFailureNotice?(options: {
+    allowReload: boolean;
+    store: RenderFailureStore;
+  }): () => void;
+}
+
+/** Where a renderer's failure notice is published for the application to show. */
+export interface RenderFailureStore {
+  /** The notice shown now, or null. */
+  readonly renderFailure: RenderFailureNotice | null;
+  /** Show a notice, or none with null. */
+  publishRenderFailure(next: RenderFailureNotice | null): void;
+}
+
+/** A notice that the renderer stopped drawing. */
+export interface RenderFailureNotice {
+  /** Why: an error in a frame, or a lost graphics context. */
+  reason: 'render-error' | 'context-lost';
+  /** The error's description, or empty. */
+  detail: string;
+  /** Draw again; after a lost context, reload the page. */
+  retry(): void;
+  /** Open the application's root address, or null where it must not. */
+  reset: (() => void) | null;
 }
 
 export interface CreateOptions {

@@ -59,6 +59,11 @@ export interface FrameDiagnostics {
   /** Reasons of the holds now out. */
   holds: string[];
   suspended: boolean;
+  /**
+   * The loop stopped after a frame failed, until the application starts it
+   * again (a retry). Absent where the loop never stops so.
+   */
+  stopped?: boolean;
   targetFps: number;
 }
 

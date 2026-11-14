@@ -94,6 +94,8 @@ export function createLifecycle({ state, services, parts, timetable }) {
       parts.ingestion.abortAllInFlight();
       state._activeFeeds.clear();
       state._heldFeedId = null;
+      state._cockpitSubjectKey = null;
+      state._cockpitLostFeedId = null;
       state._feedStatus.clear();
       dropAllTrains();
       parts.rendering.stopModels();

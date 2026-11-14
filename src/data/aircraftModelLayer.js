@@ -3,7 +3,10 @@ import {
   aircraftTreatmentAlpha,
   DEFAULT_AIRCRAFT_RECESSION_PARAMS,
 } from './aircraftRecession.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from './aircraftModelLighting.js';
 import {
   createModelRecord,
   modelIsRendering,
@@ -339,8 +342,7 @@ export function createAircraftModels({
   }
 
   /** The record's item, as its set draws it. */
-  function _itemOf(id, record, spec) {
-    const boost = state._irBoost === true;
+  function _itemOf(id, record) {
     return {
       id,
       pos: { x: record.position.x, y: record.position.y, z: record.position.z },
@@ -352,9 +354,9 @@ export function createAircraftModels({
       minPixelSize: record.minPixelSize,
       shading: _shadingOf(),
       tint: record.tint ?? WHITE,
-      // The code-side tint dominates every approved model; the IR boost
-      // removes the remaining diffuse hint with flat unlit white.
-      colorBlend: { mode: 'mix', amount: boost ? 1 : spec.blendAmount },
+      // The mesh's own colours, tinted while tracked or in an emergency;
+      // the IR boost draws it flat white.
+      colorBlend: aircraftModelBlend(state._irBoost === true),
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
       show: record.show,
     };
@@ -365,10 +367,10 @@ export function createAircraftModels({
     if (!set) return;
     const p = record.position;
     const t = record.tint ?? WHITE;
-    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${spec.blendAmount}|${record.show}`;
+    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${record.show}`;
     if (key === record.sent) return;
     record.sent = key;
-    const item = _itemOf(id, record, spec);
+    const item = _itemOf(id, record);
     if (out) out.push(item);
     else set.upsert([item]);
   }

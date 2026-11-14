@@ -7,7 +7,6 @@ import {
   RADIANS_PER_DEGREE,
   sub,
 } from '../../geo/vector.js';
-import { cssColor } from '../../render/color.js';
 import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
 import { fleetModelSet, loadFleetModelSet } from '../../data/fleetModels.js';
 import {
@@ -22,7 +21,12 @@ import {
   MODEL_PROX_ADD_M,
   MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
+
+const WHITE = Object.freeze([1, 1, 1, 1]);
 
 /** Whether `point` is inside the eye's view cone (`pose`), a metre's slack. */
 function inView(pose, point) {
@@ -42,6 +46,7 @@ const specOf = (marker) =>
   aircraftLayerModelSpec({
     typeCode: marker?.typeCode,
     category: marker?.category,
+    callsign: marker?.record?.callsign,
   });
 
 /**
@@ -51,8 +56,8 @@ const specOf = (marker) =>
  * Mirrors the public Flights fleet: models only below the altitude ceiling,
  * the same proximity/all caps and add/keep radii, the same visible-first
  * eligibility (`selectModelEligible`), the same fleet model per type, life
- * size (`aircraftLayerModelSpec`) and the same tint path (a MIX colour blend,
- * here magenta, as Flights tints military amber). A billboard stays the
+ * size (`aircraftLayerModelSpec`) and the same colours: the mesh's own
+ * (`aircraftModelBlend`). A billboard stays the
  * visual until its model is ready (the set's `ready`) AND placed; a grounded
  * aircraft's model rides the one-shot ground snap plus the model's clearance,
  * and without a resolved ground it stays a billboard. Models move and turn in
@@ -67,7 +72,6 @@ const specOf = (marker) =>
  * @param {string} options.setId The models set's id.
  * @param {string[]} [options.seeThrough] The layer's other set ids ground
  *   samples see through (its markers).
- * @param {string} options.color Model tint, a CSS colour.
  * @param {(url: string) => string} options.resolveAsset
  * @param {object|null} [options.groundSnap] `createGroundSnap()` instance.
  * @returns {object|null} Null where the renderer draws no models.
@@ -78,12 +82,10 @@ export function createLocalAdsbModels({
   camera,
   setId,
   seeThrough = [],
-  color,
   resolveAsset,
   groundSnap = null,
 }) {
   if (typeof draw?.models !== 'function' || !camera) return null;
-  const tint = cssColor(color) ?? color;
   void loadFleetModelSet({ resolveAsset }).catch(() => {
     /* aircraft stay billboards */
   });
@@ -262,8 +264,9 @@ export function createLocalAdsbModels({
           },
           scale: spec.scale,
           minPixelSize: MODEL_MIN_PX,
-          tint,
-          colorBlend: { mode: 'mix', amount: spec.blendAmount },
+          // The mesh's own colours (white, multiplied).
+          tint: WHITE,
+          colorBlend: aircraftModelBlend(false),
           environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
           show: shown,
         });

@@ -207,7 +207,7 @@ export function aircraftTreatmentAlpha({
 
 /**
  * Apply layer-owned hue and composed aircraft alpha to an ambient glTF model without
- * disturbing Cesium's existing MIX/colorBlendAmount presentation semantics.
+ * changing the model's colour blend mode or amount.
  * @param {object} input
  * @param {object} input.model
  * @param {{withAlpha:(alpha:number)=>object}} input.baseColor

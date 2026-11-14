@@ -76,3 +76,50 @@ test('a panel reports a failed frame in full and stops drawing', () => {
     console.error = original;
   }
 });
+
+test('a panel waits while its renderer’s loop is stopped after a failed frame, and draws again once it restarts', () => {
+  let clock = 0;
+  const handles = windowWith();
+  let stopped = false;
+  let fail = false;
+  let renders = 0;
+  const renderer = {
+    resize() {},
+    frame: {
+      diagnostics: () => ({ stopped }),
+      renderNow() {
+        renders += 1;
+        if (fail) {
+          // The renderer stops its loop as the frame fails.
+          stopped = true;
+          throw new Error('frame failed');
+        }
+      },
+    },
+  };
+  const errors = [];
+  const error = console.error;
+  console.error = (...args) => errors.push(args);
+  try {
+    const stop = keepPanelRendering(renderer, {
+      windowRef: handles.windowRef,
+      now: () => clock,
+    });
+    clock = 1000;
+    fail = true;
+    handles.tick();
+    assert.equal(renders, 1);
+    // Stopped: the timer waits, and leaves the error to the notice.
+    handles.tick();
+    assert.equal(renders, 1);
+    assert.deepEqual(errors, []);
+    // A retry starts the loop again: the timer draws again.
+    stopped = false;
+    fail = false;
+    handles.tick();
+    assert.equal(renders, 2);
+    stop();
+  } finally {
+    console.error = error;
+  }
+});

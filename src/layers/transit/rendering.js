@@ -484,7 +484,14 @@ export function createRendering({ state, services, parts }) {
     );
     entry.surfaceReady = !!known;
     entry.heightPending = !known;
-    setShown(entry, !!known && vehicleInView(entry) && !entry.modelOwnsVisual);
+    // A vehicle a first-person view rides keeps moving, unseen.
+    setShown(
+      entry,
+      !!known &&
+        vehicleInView(entry) &&
+        !entry.modelOwnsVisual &&
+        entry.key !== state._cockpitSubjectKey,
+    );
     if (known) {
       const p = entry.marker.position;
       const s = state._scratchCartesian;
@@ -566,7 +573,7 @@ export function createRendering({ state, services, parts }) {
    * @returns {boolean}
    */
   function vehicleInView(entry) {
-    return state._visible.has(entry);
+    return state._visible.has(entry) || entry.key === state._cockpitSubjectKey;
   }
 
   /** A preset tuple as a colour (0..1 channels), cached per profile+mode. */
@@ -892,7 +899,7 @@ export function createRendering({ state, services, parts }) {
     });
   }
 
-  /** Hand an entry's visual back to its icon. */
+  /** Hand an entry's visual back to its icon, unless a view rides it. */
   function handBack(entry) {
     if (!entry.modelOwnsVisual) return;
     entry.modelOwnsVisual = false;
@@ -901,7 +908,8 @@ export function createRendering({ state, services, parts }) {
         entry,
         vehicleInView(entry) &&
           !entry.heightPending &&
-          entry.surfaceReady !== false,
+          entry.surfaceReady !== false &&
+          entry.key !== state._cockpitSubjectKey,
       );
   }
 
@@ -939,7 +947,12 @@ export function createRendering({ state, services, parts }) {
       }
       item.position = entry.marker.position;
       item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
-      item.show = !entry.heightPending && entry.surfaceReady !== false;
+      // A vehicle a first-person view rides draws no model: the camera is
+      // inside it (cockpitSubject.js).
+      item.show =
+        !entry.heightPending &&
+        entry.surfaceReady !== false &&
+        entry.key !== state._cockpitSubjectKey;
       next.set(entry.key, item);
     }
     for (const [key, item] of modelItems)
@@ -1055,7 +1068,10 @@ export function createRendering({ state, services, parts }) {
           }
         }
       }
-      const visible = (planes || bounds) && horizon && inFrustum;
+      // A held vehicle (cockpitSubject.js) is the camera's own: it stays in
+      // play wherever the view looks.
+      const held = entry.key === state._cockpitSubjectKey;
+      const visible = held || ((planes || bounds) && horizon && inFrustum);
       const visibility = (entry.visibility ||= {});
       visibility.bounds = bounds;
       visibility.boundsApplied = !planes;
@@ -1085,6 +1101,7 @@ export function createRendering({ state, services, parts }) {
       setShown(
         entry,
         Boolean(
+          !held &&
           visible &&
           !entry.heightPending &&
           entry.surfaceReady !== false &&

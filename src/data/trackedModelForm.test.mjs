@@ -456,10 +456,12 @@ for (const fixture of LAYERS) {
       const normal = fleet.items.get(icao24);
       assert.equal(normal.shading, 'pbr');
       assert.equal(normal.show, true);
-      assert.ok(
-        normal.colorBlend.amount < 1,
-        'the asset keeps a hint of its own colour',
+      assert.deepEqual(
+        normal.colorBlend,
+        { mode: 'highlight' },
+        'an ordinary model draws its mesh in its own colours',
       );
+      assert.deepEqual([...normal.tint], [1, 1, 1, 1]);
 
       fixture.layer.setParams({ irBoost: true });
       fixture.driveFleetModel({ icao24, position, course: 92 });

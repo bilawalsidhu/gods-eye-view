@@ -26,9 +26,13 @@ function describeError(error) {
  * screen as hidden, which stops the browser's animation frames and with them
  * the renderer's own loop; while frames stop arriving, draw from a timer
  * (`resize`, then a frame of the loop, `frame.renderNow({ifDue: true})`: the
- * camera moves, input and the clock run, and it draws when due). A frame
- * that fails stops the timer,
- * its error reported in full. Returns a function that stops it.
+ * camera moves, input and the clock run, and it draws when due). While the
+ * renderer's loop is stopped after a failed frame (`stopped` in its frame
+ * diagnostics) the timer waits, and goes on once a retry starts the loop
+ * again; the render failure notice reports the error
+ * (src/render/cesium/renderFailure.js). Where the renderer never says so, a frame
+ * that fails stops the timer, its error reported in full. Returns a
+ * function that stops it.
  * @param {import('../render/contract/renderer').Renderer} renderer
  * @param {{windowRef?: Window, now?: () => number}} [options]
  * @returns {() => void}
@@ -45,12 +49,15 @@ export function keepPanelRendering(
   };
   frameRequest = windowRef.requestAnimationFrame(onFrame);
   let failed = false;
+  const stopped = () => renderer.frame.diagnostics?.().stopped;
   const timer = windowRef.setInterval(() => {
-    if (failed || now() - lastFrame < MISSED_FRAMES_MS) return;
+    if (failed || now() - lastFrame < MISSED_FRAMES_MS || stopped()) return;
     try {
       renderer.resize();
       renderer.frame.renderNow({ ifDue: true });
     } catch (error) {
+      // Stopped by now: the render failure notice has the error.
+      if (stopped() !== undefined) return;
       // Report the error in full: workers report plain objects, which
       // would print as [object Object].
       failed = true;

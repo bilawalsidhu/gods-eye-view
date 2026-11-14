@@ -12,6 +12,7 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
+import { isEmbeddedInline } from './embed.js';
 import { worldClock, worldTimeFor } from '../time/worldClock.js';
 import { followWorldTime } from '../time/viewerClock.js';
 import { t } from '../i18n/index.js';
@@ -20,6 +21,8 @@ import {
   provideApplicationHooks,
 } from '../render/applicationHooks.js';
 import { keepPanelRendering } from './panelRendering.js';
+import { useStatusStore } from '../ui/stores/status.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { createSceneHost } from '../render/rendererOf.js';
 
 let defaultLoad = null;
@@ -144,6 +147,14 @@ export async function createApplicationScene({
       controls.keepEarthFramed = false;
     });
   }
+  // The renderer's own notice when the globe stops drawing, in place of a
+  // dead-end panel; an inline panel must not reload or navigate its host's
+  // page.
+  const offRenderFailure = hooks.renderFailureNotice?.({
+    allowReload: !isEmbeddedInline(),
+    store: useStatusStore(applicationPinia()),
+  });
+  if (offRenderFailure) defer(offRenderFailure);
   defer(
     followWorldTime(viewer, worldTimeFor('sky'), {
       subscribe: worldClock.subscribe,

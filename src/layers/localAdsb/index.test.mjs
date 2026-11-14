@@ -576,7 +576,7 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
   assert.equal(queries.length, 2, 'each key is asked for once');
 });
 
-test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t) => {
+test('the DISPLAY 3D toggle gives local aircraft their fleet models in their mesh colours', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const display = { models3d: true, models3dMode: 'proximity' };
@@ -598,8 +598,12 @@ test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t
   );
   assert.ok(model().gltf instanceof Uint8Array, 'built from the loaded set');
   assert.equal(model().scale, spec.scale, 'drawn life size');
-  assert.deepEqual(model().tint, MAGENTA);
-  assert.deepEqual(model().colorBlend, { mode: 'mix', amount: 0.94 });
+  assert.deepEqual(
+    model().tint,
+    [1, 1, 1, 1],
+    'the mesh draws its own colours',
+  );
+  assert.deepEqual(model().colorBlend, { mode: 'highlight' });
   assert.equal(model().environmentMap, false);
   const heli = () => iconOf(draw, 'local-adsb:a0b702');
   assert.equal(heli().show, true, 'the icon until the model is ready');

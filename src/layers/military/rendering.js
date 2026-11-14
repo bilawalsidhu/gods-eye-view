@@ -11,7 +11,7 @@ import {
   MIL_ICON_COLOR,
   TRACKED_ICON_COLOR,
   EMERGENCY_ICON_COLOR,
-  MODEL_COLOR_BLEND_AMOUNT,
+  MODEL_WHITE,
 } from './policy.js';
 import * as policy from './policy.js';
 import { createAircraftModels } from '../../data/aircraftModelLayer.js';
@@ -34,7 +34,6 @@ export function createRendering({
     const base = aircraftLayerModelSpec(meta);
     spec = Object.freeze({
       ...base,
-      blendAmount: MODEL_COLOR_BLEND_AMOUNT,
       headingOffsetDeg: MODEL_HEADING_OFFSET_DEG,
     });
     // Not cached before the model set loads: the answer changes once it has.
@@ -62,11 +61,13 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model tint, mirroring the billboard color rules (amber instead of cyan/white). */
+  /** Model colour: the mesh's own (white), tinted amber while tracked and red
+   *  while broadcasting an emergency. */
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return TRACKED_ICON_COLOR;
-    return _fleetBillboardColor(icao24);
+    const info = flightState.records.data.get(icao24);
+    return isEmergency(info?.emergency) ? EMERGENCY_ICON_COLOR : MODEL_WHITE;
   }
 
   /** Fleet (untracked) tint: red while the latest poll broadcast an emergency,
