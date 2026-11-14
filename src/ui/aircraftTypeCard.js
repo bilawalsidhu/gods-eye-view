@@ -15,6 +15,9 @@ const LAYER_IDS = new Set(['flights', 'military']);
 const REFRESH_MS = 1000;
 const GAP_PX = 12;
 const SIDE_MARGIN_PX = 16;
+// Mirrors .gev-type-card in AircraftTypeCard.vue: width 320px, capped to the
+// viewport by `max-width: calc(100vw - 32px)` (32 = 2 * SIDE_MARGIN_PX).
+const CARD_WIDTH_PX = 320;
 
 /**
  * Mount the card. `getTracked` returns the tracked contact's descriptor, with
@@ -62,11 +65,18 @@ export function createAircraftTypeCard({
     const stack = documentRef.getElementById('right-panel-stack');
     const rect = stack?.getBoundingClientRect?.();
     const visible = rect && rect.width > 0 && rect.height > 0;
-    host.style.right = `${
-      visible
-        ? Math.max(SIDE_MARGIN_PX, windowRef.innerWidth - rect.left + GAP_PX)
-        : SIDE_MARGIN_PX
-    }px`;
+    let right = visible
+      ? Math.max(SIDE_MARGIN_PX, windowRef.innerWidth - rect.left + GAP_PX)
+      : SIDE_MARGIN_PX;
+    // Never let the clearance push the card off the left edge: on a narrow
+    // viewport the right stack sits far left, so the raw clearance can exceed
+    // the screen. Keep the card's left edge at SIDE_MARGIN_PX at the tightest.
+    const cardWidth = Math.min(
+      CARD_WIDTH_PX,
+      windowRef.innerWidth - 2 * SIDE_MARGIN_PX,
+    );
+    const maxRight = windowRef.innerWidth - cardWidth - SIDE_MARGIN_PX;
+    host.style.right = `${Math.min(right, Math.max(SIDE_MARGIN_PX, maxRight))}px`;
   }
 
   function refresh() {

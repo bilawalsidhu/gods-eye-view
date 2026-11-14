@@ -219,6 +219,24 @@ test('the card keeps clear of the right panel stack', async (t) => {
   assert.equal(m.host().style.right, '312px');
 });
 
+test('on a narrow viewport the card stays on screen beside the right stack', async (t) => {
+  const m = mount(TRACKED, t);
+  const stack = document.body.appendChild(document.createElement('div'));
+  stack.id = 'right-panel-stack';
+  stack.getBoundingClientRect = () => ({ left: 28, width: 320, height: 500 });
+  Object.defineProperty(window, 'innerWidth', {
+    value: 360,
+    configurable: true,
+  });
+  await m.emit('gev:awareness-subject-selected');
+  // Raw clearance would be 360 - 28 + 12 = 344px, putting the 320px card's
+  // left edge at 360 - 344 - 320 = -304px. The cap pins it on screen instead.
+  const right = Number.parseInt(m.host().style.right, 10);
+  assert.equal(right, 24);
+  const leftEdge = 360 - right - 320;
+  assert.ok(leftEdge >= 16, `left edge ${leftEdge}px is on screen`);
+});
+
 test('destroy removes the card from the page', (t) => {
   const m = mount(TRACKED, t);
   m.card.destroy();
