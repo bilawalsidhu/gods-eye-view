@@ -112,6 +112,22 @@ test('an unsuccessful source response releases its body before reporting an erro
   assert.equal(cancelled, 1);
 });
 
+test('a Canada extract that answers 404 for every empty tile does not take the layer down', async () => {
+  const portland = { south: 45.45, west: -122.75, north: 45.6, east: -122.55 };
+  const source = createAlprTileSource({
+    tileFetchImpl: async (url) => {
+      if (url.endsWith('.json'))
+        return Response.json(metadata(url.includes('-ca-') ? 'ca' : 'us'));
+      return url.includes('-ca-')
+        ? new Response('Tile not found', { status: 404 })
+        : new Response(fixture);
+    },
+  });
+  const snapshot = await source.fetch(portland);
+  assert.ok(snapshot.records.length > 0);
+  assert.equal(snapshot.stale, false);
+});
+
 test('source snapshots reject malformed coordinates and duplicate identities', () => {
   const record = { id: 'camera:1', latitude: 30, longitude: -98 };
   for (const records of [
