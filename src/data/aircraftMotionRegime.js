@@ -270,3 +270,50 @@ export function staleCoastSeconds(newest, info, cachedGroundFloor) {
     : 0;
   return Math.max(0, Math.min(limitSec, STALE_COAST_MAX_SEC - alreadySec));
 }
+
+/** A raw position this far (m) off its own path, plus half its step, is a jump. */
+const RAW_JUMP_SLACK_M = 5;
+
+/**
+ * Whether a tracked aircraft's raw position jumped this frame: a new report
+ * moved its path. Judged against the path itself, where its last frame's
+ * step carries it, not against a reported speed (which can be stale or 0
+ * while the drawn motion, minutes behind the newest report, is fast). A
+ * frame with no step to go by (the first on a track, or the one after a
+ * jump) is never a jump.
+ * @param {{x: number, y: number, z: number}} raw This frame's raw position.
+ * @param {{x: number, y: number, z: number}} prevRaw Last frame's.
+ * @param {{x: number, y: number, z: number}} prevRawStep Last frame's step.
+ * @param {number} prevRawStepSec Last frame's length, s (0: no step).
+ * @param {number} dtSec This frame's length, s.
+ * @returns {boolean}
+ */
+export function rawPositionJumped(
+  raw,
+  prevRaw,
+  prevRawStep,
+  prevRawStepSec,
+  dtSec,
+) {
+  if (!(prevRawStepSec > 0)) return false;
+  const k = dtSec / prevRawStepSec;
+  const dx = raw.x - (prevRaw.x + prevRawStep.x * k);
+  const dy = raw.y - (prevRaw.y + prevRawStep.y * k);
+  const dz = raw.z - (prevRaw.z + prevRawStep.z * k);
+  const stepM =
+    Math.hypot(prevRawStep.x, prevRawStep.y, prevRawStep.z) * Math.abs(k);
+  return Math.hypot(dx, dy, dz) > RAW_JUMP_SLACK_M + 0.5 * stepM;
+}
+
+/**
+ * How fast the drawn path moves (m/s), from its last raw step; `fallback`
+ * (a reported speed) with no step to go by.
+ * @param {{x: number, y: number, z: number}} step
+ * @param {number} stepSec
+ * @param {number} fallback
+ * @returns {number}
+ */
+export function rawStepSpeedMps(step, stepSec, fallback) {
+  if (!(stepSec > 0)) return fallback;
+  return Math.hypot(step.x, step.y, step.z) / stepSec;
+}

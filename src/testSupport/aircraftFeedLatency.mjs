@@ -38,7 +38,11 @@ function sharpestTurnDeg(line) {
   return worst;
 }
 
-function run(layer, pollOptions = {}, { drop = [] } = {}) {
+function run(
+  layer,
+  pollOptions = {},
+  { drop = [], reportedSpeedMps, frameMs } = {},
+) {
   const polls = slowFeedPolls({
     startMs: T0,
     count: 30,
@@ -53,6 +57,8 @@ function run(layer, pollOptions = {}, { drop = [] } = {}) {
     // From the seventh poll: the delay has settled and the trail has begun.
     measureFromMs: polls[6].receiptMs,
     contacts: CONTACTS,
+    reportedSpeedMps,
+    ...(frameMs ? { frameMs } : {}),
   });
 }
 
@@ -97,6 +103,15 @@ export function feedLatencyTests(layer, floorSec) {
     assert.ok(placementError(sim, sim.frames, 'fleet', 1) < 100);
     assert.ok(placementError(sim, sim.frames, 'tracked', 0) < 100);
     assertTrail(sim, 60);
+  });
+
+  test(`${layer}: reports that give a speed of 0 still draw the tracked aircraft along its path, with no jump or stall`, () => {
+    // The drawn motion is minutes behind the newest report, whose speed may
+    // be stale or 0: a jump is judged by the path, not by that speed.
+    // At 10 fps a frame moves 13 m, more than a speed of 0 allows.
+    const sim = run(layer, {}, { reportedSpeedMps: 0, frameMs: 100 });
+    assertSmoothMotion(sim);
+    assert.ok(placementError(sim, sim.frames, 'tracked', 0) < 100);
   });
 
   test(`${layer}: a fresh fallback feed for four polls and reports that do not move on: no jump, no stall, no kink`, () => {

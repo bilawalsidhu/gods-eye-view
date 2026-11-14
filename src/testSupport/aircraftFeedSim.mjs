@@ -227,6 +227,7 @@ export function runAircraftFeedSim({
   contacts,
   followsClock = false,
   onFrame = null,
+  reportedSpeedMps = null,
 }) {
   const mod = layer === 'flights' ? flights : military;
   const truth = arrivalPath();
@@ -336,7 +337,9 @@ export function runAircraftFeedSim({
       baroAltitudeM: p.heightM,
       ellipsoidAltitudeM: p.heightM,
       onGround: false,
-      speedMps: p.speedMps,
+      // A feed may report a speed that is not how fast the contact flies
+      // (stale, or 0 when it gave none).
+      speedMps: reportedSpeedMps ?? p.speedMps,
       courseDeg: p.trackDeg,
       verticalRateMps: -1.5,
       positionTimeMs: timeMs,

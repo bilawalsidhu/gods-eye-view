@@ -61,6 +61,8 @@ import {
   fixSpeedMps,
   fixTrackDeg,
   staleCoastSeconds,
+  rawPositionJumped,
+  rawStepSpeedMps,
 } from '../../data/aircraftMotionRegime.js';
 
 /** Where a military record carries its reported speed and track. */
@@ -355,12 +357,18 @@ export function createMotion({
       (worldMs - flightState._drPrevWorldMs) / 1000,
     );
     let snapped = false;
+    let jumpedThisFrame = false;
     if (sameTrack) {
       const speed = (info && info.speedMps) || 0;
-      // Plausible single-frame motion (m): its speed × frame Δt, half again
-      // for slack, plus 5 m. More is a jump (a new report put it elsewhere).
-      const plausible = speed * dtSec * 1.5 + 5;
-      if (distance(raw, flightState._drPrevRaw) > plausible) {
+      // A jump: a new report moved the path the raw position is on.
+      const jumped = rawPositionJumped(
+        raw,
+        flightState._drPrevRaw,
+        flightState._drPrevRawStep,
+        flightState._drPrevRawStepSec,
+        dtSec,
+      );
+      if (jumped) {
         // Discontinuity — re-anchor so the DISPLAYED position stays continuous,
         // then ease onto the new path no faster than a little over its speed;
         // farther off than RECOVER_SNAP_M it is a break, and it jumps.
@@ -378,12 +386,22 @@ export function createMotion({
               )
             : flightState._drPrevDisplay;
         const errorM = distance(anchor, raw);
+        jumpedThisFrame = true;
         snapped = errorM >= RECOVER_SNAP_M;
         copyInto(snapped ? vec() : sub(anchor, raw), flightState._drCorrection);
         flightState._drCorrectionStartMs = nowMs;
         flightState._drCorrectionMs = Math.max(
           DR_CORRECTION_MS,
-          recoveryMs(errorM, speed),
+          // As fast as the path it was drawn on moves: the newest report's
+          // speed can be stale or 0 minutes ahead of it.
+          recoveryMs(
+            errorM,
+            rawStepSpeedMps(
+              flightState._drPrevRawStep,
+              flightState._drPrevRawStepSec,
+              speed,
+            ),
+          ),
         );
       }
     } else {
@@ -408,6 +426,12 @@ export function createMotion({
       );
       flightState._drPrevStepSec = dtSec;
     } else flightState._drPrevStepSec = 0;
+    // The raw step, to judge the next frame by; none after a jump (its
+    // step is the jump) or a track switch.
+    if (sameTrack && !jumpedThisFrame) {
+      copyInto(sub(raw, flightState._drPrevRaw), flightState._drPrevRawStep);
+      flightState._drPrevRawStepSec = dtSec;
+    } else flightState._drPrevRawStepSec = 0;
     copyInto(raw, flightState._drPrevRaw);
     copyInto(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;

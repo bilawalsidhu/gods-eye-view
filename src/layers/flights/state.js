@@ -340,6 +340,9 @@ export function createFlightState({ source, services }) {
   /** How the tracked icon moved over the last frame, and that frame's length (s; 0 for none). */
   flightState._drPrevStep = { x: 0, y: 0, z: 0 };
   flightState._drPrevStepSec = 0;
+  /** The raw position's last step, and that frame's length (s; 0 for none). */
+  flightState._drPrevRawStep = { x: 0, y: 0, z: 0 };
+  flightState._drPrevRawStepSec = 0;
 
   flightState._drPrevMs = 0;
 
