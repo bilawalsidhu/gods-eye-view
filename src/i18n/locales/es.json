@@ -3699,5 +3699,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "Restablecer la vista recarga la app sin la vista restaurada desde la barra de direcciones.",
   "Reload": "Recargar",
   "Retry": "Reintentar",
-  "Reset view": "Restablecer la vista"
+  "Reset view": "Restablecer la vista",
+  "Starship telemetry unavailable": "Telemetría de Starship no disponible",
+  "Loading...": "Cargando...",
+  "No active Starship telemetry": "No hay telemetría activa de Starship",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · Altitud {altitude} · Velocidad {speed} · Rumbo {heading}°",
+  "{count} vehicles": "{count} vehículos",
+  "Starship Live": "Starship en directo",
+  "SpaceX public telemetry": "Telemetría pública de SpaceX",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "Altitud {altitude} · Velocidad {speed} · Rumbo {heading}°",
+  "Starship Live vehicles": "Vehículos Starship en directo",
+  "Booster": "Propulsor",
+  "Ship": "Nave",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "Telemetría en directo de Starship desde la transmisión pública de SpaceX. Selecciona un vehículo para seguirlo. Un marcador del propulsor solo aparece si SpaceX publica su telemetría."
 }

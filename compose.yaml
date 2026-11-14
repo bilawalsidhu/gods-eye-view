@@ -10,6 +10,7 @@ services:
     environment:
       - GEV_KEY_SETUP_TRUSTED_PEERS
       - GEV_ALLOWED_HOSTS
+      - STARSHIP_LIVE_URL
     ports:
       # Publish to loopback only. Docker's default ("4173:4173") would bind
       # every host interface, which quietly turns the LAN warning in the README

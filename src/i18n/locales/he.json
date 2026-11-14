@@ -3699,5 +3699,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "\"איפוס תצוגה\" טוען מחדש את האפליקציה בלי התצוגה ששוחזרה משורת הכתובת.",
   "Reload": "טען מחדש",
   "Retry": "נסה שוב",
-  "Reset view": "איפוס תצוגה"
+  "Reset view": "איפוס תצוגה",
+  "Starship telemetry unavailable": "טלמטריית Starship אינה זמינה",
+  "Loading...": "טוען...",
+  "No active Starship telemetry": "אין טלמטריה פעילה של Starship",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · גובה {altitude} · מהירות {speed} · כיוון {heading}°",
+  "{count} vehicles": "{count} כלי רכב",
+  "Starship Live": "Starship בשידור חי",
+  "SpaceX public telemetry": "טלמטריה ציבורית של SpaceX",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "גובה {altitude} · מהירות {speed} · כיוון {heading}°",
+  "Starship Live vehicles": "כלי רכב Starship בשידור חי",
+  "Booster": "מאיץ",
+  "Ship": "חללית",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "טלמטריית Starship בשידור חי מהזרמת SpaceX הציבורית. בחרו כלי רכב כדי לעקוב אחריו. סמן מאיץ יופיע רק אם SpaceX תפרסם טלמטריה שלו."
 }

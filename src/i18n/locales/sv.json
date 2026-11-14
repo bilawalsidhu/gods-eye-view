@@ -3612,5 +3612,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "”Återställ vy” laddar om appen utan vyn som återställdes från adressfältet.",
   "Reload": "Ladda om",
   "Retry": "Försök igen",
-  "Reset view": "Återställ vy"
+  "Reset view": "Återställ vy",
+  "Starship telemetry unavailable": "Starship-telemetri är inte tillgänglig",
+  "Loading...": "Läser in...",
+  "No active Starship telemetry": "Ingen aktiv Starship-telemetri",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · Höjd {altitude} · Hastighet {speed} · Kurs {heading}°",
+  "{count} vehicles": "{count} farkoster",
+  "Starship Live": "Starship direkt",
+  "SpaceX public telemetry": "Offentlig SpaceX-telemetri",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "Höjd {altitude} · Hastighet {speed} · Kurs {heading}°",
+  "Starship Live vehicles": "Starship-farkoster direkt",
+  "Booster": "Booster",
+  "Ship": "Farkost",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "Direkttelemetri för Starship från SpaceX offentliga sändning. Välj en farkost för att följa den. En boostermarkör visas endast om SpaceX publicerar telemetri för boostern."
 }

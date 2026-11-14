@@ -1,0 +1,3 @@
+- feat: add a Starship Live layer using the public SpaceX webcast telemetry feed.
+- Speed is displayed in km/h and, when the feed omits it, derived with Stardash’s live-sample/trajectory method so repeated snapshot positions cannot produce a bogus speed.
+- Adds a same-origin `/api/starship-live` proxy, click-to-inspect telemetry, a Movement panel row, and share-link token `03`.

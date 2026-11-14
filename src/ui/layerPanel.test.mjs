@@ -22,6 +22,7 @@ test('panel presentation places Transit and Rail between Street Traffic and Bike
     order.filter(({ label }) => label === 'Movement').map(({ id }) => id),
     [
       'satellites',
+      'starship-live',
       'flights',
       'military',
       'local-adsb',

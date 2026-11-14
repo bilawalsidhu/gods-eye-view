@@ -3525,5 +3525,17 @@
   "Reset view reloads the app without the view restored from the address bar.": "「ビューをリセット」は、アドレスバーから復元したビューを使わずにアプリを再読み込みします。",
   "Reload": "再読み込み",
   "Retry": "再試行",
-  "Reset view": "ビューをリセット"
+  "Reset view": "ビューをリセット",
+  "Starship telemetry unavailable": "Starshipテレメトリは利用できません",
+  "Loading...": "読み込み中...",
+  "No active Starship telemetry": "アクティブなStarshipテレメトリはありません",
+  "{name} · Altitude {altitude} · Speed {speed} · Heading {heading}°": "{name} · 高度 {altitude} · 速度 {speed} · 方位 {heading}°",
+  "{count} vehicles": "{count}機",
+  "Starship Live": "Starshipライブ",
+  "SpaceX public telemetry": "SpaceX公開テレメトリ",
+  "Altitude {altitude} · Speed {speed} · Heading {heading}°": "高度 {altitude} · 速度 {speed} · 方位 {heading}°",
+  "Starship Live vehicles": "Starshipライブ機体",
+  "Booster": "ブースター",
+  "Ship": "宇宙船",
+  "Live Starship telemetry from the public SpaceX webcast feed. Select a vehicle to follow it. A booster marker appears only if SpaceX publishes booster telemetry.": "SpaceXの公開配信によるStarshipのライブテレメトリです。機体を選ぶと追跡できます。ブースターのマーカーは、SpaceXがブースターのテレメトリを公開した場合にのみ表示されます。"
 }

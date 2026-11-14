@@ -47,6 +47,7 @@ const PANEL_GROUPS = [
     label: msg('Movement'),
     ids: [
       'satellites',
+      'starship-live',
       'flights',
       'military',
       'local-adsb',
