@@ -3960,5 +3960,7 @@
   "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
   "Reload": "إعادة التحميل",
   "Retry": "إعادة المحاولة",
-  "Reset view": "إعادة ضبط العرض"
+  "Reset view": "إعادة ضبط العرض",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · مواقع يرسمها المجتمع",
+  "Some camera sources are unavailable; showing available locations": "بعض مصادر الكاميرات غير متاحة؛ تُعرض المواقع المتاحة"
 }

@@ -3699,5 +3699,7 @@
   "Reset view reloads the app without the view restored from the address bar.": "Redefinir vista recarrega o app sem a vista restaurada da barra de endereços.",
   "Reload": "Recarregar",
   "Retry": "Tentar novamente",
-  "Reset view": "Redefinir vista"
+  "Reset view": "Redefinir vista",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · mapeado pela comunidade",
+  "Some camera sources are unavailable; showing available locations": "Algumas fontes de câmeras estão indisponíveis; mostrando os locais disponíveis"
 }

@@ -1476,9 +1476,19 @@ Every ALPR native marker is repositioned on map-source changes, including canvas
 
 ALPR floor preparation and clamped markers share a per-cell queue, with at most one 64-cell terrain batch active per layer. Disabling or destroying the layer cancels its terrain consumer and discards queued cells. Repeated moves inside an outstanding query retain the displayed markers until the new snapshot is ready.
 
+The existing ALPR layer merges DeFlock Maps' current primary US/Canada feed
+(`deflock.dontgetflocked.com`) with the existing hourly feed
+(`tiles.dontgetflocked.com`). Both are OSM-derived. Duplicate camera identities
+are merged, preferring a newer timestamped OSM edit; published way centroids
+remain distinct from node ids, and existing `alpr:<node-id>` ids stay stable.
+Either feed can carry the layer while its peer is unavailable: the row reports
+partial sources and retries after 30 seconds. DeFlock's build-pinned aliases are
+reread after an hour. The focused source/lifecycle tests cover merging, refresh,
+cancellation and recovery.
+
 The optional **ALPR Cameras** layer shows community-mapped OpenStreetMap locations,
 not camera footage or plate records. City-scale acquisition uses an hourly
-OpenStreetMap US/Canada extract, with available operator/brand/bearing
+pair of OpenStreetMap US/Canada extracts, with available operator/brand/bearing
 attributes. The extract carries full attributes from z9 (z0-8 are geometry-only
 heat tiles); each view reads the finest zoom from z12 down to z9 that fits 16
 tiles, so a 30 km whole-city view loads about 1,000 Austin cameras and a
@@ -1488,8 +1498,8 @@ bounds are the accepted coverage: later views inside it (and precise enough for
 it) reuse the records at once, without a request or debounce, and a still camera
 sees one marker update per move. Missing verification dates remain unknown; OSM edit dates do not
 stand in for verification. Outside coverage the row says "No ALPR data for this
-area". Reads cap tiles at 16 per country, concurrency at four per country,
-responses at 4 MiB, decoded cache at 64 entries/24 MiB per country with a one-hour
+area". Reads cap tiles at 16 per country per feed, concurrency at four per country per feed,
+responses at 4 MiB, decoded cache at 64 entries/24 MiB per country per feed with a one-hour
 TTL, and accepted records at 6,000; at most 1,500 cameras in view render,
 nearest the view centre first, and more than that reads "Coverage limited".
 Partial coverage remains explicit.
