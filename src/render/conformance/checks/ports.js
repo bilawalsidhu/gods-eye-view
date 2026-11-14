@@ -705,6 +705,22 @@ export function portChecks() {
         equal(drawnFrames, before + 1, 'renderNow drew synchronously');
       },
     ),
+    check(
+      'frame.renderNow.ifDue',
+      'renderNow({ifDue}) ticks the loop now and draws a frame that is due',
+      async (h, r) => {
+        let ticks = 0;
+        let drawnFrames = 0;
+        r.frame.on('preUpdate', () => (ticks += 1));
+        r.frame.on('postRender', () => (drawnFrames += 1));
+        await h.frame(r);
+        const [ticked, drawn] = [ticks, drawnFrames];
+        r.frame.requestRender('conformance');
+        r.frame.renderNow({ ifDue: true });
+        equal(ticks, ticked + 1, 'one tick, synchronously');
+        equal(drawnFrames, drawn + 1, 'the asked-for frame drawn');
+      },
+    ),
     check('frame.suspend', 'a suspended loop does not tick', async (h, r) => {
       let ticks = 0;
       r.frame.on('preUpdate', () => (ticks += 1));

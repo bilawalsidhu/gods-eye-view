@@ -124,7 +124,9 @@ optional, so a renderer written before it still conforms:
 - `RendererPlugin.applicationHooks(renderer)` hands the application what
   only some renderers have (`ApplicationHooks`); see
   [The application and its renderer](#the-application-and-its-renderer).
-- `frame.renderNow()` throws when the frame fails to draw.
+- `frame.renderNow()` throws when the frame fails to draw. With
+  `{ifDue: true}` it runs one tick of the loop now, as the loop's own would
+  (camera flight, input, clock), and draws only a frame that is due.
 
 The Cesium port lists `gpuTiming` where its context has
 `EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,
@@ -525,8 +527,9 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   probe is `src/render/occlusion/depthProbe.js`, which Cesium's
   `src/render/cesium/sceneOcclusionProbe.js` feeds; without it every such
   vehicle's bracket shows); and an inline panel whose host stops animation
-  frames keeps drawing through `resize` and `frame.renderNow()`
-  (`src/app/panelRendering.js`), stopping at a frame that throws.
+  frames keeps running through `resize` and `frame.renderNow({ifDue: true})`
+  (`src/app/panelRendering.js`), so flights, input and the clock go on as
+  in the renderer's own loop, stopping at a frame that throws.
 - **The map stacks** switch through the renderer's own map engine when its
   plugin hands one, else through its globe port (`src/maps/globeEngine.js`);
   see `docs/CURRENT-STATE.md` § Map source factories and coordination.

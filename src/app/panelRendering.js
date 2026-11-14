@@ -25,7 +25,9 @@ function describeError(error) {
  * Keep `renderer` drawing in an inline panel. Some hosts report a panel on
  * screen as hidden, which stops the browser's animation frames and with them
  * the renderer's own loop; while frames stop arriving, draw from a timer
- * (`resize`, then `frame.renderNow()`). A frame that fails stops the timer,
+ * (`resize`, then a frame of the loop, `frame.renderNow({ifDue: true})`: the
+ * camera moves, input and the clock run, and it draws when due). A frame
+ * that fails stops the timer,
  * its error reported in full. Returns a function that stops it.
  * @param {import('../render/contract/renderer').Renderer} renderer
  * @param {{windowRef?: Window, now?: () => number}} [options]
@@ -47,7 +49,7 @@ export function keepPanelRendering(
     if (failed || now() - lastFrame < MISSED_FRAMES_MS) return;
     try {
       renderer.resize();
-      renderer.frame.renderNow();
+      renderer.frame.renderNow({ ifDue: true });
     } catch (error) {
       // Report the error in full: workers report plain objects, which
       // would print as [object Object].

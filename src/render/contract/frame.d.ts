@@ -72,8 +72,13 @@ export interface FramePort {
   diagnostics(): FrameDiagnostics;
   /** Stop ticking while the page is hidden; resume on `false`. */
   suspend(hidden: boolean): void;
-  /** Draw a frame now, synchronously; throws when the frame fails to draw. */
-  renderNow(): void;
+  /**
+   * Draw a frame now, synchronously; throws when the frame fails to draw.
+   * `ifDue`: run one tick of the loop now as its own would (camera flight,
+   * input, clock), drawing only if a frame is due, for a host that stops
+   * the animation frames the loop runs on.
+   */
+  renderNow(options?: { ifDue?: boolean }): void;
   /** Resolves after the next frame has been drawn and presented. */
   renderOnce(options?: { timeoutMs?: number }): Promise<void>;
   /** Cap the loop's rate; 0 is the display's rate. */

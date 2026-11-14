@@ -346,8 +346,8 @@ export function createStubRenderer(options = {}) {
     suspend(hidden) {
       suspended = Boolean(hidden);
     },
-    renderNow() {
-      requestRender('renderNow');
+    renderNow({ ifDue = false } = {}) {
+      if (!ifDue) requestRender('renderNow');
       tick();
     },
     renderOnce({ timeoutMs } = {}) {

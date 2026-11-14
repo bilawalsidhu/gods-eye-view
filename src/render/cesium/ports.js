@@ -348,7 +348,7 @@ export function createCesiumPorts(
       if (!suspended) scene.requestRender();
     },
     // Draws even when nothing asked for a frame; throws when it fails.
-    renderNow: () => renderNow(scene, widget.clock.currentTime),
+    renderNow: (options) => renderNow(widget, options),
     renderOnce: (options) => nextPostRender(options),
     setTargetFps(fps) {
       targetFps = fps > 0 ? fps : 0;

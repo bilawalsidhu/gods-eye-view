@@ -19,7 +19,10 @@ test('a panel keeps drawing from a timer while animation frames stop', () => {
   const drawn = [];
   const renderer = {
     resize: () => drawn.push('resize'),
-    frame: { renderNow: () => drawn.push('render') },
+    frame: {
+      renderNow: (options) =>
+        drawn.push(options?.ifDue ? 'loop frame' : 'forced frame'),
+    },
   };
   const stop = keepPanelRendering(renderer, {
     windowRef: handles.windowRef,
@@ -33,7 +36,9 @@ test('a panel keeps drawing from a timer while animation frames stop', () => {
   // Frames stop, as in a panel its host reports hidden: the timer draws.
   clock = 400;
   handles.tick();
-  assert.deepEqual(drawn, ['resize', 'render']);
+  // A frame of the loop, as the loop's own: the camera moves, input and
+  // the clock run, and it draws when due.
+  assert.deepEqual(drawn, ['resize', 'loop frame']);
   stop();
   assert.equal(handles.tick, null);
   assert.equal(handles.frame, null);

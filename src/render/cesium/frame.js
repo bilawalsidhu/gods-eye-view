@@ -103,19 +103,23 @@ export function willDraw(scene, time) {
 }
 
 /**
- * The contract's `renderNow` on `scene`: draw a frame at `time` even when
- * nothing asked for one, and throw the error Cesium caught and raised on
- * `renderError` when the frame failed.
- * @param {object} scene
- * @param {object} [time] A Cesium JulianDate.
+ * The contract's `renderNow` on `owner`'s scene: draw a frame at the
+ * clock's time even when nothing asked for one, or with `ifDue` run one
+ * frame of the widget's own loop (`render()`: the camera's flight and
+ * input, the clock's tick, then a draw if one is due); throw the error
+ * Cesium caught and raised on `renderError` when the frame failed.
+ * @param {object} owner A Cesium `Viewer` or `CesiumWidget`.
+ * @param {{ifDue?: boolean}} [options]
  */
-export function renderNow(scene, time) {
+export function renderNow(owner, { ifDue = false } = {}) {
+  const scene = owner.scene;
   let failure = null;
   const off = scene.renderError?.addEventListener((_scene, error) => {
     failure ??= { error };
   });
   try {
-    scene.forceRender(time);
+    if (ifDue) owner.render();
+    else scene.forceRender(owner.clock?.currentTime);
   } finally {
     off?.();
   }
@@ -259,7 +263,7 @@ export function createSceneFrame(viewer) {
       viewer.useDefaultRenderLoop = suspended ? false : ownLoop;
       if (!suspended && !gone()) scene.requestRender();
     },
-    renderNow: () => renderNow(scene, viewer.clock?.currentTime),
+    renderNow: (options) => renderNow(viewer, options),
     renderOnce({ timeoutMs } = {}) {
       if (gone()) return Promise.resolve();
       return new Promise((resolve, reject) => {

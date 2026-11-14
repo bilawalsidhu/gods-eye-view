@@ -202,8 +202,37 @@ test('renderNow throws the error Cesium raises on renderError', () => {
       if (fail) for (const cb of listeners) cb(scene, failure);
     },
   };
-  renderNow(scene);
+  const owner = { scene, clock: { currentTime: 'now' } };
+  renderNow(owner);
   fail = true;
-  assert.throws(() => renderNow(scene), failure);
+  assert.throws(() => renderNow(owner), failure);
   assert.equal(listeners.size, 0, 'it stops listening either way');
+});
+
+test('renderNow ifDue runs a frame of the widget’s own loop, as its render() does', () => {
+  const listeners = new Set();
+  const failure = new Error('worker failed');
+  const calls = [];
+  let fail = false;
+  const scene = {
+    renderError: {
+      addEventListener: (cb) => (listeners.add(cb), () => listeners.delete(cb)),
+    },
+    forceRender: () => calls.push('forceRender'),
+  };
+  // The widget's render(): the camera's flight and input, the clock's
+  // tick, then a draw if one is due.
+  const owner = {
+    scene,
+    clock: { currentTime: 'now' },
+    render() {
+      calls.push('render');
+      if (fail) for (const cb of listeners) cb(scene, failure);
+    },
+  };
+  renderNow(owner, { ifDue: true });
+  assert.deepEqual(calls, ['render']);
+  fail = true;
+  assert.throws(() => renderNow(owner, { ifDue: true }), failure);
+  assert.equal(listeners.size, 0);
 });
