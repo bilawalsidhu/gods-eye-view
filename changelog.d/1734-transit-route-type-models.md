@@ -7,4 +7,4 @@
   Cluj and Turin's trams, trolleybuses and metro lines, now read as such from
   the route ids in each operator's routes.txt. Le Havre's funicular, which its
   routes.txt types as a bus, is a named correction that outranks the route
-  type (samehkhamis, #0000).
+  type (samehkhamis, #1734).
