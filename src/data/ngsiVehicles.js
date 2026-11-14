@@ -78,7 +78,18 @@ function isoToEpochSeconds(value) {
   const day = Number(match[3]);
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const daysInMonth = [
-    31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+    31,
+    leap ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
   ];
   if (month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1])
     return null;
