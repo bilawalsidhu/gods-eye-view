@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createPackPresentations } from './presentation.js';
 import { packItemId } from './geometry.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { bindFakeGroundRenderer } from '../../testSupport/fakeGroundRenderer.mjs';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 
 test('abort releases an in-flight image URL before the decoder settles or the viewer is destroyed', async () => {
   let settle;
@@ -301,4 +303,81 @@ test('an image pack draws its decoded pixels as a rectangle at its height', asyn
     if (priorDocument === undefined) delete globalThis.document;
     else globalThis.document = priorDocument;
   }
+});
+
+test('a double-click follows a pack point, as the point entity it was, and never a line or area', async (t) => {
+  const viewer = { container: {} };
+  const fake = bindFakeGroundRenderer(viewer);
+  t.after(fake.unbind);
+  let dblclick = null;
+  fake.renderer.input = {
+    onPointer(type, handler) {
+      assert.equal(type, 'dblclick');
+      dblclick = handler;
+      return () => {
+        dblclick = null;
+      };
+    },
+    stockEnabled: (name) => name === 'dblclickFollow',
+  };
+  const ring = [
+    [2, 1],
+    [2.1, 1],
+    [2.1, 1.1],
+    [2, 1],
+  ];
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 'point',
+          geometry: { type: 'Point', coordinates: [2, 1, 10] },
+        },
+        {
+          type: 'Feature',
+          id: 'area',
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+      ],
+    }),
+  );
+  const handle = await createPackPresentations(viewer, new Map(), {
+    store: { publish() {} },
+  }).geojson({
+    pack: { id: 'data', attribution: { text: 'Example', license: 'CC0' } },
+    asset: { bytes, mimeType: 'application/geo+json' },
+    signal: new AbortController().signal,
+  });
+  const points = fake.liveSets().find((record) => record.kind === 'points');
+  const shapes = fake.liveSets().find((record) => record.kind === 'shapes');
+  const at = { position: { x: 1, y: 2 } };
+
+  fake.setPick(() => ({ set: shapes.spec.id, id: packItemId('data', 'area') }));
+  dblclick(at);
+  assert.equal(
+    fake.follows.length + fake.flights.length,
+    0,
+    'an area: nothing',
+  );
+
+  fake.setPick(() => ({
+    set: points.spec.id,
+    id: packItemId('data', 'point'),
+  }));
+  dblclick(at);
+  assert.equal(fake.follows.length, 1);
+  const followed = fake.follows[0];
+  const expected = fromDegrees(2, 1, 10);
+  const got = followed.position();
+  assert.ok(
+    Math.hypot(got.x - expected.x, got.y - expected.y, got.z - expected.z) <
+      1e-6,
+  );
+
+  // Removing the pack ends the follow and lets the double-click go.
+  handle.dispose();
+  assert.equal(fake.renderer.camera.followed, null);
+  assert.equal(dblclick, null);
 });

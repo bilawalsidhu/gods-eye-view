@@ -1,6 +1,10 @@
 import { packItemId, renderPackGeometry } from './geometry.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { drawOf, findFrame } from '../../render/rendererOf.js';
+import { drawOf, findFrame, findInput } from '../../render/rendererOf.js';
+import {
+  drawnItemTarget,
+  followOnDoubleClick,
+} from '../../data/stockFollow.js';
 import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
 
@@ -66,6 +70,34 @@ export function createPackPresentations(
     cards = cards.filter((card) => card.key !== key);
     present();
   }
+  // Each drawn point set's items by id: a double-click follows a pack's
+  // point, as the default renderer followed the point entity it was (its
+  // lines, polygons and images were primitives, which it never followed).
+  const pointSets = new Map();
+  let stockFollow = null;
+  function followPoints(setId, items) {
+    pointSets.set(setId, new Map(items.map((item) => [item.id, item])));
+    if (stockFollow) return;
+    // A scene that takes no input has no double-click.
+    const input = findInput(viewer);
+    if (!input) return;
+    stockFollow = followOnDoubleClick({
+      viewer,
+      inputFor: () => input,
+      name: 'data-packs',
+      enabled: () => true,
+      targetFor: (hit) =>
+        drawnItemTarget(hit.set, pointSets.get(hit.set)?.get(hit.id)),
+    });
+  }
+  function unfollowPoints(setId) {
+    if (!pointSets.delete(setId)) return;
+    // Removing a followed entity ended the follow.
+    stockFollow?.retain((key) => !key.startsWith(`${setId}:`));
+    if (pointSets.size) return;
+    stockFollow?.destroy();
+    stockFollow = null;
+  }
   function resource(pack) {
     const sets = [],
       urls = [],
@@ -89,6 +121,7 @@ export function createPackPresentations(
         const set = drawOf(viewer)[kind]({ id: `data-pack:${++drawSets}` });
         sets.push(set);
         set.set(items);
+        if (kind === 'points') followPoints(set.id, items);
         requestRender();
         return set.id;
       },
@@ -126,7 +159,10 @@ export function createPackPresentations(
         for (const key of featureKeys.splice(0)) targets.delete(key);
         // The view stops a removed card's player as it goes.
         if (card) removeCard(card);
-        for (const set of sets.splice(0)) set.dispose();
+        for (const set of sets.splice(0)) {
+          unfollowPoints(set.id);
+          set.dispose();
+        }
         if (labelSource) {
           labels.length = 0;
           overlayHost.clearSource(labelSource);
