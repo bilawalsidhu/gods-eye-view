@@ -196,7 +196,11 @@ const WORKLOADS = [
     candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
       + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
       + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3,
-    maxBytesPerFrame: 132_000,
+    // 134,000 (was 132,000): the cooldown-expiry wake re-solves static domains
+    // so dismissed ambient cards return; this row then paints ~356 instead of
+    // ~347 and measured 132,452 B/frame (main measured 131,574). The extra
+    // bytes are the restored cards, not drift. Per-candidate cap unchanged.
+    maxBytesPerFrame: 134_000,
     maxBytesPerCandidatePerFrame: 225,
     saturated: true,
     ambientCardCapacity: AMBIENT_CARD_COLLISION_CAPACITY,
