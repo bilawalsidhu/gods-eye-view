@@ -9,6 +9,7 @@
  */
 import { followOffsetFitting } from '../geo/frames.js';
 import { findCamera, findQuery } from '../render/rendererOf.js';
+import { entityFollowTarget } from './followed.js';
 
 /**
  * Where the camera frames a part it starts following: `followOffsetFitting`
@@ -37,11 +38,13 @@ export function followViewFrom(sphere, at, camera) {
  * @param {() => boolean} options.enabled Whether the layer takes clicks now.
  * @param {(hit: import('../render/contract/query').Hit) =>
  *   ({key: string, position: () => ({x: number, y: number, z: number}|null),
- *     sphere?: {center: object, radius: number}}
+ *     sphere?: {center: object, radius: number}, entity?: object}
  *   | {zoomTo: {center: object, radius: number}}
  *   | null)} options.targetFor What a hit on one of the layer's items is
  *   followed by (`key`, its live `position`, the bounds it is framed by,
- *   radius 0 by default), or zoomed to (`zoomTo`); null for anything else.
+ *   radius 0 by default, and the holder whose entity record shows it, as
+ *   `entityFollowTarget` reads one), or zoomed to (`zoomTo`); null for
+ *   anything else.
  * @returns {{readonly following: object|null, stop(): void, destroy(): void}}
  */
 export function followOnDoubleClick({
@@ -77,7 +80,7 @@ export function followOnDoubleClick({
         }
         const at = found.position();
         if (!at) return;
-        const target = {
+        const fields = {
           key: found.key,
           position: found.position,
           frame: 'enu',
@@ -87,6 +90,9 @@ export function followOnDoubleClick({
             camera,
           ),
         };
+        const target = found.entity
+          ? entityFollowTarget(found.entity, fields)
+          : fields;
         camera.follow(target);
         follow = target;
       } catch (error) {

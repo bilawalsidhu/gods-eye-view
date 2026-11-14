@@ -1300,3 +1300,39 @@ test('a type change takes its belly offset with the new model, however soon it i
   );
   models.destroy();
 });
+
+test('a double-click follows a local aircraft with its card, until it goes, as its entity was', async (t) => {
+  const { bindRenderer } = await import('../../render/rendererOf.js');
+  const { createStubRenderer } = await import('../../render/stub/index.js');
+  const { followedOf } = await import('../../data/followed.js');
+  const renderer = createStubRenderer();
+  const viewer = { isDestroyed: () => false };
+  const unbind = bindRenderer(viewer, renderer);
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer } = await enabledLayer(receiver, clock, null, {
+    viewer: { viewer, draw: renderer.draw },
+  });
+  t.after(() => {
+    layer.destroy();
+    unbind();
+    renderer.destroy();
+  });
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const set = renderer.testing.sets().find((id) => id.endsWith(':markers'));
+  renderer.testing.scriptPicks(() => [
+    { set, id: 'local-adsb:abc123', surface: false },
+  ]);
+  renderer.testing.pointer('dblclick', 10, 10);
+  const followed = followedOf(viewer);
+  assert.ok(followed, 'the aircraft is followed');
+  assert.equal(followed.key, 'local-adsb:abc123');
+  assert.ok(followed.entity, 'its entity record shows the tracked card');
+  assert.equal(typeof followed.displayPosition, 'function');
+  assert.ok(followed.labelModel?.title, 'with its card');
+  receiver.set({ aircraft: [] });
+  clock.now += 10 * 60_000;
+  await layer.update();
+  assert.equal(followedOf(viewer), null, 'gone, it is no longer followed');
+});
