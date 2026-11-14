@@ -1,0 +1,1 @@
+- Add MCP read-only air-quality and GNSS navigation-integrity query tools over the existing layer sources, with coverage/freshness warnings and classifier provenance. Voice exposure remains gated pending prompt-budget work. (dvilrgamerz, #1550)
