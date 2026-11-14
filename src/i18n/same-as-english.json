@@ -248,6 +248,8 @@
     "COMMUNITY",
     "Regional",
     "OPT-IN",
+    "{minutes} min",
+    "1 min/s",
     "ISS LIVE · NASA"
   ],
   "es": [
@@ -627,11 +629,13 @@
     "▲ {frp} MW",
     "SATELLITE",
     "Photo © {photographer}",
+    "Photo · {licence}",
     "PACK",
     "{count} packs",
     "Orthophoto",
     "Oblique",
-    "Type"
+    "Type",
+    "{range} NM"
   ],
   "it": [
     "1 min/s",

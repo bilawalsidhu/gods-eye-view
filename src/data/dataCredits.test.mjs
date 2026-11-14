@@ -51,6 +51,13 @@ test('Planespotters is credited with a plain followable link', () => {
   assert.doesNotMatch(credit.html, /nofollow/);
 });
 
+test('Open Vessel Photos is credited with a plain followable link', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'openvesselphotos');
+  assert.ok(credit, 'the selected vessel photos come from Open Vessel Photos');
+  assert.match(credit.html, /href="https:\/\/openvesselphotos\.org"/);
+  assert.doesNotMatch(credit.html, /nofollow/);
+});
+
 test('the UCS Satellite Database is acknowledged with its version and webpage', () => {
   // UCS database manual, section 3: references name the version (the Excel
   // file's name) and link www.ucsusa.org/satellite_database.

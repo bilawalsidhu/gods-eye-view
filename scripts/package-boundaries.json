@@ -175,6 +175,28 @@
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
+  "i18n": {
+    "exports": ["./i18n"],
+    "modules": [
+      "src/i18n/page.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/ar.json",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/he.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/sv.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json"
+    ],
+    "external": []
+  },
   "time": {
     "exports": ["./time"],
     "modules": ["src/time/worldClock.js"],
@@ -1474,13 +1496,17 @@
       "src/sources/live/index.js",
       "src/sources/live/standalone.js",
       "src/sources/live/vessels.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": []
   },
   "civil-flights": {
     "exports": ["./layers/flights"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
       "src/i18n/marker.js",
       "src/cyberSonar.js",
@@ -1555,6 +1581,11 @@
   "military-flights": {
     "exports": ["./layers/military"],
     "modules": [
+      "src/layers/flights/modelSpec.js",
+      "src/layers/flights/policy.js",
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
       "src/i18n/marker.js",
       "src/cyberSonar.js",
@@ -1654,6 +1685,13 @@
   "vessel-layer": {
     "exports": ["./layers/vessels"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/aircraftClass.js",
+      "src/i18n/marker.js",
+      "src/data/fleetModelInstances.js",
+      "src/data/aircraftModelLighting.js",
+      "src/data/modelEligibility.js",
+      "src/data/fleetTrailAnchors.js",
       "src/data/headingDegrees.js",
       "src/layers/vessels/cards.js",
       "src/layers/vessels/evidence.js",
@@ -1696,7 +1734,9 @@
       "src/i18n/locales/sv.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/vessels/photos.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": ["cesium"]
   },
@@ -2524,6 +2564,10 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
+      "src/app/layers/fleetModels.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3765,7 +3809,9 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
-      "src/ui/stores/dataLibrary.js"
+      "src/ui/stores/dataLibrary.js",
+      "src/data/openVesselPhoto.js",
+      "src/layers/vessels/photos.js"
     ],
     "external": [
       "hls.js",
@@ -3792,6 +3838,10 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
+      "src/app/layers/fleetModels.js",
       "src/data/feedState.js",
       "src/loadingFeedback.js",
       "src/sources/adsbFields.js",
@@ -4479,7 +4529,9 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/layers/vessels/photos.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": [
       "hls.js",
@@ -5148,6 +5200,13 @@
   "transit-standalone": {
     "exports": ["./layers/transit/standalone"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/aircraftClass.js",
+      "src/i18n/marker.js",
+      "src/data/fleetModelInstances.js",
+      "src/data/modelEligibility.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/aircraftModelLighting.js",
       "src/data/headingDegrees.js",
       "src/cyberSonar.js",
       "src/celestialRing.js",
@@ -5231,6 +5290,13 @@
   "transit-layer": {
     "exports": ["./layers/transit"],
     "modules": [
+      "src/i18n/marker.js",
+      "src/data/fleetModels.js",
+      "src/data/fleetModelInstances.js",
+      "src/data/aircraftClass.js",
+      "src/data/aircraftModelLighting.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/modelEligibility.js",
       "src/data/headingDegrees.js",
       "src/data/iconOrientation.js",
       "src/data/inputOwnership.js",
@@ -5731,7 +5797,8 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/openVesselPhoto.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

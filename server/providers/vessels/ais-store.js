@@ -57,8 +57,13 @@ export function ingestAisStreamEnvelope(envelope) {
               message.ReportB?.Valid === false
                 ? undefined
                 : message.ReportB?.ShipType,
+            Dimension:
+              message.ReportB?.Valid === false
+                ? undefined
+                : message.ReportB?.Dimension,
           }
         : message;
+    const dimensions = aisDimensions(fields.Dimension);
     // Static reports may be partial (including Class B's separate A/B parts).
     // Keep known values in the cache as well as in the current live row.
     const staticData = {
@@ -84,6 +89,8 @@ export function ingestAisStreamEnvelope(envelope) {
         staticCode(live?.imo) ||
         staticCode(previous.imo) ||
         '',
+      length: dimensions.length ?? live?.length ?? previous.length ?? null,
+      beam: dimensions.beam ?? live?.beam ?? previous.beam ?? null,
     };
     _aisStreamStatic.set(mmsi, staticData);
     mergeAisStaticIntoLiveVessel(mmsi, staticData);
@@ -113,6 +120,8 @@ export function ingestAisStreamEnvelope(envelope) {
     imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
     type: vesselTypeFromAis(message, staticData),
     destination: stringValue(message.Destination ?? staticData.destination),
+    length: staticData.length ?? null,
+    beam: staticData.beam ?? null,
     speed: normalizedSpeedOverGround(message.Sog ?? message.SOG),
     course: normalizedCourseOverGround(message.Cog ?? message.COG),
     heading: normalizedHeading(message.TrueHeading ?? message.Heading),
@@ -236,6 +245,25 @@ function mergeAisStaticIntoLiveVessel(mmsi, staticData) {
   if (staticData.type) existing.type = staticData.type;
   if (staticData.destination) existing.destination = staticData.destination;
   if (staticData.imo) existing.imo = staticData.imo;
+  if (staticData.length) existing.length = staticData.length;
+  if (staticData.beam) existing.beam = staticData.beam;
+}
+
+/**
+ * A static report's hull size from its AIS dimensions: the antenna's
+ * distances to bow (A), stern (B), port (C) and starboard (D), in metres.
+ * Zero is AIS's "not available", so a side missing its two parts has none.
+ * @param {{A?: number, B?: number, C?: number, D?: number}|undefined} dimension
+ * @returns {{length: number|null, beam: number|null}}
+ */
+function aisDimensions(dimension) {
+  const part = (value) => {
+    const number = numberValue(value);
+    return number !== null && number > 0 ? number : 0;
+  };
+  const length = part(dimension?.A) + part(dimension?.B);
+  const beam = part(dimension?.C) + part(dimension?.D);
+  return { length: length > 0 ? length : null, beam: beam > 0 ? beam : null };
 }
 
 function vesselNameFromAis(metadata, message, staticData = {}) {

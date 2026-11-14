@@ -181,6 +181,8 @@ export class MilitaryFlightRecords {
       newestFixMs: this._noteFix(icao24, prevMeta, fixEpochMs),
       callsign: stickyText(callsign, prevMeta?.callsign),
       type: stickyType,
+      // The emitter category, kept for the fleet model a type-less row draws.
+      category: aircraft?.category ?? prevMeta?.category ?? null,
       // Type outranks category automatically inside classifyAircraft.
       klass: classifyAircraft({
         typeCode: stickyType,

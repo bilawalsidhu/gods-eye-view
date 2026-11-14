@@ -1,21 +1,65 @@
-# Bundled 3D Model Attribution
+# Bundled 3D Models
 
-The model files in this directory are third-party visual assets. They are not
-covered by the repository's MIT source-code license; each remains available
-under the license listed below.
+Every 3D model shipped in this directory but one is one of the project's procedural
+fleet models under [`fleet/`](fleet/): aircraft, helicopters, ships, buoys,
+transit and rail vehicles, and a few other airborne and ground objects. They
+are generated from code by the project maintainers, contain no third-party
+artwork, and are covered by the repository's [MIT license](../../LICENSE)
+like the source code. The exception is NASA's model of the ISS, described in
+[its own section](#the-iss-model-issglb) below.
 
-| File | Original work and creator | Source | License | Project modifications |
-|---|---|---|---|---|
-| `airplane.glb` | “boeing 747” by [zairiq-123](https://sketchfab.com/zairiq-123) | [Sketchfab model](https://sketchfab.com/3d-models/boeing-747-9b16672038ba48f98e6d80a159044ed9) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Substantially modified and optimized for God's Eye View, including geometry/material simplification and coordinate/orientation preparation. The former 24× runtime calibration is baked into the mesh; location, rotation, and scale are applied; the bounding-box centre is at the origin; and the model uses glTF +Y-up with its nose toward local −X. Geometry remains uncompressed so the aircraft asset does not compete with photogrammetry for Draco worker capacity. |
-| `jet.glb` | “Private Jet” by [Nick the Name](https://sketchfab.com/Nick_The_Name) | [Sketchfab model](https://sketchfab.com/3d-models/private-jet-cbdd1de6ced9461e950eafaa302cc82b) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Repackaged as a glTF binary for the project's military-flight visualization. Imported hierarchy transforms are baked into the meshes; location, rotation, and scale are applied; the bounding-box centre is at the origin; and the model uses meter scale, glTF +Y-up, and the shared nose −X convention. Existing materials are preserved. |
-| `bell206.glb` | “Bell 206 JetRanger” by [terran4627](https://sketchfab.com/terran4627) | [Sketchfab model](https://sketchfab.com/3d-models/bell-206-jetranger-d2f7ba1d671549d4b26aaf834139a1dd) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Optimized for God's Eye View: geometry/material simplification, textures resized to 256 px WebP, orientation/scale vertex-baked to real-world meters (Y-up, nose −X), origin centered. |
-| `c172.glb` | “Cessna 172” by [e737](https://sketchfab.com/e0057537) | [Sketchfab model](https://sketchfab.com/3d-models/cessna-172-64cddaee5aff470682659a8c08525046) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Optimized for God's Eye View: geometry/material simplification, textures resized to 256 px WebP, orientation/scale vertex-baked to real-world meters (Y-up, nose −X), origin centered. |
-| `citation2.glb` | “1990 Cessna Citation, Texture Detailed, Exterior” by [BlenderCommunityHead](https://sketchfab.com/aboodgoudagad) | [Sketchfab model](https://sketchfab.com/3d-models/1990-cessna-citation-texture-detailed-exterior-a78839624fe64900a8352cb23462350a) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Optimized for God's Eye View: geometry/material simplification, textures resized to 256 px WebP, orientation/scale vertex-baked to real-world meters (Y-up, nose −X), origin centered. |
-| `mq9.glb` | “MQ-9” by [IProZenoN](https://sketchfab.com/IProZenoN) | [Sketchfab model](https://sketchfab.com/3d-models/mq-9-fabe963feb354c5584b51f9c470c3f7e) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Optimized for God's Eye View: geometry/material simplification, textures resized to 256 px WebP, orientation/scale vertex-baked to real-world meters (Y-up, nose −X), origin centered. |
-| `b789.glb` | “Boeing 787-9” by [Nobilis 2](https://sketchfab.com/nobilishornet2) | [Sketchfab model](https://sketchfab.com/3d-models/boeing-787-9-b6711e2e698e4e469675c1154a50b7a3) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Optimized for God's Eye View: geometry/material simplification, textures resized to 256 px WebP, orientation/scale vertex-baked to real-world meters (Y-up, nose −X), origin centered. |
-| `atr72.glb` | “ATR 72 - 600” by [Oyan3D](https://sketchfab.com/oyan3D) | [Sketchfab model](https://sketchfab.com/3d-models/atr-72-600-1e1a7186f7444d288675262fcee44744) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Optimized for God's Eye View: geometry/material simplification, textures removed with dominant material colors baked into PBR factors (flat “abstracted” style), orientation/scale vertex-baked to real-world meters (Y-up, nose −X), origin centered. |
-| `iss.glb` | “International Space Station (ISS) (D) (IGOAL)”, NASA Johnson Space Center, Integrated Graphics, Operations and Analysis Laboratory | [NASA 3D Resources](https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/) | NASA media: not subject to copyright in the United States ([NASA Images and Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media)) | Reduced for God's Eye View from the 96 MB original (2.7 M triangles) to 3 MB (314 k triangles): handrails left out; geometry simplified within 15 cm (structure) or 40 cm (small details) of the original surface, normals rebuilt; normal maps dropped; textures resized to 512 px WebP; Draco-compressed. Every part is baked into one frame in meters (glTF +Y zenith, +X port, +Z forward) and the scene root moves the bounding-box centre to the origin. NASA's file is a mirror image of the station (port and starboard swapped), which is undone; 15 materials NASA marks as blended are made opaque, because blended they draw see-through. Parts that move stay separate nodes at the joints NASA names (two alpha joints, eight array beta joints, two radiator joints, Canadarm2's seven joints, two joints on each Dextre arm, three on the Japanese arm); the two Ku-band dishes and three of the four power-module radiators, welded into the truss in NASA's file, are cut out by position. Its use does not imply endorsement by NASA. |
+| Path                                                                                                      | What it holds                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fleet/catalog.json`                                                                                      | Every model by name: its file, category, built length, beam and bounds (metres, in Cesium's Z-up model frame: x along the length with the nose toward −X, y across the beam, z up), the clearance below its origin, and its 2D icon class. |
+| `fleet/types.json`                                                                                        | Which model draws which vehicle, and at what length: ICAO aircraft and helicopter type codes, ADS-B emitter categories, AIS ship-type and length ranges, GTFS route types, transit modes and rail categories, with the defaults.           |
+| `fleet/aircraft/`, `fleet/helicopters/`, `fleet/ships/`, `fleet/buoys/`, `fleet/transit/`, `fleet/other/` | The models, one GLB each (EXT_meshopt_compression and KHR_mesh_quantization, vertex colours, no textures).                                                                                                                                 |
 
-CC BY 4.0 permits sharing and adaptation, including commercial use, provided
-appropriate credit is retained, the license is linked, and modifications are
-identified. These credits do not imply endorsement by the original creators.
+How the layers use them:
+
+- Each layer draws a vehicle with the model its type selects, scaled to the
+  type's published length (a vessel to its reported AIS length and beam), so
+  every model is drawn life size. Ground objects, balloons and obstacles in
+  the `other` category are drawn at the size they are built.
+- An aircraft model's origin is its axis; it stands that model's scaled
+  clearance above the ground. A ship's origin is its waterline, and a transit
+  or rail vehicle's the road or rail top (a monorail or gondola is raised by
+  its `transit.elevation` entry, for a source that names those modes).
+- Transit and rail models carry a `_TINT` vertex attribute that marks where
+  the route or category colour is painted.
+- The whole set loads once, up front, when a layer that draws it starts; no
+  model is fetched while a session runs.
+
+`src/data/fleetModels.js` reads the set and chooses each vehicle's model;
+`src/data/fleetModels.test.mjs` checks that every model `types.json` names is
+in the catalog and on disk, and that no GLB exceeds 3 MB.
+
+## The ISS model (`iss.glb`)
+
+One model sits outside the fleet set: `iss.glb`, the International Space
+Station drawn by the satellites layer up close. It is not procedural and not
+covered by the MIT license. It is NASA's own model of the station, which is
+not subject to copyright in the United States
+([NASA Images and Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media));
+its use does not imply endorsement by NASA. It loads only when the camera
+nears the station.
+
+- **Original work:** “International Space Station (ISS) (D) (IGOAL)”, NASA
+  Johnson Space Center, Integrated Graphics, Operations and Analysis
+  Laboratory, on
+  [NASA 3D Resources](https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/).
+- **Reduction:** from the 96 MB original (2.7 M triangles) to 3 MB (314 k
+  triangles): handrails left out; geometry simplified within 15 cm
+  (structure) or 40 cm (small details) of the original surface, normals
+  rebuilt; normal maps dropped; textures resized to 512 px WebP;
+  Draco-compressed.
+- **Frame:** every part is baked into one frame in meters (glTF +Y zenith,
+  +X port, +Z forward), and the scene root moves the bounding-box centre to
+  the origin.
+- **Corrections:** NASA's file is a mirror image of the station (port and
+  starboard swapped), which is undone; 15 materials NASA marks as blended
+  are made opaque, because blended they draw see-through.
+- **Moving parts:** parts that move stay separate nodes at the joints NASA
+  names (two alpha joints, eight array beta joints, two radiator joints,
+  Canadarm2's seven joints, two joints on each Dextre arm, three on the
+  Japanese arm). The two Ku-band dishes and three of the four power-module
+  radiators, welded into the truss in NASA's file, are cut out by position.
