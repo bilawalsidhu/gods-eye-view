@@ -156,9 +156,12 @@ test('a page that must not reload offers neither reload nor reset', (t) => {
   f.frame(new Error('boom'));
   assert.equal(typeof f.store.renderFailure.retry, 'function');
   assert.equal(f.store.renderFailure.reset, null);
+  // Only a reload draws again, which this page must not offer: the notice
+  // goes, and the page's own lost-context notice speaks instead.
   f.loseContext();
-  assert.equal(f.store.renderFailure.retry, null);
-  assert.equal(f.store.renderFailure.reset, null);
+  assert.equal(f.store.renderFailure, null);
+  f.frame(new Error('Expected width to be greater than 0'));
+  assert.equal(f.store.renderFailure, null);
 });
 
 test('uninstall removes the listeners and the notice', (t) => {

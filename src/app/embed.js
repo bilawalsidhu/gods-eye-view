@@ -94,17 +94,6 @@ export function panelAwareVisibility(doc = globalThis.document) {
 const PANEL_FRAME_MS = 33;
 const MISSED_FRAMES_MS = 250;
 
-/** A render error's details, including the plain objects workers report. */
-function describeError(error) {
-  if (error instanceof Error)
-    return `${error.name}: ${error.message}\n${error.stack}`;
-  try {
-    return JSON.stringify(error, Object.getOwnPropertyNames(error ?? {}));
-  } catch {
-    return String(error);
-  }
-}
-
 /**
  * Keep the globe drawing in an inline panel. Some hosts report a panel on
  * screen as hidden, which stops the browser's animation frames and with them
@@ -123,15 +112,8 @@ export function keepPanelRendering(
   };
   frameRequest = windowRef.requestAnimationFrame(onFrame);
   // Cesium stops its render loop after a render error, and the timer stops
-  // with it; Retry restarts both. Report the error in full: workers report
-  // plain objects, which Cesium prints as [object Object].
-  const removeErrorListener = viewer.scene?.renderError?.addEventListener(
-    (_scene, error) =>
-      console.error(
-        "[God's Eye View panel] render error:",
-        describeError(error),
-      ),
-  );
+  // with it; Retry restarts both. The render failure notice logs the error
+  // (src/ui/renderFailure.js).
   const timer = windowRef.setInterval(() => {
     if (
       viewer.useDefaultRenderLoop === false ||
@@ -150,7 +132,6 @@ export function keepPanelRendering(
   return () => {
     windowRef.clearInterval(timer);
     windowRef.cancelAnimationFrame(frameRequest);
-    removeErrorListener?.();
   };
 }
 

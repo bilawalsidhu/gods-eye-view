@@ -2482,10 +2482,12 @@ Pitfalls:
   its buttons are 44 px tall on touch screens.
 
 An inline conversation panel never reloads or navigates its host's page: it
-offers Retry after a render error only, and nothing after a lost context, where
-the panel runtime's own notice applies. Its timer (`keepPanelRendering()`)
-draws only while the render loop is on. An error a timer frame throws is caught
-there: it has already been raised as a render error.
+offers Retry after a render error only, and no notice after a lost context,
+where the panel runtime's own notice applies (`src/app/globePanelRuntime.js`).
+Its timer (`keepPanelRendering()`) draws only while the render loop is on and
+logs nothing itself, so each render error is logged once, by the notice. An
+error a timer frame throws is caught there: it has already been raised as a
+render error.
 
 ## Map Source control ownership
 

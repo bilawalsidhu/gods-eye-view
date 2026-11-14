@@ -7,7 +7,8 @@ import { appRootUrl } from '../share/shareLinkPath.js';
  * Show a recoverable notice when the globe stops drawing, instead of a black
  * globe behind working controls. Retry restarts the render loop, or reloads
  * after a lost WebGL context; Reset opens the app's root address. With
- * `allowReload: false`, Reset is dropped, and so is Retry after a context loss.
+ * `allowReload: false`, Reset is dropped and a lost context shows no notice:
+ * only a reload draws again, and the page says so itself.
  * Returns a function that removes the notice.
  */
 export function installRenderFailureNotice(
@@ -78,7 +79,7 @@ export function installRenderFailureNotice(
     notice = {
       reason,
       detail,
-      retry: contextLost && !allowReload ? null : retry,
+      retry,
       reset: allowReload ? reset : null,
     };
     store.publishRenderFailure(notice);
@@ -97,6 +98,12 @@ export function installRenderFailureNotice(
     contextLost = true;
     // No frame can clear this one; only a reload draws again.
     stopWatchingFrames();
+    // A page that must not reload has nothing to offer: an inline panel
+    // shows its own lost-context notice (src/app/globePanelRuntime.js).
+    if (!allowReload) {
+      clear();
+      return;
+    }
     present('');
   };
 
@@ -155,6 +162,10 @@ function frameEvents(viewer) {
 /**
  * Finish a raise a throwing listener cut short. Until a raise ends, Cesium's
  * `Event` only queues added and removed listeners; apply that queue.
+ * These are Cesium's private fields (`_invokingListeners`, `_toAdd`,
+ * `_toRemove`, `_listeners`, and the widget's `_renderLoopRunning`), checked
+ * against cesium 1.138 / @cesium/engine 22.3.0; the render loop fixture tests
+ * drive the real classes and fail when an upgrade renames them.
  */
 function finishRaise(event) {
   if (!event?._invokingListeners) return;
