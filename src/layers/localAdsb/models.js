@@ -22,6 +22,7 @@ const specOf = (marker) =>
   aircraftLayerModelSpec({
     typeCode: marker?.typeCode,
     category: marker?.category,
+    callsign: marker?.record?.callsign,
   });
 
 /**
