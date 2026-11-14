@@ -5,6 +5,7 @@ import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
   CALIBRATION_RANGE_FLOOR_M,
@@ -438,9 +439,21 @@ export function createLifecycle({
       const unsubscribeHover = input.onPointer('move', (movement) =>
         parts.hover.handleHoverMove(movement?.endPosition),
       );
+      // A double-click zooms to a coverage line and follows the monitor
+      // plane, as the default renderer did for their entities (the camera
+      // icons were billboards, which it never followed).
+      layerState._stockFollow = followOnDoubleClick({
+        viewer: layerState._viewer,
+        inputFor: () => input,
+        name: 'cctv',
+        enabled: () => layerState._enabled,
+        targetFor: (hit) => parts.drawSets.followTargetFor(hit),
+      });
       layerState._clickSubscription = () => {
         unsubscribeClick();
         unsubscribeHover();
+        layerState._stockFollow?.destroy();
+        layerState._stockFollow = null;
       };
 
       await parts.health.syncHealthState(true);

@@ -133,3 +133,57 @@ test('a renderer without meshes or quads still draws the lines', () => {
     unbind();
   }
 });
+
+test('a double-click zooms to a coverage line and follows the plane, as their entities were', () => {
+  const viewer = {};
+  const { unbind } = bindFakeDraw(viewer);
+  const retained = [];
+  const state = {
+    _viewer: viewer,
+    _stockFollow: { retain: (drawn) => retained.push(drawn), stop() {} },
+  };
+  const drawSets = createDrawSets({ state });
+  try {
+    const a = line('cctv-cam-ray-tl');
+    drawSets.writeLines([a]);
+    const plane = {
+      id: 'cctv-cam-plane',
+      cameraId: 'cam',
+      center: { x: 10, y: 0, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+      size: [6, 8],
+      show: true,
+    };
+    drawSets.writePlane(plane);
+    const [coverage, planes] = drawSets.pickableSetIds();
+
+    const zoom = drawSets.followTargetFor({ set: coverage, id: a.id });
+    assert.deepEqual(zoom.zoomTo.center, { x: 2.5, y: 3.5, z: 4.5 });
+
+    const follow = drawSets.followTargetFor({ set: planes, id: plane.id });
+    assert.equal(follow.key, `${planes}:${plane.id}`);
+    assert.deepEqual(follow.position(), { x: 10, y: 0, z: 0 });
+    assert.equal(follow.sphere.radius, 5, 'framed to fit the plane');
+    plane.center = { x: 20, y: 0, z: 0 };
+    drawSets.writePlane(plane);
+    assert.deepEqual(follow.position(), { x: 20, y: 0, z: 0 }, 'as drawn now');
+
+    assert.equal(drawSets.followTargetFor({ set: 'other', id: a.id }), null);
+    a.show = false;
+    drawSets.writeLines([a]);
+    assert.equal(
+      drawSets.followTargetFor({ set: coverage, id: a.id }),
+      null,
+      'a hidden line takes no part',
+    );
+
+    // Taking the plane out ends a follow of it, and only of it.
+    drawSets.removePlane(plane);
+    assert.equal(retained.length, 1);
+    assert.equal(retained[0](follow.key), false);
+    assert.equal(retained[0]('other:key'), true);
+  } finally {
+    drawSets.dispose();
+    unbind();
+  }
+});
