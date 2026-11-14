@@ -622,3 +622,184 @@ test('a far receiver never places a lone surface frame; the next valid pair seed
   assert.ok(Math.abs(track.longitude - 4.7347) < 0.002, `${track.longitude}`);
   assert.equal(track.onGround, true);
 });
+
+// Altitude freshness. Frames are real DF17 layouts with recomputed parity:
+// the 40621D airborne position pair (38,000 ft) with its 12-bit altitude
+// field rewritten, and the KLM1023 identification and 485020 velocity ME
+// fields under another address.
+const IDENT_ME = '202CC371C32CE0';
+const VELOCITY_ME = '99440994083817';
+
+/** A CRC-valid DF17 frame from a 24-bit address and a 56-bit ME, in hex. */
+function frame(icao, me) {
+  return withParity(`8D${icao}${me}000000`);
+}
+
+/** Airborne position ME carrying `altitudeFt` in 25 ft (Q=1) steps, or Q=0. */
+function airborneMe(altitudeFt, { odd = false, gillham = false } = {}) {
+  const me = fromHex(odd ? '58C386435CC412' : '58C382D690C8AC');
+  const n = (altitudeFt + 1_000) / 25;
+  const field = ((n >> 4) << 5) | (gillham ? 0 : 0x10) | (n & 0xf);
+  me[1] = field >> 4;
+  me[2] = ((field & 0xf) << 4) | (me[2] & 0x0f);
+  return [...me].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function altitudeObservation(track) {
+  return {
+    altitudeFt: track.altitudeFt,
+    lastAltitudeAt: track.lastAltitudeAt,
+    altitudeSequence: track.altitudeSequence,
+  };
+}
+
+function trackHeard(tracks) {
+  return (bytes, receivedAt) =>
+    updateAircraftTrack(tracks, decodeAdsbMessage(bytes, { receivedAt }));
+}
+
+test('the altitude frame builder reproduces the published 38,000 ft position', () => {
+  assert.equal(
+    decodeAdsbMessage(fromHex('8D40621D58C382D690C8AC2863A7')).altitudeFt,
+    38_000,
+  );
+  assert.deepEqual(
+    frame('40621D', airborneMe(38_000)),
+    fromHex('8D40621D58C382D690C8AC2863A7'),
+  );
+  assert.equal(
+    decodeAdsbMessage(frame('40621D', airborneMe(36_025))).altitudeFt,
+    36_025,
+  );
+});
+
+test('only a frame that carries an altitude advances the altitude observation', () => {
+  const tracks = new Map();
+  const heard = trackHeard(tracks);
+  let track = heard(frame('40621D', IDENT_ME), 1_000);
+  assert.equal(track.callsign, 'KLM1023');
+  assert.equal(track.firstSeenAt, 1_000);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: null,
+    lastAltitudeAt: null,
+    altitudeSequence: 0,
+  });
+  heard(frame('40621D', VELOCITY_ME), 1_200);
+  track = heard(frame('40621D', airborneMe(38_000)), 1_500);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_000,
+    lastAltitudeAt: 1_500,
+    altitudeSequence: 1,
+  });
+  const cruising = track;
+
+  // The next position is missed: velocity and identification frames keep the
+  // aircraft heard, and say nothing about its altitude.
+  track = heard(frame('40621D', VELOCITY_ME), 1_700);
+  assert.equal(track.verticalRateFpm, -832);
+  track = heard(frame('40621D', IDENT_ME), 1_800);
+  assert.equal(track.lastSeen, 1_800);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_000,
+    lastAltitudeAt: 1_500,
+    altitudeSequence: 1,
+  });
+
+  // Level flight repeats the altitude: still a new observation.
+  track = heard(frame('40621D', airborneMe(38_000, { odd: true })), 2_000);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_000,
+    lastAltitudeAt: 2_000,
+    altitudeSequence: 2,
+  });
+  assert.equal(track.firstSeenAt, 1_000, 'the track start survives every copy');
+  assert.equal(cruising.altitudeSequence, 1, 'an earlier track is not mutated');
+});
+
+test('altitude frames of one USB block share a receive time and each count', () => {
+  // The worker stamps every frame of a block with one Date.now().
+  const tracks = new Map();
+  const heard = trackHeard(tracks);
+  heard(frame('40621D', airborneMe(38_000)), 5_000);
+  heard(frame('40621D', VELOCITY_ME), 5_000);
+  heard(frame('40621D', airborneMe(38_000, { odd: true })), 5_000);
+  const track = heard(frame('40621D', airborneMe(38_025)), 5_000);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_025,
+    lastAltitudeAt: 5_000,
+    altitudeSequence: 3,
+  });
+  assert.equal(track.messages, 4);
+});
+
+test('Q=0 and surface frames never advance the altitude; the next airborne one does', () => {
+  const tracks = new Map();
+  const heard = trackHeard(tracks);
+  heard(frame('C8200A', airborneMe(3_000)), 0);
+  const gillham = frame('C8200A', airborneMe(3_000, { gillham: true }));
+  assert.equal(decodeAdsbMessage(gillham).altitudeFt, null, 'Q=0 not decoded');
+  let track = heard(gillham, 500);
+  assert.equal(track.onGround, false);
+  assert.deepEqual(
+    altitudeObservation(track),
+    { altitudeFt: 3_000, lastAltitudeAt: 0, altitudeSequence: 1 },
+    'the altitude shown is still the one heard at 0',
+  );
+
+  heard(SURFACE_EVEN, 1_000);
+  track = heard(SURFACE_ODD, 2_000);
+  assert.equal(track.onGround, true);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: null,
+    lastAltitudeAt: null,
+    altitudeSequence: 1,
+  });
+
+  track = heard(frame('C8200A', airborneMe(3_100)), 3_000);
+  assert.equal(track.onGround, false);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 3_100,
+    lastAltitudeAt: 3_000,
+    altitudeSequence: 2,
+  });
+  assert.equal(track.firstSeenAt, 0);
+});
+
+test('a pruned aircraft heard again starts a new altitude session', () => {
+  const tracks = new Map();
+  const heard = trackHeard(tracks);
+  heard(frame('40621D', airborneMe(38_000)), 1_000);
+  assert.equal(pruneAircraftTracks(tracks, 61_000), 1);
+  let track = heard(frame('40621D', VELOCITY_ME), 70_000);
+  assert.equal(track.firstSeenAt, 70_000);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: null,
+    lastAltitudeAt: null,
+    altitudeSequence: 0,
+  });
+  track = heard(frame('40621D', airborneMe(38_000)), 70_500);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_000,
+    lastAltitudeAt: 70_500,
+    altitudeSequence: 1,
+  });
+});
+
+test('an altitude with an unusable receive time is counted without a time', () => {
+  const tracks = new Map();
+  const heard = trackHeard(tracks);
+  let track = heard(frame('40621D', airborneMe(38_000)), Number.NaN);
+  assert.equal(track.firstSeenAt, null);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_000,
+    lastAltitudeAt: null,
+    altitudeSequence: 1,
+  });
+  track = heard(frame('40621D', airborneMe(38_025, { odd: true })), 2_000);
+  assert.deepEqual(altitudeObservation(track), {
+    altitudeFt: 38_025,
+    lastAltitudeAt: 2_000,
+    altitudeSequence: 2,
+  });
+  assert.equal(track.firstSeenAt, null, 'the track start stays unknown');
+});
