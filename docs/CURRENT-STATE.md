@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+The optional Infrastructure **Water Wells** layer loads the published Rainfolk
+50-state historical USGWD release on demand. It shows true source-location points
+below 50 km and uses the native inspector for available depth, reported capacity,
+construction years and source identity. Count grids remain internal; there are no
+numeric cluster badges, group cards or automatic drilldown flights. Coincident
+records retain their coordinates and can be selected individually. The sidebar
+credits Rainfolk and shows consumer check age, not source-observation freshness.
+No national dataset, collector or credentials are bundled. The original USGWD
+citation/licence and Rainfolk adaptations are in DATA_SOURCES.md. See
+[consumer configuration and limits](US_GROUNDWATER_CONSUMER.md).
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.

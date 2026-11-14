@@ -50,11 +50,17 @@ defineProps({
             :aria-disabled="String(item.toggle.ariaDisabled)"
             :aria-busy="String(item.toggle.ariaBusy)"
             :title="item.toggle.title"
+            :aria-describedby="item.descriptionId"
             :aria-label="item.toggle.ariaLabel"
             @click="onToggle(item.id)"
             >{{ item.toggle.text }}</button
           ></div
         ></div
+      ><span
+        v-if="item.description"
+        :id="item.descriptionId"
+        class="world-overlay-accessibility"
+        >{{ item.description }}</span
       ><RowText tag="div" class="data-toggle-meta" :text="item.meta" /><template
         v-if="item.controls"
         ><div class="data-toggle-controls" :hidden="item.controls.hidden"

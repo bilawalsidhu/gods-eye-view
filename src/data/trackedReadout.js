@@ -170,7 +170,7 @@ export function createTrackedOverlayEntry(entity) {
       : TRACKED_BILLBOARD_SCALE,
     minAnchorGapPx: 16,
     anchorGapPaddingPx: 10,
-    verticalOnly: true,
+    verticalOnly: model.verticalOnly !== false,
     viewportMargin: 6,
     edgeFade: 'keyhole',
     horizonCull: true,
@@ -219,7 +219,11 @@ export function getActiveTrackedReadoutId() {
 }
 
 /** Static-context layers whose click selection publishes the readout card. */
-const READOUT_CONTEXT_LAYERS = new Set(['alpr-cameras', 'local-adsb']);
+const READOUT_CONTEXT_LAYERS = new Set([
+  'alpr-cameras',
+  'local-adsb',
+  'us-groundwater',
+]);
 
 /**
  * Initialize the model bridge and selection listeners. No render listener is

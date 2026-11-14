@@ -1,3 +1,4 @@
+import { createBundledWellPackSource } from '../layers/usGroundwater/bundledSource.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -37,7 +38,7 @@ test('every acquisition source can be omitted without losing catalog membership'
 
 test('all acquisition sources may be absent, and enable fails before initializing or fetching', async (t) => {
   const actual = catalog({}, t);
-  assert.equal(actual.layers.length, 41);
+  assert.equal(actual.layers.length, 42);
   const manager = new LayerLifecycle(
     {},
     { getSourceAvailability: actual.getSourceAvailability },
@@ -71,15 +72,32 @@ test('configured sources retain identity; invalid implementations never become u
   assert.throws(() => missing.getSnapshot(), { code: 'unavailable' });
 });
 
-test('standalone defaults allow exact replacements and explicit removal, and reject typos', () => {
+test('standalone defaults allow exact replacements and explicit removal, and reject typos', async () => {
   const source = { getSnapshot: async () => [] };
   const sources = createStandaloneLayerSources({
     flights: source,
     military: null,
+    'us-groundwater': createBundledWellPackSource(),
   });
   assert.equal(sources.flights, source);
   assert.equal(sources.military, null);
   assert.equal(typeof sources.cctv.getCatalog, 'function');
+  assert.equal(typeof sources['us-groundwater'].getSnapshot, 'function');
+  assert.equal(
+    sources['us-groundwater'].label,
+    'USGS (bounded six-site snapshot)',
+  );
+  assert.deepEqual(
+    (await sources['us-groundwater'].getSnapshot()).records.map(({ id }) => id),
+    [
+      'USGS-330548081391102',
+      'USGS-380743102240300',
+      'USGS-414834102302001',
+      'USGS-422702079005101',
+      'USGS-451822093413201',
+      'USGS-453816087590101',
+    ],
+  );
   assert.throws(
     () => createStandaloneLayerSources({ fligts: source }),
     /Unknown source/,

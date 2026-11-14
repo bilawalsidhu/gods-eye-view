@@ -1,0 +1,665 @@
+{
+  "schemaVersion": 1,
+  "acquisitions": [
+    {
+      "collection": "monitoring-locations",
+      "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=json&limit=10&id=USGS-451822093413201,USGS-422702079005101,USGS-330548081391102,USGS-380743102240300,USGS-414834102302001,USGS-453816087590101",
+      "retrievedAt": "2026-10-24T04:20:42.686Z",
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "id": "USGS-330548081391102",
+              "agency_code": "USGS",
+              "agency_name": "U.S. Geological Survey",
+              "monitoring_location_number": "330548081391102",
+              "monitoring_location_name": "32Y031",
+              "district_code": "13",
+              "country_code": "US",
+              "country_name": "United States of America",
+              "state_code": "13",
+              "state_name": "Georgia",
+              "county_code": "033",
+              "county_name": "Burke County",
+              "minor_civil_division_code": null,
+              "site_type_code": "GW",
+              "site_type": "Well",
+              "hydrologic_unit_code": "030601060805",
+              "basin_code": null,
+              "altitude": 85,
+              "altitude_accuracy": 5,
+              "altitude_method_code": "M",
+              "altitude_method_name": "Interpolated from topographic map.",
+              "vertical_datum": "NGVD29",
+              "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+              "horizontal_positional_accuracy_code": "F",
+              "horizontal_positional_accuracy": "Accurate to + or - 5 sec.",
+              "horizontal_position_method_code": "M",
+              "horizontal_position_method_name": "Interpolated from MAP.",
+              "original_horizontal_datum": "NAD27",
+              "original_horizontal_datum_name": "North American Datum of 1927",
+              "drainage_area": null,
+              "contributing_drainage_area": null,
+              "time_zone_abbreviation": "EST",
+              "uses_daylight_savings": "Y",
+              "construction_date": "19941001",
+              "aquifer_code": "125DBLNL",
+              "national_aquifer_code": "S100SECSLP",
+              "aquifer_type_code": "C",
+              "well_constructed_depth": 562,
+              "hole_constructed_depth": 568,
+              "depth_source_code": "S",
+              "revision_note": null,
+              "revision_created": null,
+              "revision_modified": null
+            },
+            "id": "USGS-330548081391102",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -81.6528888664919,
+                33.0970967909941
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "id": "USGS-380743102240300",
+              "agency_code": "USGS",
+              "agency_name": "U.S. Geological Survey",
+              "monitoring_location_number": "380743102240300",
+              "monitoring_location_name": "SC02204419ABB USGS 380743102240300",
+              "district_code": "08",
+              "country_code": "US",
+              "country_name": "United States of America",
+              "state_code": "08",
+              "state_name": "Colorado",
+              "county_code": "099",
+              "county_name": "Prowers County",
+              "minor_civil_division_code": null,
+              "site_type_code": "GW",
+              "site_type": "Well",
+              "hydrologic_unit_code": "110200091505",
+              "basin_code": null,
+              "altitude": 3605,
+              "altitude_accuracy": 5,
+              "altitude_method_code": "M",
+              "altitude_method_name": "Interpolated from topographic map.",
+              "vertical_datum": "NGVD29",
+              "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+              "horizontal_positional_accuracy_code": "F",
+              "horizontal_positional_accuracy": "Accurate to + or - 5 sec.",
+              "horizontal_position_method_code": "M",
+              "horizontal_position_method_name": "Interpolated from MAP.",
+              "original_horizontal_datum": "NAD27",
+              "original_horizontal_datum_name": "North American Datum of 1927",
+              "drainage_area": null,
+              "contributing_drainage_area": null,
+              "time_zone_abbreviation": "MST",
+              "uses_daylight_savings": "Y",
+              "construction_date": "19520101",
+              "aquifer_code": "111VLFL",
+              "national_aquifer_code": null,
+              "aquifer_type_code": null,
+              "well_constructed_depth": 138,
+              "hole_constructed_depth": null,
+              "depth_source_code": null,
+              "revision_note": null,
+              "revision_created": null,
+              "revision_modified": null
+            },
+            "id": "USGS-380743102240300",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -102.40130159576,
+                38.1286203213528
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "id": "USGS-414834102302001",
+              "agency_code": "USGS",
+              "agency_name": "U.S. Geological Survey",
+              "monitoring_location_number": "414834102302001",
+              "monitoring_location_name": "21N 45W11AC  1",
+              "district_code": "31",
+              "country_code": "US",
+              "country_name": "United States of America",
+              "state_code": "31",
+              "state_name": "Nebraska",
+              "county_code": "069",
+              "county_name": "Garden County",
+              "minor_civil_division_code": null,
+              "site_type_code": "GW",
+              "site_type": "Well",
+              "hydrologic_unit_code": "101800091506",
+              "basin_code": null,
+              "altitude": 3850,
+              "altitude_accuracy": 10,
+              "altitude_method_code": "U",
+              "altitude_method_name": "Unknown.",
+              "vertical_datum": "NGVD29",
+              "vertical_datum_name": "National Geodetic Vertical Datum of 1929",
+              "horizontal_positional_accuracy_code": "F",
+              "horizontal_positional_accuracy": "Accurate to + or - 5 sec.",
+              "horizontal_position_method_code": "M",
+              "horizontal_position_method_name": "Interpolated from map",
+              "original_horizontal_datum": "NAD27",
+              "original_horizontal_datum_name": "North American Datum of 1927",
+              "drainage_area": null,
+              "contributing_drainage_area": null,
+              "time_zone_abbreviation": "MST",
+              "uses_daylight_savings": "Y",
+              "construction_date": "19340101",
+              "aquifer_code": null,
+              "national_aquifer_code": "N100HGHPLN",
+              "aquifer_type_code": null,
+              "well_constructed_depth": null,
+              "hole_constructed_depth": null,
+              "depth_source_code": null,
+              "revision_note": null,
+              "revision_created": null,
+              "revision_modified": null
+            },
+            "id": "USGS-414834102302001",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -102.506030281489,
+                41.8094221061905
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "id": "USGS-422702079005101",
+              "agency_code": "USGS",
+              "agency_name": "U.S. Geological Survey",
+              "monitoring_location_number": "422702079005101",
+              "monitoring_location_name": "Local number, Ct-2498, near Perrysburg NY",
+              "district_code": "36",
+              "country_code": "US",
+              "country_name": "United States of America",
+              "state_code": "36",
+              "state_name": "New York",
+              "county_code": "009",
+              "county_name": "Cattaraugus County",
+              "minor_civil_division_code": "57298",
+              "site_type_code": "GW",
+              "site_type": "Well",
+              "hydrologic_unit_code": "041201020209",
+              "basin_code": null,
+              "altitude": 1569.92,
+              "altitude_accuracy": 0.4,
+              "altitude_method_code": "Z",
+              "altitude_method_name": "GNSS4 - Level 4 Quality Survey Grade Global Navigation Satellite System",
+              "vertical_datum": "NAVD88",
+              "vertical_datum_name": "North American Vertical Datum of 1988",
+              "horizontal_positional_accuracy_code": "1",
+              "horizontal_positional_accuracy": "Accurate to + or - .1 sec (Differentially-Corrected GPS).",
+              "horizontal_position_method_code": "G",
+              "horizontal_position_method_name": "Mapping grade GPS unit (handheld accuracy range 12 to 40 ft)",
+              "original_horizontal_datum": "NAD83",
+              "original_horizontal_datum_name": "North American Datum of 1983",
+              "drainage_area": null,
+              "contributing_drainage_area": null,
+              "time_zone_abbreviation": "EST",
+              "uses_daylight_savings": "N",
+              "construction_date": "20080815",
+              "aquifer_code": "341CONT",
+              "national_aquifer_code": "N9999OTHER",
+              "aquifer_type_code": "X",
+              "well_constructed_depth": 350,
+              "hole_constructed_depth": 350,
+              "depth_source_code": "G",
+              "revision_note": null,
+              "revision_created": null,
+              "revision_modified": null
+            },
+            "id": "USGS-422702079005101",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -79.01427777777778,
+                42.45044444444445
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "id": "USGS-451822093413201",
+              "agency_code": "USGS",
+              "agency_name": "U.S. Geological Survey",
+              "monitoring_location_number": "451822093413201",
+              "monitoring_location_name": "ALUS-25   033N27W34AAC   01             0000582144",
+              "district_code": "27",
+              "country_code": "US",
+              "country_name": "United States of America",
+              "state_code": "27",
+              "state_name": "Minnesota",
+              "county_code": "141",
+              "county_name": "Sherburne County",
+              "minor_civil_division_code": null,
+              "site_type_code": "GW",
+              "site_type": "Well",
+              "hydrologic_unit_code": "070102030605",
+              "basin_code": null,
+              "altitude": 920.93,
+              "altitude_accuracy": 0.04,
+              "altitude_method_code": "X",
+              "altitude_method_name": "GNSS2 - Level 2 Quality Survey Grade Global Navigation Satellite System",
+              "vertical_datum": "NAVD88",
+              "vertical_datum_name": "North American Vertical Datum of 1988",
+              "horizontal_positional_accuracy_code": "H",
+              "horizontal_positional_accuracy": "Accurate to + or - .01 sec (Differentially-Corrected GPS).",
+              "horizontal_position_method_code": "D",
+              "horizontal_position_method_name": "Differential Global Positioning System (DGPS)",
+              "original_horizontal_datum": "NAD83",
+              "original_horizontal_datum_name": "North American Datum of 1983",
+              "drainage_area": null,
+              "contributing_drainage_area": null,
+              "time_zone_abbreviation": "CST",
+              "uses_daylight_savings": "Y",
+              "construction_date": "19970908",
+              "aquifer_code": "112PLSC",
+              "national_aquifer_code": "N100GLCIAL",
+              "aquifer_type_code": "U",
+              "well_constructed_depth": 30.55,
+              "hole_constructed_depth": 33,
+              "depth_source_code": "S",
+              "revision_note": null,
+              "revision_created": null,
+              "revision_modified": null
+            },
+            "id": "USGS-451822093413201",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -93.68856666666667,
+                45.30576111111111
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "id": "USGS-453816087590101",
+              "agency_code": "USGS",
+              "agency_name": "U.S. Geological Survey",
+              "monitoring_location_number": "453816087590101",
+              "monitoring_location_name": "MT-37/20E/34-0007",
+              "district_code": "55",
+              "country_code": "US",
+              "country_name": "United States of America",
+              "state_code": "55",
+              "state_name": "Wisconsin",
+              "county_code": "075",
+              "county_name": "Marinette County",
+              "minor_civil_division_code": null,
+              "site_type_code": "GW",
+              "site_type": "Well",
+              "hydrologic_unit_code": "040301080502",
+              "basin_code": null,
+              "altitude": 969.3,
+              "altitude_accuracy": 0.1,
+              "altitude_method_code": "Z",
+              "altitude_method_name": "GNSS4 - Level 4 Quality Survey Grade Global Navigation Satellite System",
+              "vertical_datum": "NAVD88",
+              "vertical_datum_name": "North American Vertical Datum of 1988",
+              "horizontal_positional_accuracy_code": "H",
+              "horizontal_positional_accuracy": "Accurate to + or - .01 sec (Differentially-Corrected GPS).",
+              "horizontal_position_method_code": "Z",
+              "horizontal_position_method_name": "GNSS4 - Level 1 Quality Survey Grade Global Navigation Satellite System",
+              "original_horizontal_datum": "NAD83",
+              "original_horizontal_datum_name": "North American Datum of 1983",
+              "drainage_area": null,
+              "contributing_drainage_area": null,
+              "time_zone_abbreviation": "CST",
+              "uses_daylight_savings": "Y",
+              "construction_date": null,
+              "aquifer_code": "110SANDP",
+              "national_aquifer_code": "N100GLCIAL",
+              "aquifer_type_code": "U",
+              "well_constructed_depth": 33,
+              "hole_constructed_depth": 33,
+              "depth_source_code": null,
+              "revision_note": null,
+              "revision_created": null,
+              "revision_modified": null
+            },
+            "id": "USGS-453816087590101",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -87.9836694444444,
+                45.6373944444444
+              ]
+            }
+          }
+        ],
+        "numberReturned": 6,
+        "links": [
+          {
+            "type": "application/geo+json",
+            "rel": "self",
+            "title": "This document as GeoJSON",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=json&limit=10&id=USGS-451822093413201,USGS-422702079005101,USGS-330548081391102,USGS-380743102240300,USGS-414834102302001,USGS-453816087590101"
+          },
+          {
+            "rel": "alternate",
+            "type": "application/ld+json",
+            "title": "This document as RDF (JSON-LD)",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=jsonld&limit=10&id=USGS-451822093413201,USGS-422702079005101,USGS-330548081391102,USGS-380743102240300,USGS-414834102302001,USGS-453816087590101"
+          },
+          {
+            "type": "text/html",
+            "rel": "alternate",
+            "title": "This document as HTML",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=html&limit=10&id=USGS-451822093413201,USGS-422702079005101,USGS-330548081391102,USGS-380743102240300,USGS-414834102302001,USGS-453816087590101"
+          },
+          {
+            "type": "text/csv; charset=utf-8",
+            "rel": "alternate",
+            "title": "This document as CSV",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?f=csv&limit=10&id=USGS-451822093413201,USGS-422702079005101,USGS-330548081391102,USGS-380743102240300,USGS-414834102302001,USGS-453816087590101"
+          },
+          {
+            "type": "application/json",
+            "title": "Monitoring locations",
+            "rel": "collection",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations"
+          }
+        ],
+        "timeStamp": "2026-10-24T04:20:42.648271Z"
+      }
+    },
+    {
+      "collection": "latest-continuous",
+      "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?f=json&site_type_code=GW&parameter_code=72019&limit=3",
+      "retrievedAt": "2026-10-24T04:19:42.906Z",
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "time_series_id": "5f76252cf44347b0835ebefeacab54c8",
+              "monitoring_location_id": "USGS-451822093413201",
+              "parameter_code": "72019",
+              "statistic_id": "00011",
+              "time": "2014-11-04T05:00:00+00:00",
+              "value": "24.98",
+              "unit_of_measure": "ft",
+              "approval_status": "Approved",
+              "qualifier": null,
+              "last_modified": "2025-08-27T16:47:07.852869+00:00"
+            },
+            "id": "0002c8a8-634e-43d4-88a1-8fb75f17be6f",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -93.68856666666667,
+                45.30576111111111
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "time_series_id": "5a962351bd8642bfac4cb7524c5723ab",
+              "monitoring_location_id": "USGS-422702079005101",
+              "parameter_code": "72019",
+              "statistic_id": "00011",
+              "time": "2026-10-24T03:05:00+00:00",
+              "value": "32.01",
+              "unit_of_measure": "ft",
+              "approval_status": "Provisional",
+              "qualifier": null,
+              "last_modified": "2026-10-24T03:12:41.072959+00:00"
+            },
+            "id": "00059b04-7f1b-46a2-a546-99d9a7b1bcb3",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -79.01427777777778,
+                42.45044444444445
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "time_series_id": "1f1d70e705104912b5b738c9b7dc242b",
+              "monitoring_location_id": "USGS-330548081391102",
+              "parameter_code": "72019",
+              "statistic_id": "00011",
+              "time": "2025-12-15T19:45:00+00:00",
+              "value": "-64.73",
+              "unit_of_measure": "ft",
+              "approval_status": "Provisional",
+              "qualifier": null,
+              "last_modified": "2026-05-26T12:51:20.385054+00:00"
+            },
+            "id": "0009735b-8931-4754-a480-a3824e960172",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -81.6528888664919,
+                33.0970967909941
+              ]
+            }
+          }
+        ],
+        "numberReturned": 3,
+        "links": [
+          {
+            "rel": "next",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?cursor=MDAwOTczNWItODkzMS00NzU0LWE0ODAtYTM4MjRlOTYwMTcy&site_type_code=GW&parameter_code=72019&limit=3&f=json",
+            "type": "application/geo+json",
+            "title": "Items (next)"
+          },
+          {
+            "type": "application/geo+json",
+            "rel": "self",
+            "title": "This document as GeoJSON",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?f=json&site_type_code=GW&parameter_code=72019&limit=3"
+          },
+          {
+            "rel": "alternate",
+            "type": "application/ld+json",
+            "title": "This document as RDF (JSON-LD)",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?f=jsonld&site_type_code=GW&parameter_code=72019&limit=3"
+          },
+          {
+            "type": "text/html",
+            "rel": "alternate",
+            "title": "This document as HTML",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?f=html&site_type_code=GW&parameter_code=72019&limit=3"
+          },
+          {
+            "type": "text/csv; charset=utf-8",
+            "rel": "alternate",
+            "title": "This document as CSV",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items?f=csv&site_type_code=GW&parameter_code=72019&limit=3"
+          },
+          {
+            "type": "application/json",
+            "title": "Latest continuous",
+            "rel": "collection",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous"
+          }
+        ],
+        "timeStamp": "2026-10-24T04:19:42.882444Z"
+      }
+    },
+    {
+      "collection": "field-measurements",
+      "url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements/items?f=json&parameter_code=72019&limit=3",
+      "retrievedAt": "2026-10-24T04:19:42.206Z",
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "field_measurements_series_id": "fbbc653c-18c6-4a0b-9e43-1ab3b29aab52",
+              "reading_type": "ReferencePrimary",
+              "field_visit_id": "d40eb6a0-8606-474c-af98-e0d4ec5ce034",
+              "parameter_code": "72019",
+              "monitoring_location_id": "USGS-380743102240300",
+              "observing_procedure_code": "Z",
+              "observing_procedure": "None",
+              "value": "58.61",
+              "unit_of_measure": "ft",
+              "time": "1969-03-27",
+              "qualifier": [
+                "Static"
+              ],
+              "vertical_datum": "Local Assumed Datum",
+              "approval_status": "Approved",
+              "measuring_agency": null,
+              "last_modified": "2026-10-10T04:30:48.117166+00:00",
+              "control_condition": null,
+              "measurement_rated": null,
+              "year": 1969,
+              "month": 3,
+              "day": 27,
+              "time_of_day": null,
+              "sublocation_identifier": null
+            },
+            "id": "00000095-1d39-4fe8-8d28-02c40029b1bd",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -102.40130159576,
+                38.1286203213528
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "field_measurements_series_id": "21d3895e-71cf-4104-8241-762966e97b8e",
+              "reading_type": "ReferencePrimary",
+              "field_visit_id": "6044a398-93cc-4ce6-b2d2-8238e40e6600",
+              "parameter_code": "72019",
+              "monitoring_location_id": "USGS-414834102302001",
+              "observing_procedure_code": "S",
+              "observing_procedure": "GW level, steel tape",
+              "value": "7.30",
+              "unit_of_measure": "ft",
+              "time": "1955-12-28",
+              "qualifier": [
+                "Static"
+              ],
+              "vertical_datum": "Local Assumed Datum",
+              "approval_status": "Approved",
+              "measuring_agency": null,
+              "last_modified": "2026-10-04T06:49:02.843334+00:00",
+              "control_condition": null,
+              "measurement_rated": null,
+              "year": 1955,
+              "month": 12,
+              "day": 28,
+              "time_of_day": null,
+              "sublocation_identifier": null
+            },
+            "id": "000000fa-a994-430a-8c16-6f3bd4b666ed",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -102.506030281489,
+                41.8094221061905
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "field_measurements_series_id": "4d9e322b-b495-4374-a7dc-55fa3e68112f",
+              "reading_type": "ReferencePrimary",
+              "field_visit_id": "6be54394-298e-43ed-b589-2841a0864962",
+              "parameter_code": "72019",
+              "monitoring_location_id": "USGS-453816087590101",
+              "observing_procedure_code": "O",
+              "observing_procedure": "GW level, estim, report, observ",
+              "value": "21.17",
+              "unit_of_measure": "ft",
+              "time": "1939-11-07",
+              "qualifier": [
+                "Static"
+              ],
+              "vertical_datum": "Local Assumed Datum",
+              "approval_status": "Approved",
+              "measuring_agency": null,
+              "last_modified": "2026-10-03T06:56:54.078702+00:00",
+              "control_condition": null,
+              "measurement_rated": null,
+              "year": 1939,
+              "month": 11,
+              "day": 7,
+              "time_of_day": null,
+              "sublocation_identifier": null
+            },
+            "id": "00000169-56a8-4f09-816b-e18c9a38b02c",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -87.9836694444444,
+                45.6373944444444
+              ]
+            }
+          }
+        ],
+        "numberReturned": 3,
+        "links": [
+          {
+            "rel": "next",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements/items?cursor=MDAwMDAxNjktNTZhOC00ZjA5LTgxNmItZTE4YzlhMzhiMDJj&parameter_code=72019&limit=3&f=json",
+            "type": "application/geo+json",
+            "title": "Items (next)"
+          },
+          {
+            "type": "application/geo+json",
+            "rel": "self",
+            "title": "This document as GeoJSON",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements/items?f=json&parameter_code=72019&limit=3"
+          },
+          {
+            "rel": "alternate",
+            "type": "application/ld+json",
+            "title": "This document as RDF (JSON-LD)",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements/items?f=jsonld&parameter_code=72019&limit=3"
+          },
+          {
+            "type": "text/html",
+            "rel": "alternate",
+            "title": "This document as HTML",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements/items?f=html&parameter_code=72019&limit=3"
+          },
+          {
+            "type": "text/csv; charset=utf-8",
+            "rel": "alternate",
+            "title": "This document as CSV",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements/items?f=csv&parameter_code=72019&limit=3"
+          },
+          {
+            "type": "application/json",
+            "title": "Field measurements",
+            "rel": "collection",
+            "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/field-measurements"
+          }
+        ],
+        "timeStamp": "2026-10-24T04:19:42.159897Z"
+      }
+    }
+  ]
+}

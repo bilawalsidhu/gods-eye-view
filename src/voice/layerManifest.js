@@ -458,6 +458,7 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  'us-groundwater': 'bounded snapshot; no analyst query or timeline',
   // The Realtime prompt is at its 55,500-character budget; voice toggle and
   // query for this layer wait until there is room.
   'drone-airspace':

@@ -1,5 +1,40 @@
 # Data Sources & Attribution
 
+## Water Wells: USGWD via Rainfolk
+
+Water Wells fetches the published immutable Rainfolk release at runtime:
+`https://data.rainfolk.org/usgwd/e6dc61db1500b491671cf094602e2257814c5507e99618d717fbb4f6082d8291/index.json`.
+It contains 12,452,285 mapped historical source records across all 50 states.
+Within-state coverage is incomplete. This is not a count of distinct physical
+wells or current operating wells.
+
+Original dataset: USGWD, compiled by Chung-Yi Lin, Alexandra Miller, Musab Waqar and Landon T. Marston,
+[A Database of Groundwater Wells in the United States (USGWD)](https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55),
+HydroShare, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+USGWD compiles state and federal agency records, including USGS. Rainfolk prepares, validates
+and hosts the map artifacts; it does not claim original survey or data ownership.
+Adaptations include field normalization, approximate datum conversion and bounded
+spatial packaging. Original source IDs, acquisition hashes, dates and flags are
+retained. The layer does not infer present water level, potability or performance.
+No key is required. No private submissions or confidential Rainfolk records are
+included. Public well records do not establish public ownership of the wells.
+
+The separate six-site USGS fixture supports offline tests and explicit embedded
+source injection. Its source queries and hashes remain in
+[`fixtures/us-groundwater/v1`](fixtures/us-groundwater/v1/README.md).
+It is not added to the published Rainfolk catalog. USGS-authored public data is
+in the U.S. public domain; third-party material retains separate rights.
+
+See [the consumer configuration](docs/US_GROUNDWATER_CONSUMER.md) for release
+updates, CORS requirements, limits and interpretation.
+The [supplied state notices](docs/US_GROUNDWATER_SOURCE_NOTICES.md) preserve the
+publisher's state-specific attribution, disclaimers and representation estimates.
+Read those historical agency statements alongside the publisher's permission
+and redaction account in [the bounded reuse review](docs/US_GROUNDWATER_REUSE_REVIEW.md).
+They should not all be treated as new permission requests for each downstream
+user. The review distinguishes attribution, original-compilation conditions and
+remaining uncertainty; it is not a legal guarantee or an anonymity claim.
+
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources. The bundled 3D models are the project's own procedural fleet models, MIT-licensed with the code ([`public/models/README.md`](public/models/README.md)).
 
 How to read this:
@@ -689,3 +724,5 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+The [public-release source list](docs/US_GROUNDWATER_SOURCES.md) records all 48 catalog partitions and their contributing organizations from publisher Table S1.

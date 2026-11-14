@@ -36,6 +36,35 @@ test('panel presentation places Transit and Rail between Street Traffic and Bike
   assert.equal(order.filter(({ id }) => id === 'rail').length, 1);
 });
 
+test('panel presentation exposes groundwater wells under Infrastructure', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const order = JSON.parse(
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
+    ),
+  );
+  assert.deepEqual(
+    order.filter(({ label }) => label === 'Infrastructure').map(({ id }) => id),
+    [
+      'alpr-cameras',
+      'military-installations',
+      'drone-airspace',
+      'local-datacenters',
+      'telegeography-submarine-cables',
+      'local-dams',
+      'sea-marks',
+      'ski-pistes',
+      'us-groundwater',
+    ],
+  );
+});
 test('Wildlife follows Events and precedes Weather', () => {
   const source = readFileSync(
     new URL('./layerPanel.js', import.meta.url),
@@ -363,6 +392,262 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
       ['air-quality', 'air-quality'],
     ],
   );
+});
+
+test('well snapshot separates enabled/loading/error state from coverage and reference-page date', async () => {
+  const { LayerPanel, presentLayerToggle } = await import('./layerPanel.js');
+  const panel = LayerPanel.prototype;
+  const layer = {
+    id: 'us-groundwater',
+    name: 'U.S. Groundwater Wells',
+    source: 'USGS',
+    enabled: true,
+    stats: {
+      mode: 'snapshot',
+      partial: true,
+      count: 1042777,
+      referenceRetrievedAt: '2026-10-25T17:30:16Z',
+      displayMode: 'groups',
+      selectedGroupCount: 12345,
+    },
+  };
+  assert.equal(presentLayerToggle(layer).text, 'ON');
+  assert.equal(presentLayerToggle(layer).feedState, 'nominal');
+  const text = panel._buildMetaText(layer);
+  assert.equal(text, 'Rainfolk · never');
+  assert.equal(
+    presentLayerToggle({
+      ...layer,
+      stats: { ...layer.stats, loading: true },
+    }).text,
+    'LOADING',
+  );
+  assert.equal(
+    presentLayerToggle({
+      ...layer,
+      stats: { ...layer.stats, error: 'synthetic failure' },
+    }).text,
+    'DEGRADED',
+  );
+  assert.equal(presentLayerToggle({ ...layer, enabled: false }).text, 'OFF');
+});
+
+test('well catalog badge stays exact while represented locations and OFF state are separate', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const panel = LayerPanel.prototype;
+  const { presentLayerCount } = await import('./layerPanel.js');
+  const wellCountText = (stats) => presentLayerCount(stats, true).text;
+  const layer = {
+    id: 'us-groundwater',
+    enabled: true,
+    source: 'USGS',
+    stats: {
+      mode: 'snapshot',
+      count: 7200,
+      catalogCount: 1042777,
+      representedLocationCount: 7200,
+      displayMode: 'groups',
+      referenceRetrievedAt: '2026-10-25T17:30:16Z',
+    },
+  };
+  assert.equal(wellCountText(layer.stats), '1M');
+  assert.equal(panel._buildMetaText(layer), 'Rainfolk · never');
+  assert.equal(
+    panel._buildMetaText({ ...layer, enabled: false }),
+    'Rainfolk · never',
+  );
+  assert.doesNotMatch(panel._buildMetaText(layer), /\uFFFD|in view/);
+  assert.equal(
+    wellCountText({
+      ...layer.stats,
+      count: 1,
+      representedLocationCount: 1,
+    }),
+    '1M',
+  );
+  assert.equal(wellCountText({ catalogCount: 0 }), '0');
+});
+
+test('layer count summaries use native compact units without redundant decimals', async () => {
+  const { formatLayerCount } = await import('./formatLayerCount.js');
+  for (const [value, expected] of [
+    [0, '0'],
+    [53, '53'],
+    [999, '999'],
+    [1000, '1K'],
+    [4400, '4.4K'],
+    [1042777, '1M'],
+    [5918051, '5.9M'],
+    [999999, '1M'],
+  ]) {
+    assert.equal(formatLayerCount(value), expected);
+  }
+  const { LayerPanel } = await import('./layerPanel.js');
+  assert.equal(
+    LayerPanel.prototype._buildMetaText({
+      id: 'us-groundwater',
+      enabled: true,
+      source: 'USGWD historical catalog',
+      stats: { mode: 'snapshot' },
+    }),
+    'Rainfolk · never',
+  );
+});
+
+test('Rainfolk check age uses consumer acceptance only and preserves coverage and outage states', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const panel = LayerPanel.prototype;
+  const original = Date.now;
+  Date.now = () => 1800000000000;
+  try {
+    const layer = {
+      id: 'us-groundwater',
+      enabled: true,
+      source: 'USGWD historical catalog',
+      stats: {
+        mode: 'snapshot',
+        partial: true,
+        stateCount: 36,
+        lastCheckedAt: 1800000000000 - 125000,
+        referenceRetrievedAt: '2026-10-27T18:48:01Z',
+        lastUpdate: 1800000000000,
+      },
+    };
+    assert.equal(panel._buildMetaText(layer), 'Rainfolk · 2m ago');
+    Date.now = () => 1800000000000 + 60000;
+    assert.equal(panel._buildMetaText(layer), 'Rainfolk · 3m ago');
+    assert.equal(
+      panel._buildMetaText({
+        ...layer,
+        stats: { ...layer.stats, lastCheckedAt: null },
+      }),
+      'Rainfolk · never',
+    );
+    assert.equal(
+      panel._buildMetaText({
+        ...layer,
+        stats: { ...layer.stats, stateCount: 48 },
+      }),
+      'Rainfolk · 3m ago',
+    );
+    assert.match(
+      panel._buildMetaText({
+        ...layer,
+        stats: { ...layer.stats, status: 'zoom-in' },
+      }),
+      /^Rainfolk · 3m ago$/,
+    );
+    assert.match(
+      panel._buildMetaText({
+        ...layer,
+        stats: { ...layer.stats, loading: true },
+      }),
+      /^Rainfolk · 3m ago$/,
+    );
+    assert.match(
+      panel._buildMetaText({
+        ...layer,
+        stats: { ...layer.stats, error: 'synthetic failure' },
+      }),
+      /^Rainfolk · 3m ago$/,
+    );
+  } finally {
+    Date.now = original;
+  }
+});
+
+test('wells use a short panel label and retain the formal accessible layer name', async () => {
+  const { PANEL_LABEL_KEYS, layerNameForId } = await import('./layerNames.js');
+  assert.equal(PANEL_LABEL_KEYS['us-groundwater'], 'Water Wells');
+  assert.equal(layerNameForId('us-groundwater'), 'U.S. Groundwater Wells');
+});
+
+test('all initial and repeated lifecycle states keep the exact Rainfolk subtitle without state counts', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const panel = LayerPanel.prototype;
+  const original = Date.now;
+  Date.now = () => 1800000000000;
+  try {
+    for (const lifecycleState of [
+      'disabled',
+      'enabling',
+      'enabled',
+      'disabling',
+    ])
+      for (const extra of [
+        {},
+        { loading: true },
+        { error: 'feed failed' },
+        { status: 'zoom-in', statusMessage: 'detail limited' },
+      ]) {
+        const layer = {
+          id: 'us-groundwater',
+          source: 'USGWD historical catalog',
+          enabled: lifecycleState === 'enabled',
+          lifecycleState,
+          stats: extra,
+        };
+        assert.equal(panel._buildMetaText(layer), 'Rainfolk · never');
+        assert.equal(
+          panel._buildMetaText({
+            ...layer,
+            stats: {
+              ...extra,
+              lastCheckedAt: 1800000000000 - 125000,
+              stateCount: 48,
+            },
+          }),
+          'Rainfolk · 2m ago',
+        );
+      }
+  } finally {
+    Date.now = original;
+  }
+});
+
+test('wells expose exact count and failures in native Vue descriptions without custom hover titles', async () => {
+  const { LayerPanel, presentLayerCount } = await import('./layerPanel.js');
+  const { h, render } = await import('vue');
+  const { default: LayerRows } = await import('./layerPanel/LayerRows.vue');
+  const panel = new LayerPanel({});
+  const layer = {
+    id: 'us-groundwater',
+    name: 'U.S. Groundwater Wells',
+    icon: '🪣',
+    lifecycleUncertain: true,
+    lifecycleState: 'disabled',
+    enabled: false,
+    stats: { lastError: 'source failed', catalogCount: 5918051 },
+  };
+  const item = panel._presentRow({ count: true }, layer);
+  assert.equal(item.count.text, '5.9M');
+  assert.equal(item.meta, 'Rainfolk · never');
+  assert.match(item.description, /source failed/);
+  assert.match(item.description, /Lifecycle state uncertain/);
+  assert.match(item.description, /Historical source records/);
+  assert.match(item.description, /5,918,051/);
+  const container = document.body.appendChild(document.createElement('div'));
+  render(h(LayerRows, { items: [item] }), container);
+  const button = container.querySelector('.data-toggle-btn');
+  assert.equal(button.hasAttribute('title'), false);
+  assert.equal(
+    button.getAttribute('aria-describedby'),
+    'water-wells-description',
+  );
+  assert.equal(
+    container.querySelector('#water-wells-description').textContent,
+    item.description,
+  );
+  assert.equal(
+    container.querySelector('.data-toggle-meta').textContent,
+    'Rainfolk · never',
+  );
+  render(null, container);
+  container.remove();
+  panel.destroy();
+  assert.equal(presentLayerCount({ count: 1000 }).text, '1.0K');
+  assert.equal(presentLayerCount({ count: 1000 }, true).text, '1K');
+  assert.equal(presentLayerCount({ catalogCount: 0 }, true).text, '0');
 });
 
 // Directions renders in the Utilities panel's list; Data Layers keeps the rest.

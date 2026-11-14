@@ -315,6 +315,8 @@
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
     "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./layers/us-groundwater": "./src/layers/usGroundwater/index.js",
+    "./layers/us-groundwater/source": "./src/layers/usGroundwater/source.js",
     "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
     "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
   }

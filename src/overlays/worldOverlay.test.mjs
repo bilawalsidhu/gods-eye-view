@@ -12,6 +12,8 @@ import {
 } from '../celestialRing.js';
 import { createCctvThumbnailOverlayEntry, createFrameSlot } from '../data/cctvCards.js';
 import { combinedOverlayAlpha } from './worldOverlayDraw.js';
+import { createInfrastructureOverlayEntry } from '../data/infrastructureOverlayEntry.js';
+import { createTrackedOverlayEntry } from '../data/trackedReadout.js';
 import {
   buildWildlifeLabelEntry,
   buildWildlifeThumbnailEntry,
@@ -105,6 +107,7 @@ function installMockEnvironment({
   dpr = 2,
   occluderRect = null,
   occluders = [],
+  mockTimers = false,
 } = {}) {
   const byId = new Map();
   const paintTrace = [];
@@ -114,6 +117,18 @@ function installMockEnvironment({
   const selectorQueries = { matches: 0, querySelector: 0, querySelectorAll: 0 };
   const originalPerformance = Object.getOwnPropertyDescriptor(globalThis, 'performance');
   let currentTime = 0;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers = new Map();
+  let timerId = 0;
+  if (mockTimers) {
+    globalThis.setTimeout = (callback, delay) => {
+      const id = ++timerId;
+      timers.set(id, { callback, deadline: currentTime + delay });
+      return id;
+    };
+    globalThis.clearTimeout = (id) => timers.delete(id);
+  }
   Object.defineProperty(globalThis, 'performance', {
     configurable: true,
     value: { now: () => currentTime },
@@ -404,9 +419,23 @@ function installMockEnvironment({
     mutationObservers,
     layoutReads,
     selectorQueries,
-    advanceTime(ms) { currentTime += ms; },
+    pendingTimers() { return [...timers.values()].map((timer) => timer.deadline); },
+    advanceTime(ms, { deliverTimers = true } = {}) {
+      const end = currentTime + ms;
+      while (deliverTimers) {
+        const next = [...timers.entries()].filter(([, timer]) => timer.deadline <= end)
+          .sort((a, b) => a[1].deadline - b[1].deadline)[0];
+        if (!next) break;
+        timers.delete(next[0]); currentTime = Math.max(currentTime, next[1].deadline); next[1].callback();
+      }
+      currentTime = end;
+    },
     cleanup() {
       destroyWorldOverlay();
+      if (mockTimers) {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+      }
       delete globalThis.document;
       delete globalThis.window;
       delete globalThis.ResizeObserver;
@@ -2561,6 +2590,104 @@ test('promoting an ambient entry to selected paints it once with no fading dupli
     env.advanceTime(100); assert.equal(paint(), 1);
     setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
     assert.equal(paint(), 1, 'deselect restores the ambient card without re-entry cooldown');
+  } finally { env.cleanup(); }
+});
+
+// No groundwater lifecycle is involved: this is the shared host's deadline contract.
+function staticDismissalFixture() {
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1, mockTimers: true });
+    initWorldOverlay(env.viewer);
+    const anchor = position();
+    const entry = {
+      ...createInfrastructureOverlayEntry({ id: 'site', source: 'static-fixture', position: anchor, title: 'A location', details: ['USGS'] }),
+      horizonCull: false, edgeFade: 'none', distanceScale: undefined,
+    };
+    setOverlayEntries('static-fixture', [entry], { collisionCapacity: 24, moving: false });
+    env.postRender.raise(); env.advanceTime(200); env.postRender.raise();
+    assert.ok(getOverlayPaintRect('static-fixture', 'site'), 'initial ambient flag paints');
+    const card = createTrackedOverlayEntry({ id: 'selected-site', gevDisplayPosition: () => anchor,
+      gevLabelModel: { title: 'Selected source-backed location', details: Array(16).fill('Source-backed observation and coverage details') } });
+  return { env, select() {
+    setOverlayEntries('tracked', [{ ...card, horizonCull: false, edgeFade: 'none', anchorRadiusScale: undefined }], { collisionCapacity: 0, moving: true });
+    env.postRender.raise(); env.advanceTime(400); env.postRender.raise();
+    assert.ok(getOverlayPaintRect('tracked', card.id), 'selected card paints');
+    assert.equal(getOverlayPaintRect('static-fixture', 'site'), null, 'selected card excludes ambient footprint');
+  }, dismiss() { clearOverlaySource('tracked'); env.postRender.raise(); } };
+}
+
+test('static ambient flag recovers after repeated tracked-card dismissals with one idle deadline wake', () => {
+  const { env, select, dismiss } = staticDismissalFixture();
+  try {
+    for (let cycle = 0; cycle < 3; cycle++) {
+      select();
+      assert.equal(env.pendingTimers().length, 0, 'no wake for a flag still excluded by a protected card');
+      dismiss();
+      assert.equal(env.pendingTimers().length, 1, 'one pending cooldown deadline');
+      const deadline = env.pendingTimers()[0];
+      const revision = getWorldOverlayDiagnostics().solveRevision;
+      for (let frame = 0; frame < 4; frame++) env.postRender.raise();
+      assert.deepEqual(env.pendingTimers(), [deadline], 'steady frames do not postpone or duplicate the deadline');
+      const requests = env.viewer.scene.requestRenderCount;
+      env.advanceTime(1000);
+      assert.equal(env.viewer.scene.requestRenderCount, requests, 'no polling during idle cooldown');
+      env.advanceTime(100);
+      assert.equal(env.viewer.scene.requestRenderCount, requests + 1, 'deadline requests one frame even when rendering is idle');
+      env.postRender.raise(); env.advanceTime(200); env.postRender.raise();
+      assert.ok(getOverlayPaintRect('static-fixture', 'site'), 'flag recovers without camera motion or layer republishing');
+      assert.ok(getWorldOverlayDiagnostics().solveRevision > revision);
+      assert.equal(env.pendingTimers().length, 0, 'recovered flag leaves no polling timer');
+    }
+    const requests = env.viewer.scene.requestRenderCount;
+    env.advanceTime(10000);
+    assert.equal(env.viewer.scene.requestRenderCount, requests, 'fully settled host stays idle');
+  } finally { env.cleanup(); }
+});
+
+test('removing or hiding a pending ambient source cancels its cooldown wake', () => {
+  for (const remove of [() => clearOverlaySource('static-fixture'), () => setOverlaySourceVisible('static-fixture', false)]) {
+    const { env, select, dismiss } = staticDismissalFixture();
+    try {
+      select(); dismiss(); assert.equal(env.pendingTimers().length, 1);
+      remove(); assert.equal(env.pendingTimers().length, 0);
+      env.postRender.raise();
+      const requests = env.viewer.scene.requestRenderCount;
+      env.advanceTime(10000);
+      assert.equal(env.viewer.scene.requestRenderCount, requests);
+      assert.equal(getOverlayPaintRect('static-fixture', 'site'), null);
+    } finally { env.cleanup(); }
+  }
+});
+
+test('destroy cancels a pending cooldown and cannot wake a replacement host', () => {
+  const { env, select, dismiss } = staticDismissalFixture();
+  try {
+    select(); dismiss(); assert.equal(env.pendingTimers().length, 1);
+    destroyWorldOverlay(); assert.equal(env.pendingTimers().length, 0);
+    initWorldOverlay(env.viewer);
+    const requests = env.viewer.scene.requestRenderCount;
+    env.advanceTime(10000);
+    assert.equal(env.viewer.scene.requestRenderCount, requests);
+    assert.equal(getWorldOverlayDiagnostics().entryCount, 0);
+  } finally { env.cleanup(); }
+});
+
+test('a frame arriving after the cooldown deadline solves before delayed timers are delivered', () => {
+  const { env, select, dismiss } = staticDismissalFixture();
+  try {
+    select(); dismiss();
+    const revision = getWorldOverlayDiagnostics().solveRevision;
+    assert.equal(env.pendingTimers().length, 1);
+    env.advanceTime(1101, { deliverTimers: false });
+    assert.equal(env.pendingTimers().length, 1, 'deadline passed but callback has not run');
+    env.postRender.raise();
+    assert.ok(getWorldOverlayDiagnostics().solveRevision > revision, 'overdue frame must solve before discarding the deadline');
+    assert.equal(env.pendingTimers().length, 0, 'successful frame cancels the redundant timer');
+    const requests = env.viewer.scene.requestRenderCount;
+    env.advanceTime(0);
+    assert.equal(env.viewer.scene.requestRenderCount, requests, 'subsequent timer delivery does not wake an already solved host');
+    env.advanceTime(200); env.postRender.raise();
+    assert.ok(getOverlayPaintRect('static-fixture', 'site'), 'flag reappears without camera motion');
+    assert.equal(env.pendingTimers().length, 0);
   } finally { env.cleanup(); }
 });
 

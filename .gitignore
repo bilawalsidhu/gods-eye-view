@@ -30,3 +30,7 @@ pinokio/.installed
 
 # Transient: a release interrupted mid-assembly (npm run changelog recovers it)
 changelog.d/.assembling/
+
+# Local generated well artifacts and contract-proof scratch.
+/public/well-index-v1/
+/.temp-gev/

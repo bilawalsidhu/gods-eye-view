@@ -249,6 +249,31 @@ function nowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
 
+// Static domains need one wake-up when a live candidate's re-entry cooldown
+// expires. Render requests alone cannot cause the arbiter to solve again.
+let _cooldownTimer = null;
+let _cooldownDeadline = Infinity;
+function cancelCooldownWake() {
+  if (_cooldownTimer !== null) clearTimeout(_cooldownTimer);
+  _cooldownTimer = null;
+  _cooldownDeadline = Infinity;
+}
+function wakeAfterCooldown() {
+  _cooldownTimer = null;
+  _cooldownDeadline = Infinity;
+  if (!_destroyed && _viewer) invalidateHost();
+}
+function scheduleCooldownWake(deadline, timestamp) {
+  if (deadline === _cooldownDeadline) return;
+  cancelCooldownWake();
+  if (!Number.isFinite(deadline)) return;
+  _cooldownDeadline = deadline;
+  _cooldownTimer = setTimeout(
+    wakeAfterCooldown,
+    Math.max(1, Math.ceil(deadline - timestamp)),
+  );
+}
+
 function clamp01(value, fallback = 1) {
   return Number.isFinite(Number(value))
     ? Math.max(0, Math.min(1, Number(value)))
@@ -836,6 +861,7 @@ function getOrCreateSource(sourceId, options = {}) {
 }
 
 function invalidateHost({ solve = true, layout = false } = {}) {
+  if (solve) cancelCooldownWake();
   if (solve) _solveDirty = true;
   if (layout) _occludersDirty = true;
   _canvasNeedsClear = true;
@@ -2289,16 +2315,20 @@ function sourceCanPaint(sourceId) {
 }
 
 function solveDomains(timestamp) {
+  // A render task can beat delivery of an already-due timeout. Consume that
+  // deadline as a solve trigger before recomputing/cancelling the next wake.
+  const cooldownSolveDue = timestamp >= _cooldownDeadline;
   _paintCount = 0;
   let solveMs = 0;
   let selectedCount = 0;
   let fadingCount = 0;
   let solveRevision = 0;
+  let cooldownDeadline = Infinity;
   for (let d = 0; d < _domainList.length; d++) {
     const domain = _domainList[d];
     const movingSolveDue =
       domain.moving && timestamp - domain.lastSolveAt >= domain.solveIntervalMs;
-    if (_solveDirty || movingSolveDue) {
+    if (_solveDirty || movingSolveDue || cooldownSolveDue) {
       const started = nowMs();
       domain.arbiter.solve(domain.candidates, {
         capacity: Math.min(domain.capacity, domain.candidates.length),
@@ -2311,6 +2341,20 @@ function solveDomains(timestamp) {
       });
       solveMs += nowMs() - started;
       domain.lastSolveAt = timestamp;
+    }
+    // Only current, projected candidates with usable placements can benefit
+    // from a deadline solve. Removed/hidden/occluded entries must not keep the
+    // host awake. One timer covers the earliest deadline across all domains.
+    for (let i = 0; i < domain.candidateCount; i++) {
+      const candidate = domain.candidates[i];
+      const state = domain.arbiter.states.get(candidate.key);
+      if (
+        !candidate.stateless &&
+        state &&
+        !state.selected &&
+        state.cooldownUntil > timestamp
+      )
+        cooldownDeadline = Math.min(cooldownDeadline, state.cooldownUntil);
     }
     for (let p = 0; p < domain.protectedCount; p++) {
       const record = domain.protectedCandidates[p]._record;
@@ -2354,6 +2398,7 @@ function solveDomains(timestamp) {
   _paintQueue.length = _paintCount;
   if (_frameStamp % QUEUED_ITEM_PRUNE_FRAMES === 0) pruneQueuedItemIndex();
   _solveDirty = false;
+  scheduleCooldownWake(cooldownDeadline, timestamp);
   _diagnostics.solveMs = solveMs;
   _diagnostics.selectedCount = selectedCount;
   _diagnostics.fadingCount = fadingCount;
@@ -2824,6 +2869,7 @@ export function initWorldOverlay(viewer) {
 
 /** Remove all listeners, observers, entries, diagnostics, and overlay DOM. */
 export function destroyWorldOverlay() {
+  cancelCooldownWake();
   if (_sonarRenderTimer !== null) clearTimeout(_sonarRenderTimer);
   _sonarRenderTimer = null;
   // Tearing down a host that was never initialized must not arm the
