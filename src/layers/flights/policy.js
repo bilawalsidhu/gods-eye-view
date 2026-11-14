@@ -39,8 +39,6 @@ export const GROUND_SCALE = 0.8;
 // the slots go to either the nearest planes ('proximity') or every in-view plane ('all'), each
 // backed by a hard cap so a draw-call explosion can't tank the frame (no instancing yet).
 
-export const PLANE_MODEL_URL = '/models/airplane.glb';
-
 export const MODEL_ALT_CEIL_M = 800000;
 // m: below this camera altitude, draw 3D models (raised so it's easy to trigger)
 
@@ -55,10 +53,6 @@ export const TRACKED_MODEL_MIN_PX = 40;
 export const TRACKED_MODEL_MAX_PX = 200;
 // owner-selected close-range tracked-target feel
 
-export const MODEL_NATIVE_RADIUS_M = 34.41;
-
-export const MODEL_SCALE = 1;
-// airplane.glb is transform-applied and baked to real-world meters
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
 
 export const MODEL_MAX = 150;
@@ -90,20 +84,11 @@ export const MODEL_ALL_KEEP_M = 450000;
 // all: KEEP modeled planes out to 450 km
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
-// airplane.glb nose is opposite Cesium heading-0
+// every fleet model is nose -X: opposite Cesium heading 0
 // Owner launch-polish direction: models should read as clean light silhouettes,
-// with only a weak diffuse contribution from the existing approved textures.
+// with only a weak diffuse contribution from the models' own colours.
 
 export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
-
-// Grounded-model belly offset: airplane.glb's centred origin sits 6.719 m ABOVE its
-// lowest vertex (glTF Y-up scene AABB with node transforms applied — same reader as
-// modelScale.test.mjs, measured after its 24× transform bake). × class multiplier ≈ 5.0–9.7 m
-// of lift, so a ground-snapped model rests its lowest geometry (gear/belly) ON the sampled
-// tile skin instead of sinking to the fuselage-centerline origin. Locked against the GLB
-// by modelScale.test.mjs.
-
-export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
 export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
 
@@ -202,6 +187,24 @@ export const LANDED_SPEED_MAX_MPS = 23;
 /** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
 
 export const FLEET_DR_INTERVAL_MS = 80;
+
+/**
+ * The icon-to-model rules the aircraft layers follow, as the Vessels, Transit
+ * and Rail layers take them (`createFleetModelLayer`): the same altitude
+ * ceiling, minimum pixel size, proximity/all caps, add/keep radii and
+ * eligibility cadence, so every layer turns icons into models at one distance.
+ */
+export const FLEET_MODEL_POLICY = Object.freeze({
+  altitudeCeilingM: MODEL_ALT_CEIL_M,
+  minimumPixelSize: MODEL_MIN_PX,
+  cap: MODEL_MAX,
+  capAll: MODEL_MAX_ALL,
+  addM: MODEL_PROX_ADD_M,
+  addAllM: MODEL_ALL_ADD_M,
+  keepM: MODEL_PROX_KEEP_M,
+  keepAllM: MODEL_ALL_KEEP_M,
+  intervalMs: FLEET_DR_INTERVAL_MS,
+});
 
 /** @constant {number} Max ms between rotation passes while the camera is idle. */
 
