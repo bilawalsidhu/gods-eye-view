@@ -627,6 +627,36 @@ panel that holds its row, and `set_panel_open` reaches it as
 `utilities-panel` or by "utilities", "draw", "drawing" or "import". On a phone
 it sits collapsed in the Layers sheet under Data Layers.
 
+## Side rails and the screen edge — November 14, 2026
+
+Visual (`#pp-toggles`, the display settings, rail item `palette`) is the last
+panel of the left column, after Data Layers, Utilities and Authoring, and
+opens from the left rail like them (`PanelLayoutController`, falling back to
+the right column in a host without a left stack). Context leads the right
+column, followed by CCTV, Street Level and the other right panels. An open
+Context or CCTV panel takes the column's full height; the other right panels
+keep the content-sized layout and its hysteresis band. With nothing open, a
+rail's icons and their names show as two glass pieces side by side; once a
+panel opens, the icons stay in place and a highlight slides to the open one.
+
+Each collapsible panel header has an edge switch (`UiPanelEdge.vue`,
+`src/ui/panelEdge.js`): it moves that side's panels over their rail to the
+screen edge, with the rail as a row of icons above the open panel, and back.
+The choice is per side, kept in `localStorage` (`gev.panelEdge`), and applies
+on the desktop shell only: phones and Cockpit keep their own layouts and do
+not show the switch.
+
+Scrolling the wheel at a screen edge (`src/ui/railEdgeScroll.js`, from the
+edge to just past the rail, at most 84 px) steps that side's rail to its next
+or previous panel instead of zooming the globe, wrapping round at either end.
+One gesture is one step, trackpad coasting included, with at least half a
+second between steps; a step that comes too soon is held until then and is
+dropped if the pointer leaves the strip. Panels, controls, dialogs and the
+world timeline in the strip keep their own wheel. The strip is off on phones
+and touch screens, while the rails are hidden (clean view, recording), and it
+follows the rails' sides in a right-to-left language. On a phone, Visual is in
+the More sheet with the dock's Visual Presets, as before.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,
