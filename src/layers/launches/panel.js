@@ -1,3 +1,4 @@
+import { selectionMovesCamera } from '../../data/selectionCameraPolicy.js';
 import * as Cesium from 'cesium';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
@@ -366,7 +367,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
     const launch = layerState._launches[index];
     if (!launch) return;
     parts.selection.setSelectedMission(launch.id, true);
-    parts.selection.focusMission(launch);
+    if (selectionMovesCamera()) parts.selection.focusMission(launch);
   }
 
   function clearMissionRosterPreviewState() {

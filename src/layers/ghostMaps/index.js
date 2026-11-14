@@ -806,6 +806,30 @@ export function createGhostMapsLayer({
       };
     },
 
+    getInspectionInfo() {
+      const { product, feature } = _selectedKey ? featureFor(_selectedKey) : {};
+      if (!_enabled || !feature) return null;
+      const { fields, links } = parseDescriptionFields(feature.description);
+      const position = feature.anchor;
+      return {
+        id: _selectedKey,
+        label: feature.name || feature.folder || product?.title,
+        latitude: position?.[1],
+        longitude: position?.[0],
+        properties: {
+          product: product?.title,
+          folder: feature.folder,
+          ...Object.fromEntries(
+            fields.map((field, index) => [
+              field.label || String(index + 1),
+              field.value,
+            ]),
+          ),
+          sources: links,
+        },
+      };
+    },
+
     getStats() {
       return {
         count: featureCount(),

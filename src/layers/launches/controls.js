@@ -54,6 +54,20 @@ export function createControls({ state: layerState, services, parts, source }) {
       return result;
     },
 
+    /** Selected mission data without scene resources. */
+    getInspectionInfo() {
+      const mission = layerState._launches.find(
+        (item) => item.id === layerState._selectedLaunchId,
+      );
+      return layerState._enabled && mission
+        ? {
+            ...mission,
+            latitude: mission.lat,
+            longitude: mission.lon,
+            label: mission.name || mission.missionName,
+          }
+        : null;
+    },
     getStats() {
       return {
         count: layerState._count,

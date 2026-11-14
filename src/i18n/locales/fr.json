@@ -3699,5 +3699,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "Réinitialiser la vue recharge l’app sans la vue restaurée depuis la barre d’adresse.",
   "Reload": "Recharger",
   "Retry": "Réessayer",
-  "Reset view": "Réinitialiser la vue"
+  "Reset view": "Réinitialiser la vue",
+  "OBJECT DETAILS": "DÉTAILS DE L’OBJET",
+  "Restore last view": "Restaurer la dernière vue",
+  "Latitude": "Latitude",
+  "Longitude": "Longitude",
+  "No object selected": "Aucun objet sélectionné"
 }

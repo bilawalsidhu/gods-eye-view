@@ -3612,5 +3612,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "”Återställ vy” laddar om appen utan vyn som återställdes från adressfältet.",
   "Reload": "Ladda om",
   "Retry": "Försök igen",
-  "Reset view": "Återställ vy"
+  "Reset view": "Återställ vy",
+  "OBJECT DETAILS": "OBJEKTDETALJER",
+  "Restore last view": "Återställ senaste vy",
+  "Latitude": "Latitud",
+  "Longitude": "Longitud",
+  "No object selected": "Inget objekt valt"
 }

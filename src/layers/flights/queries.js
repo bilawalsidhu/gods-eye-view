@@ -778,8 +778,14 @@ export function createQueries({
       if (!flightState._billboards.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._trackedIcao === id)
+      if (flightState._trackedIcao === id) {
+        if (
+          flightState._viewer?.trackedEntity !== flightState._trackedEntity &&
+          this.refocusTrackedById(id, { origin })
+        )
+          return true;
         return parts.tracking._publishTrackedSelection(id, origin);
+      }
       parts.tracking._trackFlight(id, { origin });
       return true;
     },
@@ -848,8 +854,7 @@ export function createQueries({
       if (!flightState._billboards.has(id)) id = id.toLowerCase();
       if (
         id !== flightState._trackedIcao ||
-        !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||
-        flightState._viewer.trackedEntity !== flightState._trackedEntity
+        !flightState._viewer.entities?.contains?.(flightState._trackedEntity)
       )
         return false;
       flightState._trackedCameraFrameStop?.();

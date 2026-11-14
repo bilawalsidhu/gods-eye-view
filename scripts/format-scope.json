@@ -1449,5 +1449,12 @@
   "src/data/fleetModelInstances.test.mjs",
   "src/testSupport/fleetGlb.mjs",
   "src/testSupport/fleetModelFakes.mjs",
-  "scripts/measure-fleet-trail-anchors.mjs"
+  "scripts/measure-fleet-trail-anchors.mjs",
+  "src/ui/focusReturn.test.mjs",
+  "src/ui/objectInspection.test.mjs",
+  "src/ui/objectInspectionPanel.test.mjs",
+  "scripts/qa-object-inspection.mjs",
+  "scripts/qa-vessel-selection.mjs",
+  "src/data/flights.test.mjs",
+  "src/data/militaryFlights.test.mjs"
 ]

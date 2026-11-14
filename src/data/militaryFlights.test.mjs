@@ -469,6 +469,8 @@ test('real military track path creates no native label and publishes every cache
       militaryFlightsLayer.refocusTrackedById('different-flight'),
       false,
     );
+    // An inspected selection has an entity but no follow-camera owner.
+    viewer.trackedEntity = undefined;
     assert.equal(
       militaryFlightsLayer.refocusTrackedById(icao24, { origin: 'voice' }),
       true,
