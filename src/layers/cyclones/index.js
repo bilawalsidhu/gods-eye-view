@@ -1,6 +1,7 @@
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
 import {
   registerPickOwner,
   unregisterPickOwner,
@@ -230,7 +231,19 @@ export function createCyclonesLayer({
       if (id) layer.setParams({ stormId: id });
       else if (!event.topHit) layer.setParams({ clear: true });
     });
-    owner.unsubscribe = unsubscribe;
+    // A double-click follows a storm's point or zooms to its track or cone,
+    // as the default renderer did for their entities.
+    const follow = followOnDoubleClick({
+      viewer,
+      inputFor,
+      name: 'weather-cyclones',
+      enabled: () => enabled && !destroyed && selectionOwner === owner,
+      targetFor: (hit) => rendering?.followTargetFor?.(hit) ?? null,
+    });
+    owner.unsubscribe = () => {
+      unsubscribe();
+      follow.destroy();
+    };
   }
   function removeSelection() {
     const owner = selectionOwner;

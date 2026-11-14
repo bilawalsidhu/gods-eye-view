@@ -63,7 +63,10 @@ export function createCycloneRendering({ viewer, overlayHost }) {
   let centers = new Map(),
     forecasts = [],
     spheres = new Map(),
-    itemStorms = new Map();
+    itemStorms = new Map(),
+    // Per drawn item, where a double-click follows it (a point) or what it
+    // zooms to (a track, cone or outline).
+    itemPlaces = new Map();
   let counts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
   let itemCount = 0;
 
@@ -99,7 +102,8 @@ export function createCycloneRendering({ viewer, overlayHost }) {
       if (destroyed) return false;
       const nextCenters = new Map(),
         nextSpheres = new Map(),
-        nextItemStorms = new Map();
+        nextItemStorms = new Map(),
+        nextItemPlaces = new Map();
       const nextForecasts = [],
         nextLines = [],
         nextCones = [],
@@ -122,6 +126,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
         const center = ecef(at);
         const extent = [center];
         own(`cyclone:${storm.id}:center`);
+        nextItemPlaces.set(`cyclone:${storm.id}:center`, { at: center });
         nextCenters.set(storm.id, { id: storm.id, at });
         const label = {
           id: storm.id,
@@ -142,6 +147,9 @@ export function createCycloneRendering({ viewer, overlayHost }) {
             // Lines take ECEF (draw.d.ts `LineItem`).
             const positions = line.map((c) => ecef(pair(c)));
             extent.push(...positions);
+            nextItemPlaces.set(`cyclone:${storm.id}:track:${index}`, {
+              extent: positions,
+            });
             nextLines.push({
               id: own(`cyclone:${storm.id}:track:${index}`),
               positions,
@@ -161,6 +169,9 @@ export function createCycloneRendering({ viewer, overlayHost }) {
             const all = rings.map((ring) => ring.map(pair));
             const ecefRings = all.map((ring) => ring.map(ecef));
             extent.push(...ecefRings[0]);
+            nextItemPlaces.set(`cyclone:${storm.id}:cone:${index}`, {
+              extent: ecefRings[0],
+            });
             nextCones.push({
               id: own(`cyclone:${storm.id}:cone:${index}`),
               geometry: { kind: 'polygon', rings: all },
@@ -168,6 +179,10 @@ export function createCycloneRendering({ viewer, overlayHost }) {
               height: 'clampGround',
             });
             ecefRings.forEach((ring, ringIndex) => {
+              nextItemPlaces.set(
+                `cyclone:${storm.id}:cone:${index}:outline:${ringIndex}`,
+                { extent: ring },
+              );
               nextLines.push({
                 id: own(
                   `cyclone:${storm.id}:cone:${index}:outline:${ringIndex}`,
@@ -188,6 +203,9 @@ export function createCycloneRendering({ viewer, overlayHost }) {
             const pos = lonLat(point.position);
             const p = ecef(pos);
             extent.push(p);
+            nextItemPlaces.set(`cyclone:${storm.id}:forecast:${index}`, {
+              at: p,
+            });
             nextForecasts.push({
               id: own(`cyclone:${storm.id}:forecast:${index}`),
               pos,
@@ -212,6 +230,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
       forecasts = nextForecasts;
       spheres = nextSpheres;
       itemStorms = nextItemStorms;
+      itemPlaces = nextItemPlaces;
       counts = nextCounts;
       itemCount = nextItemStorms.size;
       committed = true;
@@ -235,6 +254,21 @@ export function createCycloneRendering({ viewer, overlayHost }) {
       if (!setIds.has(hit.set)) return null;
       return itemStorms.get(hit.id) ?? null;
     },
+    /**
+     * What a double-click on a hit follows or zooms to (`followOnDoubleClick`
+     * in `data/stockFollow.js`), as the default renderer did for the
+     * advisory's entities: a center or forecast point is followed, a track,
+     * cone or outline zoomed to.
+     */
+    followTargetFor(hit) {
+      if (!committed || !hit || hit.surface || !setIds.has(hit.set))
+        return null;
+      const place = itemPlaces.get(hit.id);
+      if (!place) return null;
+      if (place.extent) return { zoomTo: sphereFromPoints(place.extent) };
+      const at = place.at;
+      return { key: `${hit.set}:${hit.id}`, position: () => ({ ...at }) };
+    },
     getFocusSphere(id) {
       return spheres.get(id) || null;
     },
@@ -250,6 +284,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
       forecasts = [];
       spheres = new Map();
       itemStorms = new Map();
+      itemPlaces = new Map();
       itemCount = 0;
       selected = null;
       counts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
