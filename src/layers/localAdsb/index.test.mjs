@@ -1370,3 +1370,35 @@ test('a click on a UAT ring selects its aircraft, as the ring was a point on its
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:a1b2c3']);
 });
+
+test('a tap near a local aircraft but on nothing selects nothing, as the exact pick did', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+  });
+  t.after(() => layer.destroy());
+  const priorMatch = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (priorMatch === undefined) delete globalThis.matchMedia;
+    else globalThis.matchMedia = priorMatch;
+  });
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  // The touch search finds contacts by their registered owner.
+  const { registerPickOwner, unregisterPickOwner } =
+    await import('../../data/pickRegistry.js');
+  registerPickOwner('local-adsb-test', (id) =>
+    String(id).startsWith('local-adsb:'),
+  );
+  t.after(() => unregisterPickOwner('local-adsb-test'));
+  // Nothing exactly under the tap; the aircraft is within a touch's reach.
+  harness.scene.pickResult = null;
+  harness.scene.drillPick = (position, limit, width = 1) =>
+    width > 1 ? [iconPick(draw, 'local-adsb:abc123')] : [];
+  harness.viewer.viewer.drillHits = [];
+  harness.click();
+  assert.deepEqual(calls.selected, []);
+});

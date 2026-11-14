@@ -654,10 +654,16 @@ export function createLocalAdsbLayer({
     const top = event.drawHit;
     const own = ownHit(top);
     if (own) return own;
-    // What is on top when it is no draw-set item: a sibling's contact
-    // drawn on its own, a tile, or (on a coarse pointer) a contact found
-    // under the touch.
-    const topId = top ? top.id : event.id;
+    // What is exactly on top when it is no draw-set item: a sibling's
+    // contact drawn on its own, or a tile. Never a touch's wider contact
+    // search: a tap that misses an aircraft selects nothing, and one near
+    // another layer's contact clears the selection, as the exact pick did.
+    const exact = top ? null : event.topHit;
+    const topId = top
+      ? top.id
+      : exact && !exact.surface && exact.id != null
+        ? String(exact.id)
+        : null;
     if (!top && topId && markers.has(topId)) return topId;
     const trail = Boolean(topId) && String(topId).startsWith(TRAIL_PICK_PREFIX);
     if (ownedElsewhere(topId) && !trail) return 'other';
