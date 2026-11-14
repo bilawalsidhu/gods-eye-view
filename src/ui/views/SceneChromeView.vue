@@ -20,6 +20,7 @@ import UiButton from '../kit/UiButton.vue';
 import GlobeActions from './panels/GlobeActions.vue';
 import RenderFailure from './panels/RenderFailure.vue';
 import WorldTimeline from './panels/WorldTimeline.vue';
+import WorldOverlayCards from './panels/WorldOverlayCards.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
@@ -65,6 +66,7 @@ const vToastText = {
   <RenderFailure />
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
+    <WorldOverlayCards />
   </div>
   <div id="world-overlay-actions" class="world-overlay-accessibility" role="region" :aria-label="t('Visible map targets')">
     <div id="world-overlay-action-list"><UiButton v-for="item in targets?.items ?? []" :key="item.key" :aria-label="item.label" :pressed="Boolean(item.selected)" :data-overlay-action-key="item.key" :onClick="onOverlayAction(targets.owner, item.key)">{{ item.label }}</UiButton></div>

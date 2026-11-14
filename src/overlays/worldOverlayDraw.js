@@ -645,8 +645,6 @@ function drawCardChrome(
     : WORLD_OVERLAY_STYLE.border;
   ctx.lineWidth = selected ? 1.25 : 1;
   ctx.stroke();
-  ctx.fillStyle = accent;
-  ctx.fillRect(x, y + 3, selected ? 3 : 2, Math.max(1, h - 6));
 }
 
 function drawCardText(ctx, entry, placement, selected = false, topOffset = 0) {
@@ -1201,6 +1199,57 @@ export function paintDetectionCallout(ctx, callout, alpha = 1) {
     ctx.font = callout.microFont;
     ctx.fillText(callout.micro, callout.microX, callout.baseline);
   }
+}
+
+/**
+ * The kind of card a view may draw in place of the canvas plate and text:
+ * `'tracked'`, `'selected'` or `'card'`, or null for the variants that stay
+ * on the canvas (labels, tracks, thumbnails and tactical cards).
+ * @param {object} entry A normalized entry.
+ * @returns {?('tracked'|'selected'|'card')}
+ */
+export function overlayEntryViewCardKind(entry) {
+  if (entry.cardStyle === 'tactical' || entry.variant === 'thumbnail')
+    return null;
+  if (entry.variant === 'tracked') return 'tracked';
+  if (entry.selected || entry.variant === 'selected') return 'selected';
+  return entry.variant === 'card' ? 'card' : null;
+}
+
+/**
+ * Paint only what joins a view-drawn card to its target: the leader and, for
+ * a staged card, its anchor dot. Same arguments as `paintOverlayEntry`.
+ * @returns {number} The alpha the card itself shows at.
+ */
+export function paintOverlayEntryConnector(
+  ctx,
+  entry,
+  placement,
+  alpha = 1,
+  leaderProgress = 1,
+  contentAlpha = 1,
+) {
+  const accent = entry.accent || WORLD_OVERLAY_STYLE.accent;
+  const staged = entry.anchorDot && overlayEntryViewCardKind(entry) === 'card';
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (staged) {
+    drawLeader(
+      ctx,
+      placement,
+      accent,
+      leaderProgress,
+      WORLD_OVERLAY_STYLE.leaderWidth,
+      entry.leaderStyle,
+    );
+    drawAnchorDot(ctx, entry, placement);
+  } else {
+    drawLeader(ctx, placement, accent, 1, 1, entry.leaderStyle);
+  }
+  ctx.restore();
+  return staged
+    ? alpha * Math.max(0, Math.min(1, Number(contentAlpha) || 0))
+    : alpha;
 }
 
 /** Dispatch a normalized entry to its pure variant painter. */

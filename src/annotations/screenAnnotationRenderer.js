@@ -890,9 +890,6 @@ function partViews(parts) {
       card: label.sized
         ? { width: String(label.width), height: String(label.height) }
         : {},
-      accent: label.sized
-        ? { height: String(label.height - 8), x: '0', y: '4' }
-        : {},
     });
   return views;
 }
