@@ -36,6 +36,7 @@ export function createLifecycle({
     async init(viewer) {
       parts.catalog._abortActiveUpdates();
       clearFocusTarget('satellites');
+      parts.issModel?._destroyIssModel();
       layerState._viewer = viewer;
       layerState._catalog = new Map();
       layerState._points = new Map();
@@ -130,7 +131,10 @@ export function createLifecycle({
       if (layerState._pointCollection) layerState._pointCollection.show = false;
       for (const path of layerState._orbitPaths.values())
         path.primitive.show = false;
+      parts.issModel?._updateIssModel(); // off: hides the model
       parts.tracking._clearTracking();
+      parts.issLive?._syncIssLive(); // off: closes the live video
+      parts.issCommand?._syncIssCommand(); // off: closes the command panel
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled
       if (layerState._clickHandler) {
@@ -172,6 +176,9 @@ export function createLifecycle({
       }
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
+      parts.issModel?._destroyIssModel();
+      parts.issLive?._destroyIssLive();
+      parts.issCommand?._destroyIssCommand();
       if (layerState._pointCollection) {
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;

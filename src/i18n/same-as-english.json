@@ -249,7 +249,8 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "ISS LIVE · NASA"
   ],
   "es": [
     "1 min/s",
@@ -411,7 +412,8 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "Manual"
   ],
   "fr": [
     "1 min/s",
@@ -1067,7 +1069,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "Manual"
   ],
   "ru": [
     "1900–1945",
@@ -1264,7 +1267,8 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "ISS LIVE · NASA"
   ],
   "uk": [
     "1900–1945",

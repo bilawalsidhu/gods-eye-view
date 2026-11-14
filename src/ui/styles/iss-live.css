@@ -1,0 +1,150 @@
+/* NASA's ISS live video while the ISS is selected (src/layers/satellites/issLive.js).
+   The project's floating video window: the Québec CCTV player's `qci-` look
+   (quebecCctvOverlay.css), draggable by its header. Only its starting place
+   and the iframe's details are set here: bottom right, above the timeline,
+   300 px wide so it clears the right rail. */
+.qci-panel.iss-live-panel {
+  top: auto;
+  right: 16px;
+  bottom: 96px;
+  width: min(300px, calc(100vw - 32px));
+}
+
+.iss-live-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.iss-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff4444;
+  box-shadow: 0 0 6px #ff4444;
+}
+
+.iss-live-panel .qci-live {
+  border: 0;
+  margin-bottom: 8px;
+}
+
+/* The ISS command panel (src/layers/satellites/issCommand.js): the same
+   floating window, bottom left, collapsed to its header until opened. */
+.qci-panel.iss-command-panel {
+  top: auto;
+  right: auto;
+  left: 16px;
+  bottom: 96px;
+  width: min(250px, calc(100vw - 32px));
+}
+
+.iss-command-title {
+  min-width: 0;
+  letter-spacing: 0.06em;
+}
+
+.iss-command-body {
+  max-height: calc(100vh - 230px);
+  overflow-y: auto;
+  padding: 8px 10px 10px;
+}
+
+.iss-command-body[hidden],
+.iss-command-manual[hidden],
+.iss-command-panel .qci-note[hidden] {
+  display: none;
+}
+
+.iss-command-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.iss-command-mode,
+.iss-command-button {
+  padding: 5px 7px;
+  border: 1px solid #2a5d78;
+  border-radius: 5px;
+  background: #12283a;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.iss-command-mode.is-active,
+.iss-command-button.is-active {
+  border-color: #3eabbc;
+  background: #1b4a5c;
+}
+
+.iss-command-mode:focus-visible,
+.iss-command-button:focus-visible,
+.iss-command-slider input:focus-visible {
+  outline: 2px solid #7fe3f3;
+  outline-offset: 1px;
+}
+
+.iss-command-panel .qci-note {
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.iss-command-group {
+  margin-top: 10px;
+}
+
+.iss-command-label {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.iss-command-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.iss-command-sliders {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.iss-command-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iss-command-slider span {
+  flex: 0 0 96px;
+}
+
+.iss-command-slider input {
+  flex: 1;
+  min-width: 0;
+}
+
+.iss-command-zoom {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.iss-command-zoom[hidden] {
+  display: none;
+}
+
+.iss-command-status {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.iss-command-status[hidden],
+.iss-command-status:empty {
+  display: none;
+}

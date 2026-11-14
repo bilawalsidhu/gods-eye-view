@@ -162,6 +162,18 @@ export const DATA_CREDITS = [
       'Dr. T.S. Kelso',
   },
   {
+    key: 'nasa-iss-model',
+    html:
+      'ISS model: ' +
+      '<a href="https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/" target="_blank" rel="noopener">NASA 3D Resources</a> (JSC IGOAL)',
+  },
+  {
+    key: 'nasa-iss-live',
+    html:
+      'ISS live video: NASA, via ' +
+      '<a href="https://www.youtube.com/watch?v=ROboUHfPUrU" target="_blank" rel="noopener">YouTube</a>',
+  },
+  {
     key: 'ucs-satellite-database',
     html:
       'Satellite operators and purposes: ' +

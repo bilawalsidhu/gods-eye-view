@@ -65,6 +65,8 @@ export function createInteraction({
         const prim = picked.primitive;
         if (prim && prim.id != null) {
           const noradId = Number(prim.id);
+          // A click on the tracked ISS's own model: it is already tracked.
+          if (noradId === layerState._trackedNorad) return;
           if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
             parts.tracking._cancelPendingTrackingRestore();
             parts.tracking._trackSatellite(noradId, { origin: 'user' });
