@@ -97,7 +97,11 @@ export function resolvePickedContext(picked, { dataManager = null } = {}) {
   const record = contextCarrierRecord(picked, dataManager);
   if (record) return fromRecord(record);
 
-  const pickId = resolvePickId(picked);
+  // An item drawn in parts names the id its parts pick as (`meta.pick`:
+  // a Street Level sequence), as the one primitive they were picked as.
+  const pickId =
+    (typeof picked.meta?.pick === 'string' && picked.meta.pick) ||
+    resolvePickId(picked);
   if (!pickId) return null;
   const layerId = findPickOwner(pickId);
   if (!layerId || IGNORED_OWNERS.has(layerId)) return null;

@@ -76,6 +76,16 @@ test('something drawn outside the draw port resolves through its pick owner', ()
   unregisterPickOwner('flights');
 });
 
+test('a part of an item drawn in parts resolves as the id its parts pick as', () => {
+  registerPickOwner('flights', (id) => String(id).startsWith('seq:'));
+  const out = resolvePickedContext(
+    { set: 'lines:1', id: 'seq:42#2', meta: { pick: 'seq:42' }, surface: false },
+    { dataManager: manager() },
+  );
+  assert.equal(out?.id, 'seq:42', 'never the part’s own #n id');
+  unregisterPickOwner('flights');
+});
+
 test('disabled layers, trails and empty picks never resolve', () => {
   registerPickOwner('military', (id) => id === 'm1');
   const hit = (id) => ({ set: 'x:1', id, surface: false });
