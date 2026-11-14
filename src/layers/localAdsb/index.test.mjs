@@ -503,7 +503,7 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
   assert.equal(queries.length, 2, 'each key is asked for once');
 });
 
-test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t) => {
+test('the DISPLAY 3D toggle gives local aircraft their fleet models in the mesh's own colours', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const loads = [];
