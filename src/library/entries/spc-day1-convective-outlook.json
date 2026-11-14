@@ -1,0 +1,60 @@
+{
+  "id": "spc-day1-convective-outlook",
+  "kind": "dataset",
+  "family": "weather",
+  "title": "US severe storm outlook, today (NOAA SPC)",
+  "provider": "NOAA SPC",
+  "description": "The Storm Prediction Center's Day 1 categorical convective outlook: areas at risk of severe thunderstorms today, from general thunderstorms to high risk, as SPC issues and updates it through the day.",
+  "icon": "⛈",
+  "maintainer": "github:quanticsoul4772",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-125, 24, -66, 50]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson",
+    "fetch": "browser-direct",
+    "cacheSeconds": 900,
+    "maxBytes": 4194304,
+    "maxFeatures": 50
+  },
+  "display": {
+    "color": "#c1e9c1",
+    "label": "LABEL2",
+    "fields": ["VALID_ISO", "EXPIRE_ISO"],
+    "rank": {
+      "field": "DN",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "LABEL",
+      "colors": {
+        "TSTM": "#c1e9c1",
+        "MRGL": "#66a366",
+        "SLGT": "#ffe066",
+        "ENH": "#ffa366",
+        "MDT": "#e06666",
+        "HIGH": "#ee99ee"
+      },
+      "labels": {
+        "TSTM": "General thunderstorms",
+        "MRGL": "Marginal",
+        "SLGT": "Slight",
+        "ENH": "Enhanced",
+        "MDT": "Moderate",
+        "HIGH": "High"
+      }
+    }
+  },
+  "licence": {
+    "name": "NWS data: U.S. public domain",
+    "url": "https://www.weather.gov/disclaimer"
+  },
+  "attribution": {
+    "text": "NOAA NWS Storm Prediction Center",
+    "url": "https://www.spc.noaa.gov/products/outlook/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-13"
+}
