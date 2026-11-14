@@ -11,6 +11,7 @@ import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
+import { DISPLAY_ACCENTS } from '../../displayAccentSettings.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
 // Celestial, detection, bloom and sharpen and AircraftDisplay the 3D group,
@@ -28,6 +29,10 @@ const detection = computed(() => view.value?.detection ?? null);
 const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
 const scopeOn = computed(() => view.value?.scope.enabled ?? true);
+const accent = computed(() => hud.value?.accent ?? null);
+const accentOptions = computed(() =>
+  DISPLAY_ACCENTS.map(({ id, color, label }) => ({ id, color, label: t(label) })),
+);
 const scopeFeather = computed(() => view.value?.scope.featherPct ?? 100);
 const celestial = computed(() => view.value?.celestial ?? null);
 const celestialTitle = computed(() =>
@@ -70,6 +75,14 @@ const allocationOptions = computed(() => [
         <option value="minimal">{{ t('Minimal') }}</option>
         <option value="cyber">{{ t('Cyber') }}</option>
       </UiSelect>
+    </div>
+    <div class="pp-slider-row display-accent-control" id="display-accent-row">
+      <span class="pp-slider-mini-label">{{ t('Accent') }}</span>
+      <div class="display-accent-swatches">
+        <UiButton class="display-accent-default" :pressed="accent?.selected === 'auto'" pressed-class="active" data-accent="default" @click="act('setDisplayAccent', 'default')">{{ t('Default') }}</UiButton>
+        <button v-for="option in accentOptions" :key="option.id" type="button" class="display-accent-swatch" :class="{ active: accent?.selected === option.id }" :data-accent="option.id" :style="{ background: option.color }" :title="option.label" :aria-label="option.label" :aria-pressed="String(accent?.selected === option.id)" @click="act('setDisplayAccent', option.id)"></button>
+      </div>
+      <input type="color" id="display-accent-custom" class="display-accent-picker" :class="{ active: accent?.selected === 'custom' }" :value="accent?.customColor ?? '#7d4fae'" :title="t('Custom')" :aria-label="t('Custom')" @input="act('setDisplayAccent', 'custom', $event.target.value)" />
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" id="cyber-sonar-row">
       <span class="pp-slider-mini-label">{{ t('Sonar') }}</span>

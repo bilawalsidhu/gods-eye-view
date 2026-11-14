@@ -321,7 +321,7 @@ html:not([lang='en'])
 }
 :root[data-ui-theme='cyber']
   #gev-voice-control:has(> .gev-voice-settings-button) {
-  --voice-panel-accent: var(--cyber-red-bright);
+  --voice-panel-accent: var(--cyber-accent-bright);
 }
 :root[data-ui-theme='cyber']
   #gev-voice-control:has(> .gev-voice-settings-button)

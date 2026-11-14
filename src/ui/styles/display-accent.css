@@ -1,0 +1,34 @@
+/* Personal accents supplement each template's geometry and native defaults. */
+:root[data-display-accent]:not([data-ui-theme='cyber']) {
+  --accent: var(--display-accent);
+  --accent-dim: rgba(var(--display-accent-rgb), 0.15);
+  --accent-glow: rgba(var(--display-accent-rgb), 0.4);
+  --scroll-thumb: rgba(var(--display-accent-rgb), 0.46);
+  --glass-border-hover: rgba(var(--display-accent-rgb), 0.5);
+  --dock-label-color: var(--display-accent-bright);
+}
+
+/* IntelHUD supplies style-aware inline colors. A chosen template accent takes
+   precedence until Default releases it, including after a map-style change. */
+:root[data-display-accent] #intel-hud:not([data-variant='cyber']) {
+  --hud-color: rgba(var(--display-accent-bright-rgb), 0.95) !important;
+  --hud-glow: rgba(var(--display-accent-rgb), 0.4) !important;
+  --hud-border: rgba(var(--display-accent-rgb), 0.3) !important;
+}
+
+:root[data-display-accent]:not([data-ui-theme='cyber'])
+  #title-bar
+  .title-logo
+  #globe {
+  fill: var(--display-accent);
+  stroke: var(--display-accent-bright);
+}
+
+:root[data-display-accent]:not([data-ui-theme='cyber']) #title-bar .title-logo {
+  filter: drop-shadow(0 0 8px rgba(var(--display-accent-rgb), 0.4));
+}
+
+:root[data-display-accent]:not([data-ui-theme='cyber'])
+  #gev-voice-control:has(> .gev-voice-settings-button) {
+  --voice-panel-accent: var(--display-accent-bright);
+}

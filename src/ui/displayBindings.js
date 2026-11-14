@@ -113,6 +113,8 @@ export class DisplayBindings {
         this.shareLinkManager?.claimRestoreLane?.('visual');
         this._setHudVariant(value, { applyVisualDefaults: true });
       },
+      setDisplayAccent: (id, customColor) =>
+        this._setDisplayAccent(id, customColor),
       toggleCleanView: () => this.toggleCleanView(),
       exitCleanView: () => this.toggleCleanView(false),
       setDensity: (value) => {
@@ -150,7 +152,17 @@ export class DisplayBindings {
         this._updateHudButtonState();
         this._syncShareState();
       },
-      toggleSonar: () => this._setCyberSonarEnabled(),
+      toggleSonar: () => {
+        const enabled = this._setCyberSonarEnabled();
+        // The sweep lives in the HUD. Enabling it must also reveal its host
+        // instead of leaving an ON control with no visible effect.
+        if (enabled && !this.hud.visible) {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this.hud.toggle();
+          this._updateHudButtonState();
+          this._syncShareState();
+        }
+      },
       setSonarRings: (value) => this._setCyberSonarSetting('rings', value),
       setSonarRange: (value) => this._setCyberSonarSetting('range', value),
       setSonarIntensity: (value) =>

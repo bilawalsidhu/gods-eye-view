@@ -59,6 +59,9 @@ test('buttons, sliders, the layout select and the Scope checkbox call their acti
   ])
     $(id).click();
   input($('hud-layout-select'), 'minimal', 'change');
+  document.querySelector('#display-accent-row [data-accent="red"]').click();
+  input($('display-accent-custom'), '#123456');
+  document.querySelector('[data-accent="default"]').click();
   input($('cyber-sonar-rings'), 5);
   input($('cyber-sonar-range'), 90);
   input($('cyber-sonar-intensity'), 40);
@@ -83,6 +86,9 @@ test('buttons, sliders, the layout select and the Scope checkbox call their acti
     ['toggleSharpen'],
     ['exitCleanView'],
     ['setHudLayout', 'minimal'],
+    ['setDisplayAccent', 'red'],
+    ['setDisplayAccent', 'custom', '#123456'],
+    ['setDisplayAccent', 'default'],
     ['setSonarRings', 5],
     ['setSonarRange', 90],
     ['setSonarIntensity', 40],
@@ -203,6 +209,51 @@ test('DisplayBindings answers the controls from init until destroy', (t) => {
   bindings.destroy();
   $('bloom-toggle').click();
   assert.deepEqual(calls, [['bloom', true]]);
+});
+
+test('enabling Sonar reveals a hidden HUD; disabling it leaves HUD visibility alone', (t) => {
+  const store = mount(t);
+  let sonarEnabled = true;
+  const calls = [];
+  const hud = {
+    visible: false,
+    toggle() {
+      this.visible = !this.visible;
+      calls.push('hud');
+    },
+  };
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
+    operations: {
+      _setScope() {},
+      _setCyberSonarEnabled() {
+        return (sonarEnabled = !sonarEnabled);
+      },
+      _updateHudButtonState: () => calls.push('controls'),
+      _syncShareState: () => calls.push('share'),
+    },
+    readState: () => ({
+      hud,
+      shareLinkManager: { claimRestoreLane: (lane) => calls.push(lane) },
+    }),
+    displayStore: store,
+  });
+  bindings._initUI();
+  t.after(() => bindings.destroy());
+  $('cyber-sonar-toggle').click();
+  assert.equal(sonarEnabled, false);
+  assert.equal(hud.visible, false);
+  assert.deepEqual(calls, []);
+  $('cyber-sonar-toggle').click();
+  assert.equal(sonarEnabled, true);
+  assert.equal(hud.visible, true);
+  assert.deepEqual(calls, ['visual', 'hud', 'controls', 'share']);
+  calls.length = 0;
+  $('cyber-sonar-toggle').click();
+  $('cyber-sonar-toggle').click();
+  assert.equal(hud.visible, true);
+  assert.deepEqual(calls, []);
 });
 
 test('several owners answer their own actions, the newest first', (t) => {

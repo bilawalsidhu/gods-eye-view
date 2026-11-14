@@ -584,6 +584,8 @@ export class StyleManager extends ShellFacade {
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
         _setSharpenIntensity: (...args) => this._setSharpenIntensity(...args),
         _setHudVariant: (...args) => this._setHudVariant(...args),
+        _setDisplayAccent: (...args) =>
+          this._visualSettings._setDisplayAccent(...args),
         _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
         _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
         _setDetectionDensity: (...args) => this._setDetectionDensity(...args),

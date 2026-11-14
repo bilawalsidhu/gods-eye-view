@@ -743,6 +743,74 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   min-width: 200px;
 }
 
+.display-accent-control {
+  display: flex;
+}
+
+.display-accent-control {
+  min-width: 200px;
+  padding: 5px 8px 6px;
+}
+
+.display-accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.display-accent-swatch,
+.display-accent-picker {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid rgba(206, 222, 226, 0.28);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.display-accent-default {
+  padding: 2px 4px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.display-accent-default.active,
+.display-accent-swatch.active,
+.display-accent-picker.active,
+.display-accent-picker:focus-visible {
+  border-color: var(--display-accent-bright, var(--accent));
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.display-accent-picker {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+}
+
+.display-accent-picker::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+.display-accent-picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+
+.display-accent-picker::-moz-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+
 .cyber-sonar-control {
   display: none;
 }
