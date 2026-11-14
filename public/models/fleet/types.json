@@ -983,6 +983,14 @@
   "SHIP": [
    "blimp",
    75.0
+  ],
+  "ZVEH": [
+   "car",
+   4.61
+  ],
+  "GRND": [
+   "radio_mast",
+   1.9
   ]
  },
  "helicopters": {
@@ -1141,6 +1149,34 @@
   "GYRO": [
    "r44",
    5.0
+  ]
+ },
+ "aircraft_callsign": {
+  "ZVEH": [
+   {
+    "prefixes": [
+     "FIRE"
+    ],
+    "model": "fire_truck",
+    "length": 11.01
+   },
+   {
+    "prefixes": [
+     "PUSH",
+     "TUG"
+    ],
+    "model": "pushback",
+    "length": 6.0
+   },
+   {
+    "prefixes": [
+     "DEICER",
+     "SQUID",
+     "SQB"
+    ],
+    "model": "van",
+    "length": 5.51
+   }
   ]
  },
  "vessels": [

@@ -1,4 +1,9 @@
-import { aircraftModelSpec, fleetModelSet } from '../../data/fleetModels.js';
+import {
+  aircraftCallsignRule,
+  aircraftModelByCallsign,
+  aircraftModelSpec,
+  fleetModelSet,
+} from '../../data/fleetModels.js';
 import { MODEL_COLOR_BLEND_AMOUNT } from './policy.js';
 
 /**
@@ -25,12 +30,14 @@ export const UNLOADED_AIRCRAFT_MODEL_SPEC = Object.freeze({
 
 /**
  * The fleet model, life-size scale and measured geometry an aircraft draws
- * with, chosen by its ICAO type and emitter category (`fleetModels.js`).
+ * with, chosen by its ICAO type and emitter category, and by its callsign
+ * for the types that pick by callsign (`fleetModels.js`).
  * Shared by the Flights, Military Flights and Local ADS-B layers so all three
  * draw the same model for the same aircraft. `bellyM` is the model's scaled
  * clearance: how far a grounded aircraft's origin stands above the ground.
  * @param {{typeCode?: string|null, type?: string|null,
- *   category?: string|number|null}|null|undefined} aircraft
+ *   category?: string|number|null,
+ *   callsign?: string|null}|null|undefined} aircraft
  * @param {object|null} [set] The loaded fleet model set.
  * @returns {object} The spec, or {@link UNLOADED_AIRCRAFT_MODEL_SPEC} before
  *   the set has loaded.
@@ -40,12 +47,13 @@ export function aircraftLayerModelSpec(aircraft, set = fleetModelSet()) {
   // Layers ask on every tick; each type and category is resolved once per set.
   let cache = specCaches.get(set);
   if (!cache) specCaches.set(set, (cache = new Map()));
-  const key = aircraftModelSpecCacheKey(aircraft);
+  const key = aircraftModelSpecCacheKey(aircraft, set);
   let layerSpec = cache.get(key);
   if (!layerSpec) {
     const spec = aircraftModelSpec(set, {
       typeCode: aircraft?.typeCode ?? aircraft?.type ?? null,
       category: aircraft?.category ?? null,
+      callsign: aircraft?.callsign ?? null,
     });
     layerSpec = Object.freeze({
       ...spec,
@@ -61,10 +69,18 @@ export function aircraftLayerModelSpec(aircraft, set = fleetModelSet()) {
 const specCaches = new WeakMap();
 
 /**
- * Cache key of an aircraft's model spec: what selects its model.
+ * Cache key of an aircraft's model spec: what selects its model. For a type
+ * that picks its model by callsign (an airport vehicle) the key adds the
+ * rule its callsign matches, or `type` for none, so such a type caches at
+ * most one entry per rule and one for its own model.
  * @param {object|null|undefined} aircraft
+ * @param {object|null} [set] The loaded fleet model set.
  * @returns {string}
  */
-export function aircraftModelSpecCacheKey(aircraft) {
-  return `${aircraft?.typeCode ?? aircraft?.type ?? ''}|${aircraft?.category ?? ''}`;
+export function aircraftModelSpecCacheKey(aircraft, set = fleetModelSet()) {
+  const type = aircraft?.typeCode ?? aircraft?.type ?? '';
+  const key = `${type}|${aircraft?.category ?? ''}`;
+  if (!set || !aircraftModelByCallsign(set.types, type)) return key;
+  const rule = aircraftCallsignRule(set.types, type, aircraft?.callsign);
+  return `${key}|${rule >= 0 ? `r${rule}` : 'type'}`;
 }

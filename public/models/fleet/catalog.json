@@ -1785,6 +1785,25 @@
   "tris": 1172,
   "icon": "heli"
  },
+ "radio_mast": {
+  "category": "other",
+  "file": "other/radio_mast.glb",
+  "min": [
+   -0.7,
+   -0.815,
+   0.0
+  ],
+  "max": [
+   1.2,
+   0.815,
+   11.8
+  ],
+  "length": 1.9,
+  "beam": 1.63,
+  "clearance": 0.0,
+  "tris": 940,
+  "icon": "vehicle"
+ },
  "regional_dmu": {
   "category": "transit",
   "file": "transit/regional_dmu.glb",

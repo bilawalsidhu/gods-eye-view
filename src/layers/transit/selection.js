@@ -48,6 +48,12 @@ export function createSelection({ state, services, parts }) {
       ? state._vehicles.get(state._selectedKey)
       : null;
     if (!entry) return;
+    // A vehicle a first-person view rides shows no card.
+    if (entry.key === state._cockpitSubjectKey) {
+      state._selectedCardText = null;
+      state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
+      return;
+    }
     const now = Date.now();
     if (!force && now - state._selectedCardAt < SELECTED_CARD_REFRESH_MS)
       return;
@@ -93,6 +99,7 @@ export function createSelection({ state, services, parts }) {
       : null;
     parts.trails.clear();
     state._selectedKey = null;
+    state._selectedAtMs = null;
     state._selectedCardText = null;
     state._detectRevision += 1;
     // Cleared first: the styling path reads the selection from state.
@@ -100,11 +107,18 @@ export function createSelection({ state, services, parts }) {
     state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
   }
 
-  function selectVehicle(key) {
+  /**
+   * Select a vehicle. `byUser` marks a selection the user made (a click, or
+   * focusVehicle), even of the selected vehicle again: its time is the
+   * snapshot's `selectedAtMs` (cockpitSubject.js). A first-person view's hold
+   * selects without it.
+   */
+  function selectVehicle(key, { byUser = false } = {}) {
     clearSelection();
     const entry = state._vehicles.get(key);
     if (!entry?.marker) return;
     state._selectedKey = key;
+    if (byUser) state._selectedAtMs = Date.now();
     state._detectRevision += 1;
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);
@@ -113,6 +127,8 @@ export function createSelection({ state, services, parts }) {
   }
 
   function onKeyDown(event) {
+    // While a first-person view rides the vehicle, Escape is the view's.
+    if (state._cockpitSubjectKey) return;
     if (event.key === 'Escape' && state._selectedKey) clearSelection();
   }
 
@@ -125,6 +141,8 @@ export function createSelection({ state, services, parts }) {
       // Ambient selection never competes for a pointer a tool has claimed:
       // placing a draw vertex on top of a bus must not also select the bus.
       if (!isPointerFree()) return;
+      // A held vehicle keeps the selection until its view lets it go.
+      if (state._cockpitSubjectKey) return;
       const scene = viewer.scene;
       // Pick buffers precede post-processing. Map a sensor pixel back through
       // the active shader's barrel distortion and quantization before picking.
@@ -181,11 +199,11 @@ export function createSelection({ state, services, parts }) {
           typeof primitiveId === 'string' &&
           state._vehicles.has(primitiveId)
         ) {
-          selectVehicle(primitiveId);
+          selectVehicle(primitiveId, { byUser: true });
           return;
         }
         if (typeof picked.id === 'string' && state._vehicles.has(picked.id)) {
-          selectVehicle(picked.id);
+          selectVehicle(picked.id, { byUser: true });
           return;
         }
       }
