@@ -726,18 +726,18 @@
   "file": "other/car.glb",
   "min": [
    -2.31,
-   -0.906,
-   0.019
+   -1.075,
+   0.018
   ],
   "max": [
-   2.3,
-   0.906,
-   1.948
+   2.31,
+   1.075,
+   1.84
   ],
-  "length": 4.61,
-  "beam": 1.812,
+  "length": 4.62,
+  "beam": 2.15,
   "clearance": 0.0,
-  "tris": 206,
+  "tris": 736,
   "icon": "vehicle"
  },
  "car_carrier": {
@@ -1124,19 +1124,19 @@
   "category": "other",
   "file": "other/fire_truck.glb",
   "min": [
-   -5.51,
-   -1.5,
-   0.027
+   -6.408,
+   -1.507,
+   0.029
   ],
   "max": [
-   5.5,
-   1.5,
-   4.08
+   5.51,
+   1.507,
+   3.64
   ],
-  "length": 11.01,
-  "beam": 3.0,
+  "length": 11.918,
+  "beam": 3.014,
   "clearance": 0.0,
-  "tris": 314,
+  "tris": 1016,
   "icon": "vehicle"
  },
  "fishing_boat": {
@@ -1751,19 +1751,19 @@
   "category": "other",
   "file": "other/pushback.glb",
   "min": [
-   -3.0,
-   -1.45,
-   0.024
+   -3.45,
+   -1.398,
+   0.025
   ],
   "max": [
-   3.0,
-   1.45,
-   2.1
+   3.05,
+   1.398,
+   2.14
   ],
-  "length": 6.0,
-  "beam": 2.9,
+  "length": 6.5,
+  "beam": 2.795,
   "clearance": 0.0,
-  "tris": 176,
+  "tris": 490,
   "icon": "vehicle"
  },
  "r44": {
@@ -2303,18 +2303,18 @@
   "file": "other/van.glb",
   "min": [
    -2.76,
-   -1.0,
-   0.019
+   -1.22,
+   0.018
   ],
   "max": [
-   2.75,
-   1.0,
-   2.438
+   2.76,
+   1.22,
+   2.56
   ],
-  "length": 5.51,
-  "beam": 2.0,
+  "length": 5.52,
+  "beam": 2.44,
   "clearance": 0.0,
-  "tris": 206,
+  "tris": 736,
   "icon": "vehicle"
  }
 }
