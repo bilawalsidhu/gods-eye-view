@@ -230,3 +230,125 @@ starts and switches the language with the `./i18n` entry (`startPageLocale`,
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component
 loader with `node --import=<core package>/build/register-vue`.
+
+### Cockpit subjects
+
+Core's Cockpit rides a tracked aircraft, the tracked satellite and the
+selected AIS vessel. An application adds kinds of its own with
+`services.cockpitSubjects` on `createApplicationControls`: a list of
+providers, checked once when the controls are built
+(`src/cockpitSubjectProviders.js`). A malformed provider, or one with a member
+that throws when read (a getter), is left out with a warning and the rest are
+kept. A provider's subject takes entry when it was selected after every
+built-in subject present (a tracked aircraft or satellite, a selected vessel),
+whose own fixed order is unchanged, and needs the provider's `layerId` on; the
+provider then holds its subject, hands the camera a frame and the generic HUD
+a view model on every update, and releases it on exit. Provider methods are
+synchronous and are called on the provider, so a class instance's methods keep
+their `this`; one that throws or returns a promise is treated as having
+failed. What a method returns may carry getters: one that throws when read
+makes a candidate none, a frame malformed (the view ends) and a HUD view keep
+the last; a worded member (labels, entry face, look) that throws keeps its
+last good words.
+
+```js
+import { getLocale, onLocaleChange } from 'gods-eye-view/i18n';
+import { pointAtS } from 'gods-eye-view/layers/rail/paths';
+
+const words = {
+  en: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT RIDE' },
+  de: {
+    view: 'Fahrtansicht',
+    exit: 'Fahrtansicht verlassen',
+    exitText: 'VERLASSEN',
+  },
+};
+
+/** Ride the Rail layer's selected train; `rail` is its layer instance. */
+const ride = {
+  kind: 'example-ride',
+  layerId: 'rail',
+  entryFace: { icon: 'train', label: 'RIDE' },
+  // A function is read again when the page's language changes.
+  labels: () => words[getLocale()] ?? words.en,
+  candidate() {
+    const train = rail.getSelectedTrain();
+    return (
+      train && {
+        id: train.key,
+        name: train.label,
+        selectedAt: train.selectedAtMs,
+      }
+    );
+  },
+  // Only a train bound to its line can be ridden: read() needs its path.
+  isEntryAllowed: () => Boolean(rail.getSelectedTrain()?.path),
+  hold: (id) => rail.setCockpitSubject(id),
+  read(nowMs, ctx) {
+    const train = rail.getCockpitSubject();
+    if (!train?.path) return null; // ends the view
+    const point = pointAtS(train.path.line, train.path.s);
+    return {
+      id: train.key,
+      latitude: point.lat,
+      longitude: point.lon,
+      heightM: train.position.railHeightM, // null stands it on the shared floor
+      name: train.label,
+      headingDeg:
+        train.path.direction < 0 ? point.bearingDeg + 180 : point.bearingDeg,
+      speedMps: train.motion.reportedSpeedMps ?? train.motion.derivedSpeedMps,
+      // The layer already moves the train smoothly: sit on it.
+      anchor: 'exact',
+      eye: { upM: 3.5 },
+    };
+  },
+  hud: (frame) => ({ title: frame.name }),
+  release(id, { restore }) {
+    rail.setCockpitSubject(null);
+    if (restore) rail.focusTrain(id);
+  },
+};
+
+createApplicationControls({ /* ... */ services: { cockpitSubjects: [ride] } });
+```
+
+The `./i18n` entry gives `getLocale()` and `onLocaleChange()`:
+Core translates only its own strings, so a provider words its labels, entry
+face and HUD for the page's language (labels may be functions, as above; the
+HUD is read again on a change). `gods-eye-view/layers/rail/paths` is the
+Rail layer's pure path module (`createRailPath`, `pointAtS`, `projectOnPath`)
+for a provider placing a train along its line. The frame, HUD view and
+candidate fields are documented in `src/cockpitSubjectProviders.js`; the Rail
+and Transit read APIs in `src/layers/rail/cockpitSubject.js` and
+`src/layers/transit/cockpitSubject.js`. A snapshot read again while nothing in
+it changed is the one read before, so `read` may take one on every update; a
+train's `path.line` is a frozen copy of its line, for `pointAtS` and
+`projectOnPath`. The `layers/rail/paths` export and the
+Rail and Transit read APIs (`getSelectedTrain`, `getSelectedVehicle`,
+`getCockpitSubject` and the snapshots they return, `path.line` among them)
+are experimental and may change without notice.
+
+A candidate's `selectedAt` is a token that changes each time the user selects
+the subject, even the same one again, so entry counts it as selected then; a
+new `id` under the same token is the same selection (a train's selection
+moving to another feed's copy of it). The Rail and Transit snapshots give one,
+`selectedAtMs`: when the user last selected the train or vehicle by a click or
+`focusTrain`/`focusVehicle`. It is null after a deselection and for one
+selected only by a hold, since a hold is not the user's selection.
+
+A frame with `heightM: null` stands on the shared floor, or where it last
+stood while that floor is cold. If no height has been known since entry, the
+view waits, showing ACQUIRING SURFACE, for at most five seconds
+(`COCKPIT_GROUND_WAIT_TIMEOUT_MS`), then ends and releases the subject.
+
+`hold(id)` returns `true` once it holds the subject, or `false` to refuse
+entry; any other answer, `undefined` included, refuses entry too, with one
+warning. A refused hold, and one that throws or returns a promise, is followed
+by `release(id, { restore: false })`, again once a returned promise settles,
+so `release` must be harmless for a subject it does not hold and when called
+more than once.
+
+Leaving the view does not track again an aircraft that was tracked before
+entry, as with the bridge and orbital views: when the user leaves by the exit
+control, the map goes back to the ridden subject through
+`release(id, { restore: true })`.

@@ -8,8 +8,11 @@ import {
   cockpitAnchorCorrectionStep,
   cockpitAltitudeDisplayFt,
   cockpitGroundSafeHeight,
+  cockpitSubjectStepSec,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
+  COCKPIT_SUBJECT_LIFT_MPS,
+  easeCockpitLift,
   compassDivisions,
   compassMarkerSlot,
   scrollingCompassDivisions,
@@ -54,6 +57,28 @@ test('cockpit anchor correction bounds late-fix catch-up and render stalls', () 
   assert.ok(cockpitAnchorCorrectionStep(5000, 250, 2) <= 5.5);
   assert.equal(cockpitAnchorCorrectionStep(0, 250, 0.1), 0);
   assert.equal(cockpitAnchorCorrectionStep(Number.NaN, 250, 0.1), 0);
+});
+
+test('an application subject on a slow cadence is corrected for its whole step', () => {
+  // The built-in views' step stays capped at 0.1 s...
+  const capped = cockpitAnchorCorrectionStep(100, 0, 0.5);
+  assert.equal(capped, cockpitAnchorCorrectionStep(100, 0, 0.1));
+  // ...while a subject updated every 500 ms is corrected for all of it.
+  const whole = cockpitAnchorCorrectionStep(100, 0, 0.5, 0.5);
+  assert.ok(Math.abs(whole / capped - 5) < 1e-9);
+  assert.equal(cockpitAnchorCorrectionStep(100, 0, 0.5, Number.NaN), capped);
+});
+
+test('an application subject steps by its interval, never by a long stall', () => {
+  assert.equal(cockpitSubjectStepSec(16, 0), 0.016);
+  assert.equal(cockpitSubjectStepSec(500, 500), 0.5);
+  assert.equal(cockpitSubjectStepSec(520, 500), 0.52);
+  // A hidden tab's minutes count as one late update.
+  assert.equal(cockpitSubjectStepSec(60_000, 500), 0.6);
+  assert.equal(cockpitSubjectStepSec(60_000, 0), 0.1);
+  assert.equal(cockpitSubjectStepSec(-5, 500), 0);
+  assert.equal(cockpitSubjectStepSec(Number.NaN, 500), 0);
+  assert.equal(cockpitSubjectStepSec(1000, Number.NaN), 0.1);
 });
 
 test('cockpit camera clearance never falls below the rendered ground floor', () => {
@@ -434,4 +459,31 @@ test('cockpit emergency wording states the broadcast code, not a conclusion', ()
   );
   assert.equal(formatCockpitEmergency(null), null);
   assert.equal(formatCockpitEmergency({ label: '' }), null);
+});
+
+test('an application subject’s ground lift eases its clearance, never the floor', () => {
+  // On entry the lift asked for applies at once.
+  assert.equal(easeCockpitLift(null, 1.5, 0, 0.016), 1.5);
+  // A floor cell that rises by a metre is met at the lift rate...
+  let lift = 0;
+  const frames = [];
+  for (let i = 0; i < 60; i += 1) {
+    lift = easeCockpitLift(lift, 1, 0, 0.016);
+    frames.push(lift);
+  }
+  assert.ok(frames[0] <= COCKPIT_SUBJECT_LIFT_MPS * 0.016 + 1e-9);
+  for (let i = 1; i < frames.length; i += 1)
+    assert.ok(
+      frames[i] - frames[i - 1] <= COCKPIT_SUBJECT_LIFT_MPS * 0.016 + 1e-9,
+    );
+  assert.ok(Math.abs(frames.at(-1) - 1) < 1e-9, 'reached in under a second');
+  // ...and given back the same way.
+  assert.ok(Math.abs(easeCockpitLift(1, 0, 0, 0.1) - 0.85) < 1e-9);
+  // What keeps the eye out of the floor itself is never eased.
+  assert.equal(easeCockpitLift(0, 201.5, 200, 0.016), 200);
+  assert.equal(
+    easeCockpitLift(0.2, -3, -3, 0.016),
+    0.2 - COCKPIT_SUBJECT_LIFT_MPS * 0.016,
+  );
+  assert.equal(easeCockpitLift(0, Number.NaN, Number.NaN, 0.016), 0);
 });

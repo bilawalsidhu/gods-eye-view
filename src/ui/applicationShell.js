@@ -400,6 +400,9 @@ export class StyleManager extends ShellFacade {
             owner: 'cockpit-orbit',
             switchPolicy: 'esri-if-photoreal',
           }) ?? null,
+        // The application's own first-person subjects
+        // (src/cockpitSubjectProviders.js), checked by the coordinator.
+        cockpitSubjects: services.cockpitSubjects,
       },
       elements: {
         _ppToggles: this._ppToggles,

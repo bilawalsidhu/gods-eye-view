@@ -2208,6 +2208,83 @@ the subject (tracking stopped, Satellites off) or tracking another target
 ends the view without refocusing. `src/ui/cockpitOrbitalView.test.mjs`
 covers entry, camera, zoom, look, HUD and exit.
 
+### Application subjects
+
+An application can add its own first-person subjects beside the aircraft,
+vessel and satellite: `services.cockpitSubjects` to `createApplicationControls`,
+a list of subject providers (`src/cockpitSubjectProviders.js`, checked once by
+the coordinator; a malformed one, or one with a member that throws when read,
+is left out with a warning and the rest are kept). A provider names
+its layer, an entry face and labels in the page's language, and supplies four
+operations: `candidate()` (what entry would ride now), `hold(id)`,
+`read(nowMs, ctx)` (a camera frame each update) and `hud(frame, ctx)` (a HUD
+view model), with `release(id, {restore})` on exit. Entry needs the provider's
+layer on, no Context change in flight and the provider's own
+`isEntryAllowed(candidate)`; voice stays aircraft-only and is refused, with
+the reason, while a provider's view is in use.
+
+The built-in kinds keep their fixed entry order (a tracked aircraft, then the
+tracked satellite, then the selected vessel), so without providers entry is
+unchanged. A provider's candidate takes entry only when it was selected after
+every built-in subject present, by when the Cockpit first saw it or saw it
+selected again (its `selectedAt` changing): a train picked after an aircraft
+was tracked takes entry, and an aircraft tracked after it takes it back.
+Providers' candidates are ordered most recently selected first, then by
+priority; one first seen together with a built-in subject comes after it. The
+first in that order decides alone: when its gate is shut there is no entry
+rather than the next subject's.
+
+A frame places the eye `eye.upM` above `heightM` (the shared floor where the
+frame gives none, or where it last stood while that floor is cold; with
+neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
+at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
+subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
+turn off the floor clamps (`groundClamp: false`, for a subject inside a
+structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
+layer that already moves it smoothly; a frame with no `speedMps` is always
+exact, since an inertial anchor runs on at the frame's speed); `cameraIntervalMs: 0` updates the
+camera every rendered frame. A frame that is null, malformed or for another
+subject ends the view (`restoreTracking: false`), as an aircraft tracked
+meanwhile and the provider's layer turning off do; the exit control asks the
+provider to restore its subject. The generic HUD shows the provider's kicker,
+title, meta line, speed with its unit and tag, readout cards, always-visible
+source rows, banner, route card and Live Signals rows, a veil that darkens the
+picture under the HUD (with passing light streaks, which stop under reduced
+motion), arrow-key look-around when the provider asks for it, and a progress
+line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
+labels never overlap). Core translates none of the provider's text: a host
+words it for the page's language (`gods-eye-view/i18n`:
+`getLocale`, `onLocaleChange`). Its entry face, labels and look may be
+functions, read again when they are shown and on a change of language, as the
+HUD view is.
+
+The Rail layer offers a read API for such a view: `getSelectedTrain()` and
+`getCockpitSubject()` (a snapshot of the train: where it is along its line,
+which way it runs (`pathBinding.js` learns it), its rail height, speed as
+reported or derived, position source, feed credit and stops, and
+`selectedAtMs`, when the user last selected it by a click or `focusTrain`,
+even again; null after a deselection and for a train only a hold selected),
+`setCockpitSubject(key)` (its marker, 3D model and card hidden, the selection kept, its
+feed held, clicks and Escape left to the view; the held copy stays the one
+drawn of its train while held, another feed's copy hidden, and it keeps
+moving, still selected, when its category is turned off) and
+`focusTrain(key)` (false for a train the layer does not draw); its pure path
+module is exported as `gods-eye-view/layers/rail/paths`. That export
+and these read APIs are experimental and may change without notice. A snapshot read again while nothing in it changed is
+the one read before, and its `path.line` is a frozen copy. Transit
+offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
+`setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
+out of the camera's view, and its sprite, 3D model, card, trail and detection
+box are hidden; released, it is out of play until a visibility sweep finds it in
+view. Its snapshot's `position.groundHeightM` is the floor where playback draws
+it (the drawn marker's height while it is placed, else its segment's two
+reports' floors at the playback fraction), not the newest report's, and null while that floor is unknown. Rail's `path.direction` is the
+way the drawn train runs: once playback has placed it, a report that runs back
+turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+`src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
+`src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
+cover them.
+
 ## Context coordination
 
 Context controls own Contacts/Space Missions state, entry and exit transactions,

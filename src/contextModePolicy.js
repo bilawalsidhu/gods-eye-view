@@ -482,6 +482,24 @@ export function orbitEntryAllowed({
 }
 
 /**
+ * Whether an application subject provider's candidate can be ridden. Like the
+ * bridge and orbit it needs only its own layer on, and waits out a Context
+ * change in flight; the provider then has its own say (`isEntryAllowed`).
+ * @param {{layerEnabled: boolean, contextModeChanging: boolean,
+ *   providerAllows: boolean}} state
+ * @returns {boolean}
+ */
+export function subjectEntryAllowed({
+  layerEnabled,
+  contextModeChanging,
+  providerAllows,
+}) {
+  return (
+    Boolean(layerEnabled) && !contextModeChanging && providerAllows === true
+  );
+}
+
+/**
  * Internal context-mode id → the word the voice tools accept for it.
  *
  * `set_context_mode` takes 'contacts'; the mode's internal id is 'flights'.

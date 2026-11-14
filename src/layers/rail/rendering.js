@@ -523,9 +523,25 @@ export function createRendering({ state, services, parts }) {
     );
   }
 
-  /** Whether a train's icon is drawn: shown, and not drawn by its model. */
+  /**
+   * Whether a train's icon is drawn: shown, not drawn by its model, and no
+   * first-person view rides it (cockpitSubject.js). A held train keeps its
+   * playback; only its icon and model hide.
+   */
   function markerShown(entry) {
-    return categoryShown(entry) && !entry.modelOwnsVisual;
+    return (
+      categoryShown(entry) &&
+      !entry.modelOwnsVisual &&
+      entry.key !== state._cockpitSubjectKey
+    );
+  }
+
+  /**
+   * Whether the train's playback runs: it is drawn, or a first-person view
+   * rides it, which keeps it moving, hidden, in a category turned off.
+   */
+  function playing(entry) {
+    return categoryShown(entry) || entry.key === state._cockpitSubjectKey;
   }
 
   /**
@@ -614,7 +630,7 @@ export function createRendering({ state, services, parts }) {
     place(entry);
     const sample = entry.sample;
     const moving =
-      categoryShown(entry) &&
+      playing(entry) &&
       sample?.phase === 'playing' &&
       sample.segmentSpeedMps > 0;
     if (moving) {
@@ -622,7 +638,7 @@ export function createRendering({ state, services, parts }) {
       return;
     }
     state._moving.delete(entry);
-    if (categoryShown(entry) && Number.isFinite(sample?.nextWakeMonoMs)) {
+    if (playing(entry) && Number.isFinite(sample?.nextWakeMonoMs)) {
       entry.wakeTimer = setTimeout(
         () => {
           entry.wakeTimer = null;
@@ -744,7 +760,9 @@ export function createRendering({ state, services, parts }) {
     }
     item.position = entry.marker.position;
     item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
-    item.show = categoryShown(entry);
+    // A train a first-person view rides draws no model: the camera is inside
+    // it (cockpitSubject.js).
+    item.show = categoryShown(entry) && entry.key !== state._cockpitSubjectKey;
     return item;
   }
 
