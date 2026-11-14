@@ -57,6 +57,7 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useSolunarStore } from './stores/solunar.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
@@ -1736,6 +1737,15 @@ export class StyleManager extends ShellFacade {
       showToast: (message) => this._showToast(message),
     });
     this._cameraOrientationControls = controls;
+    import('../solunar/solunarShell.js')
+      .then((solunar) => {
+        if (this._disposed) return; // shell torn down while the module loaded
+        this._solunar?.destroy();
+        this._solunar = solunar.mountSolunarForShell(this, {
+          store: useSolunarStore(applicationPinia()),
+        });
+      })
+      .catch(() => console.warn('[Solunar] card unavailable'));
   }
 
   // ── Share Button ─────────────────────────────
@@ -1878,6 +1888,7 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).connectMapSource(null);
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
+    this._solunar?.destroy();
     this._releaseGlobeActions();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);

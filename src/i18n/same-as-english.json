@@ -249,7 +249,9 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "SOLUNAR",
+    "Solunar"
   ],
   "es": [
     "1 min/s",
@@ -411,7 +413,11 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "SOLUNAR",
+    "Solunar",
+    "12 h",
+    "24 h"
   ],
   "fr": [
     "1 min/s",
@@ -633,7 +639,9 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "12 h",
+    "24 h"
   ],
   "it": [
     "1 min/s",
@@ -839,7 +847,9 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "12 h",
+    "24 h"
   ],
   "ja": [
     "1090 MHz",
@@ -1067,7 +1077,11 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "SOLUNAR",
+    "Solunar",
+    "12 h",
+    "24 h"
   ],
   "ru": [
     "1900–1945",
@@ -1264,7 +1278,11 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "12 h",
+    "24 h",
+    "SOLUNAR",
+    "Solunar"
   ],
   "uk": [
     "1900–1945",

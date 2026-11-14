@@ -57,6 +57,7 @@
     "qa:street-level": "node scripts/qa-street-level.mjs",
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
+    "qa:solunar": "node scripts/qa-solunar.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
     "qa:data-library": "node scripts/qa-data-library.mjs",
     "mcp": "node server/mcp/stdio.js"
@@ -66,6 +67,7 @@
     "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
+    "astronomy-engine": "2.1.19",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "fzstd": "0.1.1",
@@ -76,6 +78,7 @@
     "pbf": "^5.1.2",
     "pinia": "^2.3.1",
     "satellite.js": "^6.0.2",
+    "tz-lookup": "6.1.25",
     "vue": "^3.5.44",
     "vue-i18n": "^11.4.15"
   },

@@ -82,3 +82,7 @@ Abbreviated units and codes do not change: «{count} MEDD.».
 | card / label (on the map) / clear (layers)     | kort / etikett / stäng av                                       |
 | frame (weather, video) / image                 | bildruta / bild                                                 |
 | incident                                       | händelse                                                        |
+| solunar card (sun and moon times) / hunting / fishing | solunar / jakt / fiske                                       |
+| moonrise / moonset / moon overhead / moon underfoot | månuppgång / månedgång / månen i zenit / månen i nadir          |
+| new moon / full moon / first quarter / last quarter | ny måne / fullmåne / första kvartilen / sista kvartilen        |
+| major / minor window                          | huvudfönster / mindre fönster                                 |

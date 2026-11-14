@@ -27,6 +27,8 @@
       "src/cockpitSubjectProviders.js",
       "src/ui/views/CommandDockView.vue",
       "src/ui/views/ContextView.vue",
+      "src/ui/views/panels/SolunarPanel.vue",
+      "src/solunar/format.js",
       "src/ui/views/panels/RadioPanel.vue",
       "src/ui/views/panels/SdrCard.vue",
       "src/ui/views/panels/RadioTuner.vue",
@@ -95,6 +97,7 @@
       "src/ui/stores/context.js",
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
+      "src/ui/stores/solunar.js",
       "src/ui/stores/providerSettings.js",
       "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
@@ -1086,6 +1089,12 @@
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/i18n/marker.js",
+      "src/solunar/format.js",
+      "src/solunar/panel.js",
+      "src/solunar/rating.js",
+      "src/solunar/solunarDay.js",
+      "src/solunar/solunarShell.js",
+      "src/solunar/zone.js",
       "src/ui/mobileShell.js",
       "src/exclusiveSurfaces.js",
       "src/ui/placeNames.js",
@@ -1319,6 +1328,7 @@
       "src/ui/stores/context.js",
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
+      "src/ui/stores/solunar.js",
       "src/ui/stores/providerSettings.js",
       "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
@@ -1351,7 +1361,14 @@
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js"
     ],
-    "external": ["cesium", "vue", "pinia", "vue-i18n"]
+    "external": [
+      "cesium",
+      "vue",
+      "pinia",
+      "vue-i18n",
+      "astronomy-engine",
+      "tz-lookup"
+    ]
   },
   "ui-styles": {
     "exports": ["./ui/styles"],
@@ -2573,6 +2590,12 @@
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/app/layers/fleetModels.js",
+      "src/solunar/format.js",
+      "src/solunar/panel.js",
+      "src/solunar/rating.js",
+      "src/solunar/solunarDay.js",
+      "src/solunar/solunarShell.js",
+      "src/solunar/zone.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3727,6 +3750,7 @@
       "src/ui/stores/context.js",
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
+      "src/ui/stores/solunar.js",
       "src/ui/stores/providerSettings.js",
       "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
@@ -3820,6 +3844,7 @@
       "src/layers/vessels/photos.js"
     ],
     "external": [
+      "astronomy-engine",
       "hls.js",
       "@mapbox/vector-tile",
       "cesium",
@@ -3831,6 +3856,7 @@
       "@jtarrio/webrtlsdr",
       "hyparquet",
       "fzstd",
+      "tz-lookup",
       "vue",
       "pinia",
       "vue-i18n"
