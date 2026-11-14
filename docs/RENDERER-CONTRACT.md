@@ -146,8 +146,18 @@ under the camera (the weather service, through
 `deriveWeatherEffectProfile`), asking again after five minutes or 25 km,
 and none from orbit; the Display panel's Weather group turns live off and
 sets clouds, fog, rain and snow by hand, and shows only on a renderer that
-lists `weather`. The Cesium port does not list it. The checks
-`globe.weather` and `globe.weather.drawn` (a pixel check) pin it.
+lists `weather`. The Cesium port does not list it. The strengths say what
+is observed (`clouds` is the fraction of the sky covered), not how it is
+drawn: the renderer draws clouds, fog and haze its own way, with clouds
+placed by scene time and the wind, and shading the ground under them where
+the sun lights it. The checks `globe.weather`, `globe.weather.drawn` and
+`globe.weather.sceneTime` (pixel checks) pin it.
+
+How the sky, atmosphere, haze, lighting and the frame's tone mapping and
+exposure look is the renderer's own: `globe.sky` switches parts on and
+off, and no check compares colours. The
+reference images under `src/render/conformance/goldens/visual/` are the
+default renderer's own, for checking it against itself.
 
 The Cesium port lists `followAutodetect`: an `autodetect` follow is
 Cesium's own AUTODETECT tracking frame, east-north-up on a still or slow

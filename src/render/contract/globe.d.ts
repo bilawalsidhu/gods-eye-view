@@ -199,7 +199,11 @@ export interface BaseStatus {
 }
 
 /**
- * The sky. A renderer whose sun, moon or fog are not separate from its
+ * The sky. These switch parts of it on and off; they do not say how it
+ * looks. How the sky, the atmosphere over the ground, distance haze, the
+ * lighting and the tone mapping and exposure of the frame look is each
+ * renderer's own, and no check compares colours with
+ * each other. Where the renderer's sun, moon or fog are not separate from its
  * atmosphere follows `atmosphere` for them and reports them as it draws them.
  */
 export interface SkySettings {
@@ -224,9 +228,20 @@ export interface SkySettings {
  * fades what makes no sense at the camera's height (rain from orbit) by
  * itself. None of it is picked or answers height queries. The application sets the
  * conditions observed at the view, which the user can override.
+ *
+ * The renderer draws these in its own way, as well as it can; the
+ * strengths say what is observed, not how it is drawn. Clouds and
+ * precipitation are where scene time (`frame.time()`) puts them, drifting
+ * with `wind`: the same scene time draws the same sky, and moving scene time
+ * moves them. Where the sun lights the globe (`SkySettings.lighting`),
+ * clouds shade the ground and models under them.
  */
 export interface WeatherSettings {
-  /** Cloud cover. */
+  /**
+   * The fraction of the sky the clouds cover, as observed: 0 clear, about
+   * 0.5 scattered to broken, 1 overcast. Under scattered cloud the ground
+   * shows between the clouds, from below and from above.
+   */
   clouds: number;
   /** Fog: 1 is about 500 m visibility or less. */
   fog: number;

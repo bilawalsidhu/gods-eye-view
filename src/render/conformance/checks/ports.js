@@ -4781,6 +4781,58 @@ export function portChecks() {
       },
       { capability: 'weather' },
     ),
+    check(
+      'globe.weather.sceneTime',
+      'clouds are where scene time puts them: moving it moves them, going back brings them back',
+      async (h, r) => {
+        if (h.pixels === false) return { skip: 'reads pixels' };
+        r.camera.setView({
+          destination: { ...AUSTIN, height: 600 },
+          orientation: { heading: 0, pitch: 0.05, roll: 0 },
+        });
+        const frame = async () => {
+          await drawn(h, r, 4);
+          await settled(r);
+          r.frame.renderNow();
+          return r.readPixels({ scale: 0.1 }).data;
+        };
+        const apart = (a, b) => {
+          let sum = 0;
+          for (let i = 0; i < a.length; i += 4)
+            for (let c = 0; c < 3; c++) sum += Math.abs(a[i + c] - b[i + c]);
+          return sum / ((a.length / 4) * 3);
+        };
+        const t0 = r.frame.time();
+        const later = t0 + 30 * 60_000;
+        // What moving scene time changes without clouds (the sun), so the
+        // clouds' own movement is measured on top of it.
+        const clearAt0 = await frame();
+        r.frame.setTime(later);
+        const clearLater = await frame();
+        r.frame.setTime(t0);
+        r.globe.weather.set({
+          clouds: 0.5,
+          wind: { speedMps: 20, fromDeg: 270 },
+        });
+        const cloudsAt0 = await frame();
+        r.frame.setTime(later);
+        const cloudsLater = await frame();
+        r.frame.setTime(t0);
+        const cloudsAgain = await frame();
+        r.globe.weather.set({ clouds: 0, wind: { speedMps: 0, fromDeg: 0 } });
+        const sun = apart(clearAt0, clearLater);
+        const moved = apart(cloudsAt0, cloudsLater);
+        ok(
+          moved > sun + 2,
+          `30 minutes of wind move the clouds (${moved.toFixed(1)} against ${sun.toFixed(1)} clear)`,
+        );
+        ok(
+          apart(cloudsAt0, cloudsAgain) < 3,
+          `the same scene time draws the same clouds (${apart(cloudsAt0, cloudsAgain).toFixed(1)})`,
+        );
+      },
+      { capability: 'weather' },
+    ),
 
     // --- Effects, credits, quality ---------------------------------------
     check(

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- The renderer contract no longer ties a renderer's look to the default
+  renderer's: `globe.sky` switches parts of the sky on and off, while how
+  the sky, atmosphere, haze, lighting, tone mapping and exposure look is
+  the renderer's own. `globe.weather`'s `clouds` is the fraction of the sky
+  covered, as observed; clouds are placed by scene time and the wind and
+  shade the ground under them where the sun lights it. New conformance
+  check `globe.weather.sceneTime` (samehkhamis).
 - Selecting an aircraft, a vessel, a train or a transit vehicle no longer
   makes it bigger: it keeps the size and form it had and changes colour (a
   transit vehicle only widens its dark ring). A click on an aircraft, a
@@ -869,7 +876,7 @@
 
 - Stop one retired bikeshare feed from reporting the whole layer as failed.
   City feeds are fetched independently, but failure was recorded in a single
-  flag that only a successful *activation* cleared — and an already-loaded city
+  flag that only a successful _activation_ cleared — and an already-loaded city
   never activates again. A dead feed re-entering camera range therefore latched
   LOAD FAILED permanently over a map still drawing every other city's stations.
   Failure is now tracked per city: a city that fails beside others still
@@ -1145,7 +1152,7 @@
   photo a click opens, and the cones, by each photo's projection and upload
   date. KartaView's SINCE is the upload date (all its server can filter by);
   a note under the slider says so while KartaView is lit (`sinceBasis:
-  'upload'` in the provider contract).
+'upload'` in the provider contract).
   Mapillary's line coverage and sequence cones are now shared by both
   (`lineCoverage.js`, `sequenceCones.js`).
 
@@ -1723,6 +1730,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
@@ -1998,7 +2006,6 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ### Other changes
-
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
@@ -2808,4 +2815,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-
