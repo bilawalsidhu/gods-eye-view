@@ -129,7 +129,9 @@ export function createQueries({ state, parts }) {
     const visible = [];
     for (const entry of state._visible) {
       const marker = entry.marker;
-      if (!marker?.position || marker.show === false) continue;
+      // A vehicle drawn as its 3D model is present though its marker is hidden.
+      if (!marker?.position) continue;
+      if (marker.show === false && entry.modelOwnsVisual !== true) continue;
       visible.push(entry);
     }
     let chosen = visible;

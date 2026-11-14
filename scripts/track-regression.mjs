@@ -97,8 +97,14 @@ import fs from 'node:fs';
 import puppeteer from 'puppeteer';
 import { respondToPlanespotters } from './qa-photo-stub.mjs';
 import { arrivalAngleViolated, arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
-import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
+import { aircraftModelSpec } from '../src/data/fleetModels.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
+
+/** The fleet model set the aircraft layers draw from, read from disk. */
+const FLEET_SET = Object.freeze({
+  catalog: JSON.parse(fs.readFileSync(new URL('../public/models/fleet/catalog.json', import.meta.url), 'utf8')),
+  types: JSON.parse(fs.readFileSync(new URL('../public/models/fleet/types.json', import.meta.url), 'utf8')),
+});
 
 // ---------------------------------------------------------------------------
 // Args
@@ -547,13 +553,13 @@ async function main() {
 
     // Independent GLB capability control. Product model absence cannot prove
     // that the browser backend is incapable: that is the condition this
-    // harness is meant to catch. Load the already-approved airplane asset
+    // harness is meant to catch. Load one of the shipped fleet models
     // directly through Cesium, outside the Flights/Military model pipelines,
     // then remove the control before exercising product behavior.
     const glbControlStarted = await evalPage(async () => {
       window.__qaGlbControl = null;
       window.__qaGlbControlError = null;
-      const asset = await fetch('/models/airplane.glb');
+      const asset = await fetch('/models/fleet/aircraft/a320.glb');
       const assetBytes = asset.ok ? (await asset.arrayBuffer()).byteLength : 0;
       if (!asset.ok || assetBytes === 0) {
         throw new Error(`GLB control asset unavailable: HTTP ${asset.status}`);
@@ -564,7 +570,7 @@ async function main() {
         Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 9000),
       );
       void Cesium.Model.fromGltfAsync({
-        url: '/models/airplane.glb',
+        url: '/models/fleet/aircraft/a320.glb',
         modelMatrix,
         scale: 1,
       }).then((model) => {
@@ -1454,8 +1460,8 @@ async function main() {
       }, trackedIcao);
       console.log('  (3D model did not render under SwiftShader; testing the shared display-position contract directly)');
     } else {
-      // Full check: independently transform airplane.glb's measured AABB centre
-      // through the actual 3D model matrix, then compare it with detection.
+      // Full check: independently transform the fleet model's visual centre
+      // (its origin) through the actual 3D model matrix, then compare it with detection.
       // glTF [x,y,z] → Cesium-local [x,-z,y]. The effective rendered
       // computedScale is separate from modelMatrix and includes any
       // minimumPixelSize enlargement, so include it just as the renderer does.
@@ -1469,7 +1475,7 @@ async function main() {
         const scale = Number.isFinite(model.computedScale)
           ? model.computedScale
           : (Number.isFinite(model.scale) ? model.scale : 1);
-        // airplane.glb is now bounding-box centred with transforms applied.
+        // Fleet models are drawn about their origin, transforms applied.
         const x = 0 * scale;
         const y = 0 * scale;
         const z = 0 * scale;
@@ -2229,18 +2235,12 @@ async function main() {
     // ============================================================
     console.log('\nGround 3D — grounded planes are model-eligible + snapped to the sampled skin');
     const GROUND3D_STUB_H = 187.5; // stubbed tile-skin height (m, ellipsoid)
-    // Expected belly offsets (m): native origin-above-lowest-vertex × MODEL_SCALE
-    // × CLASS_SCALE_3D[klass] — constants match the layers' MODEL_BELLY_OFFSET_NATIVE
-    // / MODEL_SCALE pairs, which modelScale.test.mjs locks against the GLBs.
-    // Class is computed with the REAL classifier on the synthetic feed fields.
-    const g3dFlKlass = classifyAircraft({ typeCode: null, category: null });
-    const g3dMilKlass = classifyAircraft({ typeCode: 'C130', category: undefined });
-    const g3dFlOffset = 6.719 * 1 * (CLASS_SCALE_3D[g3dFlKlass] || 1); // airplane.glb, flights
-    // Hangar fleet (2026-08-16): military C130 → turboprop → the real atr72.glb,
-    // whose belly offset is the registry's measured bellyM (meters, scale 1) —
-    // NOT the jet.glb 5.631 × class formula. Pinned by modelScale.test.mjs.
-    const g3dMilOffset = CLASS_MODEL_REAL[g3dMilKlass]?.bellyM
-      ?? 5.631 * 1 * (CLASS_SCALE_3D[g3dMilKlass] || 1); // jet.glb fallback classes
+    // Expected belly offsets (m): the fleet model's wheel clearance at its
+    // life-size scale, the model chosen as the layers choose it
+    // (aircraftModelSpec) from the synthetic feed's fields: no type for the
+    // flights contact (the default airliner), a C130 for the military one.
+    const g3dFlOffset = aircraftModelSpec(FLEET_SET, { typeCode: null }).clearanceM;
+    const g3dMilOffset = aircraftModelSpec(FLEET_SET, { typeCode: 'C130' }).clearanceM;
     // Height-datum fix (Task 6): the flights-layer billboard for a grounded synthetic
     // (no geo_altitude in this stub feed, no warm terrain-height cache in a headless
     // run) now renders at baroM + geoidHeight(lat, lon) rather than the raw baro
@@ -2509,10 +2509,10 @@ async function main() {
         const flDelta = g3dState.flModelRadius - g3dIngest.flBBRadius;
         const milDelta = g3dState.milModelRadius - g3dIngest.milBBRadius;
         const HEIGHT_TOL_M = 1.0;
-        record(`ground-3d: flights model height = sampled skin + belly offset (${g3dFlKlass})`,
+        record(`ground-3d: flights model height = sampled skin + belly offset (default airliner)`,
           Math.abs(flDelta - flWantDelta) <= HEIGHT_TOL_M,
           `Δradial=${flDelta.toFixed(2)} m want=${flWantDelta.toFixed(2)} m (stub ${GROUND3D_STUB_H} + offset ${g3dFlOffset.toFixed(2)} − alt ${(150 + g3dFlGeoidN).toFixed(2)} [150 baro + ${g3dFlGeoidN.toFixed(2)} geoidN])`);
-        record(`ground-3d: military model height = sampled skin + belly offset (${g3dMilKlass})`,
+        record(`ground-3d: military model height = sampled skin + belly offset (C130)`,
           Math.abs(milDelta - milWantDelta) <= HEIGHT_TOL_M,
           `Δradial=${milDelta.toFixed(2)} m want=${milWantDelta.toFixed(2)} m (stub ${GROUND3D_STUB_H} + offset ${g3dMilOffset.toFixed(2)} − alt 0)`);
         record('ground-3d: billboard→model handoff holds on the ground (icons hidden once models render)',
@@ -2712,7 +2712,7 @@ async function main() {
             const scale = Number.isFinite(m.computedScale)
               ? m.computedScale
               : (Number.isFinite(m.scale) ? m.scale : 1);
-            // airplane.glb is now bounding-box centred with transforms applied.
+            // Fleet models are drawn about their origin, transforms applied.
             const x = 0 * scale;
             const y = 0 * scale;
             const z = 0 * scale;
@@ -3722,8 +3722,8 @@ async function main() {
 
       // WARM ground, camera IN: the placement. The model is not merely visible,
       // it is standing ON the floor — within one class belly offset above it,
-      // never under it. MAX_BELLY_M clears the largest offset any class adds
-      // (widebody b789, 7.81 m in CLASS_MODEL_REAL); the floor itself is the
+      // never under it. MAX_BELLY_M clears the largest wheel clearance any
+      // fleet aircraft stands on at life size; the floor itself is the
       // hard lower bound, and a model placed at the raw feed altitude is ~240 m
       // under it.
       const MAX_BELLY_M = 12;

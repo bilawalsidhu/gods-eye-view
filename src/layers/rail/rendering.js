@@ -26,6 +26,22 @@ import {
   UNSELECTED_TRAIN_ALPHA,
 } from './policy.js';
 import { placeOnPath } from './pathBinding.js';
+import {
+  fleetModelSet,
+  loadFleetModelSet,
+  transitModelSpec,
+} from '../../data/fleetModels.js';
+import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
+
+/** How often the trains near enough for a model are gathered again (wall ms). */
+const MODEL_CANDIDATES_MS = 500;
+/** Each category's colour, painted where a train model marks it. */
+const CATEGORY_TINTS = Object.fromEntries(
+  Object.entries(RAIL_CATEGORY_COLORS).map(([category, css]) => [
+    category,
+    Cesium.Color.fromCssColorString(css),
+  ]),
+);
 
 const SPRITE_PX = 64;
 /** Billboard tints; the setter copies, so sharing one instance is safe. */
@@ -508,6 +524,27 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
+   * Whether a train's icon is drawn: shown, not drawn by its model, and no
+   * first-person view rides it (cockpitSubject.js). A held train keeps its
+   * playback; only its icon and model hide.
+   */
+  function markerShown(entry) {
+    return (
+      categoryShown(entry) &&
+      !entry.modelOwnsVisual &&
+      entry.key !== state._cockpitSubjectKey
+    );
+  }
+
+  /**
+   * Whether the train's playback runs: it is drawn, or a first-person view
+   * rides it, which keeps it moving, hidden, in a category turned off.
+   */
+  function playing(entry) {
+    return categoryShown(entry) || entry.key === state._cockpitSubjectKey;
+  }
+
+  /**
    * A train bound to its railway line is drawn on the line, at the arc its
    * playback has reached; any other train (or a bound train whose reports do
    * not fit the line) is drawn on the time-interpolated straight-line point.
@@ -536,7 +573,7 @@ export function createRendering({ state, services, parts }) {
       undefined,
       scratchPosition,
     );
-    entry.marker.show = categoryShown(entry);
+    entry.marker.show = markerShown(entry);
   }
 
   /** While a train is selected, every other train is drawn see-through. */
@@ -554,7 +591,7 @@ export function createRendering({ state, services, parts }) {
     entry.marker.width = size;
     entry.marker.height = size;
     entry.marker.color = tintFor(entry);
-    entry.marker.show = categoryShown(entry);
+    entry.marker.show = markerShown(entry);
   }
 
   /** Re-tint every train after the selection appeared, moved or cleared. */
@@ -593,7 +630,7 @@ export function createRendering({ state, services, parts }) {
     place(entry);
     const sample = entry.sample;
     const moving =
-      categoryShown(entry) &&
+      playing(entry) &&
       sample?.phase === 'playing' &&
       sample.segmentSpeedMps > 0;
     if (moving) {
@@ -601,7 +638,7 @@ export function createRendering({ state, services, parts }) {
       return;
     }
     state._moving.delete(entry);
-    if (categoryShown(entry) && Number.isFinite(sample?.nextWakeMonoMs)) {
+    if (playing(entry) && Number.isFinite(sample?.nextWakeMonoMs)) {
       entry.wakeTimer = setTimeout(
         () => {
           entry.wakeTimer = null;
@@ -658,7 +695,7 @@ export function createRendering({ state, services, parts }) {
   function cullSelected() {
     const entry = state._trains.get(state._selectedKey);
     if (!entry?.marker) return;
-    const shown = categoryShown(entry) && facesCamera(entry.marker.position);
+    const shown = markerShown(entry) && facesCamera(entry.marker.position);
     if (entry.marker.show !== shown) entry.marker.show = shown;
     parts.routes.cullStops(facesCamera);
   }
@@ -666,6 +703,134 @@ export function createRendering({ state, services, parts }) {
   function onPreRender() {
     advanceMoving();
     if (state._enabled && state._selectedKey !== null) cullSelected();
+    if (state._enabled) updateModels();
+  }
+
+  // Under the DISPLAY rail's 3D toggle, trains near the camera are drawn as
+  // the project's procedural fleet models, chosen by category and mode,
+  // painted in their category colour where the model marks it, on the
+  // aircraft layers' icon-to-model rules (services.fleet). The fleet set
+  // loads once, up front, when the layer starts.
+  let fleetModels = null;
+  /** Items drawn last frame, and the map the next frame's are gathered into. */
+  let modelItems = new Map();
+  let spareItems = new Map();
+  let modelCandidatesAtMs = -Infinity;
+
+  /** Load the fleet set and create the layer's models (on enable). */
+  function startModels() {
+    const fleet = services.fleet;
+    if (!fleet?.policy || !state._viewer) return;
+    loadFleetModelSet({ resolveAsset: fleet.resolveAsset }).catch(() => {
+      /* models stay off; trains keep their icons */
+    });
+    fleetModels ||= createFleetModelLayer({
+      viewer: state._viewer,
+      display: fleet.display,
+      policy: fleet.policy,
+      resolveAsset: fleet.resolveAsset,
+    });
+  }
+
+  /** Hand a train's visual back to its icon. */
+  function handBack(entry) {
+    if (!entry.modelOwnsVisual) return;
+    entry.modelOwnsVisual = false;
+    if (entry.marker) entry.marker.show = markerShown(entry);
+  }
+
+  function modelItem(entry, set) {
+    let item = modelItems.get(entry.key);
+    if (!item || item.entry !== entry)
+      item = {
+        entry,
+        pickId: entry.key,
+        modelOwnsVisual: false,
+        // Markers are drawn this far above the track; a model stands on it.
+        groundLiftM: GROUND_FLOOR_LIFT_M,
+      };
+    const specKey = `${entry.category}|${entry.railMode}`;
+    if (item.specKey !== specKey) {
+      item.specKey = specKey;
+      item.spec = transitModelSpec(set, {
+        railCategory: entry.category,
+        railMode: entry.railMode,
+      });
+      item.tint = CATEGORY_TINTS[entry.category] || CATEGORY_TINTS.local;
+    }
+    item.position = entry.marker.position;
+    item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
+    // A train a first-person view rides draws no model: the camera is inside
+    // it (cockpitSubject.js).
+    item.show = categoryShown(entry) && entry.key !== state._cockpitSubjectKey;
+    return item;
+  }
+
+  function updateModels() {
+    if (!fleetModels) return;
+    if (!fleetModels.active() || state._trains.size === 0) {
+      if (modelItems.size) {
+        for (const item of modelItems.values()) handBack(item.entry);
+        modelItems.clear();
+        fleetModels.frame(modelItems, performance.now());
+      }
+      return;
+    }
+    const set = fleetModelSet();
+    const now = performance.now();
+    const next = spareItems;
+    next.clear();
+    if (now - modelCandidatesAtMs >= MODEL_CANDIDATES_MS) {
+      modelCandidatesAtMs = now;
+      const camera = state._viewer?.camera;
+      const policy = services.fleet.policy;
+      const keepM =
+        services.fleet.display?.()?.models3dMode === 'all'
+          ? policy.keepAllM
+          : policy.keepM;
+      const limitSq = keepM * keepM * 1.44;
+      if (camera?.positionWC)
+        for (const entry of state._trains.values()) {
+          if (!entry.marker || !categoryShown(entry)) continue;
+          if (
+            Cesium.Cartesian3.distanceSquared(
+              camera.positionWC,
+              entry.marker.position,
+            ) > limitSq
+          )
+            continue;
+          next.set(entry.key, modelItem(entry, set));
+        }
+    } else {
+      for (const [key, item] of modelItems)
+        if (state._trains.get(key) === item.entry && item.entry.marker)
+          next.set(key, modelItem(item.entry, set));
+    }
+    for (const [key, item] of modelItems)
+      if (next.get(key) !== item) handBack(item.entry);
+    spareItems = modelItems;
+    modelItems = next;
+    fleetModels.frame(modelItems, now);
+    for (const item of modelItems.values()) {
+      const entry = item.entry;
+      if (item.modelOwnsVisual) {
+        entry.modelOwnsVisual = true;
+        entry.marker.show = false;
+      } else handBack(entry);
+    }
+    if (fleetModels.settling) governorRequestRender('rail-models');
+  }
+
+  /** Drop every model (layer disabled); `destroy` also removes the collection. */
+  function stopModels(destroy = false) {
+    for (const item of modelItems.values()) item.entry.modelOwnsVisual = false;
+    modelItems.clear();
+    spareItems.clear();
+    modelCandidatesAtMs = -Infinity;
+    if (destroy) {
+      fleetModels?.destroy();
+      fleetModels = null;
+    } else fleetModels?.clear();
   }
 
   function advanceMoving() {
@@ -697,7 +862,7 @@ export function createRendering({ state, services, parts }) {
   function applyCategoryVisibility() {
     for (const entry of state._trains.values()) {
       if (!entry.marker) continue;
-      entry.marker.show = categoryShown(entry);
+      entry.marker.show = markerShown(entry);
       schedulePlayback(entry);
     }
     syncRenderHold();
@@ -720,5 +885,7 @@ export function createRendering({ state, services, parts }) {
     applyCategoryVisibility,
     categoryShown,
     reset,
+    startModels,
+    stopModels,
   };
 }

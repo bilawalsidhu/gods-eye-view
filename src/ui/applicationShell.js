@@ -400,6 +400,9 @@ export class StyleManager extends ShellFacade {
             owner: 'cockpit-orbit',
             switchPolicy: 'esri-if-photoreal',
           }) ?? null,
+        // The application's own first-person subjects
+        // (src/cockpitSubjectProviders.js), checked by the coordinator.
+        cockpitSubjects: services.cockpitSubjects,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -1197,6 +1200,11 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        // Clear selected data layers and Context isolation switch the layer
+        // off without the user asking: the panel keeps its state for both.
+        preservePanelState: () =>
+          this._preservePanelStateDuringLayerClear ||
+          this._contextSuspendsLayer('cctv'),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
       },

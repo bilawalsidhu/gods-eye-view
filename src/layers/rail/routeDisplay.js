@@ -427,10 +427,29 @@ export function createRouteDisplay({
     updateSplit();
   }
 
+  /**
+   * Show the selected line unless a first-person view rides its train
+   * (cockpitSubject.js): from inside the train it would run up the middle of
+   * the view and under the eye.
+   */
+  function applyHold() {
+    const route = state._route;
+    if (!route?.primitive) return;
+    const shown = !(
+      state._cockpitSubjectKey !== null &&
+      state._cockpitSubjectKey === state._selectedKey
+    );
+    if (route.primitive.show !== shown) {
+      route.primitive.show = shown;
+      governorRequestRender('rail-route');
+    }
+  }
+
   /** Move the travelled/ahead split to where the train is drawn now. */
   function updateSplit() {
     const route = state._route;
     if (!route?.primitive) return;
+    applyHold();
     const binding = route.binding;
     const s = binding ? binding.drawS : NaN;
     if (route.direction === 0 && Number.isFinite(s)) {
@@ -777,6 +796,7 @@ export function createRouteDisplay({
     applyNetwork,
     onCamera,
     syncRoute,
+    applyHold,
     refreshStops,
     cullStops,
     onSelectionChanged,

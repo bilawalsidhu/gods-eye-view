@@ -64,7 +64,11 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
   const geometricFeet = finiteNumber(aircraft?.alt_geom);
   const groundSpeedKnots = finiteNumber(aircraft?.gs);
   const verticalRateFpm = readAdsbVerticalRateFpm(aircraft);
-  const track = finiteNumber(aircraft?.track);
+  // A parked or slow aircraft reports no ground track, but often its true
+  // heading (surface messages): the way its nose points, which is what an
+  // aircraft standing still is drawn by. Magnetic heading is not true north.
+  const track =
+    finiteNumber(aircraft?.track) ?? finiteNumber(aircraft?.true_heading);
 
   return [
     hex,

@@ -75,7 +75,7 @@ try {
         }
         const position = C.Cartesian3.fromDegrees(0, 0, 10000);
         const model = await C.Model.fromGltfAsync({
-          url: '/models/airplane.glb',
+          url: '/models/fleet/aircraft/a320.glb',
           modelMatrix: C.Transforms.eastNorthUpToFixedFrame(position),
         });
         scene.primitives.add(model);

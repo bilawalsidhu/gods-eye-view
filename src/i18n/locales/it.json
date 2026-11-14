@@ -3692,5 +3692,12 @@
   "Confirm: remove every added entry from Data Layers": "Conferma: rimuovi da Livelli dati tutte le voci aggiunte",
   "Remove every added entry from Data Layers": "Rimuovi da Livelli dati tutte le voci aggiunte",
   "Showing {shown} of {total}": "Mostrati: {shown} su {total}",
-  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI"
+  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI",
+  "The globe stopped drawing": "Il globo ha smesso di disegnare",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "Il browser ha ritirato la grafica 3D del globo. Livelli e controlli funzionano ancora, ma la mappa non può essere disegnata finché la pagina non viene ricaricata.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "Il rendering si è fermato dopo un errore. Livelli e controlli funzionano ancora, ma la mappa non si aggiorna.",
+  "Reset view reloads the app without the view restored from the address bar.": "Ripristina vista ricarica l’app senza la vista ripristinata dalla barra degli indirizzi.",
+  "Reload": "Ricarica",
+  "Retry": "Riprova",
+  "Reset view": "Ripristina vista"
 }

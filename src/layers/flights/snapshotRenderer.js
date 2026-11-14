@@ -198,9 +198,14 @@ export function createFlightSnapshotRenderer({
         ) {
           rendering._applyFleetBillboardPresentation(icao24, bb);
         }
-        // Poll-path class change (category updates): same model resync rule
-        // as the enrichment path — the class's GLB/scale may have changed.
-        if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
+        // Poll-path type or category change: same model resync rule as the
+        // enrichment path — the fleet model or its scale may have changed.
+        if (
+          prevMeta?.klass !== meta.klass ||
+          prevMeta?.category !== meta.category ||
+          prevMeta?.typeCode !== meta.typeCode
+        )
+          rendering._syncModelToClass(icao24);
       } else {
         // Start where the fleet pass will draw it: the fleet renders behind
         // real time, so a fresh contact's displayed position is its fix

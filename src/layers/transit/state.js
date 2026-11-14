@@ -98,6 +98,15 @@ export function createState({ services }) {
 
   /** @type {string|null} */
   state._selectedKey = null;
+  /** When the user last selected a vehicle, even the selected one (ms). */
+  state._selectedAtMs = null;
+  /**
+   * The vehicle a first-person view holds (cockpitSubject.js), or null: its
+   * sprite, 3D model, card, trail and detection box are hidden, and it keeps
+   * moving out of the camera's view.
+   * @type {string|null}
+   */
+  state._cockpitSubjectKey = null;
   state._selectedCardAt = 0;
   /** The card text last published, so an unchanged card is not re-sent. */
   state._selectedCardText = null;
