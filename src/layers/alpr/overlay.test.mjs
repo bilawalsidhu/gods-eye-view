@@ -148,6 +148,11 @@ test('a selected camera without a bearing gets its badge and brackets, never a f
   assert.equal(h.overlay.pick({ x: 100, y: 100 }), 'camera:0');
   assert.equal(h.icon('camera:0').show, true);
   assert.equal(h.icon('camera:0').color[3], 0.01, 'a faint pick target');
+  assert.equal(
+    h.icon('camera:0').meta,
+    h.carrier('camera:0'),
+    'a pick hands point-and-ask the context carrier',
+  );
   assert.equal(directionWedgePositions(h.records[0]), null);
 });
 

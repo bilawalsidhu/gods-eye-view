@@ -260,6 +260,7 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
   assert.equal(icon.disableDepthTest, Number.POSITIVE_INFINITY);
   assert.equal(layerSet(draw, ':markers').spec.horizonCull, true);
   const carrier = calls.carriers.get('local-adsb:abc123');
+  assert.equal(icon.meta, carrier, 'a pick hands point-and-ask the carrier');
   assert.equal(readEntityRecord(carrier)?.labelModel.title, 'LOCAL1');
   assert.equal(typeof readEntityRecord(carrier)?.displayPosition, 'function');
 

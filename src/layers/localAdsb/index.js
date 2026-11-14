@@ -368,6 +368,8 @@ export function createLocalAdsbLayer({
       show: !marker.modelOwnsVisual,
       disableDepthTest: Number.POSITIVE_INFINITY,
       displayRange: MARKER_RANGE,
+      // The context carrier: what a pick hands to point-and-ask.
+      meta: marker.carrier,
     };
   }
 

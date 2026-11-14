@@ -67,6 +67,8 @@ export function alprIconItem(carrier) {
     size: [size, size],
     disableDepthTest: Number.POSITIVE_INFINITY,
     show: marker.shown !== false,
+    // The context carrier: what a pick hands to point-and-ask.
+    meta: carrier,
     ...(canvas
       ? { color: PICK_TARGET_COLOR }
       : { scaleByDistance: SCALE_BY_DISTANCE }),
