@@ -392,6 +392,32 @@ test('a feed with rider-facing route ids is left alone', () => {
   assert.equal(transitRouteLabel(null, '7'), '7');
 });
 
+test('TransLink route keys lose their GTFS version; Cairns loses its C prefix', () => {
+  // Both TransLink feeds key routes `<route>-<version>`, and Cairns prefixes
+  // its numbered buses with C. Ids seen in the live feeds, 9 Nov 2026.
+  const seq = getTransitFeed('translink-seq');
+  assert.equal(transitRouteLabel(seq, '200-4'), '200');
+  assert.equal(transitRouteLabel(seq, 'L1-32'), 'L1', 'Gold Coast light rail');
+  assert.equal(transitRouteLabel(seq, 'BNVL-5'), 'BNVL', 'a rail line code');
+  assert.equal(
+    transitRouteLabel(seq, 'CLSH-5'),
+    'CLSH',
+    'a rail code starting with C is not a Cairns bus',
+  );
+  assert.equal(transitRouteLabel(seq, 'F1-18'), 'F1');
+  const cairns = getTransitFeed('translink-cairns');
+  assert.equal(transitRouteLabel(cairns, 'C123-33'), '123');
+  assert.equal(transitRouteLabel(cairns, 'C110-33'), '110');
+  assert.equal(
+    transitRouteLabel(cairns, '143W-33'),
+    '143W',
+    'a variant keeps its letter',
+  );
+  assert.equal(transitRouteLabel(cairns, 'C123'), '123', 'an unversioned key');
+  assert.equal(transitRouteLabel(seq, '600'), '600', 'nothing to strip');
+  assert.equal(transitRouteLabel(seq, null), null);
+});
+
 test('the feeds whose licences are accepted by use are switched on', () => {
   // Barrie and YRT each ask for acceptance through a form, and each licence
   // also says that using the data is itself acceptance. That reading was

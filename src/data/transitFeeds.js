@@ -378,6 +378,69 @@ function burlingtonRouteLabel(routeId) {
 }
 
 /**
+ * TransLink (Queensland) route ids are `<route>-<version>`. Rail lines are two
+ * two-letter station codes (`BRBN`, `SHCL`), ferries are `F<n>` plus the
+ * Southern Moreton Bay Islands service `SMBI`, and the Gold Coast light rail
+ * is `L1`. `SHUT` is the rail-replacement bus. Everything else is a bus, left
+ * to the feed default so movement plausibility treats it as a guess.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function translinkRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  const route = routeId.replace(/-\d+$/, '');
+  if (/^F\d+$/.test(route) || route === 'SMBI') return 'ferry';
+  if (route === 'L1') return 'tram';
+  if (/^[A-Z]{4}$/.test(route) && route !== 'SHUT') return 'rail';
+  return 'unknown';
+}
+
+/**
+ * TransLink route key to the route a rider would say: drop the `-<version>`
+ * suffix (`200-4` → `200`, `L1-32` → `L1`), and drop the `C` Cairns puts in
+ * front of its numbered buses (`C123-33` → `123`). South East Queensland has no
+ * `C<digits>` routes; its rail codes such as `CLSH` are letters only.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function translinkRouteLabel(routeId) {
+  if (!routeId) return routeId;
+  const route = routeId.replace(/-\d+$/, '');
+  const cairns = /^C(\d+)$/.exec(route);
+  return cairns ? cairns[1] : route;
+}
+
+/** Adelaide Metro train and tram route ids, from its static routes.txt. */
+const ADELAIDE_RAIL_ROUTES = new Set([
+  'BEL',
+  'FLNDRS',
+  'GAW',
+  'GAWC',
+  'GRNG',
+  'NOAR',
+  'OSBORN',
+  'OUTHA',
+  'PTDOCK',
+  'SALIS',
+  'SEAFRD',
+]);
+const ADELAIDE_TRAM_ROUTES = new Set(['BTANIC', 'FESTVL', 'GLNELG']);
+
+/**
+ * Adelaide Metro route ids are the line codes; all-letter bus routes exist
+ * (`INDSTA`), so trains and trams are listed rather than pattern-matched.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function adelaideMetroRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  if (ADELAIDE_RAIL_ROUTES.has(routeId)) return 'rail';
+  if (ADELAIDE_TRAM_ROUTES.has(routeId)) return 'tram';
+  if (routeId === 'SEALNK') return 'ferry';
+  return 'unknown';
+}
+
+/**
  * Rio route key to the line a rider would say. One SMTR `routes.txt` covers
  * both feeds (see rioRouteNames.js).
  * @param {string|null} routeId
@@ -715,7 +778,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     url: 'https://gtfsrt.api.translink.com.au/api/realtime/seq/VehiclePositions',
     license: 'CC BY 4.0',
     licenseUrl: 'https://translink.com.au/about-translink/open-data',
-    attribution: 'TransLink — Queensland Government (CC BY 4.0)',
+    attribution: 'Translink, Department of Transport and Main Roads',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -723,6 +786,29 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'No key, no stated rate limit, no caching rule. Logos and network imagery need separate approval, so the credit is text only.',
     }),
     defaultMode: 'bus',
+    routeMode: translinkRouteMode,
+    routeLabel: translinkRouteLabel,
+  }),
+  Object.freeze({
+    id: 'translink-cairns',
+    name: 'TransLink',
+    operator: 'TransLink (Queensland Government)',
+    region: 'Cairns, Australia',
+    center: Object.freeze({ lat: -16.9186, lon: 145.7781 }),
+    loadRadiusKm: 60,
+    url: 'https://gtfsrt.api.translink.com.au/api/realtime/CNS/VehiclePositions',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://translink.com.au/about-translink/open-data',
+    attribution: 'Translink, Department of Transport and Main Roads',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'Our data is licensed under a Creative Commons Attribution 4.0 International License. Authentication is not required to use the feed.',
+      note: 'The same open-data page lists Cairns (CNS) vehicle positions beside South East Queensland; same terms, text-only credit.',
+    }),
+    defaultMode: 'bus',
+    routeMode: translinkRouteMode,
+    routeLabel: translinkRouteLabel,
   }),
   Object.freeze({
     id: 'ttc-toronto',
@@ -1350,6 +1436,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'Official keyless endpoint; the state catalogue page refused automated reads, so no licence is quoted. Same basis as Metro Transit and OVapi. Speeds are m/s. The server picks its encoding from Accept, hence the override.',
     },
     defaultMode: 'bus',
+    routeMode: adelaideMetroRouteMode,
   }),
   transitFeed({
     id: 'marta-atlanta',
