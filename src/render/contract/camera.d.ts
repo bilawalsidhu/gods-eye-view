@@ -16,7 +16,9 @@
  *   view by the larger of the direction's turn over half the vertical field
  *   of view and the eye's travel over its height, since the view last
  *   fired. A frame can fire it twice, once for each measure.
- * - `moveEnd` fires 500 ms after the last change, and never while following.
+ * - `moveEnd` fires 500 ms after the last change of the eye, following or
+ *   not: a followed target that moves keeps the eye moving, and one that
+ *   stands still lets the move end.
  * - A flight's `onCancel` and `onComplete` run synchronously, inside the call
  *   or frame that ends it.
  * - Axes follow the usual convention: heading clockwise from north, pitch

@@ -5,8 +5,9 @@
  * export):
  * the listener lists, delivery (a throwing listener is reported, the rest
  * still run), the contract's per-listener `changed` measure, move detection
- * (`moveStart` on a change, `moveEnd` 500 ms after the last one, never
- * while following) and the command hooks (`onCommand`). A renderer calls
+ * (`moveStart` on a change, `moveEnd` 500 ms after the last one, as the
+ * reference measures them: a followed target that moves keeps the eye
+ * moving, one that stands still lets the move end) and the command hooks (`onCommand`). A renderer calls
  * `stepChanged()` and `stepMoveDetection()` once per frame, `command()`
  * before each camera command, and `emit()` for the events its engine
  * raises.
@@ -52,18 +53,16 @@ function sameView(a, b) {
 /**
  * @param {{pose: () => import('../contract/camera').CameraPose,
  *   world?: () => {position: object, direction: object, up: object},
- *   following?: () => boolean,
  *   report: (error: unknown) => void, thresholds?: boolean}} options `pose`
  *   is read only while a `changed` listener is registered; `world` (the
- *   eye in world coordinates; `pose()` when omitted) and `following` (no
- *   `moveEnd` while true) are read by `stepMoveDetection`; `thresholds`
+ *   eye in world coordinates; `pose()` when omitted) is read by
+ *   `stepMoveDetection`; `thresholds`
  *   false (a renderer without `cameraChangeThreshold`) ignores a listener's
  *   own threshold, so every listener fires at 0.5.
  */
 export function createCameraEvents({
   pose,
   world = pose,
-  following = () => false,
   report,
   thresholds = true,
 }) {
@@ -168,11 +167,7 @@ export function createCameraEvents({
         moving = true;
         emit('moveStart');
       }
-    } else if (
-      moving &&
-      !following() &&
-      now - lastMovedAt >= MOVE_END_WAIT_MS
-    ) {
+    } else if (moving && now - lastMovedAt >= MOVE_END_WAIT_MS) {
       moving = false;
       emit('moveEnd');
     }

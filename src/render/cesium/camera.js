@@ -105,8 +105,8 @@ export function createCesiumCamera({
   const removers = [];
   let lastWorld = null;
   // Camera events, measured on every tick: moveStart and moveEnd (500 ms
-  // after the last change of the eye or its field of view, by `now`, never
-  // while following), and `changed` per listener, where Cesium measures its
+  // after the last change of the eye or its field of view, by `now`,
+  // following or not, as Cesium's own), and `changed` per listener, where Cesium measures its
   // single threshold (`camera.percentageChanged`, which this leaves as it
   // is for everyone else listening to Cesium's own event). Cesium's own
   // moveStart and moveEnd are left out: it times them by the system clock.
@@ -132,7 +132,6 @@ export function createCesiumCamera({
         lastWorld = current;
       return lastWorld;
     },
-    following: () => Boolean(following?.followed),
     report,
     thresholds: capabilities?.has('cameraChangeThreshold') ?? true,
   });

@@ -180,7 +180,7 @@ test('the stub says where it draws an item, for a camera that is not its own', (
   r.destroy();
 });
 
-test('the stub camera ends no move while it follows', () => {
+test('a follow ends its move once the target stands still, and never while it moves', () => {
   const r = createStubRenderer();
   const seen = [];
   r.camera.on('moveStart', () => seen.push('start'));
@@ -194,10 +194,18 @@ test('the stub camera ends no move while it follows', () => {
     viewFrom: { x: 0, y: -500, z: 300 },
   });
   r.testing.advance(2000);
-  assert.deepEqual(seen, ['start'], 'moveEnd waits for the follow to end');
-  r.camera.follow(null);
-  r.testing.advance(1000);
-  assert.deepEqual(seen, ['start', 'end']);
+  assert.deepEqual(seen, ['start', 'end'], 'a still target ends the move');
+  // A moving target keeps the eye moving: no moveEnd while it moves.
+  let east = 0;
+  r.camera.follow({
+    key: 'moving',
+    position: () =>
+      toEcef({ lon: -97.74 + (east += 1e-5), lat: 30.27, height: 0 }),
+    frame: 'enu',
+    viewFrom: { x: 0, y: -500, z: 300 },
+  });
+  r.testing.advance(2000);
+  assert.deepEqual(seen, ['start', 'end', 'start'], 'no end while it moves');
   r.destroy();
 });
 

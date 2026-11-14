@@ -110,7 +110,6 @@ export function createStubCamera({
       direction: directionWC(),
       up: upWC(),
     }),
-    following: () => Boolean(followed),
     report,
     thresholds,
   });

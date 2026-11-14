@@ -9,14 +9,12 @@ const view = (x) => ({
   up: { x: 0, y: 0, z: 1 },
 });
 
-test('moveStart on a change, moveEnd once nothing moved for 500 ms and nothing is followed', () => {
+test('moveStart on a change, moveEnd once nothing moved for 500 ms', () => {
   let eye = view(7e6);
-  let following = false;
   const seen = [];
   const events = createCameraEvents({
     pose: () => eye,
     world: () => eye,
-    following: () => following,
     report: (error) => assert.fail(error),
   });
   events.on('moveStart', () => seen.push('start'));
@@ -34,11 +32,7 @@ test('moveStart on a change, moveEnd once nothing moved for 500 ms and nothing i
   assert.deepEqual(seen, ['start']);
   events.stepMoveDetection(400 + MOVE_END_WAIT_MS - 1);
   assert.deepEqual(seen, ['start']);
-  following = true;
   events.stepMoveDetection(400 + MOVE_END_WAIT_MS);
-  assert.deepEqual(seen, ['start'], 'never while following');
-  following = false;
-  events.stepMoveDetection(401 + MOVE_END_WAIT_MS);
   assert.deepEqual(seen, ['start', 'end']);
 });
 
