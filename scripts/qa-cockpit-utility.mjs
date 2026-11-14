@@ -2324,6 +2324,56 @@ try {
     JSON.stringify(narrowViewActions),
   );
 
+  // The collapsed Display/Radio row on a phone: centred on the Reset/Exit
+  // axis and clear of the ground speed and altitude telemetry it once covered.
+  for (const [width, height] of [[390, 844], [360, 740]]) {
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    const phoneRow = await page.evaluate(async () => {
+      const manager = window.__godsEyeView.styleManager;
+      manager._setCockpitDisclosure('display', false);
+      manager._setCockpitDisclosure('radio', false);
+      await new Promise(requestAnimationFrame);
+      manager.cockpitView.syncSignalLayout();
+      await new Promise(requestAnimationFrame);
+      const rect = (element) => element?.getBoundingClientRect().toJSON() || null;
+      const launchers = [...document.querySelectorAll(
+        '#cockpit-utility-controls .cockpit-utility-control',
+      )].map(rect);
+      return {
+        launchers,
+        speed: rect(document.querySelector('#cockpit-hud .cockpit-speed')),
+        altitude: rect(document.querySelector('#cockpit-hud .cockpit-altitude')),
+        switcher: rect(document.getElementById('view-switcher')),
+        viewport: { width: innerWidth, height: innerHeight },
+        // Cyber parks its row at the top; this check is the default theme's.
+        theme: document.documentElement.dataset.uiTheme || 'default',
+      };
+    });
+    const overlaps = (a, b) => Boolean(a && b)
+      && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const rowLeft = Math.min(...phoneRow.launchers.map((launcher) => launcher.left));
+    const rowRight = Math.max(...phoneRow.launchers.map((launcher) => launcher.right));
+    const switcherCentre = phoneRow.switcher
+      ? (phoneRow.switcher.left + phoneRow.switcher.right) / 2
+      : NaN;
+    check(
+      `${width}px Cockpit Display/Radio row is centred and clear of the speed and altitude readouts`,
+      phoneRow.launchers.length === 2
+        && phoneRow.launchers.every((launcher) => launcher.width > 0)
+        && phoneRow.theme !== 'cyber'
+        && phoneRow.speed?.width > 0
+        && phoneRow.altitude?.width > 0
+        && phoneRow.launchers.every((launcher) => (
+          !overlaps(launcher, phoneRow.speed) && !overlaps(launcher, phoneRow.altitude)
+        ))
+        && Math.abs((rowLeft + rowRight) / 2 - switcherCentre) <= 2
+        && rowLeft >= 0
+        && rowRight <= phoneRow.viewport.width,
+      JSON.stringify(phoneRow),
+    );
+  }
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+
   const resetResult = await page.evaluate(() => {
     // Both the UI and compatibility facade delegate to this navigation owner.
     const manager = window.__godsEyeView.styleManager._locationNavigation;

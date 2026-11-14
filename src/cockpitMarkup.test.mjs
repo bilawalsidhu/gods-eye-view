@@ -1136,10 +1136,16 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   assert.match(mobileCockpit[1], /body\.cockpit-mode #intel-hud/);
   assert.match(mobileCockpit[1], /body\.cockpit-mode \.cockpit-context-window/);
   assert.match(mobileCockpit[1], /body\.cockpit-mode \.cockpit-signal-window/);
+  // The collapsed Display/Radio row is centred on the Reset/Exit axis and
+  // anchored above the compass block, not at a fixed offset that covered the
+  // ground speed and altitude readouts; the compass reads the same anchor.
   assert.match(
     mobileCockpit[1],
-    /body\.cockpit-mode \.cockpit-utility-controls[\s\S]*?bottom:\s*152px;/,
+    /body\.cockpit-mode \.cockpit-utility-controls \{[\s\S]*?bottom:\s*calc\(var\(--cockpit-compass-bottom\) \+ 182px\);[\s\S]*?left:\s*12px;[\s\S]*?justify-content:\s*center;/,
   );
+  assert.doesNotMatch(mobileCockpit[1], /bottom:\s*152px;/);
+  assert.match(css, /\.cockpit-compass \{[\s\S]*?bottom:\s*var\(--cockpit-compass-bottom\);/);
+  assert.match(css, /--cockpit-compass-bottom:\s*clamp\(44px, 7vh, 72px\);/);
   assert.match(
     mobileCockpit[1],
     /body\.cockpit-mode \.cockpit-utility-control\.is-expanded[\s\S]*?top:\s*96px;/,

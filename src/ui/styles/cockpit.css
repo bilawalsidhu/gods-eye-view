@@ -78,6 +78,9 @@
   --cockpit-side-panel-width: min(340px, 28vw);
   /* HUD bottom offset + tallest scaled telemetry block + 20px clear border. */
   --cockpit-bottom-rail-safe: calc(clamp(84px, 11vh, 118px) + 100px);
+  /* The compass block's bottom edge; the phone Display/Radio row sits above
+     the telemetry it carries. */
+  --cockpit-compass-bottom: clamp(44px, 7vh, 72px);
   position: fixed;
   inset: 0;
   z-index: 145;
@@ -679,7 +682,7 @@ html:not([lang='en']) .cockpit-roll-token.is-separator {
 .cockpit-compass {
   position: absolute;
   left: 50%;
-  bottom: clamp(44px, 7vh, 72px);
+  bottom: var(--cockpit-compass-bottom);
   width: min(760px, 72vw);
   transform: translateX(-50%) rotateX(7deg) translateZ(18px);
   transform-style: preserve-3d;
@@ -2116,14 +2119,24 @@ body.cockpit-mode #intel-hud .hud-right-edge {
   body.cockpit-mode #right-context-rail {
     display: none !important;
   }
+  /* A centred row above the compass block: its ground speed and altitude
+     telemetry tops out ~171px above the block's bottom edge on phones, so
+     the row clears it by ~10px and stays on the same axis as RESET/EXIT.
+     The row spans the width to centre its launchers; only they take input. */
   body.cockpit-mode .cockpit-utility-controls {
     top: auto;
     right: 12px;
-    bottom: 152px;
-    max-width: calc(100vw - 24px);
+    bottom: calc(var(--cockpit-compass-bottom) + 182px);
+    left: 12px;
+    justify-content: center;
+    max-width: none;
+    pointer-events: none;
   }
   body.cockpit-mode .cockpit-utility-controls {
     flex-direction: row;
+  }
+  body.cockpit-mode .cockpit-utility-control {
+    pointer-events: auto;
   }
   body.cockpit-mode .cockpit-utility-launcher {
     width: min(150px, calc((100vw - 31px) / 2));
