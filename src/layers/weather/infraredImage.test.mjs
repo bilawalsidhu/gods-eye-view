@@ -26,6 +26,28 @@ function canvas() {
   return output;
 }
 
+test('the transfer is applied to the canvas pixels in place, with no copy written back', () => {
+  let read = null;
+  const output = {};
+  output.getContext = () => ({
+    drawImage() {},
+    getImageData: () => {
+      read = { data: new Uint8ClampedArray([194, 0, 0, 200]) };
+      // A second full-size buffer copied over the first is what this guards.
+      read.data.set = () => {
+        throw new Error('the canvas pixels were overwritten from a copy');
+      };
+      return read;
+    },
+    putImageData: (pixels) => {
+      output.pixels = pixels;
+    },
+  });
+  processInfraredImage({ width: 1, height: 1 }, 'filtered', () => output);
+  assert.equal(output.pixels, read);
+  assert.deepEqual([...read.data], [194, 0, 0, 98]);
+});
+
 test('decoded pixels are processed once on a same-sized canvas', () => {
   const image = { width: 1, height: 1 };
   const output = processInfraredImage(image, 'filtered', canvas);

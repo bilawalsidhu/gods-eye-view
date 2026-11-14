@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyInfraredAlpha,
   infraredAlpha,
   INFRARED_ALPHA_T0,
   INFRARED_ALPHA_T1,
@@ -60,4 +61,44 @@ test('full infrared preserves every channel including partial and zero alpha', (
     12, 50, 194, 80, 0, 0, 0, 255, 255, 200, 0, 0,
   ]);
   assert.deepEqual(infraredAlpha(pixels, 'full'), pixels);
+});
+
+test('the lookup table gives the per-pixel curve byte for byte, in place', () => {
+  // The transfer as it was written per pixel, before the table.
+  const perPixel = (rgba, amount) => {
+    const out = new Uint8ClampedArray(rgba);
+    for (let i = 0; i < out.length; i += 4) {
+      const linearMax =
+        (Math.max(rgba[i], rgba[i + 1], rgba[i + 2]) / 255) ** 2.2;
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          (linearMax - INFRARED_ALPHA_T0) /
+            (INFRARED_ALPHA_T1 - INFRARED_ALPHA_T0),
+        ),
+      );
+      out[i + 3] = rgba[i + 3] * (1 - amount + t * t * (3 - 2 * t) * amount);
+    }
+    return out;
+  };
+  // Every brightest-channel value in each channel, against a spread of alphas.
+  const bytes = [];
+  for (let value = 0; value < 256; value++)
+    for (const alpha of [0, 1, 37, 128, 200, 254, 255]) {
+      bytes.push(value, 0, 0, alpha);
+      bytes.push(value >> 1, value, 0, alpha);
+      bytes.push(0, value >> 2, value, alpha);
+    }
+  const source = new Uint8ClampedArray(bytes);
+  for (const strength of [1, 33, 50, 99, 100, 'filtered', Number.NaN]) {
+    const amount = Number.isFinite(strength) ? strength / 100 : 1;
+    const pixels = source.slice();
+    assert.equal(applyInfraredAlpha(pixels, strength), pixels);
+    assert.deepEqual(pixels, perPixel(source, amount), `strength ${strength}`);
+  }
+  for (const strength of [0, 'full']) {
+    const pixels = source.slice();
+    assert.deepEqual(applyInfraredAlpha(pixels, strength), source);
+  }
 });
