@@ -172,7 +172,10 @@ export function createFlightSource({
         throw new LiveSourceError('unsupported', 'Enrichment unavailable');
       const { response, payload } = await readResponse(
         fetchImpl,
-        `/api/adsbdb/${query.kind}/${encodeURIComponent(query.id)}`,
+        `/api/adsbdb/${query.kind}/${encodeURIComponent(query.id)}` +
+          (query.kind === 'type' && query.tail
+            ? `?tail=${encodeURIComponent(query.tail)}`
+            : ''),
         { signal },
         'adsbdb',
       );

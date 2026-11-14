@@ -3212,6 +3212,14 @@
   "Too many chat requests. Try again in {seconds} s.": "聊天请求过多。请在 {seconds} 秒后重试。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "服务商拒绝了此密钥的访问请求。请检查该密钥所属的项目、区域或权限。",
   "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "服务商账户余额不足。请检查账户的计费信息，或在设置中选择其他 AI 服务商。",
+  "aircraft operation|Airline": "航空公司",
+  "aircraft operation|Air taxi": "空中出租",
+  "aircraft operation|Government": "政府",
+  "aircraft operation|Private": "私人",
+  "Built {year}": "{year} 年制造",
+  "{count} seats": {
+    "other": "{count} 个座位"
+  },
   "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "最近 24 小时的新闻。每条报道都链接到其发布者；地点和类别由文本和数据自动读取，可能有误。阵营标签（如有显示）描述的是来源，而非报道是否属实。",
   "Economy": "经济",
   "News from {area}": "{area} 新闻",

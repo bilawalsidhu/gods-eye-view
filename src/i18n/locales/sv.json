@@ -3606,6 +3606,15 @@
   "Remove every added entry from Data Layers": "Ta bort alla tillagda poster från Datalager",
   "Showing {shown} of {total}": "Visar {shown} av {total}",
   "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "aircraft operation|Airline": "Flygbolag",
+  "aircraft operation|Air taxi": "Taxiflyg",
+  "aircraft operation|Government": "Statlig",
+  "aircraft operation|Private": "Privat",
+  "Built {year}": "Byggd {year}",
+  "{count} seats": {
+    "one": "{count} säte",
+    "other": "{count} säten"
+  },
   "The globe stopped drawing": "Globen ritas inte längre",
   "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "Webbläsaren tog tillbaka globens 3D-grafik. Lager och reglage fungerar fortfarande, men kartan kan inte ritas förrän sidan laddas om.",
   "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "Renderingen stoppades efter ett fel. Lager och reglage fungerar fortfarande, men kartan uppdateras inte.",

@@ -3292,6 +3292,15 @@
   "Too many chat requests. Try again in {seconds} s.": "Zu viele Chat-Anfragen. In {seconds} s erneut versuchen.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Der Anbieter hat den Zugriff für diesen Schlüssel verweigert. Projekt, Region oder Berechtigungen des Schlüssels prüfen.",
   "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "Das Anbieterkonto hat kein Guthaben mehr. Die Abrechnung prüfen oder in den Einstellungen einen anderen KI-Anbieter wählen.",
+  "aircraft operation|Airline": "Fluggesellschaft",
+  "aircraft operation|Air taxi": "Lufttaxi",
+  "aircraft operation|Government": "Staatlich",
+  "aircraft operation|Private": "Privat",
+  "Built {year}": "Baujahr {year}",
+  "{count} seats": {
+    "one": "{count} Sitz",
+    "other": "{count} Sitze"
+  },
   "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "Nachrichten der letzten 24 h. Jede Meldung verlinkt auf ihren Herausgeber; Orte und Kategorien werden automatisch aus Text und Daten gelesen und können falsch sein. Angaben zur Seite, wo vorhanden, beschreiben die Quelle, nicht ob eine Meldung stimmt.",
   "Economy": "Wirtschaft",
   "News from {area}": "Nachrichten: {area}",

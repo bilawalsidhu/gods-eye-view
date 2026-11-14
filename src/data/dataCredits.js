@@ -135,6 +135,12 @@ export const DATA_CREDITS = [
       'explicit permission of David J Taylor, Edinburgh',
   },
   {
+    key: 'anac-rab',
+    html:
+      'Brazilian aircraft details: ANAC, Registro Aeronáutico Brasileiro (RAB) ' +
+      '(<a href="https://www.anac.gov.br/acesso-a-informacao/dados-abertos/areas-de-atuacao/aeronaves/registro-aeronautico-brasileiro" target="_blank" rel="noopener">anac.gov.br</a>)',
+  },
+  {
     key: 'planespotters',
     html:
       'Aircraft photos: ' +

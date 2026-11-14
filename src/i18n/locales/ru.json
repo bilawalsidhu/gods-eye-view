@@ -3452,6 +3452,17 @@
   "Too many chat requests. Try again in {seconds} s.": "Слишком много запросов в чате. Повторите попытку через {seconds} с.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Провайдер отказал этому ключу в доступе. Проверьте проект, регион или разрешения ключа.",
   "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашем счёте у провайдера закончились средства. Проверьте оплату или выберите другого провайдера ИИ в настройках.",
+  "aircraft operation|Airline": "Авиакомпания",
+  "aircraft operation|Air taxi": "Аэротакси",
+  "aircraft operation|Government": "Государственный",
+  "aircraft operation|Private": "Частный",
+  "Built {year}": "Выпущен в {year} г.",
+  "{count} seats": {
+    "one": "{count} место",
+    "few": "{count} места",
+    "many": "{count} мест",
+    "other": "{count} места"
+  },
   "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "Новости за последние 24 ч. Каждое сообщение ведёт к своему изданию; места и категории определяются по тексту и данным автоматически и могут быть ошибочны. Метки сторон, где они есть, описывают источник, а не достоверность сообщения.",
   "Economy": "Экономика",
   "News from {area}": "Новости: {area}",

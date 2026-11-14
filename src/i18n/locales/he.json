@@ -3693,6 +3693,16 @@
   "Remove every added entry from Data Layers": "הסרת כל הפריטים שנוספו משכבות נתונים",
   "Showing {shown} of {total}": "מוצגים {shown} מתוך {total}",
   "BROWSE DATA LIBRARY": "עיון בספריית הנתונים",
+  "aircraft operation|Airline": "חברת תעופה",
+  "aircraft operation|Air taxi": "מונית אווירית",
+  "aircraft operation|Government": "ממשלתי",
+  "aircraft operation|Private": "פרטי",
+  "Built {year}": "נבנה ב-{year}",
+  "{count} seats": {
+    "one": "{count} מושב",
+    "two": "{count} מושבים",
+    "other": "{count} מושבים"
+  },
   "The globe stopped drawing": "הגלובוס הפסיק להצטייר",
   "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "הדפדפן לקח בחזרה את הגרפיקה התלת-ממדית של הגלובוס. השכבות והפקדים עדיין פועלים, אבל המפה לא תוכל להצטייר עד שהעמוד ייטען מחדש.",
   "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "הרינדור נעצר בעקבות שגיאה. השכבות והפקדים עדיין פועלים, אבל המפה אינה מתעדכנת.",

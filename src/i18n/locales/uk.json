@@ -3452,6 +3452,17 @@
   "Too many chat requests. Try again in {seconds} s.": "Забагато запитів до чату. Спробуйте ще раз через {seconds} с.",
   "The provider refused access for this key. Check the key's project, region or permissions.": "Постачальник відмовив цьому ключу в доступі. Перевірте проєкт, регіон або дозволи ключа.",
   "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "На вашому рахунку в постачальника закінчилися кошти. Перевірте оплату або виберіть іншого постачальника ШІ в налаштуваннях.",
+  "aircraft operation|Airline": "Авіакомпанія",
+  "aircraft operation|Air taxi": "Аеротаксі",
+  "aircraft operation|Government": "Державний",
+  "aircraft operation|Private": "Приватний",
+  "Built {year}": "Випущено {year} р.",
+  "{count} seats": {
+    "one": "{count} місце",
+    "few": "{count} місця",
+    "many": "{count} місць",
+    "other": "{count} місця"
+  },
   "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "Новини за останні 24 год. Кожне повідомлення веде до свого видання; місця й категорії визначаються з тексту й даних автоматично і можуть бути хибними. Позначки сторін, де вони є, описують джерело, а не правдивість повідомлення.",
   "Economy": "Економіка",
   "News from {area}": "Новини: {area}",

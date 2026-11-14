@@ -3212,6 +3212,14 @@
   "Too many chat requests. Try again in {seconds} s.": "チャットのリクエストが多すぎます。{seconds}秒後にもう一度お試しください。",
   "The provider refused access for this key. Check the key's project, region or permissions.": "プロバイダーがこのキーでのアクセスを拒否しました。キーのプロジェクト、リージョン、権限を確認してください。",
   "The provider account is out of credit. Check its billing, or choose another AI Provider in Settings.": "プロバイダーアカウントのクレジットが不足しています。課金状況を確認するか、設定で別のAIプロバイダーを選んでください。",
+  "aircraft operation|Airline": "航空会社",
+  "aircraft operation|Air taxi": "エアタクシー",
+  "aircraft operation|Government": "官公庁",
+  "aircraft operation|Private": "自家用",
+  "Built {year}": "{year}年製造",
+  "{count} seats": {
+    "other": "{count}席"
+  },
   "Last 24 h of news. Each report links to its publisher; places and categories are read from the text and data automatically and can be wrong. Side labels, where shown, describe the source, not whether a report is true.": "直近24時間のニュース。各報道は発信元にリンクします。場所とカテゴリは本文とデータから自動で読み取るため誤りがあり得ます。陣営ラベルは、表示される場合、情報源を示すもので、報道の真偽を示すものではありません。",
   "Economy": "経済",
   "News from {area}": "{area}のニュース",

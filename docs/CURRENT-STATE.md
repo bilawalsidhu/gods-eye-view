@@ -3326,6 +3326,19 @@ in `ais-store.js`. Common response caps, request coalescing and query parsing
 have their own modules. `server/providers/local.js` composes these with the
 remaining providers and retains existing named compatibility exports.
 
+Brazilian registrations returned by adsbdb gain ANAC RAB details: build year,
+seat count and type of operation (private, government, air taxi, airline), plus
+a missing ICAO type or model name (`server/providers/aircraft/anacRab.js`).
+When adsbdb has no registration for a transponder in Brazil's ICAO block
+(E40000-E7FFFF), a callsign that is itself a Brazilian mark ("PTTSI", as
+general aviation flies) is sent as `?tail=` and used instead. The
+RAB file is downloaded on the first Brazilian lookup and at most once a day,
+and only its technical columns are cached in `.gev-cache/anac-rab.json`; owner,
+operator, lien and sale columns are never read into the index. The tracked
+aircraft label shows the details as one line (`src/data/aircraftRegistry.js`),
+for example "Built 1972 · 1 seat · Private". `ANAC_RAB_ENABLED=0` turns the
+lookup off.
+
 The tracked flight also gets a photo. The browser asks Planespotters for it
 directly (`src/sources/live/standalone.js`, read by
 `src/data/planespottersPhoto.js`), once per aircraft, and the CONTEXT panel's
