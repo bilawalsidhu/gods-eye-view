@@ -57,7 +57,14 @@ test('every typed aircraft renders at its published length, a real-world aircraf
       );
       // A grounded aircraft stands on its wheels: its origin the scaled
       // clearance above the ground, never below it.
-      assert.ok(spec.clearanceM > 0, `${type}: clearance ${spec.clearanceM}`);
+      // A model built standing on its origin (a ground vehicle, a ground
+      // station's mast: its lowest point at z 0) has no clearance.
+      if (set.catalog[model].min[2] > -0.05)
+        assert.ok(
+          spec.clearanceM >= 0 && spec.clearanceM < 0.05 * spec.scale,
+          `${type}: built standing, clearance ${spec.clearanceM}`,
+        );
+      else assert.ok(spec.clearanceM > 0, `${type}: clearance ${spec.clearanceM}`);
       assert.ok(spec.clearanceM < radius, `${type}: clearance larger than the aircraft`);
     }
   }
@@ -295,4 +302,42 @@ test('a layer asking every tick gets one cached spec per type and category', asy
   assert.equal(aircraftLayerModelSpec({ typeCode: 'A320' }, set), a);
   assert.notEqual(aircraftLayerModelSpec({ typeCode: 'B744' }, set), a);
   assert.ok(Object.isFrozen(a));
+});
+
+test('an airport vehicle is cached by its callsign; other aircraft by type and category only', async () => {
+  const { aircraftLayerModelSpec, aircraftModelSpecCacheKey } = await import(
+    '../layers/flights/modelSpec.js'
+  );
+  const tender = aircraftLayerModelSpec(
+    { typeCode: 'ZVEH', callsign: 'FIRE 2' },
+    set,
+  );
+  const car = aircraftLayerModelSpec(
+    { typeCode: 'ZVEH', callsign: 'LEADER 7' },
+    set,
+  );
+  assert.equal(tender.model, 'fire_truck');
+  assert.equal(car.model, 'car');
+  assert.equal(
+    aircraftModelSpecCacheKey({ typeCode: 'A320', callsign: 'BAW1' }, set),
+    aircraftModelSpecCacheKey({ typeCode: 'A320', callsign: 'DLH2' }, set),
+  );
+  assert.notEqual(
+    aircraftModelSpecCacheKey({ typeCode: 'ZVEH', callsign: 'FIRE 2' }, set),
+    aircraftModelSpecCacheKey({ typeCode: 'ZVEH', callsign: 'LEADER 7' }, set),
+  );
+  // Keyed by the rule matched, not the callsign: at most one entry per rule
+  // and one for the type's own model.
+  assert.equal(
+    aircraftModelSpecCacheKey({ typeCode: 'ZVEH', callsign: 'FIRE 2' }, set),
+    aircraftModelSpecCacheKey({ typeCode: 'ZVEH', callsign: 'FIRE 9' }, set),
+  );
+  assert.equal(
+    aircraftModelSpecCacheKey({ typeCode: 'ZVEH', callsign: 'LEADER 7' }, set),
+    aircraftModelSpecCacheKey({ typeCode: 'ZVEH', callsign: 'ASD' }, set),
+  );
+  assert.equal(
+    aircraftLayerModelSpec({ typeCode: 'ZVEH', callsign: 'FIRE 9' }, set),
+    tender,
+  );
 });

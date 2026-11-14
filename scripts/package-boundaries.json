@@ -4815,7 +4815,9 @@
       "src/data/approxDistance.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
-      "src/data/aircraftEmergency.js"
+      "src/data/aircraftEmergency.js",
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js"
     ],
     "external": []
   },

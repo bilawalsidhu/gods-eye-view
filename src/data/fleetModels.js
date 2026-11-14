@@ -85,21 +85,74 @@ const TEXT_SHIP_TYPES = [
 ];
 
 /**
- * The model for an aircraft of ICAO type `type` (A320, B738, R44) and ADS-B
- * emitter category `category`: the type's, else the category's, else
- * `default_aircraft`.
+ * The model for an aircraft of ICAO type `type` (A320, B738, R44), ADS-B
+ * emitter category `category` and callsign `callsign`: the first of the
+ * type's callsign rules (`aircraft_callsign`) the callsign matches, else the
+ * type's, else the category's, else `default_aircraft`. An airport vehicle
+ * (type ZVEH) is a fire truck, tug or van by its callsign, else a car.
  * @param {object} types Parsed `types.json`.
  * @param {string} [type]
  * @param {string} [category]
+ * @param {string} [callsign]
  * @returns {{model: string, length: number|null}}
  */
-export function resolveAircraft(types, type, category) {
+export function resolveAircraft(types, type, category, callsign) {
   const t = type?.trim().toUpperCase();
+  const index = aircraftCallsignRule(types, t, callsign);
+  if (index >= 0) {
+    const rule = types.aircraft_callsign[t][index];
+    return { model: rule.model, length: rule.length };
+  }
   const [model, length] =
     (t && (types.aircraft[t] ?? types.helicopters[t])) ||
     (category && types.categories[category]) ||
     types.default_aircraft;
   return { model, length };
+}
+
+/**
+ * A callsign as the rules read it: upper case, spaces removed.
+ * @param {string} callsign
+ * @returns {string}
+ */
+function callsignKey(callsign) {
+  return String(callsign).toUpperCase().replace(/\s+/g, '');
+}
+
+/**
+ * Which of type `type`'s callsign rules (`types.json`'s
+ * `aircraft_callsign[type]`, each `{prefixes, model, length}`, first match
+ * wins) `callsign` matches: its index, -1 when none does or the type has
+ * none. A callsign matches a rule when, upper-cased with spaces removed, it
+ * starts with one of the rule's prefixes.
+ * @param {object} types Parsed `types.json`.
+ * @param {string|null} [type] ICAO type.
+ * @param {string|null} [callsign]
+ * @returns {number}
+ */
+export function aircraftCallsignRule(types, type, callsign) {
+  const t = String(type ?? '')
+    .trim()
+    .toUpperCase();
+  const rules = t ? types.aircraft_callsign?.[t] : undefined;
+  if (!rules || !callsign) return -1;
+  const c = callsignKey(callsign);
+  return rules.findIndex((rule) =>
+    rule.prefixes.some((prefix) => c.startsWith(callsignKey(prefix))),
+  );
+}
+
+/**
+ * Whether an aircraft of ICAO type `type` picks its model by callsign.
+ * @param {object} types Parsed `types.json`.
+ * @param {string|null} [type]
+ * @returns {boolean}
+ */
+export function aircraftModelByCallsign(types, type) {
+  const t = String(type ?? '')
+    .trim()
+    .toUpperCase();
+  return Boolean(t && types.aircraft_callsign?.[t]);
 }
 
 /**
@@ -306,24 +359,32 @@ function specOf(set, resolved, fallback, options) {
 }
 
 /**
- * The model an aircraft is drawn with. The type's entry first; then, for a
+ * The model an aircraft is drawn with. The type's callsign rules (an airport
+ * vehicle by its callsign), then the type's entry; then, for a
  * type the map lacks, the model of its class (a fast jet, a helicopter, a
  * glider) when the type names one; then the emitter category's; then
  * `default_aircraft`.
  * @param {{catalog: object, types: object}} set
  * @param {{typeCode?: string|null, type?: string|null,
- *   category?: string|number|null}} aircraft
+ *   category?: string|number|null, callsign?: string|null}} aircraft
  * @returns {object} {@link fleetModelSpec}
  */
-export function aircraftModelSpec(set, { typeCode, type, category } = {}) {
+export function aircraftModelSpec(
+  set,
+  { typeCode, type, category, callsign } = {},
+) {
   const { types, catalog } = set;
   const code = String(typeCode ?? type ?? '')
     .trim()
     .toUpperCase();
   const emitter = emitterCategory(category);
-  let resolved = resolveAircraft(types, code, emitter);
+  const sign = callsign ? String(callsign) : undefined;
+  let resolved = resolveAircraft(types, code, emitter, sign);
+  // A callsign rule names the model outright; a type's class only stands in
+  // for a type the map lacks.
+  const ruled = aircraftCallsignRule(types, code, sign) >= 0;
   const typed = code && (types.aircraft[code] || types.helicopters[code]);
-  if (!typed && code) {
+  if (!ruled && !typed && code) {
     const model = CLASS_MODELS[classifyAircraft({ typeCode: code })];
     if (model && catalog[model])
       resolved = { model, length: catalog[model].length };
@@ -387,6 +448,9 @@ export function namedFleetModels(types) {
     ...pairs(types.aircraft),
     ...pairs(types.helicopters),
     ...pairs(types.categories),
+    ...Object.values(types.aircraft_callsign ?? {}).flatMap((rules) =>
+      rules.map((rule) => rule.model),
+    ),
     ...types.vessels.flatMap((group) => group.rules.map((rule) => rule.model)),
     types.default_aircraft[0],
     types.default_vessel,

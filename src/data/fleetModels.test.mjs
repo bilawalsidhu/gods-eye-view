@@ -51,8 +51,17 @@ const sliceTypes = {
     A21N: ['a320', 44.51],
     A319: ['a320', 33.84],
     B38M: ['b738', 39.52],
+    ZVEH: ['car', 4.61],
+    GRND: ['radio_mast', 1.9],
   },
   helicopters: { EC35: ['ec35', 10.2] },
+  aircraft_callsign: {
+    ZVEH: [
+      { prefixes: ['FIRE'], model: 'fire_truck', length: 11.01 },
+      { prefixes: ['PUSH', 'TUG'], model: 'pushback', length: 6 },
+      { prefixes: ['DEICER', 'SQUID', 'SQB'], model: 'van', length: 5.51 },
+    ],
+  },
   categories: { A1: ['c172', 8.3] },
   vessels: [
     {
@@ -109,6 +118,33 @@ test('aircraft resolve by type, then emitter category, then the generic plane', 
   assert.deepEqual(resolveAircraft(sliceTypes, undefined, 'Q9'), {
     model: 'generic_plane',
     length: 36,
+  });
+});
+
+test('airport vehicles (ZVEH) by callsign, first rule wins, else the type: spaces and case ignored', () => {
+  const zveh = (callsign) =>
+    resolveAircraft(sliceTypes, 'ZVEH', undefined, callsign);
+  assert.deepEqual(zveh('FIRE 2'), { model: 'fire_truck', length: 11.01 });
+  assert.deepEqual(resolveAircraft(sliceTypes, 'zveh', undefined, ' fire2 '), {
+    model: 'fire_truck',
+    length: 11.01,
+  });
+  assert.equal(zveh('PUSH 14').model, 'pushback');
+  assert.equal(zveh('TUG3').model, 'pushback');
+  assert.deepEqual(zveh('DEICER 4'), { model: 'van', length: 5.51 });
+  assert.equal(zveh('SQUID20').model, 'van');
+  assert.equal(zveh('SQB9').model, 'van');
+  assert.equal(zveh('S Q B 9').model, 'van');
+  assert.deepEqual(zveh('LEADER 7'), { model: 'car', length: 4.61 });
+  assert.deepEqual(zveh(undefined), { model: 'car', length: 4.61 });
+  // Callsign rules belong to their type: a fire-named airliner is still an airliner.
+  assert.equal(
+    resolveAircraft(sliceTypes, 'A320', undefined, 'FIRE1').model,
+    'a320',
+  );
+  assert.deepEqual(resolveAircraft(sliceTypes, 'GRND', undefined, 'RX5'), {
+    model: 'radio_mast',
+    length: 1.9,
   });
 });
 
@@ -223,6 +259,46 @@ test('transit bodies mark the share of the route colour they take; other models 
       entry.category === 'transit',
     );
   }
+});
+
+test('aircraft specs: airport vehicles by callsign, ground stations as a mast, as the set says', () => {
+  const zveh = (callsign) =>
+    aircraftModelSpec(set, { typeCode: 'ZVEH', category: 'UNKNOWN', callsign })
+      .model;
+  assert.equal(zveh('FIRE 2'), 'fire_truck');
+  assert.equal(zveh('PUSHBACK1'), 'pushback');
+  assert.equal(zveh('TUG 4'), 'pushback');
+  assert.equal(zveh('DEICER 4'), 'van');
+  assert.equal(zveh('SQUID20'), 'van');
+  assert.equal(zveh('SQB9'), 'van');
+  assert.equal(zveh('LEADER 7'), 'car');
+  assert.equal(zveh('AOPS'), 'car');
+  assert.equal(zveh(null), 'car');
+  const mast = aircraftModelSpec(set, { typeCode: 'GRND', callsign: 'RX5' });
+  assert.equal(mast.model, 'radio_mast');
+  assert.equal(mast.scale, 1);
+});
+
+test('a callsign rule outranks the class model of a type the map lacks', () => {
+  const ruled = {
+    ...set,
+    types: {
+      ...set.types,
+      aircraft_callsign: {
+        ...set.types.aircraft_callsign,
+        PUMA: [{ prefixes: ['FIRE'], model: 'fire_truck', length: 11.01 }],
+      },
+    },
+  };
+  assert.equal(
+    aircraftModelSpec(ruled, { typeCode: 'PUMA', callsign: 'FIRE 1' }).model,
+    'fire_truck',
+  );
+  // No rule matched: the class model, as before.
+  assert.equal(
+    aircraftModelSpec(ruled, { typeCode: 'PUMA', callsign: 'RESCUE1' }).model,
+    'generic_heli',
+  );
 });
 
 test('aircraft specs: by type, then class for an unlisted type, then emitter category', () => {

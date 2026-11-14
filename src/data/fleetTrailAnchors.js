@@ -55,6 +55,7 @@ export const FLEET_TRAIL_ANCHORS = Object.freeze({
   pc12: Object.freeze([6.6416, 0.5288, 0]),
   pushback: Object.freeze([3, 0.2499, 0]),
   r44: Object.freeze([4.4219, -0.3001, 0]),
+  radio_mast: Object.freeze([1.2, 0, 0]),
   s76: Object.freeze([6.6001, 0.1915, 0]),
   sr22: Object.freeze([3.6762, 0.2376, 0]),
   t38: Object.freeze([7.0246, -0.3791, 0]),
