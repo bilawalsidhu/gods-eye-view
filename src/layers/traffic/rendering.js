@@ -43,7 +43,10 @@ export function createRendering({
   /** Take every road line (heat-lines or flow lines) down. */
 
   function removeHeatLines() {
-    if (layerState._heatLineCount) layerState._heatSet?.clear();
+    if (layerState._heatLineCount) {
+      layerState._heatSet?.clear();
+      layerState._heatOverSet?.clear();
+    }
     layerState._heatJam = [];
     layerState._heatLineCount = 0;
     parts.animation.syncRenderDemand?.();
@@ -142,7 +145,13 @@ export function createRendering({
         bucket === 'jam' ? HEAT_LINE_JAM_WIDTH : HEAT_LINE_SLOW_WIDTH;
     }
 
-    const items = [];
+    // Drawn in the order the per-bucket primitives were added: flow lines
+    // free, slow, then jam on top, in one set (in the order of its items);
+    // heat-lines jam, then slow over it, in a set of their own made after
+    // the jam lines' (a set draws its glow lines after its solid ones).
+    const order = flowLines ? ['free', 'slow', 'jam'] : ['jam', 'slow'];
+    const byBucket = { jam: [], slow: [], free: [] };
+    const over = [];
     const jam = [];
     for (let i = 0; i < kept.length; i++) {
       const { road, bucket } = kept[i];
@@ -156,12 +165,17 @@ export function createRendering({
         clampTo: flowLines ? 'both' : 'tiles',
         style: styleFor(bucket),
       };
-      items.push(item);
+      if (bucket === 'slow' && !flowLines && layerState._heatOverSet)
+        over.push(item);
+      else byBucket[bucket].push(item);
       // The steady flow lines never pulse.
       if (bucket === 'jam' && !flowLines) jam.push(item);
     }
+    const items = order.flatMap((bucket) => byBucket[bucket]);
     if (items.length || layerState._heatLineCount)
       layerState._heatSet.set(items);
+    if (over.length || layerState._heatOverSet?.size())
+      layerState._heatOverSet.set(over);
     layerState._heatJam = jam;
 
     layerState._heatLineCount = kept.length;

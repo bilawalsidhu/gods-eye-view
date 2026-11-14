@@ -181,6 +181,14 @@ export function createState({ services, source }) {
 
   layerState._heatSet = null;
 
+  /**
+   * The slow heat-lines, a lines set made after `_heatSet` so they draw
+   * over the jam ones, as before.
+   * @type {object|null}
+   */
+
+  layerState._heatOverSet = null;
+
   /** @type {Array} The jam heat-line items, recoloured as they pulse. */
 
   layerState._heatJam = [];

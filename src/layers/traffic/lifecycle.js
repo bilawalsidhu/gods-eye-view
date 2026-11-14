@@ -26,6 +26,7 @@ export function createLifecycle({
       layerState._viewer = viewer;
       layerState._dotSet?.dispose();
       layerState._heatSet?.dispose();
+      layerState._heatOverSet?.dispose();
       const instance = ++instances;
       const draw = drawOf(viewer);
       layerState._dotSet = draw.points({
@@ -37,6 +38,12 @@ export function createLifecycle({
       // sampled there; flow lines ask for terrain too, item by item.
       layerState._heatSet = draw.lines({
         id: `traffic:${instance}:heat`,
+        clampTo: 'tiles',
+      });
+      // The slow heat-lines, made after the jam ones' set so they draw over
+      // them, as their primitive was added after the jam lines'.
+      layerState._heatOverSet = draw.lines({
+        id: `traffic:${instance}:heat-over`,
         clampTo: 'tiles',
       });
       layerState._heatJam = [];
@@ -221,6 +228,8 @@ export function createLifecycle({
       layerState._dotSet = null;
       layerState._heatSet?.dispose();
       layerState._heatSet = null;
+      layerState._heatOverSet?.dispose();
+      layerState._heatOverSet = null;
       layerState._tileCache.clear();
       resetFlowTileCache();
       layerState._count = 0;

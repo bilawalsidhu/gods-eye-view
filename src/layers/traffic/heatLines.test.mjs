@@ -144,3 +144,41 @@ test('heat-lines are asked for draped whatever the renderer, with no check of th
   assert.equal(items().length, 1);
   assert.equal(items()[0].mode, 'draped');
 });
+
+test('lines stack as their per-bucket primitives were added: flow lines jam on top, heat-lines slow over jam', () => {
+  const s = setup();
+  const draw = fakeDrawPort();
+  s.state._heatSet = draw.lines({ id: 'traffic:2:heat', clampTo: 'tiles' });
+  s.state._heatOverSet = draw.lines({
+    id: 'traffic:2:heat-over',
+    clampTo: 'tiles',
+  });
+  const under = () => [...draw.set('traffic:2:heat').items.values()];
+  const over = () => [...draw.set('traffic:2:heat-over').items.values()];
+  const roads = [road(0.2, 50, 1), road(0.6, 80, 2), road(0.9, 90, 3)];
+
+  // Heat-lines: jam in the set made first, slow in the one made after it.
+  s.rendering.rebuildHeatLines(roads);
+  assert.deepEqual(
+    under().map((line) => line.style.kind),
+    ['glow'],
+  );
+  assert.deepEqual(
+    over().map((line) => line.widthPx),
+    [HEAT_LINE_SLOW_WIDTH],
+  );
+  assert.equal(s.state._heatLineCount, 2);
+
+  // Flow lines: one set, free first and jam last, as free, slow and jam
+  // primitives were added; the slow set empties.
+  s.state._showLines = true;
+  s.rendering.rebuildHeatLines(roads);
+  assert.deepEqual(
+    under().map((line) => line.positions[0].x),
+    [3, 2, 1],
+  );
+  assert.equal(over().length, 0);
+
+  s.rendering.removeHeatLines();
+  assert.equal(under().length + over().length, 0);
+});
