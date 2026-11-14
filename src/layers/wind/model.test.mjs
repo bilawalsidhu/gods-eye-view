@@ -90,6 +90,26 @@ test('a no-data corner invalidates the whole bilinear sample', () => {
   );
 });
 
+test('a no-data northward component invalidates only its weighted vector samples', () => {
+  const partialGap = {
+    ...regional,
+    v: Float32Array.from([0, -9999, 0, 0, 0, 0]),
+  };
+  for (const [lon, lat] of [
+    [175, 10],
+    [172.5, 10],
+    [172.5, 7.5],
+  ]) {
+    const vector = sampleWind(partialGap, lon, lat);
+    assert.ok(
+      Number.isNaN(vector.u) && Number.isNaN(vector.v),
+      `partial vector at (${lon}, ${lat}) must not render`,
+    );
+  }
+  assert.deepEqual(sampleWind(partialGap, 170, 10), { u: 1, v: 0 });
+  assert.deepEqual(sampleWind(partialGap, 175, 5), { u: 5, v: 0 });
+});
+
 test('periodic fields ignore the sentinel keys and keep wrapping', () => {
   const periodic = { ...field, noData: undefined, periodic: undefined };
   assert.deepEqual(

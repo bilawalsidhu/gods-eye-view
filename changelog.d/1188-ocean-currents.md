@@ -8,4 +8,5 @@
   density follows a line-coverage target so zooming in keeps the same amount
   of line on screen, and a view that crosses a tier line refetches at once.
   The three field fetchers read upstream bodies through a streaming byte cap
-  (MarioDanielPanuco, #1188).
+  (MarioDanielPanuco, #1188). A vector with either component marked no-data
+  is withheld, rather than drawn as a false current.
