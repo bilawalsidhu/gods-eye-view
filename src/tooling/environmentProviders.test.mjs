@@ -286,7 +286,8 @@ test('traffic middleware answers 502 to an oversized tile without caching it', a
 });
 
 test('FIRMS retains a large successful source during partial failure and filters stale data at serve time', async (t) => {
-  isolate(t, { FIRMS_MAP_KEY: '' });
+  // The INPE fallback off: keyless answers the old 503 and touches nothing.
+  isolate(t, { FIRMS_MAP_KEY: '', FIRMS_INPE_ENABLED: '0' });
   let now = Date.UTC(2026, 8, 12, 12);
   t.mock.method(Date, 'now', () => now);
   let calls = 0;
@@ -329,6 +330,54 @@ test('FIRMS retains a large successful source during partial failure and filters
   const stale = json(await request());
   assert.equal(stale.stale, true);
   assert.equal(stale.count, 0);
+});
+
+test('keyless FIRMS serves INPE South American detections, caches them, and never contacts NASA', async (t) => {
+  isolate(t, { FIRMS_MAP_KEY: '', FIRMS_INPE_ENABLED: '' });
+  let now = Date.UTC(2026, 9, 29, 21, 0);
+  t.mock.method(Date, 'now', () => now);
+  const listing =
+    'https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/10min/';
+  const file = 'focos_10min_20261029_2050.csv';
+  const hosts = [];
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    const url = String(raw);
+    hosts.push(new URL(url).hostname);
+    if (url === listing) return new Response(`<a href="${file}">${file}</a>`);
+    if (url === listing + file)
+      return new Response(
+        'lat,lon,satelite,data\n-16.68,-49.26,NOAA-20,2026-10-29 17:05:00\n',
+      );
+    return new Response('not found', { status: 404 });
+  });
+  const request = install(firmsProxy());
+  const first = json(await request());
+  assert.equal(first.provider, 'inpe');
+  assert.equal(first.coverage, 'south-america');
+  assert.equal(first.count, 1);
+  assert.equal(first.fires[0].frp, null, 'unknown FRP is not 0 MW');
+  assert.equal(first.fires[0].satellite, 'N20');
+  assert.deepEqual(hosts, [
+    'dataserver-coids.inpe.br',
+    'dataserver-coids.inpe.br',
+  ]);
+  assert.equal(json(await request()).count, 1);
+  assert.equal(hosts.length, 2, 'a fresh snapshot is served from memory');
+  const status = json(await request('/status'));
+  assert.equal(status.hasKey, false);
+  assert.equal(status.keyless, 'inpe');
+  assert.equal(status.count, 1);
+
+  now += 11 * 60_000;
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('offline', { status: 503 }),
+  );
+  const stale = json(await request());
+  assert.equal(stale.stale, true, 'INPE down: the last snapshot, marked stale');
+  assert.equal(stale.count, 1);
+  assert.ok(!hosts.includes('firms.modaps.eosdis.nasa.gov'));
 });
 
 test('GBFS keeps host/path/method guards, response caps and distinct information/status cache headers', async (t) => {

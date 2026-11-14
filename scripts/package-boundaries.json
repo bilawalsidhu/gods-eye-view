@@ -379,10 +379,12 @@
     "exports": ["./server/providers/firms"],
     "modules": [
       "server/providers/firms.js",
+      "server/providers/inpeQueimadas.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/data/firmsCsv.js"
+      "src/data/firmsCsv.js",
+      "src/data/inpeQueimadasCsv.js"
     ],
     "external": []
   },

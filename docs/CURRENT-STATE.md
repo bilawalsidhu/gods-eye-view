@@ -3451,6 +3451,19 @@ the server, and a non-OK response releases its connection at once. FIRMS
 warnings include the per-address connection errors and never the request URL,
 which embeds the MAP_KEY.
 
+Without a `FIRMS_MAP_KEY`, `/api/firms` answers with INPE Programa Queimadas'
+South American detections (`provider: 'inpe'`, `coverage: 'south-america'`)
+instead of `503 no_key`, refreshed every 10 minutes under the same single-flight
+and serve-stale rules. Each INPE 10-minute file is downloaded once and kept
+while it is inside a 30-hour lookback; detections are clamped to the trailing
+24 hours by their GMT pass time. INPE publishes no FRP or confidence, so those
+fields are null: cards read `FIRE` instead of a megawatt figure and omit the
+confidence, cells omit their maximum, and markers draw mid-scale. The layer row
+credits `INPE Programa Queimadas · SOUTH AMERICA`, the attribution
+lightbox carries INPE's citation, and `get_active_fires` reports
+`source`, `coverage` and a South-America-only note. `FIRMS_INPE_ENABLED=0`
+restores the keyless `503 no_key`.
+
 ## Installations and map-source guidance
 
 - Keyless mapped installations use OpenFreeMap `landuse` military polygons,
@@ -3511,7 +3524,9 @@ which embeds the MAP_KEY.
 > to the lowest-configured install. The mission does not branch on whether a key
 > is present — everyone gets the same tile.
 >
-> Keyless, the honest surface is the **layer row**, which reads
+> Keyless, the fires half shows INPE Programa Queimadas' South American
+> detections and the row reads `INPE Programa Queimadas · SOUTH AMERICA`.
+> With `FIRMS_INPE_ENABLED=0` the honest surface is the **layer row**, which reads
 > `UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED`. Its control also names the
 > key: hovering it, and its accessible name, read
 > `Needs FIRMS_MAP_KEY — add it in Provider Settings`. A layer declares which

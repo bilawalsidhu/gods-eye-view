@@ -577,6 +577,13 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'inpe-queimadas',
+    html:
+      'Active fires without a FIRMS key (South America): INPE. Programa Queimadas. Disponível em: ' +
+      '<a href="https://data.inpe.br/queimadas/" target="_blank" rel="noopener">data.inpe.br/queimadas</a> ' +
+      '(Instituto Nacional de Pesquisas Espaciais)',
+  },
+  {
     key: 's2-ghostmaps',
     html:
       'S2 GhostMaps intel products: S2 Underground © by S2A1, ' +

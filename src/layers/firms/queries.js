@@ -1,4 +1,4 @@
-import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { fireDetectionKey, fireEntityLabel } from '../../data/firmsLabels.js';
 import {
   FIRMS_CONFIDENCE_MODES,
   FRP_SLIDER_TICKS,
@@ -13,6 +13,10 @@ import { LOD_LEVELS, REFRESH_INTERVAL_MS } from './policy.js';
 
 /** Slider resolution: whole-percent positions along the log axis. */
 const SLIDER_STEPS = 1000;
+
+// i18n-ignore: provider name; sourceLabel() translates SOUTH AMERICA. No
+// trailing LIVE: the row's own status already reads "LIVE · updated …".
+const INPE_SOURCE = 'INPE Programa Queimadas · SOUTH AMERICA';
 
 export function createQueries({
   layerState,
@@ -49,8 +53,7 @@ export function createQueries({
       if (!fire) return null;
       return {
         id: fireDetectionKey(fire),
-        // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
-        label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
+        label: fireEntityLabel(fire.frp),
         latitude: fire.lat,
         longitude: fire.lon,
         frp: fire.frp,
@@ -225,6 +228,10 @@ export function createQueries({
         });
       }
       return {
+        // A keyless server serves INPE's South American detections instead of
+        // FIRMS (server/providers/inpeQueimadas.js); the row credits who
+        // actually supplied them. sourceLabel() translates the known parts.
+        ...(layerState._provider === 'inpe' ? { source: INPE_SOURCE } : {}),
         // Shown (filtered) detections; `total` is the loaded payload.
         count: layerState._count,
         total: layerState._totalCount,
@@ -265,8 +272,7 @@ export function createQueries({
         latitude: strongest.lat,
         longitude: strongest.lon,
         frp: strongest.frp,
-        // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
-        label: `Fire · FRP ${components.model.formatFrp(strongest.frp)} MW`,
+        label: fireEntityLabel(strongest.frp),
       };
     },
 

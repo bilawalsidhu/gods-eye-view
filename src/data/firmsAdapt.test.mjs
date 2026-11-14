@@ -131,3 +131,25 @@ test('non-finite frp/brightness → 0; empty input → []', () => {
   assert.deepEqual(adaptFirmsRecords([]), []);
   assert.deepEqual(adaptFirmsRecords(null), []);
 });
+
+test('a source without FRP or confidence (INPE) keeps both unknown, not zero', () => {
+  const [inpe, firms] = adaptFirmsRecords([
+    proxyRecord({
+      frp: null,
+      confidence: null,
+      brightness: null,
+      daynight: '',
+      satellite: 'G19',
+      instrument: 'ABI',
+      provider: 'inpe',
+    }),
+    proxyRecord(),
+  ]);
+  assert.equal(inpe.frp, null);
+  assert.equal(inpe.confidence, null);
+  assert.equal(inpe.provider, 'inpe');
+  assert.equal(inpe.sensor, 'ABI');
+  assert.equal(firms.frp, 0.53);
+  assert.equal(firms.confidence, 0.6);
+  assert.equal(firms.provider, 'firms', 'records without a provider are FIRMS');
+});

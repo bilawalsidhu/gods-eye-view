@@ -148,7 +148,7 @@ function shownSources(source) {
 
 // Entity labels that layers register as English data (firms/, alpr/); keep in
 // step with the producers. Other names (callsigns, places) show as they came.
-const ENTITY_LABELS = new Set([msg('ALPR camera')]);
+const ENTITY_LABELS = new Set([msg('ALPR camera'), msg('FIRE')]);
 const FIRE_LABEL = /^Fire · FRP (\S+) MW$/;
 
 /** An entity label as the card shows it, in the active language. */

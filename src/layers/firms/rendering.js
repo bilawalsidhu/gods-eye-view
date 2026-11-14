@@ -146,13 +146,16 @@ export function createRendering({
           lonCell,
           count: 0,
           intensity: 0,
-          maxFrp: 0,
+          // Null until a detection with FRP joins: a cell of INPE detections
+          // has no maximum to show, not a maximum of 0 MW.
+          maxFrp: null,
           night: 0,
           newestAcqMs: 0,
         };
         existing.count += 1;
         existing.intensity += intensity;
-        existing.maxFrp = Math.max(existing.maxFrp, fire.frp);
+        if (Number.isFinite(fire.frp))
+          existing.maxFrp = Math.max(existing.maxFrp ?? 0, fire.frp);
         existing.newestAcqMs = Math.max(existing.newestAcqMs, fire.acqMs);
         if (fire.night) existing.night += 1;
         cells.set(key, existing);

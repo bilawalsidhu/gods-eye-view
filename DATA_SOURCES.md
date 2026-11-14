@@ -477,7 +477,8 @@ FIRMS active fires are **fetched live at runtime** (CC0 / U.S. public domain dat
 `/api/firms` server-side proxy merges the two VIIRS NRT sources (NOAA-20, NOAA-21)
 and MODIS NRT (Terra + Aqua), clamped to the trailing 24 h, cached 30 min to respect the shared MAP_KEY
 transaction quota. Requires a free `FIRMS_MAP_KEY`
-(https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
+(https://firms.modaps.eosdis.nasa.gov/api/map_key/); without it the layer shows INPE's
+South American detections instead (below).
 The former bundled 2026-05-25 snapshot was removed 2026-07-16. Suomi NPP (`VIIRS_SNPP_NRT`)
 is not requested: NASA stopped delivering it on 2026-11-02.
 
@@ -488,6 +489,27 @@ Operator, owner country and purpose for active satellites, keyed by NORAD number
 ### Imaging sensor pack (`imaging_sensors/`)
 
 Swath widths and ground resolutions for 46 Earth-observation platforms (Landsat, Sentinel, MODIS, VIIRS, GOES, Himawari, Gaofen, CBERS, RADARSAT, TerraSAR-X, COSMO-SkyMed, ALOS, KOMPSAT, SPOT, Pléiades, WorldView, SkySat, PlanetScope, ICEYE, Capella, Umbra and others), compiled 2026-11-04 from the operator and agency pages cited per entry. The orbital view draws each satellite's sensor swath to scale and caps its zoom at that swath. Facts only; no text or images copied. A swath is confirmed on an operator, agency (ESA's eoPortal included) or academic page; resellers are not cited. The CEOS MIM Database (CC BY 4.0) is not yet used. Sources and unverified values: the folder README.
+
+### INPE Programa Queimadas (keyless Active Fires, South America)
+
+Citation: INPE. Programa Queimadas. Disponível em: https://data.inpe.br/queimadas/
+
+When no `FIRMS_MAP_KEY` is configured, `/api/firms` serves the near-real-time detections
+that Brazil's Instituto Nacional de Pesquisas Espaciais publishes every 10 minutes at
+https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/10min/, **fetched live at
+runtime**, nothing bundled: South America only, from VIIRS (NOAA-20, NOAA-21; Suomi-NPP until 2026-11-02),
+MODIS (Aqua, Terra), GOES-19, Meteosat (MSG-03) and MetOp-B/C, clamped to the trailing 24 h
+by pass time (GMT). No key. Each 10-minute file is downloaded once and kept until it leaves
+the 30-hour lookback, so a refresh asks INPE for the listing and one new file.
+`FIRMS_INPE_ENABLED=0` turns the fallback off.
+
+Terms: the Programa Queimadas FAQ states that all data and products are free to access at no
+cost (FAQ 5) and asks users to cite them under ABNT NBR 6023 (FAQ 36); the citation above is
+INPE's own example. No licence is attached to the files themselves. INPE is a federal body,
+and Decree 8.777/2016 (Brazil's federal open-data policy, art. 3, IV) grants unrestricted
+reuse of data published in open format. The files carry positions, satellite and pass time
+only: no fire radiative power, confidence or personal data. Credit: "INPE Programa Queimadas"
+in the attribution lightbox and in the layer row while it is the source.
 
 ### Natural Earth physical regions (`natural_earth/`)
 
