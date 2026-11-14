@@ -250,9 +250,10 @@ function guarded(run) {
  * `maxConcurrentRequests` are in flight.
  *
  * A tile `admit` defers is asked again on a later frame: the one a request
- * of the same layer in flight asks for as it settles, or, with none in
- * flight (`busy`), the one `retrySoon` asks for. So a layer whose own
- * budget is full never keeps the scene drawing while it waits.
+ * of a layer with the same `admit` in flight asks for as it settles, or,
+ * with none in flight (`busy`), the one `retrySoon` asks for. So layers
+ * whose shared budget is full never keep the scene drawing while they
+ * wait.
  * @param {object} provider
  * @param {import('../contract/globe').ImagerySpec} spec
  * @param {{started: () => void, settled: () => void, retrySoon: () => void,
@@ -366,6 +367,8 @@ export function createCesiumImagery(
   /** Port layers, bottom to top. */
   const layers = [];
   let pending = 0;
+  /** Tiles in flight by the `admit` their layers share. */
+  const admitPending = new Map();
   let retryTimer = null;
   let disposed = false;
   const waiters = [];
@@ -512,17 +515,21 @@ export function createCesiumImagery(
     };
     const signals = new Set();
     const requests = new Set();
-    let layerPending = 0;
+    // Layers given one `admit` share its waits: a tile it defers is asked
+    // again on the frame any of their tiles asks for as it settles.
+    const shared = spec.admit ?? {};
     const ctx = {
-      busy: () => layerPending > 0,
+      busy: () => (admitPending.get(shared) ?? 0) > 0,
       requests,
       started: () => {
         pending += 1;
-        layerPending += 1;
+        admitPending.set(shared, (admitPending.get(shared) ?? 0) + 1);
       },
       settled: () => {
         pending -= 1;
-        layerPending -= 1;
+        const left = (admitPending.get(shared) ?? 1) - 1;
+        if (left > 0) admitPending.set(shared, left);
+        else admitPending.delete(shared);
         if (!disposed) requestRender('imagery');
       },
       retrySoon,

@@ -111,7 +111,8 @@ export interface ImagerySpec {
   /**
    * `imageHooks`: decides each tile request on the main thread: call
    * `issue()` to fetch it, or return `undefined` to defer it and be asked
-   * again on a later frame. `fetchTile`'s `defer` does the same anywhere.
+   * again on a later frame. Layers given the same function share its waits:
+   * while one of their tiles is in flight, its settling is that frame. `fetchTile`'s `defer` does the same anywhere.
    * With both, `admit` decides first and an issued request goes through
    * `fetchTile`; each defers on its own.
    */

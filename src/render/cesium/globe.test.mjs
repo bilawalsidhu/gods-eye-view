@@ -334,6 +334,29 @@ test('a layer deferring while another has a request in flight asks for a frame',
   assert.deepEqual(renders, ['imagery']);
 });
 
+test('layers sharing an admit wait for each other’s tiles, asking for no frame', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { scene, port, renders } = setup();
+  // A budget of one shared by two layers, as Recent Imagery's swipe slots.
+  let inFlight = 0;
+  const admit = (_tile, issue) => {
+    if (inFlight >= 1) return undefined;
+    inFlight += 1;
+    return issue();
+  };
+  port.imagery.add({ kind: 'xyz', url: url('a'), admit });
+  port.imagery.add({ kind: 'xyz', url: url('b'), admit });
+  const [holder, waiting] = [0, 1].map(
+    (i) => scene.imageryLayers.get(i).imageryProvider,
+  );
+  Object.getPrototypeOf(holder).requestImage = () => new Promise(() => {});
+  assert.ok(holder.requestImage(0, 0, 1), 'in flight');
+  renders.length = 0;
+  assert.equal(waiting.requestImage(0, 0, 1), undefined);
+  t.mock.timers.tick(TILE_RETRY_DELAY_MS * 4);
+  assert.deepEqual(renders, [], 'the holder’s settling is the later frame');
+});
+
 test('fetchTile fetches in place of the provider, with the URL it would fetch', async (t) => {
   const asked = [];
   const answers = [{ defer: true }, { missing: true }];
