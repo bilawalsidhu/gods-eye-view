@@ -35,6 +35,7 @@ function harness({
   getHost,
   eventTarget,
   shell = false,
+  render,
 } = {}) {
   const shellScene = shell ? createShellScene() : null;
   const strokes = [];
@@ -218,6 +219,7 @@ function harness({
     onStatusChange,
     getHost,
     eventTarget,
+    render,
   });
   return {
     rendering,
@@ -709,6 +711,63 @@ test('GPU flow uses one scheduler, rebuilds only across viewport budgets, and pa
   assert.equal(h.preRender.size, 0);
   assert.equal(cleared, 1);
   assert.equal(destroyed, 1);
+});
+
+test('GPU flow holds the render governor as the ambient wind owner only while it animates', () => {
+  let visible = true;
+  const gpu = {
+    supported: () => true,
+    updateVisibility: () => visible,
+    setField: () => true,
+    tick() {},
+    setOptions() {},
+    clear() {},
+    destroy() {},
+    getParticleCount: () => 1,
+    getDiagnostics: () => ({ ready: true, pathCount: 1 }),
+  };
+  const holds = new Set();
+  const log = [];
+  const render = {
+    holdContinuousRender(owner) {
+      holds.add(owner);
+      log.push(`hold:${owner}`);
+    },
+    releaseContinuousRender(owner) {
+      holds.delete(owner);
+      log.push(`release:${owner}`);
+    },
+  };
+  const h = harness({ createGpuRendering: () => gpu, render });
+  h.viewer.scene.requestRender = () => {};
+  h.rendering.attach();
+  h.rendering.setField({ grid: FIELD, u: FIELD.u, v: FIELD.v });
+  assert.equal(holds.size, 0, 'a stopped renderer holds nothing');
+  h.rendering.start();
+  assert.deepEqual([...holds], ['wind']);
+  h.callbacks.shift()(16);
+  assert.deepEqual(log, ['hold:wind'], 'frames do not re-hold');
+  h.rendering.setOptions({ paused: true });
+  assert.equal(holds.size, 0, 'paused flow releases');
+  h.rendering.setOptions({ paused: false });
+  assert.deepEqual([...holds], ['wind']);
+  visible = false;
+  h.preRender.emit();
+  assert.equal(holds.size, 0, 'flow out of view releases');
+  visible = true;
+  h.preRender.emit();
+  assert.deepEqual([...holds], ['wind']);
+  globalThis.document.hidden = true;
+  h.visibility.emit();
+  assert.equal(holds.size, 0, 'a hidden tab releases');
+  globalThis.document.hidden = false;
+  h.visibility.emit();
+  assert.deepEqual([...holds], ['wind']);
+  h.rendering.stop();
+  assert.equal(holds.size, 0, 'stop releases');
+  h.rendering.start();
+  h.rendering.destroy();
+  assert.equal(holds.size, 0, 'destroy releases');
 });
 
 for (const paused of [false, true]) {

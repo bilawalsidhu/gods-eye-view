@@ -384,9 +384,31 @@ try {
   await new Promise((r) => setTimeout(r, 5_000));
   const active = await countFrames(5_000);
   const d4 = await diag();
+  const parkedRate = await page.evaluate(() => window.__godsEyeView.viewer.targetFrameRate);
   check('governor reports continuous mode with flights on', d4?.mode === 'continuous', d4);
-  check('flights-on cadence ≈ rAF cadence (≥70%)', active.renders >= active.rafs * 0.7, active);
+  // Flights alone over a parked camera is an ambient hold: 30 frames a second.
+  check('flights-on with a parked camera runs at the ambient rate (30 fps)', parkedRate === 30, { targetFrameRate: parkedRate, diag: d4 });
+  check('flights-on cadence ≥ ambient cadence (≥35% rAF)', active.renders >= active.rafs * 0.35, active);
   check('flights-on renders ≥5× idle renders', active.renders >= Math.max(1, idle.renders) * 5, { active: active.renders, idle: idle.renders });
+
+  // ── 4b. moving the camera restores the full rate ──────────────────────
+  const [moving, movingRate] = await Promise.all([
+    countFrames(1_200),
+    page.evaluate(() => new Promise((resolve) => {
+      const v = window.__godsEyeView.viewer;
+      let steps = 0;
+      let rate = 0;
+      const id = setInterval(() => {
+        v.camera.moveForward(50);
+        steps += 1;
+        if (steps === 10) rate = v.targetFrameRate;
+        if (steps >= 20) { clearInterval(id); resolve(rate); }
+      }, 60);
+    })),
+  ]);
+  check('camera motion with flights on restores the full rate', movingRate > 30, { targetFrameRate: movingRate });
+  check('flights-on cadence while moving ≈ rAF cadence (≥70%)', moving.renders >= moving.rafs * 0.7, moving);
+  await new Promise((r) => setTimeout(r, 1_500)); // settle back to the ambient rate
 
   // ── 5. flights disabled → idle again ──────────────────────────────────
   await page.evaluate(async () => {

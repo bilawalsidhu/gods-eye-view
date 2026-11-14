@@ -6,6 +6,7 @@ import {
   releaseContinuousRender,
   governorRequestRender,
   getRenderGovernorDiagnostics,
+  uninstallRenderGovernor,
   _resetRenderGovernorForTest,
 } from './renderGovernor.js';
 
@@ -97,4 +98,106 @@ test('holds registered before install apply at install time', () => {
   assert.equal(scene.requestRenderMode, false, 'pre-install hold keeps continuous mode');
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, true);
+});
+
+// ---------------------------------------------------------------- ambient frame rate
+
+/**
+ * A viewer with a frame-rate setting, a camera pose and a postRender event the
+ * test fires by hand (one call = one rendered frame at the given time).
+ */
+function makeMovingViewer({ targetFrameRate = 60 } = {}) {
+  const listeners = new Set();
+  const camera = { positionWC: { x: 1e6, y: 0, z: 0 }, directionWC: { x: -1, y: 0, z: 0 } };
+  const scene = {
+    requestRenderMode: false,
+    maximumRenderTimeChange: 0,
+    requestRender() {},
+    postRender: {
+      addEventListener(fn) {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    },
+  };
+  const viewer = { scene, camera, targetFrameRate };
+  return {
+    viewer,
+    camera,
+    listeners,
+    frame(at) {
+      const realNow = performance.now;
+      performance.now = () => at;
+      try {
+        for (const fn of [...listeners]) fn();
+      } finally {
+        performance.now = realNow;
+      }
+    },
+  };
+}
+
+test('only slow live feeds holding, with a still camera: 30 frames a second', () => {
+  const m = makeMovingViewer();
+  installRenderGovernor(m.viewer);
+  m.frame(0); // the first frame records the pose
+  m.frame(1000);
+  holdContinuousRender('flights');
+  holdContinuousRender('wind');
+  assert.equal(m.viewer.targetFrameRate, 30);
+  // Any other owner (a camera verb, tracking, the cockpit…) restores the full rate.
+  holdContinuousRender('camera-verb');
+  assert.equal(m.viewer.targetFrameRate, 60);
+  releaseContinuousRender('camera-verb');
+  assert.equal(m.viewer.targetFrameRate, 30);
+  // Idle (no holds) goes back to the full rate for camera-driven renders.
+  releaseContinuousRender('flights');
+  releaseContinuousRender('wind');
+  assert.equal(m.viewer.targetFrameRate, 60);
+});
+
+test('camera motion restores the full rate until the camera has been still for half a second', () => {
+  const m = makeMovingViewer();
+  installRenderGovernor(m.viewer);
+  m.frame(0);
+  m.frame(1000);
+  holdContinuousRender('traffic');
+  assert.equal(m.viewer.targetFrameRate, 30);
+  m.camera.positionWC = { x: 1e6 - 10, y: 0, z: 0 };
+  m.frame(1100);
+  assert.equal(m.viewer.targetFrameRate, 60);
+  assert.equal(getRenderGovernorDiagnostics().cameraMoving, true);
+  m.frame(1400); // still, but not long enough
+  assert.equal(m.viewer.targetFrameRate, 60);
+  m.frame(1700);
+  assert.equal(m.viewer.targetFrameRate, 30);
+  // A turn in place counts as motion too.
+  m.camera.directionWC = { x: -0.999, y: 0.0447, z: 0 };
+  m.frame(1800);
+  assert.equal(m.viewer.targetFrameRate, 60);
+});
+
+test('a millimetre of camera drift is not motion', () => {
+  const m = makeMovingViewer();
+  installRenderGovernor(m.viewer);
+  m.frame(0);
+  m.frame(1000);
+  holdContinuousRender('satellites');
+  m.camera.positionWC = { x: 1e6 - 0.001, y: 0, z: 0 };
+  m.frame(1100);
+  assert.equal(m.viewer.targetFrameRate, 30);
+});
+
+test('the viewer’s own frame rate is the full rate, and uninstall gives it back', () => {
+  const m = makeMovingViewer({ targetFrameRate: 45 });
+  installRenderGovernor(m.viewer);
+  m.frame(0);
+  m.frame(1000);
+  holdContinuousRender('ais-vessels');
+  assert.equal(m.viewer.targetFrameRate, 30);
+  holdContinuousRender('cockpit');
+  assert.equal(m.viewer.targetFrameRate, 45);
+  uninstallRenderGovernor(m.viewer);
+  assert.equal(m.viewer.targetFrameRate, 45);
+  assert.equal(m.listeners.size, 0, 'the motion listener is removed');
 });
