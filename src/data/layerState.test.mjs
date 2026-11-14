@@ -245,7 +245,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   }
   // News holds 00, Shipwrecks 01 and Rail 02, the first pairs: the next token
   // is 03.
-  assert.equal(nextLayerStateToken(), '03');
+  assert.equal(nextLayerStateToken(), '04');
   // The allocation rules below read the ledger before any of them took a pair.
   const beforeNews = { ...LAYER_STATE_TOKEN_RESERVATIONS };
   delete beforeNews.news;
@@ -607,7 +607,7 @@ test('Radio genre ids with spaces and ampersands round-trip through v2', () => {
 
 test('PennDOT can restore independently while retaining shared camera viewer settings', () => {
   const decoded = decodeLayerStateParams(
-    new URLSearchParams('v=2&l=05&lo=05.c.v_05.p.0'),
+    new URLSearchParams('v=2&l=03&lo=03.c.v_03.p.0'),
   );
   assert.deepEqual(decoded.enabledLayerIds, ['penndot-traffic-cams']);
   assert.equal(decoded.options.cctv.coverageMode, 'viewshed');

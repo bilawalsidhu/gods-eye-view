@@ -703,7 +703,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'news', token: '00', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'penndot-traffic-cams',
-    token: '05',
+    token: '03',
     disposition: 'enabled+mirrored-options',
     optionOwner: 'cctv',
   }),

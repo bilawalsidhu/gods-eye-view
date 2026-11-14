@@ -183,7 +183,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       news: '00',
       shipwrecks: '01',
       rail: '02',
-      'penndot-traffic-cams': '05',
+      'penndot-traffic-cams': '03',
     },
   );
   assert.throws(
