@@ -127,9 +127,13 @@ export function createImportedDrawing(
     if (pin.anchor) item.anchor = pin.anchor;
     if (pin.scaleByDistance) item.scaleByDistance = pin.scaleByDistance;
     if (pin.pixelOffset) item.pixelOffset = pin.pixelOffset;
+    if (pin.offsetScalesByDistance) item.offsetScalesByDistance = true;
     if (pin.course !== undefined) {
-      item.rotationMode = 'course';
-      item.course = pin.course;
+      // Turned clockwise by its heading from the Earth's axis as it stands
+      // on screen, as Cesium's KML icons were.
+      item.rotationMode = 'axis';
+      item.alignedAxis = { x: 0, y: 0, z: 1 };
+      item.rotation = (-pin.course * Math.PI) / 180;
     }
     // On the ground or above it, drawn over what is in front.
     if (pin.mode !== 'absolute') item.disableDepthTest = Infinity;

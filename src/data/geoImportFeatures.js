@@ -274,6 +274,8 @@ function kmlPin(name, style, at, mode) {
     course: billboard.course,
     pixelOffset: billboard.pixelOffset,
     scaleByDistance: KML_ICON_SCALE_BY_DISTANCE,
+    // Its hot spot's offset shrinks with it, as Cesium's KML icons' did.
+    offsetScalesByDistance: true,
   };
 }
 

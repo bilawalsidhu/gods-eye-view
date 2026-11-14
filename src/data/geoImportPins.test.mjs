@@ -19,6 +19,7 @@ const FEATURES = [
     course: 90,
     pixelOffset: { x: 0, y: -16 },
     scaleByDistance: { near: 1, nearValue: 1, far: 2, farValue: 0.1 },
+    offsetScalesByDistance: true,
   },
   { kind: 'pin', lon: 3, lat: 4, height: 0, mode: 'clamp', image: null },
   {
@@ -102,8 +103,13 @@ test('pins draw as icons with the look their file gave them', (t) => {
     [pin.image, pin.size, pin.scale, pin.color],
     ['blob:icon', [32, 32], 1.5, [1, 0, 0, 1]],
   );
-  assert.deepEqual([pin.rotationMode, pin.course], ['course', 90]);
+  // As Cesium's KML icon: turned by its heading from the Earth's axis.
+  assert.deepEqual(
+    [pin.rotationMode, pin.alignedAxis, pin.rotation],
+    ['axis', { x: 0, y: 0, z: 1 }, -Math.PI / 2],
+  );
   assert.deepEqual(pin.pixelOffset, { x: 0, y: -16 });
+  assert.equal(pin.offsetScalesByDistance, true);
   assert.equal(pin.scaleByDistance.farValue, 0.1);
   assert.equal(pin.disableDepthTest, undefined, 'at its own height');
   assert.deepEqual(pin.meta, { name: 'tower' });

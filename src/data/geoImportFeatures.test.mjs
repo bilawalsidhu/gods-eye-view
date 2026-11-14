@@ -58,6 +58,7 @@ test('a placemark takes its last inline style over its shared one, property by p
       far: 1.6093e7,
       farValue: 0.1,
     });
+    assert.equal(f.offsetScalesByDistance, true, 'its offset shrinks too');
   }
 });
 
