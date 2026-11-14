@@ -117,3 +117,52 @@ test('the frame view fits a sphere and steepens far from the ground', () => {
   assert.ok(Math.abs(elevation - (Math.PI / 4) * 1.5) < 1e-9);
   assert.ok(far.y < 0);
 });
+
+test('a drawn item is followed as an entity with a position was, or zoomed to as one without', async () => {
+  const { drawnItemTarget } = await import('./stockFollow.js');
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1e-6;
+  const { fromDegrees } = await import('../geo/ellipsoid.js');
+  const point = drawnItemTarget('s', { id: 'p', pos: { lon: 10, lat: 20 } });
+  assert.equal(point.key, 's:p');
+  assert.ok(near(point.position(), fromDegrees(10, 20, 0)));
+  const disc = drawnItemTarget('s', {
+    id: 'd',
+    geometry: {
+      kind: 'ellipse',
+      center: { lon: 10, lat: 20 },
+      semiMajor: 4000,
+      semiMinor: 3000,
+    },
+  });
+  assert.equal(disc.sphere.radius, 4000);
+  assert.ok(near(disc.position(), fromDegrees(10, 20, 0)));
+  const flat = new Float64Array([
+    ...Object.values(fromDegrees(0, 0, 0)),
+    ...Object.values(fromDegrees(2, 0, 0)),
+  ]);
+  const line = drawnItemTarget('s', { id: 'l', positions: flat });
+  assert.ok(line.zoomTo.radius > 100_000 && !line.position);
+  const polygon = drawnItemTarget('s', {
+    id: 'g',
+    geometry: {
+      kind: 'polygon',
+      rings: [
+        [
+          { lon: 0, lat: 0 },
+          { lon: 1, lat: 0 },
+          { lon: 1, lat: 1 },
+        ],
+      ],
+    },
+  });
+  assert.ok(polygon.zoomTo.radius > 50_000);
+  const rect = drawnItemTarget('s', {
+    id: 'r',
+    geometry: {
+      kind: 'rectangle',
+      rect: { west: 0, south: 0, east: 1, north: 1 },
+    },
+  });
+  assert.ok(rect.zoomTo.radius > 50_000);
+  assert.equal(drawnItemTarget('s', null), null);
+});

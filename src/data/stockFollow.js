@@ -10,6 +10,61 @@
 import { followOffsetFitting } from '../geo/frames.js';
 import { findCamera, findQuery } from '../render/rendererOf.js';
 import { entityFollowTarget } from './followed.js';
+import { positionToEcef } from '../geo/ellipsoid.js';
+import { sphereFromPoints } from '../geo/sphere.js';
+
+/** A line's or shape's positions as ECEF points. */
+function pointsOf(positions) {
+  if (!positions) return [];
+  if (ArrayBuffer.isView(positions)) {
+    const out = [];
+    for (let i = 0; i + 2 < positions.length; i += 3)
+      out.push({ x: positions[i], y: positions[i + 1], z: positions[i + 2] });
+    return out;
+  }
+  return Array.from(positions, positionToEcef);
+}
+
+/**
+ * What a double-click on a drawn item does, as the default renderer did
+ * for the entity a layer drew it as before: a point, an icon or a disc
+ * (an entity with a position) is followed, framed to fit the disc; a line
+ * or another shape (an entity without one) is zoomed to. For a layer's
+ * `targetFor`, given the hit's set id and the item drawn there.
+ * @param {string} set The hit's set id.
+ * @param {object|null|undefined} item The draw item (draw.d.ts) the hit names.
+ */
+export function drawnItemTarget(set, item) {
+  if (!item) return null;
+  const key = `${set}:${item.id}`;
+  if (item.pos) {
+    const at = positionToEcef(item.pos);
+    return { key, position: () => ({ ...at }) };
+  }
+  const geometry = item.geometry;
+  if (geometry?.kind === 'ellipse') {
+    const at = positionToEcef(geometry.center);
+    const radius = Math.max(geometry.semiMajor, geometry.semiMinor);
+    return {
+      key,
+      position: () => ({ ...at }),
+      sphere: { center: at, radius: Number.isFinite(radius) ? radius : 0 },
+    };
+  }
+  let points = pointsOf(item.positions);
+  if (geometry?.kind === 'polygon') points = pointsOf(geometry.rings?.[0]);
+  else if (geometry?.kind === 'wall') points = pointsOf(geometry.positions);
+  else if (geometry?.kind === 'rectangle') {
+    const { west, south, east, north } = geometry.rect;
+    points = pointsOf([
+      { lon: west, lat: south },
+      { lon: east, lat: south },
+      { lon: east, lat: north },
+      { lon: west, lat: north },
+    ]);
+  }
+  return points.length ? { zoomTo: sphereFromPoints(points) } : null;
+}
 
 /**
  * Where the camera frames a part it starts following: `followOffsetFitting`

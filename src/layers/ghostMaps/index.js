@@ -16,7 +16,11 @@ import {
 import { createHorizonCull } from '../streetLevel/view.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
-import { drawOf, findFrame } from '../../render/rendererOf.js';
+import { drawOf, findFrame, findInput } from '../../render/rendererOf.js';
+import {
+  drawnItemTarget,
+  followOnDoubleClick,
+} from '../../data/stockFollow.js';
 import { readGhostMapsKml } from './kml.js';
 import {
   fieldLabel,
@@ -197,6 +201,8 @@ export function createGhostMapsLayer({
   let _stream = 'closed';
   let _queue = Promise.resolve();
   let _clickSubscription = null;
+  /** The follow a double-click on a placemark started, while installed. */
+  let _stockFollow = null;
   let _rowListener = null;
   let _selectedKey = null;
   let _selectedCardId = null;
@@ -265,7 +271,10 @@ export function createGhostMapsLayer({
       for (const [index, feature] of item.features) {
         if (!isGhostMapsEventExpired(feature.dateMs, at, _ageDays)) continue;
         for (const [kind, ids] of Object.entries(feature.itemIds))
-          if (ids.length) item.sets?.[kind]?.remove(ids);
+          if (ids.length) {
+            dropFollowOf(item.sets?.[kind], ids);
+            item.sets?.[kind]?.remove(ids);
+          }
         item.features.delete(index);
         if (_selectedKey === `${productId}:${index}`) clearSelection();
         changed = true;
@@ -278,9 +287,22 @@ export function createGhostMapsLayer({
     }
   }
 
+  /**
+   * End a double-click's follow of an item that goes (any of `ids`, or the
+   * whole set), as removing its entity ended the default renderer's.
+   */
+  function dropFollowOf(set, ids = null) {
+    const key = _stockFollow?.following?.key;
+    if (!set || !key?.startsWith(`${set.id}:`)) return;
+    if (!ids || ids.includes(key.slice(set.id.length + 1))) _stockFollow.stop();
+  }
+
   function disposeSets(sets) {
     if (!sets) return;
-    for (const set of Object.values(sets)) set.dispose();
+    for (const set of Object.values(sets)) {
+      dropFollowOf(set);
+      set.dispose();
+    }
   }
 
   /**
@@ -307,6 +329,13 @@ export function createGhostMapsLayer({
     }
     for (const pin of next.pins) pin.set = sets.icons;
     next.sets = sets;
+    // Each set's items by id, for a double-click to follow or zoom to.
+    next.drawn = new Map(
+      Object.entries(sets).map(([kind, set]) => [
+        set.id,
+        new Map(next.items[kind].map((item) => [item.id, item])),
+      ]),
+    );
   }
 
   /** The placemark a hit on one of this layer's items is, or null. */
@@ -736,7 +765,32 @@ export function createGhostMapsLayer({
     });
   }
 
+  /**
+   * A double-click follows a pin and zooms to a line or an area, as the
+   * default renderer did for their entities (a scene that takes no input
+   * has none).
+   */
+  function installFollow() {
+    if (_stockFollow || !_viewer || !inputFor || !findInput(_viewer)) return;
+    _stockFollow = followOnDoubleClick({
+      viewer: _viewer,
+      inputFor,
+      name: GHOSTMAPS_LAYER_ID,
+      enabled: () => _enabled,
+      targetFor: (hit) => {
+        const key = hitKey(hit);
+        const loaded = key && _loaded.get(key.split(':')[0]);
+        return drawnItemTarget(
+          hit.set,
+          loaded?.drawn?.get(hit.set)?.get(hit.id),
+        );
+      },
+    });
+  }
+
   function removeClickHandler() {
+    _stockFollow?.destroy();
+    _stockFollow = null;
     _clickSubscription?.();
     _clickSubscription = null;
     picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
@@ -770,6 +824,7 @@ export function createGhostMapsLayer({
       for (const item of _loaded.values())
         for (const set of Object.values(item.sets ?? {})) set.show = true;
       installClickHandler();
+      installFollow();
       if (!_unsubscribe && typeof source.subscribe === 'function')
         _unsubscribe = source.subscribe(
           (catalog) => {

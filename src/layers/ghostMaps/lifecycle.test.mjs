@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createGhostMapsLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -121,13 +122,26 @@ function fixture(
   const viewer = {};
   // An input port and a query port: a click picks what `click(id)` names.
   const listeners = new Set();
+  const doubleListeners = new Set();
   let picked = null;
+  const camera = fakeCameraPort();
+  // What the camera follows, as the port's `follow` sets it.
+  camera.port.followed = null;
+  camera.port.follow = (target) => (camera.port.followed = target ?? null);
   const { draw, unbind } = bindFakeDraw(viewer, {
+    camera: camera.port,
     input: {
+      behaviours: { dblclickFollow: { enabled: true } },
       on(type, cb) {
-        if (type !== 'click') return () => {};
-        listeners.add(cb);
-        return () => listeners.delete(cb);
+        const into =
+          type === 'click'
+            ? listeners
+            : type === 'dblclick'
+              ? doubleListeners
+              : null;
+        if (!into) return () => {};
+        into.add(cb);
+        return () => into.delete(cb);
       },
     },
     query: { pick: () => picked },
@@ -146,6 +160,17 @@ function fixture(
     picked = set ? { set, id } : null;
     for (const cb of [...listeners])
       cb({
+        position: { x: 0, y: 0 },
+        button: 0,
+        modifiers: { shift: false, ctrl: false, alt: false },
+      });
+  };
+  const dblclick = (id) => {
+    const set = items().get(id);
+    picked = set ? { set, id, surface: false } : null;
+    for (const cb of [...doubleListeners])
+      cb({
+        type: 'dblclick',
         position: { x: 0, y: 0 },
         button: 0,
         modifiers: { shift: false, ctrl: false, alt: false },
@@ -191,6 +216,8 @@ function fixture(
     items,
     liveSets,
     click,
+    dblclick,
+    camera: camera.port,
   };
 }
 
@@ -641,4 +668,14 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().count, 1);
+});
+
+test('a double-click follows a pin until its edition goes, as its entity was', async (t) => {
+  const { layer, viewer, dblclick, camera } = fixture(t);
+  await layer.update(viewer);
+  dblclick('ghostmaps:cip:0:0');
+  assert.ok(camera.followed, 'the pin is followed');
+  assert.match(camera.followed.key, /:icons:ghostmaps:cip:0:0$/);
+  layer.disable();
+  assert.equal(camera.followed, null, 'its edition gone, so is the follow');
 });
