@@ -2181,6 +2181,13 @@ test('detection objects name the vessel card their callout gives way to', () => 
       'vessel:unkeyed:NO MMSI:37.80000:-122.40000',
       'the same identity the vessel card is published under',
     );
+    // The ship the bridge camera rides is no object in view.
+    aisLiveVesselsLayer.setCockpitSubject('200');
+    const ids = aisLiveVesselsLayer
+      .getDetectableObjects()
+      .map((object) => object.id);
+    assert.deepEqual(ids, ['NO MMSI']);
+    aisLiveVesselsLayer.setCockpitSubject(null);
   } finally {
     _setVesselStateForTest({ enabled: false });
   }

@@ -656,6 +656,14 @@ export function createQueries({
         const visual = components.rendering.getVisual(record);
         // Horizon visibility: a vessel drawn as its model still counts.
         if (!visual.visible) continue;
+        // The ship the bridge camera rides, its icon hidden, is no object in
+        // view (drawn as its model, it still counts).
+        if (
+          state.cockpitSubjectId &&
+          record.id === state.cockpitSubjectId &&
+          !visual.modelOwnsVisual
+        )
+          continue;
         const position = visual.position;
         if (!position) continue;
         result.push({
