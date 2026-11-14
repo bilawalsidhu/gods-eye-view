@@ -18,6 +18,8 @@
 
 import { roadLabel } from '../../data/routeSteps.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { sphereFromPoints } from '../../geo/sphere.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
 import { hexColor } from '../../render/color.js';
 import { drawOf } from '../../render/rendererOf.js';
 import {
@@ -1637,6 +1639,31 @@ export function createDirectionsLayer({ services, source }) {
     }
   }
 
+  /** What a double-click on a marker or the route follows or zooms to. */
+  function followTargetFor(hit) {
+    if (!_sets) return null;
+    if (hit.set === _sets.markers.id) {
+      const point =
+        hit.id === 'directions:marker:A'
+          ? _a
+          : hit.id === 'directions:marker:B'
+            ? _b
+            : null;
+      if (!point) return null;
+      return {
+        key: hit.id,
+        position: () => fromDegrees(point.lon, point.lat, 0),
+      };
+    }
+    if (hit.set === _sets.route.id && _route?.geometry?.length)
+      return {
+        zoomTo: sphereFromPoints(
+          _route.geometry.map(([lon, lat]) => fromDegrees(lon, lat, 0)),
+        ),
+      };
+    return null;
+  }
+
   function _installClickHandler(viewer) {
     if (_clickSubscription) return;
     const input = inputFor(viewer);
@@ -1670,9 +1697,25 @@ export function createDirectionsLayer({ services, source }) {
       }
       if (_selectedStep !== null) _clearStepSelection();
     });
+    // A double-click follows an A or B marker and zooms to the route, as the
+    // default renderer's double-click did with their entities.
+    let follow = null;
+    try {
+      follow = followOnDoubleClick({
+        viewer,
+        inputFor: () => input,
+        name: 'directions',
+        enabled: () => _enabled,
+        targetFor: followTargetFor,
+      });
+    } catch {
+      // A renderer that takes no input has no double-click to follow on.
+      follow = null;
+    }
     _clickSubscription = () => {
       offPlace();
       offSelect();
+      follow?.destroy();
     };
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
+import { createStubRenderer } from '../render/stub/index.js';
 import {
   DEFAULT_DIRECTIONS_MODE,
   DIRECTIONS_MODES,
@@ -1024,4 +1026,70 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
   cleared.length = 0;
   directionsLayer.destroy(viewer);
   assert.ok(cleared.includes(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID));
+});
+
+test('a double-click follows an A or B marker and zooms to the route, as their entities did', async (t) => {
+  directionsLayer = createApplicationDirectionsLayer({
+    source: {
+      getRoute: async () => ({
+        ok: true,
+        distanceM: route.distanceM,
+        durationS: route.durationS,
+        geometry: route.geometry,
+        steps: route.steps,
+      }),
+    },
+  });
+  directionsLayer._setOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
+  resetPointerOwnership();
+  const renderer = createStubRenderer();
+  const viewer = { isDestroyed: () => false };
+  const unbind = bindRenderer(viewer, renderer);
+  t.after(() => {
+    directionsLayer.destroy(viewer);
+    directionsLayer._setOverlayHostForTest(null);
+    unbind();
+    renderer.destroy();
+    resetPointerOwnership();
+  });
+  directionsLayer.init(viewer);
+  directionsLayer.enable(viewer);
+  directionsLayer.placeEndpoint('a', A);
+  directionsLayer.placeEndpoint('b', B);
+  const started = Date.now();
+  while (
+    directionsLayer.getStats().status !== 'ready' &&
+    Date.now() - started < 5000
+  )
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  const setOf = (suffix) =>
+    renderer.testing.sets().find((id) => id.endsWith(suffix));
+  let hit = null;
+  renderer.testing.scriptPicks(() => (hit ? [hit] : []));
+  const markersId = setOf(':markers');
+  const routeId = setOf(':route');
+  assert.ok(markersId && routeId, 'the sets are drawn');
+
+  hit = { set: markersId, id: 'directions:marker:B', surface: false };
+  renderer.testing.pointer('dblclick', 10, 10);
+  const followed = renderer.camera.followed;
+  assert.ok(followed, 'B is followed');
+  assert.equal(followed.key, 'directions:marker:B');
+  const p = followed.position(0);
+  const at = Cesium.Cartographic.fromCartesian(
+    new Cesium.Cartesian3(p.x, p.y, p.z),
+  );
+  assert.ok(Math.abs(Cesium.Math.toDegrees(at.latitude) - B.lat) < 1e-9);
+
+  hit = { set: routeId, id: 'directions:route', surface: false };
+  renderer.testing.pointer('dblclick', 10, 10);
+  assert.equal(renderer.camera.followed, null, 'the route is zoomed to');
+  renderer.testing.tick();
+  const pose = renderer.camera.pose();
+  assert.ok(Math.abs(pose.lat - (A.lat + B.lat) / 2) < 0.2, String(pose.lat));
+  assert.ok(Math.abs(pose.lon - (A.lon + B.lon) / 2) < 0.2, String(pose.lon));
 });
