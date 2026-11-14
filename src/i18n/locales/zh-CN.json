@@ -3525,5 +3525,7 @@
   "Reset view reloads the app without the view restored from the address bar.": "“重置视图”会重新加载应用，不使用从地址栏恢复的视图。",
   "Reload": "重新加载",
   "Retry": "重试",
-  "Reset view": "重置视图"
+  "Reset view": "重置视图",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · 社区地图数据",
+  "Some camera sources are unavailable; showing available locations": "部分摄像头数据源不可用；正在显示可用位置"
 }

@@ -53,6 +53,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     stale: false,
     /** Whether the query hit QUERY_LIMIT — the view likely holds more cameras than shown. */
     saturated: false,
+    partialSources: false,
     loading: false,
     abort: null,
     pendingQueryBox: null,
@@ -125,6 +126,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         state.lastQueryZoom >= detailZoom - 1) &&
       state.lastUpdate &&
       Date.now() - state.lastUpdate < QUERY_REUSE_MS &&
+      (!state.partialSources ||
+        Date.now() - state.lastUpdate < alprRetryDelayMs(0)) &&
       !state.stale &&
       state.status !== 'unavailable',
     );
@@ -160,6 +163,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.pendingQueryBox = null;
       state.loading = false;
       state.retrying = false;
+      state.partialSources = false;
       clearUnavailableRetry();
       renderRecords();
       setAlprStatus('zoom-in');
@@ -215,6 +219,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         state.records = [];
         state.recordById.clear();
         state.noCoverage = false;
+        state.partialSources = false;
         state.lastQueryBox = null;
         state.lastQueryZoom = null;
         clearUnavailableRetry();
@@ -233,6 +238,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       )
         return;
       state.noCoverage = snapshot.noCoverage === true;
+      state.partialSources = snapshot.partialSources === true;
       state.records = records;
       state.recordById = new Map(records.map((r) => [r.id, r]));
       state.lastUpdate = Date.now();
@@ -259,6 +265,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             : 'ready'
           : 'empty',
       );
+      if (state.partialSources) scheduleUnavailableRetry();
     } catch (error) {
       if (
         error?.name === 'AbortError' ||
@@ -360,6 +367,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.status = 'idle';
       state.stale = false;
       state.saturated = false;
+      state.partialSources = false;
       state.viewer = null;
     },
     getRowControls() {
@@ -389,6 +397,11 @@ export function createAlprCamerasLayer({ source, services } = {}) {
             ),
           },
         ],
+        info: state.partialSources
+          ? t(
+              'Some camera sources are unavailable; showing available locations',
+            )
+          : null,
       };
     },
     /**
@@ -443,7 +456,9 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         noCoverage: Boolean(state.noCoverage),
         lastUpdate: state.lastUpdate,
         stale: state.stale,
-        saturated: state.saturated || state.renderSaturated,
+        saturated:
+          state.saturated || state.renderSaturated || state.partialSources,
+        partialSources: state.partialSources,
         renderRevision: state.renderRevision,
         onScreen: state.onScreen ?? null,
         shown: state.dataSource?.entities.values.length || 0,
@@ -497,4 +512,9 @@ export {
   QUERY_SNAP_DEGREES,
   QUERY_REUSE_MS,
 } from './policy.js';
-export { createOverpassAlprSource, createAlprTileSource } from './source.js';
+export {
+  createOverpassAlprSource,
+  createAlprTileSource,
+  createDeflockAlprSource,
+  createCombinedAlprSource,
+} from './source.js';
