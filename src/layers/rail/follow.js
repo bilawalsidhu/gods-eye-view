@@ -1,7 +1,7 @@
 import { findCamera } from '../../render/rendererOf.js';
 import {
   FOLLOW_MIN_RANGE_M,
-  keptViewFrom,
+  followViewFrom,
   SELECTION_FOLLOW_TRANSITION_S,
 } from '../../data/trackedCamera.js';
 import { copyInto, lerpInto } from '../../geo/vector.js';
@@ -113,7 +113,7 @@ export function createFollow({ state, services, parts }) {
 
   function startFollow(entry, position, port) {
     const offset =
-      keptViewFrom(port.pose(), position) ??
+      followViewFrom(port.pose(), position) ??
       railFollowOffset(camera.framing, port.pose()?.heading);
     const follow = {
       key: entry.key,

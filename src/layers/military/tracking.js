@@ -85,7 +85,7 @@ export function createTracking({
   const { createTrail } = services.trails;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
-  const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, keptViewFrom } =
+  const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, followViewFrom } =
     services.camera;
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
   /** The tracked contact's billboard (an icon set on the draw port). */
@@ -1108,7 +1108,7 @@ export function createTracking({
     const camera = cameraOf(flightState._viewer);
     camera.cancelFlight();
     const kept = keepView
-      ? keptViewFrom(camera.pose(), getTrackedPosition())
+      ? followViewFrom(camera.pose(), getTrackedPosition())
       : null;
     flightState._followTarget = entityFollowTarget(flightState._trackedEntity, {
       position: getTrackedPosition,

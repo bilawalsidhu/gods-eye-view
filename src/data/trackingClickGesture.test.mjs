@@ -121,7 +121,7 @@ test('a click on an aircraft follows it keeping the camera’s view; other selec
     );
     assert.match(
       source,
-      /keepView\s*\?\s*keptViewFrom\(camera\.pose\(\), getTrackedPosition\(\)\)/,
+      /keepView\s*\?\s*followViewFrom\(camera\.pose\(\), getTrackedPosition\(\)\)/,
     );
     assert.match(source, /transitionS: SELECTION_FOLLOW_TRANSITION_S/);
   }

@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   FOLLOW_MIN_RANGE_M,
-  keptViewFrom,
+  followViewFrom,
   SELECTION_FOLLOW_TRANSITION_S,
 } from '../../data/trackedCamera.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
@@ -166,7 +166,7 @@ test('selecting a moving train hands the camera a follow target that rides on it
   assert.equal(target.frame, 'enu');
   assert.equal(target.minRange, FOLLOW_MIN_RANGE_M);
   assert.equal(target.transitionS, SELECTION_FOLLOW_TRANSITION_S);
-  const expected = keptViewFrom(pose, at);
+  const expected = followViewFrom(pose, at);
   assert.ok(Math.abs(target.viewFrom.x - expected.x) < 1e-6);
   assert.ok(Math.abs(target.viewFrom.y - expected.y) < 1e-6);
   assert.ok(Math.abs(target.viewFrom.z - expected.z) < 1e-6);
