@@ -1610,6 +1610,8 @@ const fillItem = (record) =>
         // browsers, whatever `stroke-width` says.
         outlineWidth: 1,
         height: 'absolute',
+        // The loader's entities drew a raised polygon lit by the sun.
+        lit: true,
         meta: record.carrier,
         show: record.visible,
       }

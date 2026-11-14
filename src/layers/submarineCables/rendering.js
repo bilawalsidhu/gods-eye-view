@@ -277,6 +277,8 @@ export function createRendering({ state }) {
                 // WebGL draws the loader's outline one pixel wide.
                 outline: strokeColor(props, cable, baseColor),
                 outlineWidth: 1,
+                // The loader's entities drew a raised polygon lit by the sun.
+                lit: true,
               }
             : { height: 'clampGround' }),
           show: true,

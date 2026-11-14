@@ -1272,6 +1272,7 @@ test('polygons and reference-less features draw as the GeoJSON loader drew them'
   // Heights keep a polygon off the ground, outlined in its stroke.
   assert.equal(fills[3].height, 'absolute');
   assert.equal(fills[3].geometry.perPositionHeight, true);
+  assert.equal(fills[3].lit, true);
   assert.deepEqual(fills[3].outline, [0, 0, 1, 1]);
   assert.equal(fills[3].geometry.rings[0].length, 5);
   // A feature with no reference still draws, unpicked and with no reference.

@@ -315,6 +315,8 @@ test('heights raise a polygon off the ground and stand a point’s pin on its ti
   const fill = env.fake.set('raised').items.get('p');
   assert.equal(fill.height, 'absolute');
   assert.equal(fill.geometry.perPositionHeight, true);
+  // Lit by the sun, as the loader's entities drew a raised polygon.
+  assert.equal(fill.lit, true);
   assert.equal(fill.geometry.rings[0][0].height, 100);
   assert.deepEqual(fill.outline, [0, 136 / 255, 1, 1]);
   const pin = env.fake.set('pins').items.get('pt');
