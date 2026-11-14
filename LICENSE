@@ -46,6 +46,9 @@ remain subject to their own licenses and terms. Notably:
     folder README for attribution and modification notices. The derived
     coordinates remain third-party data even though they are embedded in a
     JavaScript source file; the MIT grant does not cover that dataset.
+  - Sky view star and constellation data (src/skyView/data/): HYG v4.4
+    (CC BY-SA 4.0) and Stellarium western sky culture (CC BY-SA). Attribution
+    + share-alike on those data files; see src/skyView/NOTICE.md.
 
 Live sources (Google Maps, OpenSky, adsb.lol, AISStream, CelesTrak, USGS,
 OSM Overpass, City of Austin, GBFS) are fetched at runtime under each
