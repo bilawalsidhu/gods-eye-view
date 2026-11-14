@@ -10,7 +10,6 @@ export function createSelection({
   const { clearSelectedEntityContextForLayer } = services.context;
 
   let removeContextListeners = null;
-  let removeDoubleClick = null;
 
   function syncContextSelection(event) {
     if (!layerState.enabled) return;
@@ -72,15 +71,6 @@ export function createSelection({
         parts.rendering.renderRecords();
       }
     });
-    // Follow a site on a double-click, as the renderer's own double-click
-    // followed the site's entity.
-    removeDoubleClick =
-      input.onPointer?.('dblclick', (event) => {
-        // The renderer's own double-click follow, off while a tool holds it
-        // or on a renderer without one.
-        if (input.stockEnabled?.('dblclickFollow') !== true) return;
-        parts.rendering.followAt(event.position);
-      }) ?? null;
   }
   return {
     selectRecord,
@@ -88,8 +78,6 @@ export function createSelection({
     destroy() {
       removeContextListeners?.();
       removeContextListeners = null;
-      removeDoubleClick?.();
-      removeDoubleClick = null;
     },
   };
 }

@@ -13,7 +13,6 @@ import {
   findQuery,
 } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { followOnDoubleClick } from '../../data/stockFollow.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
@@ -151,8 +150,6 @@ export function createLocalAdsbLayer({
   let tickTimer = null;
   let syncTimer = null;
   let clickSubscription = null;
-  /** The follow a double-click on a marker started, while installed. */
-  let stockFollow = null;
   let removePreRender = null;
   let renderHeld = false;
   let selectedId = null;
@@ -571,9 +568,6 @@ export function createLocalAdsbLayer({
     if (ringsGone.length) sets.rings.remove(ringsGone);
     // Expired aircraft take their 3D models (and pending loads) with them.
     if (removed) models?.retain(markers);
-    // An aircraft that went took the follow a double-click gave it.
-    const followed = stockFollow?.following;
-    if (followed && !markers.has(followed.key)) stockFollow.stop();
     if (selectedId && !live.has(selectedId))
       clearSelection({ evicted: enabled });
     removeEntityContextsForLayer(LAYER_ID, { retainIds: live });
@@ -688,26 +682,6 @@ export function createLocalAdsbLayer({
 
   function installInteraction() {
     if (clickSubscription || !viewer) return;
-    // A double-click follows a local aircraft, its card shown, as the
-    // default renderer followed its entity.
-    stockFollow = followOnDoubleClick({
-      viewer,
-      inputFor,
-      name: LAYER_ID,
-      enabled: () => enabled,
-      targetFor: (hit) => {
-        const marker =
-          !hit.surface &&
-          (hit.set === sets?.markers.id || hit.set === sets?.rings.id) &&
-          markers.get(hit.id);
-        if (!marker?.carrier) return null;
-        return {
-          key: marker.id,
-          position: () => (marker.position ? { ...marker.position } : null),
-          entity: marker.carrier,
-        };
-      },
-    });
     clickSubscription = inputFor(viewer).onClick((event) => {
       if (!enabled) return;
       const target = clickTarget(event);
@@ -728,8 +702,6 @@ export function createLocalAdsbLayer({
   }
 
   function releaseInteraction() {
-    stockFollow?.destroy();
-    stockFollow = null;
     clickSubscription?.();
     clickSubscription = null;
   }

@@ -529,10 +529,6 @@ export function createRendering({
       layerState._selectedId = null;
     }
 
-    // Every station was drawn anew as an entity: that ended a follow of one.
-    layerState._stockFollow?.retain(
-      (key) => !key.startsWith(`${sets?.stations.id}:`),
-    );
     layerState._renderById.clear();
     drawnShow.clear();
     clusteredIds = new Set();
@@ -575,7 +571,6 @@ export function createRendering({
 
   /** Stop clustering and let the stations' draw sets go. */
   function removeDataSource() {
-    layerState._stockFollow?.stop();
     offCameraChanged?.();
     offCameraChanged = null;
     if (sets) for (const set of Object.values(sets)) set.dispose();
@@ -603,10 +598,6 @@ export function createRendering({
   /** Take the selected station's dot and bracket down, if it has them. */
   function removeSelectionEntity() {
     if (!selection) return;
-    // The selection's dot was an entity: taking it down ended its follow.
-    layerState._stockFollow?.retain(
-      (key) => !key.startsWith(`${sets?.selectedDot.id}:`),
-    );
     selection = null;
     sets?.selectedDot.clear();
     sets?.selectedBracket.clear();
@@ -622,32 +613,8 @@ export function createRendering({
     governorRequestRender('radio-recluster');
   }
 
-  /**
-   * What a double-click on a hit follows (`followOnDoubleClick`), as the
-   * default renderer followed a station's entity or the selected one's: a
-   * cluster, never an entity, is followed by nothing.
-   */
-  function followTargetFor(hit) {
-    if (!sets || hit.surface) return null;
-    let at = null;
-    let set = hit.set;
-    if (set === sets.stations.id && hit.id.startsWith(RADIO_PREFIX))
-      at = layerState._renderById.get(
-        hit.id.slice(RADIO_PREFIX.length),
-      )?.position;
-    else if (
-      (set === sets.selectedDot.id || set === sets.selectedBracket.id) &&
-      selection?.dot.id === hit.id
-    ) {
-      at = selection.position;
-      set = sets.selectedDot.id;
-    }
-    return at ? { key: `${set}:${hit.id}`, position: () => ({ ...at }) } : null;
-  }
-
   return {
     radioStationIdFromPick,
-    followTargetFor,
     installDataSource,
     removeDataSource,
     setStationsShown,

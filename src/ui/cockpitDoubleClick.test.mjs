@@ -13,11 +13,7 @@ import {
 import { bindRenderer } from '../render/rendererOf.js';
 import { entityFollowTarget } from '../data/followed.js';
 import { createCesiumInput } from '../render/cesium/input.js';
-import {
-  routeSceneDoubleClick,
-  onSceneDoubleClick,
-  onScenePointerDown,
-} from './cockpitInput.js';
+import { routeSceneDoubleClick, onSceneDoubleClick } from './cockpitInput.js';
 import { inputFor } from '../input/dispatcher.js';
 
 function harness(t, { stock = null } = {}) {
@@ -28,9 +24,8 @@ function harness(t, { stock = null } = {}) {
     },
     clock: { currentTime: 0 },
   };
-  // The followed aircraft is drawn at (100, 100), unless a test moves it.
-  let drawnAt = { x: 100, y: 100 };
-  const project = () => drawnAt;
+  // The followed aircraft is drawn at (100, 100).
+  const project = () => ({ x: 100, y: 100 });
   // With `stock`, the renderer's own input port takes the viewer's stock
   // double-click follow and runs it as the app's does; else the fake input.
   // The camera port follows the aircraft, as the flights layer's follow does.
@@ -78,14 +73,7 @@ function harness(t, { stock = null } = {}) {
     stop();
     input.destroy();
   });
-  return {
-    input,
-    controller,
-    stop,
-    moveTo: (at) => {
-      drawnAt = at;
-    },
-  };
+  return { input, controller, stop };
 }
 
 /** The Cesium renderer's input port over a fake handler, with `follow` as
@@ -260,35 +248,4 @@ test('an active Cockpit leaves presses alone, and stopping lets a hold go', (t) 
   assert.equal(controller.holds, 1);
   stop();
   assert.equal(controller.holds, 0);
-});
-
-test('a ship moved by the first click still enters, with the stock follow held where it was', async (t) => {
-  const follows = [];
-  const { input, controller, moveTo } = harness(t, {
-    stock: (event) => follows.push(event.position),
-  });
-  controller.resolveEntryKind = () => 'vessel';
-  controller.readVesselInfo = () => ({
-    id: 'ship-1',
-    latitude: 37.8,
-    longitude: -122.4,
-  });
-  const was = { x: 100, y: 100 };
-  // The first press notes where the ship is drawn; its click re-centres the
-  // camera, and the ship is drawn elsewhere by the second press.
-  onScenePointerDown.call(controller);
-  input.tap(was);
-  moveTo({ x: 300, y: 100 });
-  input.down(was);
-  assert.equal(
-    input.stockEnabled('dblclickFollow'),
-    false,
-    'held at the press where the ship was',
-  );
-  input.up(was);
-  input.dblclick(was);
-  assert.equal(controller.entered, 1);
-  assert.equal(follows.length, 0, 'the stock follow never ran');
-  await Promise.resolve();
-  assert.equal(input.stockEnabled('dblclickFollow'), true);
 });

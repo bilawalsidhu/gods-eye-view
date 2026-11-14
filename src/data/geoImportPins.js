@@ -1,20 +1,17 @@
 /**
  * The drawn part of the file import: what `geoImportFeatures.js` read from
  * a file, drawn through the draw port in three sets (its pins, its lines,
- * its shapes), its ground pins placed on the ground in batches, followed on
- * a double-click like every drawn item, and its footprint read back.
+ * its shapes), its ground pins placed on the ground in batches, and its
+ * footprint read back.
  */
 import {
   GeoImportError,
   MAX_IMPORT_ENTITIES,
   boundedImport,
 } from './geoImportShared.js';
-import { followOnDoubleClick } from './stockFollow.js';
 import { msg } from '../i18n/marker.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
-import { sphereFromPoints } from '../geo/sphere.js';
 import { heightsOf } from '../queries/heights.js';
-import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import {
   drawOf,
   findCamera,
@@ -73,13 +70,8 @@ function turnedCorners({ west, south, east: eastEdge, north }, rotation = 0) {
  * `mount()`; `refreshGround()` places the ground pins first.
  * @param {object} viewer
  * @param {object[]} features From `readKmlFeatures` or `readGeoJsonFeatures`.
- * @param {{inputFor?: Function}} [options]
  */
-export function createImportedDrawing(
-  viewer,
-  features,
-  { inputFor = defaultInputFor } = {},
-) {
+export function createImportedDrawing(viewer, features) {
   const prefix = `geo-import:${++drawings}`;
   const ids = {
     icons: `${prefix}:pins`,
@@ -98,11 +90,9 @@ export function createImportedDrawing(
       offset: pin.mode === 'relative' ? pin.height : 0,
       groundHeight: undefined,
     }));
-  const byId = new Map();
   let sets = null;
   /** The items last handed to each set, for inspection. */
   let drawn = { icons: [], lines: [], shapes: [] };
-  let follow = null;
   let show = true;
   let destroyed = false;
   /** The surface last asked whether it is the bare ellipsoid, and its answer. */
@@ -241,11 +231,6 @@ export function createImportedDrawing(
     }
   }
 
-  /** The points a feature is framed by, ECEF. */
-  function framePoints(feature) {
-    return footprintOf(feature).map(ecef);
-  }
-
   /** A feature's footprint, `[lon, lat, height]`. */
   function footprintOf(feature) {
     switch (feature.kind) {
@@ -283,17 +268,14 @@ export function createImportedDrawing(
         // A pin with no icon draws nothing, but frames its file.
         if (!feature.image) return;
         const item = pinItem(feature, index);
-        byId.set(`${ids.icons}\u0000${item.id}`, feature);
         icons.push(item);
       } else if (feature.kind === 'line') {
         const item = lineItem(feature, `l${index}`);
         if (!item) return;
-        byId.set(`${ids.lines}\u0000${item.id}`, feature);
         lines.push(item);
       } else {
         const item = shapeItem(feature, `s${index}`);
         if (!item) return;
-        byId.set(`${ids.shapes}\u0000${item.id}`, feature);
         shapes.push(item);
       }
     });
@@ -321,19 +303,6 @@ export function createImportedDrawing(
   function disposeSets() {
     for (const set of Object.values(sets ?? {})) set.dispose();
     sets = null;
-  }
-
-  /** What a double-click on one of these items follows or zooms to. */
-  function targetFor(hit) {
-    const feature = byId.get(`${hit.set}\u0000${hit.id}`);
-    if (!feature) return null;
-    if (feature.kind === 'pin')
-      return {
-        key: `${hit.set}:${hit.id}`,
-        position: () => fromDegrees(feature.lon, feature.lat, feature.height),
-      };
-    const points = framePoints(feature);
-    return points.length ? { zoomTo: sphereFromPoints(points) } : null;
   }
 
   /** Move the drawn pins to where they now stand. */
@@ -470,18 +439,6 @@ export function createImportedDrawing(
     mount() {
       if (destroyed || sets) return;
       draw();
-      try {
-        follow = followOnDoubleClick({
-          viewer,
-          inputFor,
-          name: 'geo-import',
-          enabled: () => show && !destroyed,
-          targetFor,
-        });
-      } catch {
-        // A renderer that takes no input has no double-click to follow on.
-        follow = null;
-      }
     },
     /** Place the ground pins again, and move the drawn ones. */
     async refreshGround(signal) {
@@ -507,12 +464,8 @@ export function createImportedDrawing(
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      // A pin it follows is no longer there to follow.
-      follow?.destroy();
-      follow = null;
       disposeSets();
       drawn = { icons: [], lines: [], shapes: [] };
-      byId.clear();
     },
   };
 }

@@ -70,8 +70,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     postRenderRemove: null,
     lastAnchorSampleAt: 0,
     clickSubscription: null,
-    /** The follow a double-click on a camera started, while installed. */
-    stockFollow: null,
     debounceTimer: null,
     /** Snapped box of the last successful query; a view still inside it reuses its records. */
     lastQueryBox: null,
@@ -346,8 +344,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.postRenderRemove = null;
       state.clickSubscription?.();
       state.clickSubscription = null;
-      state.stockFollow?.destroy();
-      state.stockFollow = null;
       clearRendered();
       state.markers.dispose();
       state.credit = null;

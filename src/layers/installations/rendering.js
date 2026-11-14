@@ -1,18 +1,9 @@
 import { installationClassLabel, installationTitle } from './classLabel.js';
 import { t } from '../../i18n/index.js';
 import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
-import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
-import { entityFollowTarget } from '../../data/followed.js';
+import { entityRecord } from '../../data/entityRecords.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { followOffsetFitting } from '../../geo/frames.js';
-import { sphereFromPoints } from '../../geo/sphere.js';
-import { heightsOf } from '../../queries/heights.js';
-import {
-  drawOf,
-  findCamera,
-  findGlobe,
-  findQuery,
-} from '../../render/rendererOf.js';
+import { drawOf, findGlobe } from '../../render/rendererOf.js';
 
 let instances = 0;
 
@@ -55,10 +46,7 @@ export function createRendering({
     return [r, g, b, alpha ?? a];
   }
 
-  /**
-   * Make the layer's draw sets, hidden until the layer is enabled, and
-   * follow a site on a double-click.
-   */
+  /** Make the layer's draw sets, hidden until the layer is enabled. */
   function attach(viewer) {
     const draw = drawOf(viewer);
     selectedDotKey = null;
@@ -72,7 +60,6 @@ export function createRendering({
   }
 
   function detach() {
-    stopFollow();
     if (layerState.sets)
       for (const set of Object.values(layerState.sets)) set.dispose();
     layerState.sets = null;
@@ -82,7 +69,6 @@ export function createRendering({
   function setShown(shown) {
     if (!layerState.sets) return;
     for (const set of Object.values(layerState.sets)) set.show = shown;
-    if (!shown) stopFollow();
   }
 
   /** Whether `setId` is one of this layer's sets. */
@@ -156,7 +142,6 @@ export function createRendering({
 
   function clearRendered() {
     clearSelectionFill();
-    stopFollow();
     if (layerState.sets) {
       layerState.sets.dots.clear();
       layerState.sets.selected.clear();
@@ -252,13 +237,12 @@ export function createRendering({
     else sets.selected.clear();
   }
 
-  /** Stop drawing a record's dot and outlines, and following it. */
+  /** Stop drawing a record's dot and outlines. */
   function removeRecordItems(id, dotIds, outlineIds) {
     const rendered = layerState.renderedKeys.get(id);
     if (!rendered) return;
     dotIds.push(id);
     outlineIds.push(...rendered.outlineIds);
-    if (follow?.recordId === id) stopFollow();
     layerState.renderedKeys.delete(id);
   }
 
@@ -444,98 +428,6 @@ export function createRendering({
     syncSelectionFill();
   }
 
-  /** The follow a double-click started, while the camera keeps it. */
-  let follow = null;
-
-  /**
-   * Follow the site whose dot is under `position`, as the default renderer
-   * followed the site's entity on a double-click: by the site's display
-   * position, framed as that renderer framed an entity it started
-   * following. A double-click on an outline or the selected fill, which had
-   * no position to follow, zooms to it at once instead.
-   * @param {{x: number, y: number}} position Canvas pixels.
-   */
-  function followAt(position) {
-    const viewer = layerState.viewer;
-    if (!layerState.enabled || !layerState.sets) return;
-    const query = findQuery(viewer);
-    const hit = query?.pick(position.x, position.y);
-    if (!hit || !ownsSet(hit.set)) return;
-    const camera = findCamera(viewer);
-    if (!camera) return;
-    const recordId = hit.meta?.installationId;
-    const record = layerState.recordById.get(recordId);
-    if (!record) return;
-    try {
-      if (
-        hit.set !== layerState.sets.dots.id &&
-        hit.set !== layerState.sets.selected.id
-      ) {
-        const points = partPoints(record, hit.id);
-        if (!points.length) return;
-        // Following nothing then, as that zoom stopped any follow first.
-        if (camera.followed) camera.follow(null);
-        camera.flyToBounds(sphereFromPoints(points), { durationS: 0 });
-        return;
-      }
-      const rendered = layerState.renderedKeys.get(recordId);
-      if (!rendered) return;
-      const { carrier } = rendered;
-      const shown = readEntityRecord(carrier)?.displayPosition?.();
-      if (!shown) return;
-      // Centred where the dot is drawn, on the surface under it when its
-      // height is loaded (the cached floor may not be yet), and held there
-      // as the stock follow held the dot's bounding sphere.
-      const surface = heightsOf(viewer).now({
-        lon: record.longitude,
-        lat: record.latitude,
-      });
-      const at = Number.isFinite(surface)
-        ? fromDegrees(record.longitude, record.latitude, surface)
-        : shown;
-      const pose = camera.pose?.();
-      const target = entityFollowTarget(carrier, {
-        key: `installations:${record.id}`,
-        position: () => at,
-        frame: 'enu',
-        viewFrom: followOffsetFitting({ center: at, radius: 0 }, at, {
-          fovy: pose?.fovy,
-          aspectRatio: pose?.aspectRatio,
-          minDistance: camera.controls?.minDistance,
-          maxDistance: camera.controls?.maxDistance,
-        }),
-      });
-      camera.follow(target);
-      follow = { target, recordId };
-    } catch (error) {
-      // A camera that cannot follow leaves the view where it is, as a
-      // viewer without entity tracking did on a double-click.
-      console.warn(`${LAYER_ID}: cannot follow`, error);
-    }
-  }
-
-  /** The ground points of a record's outline or fill item `itemId`. */
-  function partPoints(record, itemId) {
-    const outline = /:outline:(\d+)$/.exec(itemId);
-    if (outline) {
-      const line = outlinesOf(record)[Number(outline[1])] || [];
-      return line.map(([lon, lat]) => fromDegrees(lon, lat));
-    }
-    const fill = /:selected-fill:(\d+)$/.exec(itemId);
-    if (fill) {
-      const rings = footprintsOf(record)[Number(fill[1])] || [];
-      return rings.flat().map(([lon, lat]) => fromDegrees(lon, lat));
-    }
-    return [];
-  }
-
-  /** Stop a follow this layer started, if the camera still keeps it. */
-  function stopFollow() {
-    const camera = follow && findCamera(layerState.viewer);
-    if (follow && camera?.followed === follow.target) camera.follow(null);
-    follow = null;
-  }
-
   /**
    * Second paint for floors that missed the bounded pre-render deadline.
    *
@@ -579,8 +471,6 @@ export function createRendering({
     detach,
     setShown,
     ownsSet,
-    followAt,
-    stopFollow,
     installationSurfaceHeightM,
     clearSelectionFill,
     syncSelectionFill,

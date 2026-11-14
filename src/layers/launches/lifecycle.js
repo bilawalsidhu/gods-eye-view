@@ -1,7 +1,6 @@
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
-import { followOnDoubleClick } from '../../data/stockFollow.js';
 import { worldClock } from '../../time/worldClock.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
@@ -204,20 +203,9 @@ export function createLifecycle({
         launchAt: parts.rendering.launchMarkerAt,
       });
       const unsubscribeHover = input.onPointer('move', hover.move);
-      // A double-click follows a mission point, as the default renderer
-      // followed the missions' entities.
-      layerState._stockFollow = followOnDoubleClick({
-        viewer,
-        inputFor: () => input,
-        name: 'rocket-launches',
-        enabled: () => layerState._enabled && parts.rendering.missionsShown(),
-        targetFor: parts.rendering.followTargetFor,
-      });
       layerState._inputSubscription = () => {
         unsubscribeClick();
         unsubscribeHover();
-        layerState._stockFollow?.destroy();
-        layerState._stockFollow = null;
       };
       // Apply horizon visibility before the renderer draws and picks.
       // A postRender write is one frame late and can remain visibly stale when
@@ -307,7 +295,6 @@ export function createLifecycle({
       layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       parts.rendering.showMissions(false);
-      layerState._stockFollow?.stop();
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       const canvas = canvasOf(layerState._viewer);
       if (canvas) canvas.style.cursor = '';

@@ -322,35 +322,3 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
     'showing old data after a failure is degraded',
   );
 });
-
-test('a double-click follows a station until it is no longer reported, as its entity was', async (t) => {
-  const { bindRenderer } = await import('../../render/rendererOf.js');
-  const { createStubRenderer } = await import('../../render/stub/index.js');
-  const renderer = createStubRenderer();
-  const viewer = { isDestroyed: () => false };
-  const unbind = bindRenderer(viewer, renderer);
-  let rows = [reading('a', 12)];
-  const layer = createAirQualityLayer({
-    source: { getSnapshot: async () => rows },
-    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
-  });
-  t.after(() => {
-    layer.destroy();
-    unbind();
-    renderer.destroy();
-  });
-  layer.init(viewer);
-  layer.enable();
-  await layer.update();
-  const set = renderer.testing
-    .sets()
-    .find((id) => id.startsWith('air-quality'));
-  renderer.testing.scriptPicks(() => [
-    { set, id: 'air-quality:eccc:a', surface: false },
-  ]);
-  renderer.testing.pointer('dblclick', 10, 10);
-  assert.ok(renderer.camera.followed, 'the station is followed');
-  rows = [reading('b', 12)];
-  await layer.update();
-  assert.equal(renderer.camera.followed, null, 'gone: not followed');
-});

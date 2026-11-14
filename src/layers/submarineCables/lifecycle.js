@@ -109,8 +109,6 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._overlayPublisher.hide();
       state._clickSubscription?.();
       state._clickSubscription = null;
-      state._stockFollow?.destroy();
-      state._stockFollow = null;
       if (state._preRenderRemover) {
         state._preRenderRemover();
         state._preRenderRemover = null;

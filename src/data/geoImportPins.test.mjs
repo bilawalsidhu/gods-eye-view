@@ -65,30 +65,16 @@ const FEATURES = [
   },
 ];
 
-/** A drawing of `features` on a renderer double, with double-clicks it is handed. */
+/** A drawing of `features` on a renderer double. */
 function drawn(features = FEATURES) {
   const viewer = {};
   const ground = bindFakeGroundRenderer(viewer);
-  const clicks = [];
-  const input = {
-    onPointer(type, fn) {
-      if (type === 'dblclick') clicks.push(fn);
-      return () => clicks.splice(clicks.indexOf(fn), 1);
-    },
-    stockEnabled: () => true,
-  };
-  const drawing = createImportedDrawing(viewer, features, {
-    inputFor: () => input,
-  });
+  const drawing = createImportedDrawing(viewer, features);
   drawing.mount();
   const items = (kind) => [
     ...ground.draw.set(drawing.ids[kind]).items.values(),
   ];
-  const doubleClick = (hit) => {
-    ground.setPick(() => hit);
-    for (const fn of clicks) fn({ position: { x: 1, y: 1 } });
-  };
-  return { ground, drawing, items, doubleClick, clicks };
+  return { ground, drawing, items };
 }
 
 test('pins draw as icons with the look their file gave them', (t) => {
@@ -141,36 +127,22 @@ test('paths, polygons, walls and overlays draw as lines and shapes', (t) => {
   assert.equal(overlay.height, 'clampGround');
 });
 
-test('a double-click follows a pin and zooms to a path, until the file goes', (t) => {
-  const { ground, drawing, doubleClick, clicks } = drawn();
+test('destroying a file takes its sets with it', (t) => {
+  const { ground, drawing } = drawn();
   t.after(ground.unbind);
-  doubleClick({ set: drawing.ids.icons, id: 'p0' });
-  const followed = ground.follows.at(-1);
-  assert.equal(followed.key, `${drawing.ids.icons}:p0`);
-  const at = toLonLatH(followed.position());
-  assert.ok(Math.abs(at.lon - 1) < 1e-9 && Math.abs(at.lat - 2) < 1e-9);
-  doubleClick({ set: drawing.ids.lines, id: 'l2' });
-  assert.ok(ground.flights.at(-1).sphere.radius > 0, 'zoomed to the path');
-  assert.equal(ground.follows.at(-1), null, 'which ends the follow');
-  doubleClick({ set: 'someone-else', id: 'p0' });
-  assert.equal(ground.flights.length, 1, 'other sets are not followed');
-  doubleClick({ set: drawing.ids.icons, id: 'p0' });
   drawing.destroy();
-  assert.equal(ground.follows.at(-1), null, 'a removed pin is not followed');
-  assert.equal(clicks.length, 0);
   assert.equal(ground.liveSets().length, 0);
   assert.deepEqual(drawing.items(), { icons: [], lines: [], shapes: [] });
 });
 
-test('hiding a file hides its sets and takes no double-clicks', (t) => {
-  const { ground, drawing, doubleClick } = drawn();
+test('hiding a file hides its sets', (t) => {
+  const { ground, drawing } = drawn();
   t.after(ground.unbind);
   drawing.show = false;
   for (const id of Object.values(drawing.ids))
     assert.equal(ground.draw.set(id).show, false);
-  doubleClick({ set: drawing.ids.icons, id: 'p0' });
-  assert.equal(ground.follows.length, 0);
   drawing.show = true;
+
   assert.equal(ground.draw.set(drawing.ids.icons).show, true);
 });
 

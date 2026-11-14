@@ -62,9 +62,6 @@ export function createState({ sweepClock, overlayHost }) {
   state._referenceRecords = [];
 
   state._clickSubscription = null;
-  /** The follow a double-click started, and each set's drawn items by id. */
-  state._stockFollow = null;
-  state._drawnItems = new Map();
 
   state._preRenderRemover = null;
 

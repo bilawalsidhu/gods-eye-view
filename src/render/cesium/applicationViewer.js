@@ -84,6 +84,11 @@ export function createApplicationViewer({ container, creditContainer }) {
   );
   try {
     viewer.targetFrameRate = 60;
+    // No double-click follow or zoom: the Viewer's own (it tracked or
+    // zoomed to the entity picked) is off. Following is a layer's click.
+    viewer.screenSpaceEventHandler.removeInputAction(
+      Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+    );
     // A phone pinch spans fewer screen pixels than desktop zoom gestures.
     // Keep Cesium's distance-aware zoom and collision limits, with less travel
     // required on touch-first screens. Mouse/trackpad sensitivity stays native.

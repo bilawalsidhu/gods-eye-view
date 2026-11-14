@@ -35,9 +35,6 @@ export function createState({ services }) {
 
   state._inputSubscription = null;
 
-  // The double-click follow of mission points, while initialised.
-  state._stockFollow = null;
-
   state._viewer = null;
 
   state._declutterHandler = null;

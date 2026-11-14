@@ -119,8 +119,6 @@ export function createState({ services }) {
   layerState._playFallbackAttemptId = null;
 
   layerState._clickSubscription = null;
-  /** The follow a double-click on a station started, while installed. */
-  layerState._stockFollow = null;
 
   layerState._horizonTimer = null;
 

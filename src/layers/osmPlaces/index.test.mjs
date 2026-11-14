@@ -150,39 +150,3 @@ test('places are depth-tested past close range, so they never show through the g
     `depth test off only within ${distance} m`,
   );
 });
-
-test('a double-click follows a place until new results replace it, as its entity was', async (t) => {
-  const { bindRenderer } = await import('../../render/rendererOf.js');
-  const { createStubRenderer } = await import('../../render/stub/index.js');
-  const renderer = createStubRenderer();
-  const viewer = { isDestroyed: () => false };
-  const unbind = bindRenderer(viewer, renderer);
-  const layer = createOsmPlacesLayer({
-    overlayHost: fakeOverlayHost(),
-    overpassConfigured: async () => true,
-  });
-  t.after(() => {
-    layer.destroy();
-    unbind();
-    renderer.destroy();
-  });
-  layer.init(viewer);
-  layer.enable();
-  layer.setResults(RECORDS, { kind: 'hospital', label: 'h', area: 'K' });
-  const set = renderer.testing.sets().find((id) => id.endsWith(':points'));
-  renderer.testing.scriptPicks(() => [
-    { set, id: 'osm-place:node/1', surface: false },
-  ]);
-  renderer.testing.pointer('dblclick', 10, 10);
-  const followed = renderer.camera.followed;
-  assert.ok(followed, 'the place is followed');
-  const p = followed.position(0);
-  const lat = (Math.asin(p.z / Math.hypot(p.x, p.y, p.z)) * 180) / Math.PI;
-  assert.ok(Math.abs(lat - 27.7) < 0.2, String(lat));
-  layer.setResults(RECORDS.slice(1), {
-    kind: 'hospital',
-    label: 'h',
-    area: 'K',
-  });
-  assert.equal(renderer.camera.followed, null, 'new results end it');
-});

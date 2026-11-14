@@ -96,26 +96,12 @@ export function onScenePointerDown(nowMs = performance.now()) {
  *   refused by the gate: the caller does nothing else with it.
  */
 export function onSceneDoubleClick(position, nowMs = performance.now()) {
-  const hit = hitsFollowedTrack.call(this, position, nowMs);
+  const start = this.doubleClickStart;
   this.doubleClickStart = null;
   if (this.active || this.destroyed || !isPointerFree()) return false;
   if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
     return false;
-  if (!hit) return false;
-  this.enter();
-  return true;
-}
-
-/**
- * Whether `position` is on the followed track: where it is drawn now, or
- * where a ship was drawn as this gesture's first press began (its click
- * may have moved it).
- */
-function hitsFollowedTrack(position, nowMs) {
-  if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
-    return false;
-  const start = this.doubleClickStart;
-  return (
+  const hit =
     doubleClickHitsSubject(position, subjectCanvasPosition.call(this)) ||
     (Boolean(start) &&
       nowMs - start.atMs <= DOUBLE_CLICK_MEMORY_MS &&
@@ -123,8 +109,10 @@ function hitsFollowedTrack(position, nowMs) {
       // aircraft, another ship) is hit only where it is drawn.
       this.resolveEntryKind() === 'vessel' &&
       start.vesselId === (this.readVesselInfo()?.id ?? null) &&
-      doubleClickHitsSubject(position, start))
-  );
+      doubleClickHitsSubject(position, start));
+  if (!hit) return false;
+  this.enter();
+  return true;
 }
 
 /** Hold the renderer's own double-click follow off; returns the release. */
@@ -190,9 +178,7 @@ export function routeSceneDoubleClick() {
       isPointerFree() &&
       (this.active
         ? Boolean(this.orbitalSiteUnder?.(position))
-        : // Where the ship was as the gesture began counts too: the first
-          // click may have moved it, and the double-click still enters.
-          hitsFollowedTrack.call(this, position, performance.now()));
+        : doubleClickHitsSubject(position, subjectCanvasPosition.call(this)));
     endsDouble =
       !!last?.onSubject &&
       at - last.at <= SUBJECT_PRESS_HOLD_MS &&
@@ -214,9 +200,9 @@ export function routeSceneDoubleClick() {
     // retarget that would end the view.
     if (!this.onSceneDoubleClick(position))
       this.onOrbitalDoubleClick?.(position);
-    // The hold covers the whole double-click: subscribers after this one
-    // (a layer's own follow on a double-click) must still find the stock
-    // follow held, so it is given back once the dispatch is over.
+    // The hold covers the whole double-click: it is given back once the
+    // dispatch is over.
+
     queueMicrotask(drop);
   });
   return () => {

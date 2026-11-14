@@ -17,8 +17,6 @@
  * Meshes and quads are capabilities: on a renderer without them there are
  * no viewshed volumes or monitor plane, and the lines still draw.
  */
-import { positionToEcef } from '../../geo/ellipsoid.js';
-import { drawnItemTarget } from '../../data/stockFollow.js';
 import { drawOf } from '../../render/rendererOf.js';
 
 /** Layer instances, for set ids unique to each. */
@@ -93,9 +91,6 @@ export function createDrawSets({ state: layerState }) {
       plane: draw.quads?.({ id: `cctv:${n}:plane` }) ?? null,
       // What each line item was last written as, by id.
       lineKeys: new Map(),
-      // Each line and plane item as last written, by id.
-      lineItems: new Map(),
-      planeItems: new Map(),
     };
     return current;
   }
@@ -107,7 +102,6 @@ export function createDrawSets({ state: layerState }) {
   /** Let the sets go (the layer leaves its viewer, or moves to another). */
   function dispose() {
     if (!current) return;
-    layerState._stockFollow?.stop();
     for (const set of [current.coverage, current.viewshed, current.plane])
       try {
         set?.dispose();
@@ -145,7 +139,6 @@ export function createDrawSets({ state: layerState }) {
       const key = lineKey(item);
       if (s.lineKeys.get(item.id) === key) continue;
       s.lineKeys.set(item.id, key);
-      s.lineItems.set(item.id, item);
       changed.push(item);
     }
     if (changed.length) s.coverage.upsert(changed);
@@ -157,62 +150,17 @@ export function createDrawSets({ state: layerState }) {
     if (!s) return;
     s.coverage.clear();
     s.lineKeys.clear();
-    s.lineItems.clear();
   }
 
   /** Write the plane handle as it is now. */
   function writePlane(plane) {
     if (!plane?.id) return;
-    const s = sets();
-    if (!s?.plane) return;
-    const item = quadItemOf(plane);
-    s.planeItems.set(item.id, item);
-    s.plane.upsert([item]);
+    sets()?.plane?.upsert([quadItemOf(plane)]);
   }
 
   /** Take a plane out. */
   function removePlane(plane) {
-    const s = live();
-    if (!plane?.id || !s?.plane) return;
-    s.planeItems.delete(plane.id);
-    s.plane.remove([plane.id]);
-    // Removing the plane entity ended the default renderer's follow of it.
-    layerState._stockFollow?.retain(
-      (key) => key !== `${s.plane.id}:${plane.id}`,
-    );
-  }
-
-  /**
-   * What a double-click on a hit follows or zooms to, as the default
-   * renderer did for the entities these were: a coverage line (a polyline
-   * entity) is zoomed to and the monitor plane (a plane entity with a
-   * position) followed, framed to fit it. Null for anything else.
-   * @param {{set: string, id: string}} hit
-   */
-  function followTargetFor(hit) {
-    const s = live();
-    if (!s) return null;
-    if (hit.set === s.coverage.id) {
-      const item = s.lineItems.get(hit.id);
-      return item && item.show !== false
-        ? drawnItemTarget(hit.set, item)
-        : null;
-    }
-    if (!s.plane || hit.set !== s.plane.id) return null;
-    const item = s.planeItems.get(hit.id);
-    if (!item?.center) return null;
-    const planes = s.planeItems;
-    const at = positionToEcef(item.center);
-    const [width, height] = item.size ?? [0, 0];
-    return {
-      key: `${hit.set}:${hit.id}`,
-      // Where the plane is drawn now, as the entity's position was read.
-      position: () => {
-        const now = planes.get(hit.id)?.center;
-        return now ? positionToEcef(now) : null;
-      },
-      sphere: { center: at, radius: Math.hypot(width, height) / 2 || 0 },
-    };
+    if (plane?.id) live()?.plane?.remove([plane.id]);
   }
 
   /** Write a viewshed volume. */
@@ -242,7 +190,6 @@ export function createDrawSets({ state: layerState }) {
     removePlane,
     writeVolume,
     removeVolume,
-    followTargetFor,
     volumeWritesForTest,
   };
 }

@@ -1,6 +1,5 @@
 import { t } from '../../i18n/index.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { followOnDoubleClick } from '../../data/stockFollow.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -102,8 +101,6 @@ export function createSelection({
     if (record?.position)
       layerState._stationSet?.upsert([parts.rendering.stationItem(record)]);
     if (layerState._selectedSet?.size()) layerState._selectedSet.clear();
-    // Removing the highlight entity ended the default renderer's follow of it.
-    layerState._stockFollow?.stop();
     layerState._overlayHost.clearSource(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID);
   }
 
@@ -145,7 +142,7 @@ export function createSelection({
   function _installClickHandler(viewer) {
     if (layerState._clickSubscription) return;
 
-    const clickOff = inputFor(viewer).onClick((event) => {
+    layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       const hit = event.drawHit;
 
       if (hit) {
@@ -165,26 +162,6 @@ export function createSelection({
       // Clicked anything else — deselect.
       if (layerState._selectedKey) _clearSelection();
     });
-    // A double-click follows the selected station's highlight, as the
-    // default renderer followed the point entity it was (the station dots
-    // were point primitives, which it never followed).
-    layerState._stockFollow = followOnDoubleClick({
-      viewer,
-      inputFor,
-      name: 'bikeshare',
-      enabled: () => layerState._enabled,
-      targetFor: (hit) => {
-        const key = layerState._selectedKey;
-        const position = layerState._stationRenderMap.get(key)?.position;
-        if (hit.set !== layerState._selectedSet?.id || !position) return null;
-        return { key, position: () => ({ ...position }) };
-      },
-    });
-    layerState._clickSubscription = () => {
-      clickOff?.();
-      layerState._stockFollow?.destroy();
-      layerState._stockFollow = null;
-    };
 
     document.addEventListener('keydown', _onKeyDown);
   }

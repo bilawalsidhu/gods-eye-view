@@ -7,7 +7,6 @@ import { createRendering } from './rendering.js';
 import { createNamedMarkers, namedPointId } from './namedMarkers.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
-import { inputFor } from '../../input/dispatcher.js';
 
 function harness(t) {
   const previousWindow = globalThis.window;
@@ -40,16 +39,6 @@ function harness(t) {
     renderedKeys: new Map(),
     viewer: {
       camera: { positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 1e6) },
-      // The viewer's stock double-click follow, which the site follow
-      // stands in for.
-      screenSpaceEventHandler: {
-        getInputAction: (type) =>
-          type === Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
-            ? () => {}
-            : undefined,
-        setInputAction() {},
-        removeInputAction() {},
-      },
       scene: {
         globe: { show: false },
         canvas: Object.assign(new EventTarget(), {
@@ -62,7 +51,7 @@ function harness(t) {
     },
   };
   let picked;
-  const { draw, camera, query } = bindFakeCesiumScene(state.viewer);
+  const { draw } = bindFakeCesiumScene(state.viewer);
   const input = fakeInput(state.viewer);
   t.mock.method(
     Cesium.SceneTransforms,
@@ -124,8 +113,6 @@ function harness(t) {
     selection,
     assertSelected,
     draw,
-    camera,
-    query,
     input,
     parts,
     /** Click on what `pick` names, as the scene would pick it. */
@@ -245,95 +232,4 @@ test('a click on a site dot or its outline selects the site; another set does no
   assert.equal(selectedNow(), true);
   h.click({ id: { set: 'other:1', id: outline.id, meta: outline.meta } });
   assert.equal(selectedNow(), false);
-});
-
-test('a double-click follows a site dot where it is drawn and zooms to its outline', (t) => {
-  const h = harness(t);
-  h.state.records[0].namedArea = false;
-  h.state.records[0].outlineLines = [
-    [
-      [0, 0],
-      [0.01, 0],
-    ],
-  ];
-  h.parts.rendering.renderRecords({ claimSelection: true });
-  h.state.enabled = true;
-  const follows = [];
-  const flights = [];
-  let followed = null;
-  Object.assign(h.camera, {
-    follow(target) {
-      follows.push(target);
-      followed = target;
-    },
-    flyToBounds(sphere, options) {
-      flights.push({ sphere, options });
-    },
-    controls: { minDistance: 1, maxDistance: 1e9 },
-  });
-  Object.defineProperty(h.camera, 'followed', { get: () => followed });
-  let hit = null;
-  h.query.pick = () => hit;
-  const dots = h.state.sets.dots;
-  const dot = h.draw.set(dots.id).items.get('base');
-  h.input.dblclick({ x: 640, y: 400 });
-  assert.equal(follows.length, 0, 'nothing of the layer under it');
-  hit = { set: dots.id, id: 'base', meta: dot.meta, surface: false };
-  h.input.dblclick({ x: 640, y: 400 });
-  const target = follows.at(-1);
-  assert.equal(target.key, 'installations:base');
-  assert.equal(target.frame, 'enu');
-  // The tracked card reads the site through the target's entity.
-  assert.equal(target.entity, dot.meta);
-  assert.equal(target.labelModel.title, 'Base');
-  const at = target.position(0);
-  assert.ok(Math.abs(at.x - 6378137) < 1e-6 && Math.abs(at.y) < 1e-6);
-  // 100 m from it, north up, pitched down 45 degrees.
-  const range = Math.hypot(
-    target.viewFrom.x,
-    target.viewFrom.y,
-    target.viewFrom.z,
-  );
-  assert.ok(Math.abs(range - 100) < 1e-6);
-  assert.ok(Math.abs(target.viewFrom.x) < 1e-9);
-  assert.ok(Math.abs(target.viewFrom.y + target.viewFrom.z) < 1e-6);
-  // On the surface under the dot once its height is loaded, before the
-  // cached floor has it, and held there.
-  h.query.sampleHeightNow = () => 2400;
-  h.input.dblclick({ x: 640, y: 400 });
-  const raised = follows.at(-1).position(0);
-  assert.ok(Math.abs(raised.x - 6380537) < 1e-6);
-  h.query.sampleHeightNow = () => null;
-  h.input.dblclick({ x: 640, y: 400 });
-  assert.ok(Math.abs(follows.at(-1).position(0).x - 6378137) < 1e-6);
-  const outlines = h.state.sets.outlines;
-  hit = {
-    set: outlines.id,
-    id: 'base:outline:0',
-    meta: { installationId: 'base' },
-    surface: false,
-  };
-  h.input.dblclick({ x: 640, y: 400 });
-  assert.equal(followed, null, 'a zoom stops the follow');
-  assert.equal(flights.length, 1);
-  assert.equal(flights[0].options.durationS, 0);
-  // The follow stops when the layer hides.
-  hit = { set: dots.id, id: 'base', meta: dot.meta, surface: false };
-  h.input.dblclick({ x: 640, y: 400 });
-  assert.equal(followed?.key, 'installations:base');
-  h.parts.rendering.setShown(false);
-  assert.equal(followed, null);
-  // Another layer's item under the cursor neither follows nor zooms.
-  h.parts.rendering.setShown(true);
-  const before = follows.length;
-  hit = { set: 'another:1', id: 'base', meta: dot.meta, surface: false };
-  h.input.dblclick({ x: 640, y: 400 });
-  assert.equal(follows.length, before);
-  assert.equal(flights.length, 1);
-  // With the stock double-click follow turned off, nothing follows.
-  hit = { set: dots.id, id: 'base', meta: dot.meta, surface: false };
-  const release = inputFor(h.state.viewer).suppressStockClicks();
-  h.input.dblclick({ x: 640, y: 400 });
-  assert.equal(follows.length, before);
-  release();
 });

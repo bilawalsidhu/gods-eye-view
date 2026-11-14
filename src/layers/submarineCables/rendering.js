@@ -4,7 +4,6 @@ import { densifyRhumb } from '../../geo/rhumb.js';
 import { distance, toRadians } from '../../geo/vector.js';
 import { cssColor } from '../../render/color.js';
 import { cameraOf, canvasOf, drawOf } from '../../render/rendererOf.js';
-import { drawnItemTarget } from '../../data/stockFollow.js';
 import {
   clampLabel,
   createCableOverlayEntry,
@@ -181,9 +180,6 @@ export function createRendering({ state }) {
     state._publishScratch.length = 0;
     state._loaded = false;
     state._referenceSweepGate.reset();
-    // The sources' entities went with them, and so did a follow of one.
-    state._stockFollow?.stop();
-    state._drawnItems = new Map();
     if (!state._sets) return;
     if (clearSets) for (const set of Object.values(state._sets)) set.clear();
     for (const picks of state._picks.values()) picks.clear();
@@ -399,38 +395,11 @@ export function createRendering({ state }) {
       map.clear();
       for (const [id, info] of picks) map.set(id, info);
     }
-    // Drawn anew, as new sources' entities were: a follow of one ends.
-    state._stockFollow?.stop();
-    state._drawnItems = new Map([
-      [sets.lines.id, new Map(out.lines.map((item) => [item.id, item]))],
-      [sets.fills.id, new Map(out.fills.map((item) => [item.id, item]))],
-      [sets.pins.id, new Map(out.pins.map((item) => [item.id, item]))],
-      // A reference's stem and point were one entity, placed at the tip.
-      ...[sets.stems.id, sets.references.id].map((id) => [
-        id,
-        new Map(out.references.map((record) => [record.id, record.point])),
-      ]),
-    ]);
     sets.lines.set(out.lines);
     sets.fills.set(out.fills);
     sets.pins.set(out.pins);
     sets.stems.set(out.references.map((record) => record.stem));
     sets.references.set(out.references.map((record) => record.point));
-  }
-
-  /**
-   * What a double-click on a hit follows or zooms to, as the default
-   * renderer did for the entity it was: a landing point or a reference is
-   * followed, a cable or area zoomed to.
-   */
-  function followTargetFor(hit) {
-    if (!hit || hit.surface || !state._setIds.has(hit.set)) return null;
-    const item = state._drawnItems?.get(hit.set)?.get(hit.id);
-    if (!item) return null;
-    // A reference's stem and point follow as one.
-    const set =
-      hit.set === state._sets?.stems.id ? state._sets.references.id : hit.set;
-    return drawnItemTarget(set, item);
   }
 
   /** What a pick on one of the layer's sets names, or null. */
@@ -533,7 +502,6 @@ export function createRendering({ state }) {
     applyCableClassification,
     drawFeatures,
     pickInfo,
-    followTargetFor,
     updateReferenceVisibility,
   };
 }

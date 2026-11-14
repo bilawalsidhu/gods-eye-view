@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- A double-click on the map no longer follows or zooms to what is under
+  it. The globe's own double-click did that for some layers' markers and
+  shapes (earthquakes, cyclones, air quality, news, cables, places and
+  others); following something is a click, as for aircraft and ships. The
+  Cockpit's double-click and a drawing's finishing double-click are
+  unchanged (samehkhamis).
 - Aircraft no longer jump ahead or back, and their trails no longer kink,
   when the feed is late. The civil and military layers draw as far behind
   real time as their feed is late (the 90th percentile of recent report

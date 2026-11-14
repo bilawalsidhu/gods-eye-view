@@ -1,6 +1,5 @@
 import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
-import { sphereFromPoints } from '../../geo/sphere.js';
 import { clamp } from '../../geo/vector.js';
 import { hexColor } from '../../render/color.js';
 import { drawOf, findCamera, findQuery } from '../../render/rendererOf.js';
@@ -42,18 +41,7 @@ export function createRendering({
   let setIds = null;
   /** Frames the mission sets have been walked in, the live cache's key. */
   let frameNumber = 0;
-  // The follow reads its target before preRender (once a tick, and again
-  // in preUpdate while it first frames), so a follow read opens the live
-  // sample the next preRender keeps: the camera and the marker stand at
-  // the same instant, and every read until then shares it.
-  let followSampled = false;
 
-  /** Open the live sample a follow read and the next preRender share. */
-  function openFollowSample() {
-    if (followSampled) return;
-    followSampled = true;
-    frameNumber += 1;
-  }
   /**
    * Every drawn mission item by set and id, with what decides whether it
    * shows: `isolated` (the mission's selection), and for points and icons
@@ -173,9 +161,6 @@ export function createRendering({
 
   /** Remove every mission item, ahead of a rebuild. */
   function clearLaunchEntities() {
-    // A followed item goes with them, as a removed entity stopped being
-    // followed.
-    layerState._stockFollow?.stop();
     const sets = layerState._missionSets;
     records.clear();
     pending.clear();
@@ -192,28 +177,6 @@ export function createRendering({
       hit.set === setIds.markers ||
       hit.set === setIds.reticles
     );
-  }
-
-  /**
-   * What a double-click on a mission item follows: a point by where it is
-   * drawn (the payload as it moves), a line zoomed to by its bounds.
-   */
-  function followTargetFor(hit) {
-    if (!missionHit(hit)) return null;
-    const name = Object.keys(setIds).find((key) => setIds[key] === hit.set);
-    const record = records.get(recordKey(name, hit.id));
-    if (!record) return null;
-    if (!record.position)
-      return { zoomTo: sphereFromPoints(record.item.positions) };
-    const at = record.position;
-    return {
-      key: `${setIds.sites}:${hit.id}`,
-      position: () => {
-        if (typeof at === 'function') openFollowSample();
-        const p = typeof at === 'function' ? at() : at;
-        return p ? copy(p) : null;
-      },
-    };
   }
 
   /** The launch of the first mission item among a click's drilled hits. */
@@ -287,8 +250,7 @@ export function createRendering({
   }
 
   function updateMissionFrame() {
-    if (followSampled) followSampled = false;
-    else frameNumber += 1;
+    frameNumber += 1;
     if (!layerState._enabled || !layerState._viewer || !missionsShown()) {
       parts.overlays.hideReplayVehicleOverlay();
       return;
@@ -841,7 +803,6 @@ export function createRendering({
     showMissions,
     clearLaunchEntities,
     launchIdFromPicks,
-    followTargetFor,
     missionHitsAt,
     launchMarkerAt,
     selectLaunchEntity,

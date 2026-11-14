@@ -132,8 +132,9 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
     [
       /(?:screenSpaceEventHandler|stockHandler)\??\.removeInputAction\(/,
       'removes stock clicks instead of suppressStockClicks()',
-      // It runs the stock clicks itself.
-      ['src/render/cesium/input.js'],
+      // It runs the stock clicks itself; the viewer's factory drops the
+      // stock double-click before any input port exists.
+      ['src/render/cesium/input.js', 'src/render/cesium/applicationViewer.js'],
     ],
   ];
   const walk = (dir) =>

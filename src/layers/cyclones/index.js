@@ -1,7 +1,6 @@
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { followOnDoubleClick } from '../../data/stockFollow.js';
 import {
   registerPickOwner,
   unregisterPickOwner,
@@ -231,20 +230,7 @@ export function createCyclonesLayer({
       if (id) layer.setParams({ stormId: id });
       else if (!event.topHit) layer.setParams({ clear: true });
     });
-    // A double-click follows a storm's point or zooms to its track or cone,
-    // as the default renderer did for their entities.
-    const follow = followOnDoubleClick({
-      viewer,
-      inputFor,
-      name: 'weather-cyclones',
-      enabled: () => enabled && !destroyed && selectionOwner === owner,
-      targetFor: (hit) => rendering?.followTargetFor?.(hit) ?? null,
-    });
-    owner.follow = follow;
-    owner.unsubscribe = () => {
-      unsubscribe();
-      follow.destroy();
-    };
+    owner.unsubscribe = unsubscribe;
   }
   function removeSelection() {
     const owner = selectionOwner;
@@ -313,7 +299,6 @@ export function createCyclonesLayer({
         if (next.unavailable) {
           // An expired advisory must not remain presented as current hazard context.
           rendering.clear();
-          selectionOwner?.follow?.stop();
           snapshot = next;
           selectedId = null;
           ++navigationGeneration;
@@ -333,8 +318,6 @@ export function createCyclonesLayer({
           return false;
         snapshot = next;
         error = null;
-        // A storm point no longer in the advisory takes its follow with it.
-        selectionOwner?.follow?.retain((key) => rendering.drawsFollowKey(key));
         if (!snapshot.storms.some((storm) => storm.id === selectedId))
           select(
             selectionIntent === 'cleared'
@@ -352,7 +335,6 @@ export function createCyclonesLayer({
         error = cause?.message || ADVISORIES_UNAVAILABLE;
         // Failed acquisition has no bounded last-good age guarantee at this layer.
         rendering?.clear();
-        selectionOwner?.follow?.stop();
         snapshot = null;
         selectedId = null;
         ++navigationGeneration;

@@ -642,38 +642,3 @@ test('a failed refresh after a stale snapshot reads as the failure, not stale', 
   assert.equal(h.layer.getStats().stale, false);
   assert.equal(h.layer.getStats().error, 'WFIGS HTTP 502');
 });
-
-test('a double-click zooms to a perimeter, as the default renderer zoomed to its entity', async (t) => {
-  const { bindRenderer } = await import('../../render/rendererOf.js');
-  const { createStubRenderer } = await import('../../render/stub/index.js');
-  const renderer = createStubRenderer();
-  const viewer = { isDestroyed: () => false };
-  const unbind = bindRenderer(viewer, renderer);
-  const layer = createFirePerimetersLayer({
-    source: { getSnapshot: async () => [row] },
-  });
-  t.after(() => {
-    layer.destroy();
-    unbind();
-    renderer.destroy();
-  });
-  layer.init(viewer);
-  layer.enable();
-  await layer.update();
-  for (const suffix of [':fills', ':lines']) {
-    const set = renderer.testing.sets().find((id) => id.endsWith(suffix));
-    renderer.testing.scriptPicks(() => [
-      { set, id: `fire-perimeter:${row.stableId}:0`, surface: false },
-    ]);
-    renderer.camera.setView({
-      destination: { lon: 0, lat: 0, height: 20_000_000 },
-    });
-    renderer.testing.tick();
-    assert.ok(renderer.camera.pose().height > 1_000_000, 'starts far out');
-    renderer.testing.pointer('dblclick', 10, 10);
-    renderer.testing.tick();
-    const pose = renderer.camera.pose();
-    assert.equal(renderer.camera.followed, null, 'zoomed to, not followed');
-    assert.ok(pose.height < 1_000_000, `${suffix}: ${pose.height}`);
-  }
-});

@@ -137,7 +137,6 @@ async function fixture({ legacySource = false } = {}) {
       },
       launchIdFromPicks: () => null,
       missionHitsAt: () => [],
-      followTargetFor: () => null,
       launchMarkerAt: () => false,
       addLaunchEntity(record) {
         state._missionSets.items.push(record.id);
@@ -327,11 +326,8 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(typeof f.state._inputSubscription, 'function');
     await f.destroy();
     assert.equal(f.state._inputSubscription, null);
-    assert.equal(
-      input.subscriberCount(),
-      before - 3,
-      'click, hover and double-click follow',
-    );
+    assert.equal(input.subscriberCount(), before - 2, 'click and hover');
+
     assert.equal(f.attachedSets(), 0);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);
   } finally {

@@ -1,9 +1,5 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { drawOf, findInput } from '../../render/rendererOf.js';
-import {
-  drawnItemTarget,
-  followOnDoubleClick,
-} from '../../data/stockFollow.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { hexColor } from '../../render/color.js';
 import {
   PERIMETER_OVERLAY_SOURCE_ID,
@@ -85,9 +81,6 @@ export function createFirePerimetersLayer({
   let _stale = false;
   let _lastError = null;
   let _enabled = false;
-  // Each drawn area by id, for a double-click to zoom to.
-  let _areaById = new Map();
-  let _stockFollow = null;
   let _clickSubscription = null;
   let _selectedId = null;
   let _selectedLink = null;
@@ -309,19 +302,6 @@ export function createFirePerimetersLayer({
       if (_fills) _fills.show = _lines.show = true;
       overlayHost?.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, true);
       installClickHandler();
-      // A double-click zooms to an area, as the default renderer zoomed to
-      // its entity (a scene that takes no input has none).
-      if (!_stockFollow && inputFor && findInput(_viewer))
-        _stockFollow = followOnDoubleClick({
-          viewer: _viewer,
-          inputFor,
-          name: layer.id,
-          enabled: () => _enabled,
-          targetFor: (hit) =>
-            _setIds?.has(hit.set)
-              ? drawnItemTarget(hit.set, _areaById.get(hit.id))
-              : null,
-        });
     },
 
     disable() {
@@ -330,8 +310,6 @@ export function createFirePerimetersLayer({
       _enabled = false;
       if (_fills) _fills.show = _lines.show = false;
       removeClickHandler();
-      _stockFollow?.destroy();
-      _stockFollow = null;
       clearSelection();
     },
 
@@ -407,7 +385,6 @@ export function createFirePerimetersLayer({
 
         _fills.set(nextFills);
         _lines.set(nextLines);
-        _areaById = new Map(nextFills.map((item) => [item.id, item]));
         _snapshotSignature = signature;
         // Refresh (or drop) the selected incident's card against the new feed.
         if (_selectedId) publishSelectedCard();
@@ -435,8 +412,6 @@ export function createFirePerimetersLayer({
       _request?.abort();
       _request = null;
       removeClickHandler();
-      _stockFollow?.destroy();
-      _stockFollow = null;
       clearSelection();
       _rowById.clear();
       _snapshotSignature = null;

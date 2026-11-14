@@ -1,11 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { cssColor } from '../../render/color.js';
-import { drawOf, findCamera, findInput } from '../../render/rendererOf.js';
-import {
-  drawnItemTarget,
-  followOnDoubleClick,
-} from '../../data/stockFollow.js';
-import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { drawOf, findCamera } from '../../render/rendererOf.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -39,11 +34,7 @@ function withAlpha(css, alpha) {
 }
 
 /** Own one air-quality display, its refresh lifecycle, and its readout card. */
-export function createAirQualityLayer({
-  source,
-  overlayHost,
-  inputFor = defaultInputFor,
-} = {}) {
+export function createAirQualityLayer({ source, overlayHost } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
@@ -55,9 +46,6 @@ export function createAirQualityLayer({
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
-  // Each drawn station by id, and the follow a double-click on one started.
-  let _drawn = new Map();
-  let _stockFollow = null;
   let rowControlsListener = null;
 
   const notify = () => rowControlsListener?.();
@@ -80,22 +68,6 @@ export function createAirQualityLayer({
         show: false,
       });
       _viewer = viewer;
-      // A double-click follows a station, framed to fit its disc, as the
-      // default renderer followed its entity (a scene that takes no input
-      // has none).
-      _stockFollow =
-        inputFor && findInput(viewer)
-          ? followOnDoubleClick({
-              viewer,
-              inputFor,
-              name: 'air-quality',
-              enabled: () => _enabled,
-              targetFor: (hit) =>
-                hit.set === _markers?.id
-                  ? drawnItemTarget(hit.set, _drawn.get(hit.id))
-                  : null,
-            })
-          : null;
       _readings = [];
       _count = 0;
       _lastUpdate = null;
@@ -116,7 +88,6 @@ export function createAirQualityLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      _stockFollow?.stop();
       if (_markers) _markers.show = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
@@ -199,11 +170,6 @@ export function createAirQualityLayer({
         );
       }
       _markers.set(markers);
-      _drawn = new Map(markers.map((item) => [item.id, item]));
-      // A station no longer reported takes its follow with it.
-      _stockFollow?.retain((key) =>
-        _drawn.has(key.slice(_markers.id.length + 1)),
-      );
       if (_enabled) {
         overlayHost.setEntries(
           AIR_QUALITY_OVERLAY_SOURCE_ID,
@@ -221,9 +187,6 @@ export function createAirQualityLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      _stockFollow?.destroy();
-      _stockFollow = null;
-      _drawn = new Map();
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       _markers?.dispose();

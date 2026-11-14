@@ -1,5 +1,4 @@
 import { inputFor } from '../../input/dispatcher.js';
-import { followOnDoubleClick } from '../../data/stockFollow.js';
 import {
   RADIO_PREFIX,
   RADIO_PICK_WINDOW_PX,
@@ -99,15 +98,6 @@ export function createInteraction({
         );
       }
     });
-    // A double-click follows a station, as the default renderer followed
-    // its entity.
-    layerState._stockFollow = followOnDoubleClick({
-      viewer,
-      inputFor,
-      name: 'radio',
-      enabled: () => radioPresentationAllowed(),
-      targetFor: (hit) => parts.rendering.followTargetFor(hit),
-    });
     // Polling remains bounded during flights, but a stationary camera no longer
     // rewrites every station's visibility four times per second while voice and
     // audio processing share the main thread.
@@ -121,8 +111,6 @@ export function createInteraction({
     unregisterPickOwner('radio');
     layerState._clickSubscription?.();
     layerState._clickSubscription = null;
-    layerState._stockFollow?.destroy();
-    layerState._stockFollow = null;
     if (layerState._horizonTimer) clearInterval(layerState._horizonTimer);
     layerState._horizonTimer = null;
   }

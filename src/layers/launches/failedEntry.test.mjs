@@ -180,7 +180,6 @@ async function fixture(t) {
       addLaunchEntity: noop,
       flushLaunchEntities: noop,
       clearLaunchEntities: noop,
-      followTargetFor: () => null,
       launchIdFromPicks: () => null,
       launchMarkerAt: () => null,
       missionHitsAt: () => [],

@@ -1,9 +1,5 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { drawOf, findInput } from '../../render/rendererOf.js';
-import {
-  drawnItemTarget,
-  followOnDoubleClick,
-} from '../../data/stockFollow.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { cssColor } from '../../render/color.js';
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 import { msg, t } from '../../i18n/index.js';
@@ -81,9 +77,6 @@ export function createDroneAirspaceLayer({
   let _lastError = null;
   let _stale = false;
   let _enabled = false;
-  // Each drawn area by id, for a double-click to zoom to.
-  let _areaById = new Map();
-  let _stockFollow = null;
   let _clickSubscription = null;
   let _selectedId = null;
   let _selectedCardId = null;
@@ -212,19 +205,6 @@ export function createDroneAirspaceLayer({
       if (_fills) _fills.show = _lines.show = true;
       overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, true);
       installClickHandler();
-      // A double-click zooms to an area, as the default renderer zoomed to
-      // its entity (a scene that takes no input has none).
-      if (!_stockFollow && inputFor && findInput(_viewer))
-        _stockFollow = followOnDoubleClick({
-          viewer: _viewer,
-          inputFor,
-          name: layer.id,
-          enabled: () => _enabled,
-          targetFor: (hit) =>
-            _setIds?.has(hit.set)
-              ? drawnItemTarget(hit.set, _areaById.get(hit.id))
-              : null,
-        });
     },
 
     disable() {
@@ -233,8 +213,6 @@ export function createDroneAirspaceLayer({
       _enabled = false;
       if (_fills) _fills.show = _lines.show = false;
       removeClickHandler();
-      _stockFollow?.destroy();
-      _stockFollow = null;
       clearSelection();
     },
 
@@ -309,7 +287,6 @@ export function createDroneAirspaceLayer({
 
         _fills.set(nextFills);
         _lines.set(nextLines);
-        _areaById = new Map(nextFills.map((item) => [item.id, item]));
         _snapshotSignature = signature;
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
@@ -337,8 +314,6 @@ export function createDroneAirspaceLayer({
       _request?.abort();
       _request = null;
       removeClickHandler();
-      _stockFollow?.destroy();
-      _stockFollow = null;
       clearSelection();
       _rowById.clear();
       _snapshotSignature = null;
