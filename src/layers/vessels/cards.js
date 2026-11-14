@@ -1,8 +1,10 @@
 import {
+  AID_TO_NAVIGATION_STYLE,
   accentForVesselType,
   displayVesselType,
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
+import { isAidToNavigation } from '../../data/vesselTypes.js';
 import { formatNumber, t } from '../../i18n/index.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
@@ -16,14 +18,18 @@ export function createCards({
   function updateSelectedVesselHud(record) {
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;
+    // An aid to navigation is a fixed mark: it has no speed or heading to show.
+    const aid = isAidToNavigation(record);
     services.readouts?.presentSelectedVessel({
       text: [
         t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
-        t('{type}  SPD: {speed}  HDG: {heading}', {
-          type: trimHudValue(record.type || t('VESSEL'), 24),
-          speed: formatSpeed(record.speed),
-          heading: formatHeading(record.heading ?? record.course),
-        }),
+        aid
+          ? trimHudValue(record.type || t('AID TO NAVIGATION'), 24)
+          : t('{type}  SPD: {speed}  HDG: {heading}', {
+              type: trimHudValue(record.type || t('VESSEL'), 24),
+              speed: formatSpeed(record.speed),
+              heading: formatHeading(record.heading ?? record.course),
+            }),
         `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('STALE')}` : ''}`,
       ].join('\n'),
     });
@@ -43,20 +49,21 @@ export function createCards({
   /**
    * Card model for an ambient (decluttered-in) vessel — name title plus one
    * compact type/speed/heading detail line, anchored at the record's current
-   * rendered position (height-datum caveat: no datum work here). Pure —
-   * exported for unit tests.
+   * rendered position (height-datum caveat: no datum work here). An aid to
+   * navigation's line is its kind alone. Pure — exported for unit tests.
    * @param {Object} record - Vessel record.
    * @returns {Object} vesselLabels entry.
    */
 
   function buildVesselCard(record) {
     const parts = [];
+    const aid = isAidToNavigation(record);
     const type = vesselTypeShort(record);
     if (type) parts.push(type);
-    if (record.speed !== null && record.speed !== undefined)
+    if (!aid && record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
-    if (Number.isFinite(direction))
+    if (!aid && Number.isFinite(direction))
       parts.push(`${roundHeadingDegrees(direction)}°`);
     return {
       id: vesselOverlayEntryId(record),
@@ -65,7 +72,7 @@ export function createCards({
         components.rendering.getVisual(record).billboard?.position ||
         components.rendering.getVisual(record).position,
       gapPx: 10,
-      accent: accentForVesselType(record.type),
+      accent: vesselAccent(record, aid),
       title: trimHudValue(displayVesselName(record), 26),
       details: parts.length ? [parts.join(' · ')] : [],
       selected: false,
@@ -76,22 +83,26 @@ export function createCards({
   /**
    * Card model for the click-selected vessel — the full-detail card, drawn last
    * (on top) and never distance-faded by the overlay. Pinned-but-vanished
-   * vessels carry a STALE marker (mirrors the HUD readout). Pure — exported
-   * for unit tests.
+   * vessels carry a STALE marker (mirrors the HUD readout). An aid to
+   * navigation shows its kind with no speed or heading. Pure — exported for
+   * unit tests.
    * @param {Object} record - Selected vessel record.
    * @returns {Object} vesselLabels entry.
    */
 
   function buildSelectedVesselCard(record) {
+    const aid = isAidToNavigation(record);
     const direction = record.heading ?? record.course;
     const details = [
-      [
-        vesselTypeShort(record) || t('VESSEL'),
-        formatSpeed(record.speed),
-        Number.isFinite(direction)
-          ? `${roundHeadingDegrees(direction)}°`
-          : '--°',
-      ].join(' · '),
+      aid
+        ? vesselTypeShort(record) || t('AID TO NAVIGATION')
+        : [
+            vesselTypeShort(record) || t('VESSEL'),
+            formatSpeed(record.speed),
+            Number.isFinite(direction)
+              ? `${roundHeadingDegrees(direction)}°`
+              : '--°',
+          ].join(' · '),
     ];
     const destination = String(record.destination || '').trim();
     if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
@@ -106,12 +117,20 @@ export function createCards({
         components.rendering.getVisual(record).billboard?.position ||
         components.rendering.getVisual(record).position,
       gapPx: 12,
-      accent: accentForVesselType(record.type),
+      accent: vesselAccent(record, aid),
       title: trimHudValue(displayVesselName(record), 32),
       details,
       selected: true,
       priority: 100000,
     };
+  }
+
+  /** A card's accent: an aid's disc colour, else its ship type's. */
+
+  function vesselAccent(record, aid) {
+    return aid
+      ? AID_TO_NAVIGATION_STYLE.accent
+      : accentForVesselType(record.type);
   }
 
   /** Stable overlay identity for keyed and source-retained unkeyed rows. */
@@ -129,9 +148,15 @@ export function createCards({
    * Uppercased AIS type for the card (empty string when unknown). Free feed
    * text is bounded to the card width; a translated type token is a short
    * catalog word and shows whole, never cut mid-word ("AUXILIAR DE PUERTO").
+   * An aid's kind is the whole line, so it keeps the room speed and heading
+   * would take ("CARDINAL MARK N", not "CARDINAL MARK ").
    */
 
   function vesselTypeShort(record) {
+    if (isAidToNavigation(record)) {
+      const kind = String(record.type || '').trim();
+      return kind ? trimHudValue(kind.toUpperCase(), 26) : '';
+    }
     const feedType = normalizeVesselType(record.type);
     const shown = displayVesselType(record.type);
     return shown === feedType

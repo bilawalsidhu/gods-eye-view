@@ -342,3 +342,49 @@ test('an aid-to-navigation report is a row named by its kind of aid, not a ship 
   assert.equal(row.name, 'SF APPROACH N');
   assert.equal(row.speed, null);
 });
+
+test("an aid's name runs on into its name extension", () => {
+  ingestAisStreamEnvelope({
+    MessageType: 'AidsToNavigationReport',
+    Message: {
+      AidsToNavigationReport: {
+        UserID: 993672002,
+        Type: 13,
+        Name: 'SAN FRANCISCO MAIN S',
+        NameExtension: 'HIP CHANNEL 2',
+      },
+    },
+    MetaData: {
+      MMSI: '993672002',
+      ShipName: 'SAN FRANCISCO MAIN S',
+      latitude: 37.79,
+      longitude: -122.52,
+      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+    },
+  });
+  assert.equal(rowFor('993672002').name, 'SAN FRANCISCO MAIN SHIP CHANNEL 2');
+});
+
+test('a capped row request keeps every vessel ahead of aids to navigation', () => {
+  // The aid reports last, so it is the newest row.
+  ingestAisStreamEnvelope(positionReport('244060901', { Sog: 3 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'AidsToNavigationReport',
+    Message: { AidsToNavigationReport: { UserID: 993672003, Type: 24 } },
+    MetaData: {
+      MMSI: '993672003',
+      latitude: 37.79,
+      longitude: -122.52,
+      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+    },
+  });
+  const rows = aisStreamRows(50000);
+  const firstAid = rows.findIndex((row) => row.mmsi.startsWith('99'));
+  const lastVessel = rows.findLastIndex((row) => !row.mmsi.startsWith('99'));
+  assert.ok(firstAid > lastVessel, `${firstAid} > ${lastVessel}`);
+  const vesselCount =
+    rows.length - rows.filter((row) => row.mmsi.startsWith('99')).length;
+  assert.ok(
+    aisStreamRows(vesselCount).every((row) => !row.mmsi.startsWith('99')),
+  );
+});

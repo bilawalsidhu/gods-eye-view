@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
+  AID_TO_NAVIGATION_STYLE,
   vesselTypeCss,
   vesselOverlayCohortLimit,
   VESSEL_OVERLAY_SOURCE_ID,
@@ -29,9 +30,6 @@ import {
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 import { isAidToNavigation } from '../../data/vesselTypes.js';
-
-/** An aid to navigation's disc: a bone white apart from every ship type's colour. */
-const AID_ICON_CSS = '#d9d2c0';
 
 /** How often vessels move on as the world clock plays (wall ms). */
 const FOLLOW_POSITION_MS = 250;
@@ -213,7 +211,7 @@ export function createRendering({
     const cssColor = selected
       ? '#ffffff'
       : aid
-        ? AID_ICON_CSS
+        ? AID_TO_NAVIGATION_STYLE.css
         : vesselTypeCss(record.type);
     const key = `${cssColor}:${selected ? 'selected' : 'normal'}:${aid ? 'aid' : 'ship'}`;
     if (vesselState.shipIconCache.has(key))
@@ -482,7 +480,8 @@ export function createRendering({
             visible &&
             record.id !== state.cockpitSubjectId &&
             !visual.modelOwnsVisual;
-          if (visible && doRotations && scene) {
+          // An aid's disc is never turned (vesselCourseDeg).
+          if (visible && doRotations && scene && !isAidToNavigation(record)) {
             const rot = screenProjectedRotation(
               scene,
               visual.position,

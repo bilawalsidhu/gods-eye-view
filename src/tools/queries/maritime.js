@@ -21,7 +21,10 @@ import {
   thinEvenly,
 } from '../results.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
-import { normalizeVesselType } from '../../data/vesselTypes.js';
+import {
+  isAidToNavigation,
+  normalizeVesselType,
+} from '../../data/vesselTypes.js';
 
 const MMSI_SCHEMA = Object.freeze({
   type: 'string',
@@ -116,7 +119,8 @@ export const vesselsInArea = defineTool({
   title: 'Vessels in an area',
   description:
     'Ships currently reported by AIS inside an area, nearest the center ' +
-    'first, optionally filtered by vessel type. group_by counts every matched ' +
+    'first, optionally filtered by vessel type. Buoys, beacons and other ' +
+    'aids to navigation are not ships and are left out. group_by counts every matched ' +
     'ship by type or destination, and stats summarizes their speed; both ' +
     'cover all matches, not just the rows returned.',
   inputSchema: {
@@ -152,6 +156,8 @@ export const vesselsInArea = defineTool({
     const rows = snapshot.records
       .filter(
         (record) =>
+          // A buoy or beacon in the feed is not a ship to count.
+          !isAidToNavigation(record) &&
           areaContains(area, { lat: record.latitude, lon: record.longitude }) &&
           (!wanted ||
             (vesselType(record.type) ?? '').toLowerCase().includes(wanted)),

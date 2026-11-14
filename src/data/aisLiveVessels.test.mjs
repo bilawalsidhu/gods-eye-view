@@ -1882,3 +1882,41 @@ test('detection objects name the vessel card their callout gives way to', () => 
     _setVesselStateForTest({ enabled: false });
   }
 });
+
+test('an aid to navigation card shows its kind, never a speed or heading', () => {
+  const aid = makeRecord({
+    name: 'SF APPROACH N',
+    mmsi: '993672001',
+    type: 'Cardinal Mark N',
+    speed: 0,
+    course: 135,
+    heading: 135,
+  });
+  const card = buildVesselCard(aid);
+  assert.deepEqual(card.details, ['CARDINAL MARK N']);
+  assert.equal(card.accent, '217, 210, 192');
+  const selected = buildSelectedVesselCard(aid);
+  assert.equal(selected.details[0], 'CARDINAL MARK N');
+  assert.equal(selected.accent, '217, 210, 192');
+  // Known only by its MMSI, an aid is named as one.
+  const unnamed = buildSelectedVesselCard({ ...aid, type: '' });
+  assert.equal(unnamed.details[0], 'AID TO NAVIGATION');
+  assert.deepEqual(buildVesselCard({ ...aid, type: '' }).details, []);
+});
+
+test('the HUD of a selected aid to navigation shows no speed or heading', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    Object.assign(harness.record, {
+      type: 'Port hand Mark',
+      speed: 0,
+      heading: 135,
+      course: 135,
+    });
+    assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
+    assert.match(harness.hud.readout.text, /\nPort hand Mark\n/);
+    assert.doesNotMatch(harness.hud.readout.text, /SPD|HDG|KT/);
+  } finally {
+    harness.cleanup();
+  }
+});

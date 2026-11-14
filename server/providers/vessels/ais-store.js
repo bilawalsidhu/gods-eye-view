@@ -1,5 +1,8 @@
 import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
-import { aidToNavigationTypeName } from '../../../src/data/vesselTypes.js';
+import {
+  aidToNavigationTypeName,
+  isAidToNavigation,
+} from '../../../src/data/vesselTypes.js';
 export const AISSTREAM_CACHE_MAX = 50000;
 export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
 // Per-MMSI recent-path ring buffers (PRD WS-F F3). Float32 lat/lon (~1m
@@ -113,18 +116,21 @@ export function ingestAisStreamEnvelope(envelope) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return true;
 
   const staticData = _aisStreamStatic.get(mmsi) || {};
+  const aidReport = messageType === 'AidsToNavigationReport';
   _aisStreamVessels.set(mmsi, {
     lat,
     lon,
-    name: vesselNameFromAis(metadata, message, staticData) || `MMSI ${mmsi}`,
+    name:
+      (aidReport && aidNameFromAis(message)) ||
+      vesselNameFromAis(metadata, message, staticData) ||
+      `MMSI ${mmsi}`,
     mmsi,
     imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
     // An aid-to-navigation report's type is the kind of aid (0 to 31), not
     // a ship type: it is carried as the aid's name ("Cardinal Mark N").
-    type:
-      messageType === 'AidsToNavigationReport'
-        ? aidToNavigationTypeName(message.Type)
-        : vesselTypeFromAis(message, staticData),
+    type: aidReport
+      ? aidToNavigationTypeName(message.Type)
+      : vesselTypeFromAis(message, staticData),
     destination: stringValue(message.Destination ?? staticData.destination),
     length: staticData.length ?? null,
     beam: staticData.beam ?? null,
@@ -282,6 +288,15 @@ function vesselNameFromAis(metadata, message, staticData = {}) {
   );
 }
 
+/**
+ * An aid's whole name: an aid-to-navigation report carries the first 20
+ * characters in `Name` and the rest, up to 14 more, in `NameExtension`.
+ */
+function aidNameFromAis(message) {
+  const name = stringValue(message.Name);
+  return name ? stringValue(name + stringValue(message.NameExtension)) : '';
+}
+
 function vesselTypeFromAis(message, staticData = {}) {
   return stringValue(
     message.Type ??
@@ -291,14 +306,25 @@ function vesselTypeFromAis(message, staticData = {}) {
   );
 }
 
+/**
+ * The current rows, newest first, with every vessel ahead of every aid to
+ * navigation: a capped request never gives up a ship for a buoy.
+ */
 export function aisStreamRows(maxRows) {
   const cutoff = Date.now() - AISSTREAM_STALE_MS;
-  const rows = [];
+  const vessels = [];
+  const aids = [];
   for (const row of _aisStreamVessels.values()) {
-    if (row._updatedAt >= cutoff) rows.push(row);
+    if (row._updatedAt >= cutoff)
+      (isAidToNavigation(row) ? aids : vessels).push(row);
   }
-  rows.sort((a, b) => b._updatedAt - a._updatedAt);
-  return rows.slice(0, maxRows).map(({ _updatedAt, ...row }) => row);
+  const newestFirst = (a, b) => b._updatedAt - a._updatedAt;
+  vessels.sort(newestFirst);
+  if (vessels.length < maxRows) aids.sort(newestFirst);
+  return vessels
+    .concat(aids)
+    .slice(0, maxRows)
+    .map(({ _updatedAt, ...row }) => row);
 }
 
 function pruneAisStreamCache() {

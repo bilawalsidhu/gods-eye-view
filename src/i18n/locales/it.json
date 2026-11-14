@@ -1291,6 +1291,7 @@
   "AIS: {name}": "AIS: {name}",
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  VEL: {speed}  HDG: {heading}",
   "VESSEL": "NAVE",
+  "AID TO NAVIGATION": "AIUTO ALLA NAVIGAZIONE",
   "{speed}KT": "{speed}KT",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS: LIVE",

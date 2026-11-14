@@ -100,27 +100,53 @@ export function aidToNavigationTypeName(code) {
   return AID_TYPE_NAMES[index] ?? AID_TYPE_NAMES[0];
 }
 
+/** Every kind {@link aidToNavigationTypeName} names, lowercased. */
+const AID_TYPE_NAME_SET = new Set(
+  AID_TYPE_NAMES.map((name) => name.toLowerCase()),
+);
+
 /**
  * Words a vessel type uses for an aid to navigation. A vessel that works on
- * one ("Buoy Tender", "Buoy-Laying Vessel") is a ship underway, not a mark on
- * the water.
+ * one ("Buoy Tender", "Buoy-Laying Vessel", "Buoy Layer") is a ship underway,
+ * not a mark on the water.
  */
 const AID_TYPE_TEXT =
   /navaid|\baton\b|aids? to nav|nav(igation)? aid|racon|lighthouse|lightship|light vessel|reference point|hand mark|cardinal|safe water|preferred channel|isolated danger|special mark|beacon|buoy/i;
-const AID_WORKER_TEXT = /tender|laying/i;
+const AID_WORKER_TEXT = /tender|lay(ing|er)\b/i;
 
 /** ITU MID 99: the MMSI of an AIS aid-to-navigation station (99MIDxxxx). */
 const AID_MMSI = /^99\d{7}$/;
 
 /**
+ * Whether each type text seen names an aid. Vessel layers ask per vessel on
+ * their draw passes, and a feed uses few distinct type texts, so each is
+ * matched once; the memo is bounded against a feed of free-form types.
+ */
+const AID_TYPE_MEMO = new Map();
+const AID_TYPE_MEMO_MAX = 1024;
+
+function typeNamesAid(text) {
+  let aid = AID_TYPE_MEMO.get(text);
+  if (aid !== undefined) return aid;
+  aid =
+    AID_TYPE_NAME_SET.has(text.toLowerCase()) ||
+    (AID_TYPE_TEXT.test(text) && !AID_WORKER_TEXT.test(text));
+  if (AID_TYPE_MEMO.size >= AID_TYPE_MEMO_MAX) AID_TYPE_MEMO.clear();
+  AID_TYPE_MEMO.set(text, aid);
+  return aid;
+}
+
+/**
  * Whether a vessel record is an aid to navigation (a buoy, beacon, mark,
- * RACON or light) rather than a vessel: its type names one, or its MMSI is
- * an aid-to-navigation station's. A numeric AIS ship type never names one.
+ * RACON or light) rather than a vessel: its type is one of the kinds an aid
+ * report names or uses a word for one, or its MMSI is an aid-to-navigation
+ * station's. A numeric AIS ship type never names one.
  * @param {{type?: string|number|null, mmsi?: string|number|null}} vessel
  * @returns {boolean}
  */
 export function isAidToNavigation({ type, mmsi } = {}) {
-  const text = String(type ?? '').trim();
-  if (AID_TYPE_TEXT.test(text) && !AID_WORKER_TEXT.test(text)) return true;
-  return AID_MMSI.test(String(mmsi ?? '').trim());
+  const text = typeof type === 'string' ? type.trim() : String(type ?? '');
+  if (text && typeNamesAid(text)) return true;
+  if (mmsi === null || mmsi === undefined || mmsi === '') return false;
+  return AID_MMSI.test(typeof mmsi === 'string' ? mmsi.trim() : String(mmsi));
 }

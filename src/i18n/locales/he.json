@@ -1149,6 +1149,7 @@
   "AIS: {name}": "AIS: {name}",
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "אונייה",
+  "AID TO NAVIGATION": "עזר ניווט",
   "{speed}KT": "{speed} קשר",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS: חי",
