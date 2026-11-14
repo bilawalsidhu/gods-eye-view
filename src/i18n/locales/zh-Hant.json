@@ -3527,5 +3527,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "「重置視圖」會重新加載應用，不使用從地址欄恢復的視圖。",
   "Reload": "重新加載",
   "Retry": "重試",
-  "Reset view": "重置視圖"
+  "Reset view": "重置視圖",
+  "Trolleybus": "無軌電車",
+  "Cable car": "纜索電車",
+  "Monorail": "單軌列車",
+  "Funicular": "纜索鐵路",
+  "Gondola": "纜車"
 }

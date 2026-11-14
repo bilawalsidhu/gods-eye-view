@@ -3614,5 +3614,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "”Återställ vy” laddar om appen utan vyn som återställdes från adressfältet.",
   "Reload": "Ladda om",
   "Retry": "Försök igen",
-  "Reset view": "Återställ vy"
+  "Reset view": "Återställ vy",
+  "Trolleybus": "Trådbuss",
+  "Cable car": "Kabelspårvagn",
+  "Monorail": "Enskensbana",
+  "Funicular": "Bergbana",
+  "Gondola": "Kabinbana"
 }

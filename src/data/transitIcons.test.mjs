@@ -62,7 +62,7 @@ test('the raster cache is bounded by kind, size and halo — never by call count
   assert.ok(transitIconCacheSize() <= before + 3 + TRANSIT_ICON_KINDS.length);
 });
 
-test('all 72 variants retain the specified final halo at both display sizes', async () => {
+test('every variant retains the specified final halo at both display sizes', async () => {
   const { presetSpriteScale, presetSpriteOutlinePx } =
     await import('./transitPresetStyle.js');
   for (const kind of TRANSIT_ICON_KINDS) {
@@ -97,7 +97,8 @@ test('all 72 variants retain the specified final halo at both display sizes', as
   }
   for (let i = 0; i < 100; i++)
     transitIcon('invalid', i, { haloScreenPx: i, screenPx: i });
-  assert.equal(transitIconCacheSize(), 72);
+  // Every kind at two sizes, three profiles, with and without a course.
+  assert.equal(transitIconCacheSize(), TRANSIT_ICON_KINDS.length * 12);
 });
 
 test('every mono raster preserves the normal silhouette mask and aspect at CRT display size', async () => {
@@ -197,6 +198,11 @@ test('sensor raster halo stays dark across its screen-space band on a white roof
     subway: 11.5,
     rail: 10.5,
     ferry: 12.5,
+    trolleybus: 15,
+    cable_tram: 11,
+    monorail: 8.5,
+    funicular: 11,
+    aerial_lift: 12,
     unknown: 10,
   };
   for (const selected of [false, true]) {

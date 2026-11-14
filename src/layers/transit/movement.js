@@ -11,9 +11,14 @@ import {
 } from '../../data/contactPlayback.js';
 const MODE_MAX_SPEED_MPS = Object.freeze({
   bus: 36, // ~130 km/h — a coach on a motorway
+  trolleybus: 28, // ~100 km/h — wired to the street
   tram: 28, // ~100 km/h — interurban light rail
+  cable_tram: 12, // ~43 km/h — the cable runs at a walking-pace multiple
   subway: 42, // ~150 km/h
+  monorail: 42, // ~150 km/h
   rail: 111, // ~400 km/h — high-speed services exist on some feeds
+  funicular: 16, // ~58 km/h — the fastest lines
+  aerial_lift: 15, // ~54 km/h — the fastest gondolas and trams
   ferry: 25, // ~90 km/h — fast catamarans
   unknown: 56, // ~200 km/h
 });

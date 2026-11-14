@@ -3788,5 +3788,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "«Сбросить вид» перезагружает приложение без вида, восстановленного из адресной строки.",
   "Reload": "Перезагрузить",
   "Retry": "Повторить",
-  "Reset view": "Сбросить вид"
+  "Reset view": "Сбросить вид",
+  "Trolleybus": "Троллейбус",
+  "Cable car": "Канатный трамвай",
+  "Monorail": "Монорельс",
+  "Funicular": "Фуникулёр",
+  "Gondola": "Канатная дорога"
 }

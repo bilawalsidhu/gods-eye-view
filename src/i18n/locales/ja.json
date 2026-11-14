@@ -3527,5 +3527,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "「ビューをリセット」は、アドレスバーから復元したビューを使わずにアプリを再読み込みします。",
   "Reload": "再読み込み",
   "Retry": "再試行",
-  "Reset view": "ビューをリセット"
+  "Reset view": "ビューをリセット",
+  "Trolleybus": "トロリーバス",
+  "Cable car": "ケーブルトラム",
+  "Monorail": "モノレール",
+  "Funicular": "ケーブルカー",
+  "Gondola": "ゴンドラ"
 }
