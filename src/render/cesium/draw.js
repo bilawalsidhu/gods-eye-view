@@ -588,6 +588,18 @@ export function createCesiumDraw({
         requestRender();
       },
       setOptions(options) {
+        // A live clock's new delay only: every frame reads the clock from
+        // the spec, so nothing is rebuilt or restyled (a layer moves its
+        // display delay a little every frame).
+        if (
+          Object.keys(options).every((key) => key === 'motionClock') &&
+          options.motionClock?.kind === 'live' &&
+          spec.motionClock?.kind === 'live'
+        ) {
+          spec.motionClock = options.motionClock;
+          requestRender();
+          return;
+        }
         // Refused, changing nothing, where icons on the GPU cannot take it.
         if (record.gpu) gpu.check([], { ...spec, ...options });
         const culled = spec.horizonCull;

@@ -172,6 +172,26 @@ test('a set’s motion clock is the frame’s scene time, or wall time less its 
   assert.equal(scene.frameState.time instanceof Cesium.JulianDate, true);
 });
 
+test('a live clock’s new delay is read the next frame with nothing restyled', () => {
+  const { part, draw } = drawOver();
+  const live = draw.icons({
+    id: 'gpu:delay',
+    motionClock: { kind: 'live', delayMs: 2000 },
+  });
+  live.set([icon('a', { motion: { kind: 'hold' } })]);
+  const record = part.sets.get('gpu:delay');
+  let restyles = 0;
+  const restyle = record.gpu.restyle;
+  record.gpu.restyle = () => ((restyles += 1), restyle());
+  live.setOptions({ motionClock: { kind: 'live', delayMs: 5000 } });
+  assert.equal(restyles, 0, 'a delay alone restyles nothing');
+  const lag =
+    Date.now() - Cesium.JulianDate.toDate(record.host.renderTime({})).getTime();
+  assert.ok(Math.abs(lag - 5000) < 50, `lags ${lag} ms`);
+  live.setOptions({ motionClock: { kind: 'scene' } });
+  assert.equal(restyles, 1, 'a clock of another kind still restyles');
+});
+
 test('rows moving on a live clock keep frames coming until their segments end', () => {
   const { scene, part, draw } = drawOver();
   const set = draw.icons({ id: 'gpu:animate' });
