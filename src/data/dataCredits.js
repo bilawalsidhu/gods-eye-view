@@ -327,6 +327,13 @@ export const DATA_CREDITS = [
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
   },
   {
+    key: 'spain-cctv',
+    html:
+      'Traffic camera stills (Spain): ' +
+      '<a href="https://www.dgt.es/" target="_blank" rel="noopener">Dirección General de Tráfico (DGT)</a>, ' +
+      'Creative Commons Attribution (CC BY)',
+  },
+  {
     key: 'ottawa-cctv',
     html:
       'Traffic cameras (Ottawa, with an access certificate): ' +
