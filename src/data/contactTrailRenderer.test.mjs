@@ -104,17 +104,17 @@ test('the head is revealed to the vehicle and drawn anew only at a crossing', (t
   const sample = { displayT: 15000, fromSeq: 0, toSeq: 1, fraction: 0.75 };
   for (let i = 0; i < 120; i++) renderer.setDisplaySample(sample, marker);
   assert.equal(head.show, true);
-  const lanes = [...record.items.values()];
+  // One line, its dark edge in the same pass: lanes stacked would darken
+  // its centre where their translucent passes overlap.
+  const lines = [...record.items.values()];
   assert.deepEqual(
-    lanes.map((lane) => [lane.id, lane.widthPx, lane.revealFraction]),
-    [
-      ['backing', 5, 0.5],
-      ['line', 3, 0.5],
-    ],
+    lines.map((line) => [line.id, line.widthPx, line.revealFraction]),
+    [['head', 5, 0.5]],
   );
-  assert.deepEqual(lanes[1].positions, [point(1), point(2)]);
-  assert.ok(close(lanes[1].style.color, [...GREEN, 0.8]));
-  assert.ok(close(lanes[0].style.color, [...DARK, 0.8]));
+  assert.deepEqual(lines[0].positions, [point(1), point(2)]);
+  assert.ok(close(lines[0].style.color, [...GREEN, 0.8]));
+  assert.ok(close(lines[0].style.outline.color, [...DARK, 0.8]));
+  assert.equal(lines[0].style.outline.widthPx, 2);
   const result = renderer.diagnostics();
   assert.equal(result.headRebuilds, 1, '120 frames retain head geometry');
   assert.equal(result.entitiesAdded, 0);
@@ -125,7 +125,7 @@ test('the head is revealed to the vehicle and drawn anew only at a crossing', (t
 
   // A frame further along writes only how far it is revealed.
   renderer.setDisplaySample({ ...sample, displayT: 17500 }, marker);
-  assert.equal(record.items.get('line').revealFraction, 0.75);
+  assert.equal(record.items.get('head').revealFraction, 0.75);
   assert.equal(renderer.diagnostics().headRebuilds, 1);
   // The next subdivision, or the end of the leg, hides it.
   renderer.setDisplaySample({ ...sample, fraction: 1 }, marker);
@@ -151,7 +151,7 @@ test('a new mode colour is written into the segments, never rebuilding the body'
   assert.ok(close(line.segmentColors[0], [1, 1, 1, trailAlpha(5000)]));
   assert.equal(renderer.diagnostics().rebuilds, 1);
   assert.equal(renderer.diagnostics().headRebuilds, 1, 'no crossing');
-  const headLine = setOf(draw, ':head').items.get('line');
+  const headLine = setOf(draw, ':head').items.get('head');
   assert.ok(close(headLine.style.color, [1, 1, 1, 0.8]), 'and the head');
 });
 
@@ -199,8 +199,8 @@ test('playback across a crossing redraws the head once and shows the passed segm
     );
   assert.equal(renderer.diagnostics().headRebuilds, 2, 'one per subdivision');
   assert.deepEqual(body.items.get('line:0').segmentShow, [true, false]);
-  assert.deepEqual(head.items.get('line').positions, [point(1), point(2)]);
-  assert.ok(head.items.get('line').revealFraction > 0.99);
+  assert.deepEqual(head.items.get('head').positions, [point(1), point(2)]);
+  assert.ok(head.items.get('head').revealFraction > 0.99);
   // Body writes: one a second, and one at the crossing at most.
   assert.ok(body.writes <= 1 + 20 + 1, `${body.writes} body writes`);
 });

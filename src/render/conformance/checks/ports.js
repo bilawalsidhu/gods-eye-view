@@ -3123,6 +3123,93 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.outlineDraped',
+      'a draped, translucent, revealed solid line draws its outline in the same pass: its centre as bright as a plain line of the colour, its edges dark, nothing past the reveal',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat });
+        const lines = r.draw.lines({ id: 'conf:line-outline-draped' });
+        const green = [0, 1, 0, 0.8];
+        lines.set([
+          {
+            // 24 px with an outline of 8: 4 px of dark each side of 16 px
+            // of green, revealed to its middle.
+            id: 'outlined',
+            positions: [at(-0.004, 0.002), at(0.004, 0.002)],
+            widthPx: 24,
+            mode: 'draped',
+            style: {
+              kind: 'solid',
+              color: green,
+              outline: { color: [0, 0, 0, 0.8], widthPx: 8 },
+            },
+            revealFraction: 0.5,
+          },
+          {
+            id: 'plain',
+            positions: [at(-0.004, -0.002), at(0.004, -0.002)],
+            widthPx: 24,
+            mode: 'draped',
+            style: { kind: 'solid', color: green },
+          },
+        ]);
+        // The middle column across the line at `dLon`, as green values.
+        const column = (dLon, dLat) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon, dLat));
+          const half = 20;
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x) - 2,
+              y: Math.round(s.y) - half,
+              width: 5,
+              height: 2 * half + 1,
+            },
+          });
+          const read = [];
+          for (let row = 0; row < image.height; row++) {
+            const i = (row * image.width + 2) * 4;
+            const [red, g, blue] = image.data.slice(i, i + 3);
+            read.push({ g, greenish: g > red + 30 && g > blue + 30 });
+          }
+          return read;
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          const outlined = column(-0.002, 0.002);
+          const plain = column(-0.002, -0.002);
+          const centre = (col) => col[(col.length - 1) >> 1];
+          const coreG = centre(outlined).g;
+          const plainG = centre(plain).g;
+          ok(
+            centre(outlined).greenish && centre(plain).greenish,
+            `both centres green (${coreG}, ${plainG})`,
+          );
+          ok(
+            Math.abs(coreG - plainG) <= 0.08 * plainG + 4,
+            `the outlined centre as bright as the plain line (${coreG} vs ${plainG})`,
+          );
+          // The rows just inside each edge: dark, 4 px of outline a side.
+          const mid = (outlined.length - 1) >> 1;
+          for (const row of [mid - 10, mid + 10])
+            ok(
+              outlined[row].g < 0.6 * coreG,
+              `dark at its edge, row ${row - mid} (${outlined[row].g} vs ${coreG})`,
+            );
+          const past = column(0.002, 0.002);
+          ok(!past.some((p) => p.greenish), 'nothing drawn past the reveal');
+        } finally {
+          lines.dispose();
+        }
+      },
+    ),
+    check(
       'draw.lines.segments',
       'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
       async (h, r) => {

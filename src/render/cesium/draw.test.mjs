@@ -6484,7 +6484,7 @@ test('a transit trail moves its head, across subdivisions too, and fades its bod
       const lanes = Array.from({ length: head.length }, (_, i) =>
         head.get(i),
       ).filter((part) => part instanceof Cesium.GroundPolylinePrimitive);
-      assert.equal(lanes.length, 2, 'a backing lane and a line lane');
+      assert.equal(lanes.length, 1, 'one line, its dark edge in the same pass');
       const added = scene.added.length;
       // A second and a half of frames within the subdivision.
       for (let t = 12016; t < 13500; t += 16)

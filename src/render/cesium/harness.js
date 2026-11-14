@@ -70,6 +70,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.lines.outline',
   'draw.lines.drape',
   'draw.lines.split',
+  'draw.lines.outlineDraped',
   'draw.lines.segments',
   'draw.lines.segmentStyles',
   'draw.sets.blend',

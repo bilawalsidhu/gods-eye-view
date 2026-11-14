@@ -135,17 +135,32 @@ export function createContactTrailRenderer(viewer) {
     return lines;
   }
 
-  /** The head's lines over `segment`, revealed to `fraction`. */
+  /**
+   * The head over `segment`, revealed to `fraction`: one line the backing's
+   * width, its edge the backing's colour and its centre the line's width,
+   * in one pass. Two lanes stacked would darken the centre where their
+   * translucent passes overlap.
+   */
   function headItems(segment, fraction) {
-    return LANES.map((lane) => ({
-      id: lane.name,
-      positions: segment.positions,
-      widthPx: lane.widthPx,
-      mode: 'draped',
-      clampTo: 'both',
-      style: { kind: 'solid', color: tint(HEAD_ALPHA, lane.dark) },
-      revealFraction: fraction,
-    }));
+    const [backingLane, lineLane] = LANES;
+    return [
+      {
+        id: 'head',
+        positions: segment.positions,
+        widthPx: backingLane.widthPx,
+        mode: 'draped',
+        clampTo: 'both',
+        style: {
+          kind: 'solid',
+          color: tint(HEAD_ALPHA, false),
+          outline: {
+            color: tint(HEAD_ALPHA, true),
+            widthPx: backingLane.widthPx - lineLane.widthPx,
+          },
+        },
+        revealFraction: fraction,
+      },
+    ];
   }
 
   // Written only when it changes: a renderer may redraw for each write.
