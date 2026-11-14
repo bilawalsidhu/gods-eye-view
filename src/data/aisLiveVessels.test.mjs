@@ -1407,40 +1407,31 @@ test('buildSelectedVesselCard: full detail card with MMSI + position time', () =
   ]);
 });
 
-test('vessel host publication preserves the shipped grid winner and separation selector', () => {
+test('vessel details publish only for the selected vessel and clear on deselection', () => {
   const publications = [];
-  const originalProjection = Cesium.SceneTransforms.worldToWindowCoordinates;
-  const makeCandidate = (mmsi, name, x, y, speed = 1) => makeRecord({
-    mmsi,
-    name,
-    speed,
-    position: { x: 1, y: 2, z: 3, screen: { x, y } },
-  });
-  const low = makeCandidate('100', 'VESSEL', 20, 20, 1);
-  const winner = makeCandidate('200', 'NAMED WINNER', 40, 30, 16);
-  const separated = makeCandidate('300', 'SEPARATED', 400, 300, 3);
-  Cesium.SceneTransforms.worldToWindowCoordinates = (_scene, position) => position.screen;
+  const first = makeRecord({ mmsi: '100', name: 'FIRST VESSEL' });
+  const second = makeRecord({ mmsi: '200', name: 'SECOND VESSEL' });
+  const viewer = { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } };
   _setVesselOverlayHostForTest({
     setEntries(sourceId, entries, options) { publications.push({ sourceId, entries, options }); },
-    setVisible() {},
-    clearSource() {},
+    setVisible() {}, clearSource() {},
   });
-  _setVesselStateForTest({
-    viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
-    records: [low, winner, separated],
-  });
+  const publish = (selectedRecord = null) => {
+    _setVesselStateForTest({ viewer, records: [first, second], selectedRecord });
+    _updateVesselCardsForTest([first, second]);
+    return publications.at(-1).entries;
+  };
   try {
-    _updateVesselCardsForTest([low, winner, separated]);
-    assert.equal(publications.length, 1);
-    assert.deepEqual(
-      publications[0].entries.map(({ id }) => id).sort(),
-      ['vessel:200', 'vessel:300'],
-      'one higher-priority winner survives the shared cell and the separated card remains',
-    );
-    assert.equal(publications[0].options.cohortLimit, 112);
-    assert.equal(publications[0].options.collisionCapacity, 112);
+    assert.deepEqual(publish(), [], 'loaded vessels have icons but no ambient details');
+    const selected = publish(first);
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0].id, 'vessel:100');
+    assert.equal(selected[0].title, first.name);
+    assert.equal(selected[0].protected, true);
+    assert.ok(selected[0].details.some((line) => line.includes('MMSI 100')));
+    assert.deepEqual(publish(second).map((entry) => entry.id), ['vessel:200'], 'switching selection replaces the old detail card');
+    assert.deepEqual(publish(), [], 'deselecting removes details instead of restoring ambient cards');
   } finally {
-    Cesium.SceneTransforms.worldToWindowCoordinates = originalProjection;
     _setVesselStateForTest({ enabled: false });
     _setVesselOverlayHostForTest();
   }

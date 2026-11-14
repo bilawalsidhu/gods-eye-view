@@ -3699,5 +3699,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "\"איפוס תצוגה\" טוען מחדש את האפליקציה בלי התצוגה ששוחזרה משורת הכתובת.",
   "Reload": "טען מחדש",
   "Retry": "נסה שוב",
-  "Reset view": "איפוס תצוגה"
+  "Reset view": "איפוס תצוגה",
+  "OBJECT DETAILS": "פרטי האובייקט",
+  "Restore last view": "שחזר את התצוגה האחרונה",
+  "Latitude": "קו רוחב",
+  "Longitude": "קו אורך",
+  "No object selected": "לא נבחר אובייקט"
 }

@@ -1,3 +1,4 @@
+import { selectionMovesCamera } from './selectionCameraPolicy.js';
 import * as Cesium from 'cesium';
 import {
   layerTitle,
@@ -876,7 +877,7 @@ export function createLocalGeoJsonLayer(
                     }
                   }
 
-                  if (targetPos) {
+                  if (targetPos && selectionMovesCamera()) {
                     const carto = Cesium.Cartographic.fromCartesian(targetPos);
 
                     // Disable interactions so Cesium doesn't magically cancel the flight

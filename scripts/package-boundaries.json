@@ -11,7 +11,8 @@
       "src/data/localGeojsonLod.js",
       "src/data/inputOwnership.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["cesium"]
   },
@@ -175,7 +176,9 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/stores/worldTime.js",
       "src/ui/views/panels/WorldTimeline.vue",
-      "src/ui/surfaceKeyboard.js"
+      "src/ui/surfaceKeyboard.js",
+      "src/ui/views/panels/ObjectInspection.vue",
+      "src/ui/stores/objectInspection.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -936,7 +939,8 @@
       "src/ui/vueRuntime.js",
       "src/ui/stores/cctv.js",
       "src/ui/stores/status.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["vue", "pinia", "vue-i18n", "cesium"]
   },
@@ -1349,7 +1353,14 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/ui/objectInspection.js",
+      "src/ui/focusReturn.js",
+      "src/ui/stores/objectInspection.js",
+      "src/data/contextStore.js",
+      "src/data/pickRegistry.js",
+      "src/data/trackingClickGesture.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1583,7 +1594,8 @@
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
       "src/time/julian.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["cesium"]
   },
@@ -1655,7 +1667,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["cesium"]
   },
@@ -1877,7 +1890,8 @@
       "src/data/imagingSensors.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1920,7 +1934,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": ["cesium"]
   },
@@ -3817,7 +3832,11 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/ui/objectInspection.js",
+      "src/ui/focusReturn.js",
+      "src/ui/stores/objectInspection.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": [
       "hls.js",
@@ -4535,7 +4554,8 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/data/selectionCameraPolicy.js"
     ],
     "external": [
       "hls.js",

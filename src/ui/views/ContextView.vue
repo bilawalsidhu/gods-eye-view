@@ -1,4 +1,5 @@
 <script setup>
+import ObjectInspection from './panels/ObjectInspection.vue';
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
@@ -34,6 +35,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
 <template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail" class="ui-scroll" v-class-toggle="{ 'bhote-event-active': !!bhotePanel }">
+    <ObjectInspection />
     <RailPanel id="weather-panel" hidden :title="t('WEATHER')" sideways rail-scroller>
       <template #badge><span id="weather-panel-count" :aria-label="t('Active weather products')">0</span></template>
       <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>

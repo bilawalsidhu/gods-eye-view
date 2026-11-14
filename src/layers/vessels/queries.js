@@ -536,6 +536,27 @@ export function createQueries({
       return true;
     },
 
+    /** All public fields of the live selected vessel for the side inspector. */
+    getInspectionInfo() {
+      const record = state.selectedRecord;
+      if (!record) return null;
+      return {
+        id: record.mmsi,
+        mmsi: record.mmsi,
+        name: record.name,
+        latitude: record.lat,
+        longitude: record.lon,
+        type: record.type,
+        imo: record.imo,
+        destination: record.destination,
+        speedKt: record.speed,
+        headingDeg: record.heading,
+        courseDeg: record.course,
+        positionTimeUtc: record.lastPositionUtc,
+        stale: state.feed.stale || (record.missedRefreshes || 0) > 0,
+        missedRefreshes: record.missedRefreshes || 0,
+      };
+    },
     /**
      * Get info about the currently selected vessel.
      * @returns {{ id: string, mmsi: string, name: string, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}

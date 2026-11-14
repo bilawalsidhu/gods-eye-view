@@ -1,3 +1,4 @@
+import { selectionMovesCamera } from '../data/selectionCameraPolicy.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   registerCctvFocusRequestListener,
@@ -60,6 +61,7 @@ export class LayerBindings {
   }
   observeCamera() {
     this._cctvRequestFocusHandler = (event) =>
+      selectionMovesCamera() &&
       routeCctvFocusRequest(
         event,
         (activate, focus) => this._runExplicitCctvFocus(activate, focus),
@@ -71,6 +73,7 @@ export class LayerBindings {
       this._cctvRequestFocusHandler,
     );
     this._worldRequestFocusHandler = (event) =>
+      selectionMovesCamera() &&
       routeWorldFocusRequest(
         event,
         (detail, fly) => this._runExplicitWorldFocus(detail, fly),

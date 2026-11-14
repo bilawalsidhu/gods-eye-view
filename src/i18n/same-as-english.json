@@ -633,7 +633,9 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "Latitude",
+    "Longitude"
   ],
   "it": [
     "1 min/s",
@@ -1067,7 +1069,9 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "Latitude",
+    "Longitude"
   ],
   "ru": [
     "1900–1945",

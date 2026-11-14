@@ -1,3 +1,4 @@
+import { selectionMovesCamera } from '../../data/selectionCameraPolicy.js';
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
@@ -67,7 +68,10 @@ export function createInteraction({
           const noradId = Number(prim.id);
           if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
             parts.tracking._cancelPendingTrackingRestore();
-            parts.tracking._trackSatellite(noradId, { origin: 'user' });
+            parts.tracking._trackSatellite(noradId, {
+              origin: selectionMovesCamera() ? 'user' : 'inspect',
+              follow: selectionMovesCamera(),
+            });
             return;
           }
         }

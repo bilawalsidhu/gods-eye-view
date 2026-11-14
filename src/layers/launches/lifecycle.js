@@ -1,3 +1,4 @@
+import { selectionMovesCamera } from '../../data/selectionCameraPolicy.js';
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { worldClock } from '../../time/worldClock.js';
@@ -202,9 +203,10 @@ export function createLifecycle({
         const launchId = parts.selection.entityLaunchId(entity);
         if (!launchId) return;
         parts.selection.setSelectedMission(launchId);
-        parts.selection.focusMission(
-          layerState._launches.find((launch) => launch.id === launchId),
-        );
+        if (selectionMovesCamera())
+          parts.selection.focusMission(
+            layerState._launches.find((launch) => launch.id === launchId),
+          );
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
       layerState._moveHandler = new Cesium.ScreenSpaceEventHandler(
         viewer.scene.canvas,

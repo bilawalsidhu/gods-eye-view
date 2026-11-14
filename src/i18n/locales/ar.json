@@ -3960,5 +3960,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
   "Reload": "إعادة التحميل",
   "Retry": "إعادة المحاولة",
-  "Reset view": "إعادة ضبط العرض"
+  "Reset view": "إعادة ضبط العرض",
+  "OBJECT DETAILS": "تفاصيل العنصر",
+  "Restore last view": "استعادة العرض السابق",
+  "Latitude": "خط العرض",
+  "Longitude": "خط الطول",
+  "No object selected": "لم يتم تحديد عنصر"
 }

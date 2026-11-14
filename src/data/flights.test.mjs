@@ -806,6 +806,8 @@ test('real civil track path creates no native label and publishes every cached h
     );
     assert.equal(entity.gevSelectionOrigin, 'user');
     assert.equal(flightsLayer.refocusTrackedById('different-flight'), false);
+    // An inspected selection has an entity but no follow-camera owner.
+    viewer.trackedEntity = undefined;
     assert.equal(
       flightsLayer.refocusTrackedById(icao24, { origin: 'voice' }),
       true,

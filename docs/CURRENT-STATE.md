@@ -4183,10 +4183,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   responses from disabled, destroyed, or replaced layer requests cannot
 >   mutate or finalize the current lifecycle. Layer stats expose transport
 >   status, message time, and raw/accepted row counts for diagnosis.
-> - **Vessel/fire camera transfer:** clicking an actionable AIS vessel sprite
->   or painted card selects that MMSI and requests one close oblique camera
->   transfer; re-clicking the selected vessel refocuses it. FIRMS detection
->   sprites and actionable detection cards do the same using a refetch-stable
+> - **Vessel/fire inspection:** clicking an actionable AIS vessel sprite
+>   or painted card selects that MMSI while preserving the camera. Double-click
+>   or explicit Focus requests the close oblique camera transfer. FIRMS detection
+>   sprites and actionable detection cards select in place using a refetch-stable
 >   identity that includes position, acquisition time, and source satellite.
 >   Aggregate fire cells remain non-actionable. Painted actionable cards are
 >   also mirrored into a named, focusable assistive-control list that exposes
@@ -4553,8 +4553,9 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   misses retain the existing limiter, configured-upstream, stale, and sanitization
 >   behavior. An unconfigured transport serves dated stale data or a non-retryable
 >   capability error.
-> - **CCTV world-click focus:** clicking an in-world CCTV icon or ambient card
->   activates it and routes the camera flight through the panel FOCUS policy.
+> - **CCTV world-click inspection:** clicking an in-world CCTV icon or ambient card
+>   activates its feed without moving the camera. Double-click and explicit Focus
+>   route the camera flight through the panel FOCUS policy.
 >   Aircraft/satellite tracking releases outside cockpit; cockpit retains the
 >   view, keeps the CCTV activation, and surfaces the existing refusal toast.
 >   Auto-hop and programmatic camera activation remain activation-only. CCTV
@@ -4952,7 +4953,7 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   must also be the exact stored CCTV coverage/projection object; copying the
 >   `cctvCameraId` property cannot impersonate a camera. Card hits pass through the
 >   6 px / 400 ms gesture guard
->   before activation and the existing click-to-fly event. CCTV cards are not
+>   before activation; camera movement requires double-click or explicit Focus. CCTV cards are not
 >   sprite-focus-dimmed. Disable/destroy clear and hide the host source, stop
 >   pacing, detach in-flight image handlers, and empty source caches.
 > - **Cockpit left-panel chrome:** opening any left-stack panel fades the
@@ -6674,7 +6675,7 @@ silently demoting every later lookup for the session.
 - Aircraft cohort membership uses every locally loaded, selectable contact inside the 250 km window, including a plane hidden only by horizon culling or because its 3D model owns the visual. Counts and navigation therefore do not change with the current camera angle or billboard/model handoff.
 - Nearby examples in the context panel are focus controls: they use their owning layer's existing selection/tracking path, then frame that contact. Static-installation distances use ellipsoidal surface distance so the count matches the ground-projected context disk.
 - Context selection transfers camera ownership by subject type: selecting a civilian or military flight keeps that layer's moving follow camera, while selecting an AIS vessel or mapped installation first releases any prior aircraft tracker and performs only the source layer's one-time framing. The camera therefore remains user-controlled after non-aircraft selection instead of continuing to move with the previously selected plane.
-- Selected AIS vessels use their layer-owned full-detail presentation model in the shared world-overlay host; mapped installations promote their own entry to a selected card. Both remain crisp above post-processing without duplicate selected labels; non-selected AIS cards retain their source-owned grid/visibility selection and are host-batched with other world cards.
+- Selected AIS vessels use their layer-owned full-detail presentation model in the shared world-overlay host; mapped installations promote their own entry to a selected card. Both remain crisp above post-processing without duplicate selected labels; unselected AIS vessels retain map icons without full-detail cards.
 - Space Mission ascent replay uses the compact rocket/thrust overlay only through orbit insertion. Once the replay enters its orbit phase, that vehicle glyph is replaced by a fixed-size cyan dot following the same orbit path and callout.
 - While a subject is selected, an inner keyhole compass rotates against camera heading and up to three cyan shafted bearing arrows lock to its single faint tick-marked rim, with their labels inset just inside the circle. Labels explicitly separate the geographic bearing (`BRG`) from the contact's reported course (`CRS`) so the pointer direction is not confused with aircraft heading. They point toward the nearest observed/mapped examples; each cohort displays up to ten examples while retaining the complete locally loaded in-range cohort for navigation, with three visible at a time and a ten-second page rotation shared by the panel and arrows. This distinct neutral-context color avoids implying that all context indicators are military-flight symbols. `PREVIOUS`, `FOCUS`, and `NEXT` controls navigate selection history or the next nearby cohort example through the existing tracker. NEXT uses a cycle-scoped visited set and starts a deterministic new walk after exhausting the current candidates instead of re-admitting the nearest visited contact.
 - Awareness `BRG` and `CRS` labels wrap after rounding to whole degrees, so a direction of 359.5° displays as `000°` rather than `360°`.
@@ -8537,3 +8538,15 @@ browser-only media links, refresh cadence, and location provenance where
 available. When MLIT serves its recognized adjustment image, `/api/cctv/frame`
 returns a God’s Eye maintenance card and `/api/cctv/health` reports the camera
 as degraded with the provider-adjustment reason.
+
+## Object inspection and focus return
+
+Single-clicking selects an object and updates live OBJECT DETAILS without moving
+the camera; CCTV retains its existing feed panel. Double-click or the panel Focus
+button explicitly focuses the object. Restore last view returns to the exact
+world position, direction and up vector captured before the most recent accepted
+focus. The return snapshot is transient and consumed on restore. Unselected AIS
+vessels keep icons without ambient full-detail cards. The panel receives pointer
+events so Focus and Restore cannot click through to the globe. See
+[object inspection](OBJECT-INSPECTION.md); browser gates:
+`qa-object-inspection.mjs` (normal and Cyber) and `qa-vessel-selection.mjs`.

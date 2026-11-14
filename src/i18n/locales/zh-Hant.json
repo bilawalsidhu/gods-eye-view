@@ -3525,5 +3525,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "「重置視圖」會重新加載應用，不使用從地址欄恢復的視圖。",
   "Reload": "重新加載",
   "Retry": "重試",
-  "Reset view": "重置視圖"
+  "Reset view": "重置視圖",
+  "OBJECT DETAILS": "物件詳細資料",
+  "Restore last view": "還原上一個檢視",
+  "Latitude": "緯度",
+  "Longitude": "經度",
+  "No object selected": "未選取物件"
 }

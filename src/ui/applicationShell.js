@@ -1,3 +1,6 @@
+import { createObjectInspection } from './objectInspection.js';
+import { createFocusReturn } from './focusReturn.js';
+import { useObjectInspectionStore } from './stores/objectInspection.js';
 import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
@@ -631,6 +634,7 @@ export class StyleManager extends ShellFacade {
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initMobileShell();
+    this._initObjectInspection();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -1736,6 +1740,93 @@ export class StyleManager extends ShellFacade {
       showToast: (message) => this._showToast(message),
     });
     this._cameraOrientationControls = controls;
+  }
+
+  /** Live selected-object details, double-click focus and an exact camera return. */
+  _initObjectInspection() {
+    const store = useObjectInspectionStore(applicationPinia());
+    store.canReturn = false;
+    const camera = this.viewer.camera;
+    const history = createFocusReturn({
+      capture: () => ({
+        position: Cesium.Cartesian3.clone(camera.positionWC),
+        direction: Cesium.Cartesian3.clone(camera.directionWC),
+        up: Cesium.Cartesian3.clone(camera.upWC),
+      }),
+      restore: (snapshot) => {
+        this.beginLocationNavigation();
+        camera.cancelFlight();
+        camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        camera.setView({
+          destination: snapshot.position,
+          orientation: { direction: snapshot.direction, up: snapshot.up },
+        });
+        this.viewer.scene.requestRender();
+      },
+      publish: (canReturn) => {
+        store.canReturn = canReturn;
+      },
+    });
+    const navigate = (model) => {
+      const layer = this._dataManager?.layers.get(model.layerId)?.module;
+      if (
+        !layer &&
+        model.layerId !== 'map-object' &&
+        model.layerId !== 'earthquakes'
+      )
+        return false;
+      if (
+        !layer?.trackById &&
+        model.layerId !== 'cctv' &&
+        (!Number.isFinite(model.latitude) || !Number.isFinite(model.longitude))
+      )
+        return false;
+      return this.runImmediateNavigation('target', () => {
+        if (layer?.trackById)
+          return layer.trackById(model.id, { origin: 'user' });
+        if (model.layerId === 'cctv') return layer.focusCamera(model.id, 1.4);
+        layer?.selectById?.(model.id);
+        camera.flyToBoundingSphere(
+          new Cesium.BoundingSphere(
+            Cesium.Cartesian3.fromDegrees(
+              model.longitude,
+              model.latitude,
+              model.altitudeM || 0,
+            ),
+            100,
+          ),
+          {
+            offset: new Cesium.HeadingPitchRange(
+              camera.heading,
+              Cesium.Math.toRadians(-35),
+              2500,
+            ),
+            duration: 1.4,
+          },
+        );
+        return true;
+      });
+    };
+    const owner = createObjectInspection({
+      viewer: this.viewer,
+      getManager: () => this._dataManager,
+      publish: (model) => store.publish(model),
+      reveal: () =>
+        this.setPanelCollapsed('object-inspection-panel', false, {
+          explicit: true,
+          persist: false,
+          syncShare: false,
+        }),
+      focus: (model) => history.focus(() => navigate(model)),
+      restore: () => history.back(),
+    });
+    this.objectInspection = owner;
+    const token = store.connect({ focus: owner.focus, restore: owner.restore });
+    this._lifetime.own(() => {
+      owner.destroy();
+      store.detach(token);
+      store.canReturn = false;
+    });
   }
 
   // ── Share Button ─────────────────────────────
