@@ -37,18 +37,23 @@
 }
 
 /* Right: open panels move right by the rail's width and sit over it. */
-body.panels-edge-right:not(.context-docked) #right-context-rail > :not(.gev-panel-rail) {
+body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail
+  > :not(.gev-panel-rail) {
   z-index: 2;
   transform: translateX(var(--panel-rail-clearance, 48px));
 }
 
 /* Left: the same, moving left. */
-body.panels-edge-left #left-panel-stack > :not(.gev-panel-rail) {
+body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail) {
   z-index: 2;
   transform: translateX(calc(-1 * var(--panel-rail-clearance, 48px)));
 }
 
-body.mobile-shell .ui-panel-edge {
+body.mobile-shell .ui-panel-edge,
+body.cockpit-mode .ui-panel-edge {
   display: none;
 }
 
@@ -58,25 +63,38 @@ body.mobile-shell .ui-panel-edge {
   --edge-rail-row: 50px;
 }
 
-body.panels-edge-left .gev-panel-rail--left:has(.ui-rail--collapsible:not(.ui-rail--expanded)),
-body.panels-edge-right:not(.context-docked) .gev-panel-rail--right:has(.ui-rail--collapsible:not(.ui-rail--expanded)) {
+body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  .gev-panel-rail--left:has(.ui-rail--collapsible:not(.ui-rail--expanded)),
+body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  .gev-panel-rail--right:has(.ui-rail--collapsible:not(.ui-rail--expanded)) {
   top: 0 !important;
   z-index: 3;
 }
 
-body.panels-edge-left .gev-panel-rail--left .ui-rail--collapsible:not(.ui-rail--expanded),
-body.panels-edge-right:not(.context-docked) .gev-panel-rail--right .ui-rail--collapsible:not(.ui-rail--expanded) {
+body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  .gev-panel-rail--left
+  .ui-rail--collapsible:not(.ui-rail--expanded),
+body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  .gev-panel-rail--right
+  .ui-rail--collapsible:not(.ui-rail--expanded) {
   flex-direction: row;
   width: max-content;
   gap: 4px;
 }
 
-body.panels-edge-left #left-panel-stack > :not(.gev-panel-rail):not(.collapsed) {
-  transform: translate(calc(-1 * var(--panel-rail-clearance, 48px)), var(--edge-rail-row));
+body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translate(
+    calc(-1 * var(--panel-rail-clearance, 48px)),
+    var(--edge-rail-row)
+  );
   max-height: calc(100% - var(--edge-rail-row)) !important;
 }
 
-body.panels-edge-right:not(.context-docked) #right-context-rail > :not(.gev-panel-rail) {
+body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail
+  > :not(.gev-panel-rail):not(.collapsed) {
   transform: translate(var(--panel-rail-clearance, 48px), var(--edge-rail-row));
   max-height: calc(100% - var(--edge-rail-row)) !important;
 }

@@ -26,7 +26,9 @@ apply();
 
 /** Which side a panel element sits on, from the column it is in. */
 export function panelSide(element) {
-  return element?.closest?.('#right-context-rail, #cockpit-utility-controls') ? 'right' : 'left';
+  return element?.closest?.('#right-context-rail, #cockpit-utility-controls')
+    ? 'right'
+    : 'left';
 }
 
 export function togglePanelEdge(side) {

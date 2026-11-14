@@ -15,10 +15,19 @@ function toggle() {
 function sync() {
   side.value = panelSide(button.value);
 }
-onMounted(sync);
-const icon = computed(() => (side.value === 'right' ? 'align_horizontal_right' : 'align_horizontal_left'));
+// The layout moves some panels to the right column after they mount, so the
+// side is read again once that has happened.
+onMounted(() => {
+  sync();
+  globalThis.requestAnimationFrame?.(sync);
+});
+const icon = computed(() =>
+  side.value === 'right' ? 'align_horizontal_right' : 'align_horizontal_left',
+);
 const label = computed(() =>
-  on.value ? t('Move panels back beside the rail') : t('Move panels over the rail, to the edge'),
+  on.value
+    ? t('Move panels back beside the rail')
+    : t('Move panels over the rail, to the edge'),
 );
 </script>
 
@@ -26,7 +35,7 @@ const label = computed(() =>
   <button
     ref="button"
     type="button"
-    class="ui-panel-edge"
+    class="ui-panel-edge panel-edge-btn"
     :aria-pressed="String(on)"
     :aria-label="label"
     :title="label"
