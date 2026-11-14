@@ -644,11 +644,25 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
     assert.ok(buried, 'the cold-floor pass still renders the record');
     assert.ok(Math.abs(heightOf(buried)) < 1, 'a cold floor anchors at the ellipsoid, as before');
 
-    // The warm chain resolves out of band; wait for the floor to land.
-    for (let attempt = 0; attempt < 50 && cachedGroundFloor(lat, lon) == null; attempt += 1) {
+    // The warm chain joins the same in-flight terrain request. Wait long enough
+    // for that shared late response to land rather than issuing a duplicate.
+    for (
+      let attempt = 0;
+      attempt < 200 && cachedGroundFloor(lat, lon) == null;
+      attempt += 1
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal(cachedGroundFloor(lat, lon), 2400, 'the late floor landed in the shared cache');
+    assert.equal(
+      terrainCalls,
+      1,
+      'concurrent floor warmers share one terrain request',
+    );
+    assert.equal(
+      cachedGroundFloor(lat, lon),
+      2400,
+      'the late floor landed in the shared cache',
+    );
 
     const lifted = dataSources[0].entities.values[0];
     assert.ok(

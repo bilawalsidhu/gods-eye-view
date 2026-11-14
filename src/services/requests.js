@@ -1,5 +1,6 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import { createSingleflight } from './singleflight.js';
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -18,6 +19,7 @@ export function createApplicationRequestServices({
   features,
   boundaryProbe = { timeoutMs: 3000, retryMs: 30_000 },
 } = {}) {
+  const terrainSingleflight = createSingleflight();
   const urls = {
     boundaries: '/api/overpass',
     terrain: '/api/terrain/heights',
@@ -151,25 +153,31 @@ export function createApplicationRequestServices({
         const query = points
           .map(({ lat, lon }) => `${lon.toFixed(5)},${lat.toFixed(5)}`)
           .join(';');
-        const response = await request(
-          `${urls.terrain}?points=${encodeURIComponent(query)}`,
+        return terrainSingleflight.run(
+          query,
+          async ({ signal: sharedSignal }) => {
+            const response = await request(
+              `${urls.terrain}?points=${encodeURIComponent(query)}`,
+              { signal: sharedSignal },
+            );
+            // A failed request still carries the real heights the server had, so
+            // the caller can keep them; null marks a point without one.
+            const partial = response.data?.partial;
+            if (
+              !response.ok &&
+              Array.isArray(partial) &&
+              partial.length === points.length
+            ) {
+              const error = new Error(
+                `Terrain heights unavailable (${response.status})`,
+              );
+              error.partial = partial;
+              throw error;
+            }
+            return requireOk(response, 'Terrain heights')?.results;
+          },
           { signal },
         );
-        // A failed request still carries the real heights the server had, so
-        // the caller can keep them; null marks a point without one.
-        const partial = response.data?.partial;
-        if (
-          !response.ok &&
-          Array.isArray(partial) &&
-          partial.length === points.length
-        ) {
-          const error = new Error(
-            `Terrain heights unavailable (${response.status})`,
-          );
-          error.partial = partial;
-          throw error;
-        }
-        return requireOk(response, 'Terrain heights')?.results;
       },
     },
     regional: {
