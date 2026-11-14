@@ -814,6 +814,8 @@
   "src/data/transitProxy.test.mjs",
   "src/data/gtfsRealtime.js",
   "src/data/gtfsRealtime.test.mjs",
+  "src/data/ngsiVehicles.js",
+  "src/data/ngsiVehicles.test.mjs",
   "src/data/transit.js",
   "src/data/transit.test.mjs",
   "src/layers/transit/controls.js",

@@ -572,13 +572,18 @@ function transitFeed(fields) {
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
  *   speedUnit?: 'km/h', refreshMs?: number, sourceUrl?: string,
- *   creditDated?: boolean,
+ *   creditDated?: boolean, format?: 'gtfs-rt' | 'ngsi-v2',
  * }>>}
  * `speedUnit` marks a feed that publishes km/h where the spec requires m/s;
  * the proxy converts it before the snapshot leaves the server. `refreshMs`
  * stretches the proxy's cache for an upstream that rate-limits below one
  * request per 15 s TTL. `sourceUrl` and `creditDated` add a link and a date
  * to the credit for licences that ask for them (`transitFeedCredit`).
+ *
+ * `format` names the wire format. Absent means GTFS-Realtime protobuf;
+ * `'ngsi-v2'` is a FIWARE NGSI v2 broker answering with Smart Data Models
+ * `Vehicle` entities (see ngsiVehicles.js). Every format decodes into the same
+ * vehicle records, under the same proxy rules.
  */
 export const TRANSIT_FEED_REGISTRY = Object.freeze([
   Object.freeze({
@@ -1583,6 +1588,27 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: {
       quote: 'licence: lov2',
       note: 'Dataset record’s licence field quoted.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'stcp-porto',
+    name: 'STCP',
+    operator: 'Sociedade de Transportes Colectivos do Porto (STCP)',
+    region: 'Porto, Portugal',
+    // STCP runs Porto and its neighbours (Gaia, Matosinhos, Maia, Gondomar,
+    // Valongo); the outer terminals sit about 20 km from this point.
+    center: { lat: 41.17, lon: -8.61 },
+    loadRadiusKm: 30,
+    url: 'https://broker.fiware.urbanplatform.portodigital.pt/v2/entities?q=vehicleType==bus&limit=1000',
+    format: 'ngsi-v2',
+    license: 'CC0 1.0',
+    licenseUrl: 'https://dados.gov.pt/datasets/urban-platform-bus-location',
+    attribution: 'STCP — Porto Digital Urban Platform, via dados.gov.pt (CC0)',
+    terms: {
+      quote:
+        'The person who associated a work with this deed has dedicated the work to the public domain by waiving all of his or her rights to the work worldwide under copyright law',
+      note: 'STCP publishes the dataset on dados.gov.pt, Portugal’s open data portal, under the licence id `cc-zero` (Creative Commons CCZero); the quote is the CC0 1.0 deed (creativecommons.org/publicdomain/zero/1.0/). CC0 asks for no credit; STCP and the Porto Digital broker are credited as a courtesy. The feed is a FIWARE NGSI v2 broker serving Smart Data Models `Vehicle` entities as JSON, not GTFS-Realtime, hence `format`. Speeds are m/s as the model specifies: in two snapshots 60 s apart on 2026-11-07, reported speeds of 0–15 sat alongside 0–10 m/s of straight-line movement, which rules out km/h. Fixes refresh about once a minute and the broker sends no ETag or Last-Modified, so every poll is a full ~70 KB body. The query asks for up to 1000 entities, well above the whole STCP fleet. Route numbers come from the `stcp:route:<line>` annotation and are already the number on the bus.',
     },
     defaultMode: 'bus',
   }),
