@@ -226,6 +226,7 @@ export class StyleManager extends ShellFacade {
         getDetectionTuning: services.getDetectionTuning,
         getKeyholeFadeTuning: services.getKeyholeFadeTuning,
         getScopeMaskFeather: services.getScopeMaskFeather,
+        getScopeMaskOpacity: services.getScopeMaskOpacity,
         getScopeTerminusOverride: services.getScopeTerminusOverride,
         governorRequestRender: services.governorRequestRender,
         holdContinuousRender: services.holdContinuousRender,

@@ -225,6 +225,7 @@ export class VisualSettings {
     // What the Scope and Celestial controls show; null until first set.
     this._scopeEnabledShown = null;
     this._scopeFeatherShown = null;
+    this._scopeOpacityShown = null;
     this._celestialShown = null;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
@@ -895,6 +896,7 @@ export class VisualSettings {
       getDetectionTuning,
       isScopeMaskEnabled,
       getScopeMaskFeather,
+      getScopeMaskOpacity,
       getScopeTerminusOverride,
     } = this.services;
     const detection = this._shareableDetectionState();
@@ -915,7 +917,7 @@ export class VisualSettings {
         celestialRingEnabled: this.celestialRingEnabled,
         scopeEnabled: isScopeMaskEnabled(),
         scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
-        scopeOpacityPct: this._scopeOpacityShown ?? 100,
+        scopeOpacityPct: Math.round((getScopeMaskOpacity?.() ?? 1) * 100),
         // null when adaptive — the share layer omits `sce` entirely in that case.
         scopeTerminusPct:
           getScopeTerminusOverride() == null
