@@ -36,6 +36,11 @@ test('aids to navigation are known by their type, else their MMSI', () => {
     'Emergency wreck marking buoy',
   ])
     assert.equal(isAidToNavigation({ type, mmsi: '' }), true, type);
+  // A virtual aid is an aid whatever its type or MMSI.
+  assert.equal(
+    isAidToNavigation({ type: '', mmsi: '', virtual: true }),
+    true,
+  );
   // AIS aid-to-navigation stations are numbered 99MIDxxxx.
   assert.equal(isAidToNavigation({ type: '', mmsi: '993672001' }), true);
   assert.equal(isAidToNavigation({ type: '0', mmsi: ' 992351234 ' }), true);

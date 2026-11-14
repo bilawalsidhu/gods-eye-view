@@ -140,11 +140,13 @@ function typeNamesAid(text) {
  * Whether a vessel record is an aid to navigation (a buoy, beacon, mark,
  * RACON or light) rather than a vessel: its type is one of the kinds an aid
  * report names or uses a word for one, or its MMSI is an aid-to-navigation
- * station's. A numeric AIS ship type never names one.
- * @param {{type?: string|number|null, mmsi?: string|number|null}} vessel
+ * station's, or it is a virtual aid. A numeric AIS ship type never names one.
+ * @param {{type?: string|number|null, mmsi?: string|number|null,
+ *   virtual?: boolean}} vessel
  * @returns {boolean}
  */
-export function isAidToNavigation({ type, mmsi } = {}) {
+export function isAidToNavigation({ type, mmsi, virtual } = {}) {
+  if (virtual === true) return true;
   const text = typeof type === 'string' ? type.trim() : String(type ?? '');
   if (text && typeNamesAid(text)) return true;
   if (mmsi === null || mmsi === undefined || mmsi === '') return false;

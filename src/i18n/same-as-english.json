@@ -411,7 +411,8 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "VIRTUAL"
   ],
   "fr": [
     "1 min/s",
@@ -1067,7 +1068,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "VIRTUAL"
   ],
   "ru": [
     "1900–1945",

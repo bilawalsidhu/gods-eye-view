@@ -417,6 +417,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "SCHIFF",
   "AID TO NAVIGATION": "SEEZEICHEN",
+  "VIRTUAL": "VIRTUELL",
   "POS: LIVE": "POS: LIVE",
   "POS: {time}Z": "POS: {time}Z",
   "awaiting first AIS position…": "warten auf erste AIS-Position…",

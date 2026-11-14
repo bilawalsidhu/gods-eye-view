@@ -143,6 +143,9 @@ export function ingestAisStreamEnvelope(envelope) {
     // Use the AIS message's own report time, not server ingest wall-clock —
     // trail spacing and dead reckoning depend on true fix epochs.
     last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
+    // A virtual aid is broadcast where nothing physical stands. Only such a
+    // row carries the field, so ship rows stay their size.
+    ...(aidReport && message.VirtualAtoN === true && { virtual: true }),
     _updatedAt: Date.now(),
   });
 

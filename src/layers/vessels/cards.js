@@ -24,7 +24,10 @@ export function createCards({
       text: [
         t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
         aid
-          ? trimHudValue(record.type || t('AID TO NAVIGATION'), 24)
+          ? aidKind(
+              trimHudValue(record.type || t('AID TO NAVIGATION'), 24),
+              record,
+            )
           : t('{type}  SPD: {speed}  HDG: {heading}', {
               type: trimHudValue(record.type || t('VESSEL'), 24),
               speed: formatSpeed(record.speed),
@@ -60,6 +63,7 @@ export function createCards({
     const aid = isAidToNavigation(record);
     const type = vesselTypeShort(record);
     if (type) parts.push(type);
+    if (record.virtual === true) parts.push(t('VIRTUAL'));
     if (!aid && record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
@@ -95,7 +99,7 @@ export function createCards({
     const direction = record.heading ?? record.course;
     const details = [
       aid
-        ? vesselTypeShort(record) || t('AID TO NAVIGATION')
+        ? aidKind(vesselTypeShort(record) || t('AID TO NAVIGATION'), record)
         : [
             vesselTypeShort(record) || t('VESSEL'),
             formatSpeed(record.speed),
@@ -123,6 +127,12 @@ export function createCards({
       selected: true,
       priority: 100000,
     };
+  }
+
+  /** An aid's kind, marked virtual when nothing physical stands there. */
+
+  function aidKind(kind, record) {
+    return record.virtual === true ? `${kind} · ${t('VIRTUAL')}` : kind;
   }
 
   /** A card's accent: an aid's disc colour, else its ship type's. */

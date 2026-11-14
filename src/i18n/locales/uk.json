@@ -1310,6 +1310,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  ШВИД: {speed}  КУРС: {heading}",
   "VESSEL": "СУДНО",
   "AID TO NAVIGATION": "ЗАСІБ НАВІГАЦІЇ",
+  "VIRTUAL": "ВІРТУАЛЬНИЙ",
   "{speed}KT": "{speed} ВУЗ",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "ПОЗ.: ОНЛАЙН",

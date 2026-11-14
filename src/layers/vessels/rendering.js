@@ -274,8 +274,13 @@ export function createRendering({
     );
   }
 
-  /** The model item for `record`, its spec rebuilt only when its type or size changes. */
+  /**
+   * The model item for `record`, its spec rebuilt only when its type or size
+   * changes; null for a virtual aid to navigation, which keeps its disc: no
+   * buoy stands there (vesselModelSpec).
+   */
   function modelItem(record, set) {
+    if (record.virtual === true) return null;
     let item = modelItems.get(record.id);
     if (!item || item.record !== record)
       item = { record, pickId: record, tint: null, modelOwnsVisual: false };
@@ -309,7 +314,8 @@ export function createRendering({
         limitSq
       )
         continue;
-      into.set(record.id, modelItem(record, set));
+      const item = modelItem(record, set);
+      if (item) into.set(record.id, item);
     }
   }
 
@@ -345,8 +351,10 @@ export function createRendering({
       gatherModelItems(set, next);
     } else {
       for (const [id, item] of modelItems)
-        if (state.records.byId.get(id) === item.record)
-          next.set(id, modelItem(item.record, set));
+        if (state.records.byId.get(id) === item.record) {
+          const kept = modelItem(item.record, set);
+          if (kept) next.set(id, kept);
+        }
     }
     for (const [id, item] of modelItems)
       if (next.get(id) !== item) handBackVisual(item.record, occluder);

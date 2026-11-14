@@ -388,3 +388,25 @@ test('a capped row request keeps every vessel ahead of aids to navigation', () =
     aisStreamRows(vesselCount).every((row) => !row.mmsi.startsWith('99')),
   );
 });
+
+test('a virtual aid to navigation is marked virtual; a real one carries no flag', () => {
+  const aidReport = (mmsi, VirtualAtoN) => ({
+    MessageType: 'AidsToNavigationReport',
+    Message: {
+      AidsToNavigationReport: { UserID: Number(mmsi), Type: 28, VirtualAtoN },
+    },
+    MetaData: {
+      MMSI: mmsi,
+      latitude: 37.79,
+      longitude: -122.52,
+      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+    },
+  });
+  ingestAisStreamEnvelope(aidReport('993672004', true));
+  ingestAisStreamEnvelope(aidReport('993672005', false));
+  assert.equal(rowFor('993672004').virtual, true);
+  assert.equal('virtual' in rowFor('993672005'), false);
+  // A later real report of the same aid drops the flag.
+  ingestAisStreamEnvelope(aidReport('993672004', false));
+  assert.equal('virtual' in rowFor('993672004'), false);
+});

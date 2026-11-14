@@ -1254,6 +1254,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "船舶",
   "AID TO NAVIGATION": "航路標識",
+  "VIRTUAL": "仮想",
   "{speed}KT": "{speed} kt",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS: ライブ",

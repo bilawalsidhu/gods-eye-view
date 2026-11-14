@@ -1292,6 +1292,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD : {speed}  HDG : {heading}",
   "VESSEL": "NAVIRE",
   "AID TO NAVIGATION": "AIDE À LA NAVIGATION",
+  "VIRTUAL": "VIRTUEL",
   "{speed}KT": "{speed} ND",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS : DIRECT",

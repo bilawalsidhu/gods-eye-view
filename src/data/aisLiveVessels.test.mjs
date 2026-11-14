@@ -1916,7 +1916,23 @@ test('the HUD of a selected aid to navigation shows no speed or heading', () => 
     assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
     assert.match(harness.hud.readout.text, /\nPort hand Mark\n/);
     assert.doesNotMatch(harness.hud.readout.text, /SPD|HDG|KT/);
+    harness.record.virtual = true;
+    aisLiveVesselsLayer.selectById(harness.record.mmsi);
+    assert.match(harness.hud.readout.text, /\nPort hand Mark · VIRTUAL\n/);
   } finally {
     harness.cleanup();
   }
+});
+
+test('a virtual aid to navigation card says it is virtual', () => {
+  const aid = makeRecord({
+    mmsi: '993672001',
+    type: 'Isolated danger',
+    virtual: true,
+  });
+  assert.deepEqual(buildVesselCard(aid).details, ['ISOLATED DANGER · VIRTUAL']);
+  assert.equal(
+    buildSelectedVesselCard(aid).details[0],
+    'ISOLATED DANGER · VIRTUAL',
+  );
 });

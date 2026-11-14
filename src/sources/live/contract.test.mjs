@@ -221,6 +221,18 @@ test('vessel identity, opaque reference and heading/course remain distinct, unkn
   assert.equal(row.altitudeDatum, 'sea-surface');
   assert.equal(row.observedAtMs, now);
   assert.equal('extra' in row, false);
+  // Only a source's own true marks a virtual aid to navigation.
+  assert.equal(row.virtual, false);
+  const base = { mmsi: '993672001', lat: 30, lon: -97 };
+  assert.equal(
+    normalizeVesselObservation({ ...base, virtual: true }).virtual,
+    true,
+  );
+  for (const virtual of ['true', 1, false, null])
+    assert.equal(
+      normalizeVesselObservation({ ...base, virtual }).virtual,
+      false,
+    );
   assert.equal(
     normalizeVesselObservation({ mmsi: 'x', lat: null, lon: null }),
     null,

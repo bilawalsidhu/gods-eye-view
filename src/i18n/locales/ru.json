@@ -395,6 +395,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  СКОР: {speed}  КУРС: {heading}",
   "VESSEL": "СУДНО",
   "AID TO NAVIGATION": "СРЕДСТВО НАВИГАЦИИ",
+  "VIRTUAL": "ВИРТУАЛЬНЫЙ",
   "AIS: --": "AIS: --",
   "awaiting first AIS position…": "ожидание первой позиции AIS…",
   "awaiting usable AIS positions…": "ожидание пригодных позиций AIS…",

@@ -423,6 +423,15 @@ test('aids to navigation are the buoy of the mark their type names', () => {
   assert.equal(unnamed.model, DEFAULT_AID_MODEL);
   assert.equal(unnamed.fixed, true);
   assert.equal(aidToNavigationModel('Fixed structure off shore'), undefined);
+  // A virtual aid is broadcast where nothing stands: it keeps its disc.
+  assert.equal(
+    vesselModelSpec(set, {
+      type: 'Cardinal Mark N',
+      mmsi: '993672001',
+      virtual: true,
+    }),
+    null,
+  );
   // Vessels, including those that work on buoys, keep their hulls.
   for (const vessel of [
     { type: 'Buoy Tender', mmsi: '366999001', length: 60 },

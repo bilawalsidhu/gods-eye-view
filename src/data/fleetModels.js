@@ -443,13 +443,20 @@ export function aircraftModelSpec(
  * ({@link isAidToNavigation}: its type names a buoy, beacon, mark, RACON or
  * light, or its MMSI is an aid's) is the buoy of its mark
  * ({@link aidToNavigationModel}), else {@link DEFAULT_AID_MODEL}, drawn as
- * built and flagged `fixed`: it has no heading to turn to.
+ * built and flagged `fixed`: it has no heading to turn to. A virtual aid
+ * (`virtual`) is broadcast where nothing physical stands, so it has no model.
  * @param {{catalog: object, types: object}} set
  * @param {{type?: string|number|null, mmsi?: string|number|null,
- *   length?: number|null, beam?: number|null, name?: string|null}} vessel
- * @returns {object} {@link fleetModelSpec}, with `fixed` for an aid
+ *   virtual?: boolean, length?: number|null, beam?: number|null,
+ *   name?: string|null}} vessel
+ * @returns {object|null} {@link fleetModelSpec}, with `fixed` for an aid;
+ *   null for a virtual aid
  */
-export function vesselModelSpec(set, { type, mmsi, length, beam, name } = {}) {
+export function vesselModelSpec(
+  set,
+  { type, mmsi, virtual, length, beam, name } = {},
+) {
+  if (virtual === true) return null;
   if (isAidToNavigation({ type, mmsi })) {
     const model = aidToNavigationModel(type);
     const known = model && set.catalog[model] ? model : DEFAULT_AID_MODEL;

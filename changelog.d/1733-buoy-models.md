@@ -6,4 +6,6 @@
   show its kind of mark with no speed or heading. AISStream now subscribes to
   aid-to-navigation reports and names each by its kind of mark and its full
   name; the feed lists every ship ahead of any aid, and `vessels_in_area`
-  counts ships only (samehkhamis, #0000).
+  counts ships only. A virtual aid (a mark broadcast where nothing physical
+  stands) keeps its disc, is never drawn as a buoy, and its card says it is
+  virtual; vessel sources may mark any record `virtual` (samehkhamis, #1733).

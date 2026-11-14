@@ -1225,6 +1225,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "船舶",
   "AID TO NAVIGATION": "助航標誌",
+  "VIRTUAL": "虛擬",
   "{speed}KT": "{speed} kn",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS：實時",

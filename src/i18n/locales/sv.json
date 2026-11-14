@@ -383,6 +383,7 @@
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "FARTYG",
   "AID TO NAVIGATION": "SJÖMÄRKE",
+  "VIRTUAL": "VIRTUELL",
   "POS: LIVE": "POS: LIVE",
   "POS: {time}Z": "POS: {time}Z",
   "awaiting first AIS position…": "väntar på första AIS-positionen …",
