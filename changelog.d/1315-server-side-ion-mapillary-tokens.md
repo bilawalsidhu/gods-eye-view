@@ -24,3 +24,5 @@
   this repository starts) with `MAPILLARY_CLIENT_TOKEN` and `CESIUM_ION_TOKEN`
   set on the server, or pass `graphEndpoint` to `createMapillarySource` to
   use a Graph proxy of your own that adds the token (Byrd-IT, #1315).
+  Refuse Mapillary and ion answers that reflect their configured server token,
+  including common percent, JSON-unicode and base64 encodings.
