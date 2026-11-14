@@ -22,6 +22,9 @@
       "src/ui/vueRuntime.js",
       "src/ui/views/index.js",
       "src/ui/views/CockpitView.vue",
+      "src/ui/views/panels/CockpitProgress.vue",
+      "src/cockpitProgress.js",
+      "src/cockpitSubjectProviders.js",
       "src/ui/views/CommandDockView.vue",
       "src/ui/views/ContextView.vue",
       "src/ui/views/panels/RadioPanel.vue",
@@ -163,6 +166,7 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/views/panels/GlobeActions.vue",
+      "src/ui/views/panels/RenderFailure.vue",
       "src/ui/views/panels/GlobeCompass.vue",
       "src/ui/stores/recording.js",
       "src/ui/styleParameters.js",
@@ -247,6 +251,7 @@
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
+      "src/data/vesselTypes.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "server/providers/acartia.js",
@@ -1009,6 +1014,8 @@
       "src/ui/cockpitInput.js",
       "src/data/inputOwnership.js",
       "src/ui/cockpitInstruments.js",
+      "src/cockpitSubjectProviders.js",
+      "src/cockpitProgress.js",
       "src/ui/cockpitLayout.js",
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
@@ -1174,6 +1181,8 @@
       "src/ui/cockpitInput.js",
       "src/data/inputOwnership.js",
       "src/ui/cockpitInstruments.js",
+      "src/cockpitSubjectProviders.js",
+      "src/cockpitProgress.js",
       "src/ui/cockpitLayout.js",
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
@@ -1356,6 +1365,7 @@
       "src/ui/styles/status.css",
       "src/ui/styles/cockpit.css",
       "src/ui/styles/cockpitBridge.css",
+      "src/ui/styles/cockpitSubject.css",
       "src/ui/styles/cockpitRadar.css",
       "src/ui/styles/overlays.css",
       "src/ui/styles/layers.css",
@@ -1504,6 +1514,10 @@
   "civil-flights": {
     "exports": ["./layers/flights"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
       "src/i18n/marker.js",
       "src/cyberSonar.js",
@@ -1578,6 +1592,12 @@
   "military-flights": {
     "exports": ["./layers/military"],
     "modules": [
+      "src/layers/flights/modelSpec.js",
+      "src/layers/flights/policy.js",
+      "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
       "src/i18n/marker.js",
       "src/cyberSonar.js",
@@ -1677,6 +1697,13 @@
   "vessel-layer": {
     "exports": ["./layers/vessels"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/aircraftClass.js",
+      "src/i18n/marker.js",
+      "src/data/fleetModelInstances.js",
+      "src/data/aircraftModelLighting.js",
+      "src/data/modelEligibility.js",
+      "src/data/fleetTrailAnchors.js",
       "src/data/headingDegrees.js",
       "src/layers/vessels/cards.js",
       "src/layers/vessels/evidence.js",
@@ -2545,6 +2572,10 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
+      "src/app/layers/fleetModels.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3096,6 +3127,8 @@
       "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
+      "src/cockpitSubjectProviders.js",
+      "src/cockpitProgress.js",
       "src/ui/cockpitLayout.js",
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
@@ -3113,6 +3146,7 @@
       "src/ui/displayControls.js",
       "src/ui/effects.js",
       "src/ui/frameRateMonitor.js",
+      "src/ui/renderFailure.js",
       "src/ui/layerPanel.js",
       "src/ui/weatherPanel.js",
       "src/ui/railCards.js",
@@ -3283,6 +3317,7 @@
       "src/app/layers/rail.js",
       "src/data/railFeeds.js",
       "src/layers/rail/index.js",
+      "src/layers/rail/cockpitSubject.js",
       "src/layers/rail/source.js",
       "src/layers/rail/policy.js",
       "src/layers/rail/ingestion.js",
@@ -3309,6 +3344,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/policy.js",
@@ -3811,6 +3847,10 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/fleetModelInstances.js",
+      "src/app/layers/fleetModels.js",
       "src/data/feedState.js",
       "src/loadingFeedback.js",
       "src/sources/adsbFields.js",
@@ -4267,6 +4307,7 @@
       "src/app/layers/rail.js",
       "src/data/railFeeds.js",
       "src/layers/rail/index.js",
+      "src/layers/rail/cockpitSubject.js",
       "src/layers/rail/source.js",
       "src/layers/rail/policy.js",
       "src/layers/rail/ingestion.js",
@@ -4292,6 +4333,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/policy.js",
@@ -4776,7 +4818,10 @@
       "src/data/approxDistance.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
-      "src/data/aircraftEmergency.js"
+      "src/data/aircraftEmergency.js",
+      "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
+      "src/data/fleetTrailAnchors.js"
     ],
     "external": []
   },
@@ -5165,6 +5210,14 @@
   "transit-standalone": {
     "exports": ["./layers/transit/standalone"],
     "modules": [
+      "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
+      "src/data/aircraftClass.js",
+      "src/i18n/marker.js",
+      "src/data/fleetModelInstances.js",
+      "src/data/modelEligibility.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/aircraftModelLighting.js",
       "src/data/headingDegrees.js",
       "src/cyberSonar.js",
       "src/celestialRing.js",
@@ -5196,6 +5249,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/movement.js",
@@ -5248,6 +5302,14 @@
   "transit-layer": {
     "exports": ["./layers/transit"],
     "modules": [
+      "src/i18n/marker.js",
+      "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
+      "src/data/fleetModelInstances.js",
+      "src/data/aircraftClass.js",
+      "src/data/aircraftModelLighting.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/modelEligibility.js",
       "src/data/headingDegrees.js",
       "src/data/iconOrientation.js",
       "src/data/inputOwnership.js",
@@ -5259,6 +5321,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/policy.js",
@@ -5880,6 +5943,11 @@
       "src/layers/wildlifeSightings/gridViewport.js",
       "src/layers/wildlifeSightings/performance.js"
     ],
+    "external": []
+  },
+  "rail-paths": {
+    "exports": ["./layers/rail/paths"],
+    "modules": ["src/data/railPaths.js"],
     "external": []
   }
 }

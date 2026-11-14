@@ -46,6 +46,15 @@ const TYPE_STYLES = [
 ];
 const DEFAULT_STYLE = { css: '#39d5ff', accent: '57, 213, 255' };
 
+/**
+ * An aid to navigation's disc and card accent: a bone white apart from every
+ * ship type's colour.
+ */
+export const AID_TO_NAVIGATION_STYLE = Object.freeze({
+  css: '#d9d2c0',
+  accent: '217, 210, 192',
+});
+
 // Card text for the type tokens above. The tokens stay English: TYPE_STYLES
 // and tests match on them.
 const TYPE_DISPLAY_KEYS = Object.freeze({

@@ -258,3 +258,155 @@ test('partial static data keeps newer live metadata ahead of the old static cach
   assert.equal(rowFor(mmsi).type, '80');
   assert.equal(rowFor(mmsi).destination, 'HAMBURG');
 });
+
+// A static report's dimensions are the antenna's distances to bow (A), stern
+// (B), port (C) and starboard (D): length A+B, beam C+D. Zero is AIS's "not
+// available", so a vessel reporting none has no size, not a size of zero.
+test('a static report gives a vessel its hull length and beam', () => {
+  ingestAisStreamEnvelope(positionReport('636019825', { Sog: 14 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'ShipStaticData',
+    Message: {
+      ShipStaticData: {
+        UserID: 636019825,
+        Name: 'EVER GIVEN',
+        Type: 70,
+        Dimension: { A: 330, B: 70, C: 30, D: 29 },
+      },
+    },
+    MetaData: { MMSI: '636019825' },
+  });
+  const row = rowFor('636019825');
+  assert.equal(row.length, 400);
+  assert.equal(row.beam, 59);
+
+  ingestAisStreamEnvelope(positionReport('636019826', { Sog: 3 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'ShipStaticData',
+    Message: {
+      ShipStaticData: {
+        UserID: 636019826,
+        Type: 52,
+        Dimension: { A: 0, B: 0, C: 0, D: 0 },
+      },
+    },
+    MetaData: { MMSI: '636019826' },
+  });
+  assert.equal(rowFor('636019826').length, null);
+  assert.equal(rowFor('636019826').beam, null);
+});
+
+test('a Class B report carries its dimensions in part B', () => {
+  ingestAisStreamEnvelope(positionReport('244000777', { Sog: 6 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'StaticDataReport',
+    Message: {
+      StaticDataReport: {
+        UserID: 244000777,
+        ReportB: {
+          Valid: true,
+          ShipType: 37,
+          Dimension: { A: 8, B: 4, C: 2, D: 2 },
+        },
+      },
+    },
+    MetaData: { MMSI: '244000777' },
+  });
+  const row = rowFor('244000777');
+  assert.equal(row.length, 12);
+  assert.equal(row.beam, 4);
+});
+
+test('an aid-to-navigation report is a row named by its kind of aid, not a ship type', () => {
+  assert.equal(
+    ingestAisStreamEnvelope({
+      MessageType: 'AidsToNavigationReport',
+      Message: {
+        AidsToNavigationReport: {
+          UserID: 993672001,
+          Type: 20,
+          Name: 'SF APPROACH N',
+        },
+      },
+      MetaData: {
+        MMSI: '993672001',
+        latitude: 37.79,
+        longitude: -122.52,
+        time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+      },
+    }),
+    true,
+  );
+  const row = rowFor('993672001');
+  assert.equal(row.type, 'Cardinal Mark N');
+  assert.equal(row.name, 'SF APPROACH N');
+  assert.equal(row.speed, null);
+});
+
+test("an aid's name runs on into its name extension", () => {
+  ingestAisStreamEnvelope({
+    MessageType: 'AidsToNavigationReport',
+    Message: {
+      AidsToNavigationReport: {
+        UserID: 993672002,
+        Type: 13,
+        Name: 'SAN FRANCISCO MAIN S',
+        NameExtension: 'HIP CHANNEL 2',
+      },
+    },
+    MetaData: {
+      MMSI: '993672002',
+      ShipName: 'SAN FRANCISCO MAIN S',
+      latitude: 37.79,
+      longitude: -122.52,
+      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+    },
+  });
+  assert.equal(rowFor('993672002').name, 'SAN FRANCISCO MAIN SHIP CHANNEL 2');
+});
+
+test('a capped row request keeps every vessel ahead of aids to navigation', () => {
+  // The aid reports last, so it is the newest row.
+  ingestAisStreamEnvelope(positionReport('244060901', { Sog: 3 }));
+  ingestAisStreamEnvelope({
+    MessageType: 'AidsToNavigationReport',
+    Message: { AidsToNavigationReport: { UserID: 993672003, Type: 24 } },
+    MetaData: {
+      MMSI: '993672003',
+      latitude: 37.79,
+      longitude: -122.52,
+      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+    },
+  });
+  const rows = aisStreamRows(50000);
+  const firstAid = rows.findIndex((row) => row.mmsi.startsWith('99'));
+  const lastVessel = rows.findLastIndex((row) => !row.mmsi.startsWith('99'));
+  assert.ok(firstAid > lastVessel, `${firstAid} > ${lastVessel}`);
+  const vesselCount =
+    rows.length - rows.filter((row) => row.mmsi.startsWith('99')).length;
+  assert.ok(
+    aisStreamRows(vesselCount).every((row) => !row.mmsi.startsWith('99')),
+  );
+});
+
+test('a virtual aid to navigation is marked virtual; a real one carries no flag', () => {
+  const aidReport = (mmsi, VirtualAtoN) => ({
+    MessageType: 'AidsToNavigationReport',
+    Message: {
+      AidsToNavigationReport: { UserID: Number(mmsi), Type: 28, VirtualAtoN },
+    },
+    MetaData: {
+      MMSI: mmsi,
+      latitude: 37.79,
+      longitude: -122.52,
+      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+    },
+  });
+  ingestAisStreamEnvelope(aidReport('993672004', true));
+  ingestAisStreamEnvelope(aidReport('993672005', false));
+  assert.equal(rowFor('993672004').virtual, true);
+  assert.equal('virtual' in rowFor('993672005'), false);
+  // A later real report of the same aid drops the flag.
+  ingestAisStreamEnvelope(aidReport('993672004', false));
+  assert.equal('virtual' in rowFor('993672004'), false);
+});

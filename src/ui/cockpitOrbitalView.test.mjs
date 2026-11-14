@@ -994,7 +994,7 @@ test('a place that lands after the exit is dropped', async (t) => {
   assert.equal(store.orbital, null, 'no HUD comes back for a stale answer');
 });
 
-test('a tracked aircraft takes entry before a tracked satellite', async (t) => {
+test('an aircraft and a satellite first seen in one sync: the aircraft takes entry, by the fixed order', async (t) => {
   const aircraftInfo = {
     icao24: 'abc123',
     callsign: 'TEST1',
@@ -1007,6 +1007,9 @@ test('a tracked aircraft takes entry before a tracked satellite', async (t) => {
   };
   const { cockpit, viewer, aircraft, store } = fixture(t, { aircraftInfo });
   viewer.trackedEntity = aircraft;
+  // The satellite and the aircraft are both new to this sync; the fixed order
+  // decides between subjects first seen together. Selected one after the
+  // other, the later one takes entry (cockpitEntryGate.test.mjs).
   cockpit.syncEntry();
   assert.equal(store.presence.entryKind, 'aircraft');
 });

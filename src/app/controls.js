@@ -11,6 +11,8 @@ import { t } from '../i18n/index.js';
  * whose address does not carry one. `localePicker: false` removes the language
  * picker, for a host that offers its own language choice (`switchLocale` from
  * the `./i18n` entry).
+ * `services.cockpitSubjects` adds the application's own first-person subjects
+ * to the Cockpit (src/cockpitSubjectProviders.js).
  */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations },

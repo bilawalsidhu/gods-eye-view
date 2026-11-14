@@ -68,6 +68,34 @@ test('dump1090 aircraft.json maps to the shared local ADS-B records', () => {
   assert.deepEqual(summary, { heard: 4, positioned: 2 });
 });
 
+test('a dump1090 aircraft with no track takes its true heading, never its magnetic one', () => {
+  const trackOf = (extra) =>
+    normalizeDump1090Aircraft(
+      {
+        now: 1,
+        aircraft: [
+          {
+            hex: 'a4418c',
+            lat: 37.6,
+            lon: -122.38,
+            alt_baro: 'ground',
+            seen: 1,
+            ...extra,
+          },
+        ],
+      },
+      1000,
+    )[0].trackDeg;
+  assert.equal(
+    trackOf({ track: 56.25, true_heading: 40 }),
+    56.25,
+    'track first',
+  );
+  assert.equal(trackOf({ true_heading: 185.62 }), 185.62, 'true heading');
+  assert.equal(trackOf({ mag_heading: 278.44 }), null, 'not magnetic');
+  assert.equal(trackOf({}), null, 'none');
+});
+
 test('dump1090 adapter skips invalid addresses and tolerates missing fields', () => {
   const records = normalizeDump1090Aircraft(
     {
