@@ -240,6 +240,79 @@ test('the loader turns the document into deduplicated sources', async (t) => {
   ]);
 });
 
+const SHARED_FRAME = 'https://etraffic.dgt.es/camarasEtraffic/176130.jpg';
+
+test('a shared frame whose devices disagree by kilometres is dropped', async (t) => {
+  mockCatalog(
+    t,
+    document([
+      // One still, two device records 146 km apart: neither position can be
+      // trusted, so the frame is left out instead of placed twice.
+      cameraBlock({ id: '176130', url: SHARED_FRAME }),
+      cameraBlock({
+        id: '176131',
+        url: SHARED_FRAME,
+        lat: 39.4699,
+        lon: -0.3763,
+      }),
+      // Independent camera control: its own frame survives untouched.
+      cameraBlock({
+        id: '91337',
+        url: 'https://etraffic.dgt.es/camarasEtraffic/91337.jpg',
+        lat: 41.3874,
+        lon: 2.1686,
+      }),
+    ]),
+  );
+  assert.deepEqual(
+    (await loadSpainSources()).map((c) => c.id),
+    ['es-dgt-91337'],
+  );
+});
+
+test('nearby aliases of one shared frame keep a single camera', async (t) => {
+  mockCatalog(
+    t,
+    document([
+      cameraBlock({ id: '176130', url: SHARED_FRAME }),
+      // Two device records at the same gantry, a few tens of metres apart.
+      cameraBlock({
+        id: '176132',
+        url: SHARED_FRAME,
+        lat: 42.2627,
+        lon: -3.9405,
+      }),
+      cameraBlock({
+        id: '91337',
+        url: 'https://etraffic.dgt.es/camarasEtraffic/91337.jpg',
+        lat: 41.3874,
+        lon: 2.1686,
+      }),
+    ]),
+  );
+  const ids = (await loadSpainSources()).map((c) => c.id).sort();
+  assert.deepEqual(ids, ['es-dgt-176130', 'es-dgt-91337']);
+});
+
+test('separate frames far apart are both kept', async (t) => {
+  mockCatalog(
+    t,
+    document([
+      cameraBlock({ id: '176130', url: SHARED_FRAME }),
+      cameraBlock({
+        id: '91337',
+        url: 'https://etraffic.dgt.es/camarasEtraffic/91337.jpg',
+        lat: 41.3874,
+        lon: 2.1686,
+      }),
+    ]),
+  );
+  assert.deepEqual((await loadSpainSources()).map((c) => c.id).sort(), [
+    'es-dgt-176130',
+    'es-dgt-91337',
+  ]);
+});
+
 test('a redirected, failed or oversized document contributes an empty pack', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const status of [302, 503]) {

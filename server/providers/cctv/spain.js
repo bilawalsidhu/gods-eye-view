@@ -5,6 +5,7 @@ import {
   prioritizeSources,
 } from './normalize.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { haversineKm } from '../common/geo.js';
 
 /** DGT (Dirección General de Tráfico) publishes its whole road-camera
  * network as one DATEX II 3.7 document, keyless, refreshed continuously
@@ -190,6 +191,56 @@ export function spainCameraToSource(row) {
   };
 }
 
+/** Two device records can publish the same still. Kept together they would place
+ * two confident anchors on one camera, so a shared frame survives only when its
+ * devices agree on where the camera is; aliases further apart than this drop the
+ * frame altogether. */
+const SPAIN_SHARED_FRAME_TOLERANCE_KM = 0.5;
+
+/**
+ * Collapse device records that publish one frame URL.
+ *
+ * Nearby aliases (within the tolerance) keep their first device; aliases that
+ * disagree by more than the tolerance drop the shared frame entirely, because
+ * which of the two positions is the camera's cannot be told apart.
+ *
+ * @param {Array<object>} cameras sources from {@link spainCameraToSource}
+ * @returns {{cameras: Array<object>, omitted: number}}
+ */
+export function dedupeSpainCameras(cameras) {
+  const byId = new Map();
+  for (const camera of cameras) {
+    if (!byId.has(camera.id)) byId.set(camera.id, camera);
+  }
+  const byFrame = new Map();
+  for (const camera of byId.values()) {
+    const group = byFrame.get(camera.url);
+    if (group) group.push(camera);
+    else byFrame.set(camera.url, [camera]);
+  }
+  const kept = [];
+  let omitted = 0;
+  for (const group of byFrame.values()) {
+    if (group.length === 1) {
+      kept.push(group[0]);
+      continue;
+    }
+    const [primary] = group;
+    const disagrees = group.some(
+      (camera) =>
+        haversineKm(primary.lat, primary.lon, camera.lat, camera.lon) >
+        SPAIN_SHARED_FRAME_TOLERANCE_KM,
+    );
+    if (disagrees) {
+      omitted += group.length;
+      continue;
+    }
+    kept.push(primary);
+    omitted += group.length - 1;
+  }
+  return { cameras: kept, omitted };
+}
+
 /** Prioritization anchors, mainland plus both archipelagos, so a cap keeps the
  * whole country rather than only the Madrid–Barcelona corridor. */
 const ANCHORS = [
@@ -261,20 +312,18 @@ export async function loadSpainSources() {
       SPAIN_MAX_CATALOG_BYTES,
       signal,
     );
-    const cameras = new Map();
+    const parsed = [];
     for (const row of parseSpainDgtXml(xml)) {
       const camera = spainCameraToSource(row);
-      if (camera && !cameras.has(camera.id)) cameras.set(camera.id, camera);
+      if (camera) parsed.push(camera);
     }
-    if (!cameras.size) throw new Error('no usable cameras in the document');
-    const sources = prioritizeSources(
-      [...cameras.values()],
-      spainSourceCap(),
-      ANCHORS,
-    );
+    const { cameras, omitted } = dedupeSpainCameras(parsed);
+    if (!cameras.length) throw new Error('no usable cameras in the document');
+    const sources = prioritizeSources(cameras, spainSourceCap(), ANCHORS);
     console.log(
-      `[CCTV] Loaded Spain DGT camera sources: ${cameras.size} ` +
-        `(using ${sources.length})`,
+      `[CCTV] Loaded Spain DGT camera sources: ${cameras.length}` +
+        (omitted ? ` (${omitted} shared-frame aliases dropped)` : '') +
+        ` (using ${sources.length})`,
     );
     lastGood = sources;
     lastGoodAt = Date.now();
