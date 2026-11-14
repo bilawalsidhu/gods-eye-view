@@ -255,8 +255,7 @@ export function panWildlifeSighting(viewer, from, to, reducedMotion = false) {
         roll: pose.roll,
       },
       durationS: reducedMotion ? 0 : 0.22,
-      // The contract's nearest ease-out to a quadratic one.
-      easing: 'cubicOut',
+      easing: 'quadraticOut',
     },
   );
   return true;

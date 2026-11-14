@@ -64,6 +64,7 @@ const EASINGS = {
   cubicInOut: (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
   quinticInOut: (t) => (t < 0.5 ? 16 * t ** 5 : 1 - (-2 * t + 2) ** 5 / 2),
   cubicOut: (t) => (t - 1) ** 3 + 1,
+  quadraticOut: (t) => t * (2 - t),
   sineInOut: (t) => 0.5 * (1 - Math.cos(Math.PI * t)),
 };
 

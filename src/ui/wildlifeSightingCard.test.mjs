@@ -1,5 +1,6 @@
 import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import test from 'node:test';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindWildlifeViewer } from '../testSupport/wildlifeViewer.mjs';
@@ -510,6 +511,11 @@ test('the camera correction preserves altitude and orientation and honors reduce
       roll: 0.1,
     });
     assert.equal(flight.duration, reduced ? 0 : 0.22);
+    assert.equal(
+      flight.easingFunction,
+      Cesium.EasingFunction.QUADRATIC_OUT,
+      'eased as before',
+    );
   }
 });
 

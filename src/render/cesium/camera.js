@@ -41,6 +41,7 @@ export const EASINGS = Object.freeze({
   quadraticInOut: Cesium.EasingFunction.QUADRATIC_IN_OUT,
   cubicInOut: Cesium.EasingFunction.CUBIC_IN_OUT,
   cubicOut: Cesium.EasingFunction.CUBIC_OUT,
+  quadraticOut: Cesium.EasingFunction.QUADRATIC_OUT,
   quinticInOut: Cesium.EasingFunction.QUINTIC_IN_OUT,
   sineInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
 });

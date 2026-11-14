@@ -90,6 +90,7 @@ export type Easing =
   | 'quadraticInOut'
   | 'cubicInOut'
   | 'cubicOut'
+  | 'quadraticOut'
   | 'quinticInOut'
   | 'sineInOut';
 
