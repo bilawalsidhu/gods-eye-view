@@ -175,7 +175,11 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/stores/worldTime.js",
       "src/ui/views/panels/WorldTimeline.vue",
-      "src/ui/surfaceKeyboard.js"
+      "src/ui/surfaceKeyboard.js",
+      "src/ui/chesterCountyPanel.js",
+      "src/ui/stores/chesterCountyPanel.js",
+      "src/ui/views/panels/ChesterCountyPanel.vue",
+      "src/ui/rail/RailRowList.vue"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1349,7 +1353,10 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/ui/chesterCountyPanel.js",
+      "src/ui/stores/chesterCountyPanel.js",
+      "src/ui/views/panels/ChesterCountyPanel.vue"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -3817,7 +3824,15 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/ui/chesterCountyPanel.js",
+      "src/ui/stores/chesterCountyPanel.js",
+      "src/ui/views/panels/ChesterCountyPanel.vue",
+      "src/app/layers/chesterCountyEms.js",
+      "src/layers/chesterCountyEms/index.js",
+      "src/layers/chesterCountyEms/filterPreferences.js",
+      "src/layers/chesterCountyEms/source.js",
+      "src/layers/chesterCountyEms/counties.js"
     ],
     "external": [
       "hls.js",
@@ -4535,7 +4550,12 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/app/layers/chesterCountyEms.js",
+      "src/layers/chesterCountyEms/index.js",
+      "src/layers/chesterCountyEms/filterPreferences.js",
+      "src/layers/chesterCountyEms/source.js",
+      "src/layers/chesterCountyEms/counties.js"
     ],
     "external": [
       "hls.js",
@@ -5706,7 +5726,9 @@
       "src/tools/globePanel.js",
       "src/tools/queries/panelRequest.js",
       "src/geoDistance.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/tools/queries/chesterCounty.js",
+      "src/layers/chesterCountyEms/counties.js"
     ],
     "external": ["satellite.js"]
   },
@@ -5806,7 +5828,8 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/chesterCountyEms/source.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

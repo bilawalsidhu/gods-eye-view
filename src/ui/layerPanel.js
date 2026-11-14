@@ -79,6 +79,7 @@ const PANEL_GROUPS = [
     ids: [
       'rocket-launches',
       'earthquakes',
+      'chester-county-ems',
       'local-firms',
       'fire-perimeters',
       'gnss-integrity',

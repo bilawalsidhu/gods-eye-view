@@ -131,3 +131,20 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       claimed.set(alias, entry.id);
     }
 });
+
+test('County EMS keeps Chester aliases and directs record questions to generic county tools', () => {
+  assert.equal(VOICE_OFF_LAYERS['chester-county-ems'], undefined);
+  assert.ok(VOICE_TOGGLE_LAYER_IDS.includes('chester-county-ems'));
+  assert.equal(voiceLayerAliasMap().get('chesco ems'), 'chester-county-ems');
+  assert.equal(voiceLayerAliasMap().get('county ems'), 'chester-county-ems');
+  assert.equal(voiceLayerAliasMap().get('montgomery county ems'), 'chester-county-ems');
+  assert.equal(
+    voiceLayerAliasMap().get('chester county incidents'),
+    'chester-county-ems',
+  );
+  assert.match(
+    VOICE_LAYER_MANIFEST.find((layer) => layer.id === 'chester-county-ems')
+      .noQuery,
+    /get_county_incidents/,
+  );
+});

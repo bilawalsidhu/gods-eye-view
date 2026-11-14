@@ -1,3 +1,6 @@
+import { createChesterCountyPanel } from './chesterCountyPanel.js';
+import { useChesterCountyPanelStore } from './stores/chesterCountyPanel.js';
+import { applicationPinia } from './vueRuntime.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   registerCctvFocusRequestListener,
@@ -30,6 +33,9 @@ export class LayerBindings {
       },
       operations,
     );
+    this._chesterCountyPanel = createChesterCountyPanel({
+      store: useChesterCountyPanelStore(applicationPinia()),
+    });
     this._disposed = false;
     this._dataManager = null;
     this._directionsShellModule = null;
@@ -236,6 +242,7 @@ export class LayerBindings {
   attachDataManager(dataManager) {
     if (this._disposed) return;
     this._dataManager = dataManager || null;
+    this._chesterCountyPanel.connect(this._dataManager);
     this.hud.attachDataManager(this._dataManager);
     this._updateTrafficSyncChip();
     if (this._dataManagerUnsubscribe) {
@@ -276,6 +283,7 @@ export class LayerBindings {
   stop() {
     if (this._disposed) return;
     this._disposed = true;
+    this._chesterCountyPanel.destroy();
     if (this._awarenessSelectedHandler) {
       window.removeEventListener(
         'gev:awareness-subject-selected',
@@ -303,6 +311,7 @@ export class LayerBindings {
     this._removeNavigationAuthorityListener = null;
   }
   disconnect() {
+    this._chesterCountyPanel.connect(null);
     this._dataManagerUnsubscribe?.();
     this._dataManagerUnsubscribe = null;
     this._directionsShellModule?.attachShellServices?.(null);

@@ -107,6 +107,10 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'chester-county-ems',
+    html: '<a href="https://www.chesco.org/3963/WebCad-Active-Incidents" target="_blank" rel="noopener">Chester County DES WebCAD</a> · <a href="https://www.montgomerycountypa.gov/departments/department-public-safety/webcad-active-incidents" target="_blank" rel="noopener">© Montgomery County, PA WebCAD / public CAD map</a> · <a href="https://www.lcwc911.us/live-incident-list" target="_blank" rel="noopener">© Lancaster County / LCWC public list and map</a> · <a href="https://delcodispat.ch/d/pa/delco" target="_blank" rel="noopener">Delco Dispatch (community paging; active status unknown)</a> · <a href="https://dpswebcad.dauphincounty.gov/webcad/" target="_blank" rel="noopener">Dauphin County WebCAD</a> · <a href="https://webcad.pikepa.org/pages/public/FeedReader.asp" target="_blank" rel="noopener">Pike County public completed reports</a> · <a href="https://ycdes.org/webcad/default.aspx" target="_blank" rel="noopener">York County DES</a> · <a href="https://incidents.adamscountypa.gov/" target="_blank" rel="noopener">Adams County active calls</a> · <a href="https://717alerts.com/county/lebanon" target="_blank" rel="noopener">Lebanon DES pager via 717 Alerts (community summaries)</a> · Approximate street positions derived from © Chester County GIS Road Centerlines and Site Address Points (<a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noopener">CC BY-NC-SA 3.0</a>; runtime only) · Named places: <a href="https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Common_Place/FeatureServer/1" target="_blank" rel="noopener">© Chester County GIS Common Place</a> (county terms)',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

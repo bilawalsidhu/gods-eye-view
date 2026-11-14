@@ -27,6 +27,7 @@ import { createApplicationAlpr } from './layers/alprCameras.js';
 import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
+import { createApplicationChesterCountyEms } from './layers/chesterCountyEms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
@@ -132,6 +133,9 @@ export function createApplicationCatalog({
           enrichment: sources.flights,
           displayParams: () => flights.getParams(),
           ...(resolveAsset ? { resolveAsset } : {}),
+        }),
+        createApplicationChesterCountyEms({
+          source: sources['chester-county-ems'],
         }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
         createApplicationAirQuality({ source: sources['air-quality'] }),

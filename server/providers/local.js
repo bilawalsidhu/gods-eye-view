@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { countyEmsProxy } from './countyEms.js';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
@@ -56,6 +57,7 @@ function localProviderPlugins({
   )
     throw new TypeError('nominatimStorageDir must be an absolute directory');
   return [
+    countyEmsProxy(),
     openSkyProxy(),
     celestrakProxy(),
     tomtomProxy(),

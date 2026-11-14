@@ -44,6 +44,32 @@ const AIRCRAFT_FIELDS = {
 
 const layers = [
   {
+    id: 'chester-county-ems',
+    aliases: [
+      'county ems',
+      'chester county',
+      'lancaster county ems',
+      'delaware county ems',
+      'delco dispatch',
+      'dauphin county ems',
+      'pike county ems',
+      'york county ems',
+      'adams county ems',
+      'lebanon county ems',
+
+      'county incidents',
+      'montgomery county ems',
+      'montco incidents',
+      'chesco ems',
+      'chester county incidents',
+      'chester county ems',
+      'chesco incidents',
+    ],
+    context: false,
+    noQuery:
+      'use get_county_incidents and get_county_incident_details; unresolved public reports have no coordinates',
+  },
+  {
     id: 'gnss-integrity',
     aliases: [
       'gnss integrity',

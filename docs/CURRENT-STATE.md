@@ -8462,6 +8462,119 @@ startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
 
+## County EMS
+
+The Events group includes an off-by-default **County EMS** layer covering Chester
+and Montgomery counties, Pennsylvania. It reads public Fire, EMS and Traffic
+reports through /api/county-ems. Chester refreshes at most every minute;
+Montgomery refreshes at most every two minutes while enabled.
+County road-centerline junctions resolve reported intersections; county address
+points resolve numbered addresses. Flame, red-cross and siren billboards identify fire, EMS and traffic.
+Only icons show by default; clicking an icon opens a labelled detail card, and
+clicking empty map space dismisses it. Repeated approximate-location tags are
+omitted; the layer-level GIS accuracy notice remains. Unresolved or ambiguous reports stay listed
+without a marker or municipality-center fallback. Successful empty
+snapshots clear reports and failures retain last-good data marked stale.
+All sources load at runtime into memory, with bounded county GIS lookups and
+no incident archive. The layer id is `chester-county-ems` and share token `03` stores only enabled state. See `docs/COUNTY-EMS.md` for matching limits and source terms.
+
+County incident health separates successful unmatched locations from GIS failures.
+Coverage counts expose mapped, unresolved and lookup-error totals; only actual
+lookup failures degrade a fresh feed. WebCAD retries transient failures once.
+County Common Place provides approximate named-place positions, and a documented
+Tredyffrin-only junction alias resolves Valley Forge/Yellow Springs using the
+GIS Valley Creek road name. Original report locations and GIS provenance are retained.
+
+County incident cards acquire public unit IDs, statuses and status-entry times
+from the selected report's official WebCAD detail page. Detail requests are
+on demand through a fixed-origin active-incident lookup, shared/cached for 60
+seconds and limited to four concurrent upstream requests. Detail outages retain
+the report, label old unit fields stale, and leave main-feed health unchanged.
+Cards link to the incident source; no private dispatch notes or history are stored.
+
+Chester County incidents are exposed to MCP and voice through
+`get_chester_county_incidents` and `get_chester_county_incident_details`, using
+the existing public snapshot/detail proxy and shared caches. Listing preserves
+unresolved reports with null coordinates and includes source freshness and
+coverage; selected report queries return bounded public unit status or an
+explicit unavailable result without discarding the report. Voice can toggle
+the layer through scoped Chesco/Chester County aliases. Its spatial analyst
+exclusion now directs the model to these tools rather than hiding the layer.
+
+The active Chester County report list now lives in its own **COUNTY EMS**
+right-side app alongside the other panels. Its launcher and panel are hidden
+while the data layer is off, and return when it is enabled. Data Layers keeps
+the normal visibility toggle/feed count and synchronized category filters. The
+app shares the existing snapshot and selection lifecycle, with no additional requests or polling;
+empty/stale/error feeds remain accessible while enabled. List selections still
+open the same map cards, and icon selections update the app's active row.
+
+The county app and Data Layers include synchronized Fire, EMS and Traffic
+category toggles, all on by default. These filter map icons and the app list together, with matching/total
+counts and a distinct no-match state. Traffic covers source traffic reports, not a complete police-call feed. Category changes use the cached snapshot, preserve full feed health/counts,
+and dismiss a selected report when its category is hidden. Filters are saved as browser-local preferences, including entirely unchecked
+groups, and restored when the layer is recreated. The existing enabled-only
+share token and MCP full-feed queries retain their behavior.
+
+County coverage uses checkboxes only in COUNTY EMS. The category filters stay
+synchronized between the app and Data Layers. Eight counties start enabled;
+Pike completed reports are opt-in. Rows/cards identify
+their county; Montgomery IDs are county-qualified. Montgomery joins its complete
+public HTML list to its published read-only CAD map by incident, location and
+municipality, preserving unmapped reports. Public unit fragments retain undated
+time text and label retrieval times as checks. Per-county caches and health
+prevent one outage from hiding the other's reports. Generic MCP/voice tools
+get_county_incidents and get_county_incident_details cover all supported sources; Chester tools,
+the legacy endpoint, internal layer ID and share token remain compatible.
+
+County EMS also supports Lancaster's official LCWC list/public map and Delaware's
+community Delco Dispatch paging source. County filters and generic AI schemas
+read the same nine-source registry. Lancaster retains unmatched public list rows;
+map matches require IsPublic=1, category/type, municipality, intersection and
+dispatch minute. Its cards identify assigned units without invented movement
+statuses/times or synthetic official incident numbers.
+
+Delco reads only the newest 20 public pages within two hours, merges duplicate
+incident/category pages, and labels every report as a recent dispatch with
+unknown active/closed status. It is not an official county active feed. Published
+coordinates remain approximate; received times disclose an Eastern-time
+assumption. Raw paging messages, notes, apartment details, radio metadata and
+private-flagged pages are excluded. Its per-county provenance exposes limited
+coverage, community origin and retrieval timestamps. Each adapter has bounded
+on-demand caching and independent stale/error recovery; neither polls while the
+layer is off unless an AI explicitly queries the feed. Existing Chester routes,
+tool names and share identity stay compatible.
+
+
+### County EMS expanded county coverage and app configuration
+
+County coverage is configured only through nine native checkboxes in the
+right-side app: Chester, Montgomery, Lancaster, Delaware, Dauphin, Pike, York,
+Adams and Lebanon (PA). Data Layers retains the master switch and synchronized
+Fire/EMS/Traffic chips; county chips and WebCAD/source buttons are removed.
+Pike starts unchecked and reads only today's completed public press reports.
+Delaware and Lebanon use recent community pager summaries with unknown active
+status, not official active lists. Lebanon uses the user-provided 717 Alerts
+alternate, filters resolved/redacted rows and omits EMS/municipality-centroid
+pins. Dauphin, Pike, York and Adams remain list-only when coordinates are not
+published; selection opens public fields/units in the app without a guessed
+camera target. Adams distinguishes healthy empty from failed monitoring.
+Combined and legacy MCP routes retain their scope, with per-source provenance,
+received/reported/dispatch times and completed/unknown-active labels preserved.
+See docs/COUNTY-EMS.md for source limits, terms and validation coverage.
+
+
+### County EMS filter persistence
+
+County coverage and Fire/EMS/Traffic selections now survive page reloads,
+app/browser restarts and device reboots in the same browser profile and origin.
+The layer loads validated preferences when constructed and saves only explicit
+user/voice/tool filter edits to gev:county-ems:filters:v1. Empty selections stay
+empty. Temporary scene/restore changes cannot overwrite unrelated saved groups;
+selected incidents and source data are never persisted. Blocked storage leaves
+session controls usable. Existing enabled-only share links remain compatible.
+The County EMS browser gate verifies mixed filters after a fresh document and
+all-unchecked filters after closing/relaunching the browser with the same profile.
 ## Québec CCTV integration
 
 The regular CCTV source loader reads `public/quebec-cameras.json` by default

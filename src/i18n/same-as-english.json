@@ -1264,7 +1264,9 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "EMS",
+    "Station: {station}"
   ],
   "uk": [
     "1900–1945",
@@ -1537,6 +1539,7 @@
     "Ironbow",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "EMS"
   ]
 }

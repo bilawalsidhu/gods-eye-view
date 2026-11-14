@@ -58,8 +58,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
+    // County EMS extends the generated layer enums.
     // show_street_level (map, source, photo) adds one tool.
-    '0c27f62062001e6a07241cd301c3d357f55e9b74f66cd2904d16590510337468',
+    '99d2f40de4b66d4fbabd774686cbcced30c58287dbf1783e253e0087f77f13fe',
   );
 });
 

@@ -182,6 +182,9 @@ body.mobile-shell[data-mobile-sheet='context']
   > #global-context-panel,
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail
+  > #chester-county-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
   > #weather-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail

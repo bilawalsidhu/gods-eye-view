@@ -15,6 +15,7 @@ import { msg, t, translateKnown } from '../i18n/index.js';
 export const LAYER_NAME_KEYS = Object.freeze({
   flights: msg('Live Flights'),
   military: msg('Military Flights'),
+  'chester-county-ems': msg('County EMS'),
   earthquakes: msg('Earthquakes (24h)'),
   satellites: msg('Satellites'),
   'rocket-launches': msg('Space Missions (30d)'),
