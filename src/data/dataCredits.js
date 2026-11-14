@@ -617,6 +617,13 @@ export const DATA_CREDITS = [
       ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
   },
   {
+    key: 'eclipse-paths',
+    html:
+      'Eclipse predictions: Five Millennium Canons of <a href="https://eclipse.gsfc.nasa.gov/SEpubs/5MCSE.html" target="_blank" rel="noopener">Solar</a> and ' +
+      '<a href="https://eclipse.gsfc.nasa.gov/SEpubs/5MCLE.html" target="_blank" rel="noopener">Lunar</a> Eclipses ' +
+      'by Fred Espenak and Jean Meeus (NASA&rsquo;s GSFC)',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

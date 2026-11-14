@@ -905,6 +905,13 @@ html:not([lang='en'])
   outline: none;
 }
 
+/* A chip may start a new line, so a row can group its chips. */
+.data-toggle-chip-break {
+  flex-basis: 100%;
+  height: 0;
+  margin-top: -4px;
+}
+
 /* An icon action chip (RailChips.vue `icon`): a square button sized to the
    text chips beside it. */
 .data-toggle-chip.chip-icon {
