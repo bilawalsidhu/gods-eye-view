@@ -1982,6 +1982,82 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.icons.offsetTurn',
+      'an icon offset shrinks with it when it says so, and one turned by an axis turns by its rotation too',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:icons-offset-turn' });
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const icon = (extra = {}) => ({
+          id: 'one',
+          pos,
+          image: DOT,
+          size: [16, 16],
+          ...extra,
+        });
+        const show = async (extra) => {
+          set.set([icon(extra)]);
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+        };
+        await show();
+        const s = r.query.project(pos);
+        ok(s, 'the icon projects');
+        const mine = (x, y) =>
+          r.query
+            .drillPick(x, y)
+            .some(
+              (hit) => hit.set === 'conf:icons-offset-turn' && hit.id === 'one',
+            );
+        // The eye is 2 km off: held at the curve's near value, half size.
+        const half = { near: 1e4, nearValue: 0.5, far: 1e7, farValue: 0.5 };
+        const offset = { x: 40, y: 0 };
+        await show({ scaleByDistance: half, pixelOffset: offset });
+        ok(
+          mine(s.x + 40, s.y) && !mine(s.x + 20, s.y),
+          'halved by distance, its offset is not',
+        );
+        await show({
+          scaleByDistance: half,
+          pixelOffset: offset,
+          offsetScalesByDistance: true,
+        });
+        ok(
+          mine(s.x + 20, s.y) && !mine(s.x + 40, s.y),
+          'halved by distance with its offset',
+        );
+        // Looking north, an up along east turns it a quarter clockwise; a
+        // quarter turn counter-clockwise on screen lays it down again.
+        const east = h.toEcef({
+          lon: AUSTIN.lon + 0.01,
+          lat: AUSTIN.lat,
+          height: 0,
+        });
+        const alignedAxis = {
+          x: east.x - pos.x,
+          y: east.y - pos.y,
+          z: east.z - pos.z,
+        };
+        await show({ size: [64, 8], rotationMode: 'axis', alignedAxis });
+        ok(
+          mine(s.x, s.y + 24) && !mine(s.x + 24, s.y),
+          'its up along east stands it up',
+        );
+        await show({
+          size: [64, 8],
+          rotationMode: 'axis',
+          alignedAxis,
+          rotation: Math.PI / 2,
+        });
+        ok(
+          mine(s.x + 24, s.y) && !mine(s.x, s.y + 24),
+          'then a quarter turn on screen lays it down',
+        );
+        set.dispose();
+      },
+    ),
+    check(
       'draw.motion.look',
       'moving icons draw offset, anchored, turned, clamped, faded and ranged as icons do',
       async (h, r) => {

@@ -1146,15 +1146,20 @@ export function createStubRenderer(options = {}) {
         let dy = y - cy;
         if (set.kind === 'icons') {
           const lift = { bottom: 1, top: -1 }[item.anchor] ?? 0;
-          cx += item.pixelOffset?.x ?? 0;
+          // Its offset shrinks with it when it says so.
+          const offsetScale = item.offsetScalesByDistance ? scale : 1;
+          cx += (item.pixelOffset?.x ?? 0) * offsetScale;
           cy +=
-            (item.pixelOffset?.y ?? 0) -
+            (item.pixelOffset?.y ?? 0) * offsetScale -
             (lift * (item.size?.[1] ?? 0) * scale) / 2;
           dx = x - cx;
           dy = y - cy;
           // Turned counter-clockwise on screen (its up along the axis
-          // as projected there): the pick turned back.
-          let turn = item.rotationMode === 'screen' ? (item.rotation ?? 0) : 0;
+          // as projected there, then by its rotation): the pick turned back.
+          let turn =
+            item.rotationMode === 'screen' || item.rotationMode === 'axis'
+              ? (item.rotation ?? 0)
+              : 0;
           const axis = item.rotationMode === 'axis' ? item.alignedAxis : null;
           if (
             axis &&
@@ -1164,7 +1169,7 @@ export function createStubRenderer(options = {}) {
               add(p, normalize(vec(axis.x ?? 0, axis.y ?? 0, axis.z ?? 0))),
             );
             if (tip && (tip.x !== s.x || tip.y !== s.y))
-              turn = Math.atan2(-(tip.x - s.x), -(tip.y - s.y));
+              turn += Math.atan2(-(tip.x - s.x), -(tip.y - s.y));
           }
           if (turn !== 0) {
             const c = Math.cos(turn);

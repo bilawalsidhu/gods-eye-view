@@ -240,6 +240,8 @@ export function createGpuIcons({
       const refuse = (what) => {
         throw new Error(`the Cesium renderer's GPU icons have no ${what}`);
       };
+      if (item.offsetScalesByDistance && nonZero(item.pixelOffset))
+        refuse('pixel offsets scaled by distance');
       // What a row reads from its extras texture, which WebGL 1 has not.
       if (scene.context?.webgl2 === false) {
         if (item.height !== undefined && item.height !== 'absolute')
@@ -447,10 +449,12 @@ export function createGpuIcons({
       set.setAnchor(row, ANCHORS[item.anchor] ?? 0);
       set.setRotation(
         row,
-        item.rotationMode === 'screen' ? (item.rotation ?? 0) : 0,
+        item.rotationMode === 'screen' || item.rotationMode === 'axis'
+          ? (item.rotation ?? 0)
+          : 0,
       );
-      // Its up along the axis, as a billboard's; one of zero length
-      // stands upright.
+      // Its up along the axis, as a billboard's, then turned by its
+      // rotation; one of zero length stands upright.
       const {
         x = 0,
         y = 0,

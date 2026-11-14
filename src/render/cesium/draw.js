@@ -1356,6 +1356,10 @@ export function createCesiumDraw({
       // An empty range shows it nowhere.
       show: item.show !== false && displayable(item.displayRange),
       scaleByDistance: nearFarOf(item.scaleByDistance),
+      // Its offset shrinks with it, as Cesium's KML icons' did.
+      pixelOffsetScaleByDistance: item.offsetScalesByDistance
+        ? nearFarOf(item.scaleByDistance)
+        : undefined,
       translucencyByDistance: nearFarOf(item.fadeByDistance),
       distanceDisplayCondition: displayConditionOf(item.displayRange),
       // The defaults, so a restyle in place puts back what an item dropped.
@@ -1367,9 +1371,11 @@ export function createCesiumDraw({
         item.pixelOffset?.y ?? 0,
       ),
     };
-    if (item.rotationMode === 'screen') look.rotation = item.rotation ?? 0;
+    if (item.rotationMode === 'screen' || item.rotationMode === 'axis')
+      look.rotation = item.rotation ?? 0;
     // Its up turned along the axis on screen, as Cesium's own aligned
-    // billboards stand; an axis of zero length stands upright.
+    // billboards stand, then by its rotation; an axis of zero length stands
+    // upright.
     if (item.rotationMode === 'axis' && item.alignedAxis) {
       const { x = 0, y = 0, z = 0 } = item.alignedAxis;
       const axis = new Cesium.Cartesian3(x, y, z);
@@ -1413,6 +1419,7 @@ export function createCesiumDraw({
       show: item.show,
       displayRange: item.displayRange ? [...item.displayRange] : undefined,
       scaleByDistance: curve(item.scaleByDistance),
+      offsetScalesByDistance: item.offsetScalesByDistance,
       fadeByDistance: curve(item.fadeByDistance),
       rotationMode: item.rotationMode,
       rotation: item.rotation,
@@ -1466,6 +1473,7 @@ export function createCesiumDraw({
       style.show === item.show &&
       sameList(style.displayRange, item.displayRange) &&
       sameCurve(style.scaleByDistance, item.scaleByDistance) &&
+      style.offsetScalesByDistance === item.offsetScalesByDistance &&
       sameCurve(style.fadeByDistance, item.fadeByDistance) &&
       style.rotationMode === item.rotationMode &&
       (item.rotationMode === 'screen' || style.rotation === item.rotation) &&

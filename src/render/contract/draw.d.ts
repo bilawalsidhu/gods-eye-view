@@ -192,14 +192,21 @@ export interface IconItem extends Placed {
   /**
    * `screen`: upright on screen, rotated by `rotation`;
    * `course`: rotated on screen along `course` (or the motion's course);
-   * `axis`: rotated about `alignedAxis`.
+   * `axis`: its up along `alignedAxis` as projected on screen, then
+   * rotated by `rotation`.
    */
   rotationMode?: 'screen' | 'course' | 'axis';
-  /** Radians counter-clockwise on screen, for `rotationMode: 'screen'`. */
+  /**
+   * Radians counter-clockwise on screen, for `rotationMode: 'screen'` and
+   * `'axis'`.
+   */
   rotation?: number;
   /** ECEF axis for `rotationMode: 'axis'`. */
   alignedAxis?: Vec3;
+  /** CSS pixels, y down. */
   pixelOffset?: ScreenXY;
+  /** `pixelOffset` grows and shrinks with `scaleByDistance`, as the icon does. */
+  offsetScalesByDistance?: boolean;
   anchor?: 'center' | 'bottom' | 'top';
   /** Swap to `near` when drawn larger than `switchPx`. */
   imageLod?: { near: ImageRef; switchPx: number };
