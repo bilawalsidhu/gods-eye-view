@@ -1,3 +1,5 @@
+import { sampleWindField } from './grid.js';
+
 /** Lazy shared ecCodes WASM instance, created only for an active wind request. */
 let eccodesPromise = null;
 function loadEccodes() {
@@ -48,4 +50,19 @@ export async function decodeWindGribMessage(buffer, { eccodesModule } = {}) {
     handle?.delete();
     eccodes.writeFile(file, new Uint8Array(0));
   }
+}
+
+/**
+ * Worker side of ./decoder.js: decode each posted message, validate and sample
+ * it to the display grid, and transfer back only the samples.
+ */
+export function serveWindDecodes(port, decodeImpl = decodeWindGribMessage) {
+  port.on('message', async ({ id, bytes, targetDx }) => {
+    try {
+      const field = sampleWindField(await decodeImpl(bytes), targetDx);
+      port.postMessage({ id, field }, [field.samples.buffer]);
+    } catch (error) {
+      port.postMessage({ id, error: String(error?.message ?? error) });
+    }
+  });
 }
