@@ -185,6 +185,44 @@ for (const preview of [false, true]) {
   });
 }
 
+test('a refused Places or Geocoding answer is not kept by the browser', async (t) => {
+  const plugin = googlePlacesContextProxy({
+    resolveApiKey: () => 'fixture-server-key',
+  });
+  const request = install((middlewares) =>
+    plugin.configureServer({ middlewares }),
+  );
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ error: { message: 'API key not valid' } }, { status: 403 }),
+  );
+  for (const url of [
+    ['/api/google/nearby-places', '?lat=30&lon=-97'],
+    ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+  ]) {
+    const refused = await request(...url);
+    assert.equal(refused.statusCode, 403);
+    assert.equal(refused.headers['cache-control'], 'no-store');
+  }
+
+  // Geocoding reports a denied key as HTTP 200 with a status of its own.
+  let status = 'REQUEST_DENIED';
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ status, results: [] }),
+  );
+  for (const denied of ['REQUEST_DENIED', 'OVER_QUERY_LIMIT']) {
+    status = denied;
+    const answer = await request('/api/google/geocode', '?address=Austin');
+    assert.equal(answer.statusCode, 200);
+    assert.equal(answer.body.status, denied);
+    assert.equal(answer.headers['cache-control'], 'no-store', denied);
+  }
+  for (const answered of ['OK', 'ZERO_RESULTS']) {
+    status = answered;
+    const answer = await request('/api/google/geocode', '?address=Austin');
+    assert.equal(answer.headers['cache-control'], 'private, max-age=300');
+  }
+});
+
 test('OSRM routing preserves aliases, cache, span guards and upstream failure behavior', async (t) => {
   const request = install(installRouteMiddleware);
   let calls = 0;

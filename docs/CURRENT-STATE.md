@@ -7524,6 +7524,7 @@ apply to `public/` assets or built-preview serving.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/vessels` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
+- The two Places routes and both geocode routes let the browser keep an answer for five minutes (`private, max-age=300`), but a refusal is `no-store`: a Places error status, or a Geocoding status other than `OK` or `ZERO_RESULTS` (Google sends `REQUEST_DENIED` and `OVER_QUERY_LIMIT` as HTTP 200). A denied or exhausted key is not replayed from the browser cache after it is fixed.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; routing outages return 502.
