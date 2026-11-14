@@ -739,8 +739,7 @@ and Radio through the cockpit layout pass, whose floor
 (`COCKPIT_UTILITY_MIN_TOP_PX` / `_RATIO` in `src/ui/cockpitPresentation.js`)
 matches it, so an open panel still stops short of the briefing. Contact and
 Live Signals are shorter, in the same glass, with the briefing's rows and
-weather tiles tightened; Regional News stays a briefing page. The map credits
-sit on one line at the bottom. In a right-to-left language, the rail keeps its
+weather tiles tightened; Regional News stays a briefing page. In a right-to-left language, the rail keeps its
 physical side as the cockpit's other windows do. The Cyber HUD and the phone
 keep their own cockpit layouts, with the Display and Radio launchers as
 before, and edge mode does not apply in the cockpit.

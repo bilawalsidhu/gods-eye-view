@@ -244,34 +244,6 @@
   display: none;
 }
 
-/* Map credits: one quiet centred line at the very bottom, under Reset /
-   Exit Cockpit, clear of the HUD readouts in the corners. */
-body.cockpit-mode #cesium-credits {
-  top: auto !important;
-  right: auto !important;
-  bottom: 8px !important;
-  left: 50% !important;
-  max-width: calc(100vw - 2rem) !important;
-  padding: 0.2rem 0.75rem !important;
-  border-radius: 999px !important;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-body.cockpit-mode
-  #cesium-credits
-  :is(.cesium-widget-credits, .cesium-credit-textContainer) {
-  display: inline-flex !important;
-  flex-wrap: nowrap !important;
-  align-items: center;
-  gap: 0.4rem;
-  white-space: nowrap;
-}
-
-body.cockpit-mode #cesium-credits img {
-  height: 13px;
-}
-
 /* Both rails start at one height, just under the top HUD text, so their top
    edges line up; the cockpit layout pass places Display and Radio at the
    same height (COCKPIT_UTILITY_MIN_TOP_PX / _RATIO in cockpitPresentation.js). */
