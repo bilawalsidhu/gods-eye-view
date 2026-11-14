@@ -1,5 +1,6 @@
 import { t } from '../i18n/index.js';
 import { spaceMissionsIndexFailure } from './contextActions.js';
+import { translateStatusPiece } from './statusText.js';
 import { shouldExpandGlobalContextPanel } from '../rightRailPolicy.js';
 
 export function _initGlobalContextPanel() {
@@ -112,7 +113,7 @@ export function _initGlobalContextPanel() {
       if (this.destroyed || searched === false) return false;
       const stats = this.installations.getStats?.();
       this.showToast(
-        stats?.statusMessage ||
+        (stats?.statusMessage && translateStatusPiece(stats.statusMessage)) ||
           (stats?.status === 'zoom-in'
             ? t('Zoom in to search mapped installations')
             : t('Nearby installations refreshed')),

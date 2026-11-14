@@ -9,6 +9,7 @@ import {
   translateKnown,
 } from '../../i18n/index.js';
 import { sourceStatusLabel } from '../../ui/layerNames.js';
+import { translateStatusPiece } from '../../ui/statusText.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 import { distanceParts } from '../../data/distanceFormat.js';
@@ -45,7 +46,7 @@ export function presentAwarenessDistance(meters) {
 function presentAwarenessReason(summary = {}) {
   return summary.reasonTemplate
     ? t(summary.reasonTemplate, summary.reasonValues)
-    : translateKnown(summary.reason || '');
+    : translateStatusPiece(summary.reason || '');
 }
 
 /**
