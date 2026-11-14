@@ -613,6 +613,7 @@
   "src/data/dataCredits.test.mjs",
   "src/layers/alpr/index.js",
   "src/layers/alpr/model.js",
+  "src/layers/alpr/modelSpecs.test.mjs",
   "src/layers/alpr/policy.js",
   "src/layers/alpr/presentation.js",
   "src/layers/alpr/visuals.js",
