@@ -7,8 +7,11 @@
  */
 import {
   createLocalGeoJsonLayer,
+  fillOf,
   localDatasetError,
   localGeojsonParts,
+  rhumbPositions,
+  strokeOf,
 } from '../data/localGeojsonCore.js';
 import {
   canvasOf,
@@ -777,33 +780,39 @@ export function createLibraryViewLayer(
       const dots = [];
       for (const part of localGeojsonParts(features)) {
         const meta = { layerId: id, id: part.id };
-        const own = colorOf(part.feature.properties);
+        const style = part.feature.properties;
+        const own = colorOf(style);
+        // As the GeoJSON loader drew them: edges along rhumb lines, and a
+        // feature's simplestyle fill and stroke over the entry's colour (a
+        // colorBy fill over both).
         if (part.kind === 'polygon')
           fills.push({
             id: part.id,
             geometry: {
               kind: 'polygon',
-              rings: part.coordinates.map((ring) =>
-                ring.map(([lon, lat]) => ({ lon, lat })),
-              ),
+              rings: part.coordinates.map(rhumbPositions),
             },
-            fill: withAlpha(own, colorBy ? 0.45 : 0.35),
+            fill: colorBy
+              ? withAlpha(own, 0.45)
+              : fillOf(style, withAlpha(color, 0.35)),
             height: 'clampGround',
             clampTo: 'both',
             meta,
           });
-        else if (part.kind === 'line')
+        else if (part.kind === 'line') {
+          const stroke = strokeOf(style, color);
           lines.push({
             id: part.id,
-            positions: part.coordinates.map(([lon, lat]) =>
+            positions: rhumbPositions(part.coordinates).map(({ lon, lat }) =>
               fromDegrees(lon, lat, 0),
             ),
-            widthPx: 2,
+            widthPx: stroke.widthPx,
             mode: 'draped',
             clampTo: 'both',
-            style: { kind: 'solid', color },
+            style: { kind: 'solid', color: stroke.color },
             meta,
           });
+        }
         // Points draw as small dots, not pins: a view can hold thousands.
         else if (part.kind === 'point')
           dots.push({

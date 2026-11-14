@@ -344,7 +344,7 @@ const given = (value) => value !== undefined && value !== null;
  * properties (`stroke`, `stroke-opacity`, `stroke-width`), over the
  * layer's colour and width.
  */
-function strokeOf(properties, rgba) {
+export function strokeOf(properties, rgba) {
   let color = null;
   let widthPx = FEATURE_LINE_WIDTH_PX;
   if (properties) {
@@ -362,7 +362,7 @@ function strokeOf(properties, rgba) {
  * A polygon's own fill as the GeoJSON loader read it (`fill` keeps the
  * layer's fill alpha; `fill-opacity` sets the alpha).
  */
-function fillOf(properties, fillColor) {
+export function fillOf(properties, fillColor) {
   let fill = null;
   if (properties) {
     if (given(properties.fill)) {
@@ -409,7 +409,7 @@ function* markerSymbols(features) {
  * Ground `coordinates` as `{lon, lat}` degrees along the rhumb lines
  * between them, as the GeoJSON loader drew its draped edges.
  */
-function rhumbPositions(coordinates) {
+export function rhumbPositions(coordinates) {
   return densifyRhumb(
     coordinates.map((c) => ({ lon: c[0] * RADIANS, lat: c[1] * RADIANS })),
     RHUMB_GRANULARITY_M,

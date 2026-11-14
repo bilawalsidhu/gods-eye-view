@@ -267,3 +267,60 @@ test('values sharing a label are one legend group, and uncoloured values count a
   );
   assert.equal(legend.at(-1).color, '#a0aec0');
 });
+
+test('features draw as the GeoJSON loader drew them: rhumb edges and their own simplestyle', async (t) => {
+  // A long east-west edge: a rhumb line holds its latitude, a geodesic bows
+  // toward the pole, so the edge is drawn as points along its rhumb line.
+  const wide = {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-80, 38.89],
+          [-74, 38.89],
+          [-74, 38.9],
+          [-80, 38.89],
+        ],
+      ],
+    },
+    properties: { fill: '#ff0000', 'fill-opacity': 0.5 },
+  };
+  const road = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [-80, 38.89],
+        [-74, 38.89],
+      ],
+    },
+    properties: { stroke: '#00ff00', 'stroke-width': 5 },
+  };
+  // An entry with no colorBy (a colorBy fill is drawn over simplestyle).
+  const plainEntry = {
+    ...entry,
+    display: { ...entry.display, colorBy: undefined },
+  };
+  const layer = createLibraryViewLayer(plainEntry, {
+    source: { loadDataset: async () => ({ features: [wide, road, polygon] }) },
+  });
+  const { viewer, drawn, draw } = fakeViewer(t, { height: 2000 });
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  const [own, plain] = drawn()[0].items.values();
+  const ring = own.geometry.rings[0];
+  assert.ok(ring.length > 40, `densified (${ring.length} points)`);
+  for (const { lat } of ring.slice(0, ring.length / 2))
+    assert.ok(Math.abs(lat - 38.89) < 1e-9, 'the long edge holds its latitude');
+  assert.deepEqual(own.fill, [1, 0, 0, 0.5]);
+  // Without simplestyle, the entry's colour at 0.35.
+  assert.equal(plain.fill[3], 0.35);
+  const [line] = [...draw.sets.values()]
+    .find((set) => !set.disposed && set.spec.id.endsWith(':lines'))
+    .items.values();
+  assert.equal(line.widthPx, 5);
+  assert.deepEqual(line.style.color.slice(0, 3), [0, 1, 0]);
+  assert.ok(line.positions.length > 40);
+  await layer.destroy(viewer);
+});
