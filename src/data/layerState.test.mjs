@@ -244,7 +244,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
   // News holds 00, Shipwrecks 01 and Rail 02, the first pairs: the next token
-  // is 03.
+  // is 04 after Starship Live takes 03.
   assert.equal(nextLayerStateToken(), '04');
   // The allocation rules below read the ledger before any of them took a pair.
   const beforeNews = { ...LAYER_STATE_TOKEN_RESERVATIONS };
