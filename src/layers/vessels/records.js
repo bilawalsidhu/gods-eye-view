@@ -25,6 +25,9 @@ export function normalizeVessel(row) {
     imo: String(row.imo || ''),
     type: String(row.type || ''),
     destination: String(row.destination || ''),
+    // Hull length and beam (metres), null when unreported.
+    length: positiveNumber(row.length),
+    beam: positiveNumber(row.beam),
     speed: finiteNumber(row.speed),
     course: finiteNumber(row.course),
     heading: finiteNumber(row.heading),
@@ -44,6 +47,11 @@ export function normalizeVessel(row) {
 function stampFix(record, receivedAtMs, feedLatestEpoch) {
   record.fixReceivedAtMs = receivedAtMs;
   record.fixFeedEpoch = feedLatestEpoch;
+}
+
+function positiveNumber(value) {
+  const number = finiteNumber(value);
+  return number !== null && number > 0 ? number : null;
 }
 
 function finiteNumber(value) {
@@ -147,6 +155,8 @@ export class VesselRecords {
         record.imo = next.imo;
         record.type = next.type;
         record.destination = next.destination;
+        record.length = next.length;
+        record.beam = next.beam;
         record.speed = next.speed;
         record.course = next.course;
         record.heading = next.heading;

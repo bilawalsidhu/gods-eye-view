@@ -142,6 +142,13 @@ export const DATA_CREDITS = [
       '· each photo is © its photographer, credited beside it',
   },
   {
+    key: 'openvesselphotos',
+    html:
+      'Vessel photos: ' +
+      '<a href="https://openvesselphotos.org" target="_blank" rel="noopener">Open Vessel Photos</a> ' +
+      "· each photo keeps its author's open licence, credited beside it",
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +

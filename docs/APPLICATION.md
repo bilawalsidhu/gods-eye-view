@@ -224,7 +224,9 @@ leaving out `command-dock` the voice control and its pointer reticle;
 leaving out `context` the Bhote Koshi reconstruction panel; and leaving out
 `intel-hud` the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
 implementation publishes to the `gev-hud` store. An unknown
-view name is an error. A host that does not initialize Core's locale passes
+view name is an error. An application that offers its own language choice
+starts and switches the language with the `./i18n` entry (`startPageLocale`,
+`followPageLocale`, `switchLocale`; see [I18N.md](./I18N.md)) and passes
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component
 loader with `node --import=<core package>/build/register-vue`.
