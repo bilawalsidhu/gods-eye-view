@@ -14,7 +14,9 @@
  * poll together). The delay aimed at is the 90th percentile of the newest 256
  * lags plus 5 s, within the layer's floor and a five-minute cap. Before a
  * feed has given 16 lags, its first reports stand in: their age plus one poll
- * interval.
+ * interval. A delivery that comes more than three poll intervals after the
+ * one before it (a hidden tab's polls paused, or the feed failed) gives no
+ * lags: the wait was not the feed's lateness.
  *
  * The delay drawn with moves toward that aim at a bounded rate, rising by at
  * most 0.2 s and falling by at most 0.05 s per second, so every contact
@@ -39,6 +41,8 @@ export const DISPLAY_DELAY_RISE = 0.2;
 export const DISPLAY_DELAY_FALL = 0.05;
 /** @constant {number} An aim this close (ms) to the delay leaves it be. */
 export const DISPLAY_DELAY_DEADBAND_MS = 2_000;
+/** @constant {number} Poll intervals between deliveries past which a delivery gives no lags. */
+export const DISPLAY_DELAY_GAP_POLLS = 3;
 
 function createWindow(capacity) {
   return { values: new Float64Array(capacity), count: 0, cursor: 0 };
@@ -74,6 +78,10 @@ export function createDisplayDelay({
   let fromMs = floorMs;
   let fromAtMs = NaN;
   let currentMs = floorMs;
+  // The delivery being noted, the one before it, and whether a pause
+  // separated them.
+  let deliveryMs = NaN;
+  let afterGap = false;
 
   const clamp = (ms) => Math.max(floorMs, Math.min(capMs, ms));
 
@@ -107,8 +115,12 @@ export function createDisplayDelay({
      * contact's previous report time (none for a contact seen first).
      */
     noteReport(receiptMs, reportMs, previousReportMs) {
+      if (receiptMs !== deliveryMs) {
+        afterGap = receiptMs - deliveryMs > DISPLAY_DELAY_GAP_POLLS * pollMs;
+        deliveryMs = receiptMs;
+      }
       if (Number.isFinite(previousReportMs)) {
-        if (reportMs > previousReportMs)
+        if (reportMs > previousReportMs && !afterGap)
           add(lags, receiptMs - previousReportMs);
       } else if (Number.isFinite(reportMs))
         add(firstAges, receiptMs - reportMs);
@@ -159,6 +171,8 @@ export function createDisplayDelay({
       firstAges.count = firstAges.cursor = 0;
       aimMs = fromMs = currentMs = floorMs;
       fromAtMs = NaN;
+      deliveryMs = NaN;
+      afterGap = false;
     },
   };
 }

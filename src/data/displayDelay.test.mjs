@@ -168,3 +168,18 @@ test('reset forgets the feed', () => {
   assert.equal(delay.lagCount, 0);
   assert.equal(delay.settle(now, { jump: true }), FLOOR);
 });
+
+test('a delivery after a pause in polling gives no lags, and the next one does', () => {
+  const delay = createDisplayDelay({ floorMs: FLOOR, pollMs: POLL });
+  let now = feed(delay, { ageMs: 10 * SEC, contacts: 20, polls: 2 });
+  const learned = delay.lagCount;
+  // A hidden tab: ten minutes with no polls, then a delivery whose reports
+  // moved on from ones ten minutes old.
+  now += 10 * 60 * SEC;
+  for (let c = 0; c < 20; c++)
+    delay.noteReport(now, now - 10 * SEC, now - 10 * 60 * SEC);
+  assert.equal(delay.lagCount, learned, 'the pause is not the feed’s lateness');
+  assert.ok(delay.settle(now, { jump: true }) < 60 * SEC);
+  feed(delay, { ageMs: 10 * SEC, contacts: 20, polls: 1, startMs: now });
+  assert.equal(delay.lagCount, learned + 20, 'polling again, lags count again');
+});
