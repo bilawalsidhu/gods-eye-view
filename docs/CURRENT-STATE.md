@@ -7594,6 +7594,28 @@ apply to `public/` assets or built-preview serving.
     holds the way it stripped detection's would take bracket promptness with it, silently.
   - Known, pre-existing, and deliberately out of scope here: the overlay's backing store does not
     re-derive on a DPR change mid-session (`worldOverlay` sizing — untouched by this work).
+- **A detection paint reuses the sweep before it when nothing it reads has changed
+  (`src/data/detectionPaintCache.js`).** The sweep in `_drawOverlay` (project every contact, fade
+  it, append its bracket, build callout candidates) depends only on the view and on the contacts.
+  Each paint still asks every layer for its contacts, then compares them with what the last sweep
+  was built from: the same objects in the same order, the same position coordinates, and the same
+  value in every field the sweep reads (`PAINTED_OBJECT_FIELDS`), under the same view (profile,
+  style, canvas size, keyhole, camera position, view-projection matrix, UI rectangles; see
+  `_paintViewOf`). On a match the kept bracket paths, counts and callout candidates are used again
+  and only the strokes and callouts are repainted. No layer has to announce a change, so none can
+  leave a stale picture behind. A sweep that READS a new object field or a new view value must add
+  it to those two lists; `detectionHost.test.mjs` compares 41 frames against a full sweep, canvas
+  call for canvas call.
+  - Never reused or kept: a solve paint (the sweep gathers the cohort), any paint while the Cyber
+    sonar sweep or a Global Context echo is live (brackets change with the clock), and any sweep
+    that reached a depth-tested contact (its answer comes from the scene).
+  - Where it pays: a held camera with contacts that move in steps. Live Flights re-positions the
+    fleet every 80 ms, so at 60 fps about seven paints in ten reuse a sweep. Once a frame takes
+    longer than 80 ms every paint sees moved aircraft and none is reused; after eight such sweeps
+    the contacts are only recorded on every eighth, so the comparison costs nothing there.
+    Satellites move on every frame and are never reused.
+  - `getDetectionDiagnostics().paintReuseCount` (and `data-paint-reuse-count`) counts reused
+    paints since `initDetection`; `placementBuildCount` is 0 on a reused paint.
 - The detection MODE BANNER (`DENSE VIS:… SRC:… DENS:…% ELASTIC …ms`) is
   developer telemetry and is HIDDEN by default. It paints only under
   `?detectDebug=1` (the `trafficDebug` convention), resolved once per

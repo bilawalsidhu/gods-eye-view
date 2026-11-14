@@ -1661,3 +1661,234 @@ test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
     env.cleanup();
   }
 });
+
+// --- Reusing a paint -------------------------------------------------------
+
+/**
+ * Contacts as the fleet layers return them: the same objects on every paint,
+ * changed in place. `fresh` returns equal copies instead, which no paint can
+ * reuse, so the two can be compared.
+ */
+function steadyContacts({ fresh = false } = {}) {
+  const objects = [
+    { position: new Cesium.Cartesian3(-0.4, 0.2, 6_356_752), sourceId: 'air-1', id: 'AIRONE', metric: 'FL350', type: 'AIR' },
+    { position: new Cesium.Cartesian3(0.4, -0.2, 6_356_752), sourceId: 'sat-1', id: 'SATONE', metric: '412KM', type: 'SAT' },
+    { position: new Cesium.Cartesian3(0.1, 0.5, 6_356_752), sourceId: 'sea-1', id: 'SEAONE', metric: '12 kn', type: 'SEA' },
+    { position: new Cesium.Cartesian3(-0.2, -0.5, 6_356_752), sourceId: 'mil-1', id: 'MILONE', metric: 'FL410', type: 'AIR', tier: 'military' },
+  ];
+  let calls = 0;
+  return {
+    objects,
+    get calls() { return calls; },
+    layer: {
+      id: 'flights',
+      getDetectableObjects() {
+        calls += 1;
+        return fresh
+          ? objects.map((object) => ({ ...object, position: Cesium.Cartesian3.clone(object.position) }))
+          : objects;
+      },
+    },
+  };
+}
+
+/** Everything painted since the trace was last emptied, with each path as its points. */
+function takePainted(env) {
+  const painted = env.paintTrace.map((call) =>
+    call.map((value) => (value instanceof MockPath2D ? value.points.map((point) => [...point]) : value)));
+  env.paintTrace.length = 0;
+  return painted;
+}
+
+const bracketPointCount = (env) => env.detectionCtx.calls
+  .filter(([name]) => name === 'stroke')
+  .reduce((sum, [, path]) => sum + (path?.points?.length ?? 0), 0);
+
+test('a paint with the same view and the same contacts reuses the last sweep, and paints exactly what a full sweep paints', () => {
+  // The same frames twice: once with contacts a paint can reuse, once with
+  // equal copies it cannot. Every canvas call must match, frame for frame.
+  const frames = (fresh) => {
+    const env = installEnvironment();
+    const contacts = steadyContacts({ fresh });
+    const painted = [];
+    try {
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [contacts.layer], () => {});
+      setMode('DENSE');
+      settleFrame(env);
+      painted.push(takePainted(env));
+      for (let frame = 1; frame <= 40; frame++) {
+        // Through the run: a contact moves, one is relabelled, one changes
+        // tier, and the camera turns.
+        if (frame === 9) contacts.objects[0].position.x += 0.05;
+        if (frame === 17) contacts.objects[1].metric = '398KM';
+        if (frame === 23) contacts.objects[2].tier = 'military';
+        if (frame === 31) env.viewer.camera.viewMatrix[12] = 0.03;
+        nextFrame(env);
+        painted.push(takePainted(env));
+      }
+      return { painted, reused: getDetectionDiagnostics().paintReuseCount };
+    } finally {
+      env.cleanup();
+    }
+  };
+  const reusing = frames(false);
+  const sweeping = frames(true);
+  assert.equal(sweeping.reused, 0, 'copies are swept on every paint');
+  // 40 frames 16 ms apart: a solve about every eighth, four changes, and the
+  // rest reuse the sweep before them.
+  assert.ok(reusing.reused >= 28, `${reusing.reused} of 40 paints reused a sweep`);
+  assert.equal(reusing.painted.length, sweeping.painted.length);
+  reusing.painted.forEach((frame, index) => {
+    assert.ok(frame.some(([target, name]) => target === 'detection' && name === 'stroke'), `frame ${index} strokes brackets`);
+    assert.deepEqual(frame, sweeping.painted[index], `frame ${index}`);
+  });
+  assert.ok(
+    reusing.painted.some((frame) => frame.some(([, name, text]) => name === 'fillText' && text === 'AIRONE')),
+    'callouts were painted during the run',
+  );
+});
+
+test('a reused paint builds no bracket paths and still strokes the kept ones', () => {
+  const env = installEnvironment();
+  const contacts = steadyContacts();
+  const builtPaths = [];
+  class CountingPath2D extends MockPath2D {
+    constructor() { super(); builtPaths.push(this); }
+  }
+  try {
+    globalThis.Path2D = CountingPath2D;
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [contacts.layer], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    assert.equal(getDetectionDiagnostics().paintReuseCount, 0);
+    const built = builtPaths.length;
+    const points = builtPaths.reduce((sum, path) => sum + path.points.length, 0);
+    assert.ok(points >= 4 * 12, 'four brackets of twelve points were built');
+
+    env.detectionCtx.calls.length = 0;
+    nextFrame(env);
+    assert.equal(getDetectionDiagnostics().paintReuseCount, 1);
+    assert.equal(builtPaths.length, built, 'no path was built');
+    assert.equal(builtPaths.reduce((sum, path) => sum + path.points.length, 0), points, 'no point was added to a kept path');
+    assert.equal(bracketPointCount(env), 4 * 12, 'the kept brackets are stroked');
+    assert.equal(getDetectionDiagnostics().visibleCount, 4);
+    assert.equal(getDetectionDiagnostics().placementBuildCount, 0, 'no placement was built on the reused paint');
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('any change to a contact or to the view is swept on the very next paint', () => {
+  const changes = {
+    'a contact moves': (contacts) => { contacts.objects[0].position.y -= 0.01; },
+    'a contact gets a new position object': (contacts) => {
+      contacts.objects[0].position = new Cesium.Cartesian3(0.3, 0.3, 6_356_752);
+    },
+    'a contact is renamed': (contacts) => { contacts.objects[1].id = 'SATTWO'; },
+    'a contact reading changes': (contacts) => { contacts.objects[0].metric = 'FL360'; },
+    'a contact becomes the tracked one': (contacts) => { contacts.objects[0].skipLabel = true; },
+    'a contact changes tier': (contacts) => { contacts.objects[3].tier = undefined; },
+    'a contact changes type': (contacts) => { contacts.objects[2].type = 'VEH'; },
+    'a contact joins': (contacts) => {
+      contacts.objects.push({ position: new Cesium.Cartesian3(0.6, 0.6, 6_356_752), sourceId: 'air-2', id: 'AIRTWO', type: 'AIR' });
+    },
+    'a contact leaves': (contacts) => { contacts.objects.pop(); },
+    'a contact is replaced by an equal one': (contacts) => { contacts.objects[1] = { ...contacts.objects[1] }; },
+    'two contacts swap places in the list': (contacts) => { contacts.objects.reverse(); },
+    'the camera turns': (contacts, env) => { env.viewer.camera.viewMatrix[13] = 0.02; },
+    'the camera moves': (contacts, env) => {
+      env.viewer.camera.positionWC = new Cesium.Cartesian3(0, 100, 10_000_000);
+    },
+    'the style changes': () => { setDetectionStyle('thermal'); },
+    'the profile changes': () => { setMode('SPARSE'); },
+  };
+  for (const [name, change] of Object.entries(changes)) {
+    const env = installEnvironment();
+    const contacts = steadyContacts();
+    try {
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [contacts.layer], () => {});
+      setDetectionStyle('normal');
+      setMode('DENSE');
+      settleFrame(env);
+      nextFrame(env);
+      assert.equal(getDetectionDiagnostics().paintReuseCount, 1, `${name}: steady paints reuse`);
+
+      change(contacts, env);
+      nextFrame(env);
+      assert.equal(getDetectionDiagnostics().paintReuseCount, 1, `${name}: swept again`);
+      assert.equal(getDetectionDiagnostics().observationCount, contacts.objects.length, name);
+    } finally {
+      env.cleanup();
+    }
+  }
+});
+
+test('a depth-tested contact, the sonar sweep and echoes are swept on every paint', () => {
+  const run = ({ depthTested = false, sonar = false, echo = false } = {}) => {
+    const env = installEnvironment();
+    const contacts = steadyContacts();
+    if (depthTested) {
+      contacts.objects[0].type = 'VEH';
+      contacts.objects[0].depthTested = true;
+    }
+    if (sonar) {
+      env.document.documentElement = {
+        dataset: { uiTheme: 'cyber', cyberSonarOpacity: '35' },
+        style: { setProperty() {}, removeProperty() {} },
+      };
+      const hud = env.document.createElement('div');
+      hud.id = 'intel-hud';
+      hud.classList = { contains: (className) => className === 'active' };
+      env.document.body.appendChild(hud);
+    }
+    try {
+      if (echo)
+        setAwarenessEchoField({
+          center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+          radiusM: 250_000,
+          pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+          echo: { layerIds: ['flights'], fadeMs: 60_000, color: 'rgb(1, 2, 3)', spreadPx: 8, lineWidth: 3.25 },
+        });
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [contacts.layer], () => {});
+      setMode('DENSE');
+      settleFrame(env);
+      const sweeps = contacts.calls;
+      for (let i = 0; i < 30; i++) nextFrame(env);
+      assert.ok(contacts.calls > sweeps, 'frames painted');
+      return getDetectionDiagnostics().paintReuseCount;
+    } finally {
+      clearAwarenessEchoField();
+      env.cleanup();
+    }
+  };
+  assert.ok(run() > 15, 'the same contacts with none of these are reused');
+  assert.equal(run({ depthTested: true }), 0, 'depth-tested');
+  assert.equal(run({ sonar: true }), 0, 'sonar');
+  assert.equal(run({ echo: true }), 0, 'echo');
+});
+
+test('turning detection off lets go of the kept sweep', () => {
+  const env = installEnvironment();
+  const contacts = steadyContacts();
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [contacts.layer], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    nextFrame(env);
+    assert.equal(getDetectionDiagnostics().paintReuseCount, 1);
+    setMode('OFF');
+    setMode('DENSE');
+    // The first paint back is a solve, and the one after it reuses that.
+    nextFrame(env);
+    assert.equal(getDetectionDiagnostics().paintReuseCount, 1);
+    nextFrame(env);
+    assert.equal(getDetectionDiagnostics().paintReuseCount, 2);
+  } finally {
+    env.cleanup();
+  }
+});
