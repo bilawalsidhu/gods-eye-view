@@ -22,6 +22,7 @@ import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
+import { createAircraftTypeCard } from './aircraftTypeCard.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
@@ -628,6 +629,7 @@ export class StyleManager extends ShellFacade {
     this._initCctvPanel();
     this._initStreetLevelPanel();
     this._initWildlifeSightingCard();
+    this._initAircraftTypeCard();
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initMobileShell();
@@ -1122,6 +1124,23 @@ export class StyleManager extends ShellFacade {
       layer,
       ui: this._ui,
       viewer: this.viewer,
+    });
+  }
+
+  /** Show the selected aircraft's type photo and specs beside its live telemetry. */
+  _initAircraftTypeCard() {
+    this._aircraftTypeCard?.destroy();
+    this._aircraftTypeCard = null;
+    const { flightsLayer, militaryFlightsLayer } = this.services;
+    if (!flightsLayer) return;
+    this._aircraftTypeCard = createAircraftTypeCard({
+      ui: this._ui,
+      getTracked: () =>
+        militaryFlightsLayer?.getTrackedInfo?.() ??
+        flightsLayer.getTrackedInfo?.() ??
+        null,
+      resolveAsset: (url) =>
+        `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
     });
   }
 
@@ -1868,6 +1887,7 @@ export class StyleManager extends ShellFacade {
     this._mobileShell?.destroy();
     this._panelNavigation?.destroy();
     this._wildlifeSightingCard?.destroy();
+    this._aircraftTypeCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
     this._offPlacePacks();

@@ -706,6 +706,49 @@ for (const fixture of LAYERS) {
     }
   });
 
+  test(`${fixture.name}: the selected aircraft's model is created with its faction hologram and the look leaves with the model`, async () => {
+    clearTr3bRegistry();
+    fixture.layer.stopTracking();
+    fixture.layer.setParams({ models3d: false });
+
+    const realFrom = Cesium.Model.fromGltfAsync;
+    const created = [];
+    const removed = [];
+    const collection = { add() {}, remove(m) { removed.push(m); }, isDestroyed() { return false; } };
+    const model = {
+      modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+      ready: true,
+      show: false,
+      scale: 1,
+      destroy() {},
+    };
+    Cesium.Model.fromGltfAsync = (options) => { created.push(options); return Promise.resolve(model); };
+
+    try {
+      fixture.seed({ viewer: viewerAtHeight(WELL_INSIDE_M), modelCollection: collection });
+      fixture.driveTrackedModel();
+      await Promise.resolve(); await Promise.resolve();
+      assert.equal(created.length, 1, 'the tracked model is requested once');
+      const shader = created[0].customShader;
+      assert.ok(shader instanceof Cesium.CustomShader, 'the hologram shader rides the creation options');
+      const hue = shader.uniforms.u_col.value;
+      const expected = fixture.name === 'flights' ? [0, 1, 1] : [1, 0.722, 0];
+      assert.ok([hue.x, hue.y, hue.z].every((c, i) => Math.abs(c - expected[i]) < 0.01),
+        `${fixture.name} contacts take their faction hue`);
+      assert.equal(created[0].colorBlendAmount, 0, 'the shader owns the hue, not the model tint');
+
+      fixture.driveTrackedModel();
+      assert.equal(model.show, true, 'the ready model is shown');
+      assert.ok(shader.uniforms.u_time.value > 0, 'the hologram animates while the model is shown');
+
+      fixture.layer.stopTracking();
+      assert.deepEqual(removed, [model], 'deselect releases the model that carries the hologram');
+    } finally {
+      Cesium.Model.fromGltfAsync = realFrom;
+      fixture.layer.stopTracking();
+    }
+  });
+
   test(`${fixture.name}: the tracked contact goes 3D with the fleet 3D toggle OFF`, () => {
     clearTr3bRegistry();
     fixture.layer.setParams({ models3d: false });

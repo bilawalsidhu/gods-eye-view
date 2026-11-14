@@ -2,6 +2,8 @@ import { MilitaryFlightRecords } from './records.js';
 import { createMilitaryFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
 import { worldTimeFor } from '../../time/worldClock.js';
+import { createTrackedHologram } from '../../data/trackedHologram.js';
+import { MIL_ICON_COLOR } from './policy.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
@@ -371,6 +373,10 @@ export function createFlightState({ source, services }) {
   flightState._IR_UNLIT_SHADER = new Cesium.CustomShader({
     lightingModel: Cesium.LightingModel.UNLIT,
   });
+
+  /** Amber hologram baked into the tracked model at creation (see data/trackedHologram.js). */
+
+  flightState._hologram = createTrackedHologram({ military: MIL_ICON_COLOR });
 
   flightState._irReloadQueue = null;
 

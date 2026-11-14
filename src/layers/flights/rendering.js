@@ -699,9 +699,19 @@ export function createRendering({
       ? STALE_ALPHA
       : 1;
     if (model.color?.alpha === alpha) return;
-    model.color = (
-      flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN
-    ).withAlpha(alpha);
+    model.color = Cesium.Color.WHITE.withAlpha(alpha);
+  }
+
+  /** Creation-time look of the tracked model: IR flat white, else the faction hologram. */
+  function trackedModelLook(icao24) {
+    if (flightState._irBoost)
+      return {
+        color: Cesium.Color.WHITE,
+        colorBlendMode: Cesium.ColorBlendMode.MIX,
+        colorBlendAmount: 1.0,
+        customShader: flightState._IR_UNLIT_SHADER,
+      };
+    return flightState._hologram.modelOptions(isMilitaryIcao(icao24));
   }
 
   function _updateTrackedModel() {
@@ -747,14 +757,7 @@ export function createRendering({
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
-        color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // The tracked aircraft uses the same dominant light tint as the fleet;
-        // IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : trackedSpec.blendAmount,
-        customShader: flightState._irBoost
-          ? flightState._IR_UNLIT_SHADER
-          : undefined,
+        ...trackedModelLook(flightState._trackedIcao),
         // Pick id (H1): without it, clicking the very plane being tracked read as
         // EMPTY SPACE (scene.pick → primitive with no id) → an unintended
         // deselect. With the icao, the click handler recognizes it as ours.
@@ -866,6 +869,15 @@ export function createRendering({
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
       flightState._trackedModel.show = true;
+      if (!flightState._irBoost)
+        flightState._hologram.tick(
+          isMilitaryIcao(flightState._trackedIcao),
+          parts.motion._trackedFocusSizePx(
+            flightState._trackedIcao,
+            displayPos,
+          ),
+          performance.now(),
+        );
     }
   }
 

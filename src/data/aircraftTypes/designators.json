@@ -1,0 +1,396 @@
+{
+  "about": "Curated input for scripts/build-aircraft-catalog.mjs. Every type listed here is built in addition to the top civil types of typeFrequency.json. role: civil (default), military or both. article: English Wikipedia article of the type, for designators the Wikipedia designator list lacks (Wikidata has no ICAO type designator property). wikidata: pin the item instead. docDesignator: ICAO Doc 8643 designator when the feed uses a non-ICAO code. photo: pin a Commons file name. class + classReason: correct classifyAircraft where ICAO Doc 8643 cannot.",
+  "types": {
+    "A10": {
+      "role": "military",
+      "article": "Fairchild Republic A-10 Thunderbolt II"
+    },
+    "A109": {
+      "article": "AgustaWestland AW109"
+    },
+    "A139": {
+      "article": "AgustaWestland AW139"
+    },
+    "A169": {
+      "article": "AgustaWestland AW169"
+    },
+    "A400": {
+      "role": "military"
+    },
+    "AC50": {
+      "article": "Aero Commander 500 family"
+    },
+    "AN12": {
+      "role": "both"
+    },
+    "AN26": {
+      "role": "both"
+    },
+    "AS32": {
+      "role": "both",
+      "article": "Eurocopter AS532 Cougar"
+    },
+    "AS50": {
+      "article": "Eurocopter AS350 Écureuil"
+    },
+    "B06": {
+      "article": "Bell 206"
+    },
+    "B350": {
+      "article": "Beechcraft Super King Air",
+      "photo": "SE-MLP Beech Super King Air 350 VBY 01.jpg"
+    },
+    "B407": {
+      "article": "Bell 407"
+    },
+    "B429": {
+      "article": "Bell 429 GlobalRanger"
+    },
+    "B505": {
+      "article": "Bell 505 Jet Ranger X"
+    },
+    "B52": {
+      "role": "military"
+    },
+    "B733": {
+      "photo": "Boeing 737 Classic (Lufthansa) (4557994031).jpg"
+    },
+    "B735": {
+      "photo": "Libyan Express, 5A-VIP, Boeing 737-5Y0 (53814565352).jpg"
+    },
+    "BE36": {
+      "article": "Beechcraft Bonanza"
+    },
+    "BE58": {
+      "article": "Beechcraft Baron"
+    },
+    "BE9L": {
+      "article": "Beechcraft King Air"
+    },
+    "BTB2": {
+      "role": "military",
+      "class": "uav",
+      "classReason": "Bayraktar TB2 is an unmanned aircraft; ICAO lists it outside classifyAircraft's UAV set",
+      "article": "Baykar Bayraktar TB2"
+    },
+    "C130": {
+      "role": "both",
+      "article": "Lockheed C-130 Hercules"
+    },
+    "C150": {
+      "article": "Cessna 150",
+      "photo": "Cessna 150 landet in Zell am See (4222690790).jpg"
+    },
+    "C152": {
+      "article": "Cessna 152"
+    },
+    "C17": {
+      "role": "military"
+    },
+    "C172": {
+      "article": "Cessna 172"
+    },
+    "C182": {
+      "article": "Cessna 182 Skylane"
+    },
+    "C210": {
+      "article": "Cessna 210 Centurion"
+    },
+    "C27J": {
+      "role": "military",
+      "article": "Alenia C-27J Spartan"
+    },
+    "C295": {
+      "role": "both",
+      "article": "EADS CASA C-295"
+    },
+    "C30J": {
+      "role": "military"
+    },
+    "C310": {
+      "article": "Cessna 310"
+    },
+    "C402": {
+      "article": "Cessna 402"
+    },
+    "C441": {
+      "article": "Cessna Conquest II"
+    },
+    "C5M": {
+      "role": "military"
+    },
+    "C72R": {
+      "article": "Cessna 172"
+    },
+    "CL64": {
+      "article": "Bombardier Challenger 600 series",
+      "docDesignator": "CL60"
+    },
+    "CL65": {
+      "article": "Bombardier Challenger 600 series",
+      "docDesignator": "CL60"
+    },
+    "CN35": {
+      "role": "both"
+    },
+    "DA40": {
+      "article": "Diamond DA40 Diamond Star"
+    },
+    "DA42": {
+      "article": "Diamond DA42 Twin Star"
+    },
+    "DHC6": {
+      "photo": "936 DHC-6 Twin Otter Fuerza Aerea De Chile (7334674242).jpg"
+    },
+    "DR40": {
+      "article": "Robin DR400"
+    },
+    "E2": {
+      "role": "military",
+      "article": "Northrop Grumman E-2 Hawkeye"
+    },
+    "E3CF": {
+      "role": "military",
+      "article": "Boeing E-3 Sentry"
+    },
+    "E45X": {
+      "article": "Embraer ERJ 145 family"
+    },
+    "E737": {
+      "role": "military",
+      "article": "Boeing 737 AEW&C"
+    },
+    "EC20": {
+      "article": "Eurocopter EC120 Colibri"
+    },
+    "EC25": {
+      "role": "both",
+      "article": "Eurocopter EC225 Super Puma",
+      "photo": "F-WWOT test flight Marignane.jpg"
+    },
+    "EC30": {
+      "article": "Eurocopter EC130"
+    },
+    "EC35": {
+      "article": "Eurocopter EC135"
+    },
+    "EC45": {
+      "article": "Eurocopter EC145"
+    },
+    "EC75": {
+      "article": "Airbus Helicopters H175"
+    },
+    "EUFI": {
+      "role": "military",
+      "article": "Eurofighter Typhoon",
+      "photo": "Darwin Pitch Black 2022 2WAL1090 (52338121658).jpg"
+    },
+    "F15": {
+      "role": "military",
+      "article": "McDonnell Douglas F-15 Eagle"
+    },
+    "F16": {
+      "role": "military",
+      "article": "General Dynamics F-16 Fighting Falcon"
+    },
+    "F18H": {
+      "role": "military",
+      "class": "fastjet",
+      "classReason": "F/A-18 Hornet fighter; ICAO designator F18H is outside classifyAircraft's fast-jet set",
+      "article": "McDonnell Douglas F/A-18 Hornet"
+    },
+    "F18S": {
+      "role": "military",
+      "class": "fastjet",
+      "classReason": "F/A-18E/F Super Hornet fighter; ICAO designator F18S is outside classifyAircraft's fast-jet set",
+      "article": "Boeing F/A-18E/F Super Hornet"
+    },
+    "F22": {
+      "role": "military",
+      "article": "Lockheed Martin F-22 Raptor"
+    },
+    "F2LX": {
+      "article": "Dassault Falcon 2000",
+      "docDesignator": "F2TH"
+    },
+    "F35": {
+      "role": "military",
+      "article": "Lockheed Martin F-35 Lightning II"
+    },
+    "G115": {
+      "article": "Grob G 115"
+    },
+    "G450": {
+      "article": "Gulfstream IV",
+      "docDesignator": "GLF4"
+    },
+    "G550": {
+      "article": "Gulfstream G550",
+      "docDesignator": "GLF5"
+    },
+    "G650": {
+      "article": "Gulfstream G650",
+      "docDesignator": "GLF6"
+    },
+    "GA8": {
+      "article": "GippsAero GA8 Airvan"
+    },
+    "GL6T": {
+      "article": "Bombardier Global 6000",
+      "docDesignator": "GLEX"
+    },
+    "H25B": {
+      "photo": "British Aerospace BAe 125 D-CHGN (10212525184).jpg"
+    },
+    "H47": {
+      "role": "military",
+      "article": "Boeing CH-47 Chinook"
+    },
+    "H60": {
+      "role": "military",
+      "article": "Sikorsky UH-60 Black Hawk"
+    },
+    "H64": {
+      "role": "military",
+      "article": "Boeing AH-64 Apache"
+    },
+    "HAWK": {
+      "role": "military",
+      "article": "BAE Systems Hawk"
+    },
+    "IL76": {
+      "role": "both"
+    },
+    "K35R": {
+      "role": "military"
+    },
+    "KA52": {
+      "role": "military",
+      "wikidata": "Q1723252"
+    },
+    "L39": {
+      "role": "military",
+      "article": "Aero L-39 Albatros"
+    },
+    "LJ45": {
+      "article": "Learjet 45"
+    },
+    "M20P": {
+      "article": "Mooney M20"
+    },
+    "M346": {
+      "role": "military",
+      "article": "Alenia Aermacchi M-346 Master"
+    },
+    "MG29": {
+      "role": "military",
+      "article": "Mikoyan MiG-29"
+    },
+    "MI24": {
+      "role": "military",
+      "article": "Mil Mi-24"
+    },
+    "MI8": {
+      "role": "both",
+      "article": "Mil Mi-8"
+    },
+    "NH90": {
+      "role": "military",
+      "article": "NHIndustries NH90"
+    },
+    "P28A": {
+      "article": "Piper PA-28 Cherokee"
+    },
+    "P28R": {
+      "article": "Piper PA-28R Cherokee Arrow"
+    },
+    "P3": {
+      "role": "military",
+      "article": "Lockheed P-3 Orion"
+    },
+    "P8": {
+      "role": "military"
+    },
+    "PA30": {
+      "article": "Piper PA-30 Twin Comanche"
+    },
+    "PA31": {
+      "article": "Piper PA-31 Navajo"
+    },
+    "PA44": {
+      "article": "Piper PA-44 Seminole"
+    },
+    "PC21": {
+      "role": "military",
+      "article": "Pilatus PC-21"
+    },
+    "PIAT": {
+      "article": "Pipistrel Alpha Trainer"
+    },
+    "Q4": {
+      "role": "military",
+      "article": "Northrop Grumman RQ-4 Global Hawk"
+    },
+    "Q9": {
+      "role": "military",
+      "article": "General Atomics MQ-9 Reaper"
+    },
+    "R135": {
+      "role": "military",
+      "article": "Boeing RC-135"
+    },
+    "R22": {
+      "article": "Robinson R22"
+    },
+    "R44": {
+      "article": "Robinson R44"
+    },
+    "RFAL": {
+      "role": "military",
+      "article": "Dassault Rafale"
+    },
+    "S22T": {
+      "article": "Cirrus SR22",
+      "photo": "D-EAIX Cirrus SR-22T VBY 01.jpg"
+    },
+    "S92": {
+      "article": "Sikorsky S-92"
+    },
+    "SGCD": {
+      "role": "military",
+      "class": "fastjet",
+      "classReason": "JAS 39C/D Gripen fighter; ICAO designator SGCD is outside classifyAircraft's fast-jet set",
+      "article": "Saab JAS 39 Gripen"
+    },
+    "SLG2": {
+      "article": "Airplane Factory Sling 2"
+    },
+    "SR20": {
+      "article": "Cirrus SR20"
+    },
+    "SR22": {
+      "article": "Cirrus SR22",
+      "photo": "D-EAIX Cirrus SR-22T VBY 01.jpg"
+    },
+    "SU27": {
+      "role": "military",
+      "article": "Sukhoi Su-27"
+    },
+    "T38": {
+      "role": "military",
+      "article": "Northrop T-38 Talon"
+    },
+    "U2": {
+      "role": "military",
+      "article": "Lockheed U-2"
+    },
+    "V22": {
+      "role": "military",
+      "article": "Bell Boeing V-22 Osprey"
+    },
+    "Y20": {
+      "role": "military",
+      "article": "Xian Y-20"
+    }
+  }
+}

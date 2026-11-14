@@ -184,6 +184,7 @@ export function createQueries({
       emergency: info?.emergency ? { ...info.emergency } : null,
       emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
       airline: info?.airline ?? null,
+      military: isMilitaryIcao(icao24),
       // CLASS label follows the TR-3B conversion so every downstream card
       // (cockpit, Contacts, analyst) agrees with the triangle on screen.
       typeName: tr3bTypeLabel(icao24, info?.typeName ?? null),
