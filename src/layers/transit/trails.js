@@ -8,16 +8,9 @@ import {
 } from '../../data/contactPlayback.js';
 import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
+import { TRANSIT_MODE_COLORS } from './policy.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
-const MODE_COLOR = {
-  bus: '#5EF08A',
-  tram: '#FFC24A',
-  subway: '#FF4538',
-  rail: '#D9A6FF',
-  ferry: '#5FD6FF',
-  unknown: '#D8DDE5',
-};
 // Final Cesium batching uses 3,152 bytes per two-lane edge.
 // The 1,278-instance body plus 64 bytes/instance reserve stays below 2 MiB.
 export const TRAIL_VERTEX_LIMIT = 640;
@@ -41,7 +34,7 @@ export function createTrails({ state, services, parts, source }) {
     renderer?.setStyle(
       transitStyleProfile(state._stylePreset) === 'mono'
         ? '#FFFFFF'
-        : MODE_COLOR[selected?.mode] || MODE_COLOR.unknown,
+        : TRANSIT_MODE_COLORS[selected?.mode] || TRANSIT_MODE_COLORS.unknown,
     );
   }
   function releaseSelectionGeometry(entry) {

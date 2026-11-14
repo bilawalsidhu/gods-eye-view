@@ -202,3 +202,25 @@ test('a feed fleet-number mode outranks its route mode in the epoch context', (t
   assert.equal(h.get('ttc', '4507', 100000).epochs[0].mode, 'tram');
   assert.equal(h.get('ttc', 'x1', 100000).epochs[0].mode, 'tram');
 });
+test('the epoch mode is the live mode: a route type, else hints, else the default', (t) => {
+  const h = history(t);
+  const pid = {
+    id: 'pid',
+    historyRetention: true,
+    defaultMode: 'bus',
+    routeMode: (route) => (route === 'L22' ? 'tram' : 'unknown'),
+  };
+  h.ingest(
+    pid,
+    [
+      row(100000, 'a', { routeId: 'L58', routeType: 11 }),
+      row(100000, 'b', { routeId: 'L22' }),
+      row(100000, 'c', { routeId: 'L9999' }),
+    ],
+    100000,
+  );
+  assert.equal(h.get('pid', 'a', 100000).epochs[0].mode, 'trolleybus');
+  assert.equal(h.get('pid', 'b', 100000).epochs[0].mode, 'tram');
+  // A hint that knows nothing leaves the default, as the live layer does.
+  assert.equal(h.get('pid', 'c', 100000).epochs[0].mode, 'bus');
+});

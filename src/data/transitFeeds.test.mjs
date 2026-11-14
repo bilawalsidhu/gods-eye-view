@@ -11,9 +11,13 @@ import {
   haversineKm,
   publicTransitCatalog,
   transitFeedsInRange,
+  TRANSIT_MODE_ICON,
   transitModeFor,
+  transitModeOfRouteType,
   transitModeResolved,
+  transitModelRouteType,
   transitRouteLabel,
+  transitRouteType,
 } from './transitFeeds.js';
 import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
@@ -729,8 +733,9 @@ test('Prague route-id ranges give metro, trains, ferries and trolleybuses their 
     transitRouteLabel(feed, routeId),
   ];
   assert.deepEqual(read('L22'), ['tram', '22']);
-  assert.deepEqual(read('L58'), ['bus', '58'], 'trolleybus');
-  assert.deepEqual(read('L49'), ['rail', 'LD'], 'Petřín funicular');
+  assert.deepEqual(read('L58'), ['trolleybus', '58']);
+  assert.deepEqual(read('L275'), ['trolleybus', '275'], 'route type 11');
+  assert.deepEqual(read('L49'), ['funicular', 'LD'], 'Petřín funicular');
   assert.deepEqual(read('L135'), ['bus', '135']);
   assert.deepEqual(read('L803'), ['bus', 'X3']);
   assert.deepEqual(read('L991'), ['subway', 'A']);
@@ -767,7 +772,7 @@ test('Rouen Métro and Calypso are not buses; Le Havre reads its own ids', () =>
   assert.equal(transitModeFor(feed, 'TCAR:93'), 'bus');
   assert.equal(transitRouteLabel(feed, 'TAE:F'), 'F');
   const lia = getTransitFeed('lia-le-havre');
-  assert.equal(transitModeFor(lia, '8-FUNI'), 'rail');
+  assert.equal(transitModeFor(lia, '8-FUNI'), 'funicular');
   assert.equal(transitRouteLabel(lia, '8-C3'), 'C3');
   assert.equal(transitRouteLabel(lia, '8-09'), '9');
   assert.equal(transitRouteLabel(lia, '8-A'), 'A');
@@ -777,4 +782,115 @@ test('data.gov.my feeds ask the proxy for no more than its 4 a minute', () => {
   for (const id of ['mybas-johor', 'mybas-kota-bharu']) {
     assert.ok(getTransitFeed(id).refreshMs >= 30_000, id);
   }
+});
+
+test('a GTFS route type names its mode, basic and extended alike', () => {
+  for (const [routeType, mode] of [
+    [0, 'tram'],
+    [1, 'subway'],
+    [2, 'rail'],
+    [3, 'bus'],
+    [4, 'ferry'],
+    [5, 'cable_tram'],
+    [6, 'aerial_lift'],
+    [7, 'funicular'],
+    [11, 'trolleybus'],
+    [12, 'monorail'],
+    [101, 'rail'],
+    [106, 'rail'],
+    [200, 'bus'],
+    [300, 'rail'],
+    [401, 'subway'],
+    [405, 'monorail'],
+    [702, 'bus'],
+    [800, 'trolleybus'],
+    [900, 'tram'],
+    [1000, 'ferry'],
+    [1200, 'ferry'],
+    [1300, 'aerial_lift'],
+    [1400, 'funicular'],
+    ['11', 'trolleybus'],
+  ])
+    assert.equal(transitModeOfRouteType(routeType), mode, String(routeType));
+  // Air, taxi and other services, and values GTFS does not define.
+  for (const other of [8, 1100, 1500, 1700, 1800, -1, 2.5, '', 'tram', null])
+    assert.equal(transitModeOfRouteType(other), 'unknown', String(other));
+  assert.equal(transitRouteType(' 200 '), 200);
+  assert.equal(transitRouteType('2e2'), null);
+});
+
+test('every mode has an icon, and every mode a route type names is a mode', () => {
+  for (const mode of TRANSIT_MODES) assert.ok(TRANSIT_MODE_ICON[mode], mode);
+  for (let routeType = 0; routeType < 1800; routeType++)
+    assert.ok(TRANSIT_MODES.includes(transitModeOfRouteType(routeType)));
+});
+
+test('a route type settles the mode before a route hint or the default', () => {
+  const mbta = getTransitFeed('mbta');
+  // The hint calls every numbered MBTA route a bus; a route type is finer.
+  assert.equal(transitModeFor(mbta, '71'), 'bus');
+  assert.equal(transitModeFor(mbta, '71', 'y1', 11), 'trolleybus');
+  assert.equal(transitModeResolved(mbta, '71', 'y1', 11), true);
+  // A default-only feed is resolved by a route type alone.
+  const durham = getTransitFeed('durham-region');
+  assert.equal(transitModeResolved(durham, '915', 'b1'), false);
+  assert.equal(transitModeFor(durham, '915', 'b1', 200), 'bus');
+  assert.equal(transitModeResolved(durham, '915', 'b1', 200), true);
+  // A type that names no mode leaves the hints in charge.
+  assert.equal(transitModeFor(mbta, 'Red', null, 1700), 'subway');
+  assert.equal(transitModeFor(mbta, 'Red', null, 'x'), 'subway');
+});
+
+test('a fleet hint outranks the route type, and then the type picks no model', () => {
+  const ttc = getTransitFeed('ttc-toronto');
+  // A bus standing in on the 501 streetcar route (route type 0).
+  const mode = transitModeFor(ttc, '501', '8400', 0);
+  assert.equal(mode, 'bus');
+  assert.equal(transitModelRouteType(mode, 0), null);
+  assert.equal(transitModelRouteType('tram', 0), 0);
+  assert.equal(transitModelRouteType('bus', 200), 200, 'a coach is a bus');
+  assert.equal(transitModelRouteType('bus', null), null);
+});
+
+test('a route correction outranks a mistyped route type, and only for its route', () => {
+  const lia = getTransitFeed('lia-le-havre');
+  // LiA's routes.txt types the funicular as a bus (3).
+  assert.equal(transitModeFor(lia, '8-FUNI', null, 3), 'funicular');
+  assert.equal(transitModeResolved(lia, '8-FUNI', null, 3), true);
+  // A correction is a mode, so the bus type picks no model for it.
+  assert.equal(transitModelRouteType('funicular', 3), null);
+  // Every other route still takes its route type.
+  assert.equal(transitModeFor(lia, '8-A', null, 0), 'tram');
+  assert.equal(transitModeFor(lia, '8-C3', null, 3), 'bus');
+  assert.equal(transitModeFor(lia, null, null, 3), 'bus');
+  // Corrections are narrow: a few named routes, each to a known mode.
+  for (const feed of TRANSIT_FEED_REGISTRY) {
+    if (!feed.routeCorrections) continue;
+    assert.ok(Object.isFrozen(feed.routeCorrections), feed.id);
+    for (const [route, mode] of Object.entries(feed.routeCorrections)) {
+      assert.ok(TRANSIT_MODES.includes(mode), `${feed.id} ${route}`);
+      assert.notEqual(mode, 'unknown', `${feed.id} ${route}`);
+    }
+  }
+  // An inherited key is not a correction.
+  assert.equal(transitModeFor(lia, 'toString', null, 3), 'bus');
+});
+
+// Route ids as each realtime feed and its operator's routes.txt carried them
+// on 2026-11-14.
+test('Bucharest, Cluj and Turin route ids give trams, trolleybuses and a funicular', () => {
+  const mode = (id, routeId) => transitModeFor(getTransitFeed(id), routeId);
+  assert.equal(mode('tpbi-bucuresti', '85'), 'trolleybus', 'line 74');
+  assert.equal(mode('tpbi-bucuresti', '1013'), 'tram', 'line 4');
+  assert.equal(mode('tpbi-bucuresti', '968'), 'subway', 'M1');
+  assert.equal(mode('tpbi-bucuresti', '828'), 'bus');
+  assert.equal(mode('tpbi-bucuresti', 'PV1_407'), 'bus');
+  assert.equal(mode('ctp-cluj', '1'), 'trolleybus');
+  assert.equal(mode('ctp-cluj', '2'), 'tram', 'line 100');
+  assert.equal(mode('ctp-cluj', '6'), 'bus', 'line 19');
+  assert.equal(mode('gtt-torino', '79U'), 'funicular', 'Sassi–Superga');
+  assert.equal(mode('gtt-torino', '16CDU'), 'tram');
+  assert.equal(mode('gtt-torino', 'METROU'), 'subway');
+  assert.equal(mode('gtt-torino', '6U'), 'bus');
+  assert.equal(mode('gtt-torino', null), 'bus', 'no route: the default');
 });

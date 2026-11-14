@@ -3701,5 +3701,10 @@
   "Reset view reloads the app without the view restored from the address bar.": "Restablecer la vista recarga la app sin la vista restaurada desde la barra de direcciones.",
   "Reload": "Recargar",
   "Retry": "Reintentar",
-  "Reset view": "Restablecer la vista"
+  "Reset view": "Restablecer la vista",
+  "Trolleybus": "Trolebús",
+  "Cable car": "Tranvía de cable",
+  "Monorail": "Monorraíl",
+  "Funicular": "Funicular",
+  "Gondola": "Góndola"
 }
