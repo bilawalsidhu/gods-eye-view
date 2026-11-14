@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 
 import {
   checkCatalog,
+  checkZhHant,
   extractMessages,
   findUnmarked,
   markedTemplate,
   readCatalog,
   shippedLocales,
+  toZhHant,
   unmarkedMarkup,
   unmarkedScript,
+  zhHantCatalog,
 } from '../../scripts/i18n.mjs';
 import { LOCALES } from './locale.js';
 
@@ -35,6 +38,65 @@ for (const locale of shippedLocales()) {
     );
   });
 }
+
+test('zh-Hant is zh-CN converted to Traditional characters (npm run i18n -- --zh-hant)', () => {
+  assert.deepEqual(
+    checkZhHant(readCatalog('zh-CN'), readCatalog('zh-Hant')),
+    [],
+  );
+});
+
+test('toZhHant converts characters, not vocabulary, and fixes what s2tw picks wrongly', () => {
+  // s2twp would write 影片, 伺服器 and 載入; zh-Hant keeps the zh-CN words.
+  assert.equal(toZhHant('视频'), '視頻');
+  assert.equal(toZhHant('服务器'), '服務器');
+  assert.equal(toZhHant('加载'), '加載');
+  assert.equal(toZhHant('50 年历史'), '50 年歷史');
+  assert.equal(toZhHant('发布于 {date}'), '發布於 {date}');
+  assert.equal(toZhHant('1 周/秒'), '1 週/秒');
+  assert.equal(
+    toZhHant('{direction}并道，进入 {road}'),
+    '{direction}併道，進入 {road}',
+  );
+  assert.equal(toZhHant('事故并道路封闭'), '事故並道路封閉');
+  assert.equal(toZhHant('已关闭并道歉'), '已關閉並道歉');
+});
+
+test('checkZhHant names each entry that is not the conversion of zh-CN', () => {
+  const zhCN = {
+    Video: '视频',
+    Server: '服务器',
+    '{count} ships': { other: '{count} 艘船' },
+  };
+  const generated = zhHantCatalog(zhCN);
+  assert.deepEqual(generated, {
+    Video: '視頻',
+    Server: '服務器',
+    '{count} ships': { other: '{count} 艘船' },
+  });
+  assert.deepEqual(checkZhHant(zhCN, generated), []);
+
+  const fix =
+    'zh-Hant is generated: edit zh-CN, then run npm run i18n -- --zh-hant';
+  const { Server, ...withoutServer } = generated;
+  assert.deepEqual(
+    checkZhHant(zhCN, {
+      ...withoutServer,
+      Video: '影片',
+      '{count} ships': { other: '{count} 艘船隻' },
+      Extra: '多餘',
+    }),
+    [
+      `"Video" is "影片", not zh-CN converted ("視頻"). ${fix}`,
+      `"Server" is in zh-CN but not here. ${fix}`,
+      `"{count} ships" is {"other":"{count} 艘船隻"}, not zh-CN converted ({"other":"{count} 艘船"}). ${fix}`,
+      `"Extra" is not in zh-CN. ${fix}`,
+    ],
+  );
+  assert.deepEqual(checkZhHant(zhCN, { Server, ...withoutServer }), [
+    'entries leave the zh-CN order at "Video": run npm run i18n -- --zh-hant',
+  ]);
+});
 
 test('every UI string is marked for translation or kept on purpose (npm run i18n)', () => {
   assert.deepEqual(
