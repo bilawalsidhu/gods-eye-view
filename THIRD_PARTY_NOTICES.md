@@ -60,3 +60,11 @@ Street Level viewer and the Data Library's GeoParquet reader; the complete resol
 - Author: Copyright (c) 2020 Arjun Barrett
 - Source: <https://github.com/101arrowz/fzstd>
 - License: MIT
+
+## kdbush
+
+- Package: `kdbush` 4.0.2 (the screen index that groups points drawn too
+  close together into clusters)
+- Author: Copyright (c) 2018, Vladimir Agafonkin
+- Source: <https://github.com/mourner/kdbush>
+- License: ISC

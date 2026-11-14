@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import KDBush from 'kdbush';
 import { clusterScreenPoints } from './screenCluster.js';
 
 /** A point at screen `x, y` whose world position is `x, y, 0` too. */
@@ -129,8 +130,51 @@ test('many points cluster as a scan of every point would', () => {
       ids.forEach((id) => done.add(id));
     }
   }
+  // The same seeds take the same points; the order after the seed is the
+  // index's, checked below.
+  const seedThenSorted = (ids) => [ids[0], ...ids.slice(1).sort()];
   assert.deepEqual(
-    result.clusters.map((c) => c.ids),
-    expected,
+    result.clusters.map((c) => seedThenSorted(c.ids)),
+    expected.map(seedThenSorted),
   );
+});
+
+test('a cluster lists its points in the reference renderer’s KDBush order, so a kept one names the same point first', () => {
+  // The reference indexes the points with KDBush (64 per node, 64-bit) and
+  // lists a cluster's points in the order a range query returns them.
+  let seed = 11;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const points = Array.from({ length: 400 }, (_, i) =>
+    at(`p${i}`, random() * 400, random() * 400),
+  );
+  const index = new KDBush(points.length, 64, Float64Array);
+  for (const p of points) index.add(p.screen.x, 1000 - p.screen.y);
+  index.finish();
+  const first = run(points);
+  const [kept] = first.state.clusters;
+  // Closer, at once: the first kept cluster takes every unclustered point in
+  // its box, in the index's order.
+  // (Its box is measured from the top, the index from the bottom.)
+  const coord = { x: 200, y: 800 };
+  const again = run(points, {
+    eyeHeight: 999_999,
+    previous: first.state,
+    project: () => coord,
+  });
+  const width = Math.max(kept.width * 1e-6, kept.minimumWidth);
+  const height = Math.max(kept.height * 1e-6, kept.minimumHeight);
+  const expected = index
+    .range(
+      coord.x - width * 0.5,
+      coord.y - height * 0.5,
+      coord.x + width,
+      coord.y + height,
+    )
+    .map((i) => points[i].id);
+  assert.ok(expected.length >= 3, 'the kept cluster holds');
+  assert.deepEqual(again.clusters[0].ids, expected);
+  const ascending = [...expected].sort(
+    (a, b) => Number(a.slice(1)) - Number(b.slice(1)),
+  );
+  assert.notDeepEqual(expected, ascending, 'the order is not the input order');
 });

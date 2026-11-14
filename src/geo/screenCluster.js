@@ -17,6 +17,8 @@
  * right and down.
  */
 
+import KDBush from 'kdbush';
+
 /**
  * @typedef {object} ScreenClusterPoint
  * @property {string} id
@@ -71,7 +73,7 @@ export function clusterScreenPoints({
     ys[i] = viewHeight - points[i].screen.y;
   }
   const clustered = new Uint8Array(n);
-  const index = createGridIndex(xs, ys, Math.max(1, pixelRange * 2));
+  const index = createIndex(xs, ys);
   const clusters = [];
   const kept = [];
 
@@ -164,43 +166,15 @@ function pointBox(x, y, size, pixelRange) {
 }
 
 /**
- * A uniform grid over packed coordinates, answering which points lie in a
- * box (bounds included), in ascending index order.
+ * The points' index: a KDBush tree built as the reference renderer's entity
+ * clustering builds it (64 per node, 64-bit coordinates), so a range query
+ * lists the same points in the same order and a cluster kept from the last
+ * pass names the same station first.
  */
-function createGridIndex(xs, ys, cell) {
-  const buckets = new Map();
-  const key = (cx, cy) => `${cx}:${cy}`;
-  for (let i = 0; i < xs.length; i++) {
-    const k = key(Math.floor(xs[i] / cell), Math.floor(ys[i] / cell));
-    let bucket = buckets.get(k);
-    if (!bucket) buckets.set(k, (bucket = []));
-    bucket.push(i);
-  }
-  return {
-    range(minX, minY, maxX, maxY) {
-      const found = [];
-      if (!(maxX >= minX && maxY >= minY)) return found;
-      const x0 = Math.floor(minX / cell);
-      const x1 = Math.floor(maxX / cell);
-      const y0 = Math.floor(minY / cell);
-      const y1 = Math.floor(maxY / cell);
-      if ((x1 - x0 + 1) * (y1 - y0 + 1) > buckets.size) {
-        for (let i = 0; i < xs.length; i++)
-          if (xs[i] >= minX && xs[i] <= maxX && ys[i] >= minY && ys[i] <= maxY)
-            found.push(i);
-        return found;
-      }
-      for (let cx = x0; cx <= x1; cx++)
-        for (let cy = y0; cy <= y1; cy++)
-          for (const i of buckets.get(key(cx, cy)) ?? [])
-            if (
-              xs[i] >= minX &&
-              xs[i] <= maxX &&
-              ys[i] >= minY &&
-              ys[i] <= maxY
-            )
-              found.push(i);
-      return found.sort((a, b) => a - b);
-    },
-  };
+function createIndex(xs, ys) {
+  if (!xs.length) return { range: () => [] };
+  const index = new KDBush(xs.length, 64, Float64Array);
+  for (let i = 0; i < xs.length; i++) index.add(xs[i], ys[i]);
+  index.finish();
+  return index;
 }

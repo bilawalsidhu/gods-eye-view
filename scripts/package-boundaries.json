@@ -69,7 +69,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "application": {
     "exports": ["./application"],
@@ -1159,7 +1159,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "scene-controls": {
     "exports": ["./ui/scenes"],
@@ -1548,7 +1548,8 @@
       "pinia",
       "vue-i18n",
       "pbf",
-      "@mapbox/vector-tile"
+      "@mapbox/vector-tile",
+      "kdbush"
     ]
   },
   "ui-styles": {
@@ -1738,7 +1739,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "vue", "pinia", "vue-i18n"]
+    "external": ["cesium", "vue", "pinia", "vue-i18n", "kdbush"]
   },
   "live-observations": {
     "exports": ["./sources/live"],
@@ -1892,7 +1893,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "military-flights": {
     "exports": ["./layers/military"],
@@ -2024,7 +2025,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "aircraft-mechanics": {
     "exports": ["./aircraft"],
@@ -2173,7 +2174,7 @@
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "render-cesium-plugin": {
     "exports": ["./render/cesium/plugin"],
@@ -2297,7 +2298,7 @@
       "src/layers/wind/model.js",
       "src/sky/assets.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
+    "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
   "render-cesium-unbound": {
     "exports": ["./render/cesium/unbound"],
@@ -2392,7 +2393,7 @@
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
+    "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
   "earthquakes": {
     "exports": ["./layers/earthquakes"],
@@ -2539,7 +2540,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "satellites-layer": {
     "exports": ["./layers/satellites"],
@@ -2645,7 +2646,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "satellite.js"]
+    "external": ["cesium", "satellite.js", "kdbush"]
   },
   "launches-layer": {
     "exports": ["./layers/launches"],
@@ -2747,7 +2748,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "installations-layer": {
     "exports": ["./layers/installations"],
@@ -2857,7 +2858,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "@mapbox/vector-tile", "pbf"]
+    "external": ["cesium", "@mapbox/vector-tile", "pbf", "kdbush"]
   },
   "awareness-layer": {
     "exports": ["./layers/awareness"],
@@ -2938,7 +2939,7 @@
       "src/ui/layerNames.js",
       "src/render/cesium/zoomOutGuard.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "traffic-layer": {
     "exports": ["./layers/traffic"],
@@ -3062,7 +3063,7 @@
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
+    "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
   "bikeshare-layer": {
     "exports": ["./layers/bikeshare"],
@@ -3251,7 +3252,7 @@
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js"
     ],
-    "external": ["hls.js", "cesium", "pbf", "@mapbox/vector-tile"]
+    "external": ["hls.js", "cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
   "street-level-layer": {
     "exports": [
@@ -3378,7 +3379,13 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
+    "external": [
+      "cesium",
+      "pbf",
+      "@mapbox/vector-tile",
+      "mapillary-js",
+      "kdbush"
+    ]
   },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
@@ -3463,7 +3470,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "@mapbox/vector-tile", "pbf"]
+    "external": ["cesium", "@mapbox/vector-tile", "pbf", "kdbush"]
   },
   "radio-layer": {
     "exports": ["./layers/radio"],
@@ -3573,7 +3580,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "submarine-cables": {
     "exports": ["./layers/submarine-cables"],
@@ -3648,7 +3655,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "bundled-cables": {
     "exports": ["./sources/bundled-cables"],
@@ -3787,7 +3794,7 @@
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js"
     ],
-    "external": ["cesium", "pbf", "@mapbox/vector-tile"]
+    "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
   "voice-connection": {
     "exports": [
@@ -5259,6 +5266,7 @@
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
       "src/layers/vessels/photos.js",
+      "src/viewSky.js",
       "src/viewWeather.js",
       "src/render/weather.js"
     ],
@@ -5276,7 +5284,8 @@
       "fzstd",
       "vue",
       "pinia",
-      "vue-i18n"
+      "vue-i18n",
+      "kdbush"
     ]
   },
   "application-catalog": {
@@ -6088,7 +6097,8 @@
       "@jtarrio/webrtlsdr",
       "vue",
       "pinia",
-      "vue-i18n"
+      "vue-i18n",
+      "kdbush"
     ]
   },
   "application-operations": {
@@ -6225,7 +6235,8 @@
       "satellite.js",
       "@mapbox/vector-tile",
       "pbf",
-      "mgrs"
+      "mgrs",
+      "kdbush"
     ]
   },
   "entity-records": {
@@ -6330,7 +6341,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "ui-share-restoration": {
     "exports": ["./ui/share-restoration"],
@@ -7038,7 +7049,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "egm96-universal", "pbf"]
+    "external": ["cesium", "egm96-universal", "pbf", "kdbush"]
   },
   "transit-layer": {
     "exports": ["./layers/transit"],
@@ -7162,7 +7173,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium", "pbf"]
+    "external": ["cesium", "pbf", "kdbush"]
   },
   "transit-source-factory": {
     "exports": ["./layers/transit/source"],
@@ -7473,7 +7484,7 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "kdbush"]
   },
   "ghostmaps-source": {
     "exports": ["./layers/ghostmaps/source"],
@@ -7881,7 +7892,7 @@
       "src/render/vectorBase/encode.js",
       "src/render/weather.js"
     ],
-    "external": ["pbf", "@mapbox/vector-tile"]
+    "external": ["pbf", "@mapbox/vector-tile", "kdbush"]
   },
   "wildlife-sightings": {
     "exports": ["./layers/wildlife-sightings"],
