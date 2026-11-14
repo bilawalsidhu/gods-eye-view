@@ -3692,5 +3692,12 @@
   "Confirm: remove every added entry from Data Layers": "Confirmar: remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Remove every added entry from Data Layers": "Remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Showing {shown} of {total}": "Mostrando {shown} de {total}",
-  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS"
+  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS",
+  "The globe stopped drawing": "O globo parou de desenhar",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "O navegador retirou os gráficos 3D do globo. As camadas e os controles continuam funcionando, mas o mapa só volta a ser desenhado depois de recarregar a página.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "A renderização parou após um erro. As camadas e os controles continuam funcionando, mas o mapa não está sendo atualizado.",
+  "Reset view reloads the app without the view restored from the address bar.": "Redefinir vista recarrega o app sem a vista restaurada da barra de endereços.",
+  "Reload": "Recarregar",
+  "Retry": "Tentar novamente",
+  "Reset view": "Redefinir vista"
 }

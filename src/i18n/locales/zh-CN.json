@@ -3518,5 +3518,12 @@
   "Confirm: remove every added entry from Data Layers": "确认：从数据图层中移除所有已添加条目",
   "Remove every added entry from Data Layers": "从数据图层中移除所有已添加条目",
   "Showing {shown} of {total}": "显示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "浏览数据资源库"
+  "BROWSE DATA LIBRARY": "浏览数据资源库",
+  "The globe stopped drawing": "地球已停止绘制",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "浏览器收回了地球的 3D 图形。图层和控件仍可使用，但在重新加载页面之前地图无法绘制。",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "渲染因错误而停止。图层和控件仍可使用，但地图不再更新。",
+  "Reset view reloads the app without the view restored from the address bar.": "“重置视图”会重新加载应用，不使用从地址栏恢复的视图。",
+  "Reload": "重新加载",
+  "Retry": "重试",
+  "Reset view": "重置视图"
 }

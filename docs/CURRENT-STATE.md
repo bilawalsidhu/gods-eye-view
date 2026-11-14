@@ -2306,6 +2306,17 @@ shown without a fade once it is decoded (or after one second if its decode never
 settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
+The panel opens when a camera becomes active and collapses when the layer is
+switched off, from its own switch or anywhere else. The panel chrome applies
+the collapse, so a panel the desktop accordion only folded has its saved and
+shared state closed too. Clear selected data layers and Context isolation
+(Contacts, Space Missions) switch the layer off without the user asking: the
+panel and its share preference stay as they are, and the layer comes back to an
+open panel. Only the switch-off isolation makes counts (`suspendsLayer`, true
+while `_clearLayersOutsideContextMode` switches the layer off): the user
+switching CCTV off inside Contacts closes the panel as anywhere else. A panel opened by hand while the layer is off stays open, and its
+meta line reads the catalog count, not the last active camera.
+
 ## UI disposal
 
 UI disposal releases the CCTV subscription, command-dock observer, legacy drag
@@ -2519,6 +2530,53 @@ Detection is a WebGL2 link probe of the same out-parameter/varying pattern, so a
 future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
+
+## Render failure notice
+
+When the globe stops drawing, the scene chrome says so instead of leaving a
+black globe behind working controls. `installRenderFailureNotice()`
+(`src/ui/renderFailure.js`) listens for Cesium's `renderError` and the canvas'
+`webglcontextlost`, logs the error, and publishes a notice that
+`RenderFailure.vue` shows as an alert dialog with focus on its first action.
+The app's viewer uses `showRenderLoopErrors: false`, so Cesium's dead-end
+"Rendering has stopped" panel no longer appears; `applicationViewerOptions()`
+keeps it by default for other callers.
+
+- **Retry** restarts the render loop. The notice stays until a frame starts
+  and ends without an error: Cesium raises `postRender` after a failed frame
+  too.
+- **Reload**, after a lost context, reloads the page; the address keeps the
+  view.
+- **Reset view** opens `appRootUrl()`, without the hash or `/share/<code>`
+  path; the query, such as `?lang=`, is kept.
+
+Pitfalls:
+
+- An error thrown outside Scene's error handling (a frame listener, `onTick`,
+  a resize) stops the loop without a `renderError`. The notice wraps the
+  widget's `render()` and `resize()` and raises it as one, once even with
+  `rethrowRenderErrors`.
+- A throwing listener leaves its Cesium event mid-raise, with listener changes
+  only queued. The wrapper finishes those raises first (`finishRaise()` over
+  `frameEvents()`), so a layer turned off or on meanwhile behaves.
+- A render error marks the loop stopped while its next frame is still queued.
+  The wrapper keeps the loop marked running, so a Retry or a shown tab
+  (`src/app/tools.js`) before that frame starts no second loop.
+- After a lost context, later render errors are only logged, so the notice
+  keeps saying why. The listener neither prevents nor restores the loss.
+- When the globe draws again, focus goes back where it was, or to the globe's
+  canvas, which the map's keys read as the map; the canvas is focusable only
+  until focus leaves or the globe is pressed. Focus the user moved stays put.
+- The notice sits above floating panels such as the Québec camera viewer, and
+  its buttons are 44 px tall on touch screens.
+
+An inline conversation panel never reloads or navigates its host's page: it
+offers Retry after a render error only, and no notice after a lost context,
+where the panel runtime's own notice applies (`src/app/globePanelRuntime.js`).
+Its timer (`keepPanelRendering()`) draws only while the render loop is on and
+logs nothing itself, so each render error is logged once, by the notice. An
+error a timer frame throws is caught there: it has already been raised as a
+render error.
 
 ## Map Source control ownership
 
