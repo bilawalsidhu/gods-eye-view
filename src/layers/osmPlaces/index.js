@@ -1,5 +1,7 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { drawOf } from '../../render/rendererOf.js';
+import { drawOf, findInput } from '../../render/rendererOf.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 import { msg } from '../../i18n/marker.js';
 import { OSM_PLACES_LAYER_ID } from './model.js';
 import { createNominatimStatus } from '../../sources/nominatimStatus.js';
@@ -28,6 +30,7 @@ export function createOsmPlacesLayer({
   overlayHost,
   // The same once-per-page capability probe as Nominatim's, on Overpass.
   overpassConfigured = createNominatimStatus({ url: '/api/overpass/status' }),
+  inputFor = defaultInputFor,
 } = {}) {
   if (!overlayHost) throw new TypeError('OSM Places requires an overlay host');
   let viewer = null;
@@ -39,12 +42,17 @@ export function createOsmPlacesLayer({
   let lastUpdate = null;
   /** true / false from the server's probe, null while unknown. */
   let configured = null;
+  /** Each drawn place's position, for a double-click to follow. */
+  let placeAt = new Map();
+  let stockFollow = null;
 
   function render() {
     if (!points) return;
     const items = [];
+    const nextAt = new Map();
     const overlay = [];
     for (const record of records) {
+      nextAt.set(`osm-place:${record.id}`, fromDegrees(record.lon, record.lat));
       items.push({
         id: `osm-place:${record.id}`,
         pos: { lon: record.lon, lat: record.lat },
@@ -77,6 +85,7 @@ export function createOsmPlacesLayer({
         });
     }
     points.set(items);
+    placeAt = nextAt;
     if (enabled)
       overlayHost.setEntries(OVERLAY_SOURCE_ID, overlay, {
         cohortLimit: LABEL_LIMIT,
@@ -116,6 +125,23 @@ export function createOsmPlacesLayer({
         show: false,
       });
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
+      // A double-click follows a place, as the default renderer followed
+      // the places' entities (a scene that takes no input has none).
+      stockFollow?.destroy();
+      stockFollow =
+        findInput(viewer) &&
+        followOnDoubleClick({
+          viewer,
+          inputFor,
+          name: OSM_PLACES_LAYER_ID,
+          enabled: () => enabled,
+          targetFor: (hit) => {
+            const at = hit.set === points?.id && placeAt.get(hit.id);
+            return at
+              ? { key: `${hit.set}:${hit.id}`, position: () => ({ ...at }) }
+              : null;
+          },
+        });
     },
 
     enable() {
@@ -128,6 +154,7 @@ export function createOsmPlacesLayer({
 
     disable() {
       enabled = false;
+      stockFollow?.stop();
       if (points) points.show = false;
       overlayHost.clearSource(OVERLAY_SOURCE_ID);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
@@ -143,8 +170,11 @@ export function createOsmPlacesLayer({
       enabled = false;
       overlayHost.clearSource(OVERLAY_SOURCE_ID);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
+      stockFollow?.destroy();
+      stockFollow = null;
       points?.dispose();
       points = null;
+      placeAt = new Map();
       viewer = null;
       records = [];
       meta = null;
@@ -160,6 +190,8 @@ export function createOsmPlacesLayer({
       records = Array.isArray(next) ? next.slice() : [];
       meta = nextMeta ? { ...nextMeta } : null;
       lastUpdate = Date.now();
+      // New results replace every place: one followed is gone with them.
+      stockFollow?.stop();
       render();
     },
 
