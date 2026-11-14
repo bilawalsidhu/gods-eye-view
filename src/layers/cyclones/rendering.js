@@ -269,6 +269,13 @@ export function createCycloneRendering({ viewer, overlayHost }) {
       const at = place.at;
       return { key: `${hit.set}:${hit.id}`, position: () => ({ ...at }) };
     },
+    /** Whether the item a follow's key (`<set>:<item>`) names is drawn now. */
+    drawsFollowKey(key) {
+      for (const set of setIds)
+        if (key.startsWith(`${set}:`))
+          return committed && itemPlaces.has(key.slice(set.length + 1));
+      return false;
+    },
     getFocusSphere(id) {
       return spheres.get(id) || null;
     },

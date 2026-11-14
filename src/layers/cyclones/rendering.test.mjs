@@ -480,7 +480,11 @@ test('a double-click follows a storm’s points and zooms to its tracks and cone
     }),
     null,
   );
+  const key = `${h.sets.points.spec.id}:cyclone:ep152026:center`;
+  assert.equal(h.rendering.drawsFollowKey(key), true);
+  assert.equal(h.rendering.drawsFollowKey(`other:points:x`), false);
   h.rendering.clear();
+  assert.equal(h.rendering.drawsFollowKey(key), false, 'cleared: not drawn');
   assert.equal(
     h.rendering.followTargetFor(h.hit('points', 'cyclone:ep152026:center')),
     null,

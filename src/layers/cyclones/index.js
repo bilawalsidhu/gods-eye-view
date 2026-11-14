@@ -240,6 +240,7 @@ export function createCyclonesLayer({
       enabled: () => enabled && !destroyed && selectionOwner === owner,
       targetFor: (hit) => rendering?.followTargetFor?.(hit) ?? null,
     });
+    owner.follow = follow;
     owner.unsubscribe = () => {
       unsubscribe();
       follow.destroy();
@@ -312,6 +313,7 @@ export function createCyclonesLayer({
         if (next.unavailable) {
           // An expired advisory must not remain presented as current hazard context.
           rendering.clear();
+          selectionOwner?.follow?.stop();
           snapshot = next;
           selectedId = null;
           ++navigationGeneration;
@@ -331,6 +333,8 @@ export function createCyclonesLayer({
           return false;
         snapshot = next;
         error = null;
+        // A storm point no longer in the advisory takes its follow with it.
+        selectionOwner?.follow?.retain((key) => rendering.drawsFollowKey(key));
         if (!snapshot.storms.some((storm) => storm.id === selectedId))
           select(
             selectionIntent === 'cleared'
@@ -348,6 +352,7 @@ export function createCyclonesLayer({
         error = cause?.message || ADVISORIES_UNAVAILABLE;
         // Failed acquisition has no bounded last-good age guarantee at this layer.
         rendering?.clear();
+        selectionOwner?.follow?.stop();
         snapshot = null;
         selectedId = null;
         ++navigationGeneration;

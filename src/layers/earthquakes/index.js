@@ -181,6 +181,10 @@ export function createEarthquakesLayer({
 
         _discs.set(nextDiscs);
         _discsById = nextById;
+        // A disc no longer reported takes its follow with it.
+        _stockFollow?.retain((key) =>
+          _discsById.has(key.slice(_discs.id.length + 1)),
+        );
         _events = nextEvents;
         if (_enabled) {
           overlayHost.setEntries(

@@ -178,9 +178,10 @@ test('a double-click follows a disc, framed to fit it, as its entity was', async
   const viewer = { isDestroyed: () => false };
   const unbind = bindRenderer(viewer, renderer);
   const layer = createEarthquakesLayer({
-    source: { getSnapshot: async () => [row] },
+    source: { getSnapshot: async () => rows },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
+  let rows = [row];
   t.after(() => {
     layer.destroy(viewer);
     unbind();
@@ -203,6 +204,19 @@ test('a double-click follows a disc, framed to fit it, as its entity was', async
   const p = followed.position(0);
   const lon = (Math.atan2(p.y, p.x) * 180) / Math.PI;
   assert.ok(Math.abs(lon - row.lon) < 1e-9, String(lon));
+  await layer.update(viewer);
+  assert.ok(renderer.camera.followed, 'still reported: still followed');
+  rows = [{ ...row, stableId: 'event-b', usgsId: 'event-b' }];
+  await layer.update(viewer);
+  assert.equal(
+    renderer.camera.followed,
+    null,
+    'gone from the feed: not followed',
+  );
+  rows = [row];
+  await layer.update(viewer);
+  renderer.testing.pointer('dblclick', 10, 10);
+  assert.ok(renderer.camera.followed);
   layer.disable(viewer);
   assert.equal(renderer.camera.followed, null, 'hiding the layer stops it');
 });

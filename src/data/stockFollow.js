@@ -100,7 +100,8 @@ export function followViewFrom(sphere, at, camera) {
  *   radius 0 by default, and the holder whose entity record shows it, as
  *   `entityFollowTarget` reads one), or zoomed to (`zoomTo`); null for
  *   anything else.
- * @returns {{readonly following: object|null, stop(): void, destroy(): void}}
+ * @returns {{readonly following: object|null, retain(drawn: (key: string) => boolean): void,
+ *   stop(): void, destroy(): void}}
  */
 export function followOnDoubleClick({
   viewer,
@@ -159,6 +160,15 @@ export function followOnDoubleClick({
   return {
     get following() {
       return follow && findCamera(viewer)?.followed === follow ? follow : null;
+    },
+    /**
+     * Stop a follow this started of something no longer drawn, as removing
+     * an entity ended the default renderer's follow of it.
+     * @param {(key: string) => boolean} drawn Whether the item keyed so is.
+     */
+    retain(drawn) {
+      const key = this.following?.key;
+      if (key && !drawn(key)) this.stop();
     },
     /** Stop a follow this started, if the camera still keeps it. */
     stop() {
