@@ -1355,7 +1355,13 @@
       "src/layers/flights/typeCard.js",
       "src/data/aircraftTypes/index.js",
       "src/data/aircraftClass.js",
-      "src/data/aircraftTypes/catalog.json"
+      "src/data/aircraftTypes/catalog.json",
+      "src/data/countries/index.js",
+      "src/data/countries/naming.js",
+      "src/data/countries/catalog.json",
+      "src/data/airlines/index.js",
+      "src/data/airlines/naming.js",
+      "src/data/airlines/catalog.json"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -3831,7 +3837,13 @@
       "src/layers/flights/typeCard.js",
       "src/data/aircraftTypes/index.js",
       "src/data/trackedHologram.js",
-      "src/data/aircraftTypes/catalog.json"
+      "src/data/aircraftTypes/catalog.json",
+      "src/data/countries/index.js",
+      "src/data/countries/naming.js",
+      "src/data/countries/catalog.json",
+      "src/data/airlines/index.js",
+      "src/data/airlines/naming.js",
+      "src/data/airlines/catalog.json"
     ],
     "external": [
       "hls.js",

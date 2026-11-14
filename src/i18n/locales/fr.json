@@ -3730,5 +3730,7 @@
   "Selected aircraft": "Aéronef sélectionné",
   "Unidentified aircraft": "Aéronef non identifié",
   "Photo shows the aircraft type, not the tracked airframe.": "La photo montre le type d'aéronef, pas l'appareil suivi.",
-  "This aircraft type is not in the type library yet.": "Ce type d'aéronef n'est pas encore dans la bibliothèque des types."
+  "This aircraft type is not in the type library yet.": "Ce type d'aéronef n'est pas encore dans la bibliothèque des types.",
+  "Operator": "Exploitant",
+  "Country of registry": "Pays d'immatriculation"
 }

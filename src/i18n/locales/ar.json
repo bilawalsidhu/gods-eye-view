@@ -3991,5 +3991,7 @@
   "Selected aircraft": "الطائرة المحددة",
   "Unidentified aircraft": "طائرة غير محددة الهوية",
   "Photo shows the aircraft type, not the tracked airframe.": "تعرض الصورة نوع الطائرة وليس الطائرة المتتبَّعة.",
-  "This aircraft type is not in the type library yet.": "نوع الطائرة هذا غير موجود في مكتبة الأنواع بعد."
+  "This aircraft type is not in the type library yet.": "نوع الطائرة هذا غير موجود في مكتبة الأنواع بعد.",
+  "Operator": "المشغّل",
+  "Country of registry": "بلد التسجيل"
 }

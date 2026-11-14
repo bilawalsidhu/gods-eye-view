@@ -147,6 +147,14 @@ const telemetryRows = computed(() => {
     </template>
     <h2>{{ title }}</h2>
     <div class="cls">{{ classLine }}</div>
+    <div v-if="model.operator" class="operator" :title="t('Operator')">
+      <span v-if="model.operator.tailColor" class="swatch" :style="{ background: model.operator.tailColor }"></span>
+      {{ model.operator.name }}
+    </div>
+    <div v-if="model.country" class="country" :title="t('Country of registry')">
+      <span aria-hidden="true">{{ model.country.flag }}</span>
+      {{ model.country.name }}
+    </div>
     <dl>
       <div v-for="row in specRows" :key="row.key" :class="{ wide: row.wide }">
         <dt>{{ row.label }}</dt>
@@ -223,6 +231,22 @@ const telemetryRows = computed(() => {
   text-shadow: 0 0 10px color-mix(in srgb, var(--acc) 60%, transparent);
 }
 .gev-type-card .cls { margin: 2px 12px 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--acc); }
+.gev-type-card .operator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #eaffff;
+}
+.gev-type-card .operator .swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid color-mix(in srgb, var(--acc) 60%, transparent);
+}
+.gev-type-card .country { margin: 2px 12px 0; font-size: 12px; color: #b9dde8; }
 .gev-type-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 10px 12px 12px; }
 .gev-type-card dt { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #7fa9b8; }
 .gev-type-card dd { margin: 0; font-size: 14px; color: #eaffff; }

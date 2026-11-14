@@ -3817,5 +3817,7 @@
   "Selected aircraft": "Выбранный самолёт",
   "Unidentified aircraft": "Неопознанный самолёт",
   "Photo shows the aircraft type, not the tracked airframe.": "На фото показан тип самолёта, а не отслеживаемый борт.",
-  "This aircraft type is not in the type library yet.": "Этого типа самолёта пока нет в библиотеке типов."
+  "This aircraft type is not in the type library yet.": "Этого типа самолёта пока нет в библиотеке типов.",
+  "Operator": "Оператор",
+  "Country of registry": "Страна регистрации"
 }

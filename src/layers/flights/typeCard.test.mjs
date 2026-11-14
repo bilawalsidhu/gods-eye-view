@@ -84,11 +84,35 @@ test('a contact with nothing known still yields a model with null fields', () =>
   assert.equal(model.telemetry.headingDeg, null);
 });
 
-test('the operator and country slots exist and stay null', () => {
+test('the callsign names the operator and the address names the country', () => {
   const model = aircraftTypeCardModel(tracked, { isMilitary: false });
+  assert.equal(model.operator.name, 'Swiss International Air Lines');
+  assert.equal(model.operator.icao, 'SWR');
+  assert.equal(model.country.iso2, 'CH');
+  assert.equal(model.country.name, 'Switzerland');
+  assert.equal(model.country.flag, '\u{1F1E8}\u{1F1ED}');
+});
+
+test('a carrier with a curated tail colour carries it', () => {
+  const model = aircraftTypeCardModel(
+    { ...tracked, callsign: 'BAW123', icao24: '400A00' },
+    { isMilitary: false },
+  );
+  assert.equal(model.operator.name, 'British Airways');
+  assert.match(model.operator.tailColor, /^#[0-9A-F]{6}$/);
+  assert.equal(model.country.iso2, 'GB');
+});
+
+test('an unknown callsign or address leaves the operator and country null', () => {
+  const model = aircraftTypeCardModel(
+    { ...tracked, callsign: 'N123AB', icao24: 'ffffff' },
+    { isMilitary: false },
+  );
   assert.equal(model.operator, null);
   assert.equal(model.country, null);
-  assert.ok('operator' in model && 'country' in model);
+  const empty = aircraftTypeCardModel(null, { isMilitary: false });
+  assert.equal(empty.operator, null);
+  assert.equal(empty.country, null);
 });
 
 test('a heading of zero is kept, not treated as missing', () => {

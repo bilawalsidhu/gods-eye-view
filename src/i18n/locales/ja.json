@@ -3556,5 +3556,7 @@
   "Selected aircraft": "選択中の航空機",
   "Unidentified aircraft": "未識別の航空機",
   "Photo shows the aircraft type, not the tracked airframe.": "写真は機種を示すもので、追跡中の機体そのものではありません。",
-  "This aircraft type is not in the type library yet.": "この機種はまだ機種ライブラリにありません。"
+  "This aircraft type is not in the type library yet.": "この機種はまだ機種ライブラリにありません。",
+  "Operator": "運航会社",
+  "Country of registry": "登録国"
 }

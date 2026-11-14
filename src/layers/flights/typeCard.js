@@ -1,10 +1,13 @@
 import { aircraftTypeEntry } from '../../data/aircraftTypes/index.js';
+import { airlineForCallsign } from '../../data/airlines/index.js';
+import { countryForIcao24 } from '../../data/countries/index.js';
 
 /**
  * @module typeCard
  * @description Pure model behind the selected-aircraft type card: what kind of
  * aircraft the tracked contact is (name, specs, a licensed photo of the TYPE)
- * plus its live telemetry. The type library import lives only here.
+ * plus its live telemetry, the operator airline and the country of registry.
+ * The library imports live only here.
  */
 
 const finiteOrNull = (value) => (Number.isFinite(value) ? value : null);
@@ -52,11 +55,12 @@ function photoOf(entry) {
  *   telemetry: {altitudeM: number|null, speedMs: number|null,
  *     headingDeg: number|null, lat: number|null, lon: number|null,
  *     origin: string|null, destination: string|null},
- *   operator: null,
- *   country: null,
+ *   operator: {name: string, icao: string, iata: string|null,
+ *     callsign: string|null, tailColor: string|null}|null,
+ *   country: {iso2: string, name: string, flag: string}|null,
  * }} `type`, `specs` and `photo` are null for a type the library lacks.
- *   `operator` and `country` are reserved for the airline and country
- *   libraries and stay null until those exist.
+ *   `operator` is null when the callsign names no airline, and `country` is
+ *   null when the ICAO 24-bit address sits in no allocated block.
  */
 export function aircraftTypeCardModel(record, { isMilitary }) {
   const info = record ?? {};
@@ -87,7 +91,21 @@ export function aircraftTypeCardModel(record, { isMilitary }) {
       origin: textOrNull(info.origin),
       destination: textOrNull(info.destination),
     },
-    operator: null,
-    country: null,
+    operator: (() => {
+      const a = airlineForCallsign(info.callsign);
+      return a
+        ? {
+            name: a.name,
+            icao: a.icao,
+            iata: a.iata,
+            callsign: a.callsign,
+            tailColor: a.tailColor,
+          }
+        : null;
+    })(),
+    country: (() => {
+      const c = countryForIcao24(info.icao24);
+      return c ? { iso2: c.iso2, name: c.name, flag: c.flag } : null;
+    })(),
   };
 }

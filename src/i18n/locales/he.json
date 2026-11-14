@@ -3730,5 +3730,7 @@
   "Selected aircraft": "כלי הטיס שנבחר",
   "Unidentified aircraft": "כלי טיס לא מזוהה",
   "Photo shows the aircraft type, not the tracked airframe.": "התצלום מציג את סוג כלי הטיס, לא את המטוס שנעקב.",
-  "This aircraft type is not in the type library yet.": "סוג כלי טיס זה עדיין אינו בספריית הסוגים."
+  "This aircraft type is not in the type library yet.": "סוג כלי טיס זה עדיין אינו בספריית הסוגים.",
+  "Operator": "מפעיל",
+  "Country of registry": "מדינת רישום"
 }

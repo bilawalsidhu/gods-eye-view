@@ -84,6 +84,29 @@ test('the component renders the type name, photo and civil class line', (t) => {
   );
 });
 
+test('the card names the operator with its tail colour and the country with its flag', (t) => {
+  const root = render(TRACKED, t);
+  const operator = root.querySelector('.operator');
+  assert.equal(text(operator), 'Swiss International Air Lines');
+  assert.equal(operator.getAttribute('title'), 'Operator');
+  assert.match(
+    operator.querySelector('.swatch').getAttribute('style'),
+    /background:\s*(#E30613|rgb\(227,\s*6,\s*19\))/i,
+  );
+  const country = root.querySelector('.country');
+  assert.equal(text(country), '\u{1F1E8}\u{1F1ED} Switzerland');
+  assert.equal(country.getAttribute('title'), 'Country of registry');
+});
+
+test('the operator and country lines are absent when the contact has neither', (t) => {
+  const root = render(
+    { ...TRACKED, callsign: 'N123AB', icao24: 'ffffff' },
+    t,
+  );
+  assert.equal(root.querySelector('.operator'), null);
+  assert.equal(root.querySelector('.country'), null);
+});
+
 test('the photo credit links to its author and licence', (t) => {
   const root = render(TRACKED, t);
   const links = [...root.querySelectorAll('.credit a')];

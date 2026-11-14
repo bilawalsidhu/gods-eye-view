@@ -3730,5 +3730,7 @@
   "Selected aircraft": "Aeronave selecionada",
   "Unidentified aircraft": "Aeronave não identificada",
   "Photo shows the aircraft type, not the tracked airframe.": "A foto mostra o tipo de aeronave, não a aeronave rastreada.",
-  "This aircraft type is not in the type library yet.": "Este tipo de aeronave ainda não está na biblioteca de tipos."
+  "This aircraft type is not in the type library yet.": "Este tipo de aeronave ainda não está na biblioteca de tipos.",
+  "Operator": "Operador",
+  "Country of registry": "País de registo"
 }

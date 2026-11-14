@@ -3556,5 +3556,7 @@
   "Selected aircraft": "已选飞机",
   "Unidentified aircraft": "未识别飞机",
   "Photo shows the aircraft type, not the tracked airframe.": "照片显示的是机型，并非正在跟踪的机体。",
-  "This aircraft type is not in the type library yet.": "该机型尚未收录到机型库。"
+  "This aircraft type is not in the type library yet.": "该机型尚未收录到机型库。",
+  "Operator": "运营人",
+  "Country of registry": "注册国家"
 }

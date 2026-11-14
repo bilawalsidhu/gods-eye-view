@@ -3643,5 +3643,7 @@
   "Selected aircraft": "Valt flygplan",
   "Unidentified aircraft": "Oidentifierat flygplan",
   "Photo shows the aircraft type, not the tracked airframe.": "Fotot visar flygplanstypen, inte det följda flygplanet.",
-  "This aircraft type is not in the type library yet.": "Den här flygplanstypen finns inte i typbiblioteket än."
+  "This aircraft type is not in the type library yet.": "Den här flygplanstypen finns inte i typbiblioteket än.",
+  "Operator": "Operatör",
+  "Country of registry": "Registreringsland"
 }
