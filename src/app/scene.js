@@ -2,6 +2,7 @@ import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
+  installFreeLookHeightLimit,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
@@ -14,7 +15,11 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
-import { t } from '../i18n/index.js';
+import { isEmbeddedInline } from './embed.js';
+import { installRenderFailureNotice } from '../ui/renderFailure.js';
+import { worldClock, worldTimeFor } from '../time/worldClock.js';
+import { followWorldTime } from '../time/viewerClock.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
@@ -52,14 +57,28 @@ export async function createApplicationScene({
   const viewer = createApplicationViewer({
     container: 'cesiumContainer',
     creditContainer,
+    // The render failure notice below replaces Cesium's dead-end panel.
+    showRenderLoopErrors: false,
   });
   defer(() => {
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  // An inline panel must not reload or navigate its host's page.
+  defer(
+    installRenderFailureNotice(viewer, { allowReload: !isEmbeddedInline() }),
+  );
   defer(installTrackpadPinchZoom(viewer));
+  defer(
+    followWorldTime(viewer, worldTimeFor('sky'), {
+      subscribe: worldClock.subscribe,
+      requestRender: () => governorRequestRender('world-time'),
+    }),
+  );
+  defer(installFreeLookHeightLimit(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
+  defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')

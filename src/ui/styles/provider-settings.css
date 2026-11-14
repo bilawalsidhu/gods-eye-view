@@ -184,17 +184,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(54, 220, 255, 0.45) transparent;
   scrollbar-gutter: stable;
-}
-
-.key-setup-rows::-webkit-scrollbar {
-  width: 6px;
-}
-.key-setup-rows::-webkit-scrollbar-thumb {
-  background: rgba(54, 220, 255, 0.45);
-  border-radius: 3px;
 }
 
 .key-setup-row {

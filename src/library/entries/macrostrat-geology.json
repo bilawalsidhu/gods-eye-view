@@ -1,0 +1,88 @@
+{
+  "id": "macrostrat-geology",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Geologic map (Macrostrat)",
+  "provider": "Macrostrat",
+  "description": "Bedrock geology worldwide, harmonised from hundreds of published geologic maps and coloured by rock age on the international (ICS) time-scale colours.",
+  "icon": "◒",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 14
+  },
+  "display": {
+    "opacity": 0.7,
+    "legend": [
+      {
+        "label": "Quaternary",
+        "color": "#f9f97f"
+      },
+      {
+        "label": "Neogene",
+        "color": "#ffe619"
+      },
+      {
+        "label": "Paleogene",
+        "color": "#fd9a52"
+      },
+      {
+        "label": "Cretaceous",
+        "color": "#7fc64e"
+      },
+      {
+        "label": "Jurassic",
+        "color": "#34b2c9"
+      },
+      {
+        "label": "Triassic",
+        "color": "#812b92"
+      },
+      {
+        "label": "Permian",
+        "color": "#f04028"
+      },
+      {
+        "label": "Carboniferous",
+        "color": "#67a599"
+      },
+      {
+        "label": "Devonian",
+        "color": "#cb8c37"
+      },
+      {
+        "label": "Silurian",
+        "color": "#b3e1b6"
+      },
+      {
+        "label": "Ordovician",
+        "color": "#009270"
+      },
+      {
+        "label": "Cambrian",
+        "color": "#7fa056"
+      },
+      {
+        "label": "Precambrian",
+        "color": "#f74370"
+      }
+    ]
+  },
+  "licence": {
+    "name": "CC BY 4.0 (Macrostrat; source maps credited by their publishers)",
+    "url": "https://macrostrat.org/about"
+  },
+  "attribution": {
+    "text": "Macrostrat — geologic maps from their original publishers",
+    "url": "https://macrostrat.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

@@ -26,6 +26,10 @@ export function railFixture(onWrite = () => {}) {
         getAttribute(key) {
           return this.attributes.get(key) ?? null;
         },
+        removeAttribute(key) {
+          onWrite('attribute');
+          this.attributes.delete(key);
+        },
         appendChild(child) {
           return this.insertBefore(child, null);
         },
@@ -112,5 +116,29 @@ export function railFixture(onWrite = () => {}) {
     container,
     document,
     find: (predicate, root = container) => find(root, predicate),
+  };
+}
+
+/**
+ * A container in the test document for presentation that renders with Vue,
+ * with a count of DOM writes. Import `../testSupport/registerDom.mjs` first.
+ */
+export function railDocumentFixture() {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const observer = new MutationObserver(() => {});
+  observer.observe(container, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  });
+  return {
+    container,
+    document,
+    find: (predicate, root = container) =>
+      [root, ...root.querySelectorAll('*')].find(predicate) ?? null,
+    /** DOM writes since the last call. */
+    writes: () => observer.takeRecords().length,
   };
 }

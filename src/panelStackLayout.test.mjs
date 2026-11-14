@@ -1,5 +1,5 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -141,8 +141,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   const ui = readShellSource();
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.doesNotMatch(ui, /_enforce(?:Left|Right)PanelAccordion/);
-  assert.match(rails, /classList\.add\('collapsed', 'layout-auto-collapsed'\)/);
-  assert.match(readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8'), /classList\.remove\('collapsed', 'layout-auto-collapsed'\)/);
+  assert.match(rails, /onCollapse\(panel, \{ collapsed: true, auto: 'layout' \}\)/);
+  assert.match(readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8'), /_presentPanel\(panel, \{ collapsed: false, auto: null \}\)/);
   assert.match(ui, /reconsiderAutoCollapse/);
   assert.match(
     ui,
@@ -167,7 +167,9 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   );
   assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
   assert.match(rightRail, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\s*\(panel\) =>\s*panel\.contains\(documentRef\.activeElement\),?\s*\)/);
-  assert.match(ui, /setAttribute\('aria-expanded', String\(!collapsed\)\)/);
+  // Collapse buttons render aria-expanded from the state the chrome presents
+  // (panelChromeButtons.test.mjs covers the views).
+  assert.match(ui, /this\._presentPanel\(panelEl, \{ collapsed: nextCollapsed, auto: null \}\)/);
   assert.match(leftRail, /--left-panel-allocated-height/);
   assert.match(rightRail, /--right-panel-allocated-height/);
   assert.match(
@@ -188,7 +190,7 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     'focus mode must hide every collapsed sibling, including presentation-only auto-collapses',
   );
   assert.doesNotMatch(css, /layout-focus > \[data-panel-id\]\.collapsed:not\(\.layout-auto-collapsed\)/);
-  assert.match(leftRail, /const hiddenSibling =\s*shouldFocus && panel\.classList\.contains\('collapsed'\);/);
+  assert.match(leftRail, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\)\s*panel\.setAttribute\('aria-hidden', 'true'\)/);
 });
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {
@@ -198,7 +200,7 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 
   assert.match(
     ui,
-    /const collapsed =[\s\S]*?panelEl\.classList\.contains\('layout-auto-collapsed'\)[\s\S]*?panelEl\.classList\.contains\('cyber-accordion-collapsed'\)[\s\S]*?\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
+    /const shown = this\._shownPanel\(panelEl\);\s*const collapsed = prefersCollapsed\(shown\);/,
     'responsive auto-collapse must serialize the explicit expanded preference',
   );
   assert.match(
@@ -222,13 +224,14 @@ test('parameterized Display presets keep one stable scroll owner', () => {
   assert.match(css, /#pp-toggles:not\(\.collapsed\) > \.pp-panel-body > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
   assert.match(ui, /readDisplayScrollTop: \(\) =>\s*this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?displayPanelScroller\(this\._ppToggles\)\?\.scrollTop \|\| 0/);
   assert.match(rightRail, /scroller\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
+  // The panel's parameters change, and the rail lays out again.
   assert.match(
     ui,
-    /this\._sliderPanel\.classList\.remove\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
+    /this\._publishParameters\(null\);\s*this\._scheduleRightPanelLayout\(\);/,
   );
   assert.match(
     ui,
-    /this\._sliderPanel\.classList\.add\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
+    /this\._publishParameters\(\{[\s\S]*?\}\);\s*this\._scheduleRightPanelLayout\(\);/,
   );
   assert.match(
     css,
@@ -264,8 +267,8 @@ test('expanded left panels integrate their headers with the container shell', ()
   );
 });
 
-test('Map Source uses five compact tiles in the bottom Visual Presets tray', () => {
-  const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+test('Map Source uses five compact tiles in the bottom Visual Presets tray', async () => {
+  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.doesNotMatch(html, /id="stack-panel"/);
@@ -277,8 +280,8 @@ test('Map Source uses five compact tiles in the bottom Visual Presets tray', () 
   );
 });
 
-test('expanded right panels highlight the title divider without changing collapsed launchers', () => {
-  const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+test('expanded right panels highlight the title divider without changing collapsed launchers', async () => {
+  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(
@@ -293,4 +296,26 @@ test('expanded right panels highlight the title divider without changing collaps
     css,
     /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(0 212 255 \/ 28%\),\s*rgba\(0, 212, 255, 0\.18\) 58%,\s*transparent\s*\);/,
   );
+});
+
+test('Utilities sits between Data Layers and Scenes and follows the left panels through every mode', () => {
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
+  const order = (id) => Number(new RegExp(`#left-panel-stack > #${id} \\{\\s*order: (\\d+);`).exec(css)?.[1]);
+  assert.ok(order('data-panel') < order('utilities-panel'));
+  assert.ok(order('utilities-panel') < order('scene-panel'));
+  assert.match(css, /body\.ui-clean-view #utilities-panel,/);
+  assert.match(css, /body\.recording-mode #utilities-panel,/);
+  // Directions stays reachable in Cockpit; only Draw and Import step aside.
+  assert.match(css, /body\.cockpit-mode #utilities-panel \.utilities-tools \{\s*display: none !important;/);
+  assert.doesNotMatch(css, /body\.cockpit-mode #left-panel-stack > #utilities-panel[,\s{]/);
+  assert.match(css, /body\.mobile-shell\[data-mobile-sheet='layers'\]\s+#left-panel-stack\s+> #utilities-panel,/);
+});
+
+test('every left panel has its rail item, Utilities with its own icon', async () => {
+  const { PANEL_RAIL_ITEMS } = await import('./ui/panelRailCatalog.js');
+  const view = readFileSync(new URL('./ui/views/LayerPanelsView.vue', import.meta.url), 'utf8');
+  const ids = [...view.matchAll(/<RailPanel id="([\w-]+)"/g)].map(([, id]) => id);
+  assert.ok(ids.includes('utilities-panel'));
+  for (const id of ids) assert.ok(PANEL_RAIL_ITEMS[id], `${id} has a rail item`);
+  assert.equal(PANEL_RAIL_ITEMS['utilities-panel'].icon, 'handyman');
 });

@@ -21,6 +21,7 @@ import { t, tn } from '../i18n/index.js';
  */
 
 import { greatCircleMeters } from '../geoDistance.js';
+import { formatDistanceText } from '../data/distanceFormat.js';
 
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
@@ -207,17 +208,16 @@ export function ringCentroid(vertices) {
 export function formatMeasure(session) {
   if (!session) return '';
   if (session.shape === 'line') {
-    const m = pathLengthM(session.vertices);
-    // Round before the kilometre cut. 999.6 m was printed as "1000 m".
-    const whole = Math.round(m);
-    if (whole < 1000) return `${whole} m`;
-    return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
+    return formatDistanceText(pathLengthM(session.vertices)) ?? '';
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);
-    if (m2 >= 1e6) return `${(m2 / 1e6).toFixed(2)} km²`;
-    if (m2 >= 1e4) return `${(m2 / 1e4).toFixed(1)} ha`;
-    return `${Math.round(m2)} m²`;
+    // Round before each unit cut, as for a line. 9,999.6 m² was "10000 m²".
+    const whole = Math.round(m2);
+    const ha = (m2 / 1e4).toFixed(1);
+    if (whole < 1e4) return `${whole} m²`;
+    if (Number(ha) < 100) return `${ha} ha`;
+    return `${(m2 / 1e6).toFixed(2)} km²`;
   }
   return '';
 }

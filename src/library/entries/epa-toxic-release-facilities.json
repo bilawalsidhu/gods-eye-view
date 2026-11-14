@@ -1,0 +1,45 @@
+{
+  "id": "epa-toxic-release-facilities",
+  "kind": "dataset",
+  "family": "environment",
+  "title": "Toxic release facilities (US EPA TRI)",
+  "provider": "US EPA",
+  "description": "The about 64,500 facilities that report releases to the EPA's Toxics Release Inventory. Loads the facilities in view below 15 km.",
+  "icon": "☣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-180, 13, -64, 72]
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://geopub.epa.gov/arcgis/rest/services/EMEF/efpoints/MapServer/1",
+    "query": {
+      "outFields": "primary_name,city_name,state_code"
+    },
+    "fetch": "browser-direct",
+    "view": {
+      "maxAltitudeM": 15000,
+      "sample": [-95.2, 29.7, -95.1, 29.76]
+    },
+    "cacheSeconds": 86400,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#ed8936",
+    "label": "primary_name",
+    "fields": ["city_name", "state_code"]
+  },
+  "licence": {
+    "name": "U.S. EPA data: public domain",
+    "url": "https://www.epa.gov/web-policies-and-procedures/epa-disclaimers"
+  },
+  "attribution": {
+    "text": "U.S. Environmental Protection Agency — Toxics Release Inventory via the Facility Registry Service",
+    "url": "https://www.epa.gov/toxics-release-inventory-tri-program"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

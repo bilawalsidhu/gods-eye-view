@@ -5,6 +5,7 @@ import {
   sinceStopIndex,
 } from './streetLevelPresentation.js';
 import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
+import { getLocale, setLocale } from '../i18n/index.js';
 
 const provider = providerSnapshot;
 
@@ -319,6 +320,29 @@ test('a Street View caption names the place, dates it by month, and offers no FI
   assert.equal(view.viewer.captionRight, '360° · 0° · 2023-01');
   assert.equal(view.viewer.linkLabel, 'STREET VIEW ↗');
   assert.equal(view.viewer.renderModes, false);
+});
+
+test('in Arabic each part of a provider address keeps its own order', () => {
+  const previous = getLocale();
+  setLocale('ar');
+  try {
+    const view = presentStreetLevelPanel(
+      snapshot({
+        enabled: true,
+        street: {
+          open: true,
+          imageId: 'pano-1',
+          title: '602 Congress Ave, أوستن, تكساس',
+        },
+      }),
+    );
+    assert.equal(
+      view.viewer.captionLeft,
+      '\u2068602 Congress Ave\u2069, \u2068أوستن\u2069, \u2068تكساس\u2069',
+    );
+  } finally {
+    setLocale(previous);
+  }
 });
 
 test('the meta line keeps the sequence count and adds the other providers’ hints', () => {

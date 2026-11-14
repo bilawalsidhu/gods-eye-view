@@ -28,6 +28,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 import { createScreencast, moveCamera } from './qa-journey-recorder.mjs';
 
 const argv = process.argv.slice(2);
@@ -77,6 +78,7 @@ const browser = await puppeteer.launch({
 
 async function openPage({ aircraft = false } = {}) {
   const page = await browser.newPage();
+  await stubPlanespotters(page);
   await page.setViewport({ width: 1440, height: 900 });
   page.on('console', (message) => {
     if (message.type() === 'error') result.consoleErrors.push(message.text());
@@ -474,12 +476,22 @@ async function contacts() {
 
   // SEARCH NEARBY SITES, as the user presses it.
   await page.evaluate(() => {
-    document.getElementById('toast').textContent = '';
+    const toast = document.getElementById('toast');
+    const before = toast.firstChild;
     document.getElementById('installations-search-btn').click();
+    window.__qaToastBefore = before;
   });
+  // Every toast show writes a new text node, even for a repeated message.
   await page
     .waitForFunction(
-      () => document.getElementById('toast').textContent.trim().length > 0,
+      () => {
+        const toast = document.getElementById('toast');
+        return (
+          toast.classList.contains('visible') &&
+          toast.firstChild !== window.__qaToastBefore &&
+          toast.textContent.trim().length > 0
+        );
+      },
       { timeout: 20_000 },
     )
     .catch(() => {});

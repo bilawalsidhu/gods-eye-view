@@ -9,15 +9,49 @@
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   fetchNominatimSearch,
   geocodeProxy,
   NOMINATIM_MAX_PENDING,
 } from '../../server/providers/regional/place.js';
 import { fetchRegionalJson } from '../../server/providers/regional/http.js';
+import {
+  createNominatimGate,
+  resolveNominatimSettings,
+  PUBLIC_NOMINATIM_SEARCH,
+  setSharedNominatimGate,
+} from '../../server/providers/regional/nominatimGate.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
+import { standaloneConfig } from '../../server/standalone/vite.config.js';
+import { defaultSourceRoot } from '../../server/providers/common/source-root.js';
 import { createPlaceSearch, createGoogleGeocoder } from '../search/index.js';
 import { createPhotonGeocoder } from '../keylessGeocoder.js';
+
+// Each case starts with a fresh shared gate: a pause after one case's
+// simulated outage must not decide the next case.
+// Pin the public-policy fixture independently of operator endpoint settings.
+// Each case's transport fails closed outside its active withUpstream block.
+let activeUpstream;
+test.beforeEach(() => {
+  const transport = { fetch: null };
+  activeUpstream = transport;
+  setSharedNominatimGate(
+    createNominatimGate({
+      settings: resolveNominatimSettings({
+        NOMINATIM_URL: PUBLIC_NOMINATIM_SEARCH,
+      }),
+      fetchImpl: (...args) => {
+        if (!transport.fetch) throw new Error('No active test upstream');
+        return transport.fetch(...args);
+      },
+    }),
+  );
+});
+const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-search-route-'));
+test.after(() => fs.rmSync(storageRoot, { recursive: true, force: true }));
 
 const HIT = [
   {
@@ -33,13 +67,16 @@ const HIT = [
 /** Mount the geocode route the way the dev server does. */
 let clientCounter = 0;
 
-function mountGeocode(
-  install = (server) => geocodeProxy().configureServer(server),
-) {
+function mountGeocode(install = null) {
   // A fresh client address per mount: the per-client rate limiter is module
   // state shared by every case in this file, and one case's burst must not
   // decide another case's outcome.
   clientCounter += 1;
+  if (!install)
+    install = (server) =>
+      geocodeProxy({
+        storageDir: path.join(storageRoot, `case-${clientCounter}`),
+      }).configureServer(server);
   const remoteAddress = `10.0.0.${clientCounter % 250}`;
   const routes = new Map();
   install({
@@ -93,14 +130,17 @@ function mountGeocode(
 /** Answer the upstream from a stub, counting and optionally stalling calls. */
 async function withUpstream(respond, run) {
   const previous = globalThis.fetch;
+  const transport = activeUpstream;
+  const previousUpstream = transport.fetch;
   const calls = [];
-  globalThis.fetch = async (url, options) => {
+  globalThis.fetch = transport.fetch = async (url, options) => {
     calls.push({ url: String(url), options });
     return await respond(String(url), options, calls.length);
   };
   try {
     return await run(calls);
   } finally {
+    transport.fetch = previousUpstream;
     globalThis.fetch = previous;
   }
 }
@@ -111,13 +151,55 @@ const jsonResponse = (value) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
-test('the route is part of the application on both dev and preview', () => {
-  const plugin = localProviderPlugins().find(
+test('the real composition binds durable storage before dev or preview installation, independent of CWD', async () => {
+  const cwd = process.cwd();
+  const expected = path.join(defaultSourceRoot, '.gev-cache', 'nominatim');
+  try {
+    for (const suffix of ['one', 'two']) {
+      const dir = path.join(storageRoot, `cwd-${suffix}`);
+      fs.mkdirSync(dir);
+      process.chdir(dir);
+      const { NOMINATIM_CACHE_DIR } = await import(
+        `../../server/providers/regional/place.js?cwd-${suffix}`
+      );
+      assert.equal(NOMINATIM_CACHE_DIR, expected);
+      assert.equal(fs.existsSync(path.join(dir, '.gev-cache')), false);
+    }
+  } finally {
+    process.chdir(cwd);
+  }
+  const bound = [];
+  setSharedNominatimGate({
+    persistUsage: (file) => bound.push(file),
+  });
+  const storage = path.join(storageRoot, 'composition');
+  const plugin = localProviderPlugins({ nominatimStorageDir: storage }).find(
     (entry) => entry.name === 'geocode-proxy',
   );
   assert.ok(plugin, 'the application must compose the place-search route');
   assert.equal(typeof plugin.configureServer, 'function');
   assert.equal(typeof plugin.configurePreviewServer, 'function');
+  assert.deepEqual(bound, [path.join(storage, 'state.json')]);
+  const standaloneStorage = path.join(storageRoot, 'standalone');
+  const config = standaloneConfig(
+    { command: 'serve', mode: 'test' },
+    { nominatimStorageDir: standaloneStorage },
+  );
+  assert.ok(config.plugins.some((entry) => entry.name === 'geocode-proxy'));
+  assert.deepEqual(bound, [
+    path.join(storage, 'state.json'),
+    path.join(standaloneStorage, 'state.json'),
+  ]);
+  for (const value of [null, '', 'relative'])
+    assert.throws(
+      () => localProviderPlugins({ nominatimStorageDir: value }),
+      /absolute directory/,
+    );
+  assert.equal(
+    bound.length,
+    2,
+    'invalid bindings never construct policy state',
+  );
 });
 
 test('a search reaches the upstream identified, and the answer is cached', async () => {
@@ -126,7 +208,9 @@ test('a search reaches the upstream identified, and the answer is cached', async
     async () => jsonResponse(HIT),
     async (calls) => {
       const query = `niagara-${Date.now()}`;
-      const first = await request(`/api/geocode?q=${query}`);
+      const first = await request(
+        `/api/geocode?q=${query}&bounds=${encodeURIComponent('-20,170|-10,-171')}`,
+      );
       assert.equal(first.status, 200);
       assert.equal(first.body.status, 'OK');
       assert.deepEqual(first.body.results[0].geometry.location, {
@@ -134,6 +218,11 @@ test('a search reaches the upstream identified, and the answer is cached', async
         lng: -79.0384,
       });
       assert.equal(calls.length, 1);
+      assert.equal(
+        new URL(calls[0].url).searchParams.has('viewbox'),
+        false,
+        'a wrapped hint must not be coarsened into a Greenwich viewbox',
+      );
       const headers = calls[0].options.headers;
       assert.match(
         String(headers['User-Agent']),
@@ -147,7 +236,7 @@ test('a search reaches the upstream identified, and the answer is cached', async
         'a fixed API endpoint may not be redirected elsewhere',
       );
 
-      // The policy asks that results be cached; a repeat costs no request.
+      // Dropping the invalid hint also shares the unbiased cache entry.
       const repeat = await request(`/api/geocode?q=${query}`);
       assert.equal(repeat.status, 200);
       assert.equal(

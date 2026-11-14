@@ -1,7 +1,12 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
-import { civilAircraftModelSpec } from './modelSpec.js';
+import {
+  aircraftLayerModelSpec,
+  aircraftModelSpecCacheKey,
+} from './modelSpec.js';
+import { createFleetModel } from '../../data/fleetModelInstances.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
@@ -32,10 +37,13 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
-  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
+  HIDDEN_CONTACT_DR_TICKS,
+  hiddenContactDrPhase,
+  STALE_ALPHA,
+  displayDelayMs,
 } from './policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
@@ -111,11 +119,14 @@ export function createRendering({
     return Number.POSITIVE_INFINITY;
   }
 
-  function _modelSpec(klass) {
-    const cached = flightState._specCache.get(klass);
+  /** The fleet model an aircraft draws with, by its type and emitter category. */
+  function _modelSpec(meta) {
+    const key = aircraftModelSpecCacheKey(meta);
+    const cached = flightState._specCache.get(key);
     if (cached) return cached;
-    const spec = civilAircraftModelSpec(klass);
-    flightState._specCache.set(klass, spec);
+    const spec = aircraftLayerModelSpec(meta);
+    // Not cached before the model set loads: the answer changes once it has.
+    if (spec.model) flightState._specCache.set(key, spec);
     return spec;
   }
 
@@ -305,7 +316,7 @@ export function createRendering({
       Cesium.Ellipsoid.WGS84,
       flightState._scratchGroundCarto,
     );
-    carto.height = h + _modelSpec(meta.klass).bellyM;
+    carto.height = h + _modelSpec(meta).bellyM;
     return Cesium.Cartesian3.fromRadians(
       carto.longitude,
       carto.latitude,
@@ -412,16 +423,13 @@ export function createRendering({
     return !!model && model.ready === true && model.show === true;
   }
 
-  /** Spec identity for a LOADED model: URL and scale together (same-URL classes
-   *  differ by scale — airliner vs quadjet both ship airplane.glb). */
+  /** Spec identity for a LOADED model: the model and its scale together (one
+   *  model draws several types, each at its own length). */
 
-  const _specKeyFor = (klass) => {
-    const spec = _modelSpec(klass);
-    return `${spec.url}@${spec.scale}`;
-  };
+  const _specKeyFor = (meta) => _modelSpec(meta).key;
 
-  /** Class-change model sync (enrichment AND poll-path klass updates): when the
-   *  aircraft's live model or in-flight load no longer matches its class's spec,
+  /** Type-change model sync (enrichment AND poll-path type/category updates): when the
+   *  aircraft's live model or in-flight load no longer matches its type's spec,
    *  drop it so the eligibility pass reloads the right asset at the right scale.
    *  Gap-proof: the fleet billboard is re-shown BEFORE the release so the
    *  contact never goes invisible for the tick gap; _releaseModel's generation
@@ -429,7 +437,7 @@ export function createRendering({
    *  the same rule (its billboard entity is always the fallback visual). */
 
   function _syncModelToClass(icao24) {
-    const key = _specKeyFor(flightState.records.data.get(icao24)?.klass);
+    const key = _specKeyFor(flightState.records.data.get(icao24));
     const current = flightState._models.get(icao24);
     if (
       (current && current._gevSpecKey !== key) ||
@@ -474,6 +482,11 @@ export function createRendering({
       flightState._irReloadQueue = null;
   }
 
+  /** A Cesium Model of `spec` from the fleet set loaded up front (no fetch mid-session). */
+  function _createModel(spec, options) {
+    return createFleetModel(spec, options, { resolveAsset });
+  }
+
   /** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
 
   async function _ensureModel(icao24) {
@@ -493,6 +506,8 @@ export function createRendering({
       _modelCap()
     )
       return;
+    // Until the fleet model set has loaded the aircraft stays a billboard.
+    if (!_modelSpec(flightState.records.data.get(icao24)).model) return;
     const epoch = flightState._modelEpoch; // lifecycle token: if destroy() bumps it, this load is dead
     const gen = flightState._modelGen.get(icao24) || 0; // capture; if it changes during the load, we're stale
     flightState._modelPending.add(icao24);
@@ -501,12 +516,11 @@ export function createRendering({
     // aircraft mid-load, the post-await admission below rejects the stale asset.
     // Boost state likewise: the creation options bake it in, so a mid-load
     // toggle must reject too (the reload queue only covers ADMITTED models).
-    const specKey = _specKeyFor(flightState.records.data.get(icao24)?.klass);
+    const specKey = _specKeyFor(flightState.records.data.get(icao24));
     const loadIrBoost = flightState._irBoost;
     try {
-      const spec = _modelSpec(flightState.records.data.get(icao24)?.klass);
-      model = await Cesium.Model.fromGltfAsync({
-        url: resolveAsset(spec.url),
+      const spec = _modelSpec(flightState.records.data.get(icao24));
+      model = await _createModel(spec, {
         asynchronous: false,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
@@ -556,7 +570,7 @@ export function createRendering({
       flightState._models.has(icao24) ||
       flightState._models.size >= _modelCap() ||
       // Class reclassified mid-load → this GLB/scale is for the OLD class.
-      _specKeyFor(flightState.records.data.get(icao24)?.klass) !== specKey ||
+      _specKeyFor(flightState.records.data.get(icao24)) !== specKey ||
       // IR boost flipped mid-load → this model baked the wrong shader/tint.
       flightState._irBoost !== loadIrBoost;
     if (stale) {
@@ -677,6 +691,19 @@ export function createRendering({
    *  follow-camera's bounding sphere is ALWAYS ready — toggling 3D, or tracking while already zoomed
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode). */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (
+      flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN
+    ).withAlpha(alpha);
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -699,6 +726,9 @@ export function createRendering({
       return;
     }
     if (
+      // Until the fleet model set has loaded the billboard carries it.
+      _modelSpec(flightState.records.data.get(flightState._trackedIcao))
+        .model &&
       !flightState._trackedModel &&
       !flightState._trackedModelLoading &&
       parts.tracking._trackedModelLoadAllowed()
@@ -706,14 +736,13 @@ export function createRendering({
       flightState._trackedModelLoading = true;
       const gen = flightState._trackedModelGen;
       const trackedSpec = _modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       const trackedKey = _specKeyFor(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       const trackedIrBoost = flightState._irBoost;
-      Cesium.Model.fromGltfAsync({
-        url: resolveAsset(trackedSpec.url),
+      _createModel(trackedSpec, {
         asynchronous: false,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
@@ -749,7 +778,7 @@ export function createRendering({
           // _trackedModel was still null): drop the stale asset; driver reloads.
           if (
             _specKeyFor(
-              flightState.records.data.get(flightState._trackedIcao)?.klass,
+              flightState.records.data.get(flightState._trackedIcao),
             ) !== trackedKey ||
             flightState._irBoost !== trackedIrBoost
           ) {
@@ -820,9 +849,10 @@ export function createRendering({
         parts.motion._trackedDisplayCourse(),
         flightState._trackedModel.modelMatrix,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       const spec = _modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -839,7 +869,20 @@ export function createRendering({
     }
   }
 
+  /** The contact's hidden-rotation slot, cached on its billboard. */
+  function _hiddenDrPhase(bb, icao24) {
+    bb._gevHiddenDrPhase ??= hiddenContactDrPhase(icao24);
+    return bb._gevHiddenDrPhase;
+  }
+
   function _fleetTick() {
+    // Every frame, shown or not: the tracked trail records where its icon is
+    // drawn and moves its body on (the head callback only reads the result),
+    // and the tracked label's stale cue follows the clock.
+    if (flightState._viewer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (
       !flightState._viewer ||
       !flightState._billboardCollection ||
@@ -863,8 +906,8 @@ export function createRendering({
     flightState._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
     const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(flightState._scratchFleetRenderTime),
-      -RENDER_DELAY_SEC,
+      julianAt(flightState.now(), flightState._scratchFleetRenderTime),
+      -displayDelayMs(flightState) / 1000,
       flightState._scratchFleetRenderTime,
     );
 
@@ -965,8 +1008,24 @@ export function createRendering({
       for (const icao of toRelease) _releaseModel(icao);
     }
 
+    const hiddenDrPhase = flightState._fleetTickSeq++ % HIDDEN_CONTACT_DR_TICKS;
+
     for (const [icao24, bb] of flightState._billboards) {
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
+
+      // A contact still behind the horizon at its last position would only be
+      // re-reckoned to be hidden again, so off its turn it keeps that position
+      // (see HIDDEN_CONTACT_DR_TICKS). Anything the stale position puts in view,
+      // and any contact with a fleet model, takes the full pass below at once.
+      if (
+        !bb.show &&
+        _hiddenDrPhase(bb, icao24) !== hiddenDrPhase &&
+        !flightState._models.has(icao24) &&
+        !occluder.isPointVisible(
+          flightState._cullPositions.get(icao24) || bb.position,
+        )
+      )
+        continue;
 
       const info = flightState.records.data.get(icao24);
 
@@ -1056,7 +1115,9 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,

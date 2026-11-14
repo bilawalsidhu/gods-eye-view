@@ -151,6 +151,9 @@ export function createViewport({
         // on screen throughout it — so the horizon pass below must keep running
         // while a fetch is in flight. Only the rebuild is gated on fresh data.
         if (!layerState._enabled) return;
+        // Every frame, ahead of the throttle: a fast zoom crosses the whole
+        // hand-off between two band checks.
+        components.rendering.applyHandoffFade();
         const now = performance.now();
         if (now - layerState._lastLodCheck < LOD_CHECK_MS) return;
         layerState._lastLodCheck = now;

@@ -8,9 +8,14 @@ import {
   cockpitAnchorCorrectionStep,
   cockpitAltitudeDisplayFt,
   cockpitGroundSafeHeight,
+  cockpitSubjectStepSec,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
+  COCKPIT_SUBJECT_LIFT_MPS,
+  easeCockpitLift,
   compassDivisions,
+  compassMarkerSlot,
+  scrollingCompassDivisions,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
   formatCockpitEmergency,
@@ -52,6 +57,28 @@ test('cockpit anchor correction bounds late-fix catch-up and render stalls', () 
   assert.ok(cockpitAnchorCorrectionStep(5000, 250, 2) <= 5.5);
   assert.equal(cockpitAnchorCorrectionStep(0, 250, 0.1), 0);
   assert.equal(cockpitAnchorCorrectionStep(Number.NaN, 250, 0.1), 0);
+});
+
+test('an application subject on a slow cadence is corrected for its whole step', () => {
+  // The built-in views' step stays capped at 0.1 s...
+  const capped = cockpitAnchorCorrectionStep(100, 0, 0.5);
+  assert.equal(capped, cockpitAnchorCorrectionStep(100, 0, 0.1));
+  // ...while a subject updated every 500 ms is corrected for all of it.
+  const whole = cockpitAnchorCorrectionStep(100, 0, 0.5, 0.5);
+  assert.ok(Math.abs(whole / capped - 5) < 1e-9);
+  assert.equal(cockpitAnchorCorrectionStep(100, 0, 0.5, Number.NaN), capped);
+});
+
+test('an application subject steps by its interval, never by a long stall', () => {
+  assert.equal(cockpitSubjectStepSec(16, 0), 0.016);
+  assert.equal(cockpitSubjectStepSec(500, 500), 0.5);
+  assert.equal(cockpitSubjectStepSec(520, 500), 0.52);
+  // A hidden tab's minutes count as one late update.
+  assert.equal(cockpitSubjectStepSec(60_000, 500), 0.6);
+  assert.equal(cockpitSubjectStepSec(60_000, 0), 0.1);
+  assert.equal(cockpitSubjectStepSec(-5, 500), 0);
+  assert.equal(cockpitSubjectStepSec(Number.NaN, 500), 0);
+  assert.equal(cockpitSubjectStepSec(1000, Number.NaN), 0.1);
 });
 
 test('cockpit camera clearance never falls below the rendered ground floor', () => {
@@ -151,6 +178,46 @@ test('compass divisions remain ordered across north', () => {
   assert.deepEqual(compassDivisions(359), [270, 300, 330, 0, 30, 60, 90]);
 });
 
+test('compass marks sit in division slots off the caret, or off the tape', () => {
+  // Measured from the exact heading under the caret, not the nearest division.
+  assert.equal(compassMarkerSlot(350, 350), 0);
+  assert.equal(compassMarkerSlot(35, 350), 1.5);
+  assert.equal(compassMarkerSlot(260, 350), -3);
+  assert.equal(compassMarkerSlot(80, 350), 3);
+  assert.equal(compassMarkerSlot(90, 350), null);
+  assert.equal(compassMarkerSlot(180, 350), null);
+  assert.equal(compassMarkerSlot(Number.NaN, 0), null);
+});
+
+test('a scrolling tape puts the exact heading under the caret', () => {
+  // At 100° the divisions sit a third of a slot off their snapped places,
+  // so the bow mark (also 100°) lines up with the caret, not 10° beside it.
+  const tape = scrollingCompassDivisions(100);
+  assert.deepEqual(
+    tape.map(({ heading }) => heading),
+    [330, 0, 30, 60, 90, 120, 150, 180, 210],
+  );
+  const nearest = tape.find((division) => division.nearest);
+  assert.equal(nearest.heading, 90);
+  assert.equal(nearest.slot, -0.3333);
+  assert.equal(tape.find(({ heading }) => heading === 120).slot, 0.6667);
+  assert.equal(compassMarkerSlot(100, 100), 0);
+  assert.equal(compassMarkerSlot(90, 100), nearest.slot);
+  // Across north the slots stay continuous.
+  assert.deepEqual(
+    scrollingCompassDivisions(355, 1).map(({ heading, slot }) => [
+      heading,
+      slot,
+    ]),
+    [
+      [330, -0.8333],
+      [0, 0.1667],
+      [30, 1.1667],
+    ],
+  );
+  assert.deepEqual(scrollingCompassDivisions(Number.NaN), []);
+});
+
 test('compass labels use cardinals where exact and degrees elsewhere', () => {
   assert.equal(formatCompassDivision(270), 'W');
   assert.equal(formatCompassDivision(30), '030');
@@ -161,6 +228,7 @@ test('a heading that rounds to north reads 000, not 360', () => {
   assert.equal(formatHeadingReadout(359.4), '359');
   assert.equal(formatHeadingReadout(0), '000');
   assert.equal(formatHeadingReadout(10.2), '010');
+  assert.equal(formatHeadingReadout(-0.6), '359');
   assert.equal(formatHeadingReadout(Number.NaN), '---');
 });
 
@@ -391,4 +459,31 @@ test('cockpit emergency wording states the broadcast code, not a conclusion', ()
   );
   assert.equal(formatCockpitEmergency(null), null);
   assert.equal(formatCockpitEmergency({ label: '' }), null);
+});
+
+test('an application subject’s ground lift eases its clearance, never the floor', () => {
+  // On entry the lift asked for applies at once.
+  assert.equal(easeCockpitLift(null, 1.5, 0, 0.016), 1.5);
+  // A floor cell that rises by a metre is met at the lift rate...
+  let lift = 0;
+  const frames = [];
+  for (let i = 0; i < 60; i += 1) {
+    lift = easeCockpitLift(lift, 1, 0, 0.016);
+    frames.push(lift);
+  }
+  assert.ok(frames[0] <= COCKPIT_SUBJECT_LIFT_MPS * 0.016 + 1e-9);
+  for (let i = 1; i < frames.length; i += 1)
+    assert.ok(
+      frames[i] - frames[i - 1] <= COCKPIT_SUBJECT_LIFT_MPS * 0.016 + 1e-9,
+    );
+  assert.ok(Math.abs(frames.at(-1) - 1) < 1e-9, 'reached in under a second');
+  // ...and given back the same way.
+  assert.ok(Math.abs(easeCockpitLift(1, 0, 0, 0.1) - 0.85) < 1e-9);
+  // What keeps the eye out of the floor itself is never eased.
+  assert.equal(easeCockpitLift(0, 201.5, 200, 0.016), 200);
+  assert.equal(
+    easeCockpitLift(0.2, -3, -3, 0.016),
+    0.2 - COCKPIT_SUBJECT_LIFT_MPS * 0.016,
+  );
+  assert.equal(easeCockpitLift(0, Number.NaN, Number.NaN, 0.016), 0);
 });

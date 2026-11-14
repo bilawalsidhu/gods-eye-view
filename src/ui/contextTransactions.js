@@ -18,7 +18,10 @@ export async function _selectContextMode(
   this._contextModeChanging = true;
   this._syncContextModeButtons();
   try {
-    if (mode !== 'flights' && this.cockpitView?.active) {
+    // Cockpit does not need Contacts, so leaving it keeps the view; the
+    // restore below ends it only by turning off the layer it rides. Another
+    // mode takes the camera, so switching to one ends it.
+    if (mode && mode !== 'flights' && this.cockpitView?.active) {
       this.cockpitView.exit({ restoreTracking: false });
     }
     if (!mode) {
@@ -220,8 +223,8 @@ export async function _deactivateContextForLayerChange({
   this._contextMode = null;
   this._contextModeEntryIntent = null;
   this._contextModeReplacementIntent = null;
-  if (this.cockpitView?.active)
-    this.cockpitView.exit({ restoreTracking: false });
+  // A layer turned off ends Contacts but not the Cockpit: the view ends only
+  // when the layer it rides goes off (see _handleContextLayerChange).
   this._syncContextModeButtons();
   try {
     await this._restoreContextSession({ notificationToken });
@@ -237,25 +240,35 @@ export async function _clearLayersOutsideContextMode(
 ) {
   const allowed = contextAllowedLayerIds(mode);
   const pending = [];
-  for (const [layerId] of this._dataManager.layers || []) {
-    // Effective visibility: a disallowed layer still mid-ENABLING must be
-    // isolated too, or it settles ON inside the exclusive mode.
-    if (
-      !allowed.has(layerId) &&
-      this._dataManager.isEffectivelyEnabled(layerId)
-    ) {
-      pending.push({
-        layerId,
-        transition: this._dataManager.setEnabled(layerId, false, {
-          notificationToken,
-          ...(signal ? { signal } : {}),
-        }),
-      });
+  // Panels read this while their layer goes off (suspendsLayer): a layer
+  // isolation switches off is suspended, not switched off by the user.
+  const isolating = [];
+  let results;
+  try {
+    for (const [layerId] of this._dataManager.layers || []) {
+      // Effective visibility: a disallowed layer still mid-ENABLING must be
+      // isolated too, or it settles ON inside the exclusive mode.
+      if (
+        !allowed.has(layerId) &&
+        this._dataManager.isEffectivelyEnabled(layerId)
+      ) {
+        if (!this._isolatingLayerIds.has(layerId)) {
+          this._isolatingLayerIds.add(layerId);
+          isolating.push(layerId);
+        }
+        pending.push({
+          layerId,
+          transition: this._dataManager.setEnabled(layerId, false, {
+            notificationToken,
+            ...(signal ? { signal } : {}),
+          }),
+        });
+      }
     }
+    results = await Promise.all(pending.map(({ transition }) => transition));
+  } finally {
+    for (const layerId of isolating) this._isolatingLayerIds.delete(layerId);
   }
-  const results = await Promise.all(
-    pending.map(({ transition }) => transition),
-  );
   const failed = pending
     .filter(
       ({ layerId }, index) =>

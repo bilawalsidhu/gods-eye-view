@@ -110,18 +110,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
-  /* A visible, non-overlaying affordance that the list continues. */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(54, 220, 255, 0.45) transparent;
+  /* A visible, non-overlaying affordance that the list continues; the
+     scrollbar itself is the kit's .ui-scroll. */
   scrollbar-gutter: stable;
-}
-
-.first-run-choices::-webkit-scrollbar {
-  width: 6px;
-}
-.first-run-choices::-webkit-scrollbar-thumb {
-  background: rgba(54, 220, 255, 0.45);
-  border-radius: 3px;
 }
 
 .first-run-choices button {
@@ -133,7 +124,7 @@
   min-height: 3.55rem;
   padding: 0.6rem 0.7rem;
   color: rgba(225, 244, 248, 0.92);
-  text-align: left;
+  text-align: start;
   background: rgba(29, 69, 81, 0.18);
   border: 1px solid rgba(100, 200, 220, 0.18);
   border-radius: 0.42rem;

@@ -92,7 +92,8 @@ pitch), data layers, visual style, map imagery, and an aircraft, military
 aircraft or satellite to follow. `createView` builds and bounds one,
 `viewToParams` and `viewFromParams` write and read it in the share-link
 format the app restores, and `viewUrl` gives the address that opens it. The
-style names are the ones share links use. Ships cannot be followed from a
+style names are the ones share links use; a retired style (`snow`) is read
+as `normal`. Ships cannot be followed from a
 link yet. An aircraft's `follow` may ask for its cockpit view
 (`cockpit: true`); links cannot carry that and open the app following it.
 
@@ -101,11 +102,29 @@ action draws (pins, highlights, areas, arrows, routes and labels at a place
 name or coordinates). Links carry them in the `an` parameter, and the app
 draws them once the link has been restored.
 
+A view can open street-level photos too: `street_level` names a source
+(`google` for Street View, `mapillary`, `kartaview`, `panoramax`, or none for
+the lit one) and a point, by default the spot the camera looks at. Street View
+shows only on the Google 3D map, so a `google` source sets `map` to
+`photoreal` and refuses another; a view cannot both follow an entity and open
+photos. Links carry it as `sl=<source>,<lat>,<lon>`: once restored, the app
+runs `show_street_level`, which flies there and opens the nearest photo. A
+plain link with a `google` source only arms the panel for OPEN GOOGLE STREET
+VIEW; a view posted into the embedded app opens it, and so does the panel
+page's own opening link, but only for a tool result issued in the last five
+minutes (an older one, such as a host remounting the panel, only arms);
+`?embed=1` on a published link does not. Mapillary,
+KartaView and Panoramax, which do not bill per image, open at once. A link
+that follows an entity ignores `sl`.
+
 Tools take a view as `VIEW_ARGUMENTS`: an `area` to frame from above, or a
-`camera`, plus `layers`, `style`, `map`, `follow` and `annotations`. A
-tilted camera over an area looks at its center from behind; camera fields
-given with an area override its framing. `resolveViewArguments` turns them
-into a view.
+`camera`, plus `layers`, `style`, `map`, `follow`, `annotations` and
+`street_level`. A tilted camera over an area looks at its center from behind;
+camera fields given with an area override its framing. A passed-through
+view's `street_level` point moves with a new `area` or camera position (a
+turned camera keeps it). `resolveViewArguments` turns them into a view. The
+app's own links (the address bar, Copy Link, `/share/<code>`) do not carry
+`sl`; see `docs/SHARE-LINK-FORMAT.md`.
 
 ### The God's Eye View panel
 
@@ -269,7 +288,7 @@ and the development server's internal routes. See SECURITY.md.
 | `get_aircraft_info`   | `aircraft`    | Aircraft type and registration, and flight route, from adsbdb  |
 | `vessels_in_area` | `vessels` | Ships reported by AIS in an area, nearest first, optionally by type; `group_by` and `stats` count and summarize every match |
 | `find_vessel` | `vessels` | Ships anywhere by MMSI, IMO number or name |
-| `get_vessel_track` | `vessels` | Recent positions of one ship, thinned to 200 points |
+| `get_vessel_track` | `vessels` | Recent positions of one ship by vessel id or MMSI, thinned to 200 points |
 | `next_satellite_pass` | `satellites` | Next pass over a place or point (default the ISS), with naked-eye visibility |
 | `satellites_overhead` | `satellites` | Satellites in a CelesTrak group above a place or point now, highest first |
 | `find_cctv_cameras` | `cctv` | Public cameras in an area, nearest first |
@@ -298,5 +317,5 @@ and the development server's internal routes. See SECURITY.md.
 | `situation_brief` | `weather` | Weather, earthquakes, fires, aircraft, ships and cyclones for an area, by section |
 | `military_awareness` | `military` | Military and other aircraft, ships and military installations within 250 km of a point, by section |
 | `get_hud_caption` | `weather`, `summary` | The app's heads-up display caption for an area |
-| `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks and something to follow |
+| `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks, something to follow, or street-level photos (Street View or Mapillary) at a place |
 | `panel_request` | `app` | Panel only: loads a path from the app's server for the God's Eye View panel |

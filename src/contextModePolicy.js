@@ -411,30 +411,91 @@ export function contextRestoreLayerIds(snapshot = {}) {
   return restored;
 }
 
+/** The layers an aircraft Cockpit subject can come from. */
+export const COCKPIT_AIRCRAFT_LAYER_IDS = Object.freeze([
+  'flights',
+  'military',
+]);
+
 /**
- * Cockpit entry belongs to the operational Contacts context bundle. A tracked
- * aircraft alone is not sufficient: both observed-flight feeds must still be
- * active so the cockpit's surrounding-contact picture is not presented as a
- * complete context view when one source is disabled.
+ * Cockpit entry needs only the aircraft it rides: that aircraft's own layer
+ * (Live Flights for a civilian, Military Flights for a military aircraft) must
+ * be on. Contacts and the other feeds are not required. When a source the
+ * surrounding picture uses is off, the Cockpit's Contact card and Live
+ * Signals say the picture is partial instead of blocking entry, so a partial
+ * picture is never presented as complete. A Context mode change in flight
+ * still owns the camera, so entry waits it out.
  *
- * @param {object} input Current context and dependency visibility.
- * @param {string|null} input.contextMode Active Context mode.
- * @param {boolean} input.contextModeChanging Whether the Context transaction is unsettled.
- * @param {boolean} input.flightsEnabled Whether Live Flights is enabled.
- * @param {boolean} input.militaryEnabled Whether Military Flights is enabled.
+ * @param {object} input Current subject and Context state.
+ * @param {string|null} input.subjectLayerId Layer of the tracked aircraft
+ *   ('flights' or 'military'), or null with none tracked.
+ * @param {boolean} input.subjectLayerEnabled Whether that layer is enabled.
+ * @param {boolean} input.contextModeChanging Whether a Context transaction is unsettled.
  * @returns {boolean} Whether cockpit entry may be offered or activated.
  */
 export function cockpitEntryAllowed({
-  contextMode,
+  subjectLayerId,
+  subjectLayerEnabled,
   contextModeChanging,
-  flightsEnabled,
-  militaryEnabled,
 }) {
   return (
-    contextMode === 'flights' &&
+    COCKPIT_AIRCRAFT_LAYER_IDS.includes(subjectLayerId) &&
+    Boolean(subjectLayerEnabled) &&
+    !contextModeChanging
+  );
+}
+
+/**
+ * Whether the selected vessel's bridge view can be entered. Like aircraft
+ * Cockpit it needs only its own layer, Live AIS Vessels, with a vessel
+ * selected. A Context mode change in flight still owns the camera, so entry
+ * waits it out.
+ * @param {{vesselsEnabled: boolean, contextModeChanging: boolean}} state
+ * @returns {boolean}
+ */
+export function bridgeEntryAllowed({ vesselsEnabled, contextModeChanging }) {
+  return Boolean(vesselsEnabled) && !contextModeChanging;
+}
+
+/**
+ * Whether the tracked satellite's orbital view can be entered. Like the
+ * bridge it needs only its own layer, Satellites, with a satellite tracked.
+ * A Context mode change in flight still owns the camera, so entry waits it
+ * out. A subject the satellites layer marks as not enterable (debris:
+ * rocket bodies, fragments, dead satellites; `satelliteClassEnterable` in
+ * src/layers/satellites/classes.js) can be tracked but is never ridden: it is
+ * no mission and has no view to offer.
+ * @param {{satellitesEnabled: boolean, contextModeChanging: boolean,
+ *   subjectEnterable?: boolean}} state
+ * @returns {boolean}
+ */
+export function orbitEntryAllowed({
+  satellitesEnabled,
+  contextModeChanging,
+  subjectEnterable = true,
+}) {
+  return (
+    Boolean(satellitesEnabled) &&
     !contextModeChanging &&
-    Boolean(flightsEnabled) &&
-    Boolean(militaryEnabled)
+    subjectEnterable !== false
+  );
+}
+
+/**
+ * Whether an application subject provider's candidate can be ridden. Like the
+ * bridge and orbit it needs only its own layer on, and waits out a Context
+ * change in flight; the provider then has its own say (`isEntryAllowed`).
+ * @param {{layerEnabled: boolean, contextModeChanging: boolean,
+ *   providerAllows: boolean}} state
+ * @returns {boolean}
+ */
+export function subjectEntryAllowed({
+  layerEnabled,
+  contextModeChanging,
+  providerAllows,
+}) {
+  return (
+    Boolean(layerEnabled) && !contextModeChanging && providerAllows === true
   );
 }
 

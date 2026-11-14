@@ -6,9 +6,8 @@ import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
 
 /**
  * Every aircraft model drawn in the scene skips Cesium's dynamic environment
- * map (a sky render and GPU readback per model). The preload calls only warm
- * the glTF cache and are never added to the scene, so they are left out:
- * drawn models are the calls that set a minimum pixel size.
+ * map (a sky render and GPU readback per model). Drawn models are the calls
+ * that set a minimum pixel size.
  */
 const SOURCES = [
   {
@@ -36,7 +35,9 @@ test('the shared option turns the dynamic environment map off', () => {
 for (const { name, source } of SOURCES) {
   test(`${name}: every drawn aircraft model skips the dynamic environment map`, () => {
     const calls = [
-      ...source.matchAll(/(?:fromGltfAsync|loadModel)\(\{([\s\S]*?)\}\)/g),
+      ...source.matchAll(
+        /(?:fromGltfAsync\(|loadModel\(|(?:_createModel|createFleetModel)\(\s*\w+,\s*)\{([\s\S]*?)\n\s*\}[,)]/g,
+      ),
     ]
       .map((match) => match[1])
       .filter((options) => /\bminimumPixelSize:/.test(options));

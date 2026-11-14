@@ -2,13 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { gstime } from 'satellite.js';
+import { worldClock } from '../time/worldClock.js';
 import { createModel } from '../layers/launches/model.js';
 import rocketLaunchesLayer, {
   _setRocketMissionOverlayHostForTest,
   _setSelectedRocketMissionForTest,
   approximateOrbitPath,
-  bindMissionRosterItemKeyboardPreview,
-  captureMissionRosterFocus,
   buildMissionPaths,
   cameraHeadingForPath,
   compactLaunchSiteName,
@@ -46,7 +45,6 @@ import rocketLaunchesLayer, {
   replayStartAfterPause,
   replayVehicleScreenRotation,
   resolveMissionRosterPreviewLaunch,
-  restoreMissionRosterFocus,
   releaseAircraftTracking,
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
@@ -448,6 +446,18 @@ test('holds replay at the pad for a real-time countdown independent of replay sp
   assert.ok(liftoff.phaseProgress > 0);
 });
 
+test('runs the five-second tile hold before a full T-10 countdown', () => {
+  const launch = { launchTime: '2026-07-20T10:00:00Z', timeline: [] };
+  // REPLAY ASCENT puts liftoff 5 s (tile hold) + 10 s (countdown) ahead.
+  const hold = replayState(launch, 115000, 12, 28, 5400, 1, 104500, 5);
+  assert.equal(hold.preCountdownActive, true);
+  assert.equal(hold.countdownActive, false);
+  const countdown = replayState(launch, 115000, 12, 28, 5400, 1, 105000, 5);
+  assert.equal(countdown.preCountdownActive, false);
+  assert.equal(countdown.countdownActive, true);
+  assert.equal(countdown.countdownSeconds, 10);
+});
+
 test('hands replay directly from ascent into orbit', () => {
   const launch = { launchTime: '2026-07-20T10:00:00Z', timeline: [] };
   const orbit = replayState(launch, 0, 12, 28, 5400, 1, 16_000);
@@ -514,42 +524,6 @@ test('keyboard focus previews roster missions and clears without selecting them'
   ]);
 });
 
-test('rendered mission row focus and blur drive the preview ownership controller', () => {
-  const listeners = new Map();
-  const calls = [];
-  const button = {
-    addEventListener(type, listener) {
-      listeners.set(type, listener);
-    },
-  };
-  const nextButton = {
-    dataset: { missionRosterIndex: '4' },
-    closest: () => nextButton,
-  };
-  const roster = { contains: (candidate) => candidate === nextButton };
-  const ownership = {
-    pointerEnter: (index) => calls.push(['pointer-enter', index]),
-    pointerLeave: () => calls.push(['pointer-leave']),
-    focus: (index) => calls.push(['focus', index]),
-    blur: (index) => calls.push(['blur', index]),
-  };
-
-  bindMissionRosterItemKeyboardPreview(button, 2, ownership, roster);
-  listeners.get('mouseenter')();
-  listeners.get('mouseleave')();
-  listeners.get('focus')();
-  listeners.get('blur')({ relatedTarget: nextButton });
-  listeners.get('blur')({ relatedTarget: null });
-
-  assert.deepEqual(calls, [
-    ['pointer-enter', 2],
-    ['pointer-leave'],
-    ['focus', 2],
-    ['blur', 4],
-    ['blur', null],
-  ]);
-});
-
 test('leaving a hovered row for an internal roster gap restores keyboard preview', () => {
   const calls = [];
   const ownership = createMissionRosterPreviewOwnership({
@@ -566,50 +540,6 @@ test('leaving a hovered row for an internal roster gap restores keyboard preview
     ['preview', 0],
     ['preview', 1],
   ]);
-});
-
-test('mission roster refresh restores keyboard focus by stable mission identity after reorder', () => {
-  const focused = {
-    dataset: { missionRosterId: 'mission-b' },
-    closest: () => focused,
-  };
-  let restored = false;
-  const replacement = {
-    dataset: { missionRosterId: 'mission-b' },
-    focus: ({ preventScroll }) => { restored = preventScroll; },
-  };
-  const list = {
-    contains: (candidate) => candidate === focused,
-    querySelectorAll: () => [
-      { dataset: { missionRosterId: 'mission-c' } },
-      replacement,
-      { dataset: { missionRosterId: 'mission-a' } },
-    ],
-  };
-
-  const snapshot = captureMissionRosterFocus(list, focused);
-  assert.deepEqual(snapshot, { launchId: 'mission-b' });
-  assert.equal(restoreMissionRosterFocus(list, snapshot, null), 'restored');
-  assert.equal(restored, true);
-});
-
-test('mission roster refresh continues after the list when the focused mission departed', () => {
-  const focused = {
-    dataset: { missionRosterId: 'departed' },
-    closest: () => focused,
-  };
-  let continuationFocused = false;
-  const list = {
-    contains: (candidate) => candidate === focused,
-    querySelectorAll: () => [{ dataset: { missionRosterId: 'remaining' } }],
-  };
-  const continuation = {
-    focus: ({ preventScroll }) => { continuationFocused = preventScroll; },
-  };
-
-  const snapshot = captureMissionRosterFocus(list, focused);
-  assert.equal(restoreMissionRosterFocus(list, snapshot, continuation), 'continued');
-  assert.equal(continuationFocused, true);
 });
 
 test('pending mission preview resolves the current refreshed record by identity', () => {
@@ -1311,7 +1241,11 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     rocketLaunchesLayer.init(viewer);
     initialized = true;
     await rocketLaunchesLayer.enable();
+    assert.equal(worldClock.coverage(), null, 'nothing loaded, no time to show');
     await rocketLaunchesLayer.update();
+    const at = Date.parse(launchTime);
+    assert.deepEqual(worldClock.coverage(), { start: at, end: at, marks: [at] });
+    assert.equal(worldClock.isSupported(), true, 'loaded launches bring up the timeline');
 
     const entities = dataSources[0].entities.values;
     assert.ok(entities.length >= 7, 'runtime guard requires the populated mission build path');
@@ -1450,6 +1384,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     assert.equal(deselectedPublication[2][0].protected, false);
 
     await rocketLaunchesLayer.disable();
+    assert.equal(worldClock.coverage(), null, 'off, launches show no time');
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false],
@@ -1570,4 +1505,12 @@ test('missing payload details stay unknown without inventing mass or classificat
   }
   const [launch] = normalizeRocketLaunches([{ id: 'missing', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z' }], NOW);
   assert.deepEqual(launch.payloads, []);
+});
+
+test('away from live the feed keeps its own window of launches', (t) => {
+  t.after(() => worldClock.goLive());
+  worldClock.seek(Date.now() - 20 * 86_400_000);
+  const net = new Date(Date.now() - 86_400_000).toISOString();
+  const launches = normalizeRocketLaunches([{ id: 'recent', pad: { latitude: 1, longitude: 2 }, net }]);
+  assert.deepEqual(launches.map((launch) => launch.id), ['recent']);
 });

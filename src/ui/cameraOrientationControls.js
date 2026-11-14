@@ -239,18 +239,20 @@ export function createCameraOrientationAnimator(
   };
 }
 
-/** Bind the two map-orientation actions and keep their accessible state current. */
+/**
+ * Answer the two map-orientation actions and publish the state their buttons
+ * show: whether the map is tilted and the camera's whole-degree heading.
+ * The state is published on every rendered frame; its store keeps only a
+ * change, so an owner that takes the buttons back shows its state at once.
+ */
 export function bindCameraOrientationControls({
   viewer,
-  elements,
+  publish,
   runNavigation,
   showToast,
 }) {
-  const tiltButton = elements?.tiltButton;
-  const northButton = elements?.northButton;
   const removers = [];
   let destroyed = false;
-  let applied = null;
   // The tilt state is the one thing here that costs a depth read of the middle
   // of the screen: 4 ms median and up to 12 ms, measured on this machine. It is
   // therefore held between refreshes rather than recomputed per frame.
@@ -265,12 +267,14 @@ export function bindCameraOrientationControls({
   };
 
   /**
-   * Write the two controls' state, but only what actually changed.
+   * Publish the two controls' state.
    *
    * The compass needle reads the camera's own bearing, which costs nothing, so
    * this can run on every rendered frame: measured at 1.4 ms across 120 frames
    * of a continuously dragged map (0.012 ms per frame, 0.1 ms worst case),
    * against the 4 ms per frame the depth read it replaced would have cost.
+   * That measured the controls' own work; what a publish renders is the
+   * view's (the globe actions compass alone renders the heading).
    */
   function sync() {
     if (destroyed) return;
@@ -278,40 +282,11 @@ export function bindCameraOrientationControls({
       tilted,
       heading: Math.round(headingDegrees(viewer?.camera)) % 360,
     };
-    if (
-      applied &&
-      applied.tilted === next.tilted &&
-      applied.heading === next.heading
-    )
-      return;
-    if (!applied || applied.tilted !== next.tilted) {
-      tiltButton?.setAttribute('aria-pressed', String(next.tilted));
-      tiltButton?.setAttribute(
-        'aria-label',
-        next.tilted
-          ? t('Return map to straight-down view')
-          : t('Tilt map to oblique view'),
-      );
-    }
-    if (!applied || applied.heading !== next.heading) {
-      northButton?.setAttribute('data-north-up', String(next.heading === 0));
-      northButton?.style?.setProperty('--camera-heading', `${next.heading}deg`);
-      northButton?.setAttribute(
-        'aria-label',
-        t('Reset map to north up. Current heading {heading} degrees', {
-          heading: next.heading,
-        }),
-      );
-    }
-    applied = next;
+    publish?.(next);
   }
 
-  const listen = (element, handler) => {
-    if (!element) return;
-    element.addEventListener('click', handler);
-    removers.push(() => element.removeEventListener('click', handler));
-  };
-  listen(tiltButton, () => {
+  function tilt() {
+    if (destroyed) return;
     const pending = animator.destination;
     const result = runNavigation('camera', () => {
       const frame = readCameraTargetFrame(viewer);
@@ -332,8 +307,10 @@ export function bindCameraOrientationControls({
       tilted = result.tilted;
     }
     sync();
-  });
-  listen(northButton, () => {
+  }
+
+  function northUp() {
+    if (destroyed) return;
     const pending = animator.destination;
     const result = runNavigation('camera', () => {
       const frame = readCameraTargetFrame(viewer);
@@ -347,7 +324,7 @@ export function bindCameraOrientationControls({
     });
     if (result) showToast?.(t('North up'));
     sync();
-  });
+  }
 
   const subscribe = (event, handler) => {
     const remove = event?.addEventListener?.(handler);
@@ -369,6 +346,8 @@ export function bindCameraOrientationControls({
   refreshTilt();
 
   return {
+    tilt,
+    northUp,
     sync,
     refreshTilt,
     cancel: animator.cancel,

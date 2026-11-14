@@ -1,5 +1,5 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 // src/reasonableDefaults.test.mjs
 //
 // What the console looks like the FIRST time it opens — before any share link,
@@ -46,7 +46,7 @@ import { ShareLinkManager } from './sharelink.js';
 // Follow the UI wiring and its extracted preset definitions.
 const uiSource = readShellSource()
   + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
-const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const indexHtml = await renderApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
@@ -92,7 +92,7 @@ test('first run opens with Scope ON and 100% feather at every default surface', 
   assert.match(indexHtml, /id="scope-feather-value"[^>]*>100%</,
     'index.html: and its readout agrees with the handle');
 
-  assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/>/,
+  assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/?>/,
     'the native Scope checkbox starts checked');
 
   // The link this session generates must describe the mask this session draws,
@@ -263,7 +263,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // preset consults the flag, and the detection button sets it.
   assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
     'a style preset still yields to an operator who changed detection by hand');
-  const displayActions = uiSource.slice(uiSource.indexOf('this._displayControls ='));
+  const displayActions = uiSource.slice(uiSource.indexOf('const token = store.connect('));
   const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
   assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
   assert.match(detectionButton, /this\.claimDetection\(\);/,
