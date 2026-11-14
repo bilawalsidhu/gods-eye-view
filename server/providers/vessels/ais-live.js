@@ -10,6 +10,7 @@ import {
   readAisTrack,
   aisStreamRows,
   newestAisPositionAt,
+  pruneAisStreamCache,
 } from './ais-store.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
@@ -340,6 +341,9 @@ function startAisStreamWatchdogTick() {
     } catch (error) {
       console.warn('[AISStream] watchdog tick failed', error?.message || '');
     }
+    // The store no longer prunes per message; this tick is its expiry clock,
+    // so a silent feed still releases vessels it stopped hearing from.
+    pruneAisStreamCache();
   }, AISSTREAM_TICK_MS);
   _aisStreamTickTimer.unref?.();
 }
