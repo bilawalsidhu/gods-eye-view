@@ -84,7 +84,8 @@ function leaveSignals() {
       <span id="cockpit-brief-source">{{ b.source }}</span>
       <nav class="cockpit-brief-tabs" :aria-label="t('Cockpit briefing pages')">
         <button type="button" data-cockpit-brief-index="0" :aria-label="t('Show Live Signals')" :aria-current="String(b.pageIndex === 0)">{{ t('SIG') }}</button>
-        <button type="button" data-cockpit-brief-index="1" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('LOCAL') }}</button>
+        <button type="button" data-cockpit-brief-index="1" :aria-label="t('Show Regional News')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('NEWS') }}</button>
+        <button type="button" data-cockpit-brief-index="2" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 2) : undefined">{{ t('LOCAL') }}</button>
       </nav>
     </footer>
   </aside>

@@ -1275,7 +1275,7 @@ test('cockpit briefing cycle control keeps its state as the accessible name', ()
   assert.match(match[0], />CYCLE OFF<\/button>/);
   assert.match(
     match[0],
-    /title="Cycle briefing pages automatically every 9 seconds \(Signals → Local\)\./,
+    /title="Cycle briefing pages automatically every 9 seconds \(Signals → News → Local\)\./,
   );
 
   // The presented label is the state; the help is only the tooltip.
