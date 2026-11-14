@@ -106,6 +106,9 @@ test('focus de-emphasis fades each icon from its own color', () => {
     });
     assert.equal(drawn.focus, FOCUS_FACTOR);
     assert.equal(draw.set(setId).spec.horizonCull, true);
+    // Hidden until enable() has culled and thinned the cameras: the layer
+    // waits on its health check between drawing them and that pass.
+    assert.equal(draw.set(setId).show, false);
   } finally {
     unbind();
   }

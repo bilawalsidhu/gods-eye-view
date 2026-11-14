@@ -128,6 +128,11 @@ export function createRendering({
     const set = drawOf(viewer).icons({
       id: `cctv:${++iconSets}:icons`,
       horizonCull: true,
+      // Hidden until enable() has thinned and culled them
+      // (refreshHorizonCulling, then refreshCoverageStyles shows the set):
+      // shown from the start, every camera in the catalogue drew while the
+      // layer waited on its health check.
+      show: false,
       drawOrder: services.sprites?.spriteDrawOrder?.('cctv') ?? 0,
     });
     // Columns of no rows put the set's host in the scene now, rather than
