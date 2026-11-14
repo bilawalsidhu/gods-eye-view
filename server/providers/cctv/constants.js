@@ -296,6 +296,31 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
 /**
+ * Singapore traffic cameras from the Land Transport Authority, through
+ * data.gov.sg. One keyless JSON list gives every camera's coordinates and its
+ * current frame link. It listed 90 cameras on 2026-06-15 and 8 cameras from
+ * 2026-07-01 (checked again on 2026-11-11).
+ */
+export const SINGAPORE_TRAFFIC_IMAGES_URL =
+  'https://api.data.gov.sg/v1/transport/traffic-images';
+/** The only directory Singapore frames may come from. */
+export const SINGAPORE_IMAGE_ORIGIN =
+  'https://images.data.gov.sg/api/traffic-images/';
+/** Room for the full 90-camera list the feed carried before July 2026. */
+export const DEFAULT_SINGAPORE_MAX_SOURCES = 100;
+/** Hard ceiling on the list body. One camera is about 330 bytes (2.6 KB for 8
+ * cameras on 2026-11-11), so this cap only stops an unbounded body. */
+export const SINGAPORE_MAX_CATALOG_BYTES = 1024 * 1024;
+/** A frame link changes with every snapshot, about every 1 to 2 minutes. The
+ * frame proxy looks up the current links at most once in this window. */
+export const SINGAPORE_FRAME_LINK_REFRESH_MS = 60 * 1000;
+/** Deadline for the frame-time link lookup. The frame fetch then gets what is
+ * left of the normal frame deadline. */
+export const SINGAPORE_FRAME_LINK_TIMEOUT_MS = 3 * 1000;
+/** Prioritization anchor: City Hall, in the city centre. */
+export const SINGAPORE_ANCHORS = [{ lat: 1.2932, lon: 103.852 }];
+
+/**
  * Catalonia traffic cameras (Servei Català de Trànsit): one keyless WFS/GML
  * XML list (verified 2026-09-15, hourly catalog refresh), fetched over https
  * (verified 2026-09-27: same 200 body, no redirect). The feed carries a

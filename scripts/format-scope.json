@@ -125,6 +125,7 @@
   "src/data/cctvLithuania.test.mjs",
   "server/providers/cctv/taiwan.js",
   "src/data/cctvTaiwan.test.mjs",
+  "src/data/cctvSingapore.test.mjs",
   "server/providers/cctv/constants.js",
   "server/providers/cctv/media.js",
   "server/providers/cctv/normalize.js",
