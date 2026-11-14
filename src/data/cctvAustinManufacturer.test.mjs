@@ -220,7 +220,10 @@ test('hardware labels flag only PTZ-only product lines', () => {
     'Pelco Spectra Enhanced (PTZ)',
   );
   assert.equal(hardwareLabel({ manufacturer: 'Acme Spectra' }), 'Acme Spectra');
-  assert.equal(hardwareHudToken({ manufacturer: 'Acme Spectra' }), 'HW ACME SPECTRA');
+  assert.equal(
+    hardwareHudToken({ manufacturer: 'Acme Spectra' }),
+    'HW ACME SPECTRA',
+  );
   assert.equal(hardwareLabel({ manufacturer: '  ' }), '');
   assert.equal(hardwareLabel(null), '');
   assert.equal(hardwareHudToken({ manufacturer: 'Advidia' }), 'HW ADVIDIA');

@@ -22,7 +22,9 @@ const PTZ_ONLY_LINES = [/^pelco spectra(?:\s|$)/i];
  * @returns {boolean}
  */
 export function isPtzOnlyLine(manufacturer) {
-  const text = String(manufacturer || '').replace(/\s+/g, ' ').trim();
+  const text = String(manufacturer || '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return PTZ_ONLY_LINES.some((re) => re.test(text));
 }
 
