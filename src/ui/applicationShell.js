@@ -1,3 +1,5 @@
+import { createVesselPanel } from './vesselPanel.js';
+import { useVesselPanelStore } from './stores/vesselPanel.js';
 import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
@@ -278,6 +280,7 @@ export class StyleManager extends ShellFacade {
         cctvLayer: services.cctvLayer,
       },
       readControls: () => ({
+        vesselPanel: this.vesselPanel,
         hud: this.hud,
         _contextControls: this._contextControls,
         _cctvControls: this._cctvControls,
@@ -631,6 +634,7 @@ export class StyleManager extends ShellFacade {
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initMobileShell();
+    this._initVesselPanel();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -1736,6 +1740,26 @@ export class StyleManager extends ShellFacade {
       showToast: (message) => this._showToast(message),
     });
     this._cameraOrientationControls = controls;
+  }
+
+  _initVesselPanel() {
+    let storage;
+    try {
+      storage = globalThis.localStorage;
+    } catch {
+      /* Optional preferences. */
+    }
+    this.vesselPanel = createVesselPanel({
+      store: useVesselPanelStore(applicationPinia()),
+      storage,
+      reveal: () =>
+        this.setPanelCollapsed('vessel-panel', false, {
+          explicit: true,
+          persist: true,
+          syncShare: false,
+        }),
+    });
+    this._lifetime.own(() => this.vesselPanel.destroy());
   }
 
   // ── Share Button ─────────────────────────────

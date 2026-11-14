@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { t, msg } from '../../i18n/index.js';
 import { vesselCockpitInfo } from './cockpitSubject.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
+import { normalizeVesselType } from '../../data/vesselTypes.js';
 import { greatCircleMeters } from '../../geoDistance.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
@@ -679,6 +680,10 @@ export function createQueries({
           id: record.name || record.mmsi || 'VESSEL',
           type: 'SEA',
           skipLabel: record === selected,
+          // Civilian names belong to the selected detail card; AIS type 35
+          // and explicitly military types retain ambient detection names.
+          suppressLabel:
+            normalizeVesselType(record.type).toUpperCase() !== 'MILITARY',
           // Detection hides the callout while this card paints.
           cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
           cardEntryId: components.cards.vesselOverlayEntryId(record),

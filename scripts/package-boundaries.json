@@ -175,7 +175,12 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/stores/worldTime.js",
       "src/ui/views/panels/WorldTimeline.vue",
-      "src/ui/surfaceKeyboard.js"
+      "src/ui/surfaceKeyboard.js",
+      "src/ui/views/panels/VesselPanel.vue",
+      "src/ui/stores/vesselPanel.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/vesselTypes.js",
+      "src/data/vesselLabels.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1349,7 +1354,11 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/ui/vesselPanel.js",
+      "src/ui/stores/vesselPanel.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/vesselTypes.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1745,7 +1754,10 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/vessels/displayFilters.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/viewArea.js"
     ],
     "external": ["cesium"]
   },
@@ -3817,7 +3829,12 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/layers/vessels/displayFilters.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/viewArea.js",
+      "src/ui/vesselPanel.js",
+      "src/ui/stores/vesselPanel.js"
     ],
     "external": [
       "hls.js",
@@ -4535,7 +4552,10 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/vessels/displayFilters.js",
+      "src/data/vesselDisplayFilters.js",
+      "src/data/viewArea.js"
     ],
     "external": [
       "hls.js",
