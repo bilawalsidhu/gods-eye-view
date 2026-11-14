@@ -360,3 +360,23 @@ test('anchors wait for the surface heights answer from: the globe’s terrain wh
   h.paint();
   assert.ok(samples > 0, 'sampled once it has loaded');
 });
+
+test('without height sampling no sample is spent, and the terrain anchors only while the globe is drawn', (t) => {
+  for (const shown of [true, false]) {
+    const h = harness(t, 1);
+    let samples = 0;
+    h.state.viewer.scene.sampleHeight = () => (samples++, 172);
+    const renderer = rendererOf(h.state.viewer);
+    renderer.capabilities = new Set();
+    renderer.globe = { isSettled: () => true, isGlobeVisible: () => shown };
+    h.overlay.sync(h.records);
+    h.paint();
+    h.paint();
+    assert.equal(samples, 0, 'nothing sampled without the capability');
+    assert.equal(
+      Boolean(alprMarkers.read(h.carrier('camera:0'))?.canvasPosition),
+      shown,
+      shown ? 'anchored on the terrain' : 'no terrain under hidden globe',
+    );
+  }
+});

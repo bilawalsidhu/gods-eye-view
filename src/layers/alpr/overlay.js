@@ -106,17 +106,34 @@ export function createAlprOverlay({
       record.longitude,
     );
     if (validAlprGroundHeight(floor)) height = floor + MARKER_FLOOR_LIFT_M;
-    else if (query) {
+    else if (query && canSampleHeight()) {
       if (budget.samples <= 0) return null;
       budget.samples -= 1;
       // A miss is tiles still streaming.
       height = query.sampleHeightNow(point, { exclude: [markers.icons?.id] });
     }
-    if (!validAlprGroundHeight(height))
+    // The globe's terrain, while the globe is drawn (hidden under photoreal
+    // tiles, its height is not what shows).
+    if (!validAlprGroundHeight(height) && globeShown())
       height = query?.sampleHeightNow(point, { against: 'terrain' });
     if (!validAlprGroundHeight(height)) return null;
     setAnchor(record, carrier, height);
     return alprMarkers.read(carrier)?.canvasPosition;
+  }
+
+  /**
+   * Whether the renderer samples the drawn surface's height (Cesium needs
+   * depth textures). Without, nothing is sampled or spent from the budget,
+   * and a marker with no floor yet anchors on the terrain.
+   */
+  function canSampleHeight() {
+    const capabilities = rendererOf(state.viewer)?.capabilities;
+    return !capabilities || capabilities.has('sampleHeight');
+  }
+
+  /** Whether the globe surface is drawn; true where the renderer cannot say. */
+  function globeShown() {
+    return rendererOf(state.viewer)?.globe?.isGlobeVisible?.() !== false;
   }
 
   function floorHeightAt(latitude, longitude) {
@@ -162,7 +179,7 @@ export function createAlprOverlay({
       direction: { ...pose.direction },
     };
     const query = findQuery(state.viewer);
-    if (!query) return false;
+    if (!query || !canSampleHeight()) return false;
     let pending = false;
     for (const record of records) {
       const carrier = markers.get(record.id);
