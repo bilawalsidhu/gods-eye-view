@@ -282,7 +282,7 @@ test('scope choice and expanded feather survive every HUD layout and both restor
   let shown = null;
   owner.store = { publish: (view) => (shown = view.scope) };
   await owner.restoreShareState({ scopeEnabled: false, scopeFeatherPct: 200 });
-  assert.deepEqual(shown, { enabled: false, featherPct: 200 });
+  assert.deepEqual(shown, { enabled: false, featherPct: 200, opacityPct: 100 });
   for (const layout of ['minimal', 'cyber', 'tactical']) {
     owner._setHudVariant(layout, { applyVisualDefaults: true });
     assert.equal(isScopeMaskEnabled(), false, layout);
@@ -292,10 +292,10 @@ test('scope choice and expanded feather survive every HUD layout and both restor
   await owner.applyVisualState({ scope: { enabled: true, featherPct: 175 } });
   assert.equal(isScopeMaskEnabled(), true);
   assert.equal(getScopeMaskFeather(), 1.75);
-  assert.deepEqual(shown, { enabled: true, featherPct: 175 });
+  assert.deepEqual(shown, { enabled: true, featherPct: 175, opacityPct: 100 });
   await owner.applyVisualState({ scope: { featherPct: 500 } });
   assert.equal(getScopeMaskFeather(), 2);
-  assert.deepEqual(shown, { enabled: true, featherPct: 200 });
+  assert.deepEqual(shown, { enabled: true, featherPct: 200, opacityPct: 100 });
 });
 
 test('a scene shot saved with the retired Snow style plays on Normal', async (t) => {

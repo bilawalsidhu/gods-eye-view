@@ -509,6 +509,7 @@ test('the field registry is well formed and permanent', () => {
       [27, 'styleParams', BY_STYLE],
       [28, 'worldTime', null],
       [29, 'library', null],
+      [30, 'scopeOpacityPct', 100],
     ],
   );
   assert.deepEqual(

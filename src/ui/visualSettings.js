@@ -66,6 +66,7 @@ export class VisualSettings {
       celestialRing,
       scopeEnabled,
       scopeFeatherPct,
+      scopeOpacityPct,
       scopeTerminusPct,
       mapStack,
       panelState,
@@ -133,7 +134,11 @@ export class VisualSettings {
         focus: false,
       });
     }
-    this._setScope({ enabled: scopeEnabled, featherPct: scopeFeatherPct });
+    this._setScope({
+      enabled: scopeEnabled,
+      featherPct: scopeFeatherPct,
+      opacityPct: typeof scopeOpacityPct === 'number' ? scopeOpacityPct : undefined,
+    });
     // null restores the altitude-adaptive ramp; a number pins the terminus
     // (clamped to the supported 94..100 band, same as the `sce` hash key).
     if (scopeTerminusPct === null) setScopeTerminusOverride(null);
@@ -479,6 +484,7 @@ export class VisualSettings {
       scope: {
         enabled: this._scopeEnabledShown,
         featherPct: this._scopeFeatherShown,
+        opacityPct: this._scopeOpacityShown ?? 100,
       },
       celestial: this._celestialShown,
     };
@@ -488,7 +494,12 @@ export class VisualSettings {
    * Apply the Scope mask and show it on its controls; a field that is not
    * given stays as it is. `apply: false` only shows the mask's state.
    */
-  _setScope({ enabled, featherPct } = {}, { apply = true } = {}) {
+  _setScope({ enabled, featherPct, opacityPct } = {}, { apply = true } = {}) {
+    if (typeof opacityPct === 'number') {
+      const pct = Math.max(0, Math.min(100, Math.round(opacityPct)));
+      if (apply) this.services.setScopeMaskOpacity?.(pct / 100);
+      this._scopeOpacityShown = pct;
+    }
     if (typeof enabled === 'boolean') {
       if (apply) this.services.setScopeMaskEnabled(enabled);
       this._scopeEnabledShown = enabled;
@@ -903,6 +914,7 @@ export class VisualSettings {
         celestialRingEnabled: this.celestialRingEnabled,
         scopeEnabled: isScopeMaskEnabled(),
         scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
+        scopeOpacityPct: this._scopeOpacityShown ?? 100,
         // null when adaptive — the share layer omits `sce` entirely in that case.
         scopeTerminusPct:
           getScopeTerminusOverride() == null
