@@ -3,7 +3,12 @@ import https from 'node:https';
 import { promises as fsp } from 'node:fs';
 import { Readable } from 'node:stream';
 
-import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
+import {
+  filterTrailing24h,
+  parseFirmsCsv,
+  trailing24hWindow,
+} from '../../src/data/firmsCsv.js';
+import { acceptsGzip, encodedBody, gzipBody } from './common/compress.js';
 import { readResponseTextCapped } from './common/http.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
@@ -179,6 +184,11 @@ export function firmsProxy() {
   let statusCache = null;
   /** @type {?Promise<?{used: number, limit: number}>} */
   let statusInflight = null;
+  /**
+   * The last /api/firms payload as bytes, with its gzip. One slot.
+   * @type {?{entry: object, stale: boolean, from: number, until: number, body: Buffer, gzip: ?Promise<?Buffer>}}
+   */
+  let served = null;
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
 
@@ -259,12 +269,8 @@ export function firmsProxy() {
     return { at: now, sources, fires };
   }
 
-  /**
-   * Cache entry → response payload. Fires are RE-filtered to the trailing
-   * 24 h at serve time so a stale cache never serves >24h-old detections.
-   */
-  function buildPayload(entry, stale) {
-    const fires = filterTrailing24h(entry.fires, Date.now());
+  /** Cache entry and the fires to serve from it → response payload. */
+  function buildPayload(entry, stale, fires) {
     return {
       fetchedAt: entry.at,
       stale,
@@ -273,6 +279,32 @@ export function firmsProxy() {
       count: fires.length,
       fires,
     };
+  }
+
+  /**
+   * The payload as the bytes to send. Serialising the whole fire set is tens
+   * of MB in a heavy season, so it is done once and kept, not once per request.
+   *
+   * Fires are RE-filtered to the trailing 24 h at serve time so a stale cache
+   * never serves >24h-old detections. The kept bytes are therefore reused only
+   * for the same entry and stale flag while the clock is inside the span over
+   * which that filter keeps the same records: a request never gets a body that
+   * serialising for it would not have produced.
+   */
+  function payloadBody(entry, stale) {
+    const now = Date.now();
+    if (
+      served?.entry === entry &&
+      served.stale === stale &&
+      now >= served.from &&
+      now <= served.until
+    ) {
+      return served;
+    }
+    const { kept, from, until } = trailing24hWindow(entry.fires, now);
+    const body = Buffer.from(JSON.stringify(buildPayload(entry, stale, kept)));
+    served = { entry, stale, from, until, body, gzip: null };
+    return served;
   }
 
   /** mapkey_status transactions, cached 5 min, best-effort (null on failure). */
@@ -327,6 +359,22 @@ export function firmsProxy() {
         });
         res.end(JSON.stringify(obj));
       };
+      const sendPayload = async (entry, stale) => {
+        const kept = payloadBody(entry, stale);
+        // Compressed once per kept body, on the first request that accepts
+        // gzip, so an identity response never pays or waits for it.
+        const gzip = acceptsGzip(req)
+          ? await (kept.gzip ??= gzipBody(kept.body).catch(() => null))
+          : null;
+        const encoded = encodedBody(req, kept.body, gzip);
+        if (res.headersSent) return;
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          ...encoded.headers,
+        });
+        res.end(encoded.body);
+      };
       try {
         const subPath = String(req.url || '').split('?')[0];
         const key = mapKey();
@@ -363,7 +411,7 @@ export function firmsProxy() {
 
         const entry = mem;
         if (entry && Date.now() - entry.at < TTL_MS) {
-          sendJson(200, buildPayload(entry, false));
+          await sendPayload(entry, false);
           return;
         }
         // Stale or missing → refresh, single-flight (concurrent requests
@@ -389,9 +437,9 @@ export function firmsProxy() {
         const pending = inflight;
         const fresh = await pending;
         if (fresh) {
-          sendJson(200, buildPayload(fresh, false));
+          await sendPayload(fresh, false);
         } else if (entry) {
-          sendJson(200, buildPayload(entry, true)); // upstream down — stale beats empty
+          await sendPayload(entry, true); // upstream down — stale beats empty
         } else {
           sendJson(502, {
             error: 'firms fetch failed and no cache available',
