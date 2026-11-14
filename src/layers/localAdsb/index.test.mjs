@@ -548,13 +548,10 @@ test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t
   assert.equal(model.scale, spec.scale, 'drawn life size');
   assert.equal(model.id, 'local-adsb:a0b702');
   assert.ok(
-    Cesium.Color.equals(
-      model.color,
-      Cesium.Color.fromCssColorString('#ff4fd8'),
-    ),
+    Cesium.Color.equals(model.color, Cesium.Color.WHITE),
+    'the mesh draws its own colours',
   );
-  assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.MIX);
-  assert.equal(model.colorBlendAmount, 0.94);
+  assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.HIGHLIGHT);
   assert.equal(model.show, true);
   const heli = sources[0].entities.getById('local-adsb:a0b702');
   assert.equal(

@@ -85,10 +85,6 @@ export const MODEL_ALL_KEEP_M = 450000;
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
 // every fleet model is nose -X: opposite Cesium heading 0
-// Owner launch-polish direction: models should read as clean light silhouettes,
-// with only a weak diffuse contribution from the models' own colours.
-
-export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
 
 export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
 

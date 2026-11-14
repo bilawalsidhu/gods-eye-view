@@ -16,7 +16,10 @@ import {
   MODEL_PROX_ADD_M,
   MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
 
 const specOf = (marker) =>
   aircraftLayerModelSpec({
@@ -31,15 +34,14 @@ const specOf = (marker) =>
  * Mirrors the public Flights fleet: models only below the altitude ceiling,
  * the same proximity/all caps and add/keep radii, the same visible-first
  * eligibility (`selectModelEligible`), the same fleet model per type, life
- * size (`aircraftLayerModelSpec`) and the same tint path (a MIX colour blend, here
- * magenta, as Flights tints military amber). Each model owns its matrix. A
+ * size (`aircraftLayerModelSpec`) and the same colours: the mesh's own
+ * (`aircraftModelBlend`). Each model owns its matrix. A
  * billboard stays the visual until its model is loaded AND placed; a grounded
  * aircraft's model rides the one-shot ground snap plus the class belly
  * offset, and without a resolved ground it stays a billboard. Every fleet
  * model loads once, up front, when the layer starts (`loadFleetModelSet`).
  * @param {object} options
  * @param {object} options.viewer Cesium viewer.
- * @param {Cesium.Color} options.color Model tint.
  * @param {(url: string) => string} options.resolveAsset
  * @param {object|null} [options.groundSnap] `createGroundSnap()` instance.
  * @param {(options: object) => Promise<object>} [options.loadModel]
@@ -47,7 +49,6 @@ const specOf = (marker) =>
  */
 export function createLocalAdsbModels({
   viewer,
-  color,
   resolveAsset,
   groundSnap = null,
   loadModel = (options) => Cesium.Model.fromGltfAsync(options),
@@ -104,9 +105,8 @@ export function createLocalAdsbModels({
           environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
           minimumPixelSize: MODEL_MIN_PX,
           scale: spec.scale,
-          color,
-          colorBlendMode: Cesium.ColorBlendMode.MIX,
-          colorBlendAmount: spec.blendAmount,
+          color: Cesium.Color.WHITE,
+          ...aircraftModelBlend(false),
           id,
         },
         { resolveAsset, load: loadModel },
