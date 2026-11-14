@@ -476,7 +476,7 @@ try {
     });
   }
   await page.waitForFunction(
-    () => location.hash.includes('9.d.2') && location.hash.includes('9.t.t'),
+    () => location.hash.includes('03.d.2') && location.hash.includes('03.t.t'),
     { timeout: 10_000 },
   );
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -561,7 +561,7 @@ try {
       target.searchParams.set('welcome', '0');
       target.searchParams.set('lang', locale);
       target.hash =
-        'v=2&lat=37&lon=-98&alt=5000000&heading=0&pitch=-90&map=esri-imagery&l=9&lo=9.d.2_9.t.t';
+        'v=2&lat=37&lon=-98&alt=5000000&heading=0&pitch=-90&map=esri-imagery&l=03&lo=03.d.2_03.t.t';
       await page.goto(target.href, {
         waitUntil: 'domcontentloaded',
         timeout: 60_000,

@@ -700,7 +700,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'severe-weather-outlooks',
-    token: '9',
+    token: '03',
     disposition: 'enabled+options',
     optionOwner: 'severe-weather-outlooks',
   }),

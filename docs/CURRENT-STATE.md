@@ -18,7 +18,7 @@ classification. Tornado fills use 70% opacity so the brown 5% band remains
 distinguishable over desert imagery; categorical fills remain at 35%. Ground
 boundaries draw in risk order so an outer band's hole line cannot cover the
 higher-risk boundary. Day/type restore through v2 shares and saved state (token
-`9`, the first free token on this base). No key, database or new
+`03`, after the published `9` and `00`–`02` reservations). No key, database or new
 dependency is required. See [source validation and limits](../DATA_SOURCES.md#severe-weather-outlooks-noaa-spc).
 Focused browser gate: `node scripts/qa-spc-outlooks.mjs --url http://localhost:4173`.
 SPC selector labels sit above their buttons so long English and translated labels
