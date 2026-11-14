@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDirectInvocation } from './pinokio-install.mjs';
 import { loadViteFromCanonicalRoot } from './pinokio-start.mjs';
+import { dataDir } from '../server/providers/common/data-dir.js';
 
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const ROOT = realpathSync(path.resolve(path.dirname(MODULE_PATH), '..'));
@@ -67,11 +68,19 @@ export function resolveTrustedPeers({ env = process.env, routeTable = '' } = {})
  * answers 500 and `.gev-cache` is never created, with nothing in the log. The
  * usual cause is a clone made as root on a NAS or Proxmox host while the
  * container runs as 1000:1000. Say so at start, naming both sets of ids.
- * @param {{root: string, writable: boolean, owner: {uid: number, gid: number}, runAs: {uid: number, gid: number}}} input
+ * @param {{root: string, writable: boolean, owner: {uid: number, gid: number}, runAs: {uid: number, gid: number}, kind?: string}} input
  * @returns {string|null} A warning, or null when the checkout is writable.
  */
-export function unwritableRootWarning({ root, writable, owner, runAs }) {
+export function unwritableRootWarning({ root, writable, owner, runAs, kind = 'checkout' }) {
   if (writable) return null;
+  if (kind !== 'checkout') {
+    return (
+      `[Docker] ${root} (GEV_DATA_DIR) is owned by ${owner.uid}:${owner.gid} but the container runs as ` +
+      `${runAs.uid}:${runAs.gid}, so saving keys and caching will fail. Mount a volume there ` +
+      `that ${runAs.uid}:${runAs.gid} can write: chown ${runAs.uid}:${runAs.gid} a bind-mounted folder, ` +
+      `add :Z to the bind mount on SELinux hosts, or run as ${owner.uid}:${owner.gid}`
+    );
+  }
   return (
     `[Docker] ${root} is owned by ${owner.uid}:${owner.gid} but the container runs as ` +
     `${runAs.uid}:${runAs.gid}, so saving keys and caching will fail. Either give ` +
@@ -89,20 +98,31 @@ function readRouteTable() {
 }
 
 async function start() {
+  // The checkout is where the app writes, unless GEV_DATA_DIR moves that
+  // (the hardened image keeps its code read-only and writes to /data).
+  const writeRoot = dataDir(ROOT);
+  const relocated = writeRoot !== ROOT;
   let writable = true;
   try {
-    accessSync(ROOT, constants.W_OK);
+    accessSync(writeRoot, constants.W_OK);
   } catch {
     writable = false;
   }
   if (!writable) {
-    const { uid, gid } = statSync(ROOT);
+    let owner = { uid: -1, gid: -1 };
+    try {
+      owner = statSync(writeRoot);
+    } catch {
+      // A data directory that does not exist is as unwritable as one we cannot write.
+    }
+    const { uid, gid } = owner;
     console.warn(
       unwritableRootWarning({
-        root: ROOT,
+        root: writeRoot,
         writable,
         owner: { uid, gid },
         runAs: { uid: process.getuid?.() ?? -1, gid: process.getgid?.() ?? -1 },
+        kind: relocated ? 'data' : 'checkout',
       }),
     );
   }

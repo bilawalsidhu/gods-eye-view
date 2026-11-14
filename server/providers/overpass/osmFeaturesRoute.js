@@ -12,6 +12,7 @@ import {
   resolveOverpassUpstreamTag,
 } from './constants.js';
 import { fetchOverpassPayload, overpassPayloadIsData } from './transport.js';
+import { dataDir } from '../common/data-dir.js';
 
 /** Places of interest change slowly: answers are kept a day. */
 const OSM_FEATURES_TTL_MS = 86_400_000;
@@ -179,7 +180,7 @@ export function installOsmFeaturesRoute(
     // caches do, so repointing OVERPASS_UPSTREAMS never serves the old one's.
     upstreamTag = resolveOverpassUpstreamTag,
     upstreamBudgetMs = OSM_FEATURE_LIMITS.upstreamBudgetMs,
-    cacheRoot = path.join(process.cwd(), '.gev-cache'),
+    cacheRoot = path.join(dataDir(), '.gev-cache'),
     featuresCache = createBoundedCache({
       dir: cacheRoot ? path.join(cacheRoot, 'osm-features') : null,
       ttlMs: OSM_FEATURES_TTL_MS,

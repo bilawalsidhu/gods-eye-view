@@ -2,6 +2,7 @@ import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
 import { readResponseBytesCapped } from './common/http.js';
+import { dataDir } from './common/data-dir.js';
 import {
   isValidTileCoord as isValidTomTomTile,
   utcDayKey as tomtomUtcDayKey,
@@ -51,7 +52,7 @@ import { admitSameSite } from './common/same-site.js';
  */
 export function tomtomProxy() {
   const TILE_TTL_MS = 120_000;
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache', 'tomtom');
+  const CACHE_DIR = path.join(dataDir(), '.gev-cache', 'tomtom');
   const BUDGET_PATH = path.join(CACHE_DIR, 'budget.json');
   // 200,000/month free tier / 31 days = 6,451. Rounded down for headroom.
   const DEFAULT_DAILY_BUDGET = 6000;
