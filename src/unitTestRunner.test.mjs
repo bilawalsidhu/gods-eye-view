@@ -5,12 +5,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ALLOCATION_TEST_FILES,
+  UNIT_TEST_ARGV_CHAR_BUDGET,
+  UNIT_TEST_NODE_FLAGS,
   UNIT_TEST_ROOTS,
   allocationTestArgs,
   assertCalibratedAllocationRuntime,
+  batchUnitTestFiles,
   buildUnitTestPlan,
   discoverUnitTestFiles,
   isCalibratedAllocationRuntime,
+  runParallelTestBatches,
 } from '../scripts/run-unit-tests.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -60,6 +64,110 @@ test('unit runner serializes only GC-bracketed allocation microbenchmarks', () =
   assert.throws(
     () => allocationTestArgs('src/data/radio.test.mjs'),
     /Not an allocation microbenchmark/,
+  );
+});
+
+test('parallel batches stay under the Windows command-line limit (#1631)', () => {
+  // Windows caps a spawned command line at 32,767 characters; the parallel
+  // suite is ~950 paths and crossed that on a single `node --test` spawn, so
+  // `npm test` died with ENAMETOOLONG before running anything. The runner now
+  // shards the parallel files — these assertions pin the sharding contract
+  // against the real suite, not a fixture, so growth past another batch
+  // boundary stays covered.
+  const plan = buildUnitTestPlan(discoverUnitTestFiles(repositoryRoot));
+  const batches = batchUnitTestFiles(plan.parallel);
+
+  // Nothing lost, nothing reordered, nothing duplicated.
+  assert.deepEqual(batches.flat(), plan.parallel);
+  assert.ok(batches.length > 0);
+
+  const overhead =
+    process.execPath.length + 1 +
+    UNIT_TEST_NODE_FLAGS.join(' ').length + 1 +
+    '--test'.length;
+  for (const batch of batches) {
+    // Space per argument plus the two quotes spawnSync adds around a path
+    // containing spaces, counted for every path so the bound holds from a
+    // checkout under a spaced directory too.
+    const chars = overhead + batch.reduce((sum, file) => sum + file.length + 3, 0);
+    assert.ok(
+      chars <= UNIT_TEST_ARGV_CHAR_BUDGET,
+      `batch of ${batch.length} files needs ${chars} characters (budget ${UNIT_TEST_ARGV_CHAR_BUDGET})`,
+    );
+    assert.ok(
+      chars < 32_767,
+      `batch of ${batch.length} files needs ${chars} characters, over the Windows limit`,
+    );
+  }
+});
+
+test('batching kicks in for an oversized suite (#1631)', () => {
+  // Fixed synthetic input, independent of the repository's suite size and
+  // of process.execPath: 500 fixed-length paths need ~41k characters, over
+  // the Windows 32,767 limit on any machine, so the guard must split them.
+  const synthetic = Array.from(
+    { length: 500 },
+    (_, index) => `src/${'m'.repeat(60)}/module-${index}.test.mjs`,
+  );
+  const overhead =
+    process.execPath.length + 1 +
+    UNIT_TEST_NODE_FLAGS.join(' ').length + 1 +
+    '--test'.length;
+  const singleChars = overhead + synthetic.reduce((sum, file) => sum + file.length + 3, 0);
+  assert.ok(
+    singleChars > 32_767,
+    `expected the synthetic suite (${singleChars} chars) to exceed the Windows limit`,
+  );
+
+  const batches = batchUnitTestFiles(synthetic);
+  assert.ok(batches.length > 1, 'synthetic oversized suite must need several batches');
+  assert.deepEqual(batches.flat(), synthetic);
+  for (const batch of batches) {
+    const chars = overhead + batch.reduce((sum, file) => sum + file.length + 3, 0);
+    assert.ok(
+      chars <= UNIT_TEST_ARGV_CHAR_BUDGET,
+      `batch of ${batch.length} files needs ${chars} characters (budget ${UNIT_TEST_ARGV_CHAR_BUDGET})`,
+    );
+  }
+});
+
+test('batching degenerates safely (#1631)', () => {
+  // Empty input yields no batches, so the runner never spawns a bare
+  // `node --test` (which would rediscover tests outside the plan).
+  assert.deepEqual(batchUnitTestFiles([]), []);
+
+  // A single path longer than the whole budget is kept, not dropped.
+  const longFile = `src/${'x'.repeat(300)}/solo.test.mjs`;
+  assert.deepEqual(batchUnitTestFiles([longFile], 100), [[longFile]]);
+
+  // A tiny budget splits a short list into singles, order preserved.
+  const files = ['src/a.test.mjs', 'src/b.test.mjs', 'src/c.test.mjs'];
+  const batches = batchUnitTestFiles(files, 1);
+  assert.deepEqual(batches, files.map((file) => [file]));
+});
+
+test('failing parallel batches still execute later files (#1631)', () => {
+  const files = ['src/a.test.mjs', 'src/b.test.mjs', 'src/c.test.mjs'];
+  const overhead =
+    process.execPath.length + 1 +
+    UNIT_TEST_NODE_FLAGS.join(' ').length + 1 +
+    '--test'.length;
+  const argvCharBudget = overhead + files[0].length + 3;
+  const calls = [];
+  const statuses = [7, 0, 2];
+  const status = runParallelTestBatches(files, {
+    argvCharBudget,
+    runBatch(args) {
+      calls.push(args);
+      return statuses[calls.length - 1];
+    },
+  });
+
+  assert.equal(status, 7, 'first failed batch determines the exit status');
+  assert.deepEqual(calls, files.map((file) => ['--test', file]));
+  assert.equal(
+    runParallelTestBatches([], { runBatch: () => { throw new Error('unexpected spawn'); } }),
+    0,
   );
 });
 

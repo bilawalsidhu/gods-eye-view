@@ -78,6 +78,50 @@ export const UNIT_TEST_NODE_FLAGS = Object.freeze([
   '--import=./build/registerVue.js',
 ]);
 
+/**
+ * Character budget for one spawned command line (#1631). Windows refuses to
+ * start a process whose command line exceeds 32,767 characters, and the
+ * parallel suite is ~950 paths — over 33k characters on a single `node
+ * --test <files...>`, which died with ENAMETOOLONG before any test ran. The
+ * budget counts the executable, the shared flags, one separating space per
+ * argument and two quoting characters per path (spawnSync quotes arguments
+ * containing spaces, e.g. a checkout under `Mobile Documents`), then keeps a
+ * wide margin under the platform limit.
+ */
+export const UNIT_TEST_ARGV_CHAR_BUDGET = 24_000;
+
+/**
+ * Partition the parallel test files into batches whose spawned command line
+ * stays under `argvCharBudget` (#1631). Order is preserved, so flattening
+ * the batches reproduces the input exactly; a single path longer than the
+ * budget still gets its own batch rather than being dropped. An empty input
+ * yields no batches, so callers never spawn a bare `node --test` (which
+ * would fall back to Node's default test discovery instead of this list).
+ */
+export function batchUnitTestFiles(files, argvCharBudget = UNIT_TEST_ARGV_CHAR_BUDGET) {
+  const overhead =
+    process.execPath.length + 1 +
+    UNIT_TEST_NODE_FLAGS.join(' ').length + 1 +
+    '--test'.length;
+  const batches = [];
+  let current = [];
+  let currentChars = overhead;
+  for (const file of files) {
+    // Space separator plus the two quotes spawnSync adds around a path that
+    // contains spaces; counted unconditionally so the budget holds anywhere.
+    const added = file.length + 3;
+    if (current.length > 0 && currentChars + added > argvCharBudget) {
+      batches.push(current);
+      current = [];
+      currentChars = overhead;
+    }
+    current.push(file);
+    currentChars += added;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
 function runTests(args) {
   const result = spawnSync(process.execPath, [...UNIT_TEST_NODE_FLAGS, ...args], {
     cwd: process.cwd(),
@@ -88,9 +132,22 @@ function runTests(args) {
   return result.status ?? 1;
 }
 
+/** Run all parallel batches and preserve the first non-zero exit status. */
+export function runParallelTestBatches(
+  files,
+  { argvCharBudget = UNIT_TEST_ARGV_CHAR_BUDGET, runBatch = runTests } = {},
+) {
+  let firstFailure = 0;
+  for (const batch of batchUnitTestFiles(files, argvCharBudget)) {
+    const status = runBatch(['--test', ...batch]);
+    if (firstFailure === 0 && status !== 0) firstFailure = status;
+  }
+  return firstFailure;
+}
+
 export function runUnitTests() {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  const parallelStatus = runTests(['--test', ...plan.parallel]);
+  const parallelStatus = runParallelTestBatches(plan.parallel);
   if (parallelStatus !== 0) return parallelStatus;
 
   // The GC-bracketed budgets are calibrated on every supported Node major.
