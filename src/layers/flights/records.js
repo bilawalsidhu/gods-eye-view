@@ -109,11 +109,12 @@ export class FlightRecords {
     // The airframe's facts: this record's, or those kept across a reset.
     const airframe = prevMeta ?? this.airframes.get(icao24);
     this.airframes.delete(icao24);
-    // A ground vehicle or ground station (a feed's ZVEH or GRND: a model
-    // built standing, catalog category `other`) takes the feed's own type,
-    // which no airframe lookup knows; every other aircraft keeps waiting for
-    // its looked-up type. With no altitude at all it stands on the ground,
-    // where it is, instead of at the airborne default.
+    // adsbdb enrichment, once it has answered, outranks the observation's
+    // type: the feed's own, or the type database's fill (the source's
+    // /api/aircraft-types lookup). A ground vehicle or ground station (a
+    // feed's ZVEH or GRND: a model built standing, catalog category `other`)
+    // with no altitude at all stands on the ground, where it is, instead of
+    // at the airborne default.
     const groundModel = (typeCode) =>
       drawnAsGroundModel(
         this.fleetModels(),
@@ -121,10 +122,7 @@ export class FlightRecords {
         category,
         stickyText(callsign, prevMeta?.callsign),
       );
-    const feedType = observation.typeCode || null;
-    const typeCode =
-      airframe?.typeCode ??
-      (feedType && groundModel(feedType) ? feedType : null);
+    const typeCode = airframe?.typeCode ?? (observation.typeCode || null);
     const onGround =
       on_ground === true ||
       (!Number.isFinite(baro_alt) &&
@@ -311,11 +309,8 @@ export class FlightRecords {
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
       true_track: stickyNumber(true_track, prevMeta?.true_track, 0),
       category: cat,
-      // An adsbdb-enriched type code outranks the coarse OpenSky category.
-      klass: classifyAircraft({
-        typeCode: airframe?.typeCode ?? null,
-        category: cat,
-      }),
+      // A known type code outranks the coarse OpenSky category.
+      klass: classifyAircraft({ typeCode, category: cat }),
       turnRateDps: prevMeta?.turnRateDps || 0,
       verticalRate: stickyNumber(vertical_rate, prevMeta?.verticalRate, null),
       // Analyst seam: OpenSky origin_country (state[2]) — additive, sticky
@@ -348,10 +343,10 @@ export class FlightRecords {
         null,
       ),
       // adsbdb enrichment — written by the enrichment callbacks, carried
-      // across polls; a ground vehicle's or station's from the feed:
+      // across polls — else the feed's or the type database's fill:
       typeCode,
-      typeName: airframe?.typeName ?? null,
-      registration: airframe?.registration ?? null,
+      typeName: airframe?.typeName ?? observation.typeName ?? null,
+      registration: airframe?.registration ?? observation.registration ?? null,
       airline: routeHeld ? (airframe.airline ?? null) : null,
       route: routeHeld ? (airframe.route ?? null) : null,
       routeCallsign: routeHeld ? airframe.routeCallsign : null,

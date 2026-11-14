@@ -300,6 +300,7 @@ export function createEnrichment({
         // Answered, queued, negative this session, or cooling down after a
         // failure: never spend a token on it.
         if (_enrichHeld(`t:${icao24}`)) continue;
+        if (flightState.records.data.get(icao24)?.typeCode) continue; // the aircraft type database already answered
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
