@@ -30,6 +30,7 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
 import { shipwrecksProxy } from './shipwrecks.js';
+import { airAccidentsProxy } from './airAccidents.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
 import { newsProxy } from './news.js';
 import { inaturalistProxy } from './inaturalist/observations.js';
@@ -89,6 +90,7 @@ function localProviderPlugins({
     libraryProxy(),
     ghostMapsProxy(),
     shipwrecksProxy(),
+    airAccidentsProxy(),
     droneAirspaceProxy(),
     newsProxy(),
     inaturalistProxy(),

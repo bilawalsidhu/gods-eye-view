@@ -33,6 +33,7 @@ import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationShipwrecks } from './layers/shipwrecks.js';
+import { createApplicationAirAccidents } from './layers/airAccidents.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
 import { createApplicationNews } from './layers/news.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
@@ -144,6 +145,7 @@ export function createApplicationCatalog({
         }),
         createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
         createApplicationShipwrecks({ source: sources.shipwrecks }),
+        createApplicationAirAccidents({ source: sources['air-accidents'] }),
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
