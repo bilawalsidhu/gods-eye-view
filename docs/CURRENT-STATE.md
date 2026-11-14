@@ -3455,7 +3455,8 @@ reads `NASA FIRMS · LIVE · updated …`. A source may instead answer the 24 ho
 to a set time, naming its end as `at` (epoch ms): the row then reads
 `NASA FIRMS · 24 h to MM-DD HH:MM UTC`, `getStats()` reports `at`, and
 `get_active_fires` says "in the 24 hours to" that time and reports it as
-`window_end`. The dev proxy never sets `at`.
+`window_end`, and card and detail ages count back from that time instead of
+now. The dev proxy never sets `at`.
 
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
 FIRMS ages round to whole hours before choosing a unit, so a 47.6-hour age reads "2d", not "48h"; with detections filtered to 24 hours, this shows mostly in the `STALE · cached {age}` stats line.
@@ -8411,7 +8412,11 @@ clock drives all enabled observation rows. Earlier/Later use the sorted union of
 non-suspended products' advertised times; each product selects its nearest frame
 at or before the requested UTC time, never a future frame or an interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
-3 hours for hourly global infrared. A missing eligible frame hides that product
+3 hours for hourly global infrared, but never less than one and a half of the
+feed's median frame spacing over its latest frames, so a regional feed whose
+frames come an hour apart holds each for 90 minutes; the latest frame reads late
+after the same floor (20 minutes for radar and regional infrared, 45 for
+lightning, 4 hours for global infrared). A missing eligible frame hides that product
 and reports the gap; rows show actual displayed UTC time with synced/nearest labels.
 Manifest rollover preserves the requested history time, even when frames expire.
 
