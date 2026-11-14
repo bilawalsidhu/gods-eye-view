@@ -236,6 +236,7 @@ export function createLifecycle({ state, services, parts }) {
         state._preRenderRemove = null;
       }
       parts.ingestion.abortAllInFlight();
+      parts.coverage.hide();
       state._activeFeeds.clear();
       state._feedStatus.clear();
       for (const entry of state._vehicles.values()) {
@@ -270,6 +271,7 @@ export function createLifecycle({ state, services, parts }) {
     async update() {
       if (!state._enabled) return;
       parts.ingestion.sweepAgedVehicles(Date.now());
+      parts.coverage.sync(parts.viewport.getCameraAltitude());
       if (state._activeFeeds.size === 0) return;
       const generation = state._generation;
       await Promise.all(
@@ -285,6 +287,7 @@ export function createLifecycle({ state, services, parts }) {
      */
     destroy(viewer) {
       this.disable(viewer);
+      parts.coverage.destroy();
       parts.rendering.stopModels(true);
       if (state._markers) {
         unregisterSpriteCollection('transit', state._markers);
