@@ -3706,5 +3706,7 @@
   "Cable car": "Tranvía de cable",
   "Monorail": "Monorraíl",
   "Funicular": "Funicular",
-  "Gondola": "Góndola"
+  "Gondola": "Góndola",
+  "Move panels back beside the rail": "Devolver los paneles junto a la barra",
+  "Move panels over the rail, to the edge": "Mover los paneles sobre la barra, hasta el borde"
 }

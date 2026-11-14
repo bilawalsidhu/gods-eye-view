@@ -141,6 +141,7 @@ test("UiPanel draws Core's panel markup and asks for the other state", async (t)
       'demo-badge',
       'panel-divider',
       'demo-action',
+      'panel-edge-btn',
       'panel-collapse-btn',
     ],
   );

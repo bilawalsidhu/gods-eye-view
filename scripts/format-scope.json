@@ -1449,5 +1449,13 @@
   "src/data/fleetModelInstances.test.mjs",
   "src/testSupport/fleetGlb.mjs",
   "src/testSupport/fleetModelFakes.mjs",
-  "scripts/measure-fleet-trail-anchors.mjs"
+  "scripts/measure-fleet-trail-anchors.mjs",
+  "src/ui/panelEdge.js",
+  "src/ui/railEdgeScroll.js",
+  "src/ui/railEdgeScroll.test.mjs",
+  "src/ui/kit/UiPanelEdge.vue",
+  "src/ui/styles/rail-edge.css",
+  "src/ui/styles/rail-split.css",
+  "src/ui/styles/left-tools.css",
+  "src/ui/styles/panel-edge.css"
 ]

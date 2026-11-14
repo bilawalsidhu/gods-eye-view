@@ -3619,5 +3619,7 @@
   "Cable car": "Kabelstraßenbahn",
   "Monorail": "Einschienenbahn",
   "Funicular": "Standseilbahn",
-  "Gondola": "Gondelbahn"
+  "Gondola": "Gondelbahn",
+  "Move panels back beside the rail": "Bedienfelder zurück neben die Leiste",
+  "Move panels over the rail, to the edge": "Bedienfelder über die Leiste an den Rand verschieben"
 }

@@ -60,6 +60,7 @@ export function layoutLeftPanelRail({
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');
     stack.style.removeProperty('--panel-rail-offset');
+    stack.style.removeProperty('--panel-rail-lift');
     stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
     settleSideAccordion({ panels, enabled: false, onCollapse });
@@ -282,9 +283,18 @@ export function layoutLeftPanelRail({
     getComputedStyle(stack)
       .getPropertyValue?.('--panel-stack-top-pinned')
       ?.trim() === '1';
-  const railOffset = `${(topPinned ? 0 : safeTop - layoutTop).toFixed(1)}px`;
+  // The stack itself rises by the lift below, by a different amount for a
+  // tall panel than at rest; the rail takes up the difference.
+  const lift = (top) => Math.min(0, obstacleSafeTop - top);
+  const railOffset = `${(topPinned ? 0 : safeTop + lift(safeTop) - layoutTop - lift(layoutTop)).toFixed(1)}px`;
   if (stack.style.getPropertyValue('--panel-rail-offset') !== railOffset) {
     stack.style.setProperty('--panel-rail-offset', railOffset);
+  }
+  // How far the column can rise before it meets the HUD readout, so the rail
+  // and any open panel sit just under it, whether or not a panel is open.
+  const railLift = `${(topPinned ? 0 : lift(layoutTop)).toFixed(1)}px`;
+  if (stack.style.getPropertyValue('--panel-rail-lift') !== railLift) {
+    stack.style.setProperty('--panel-rail-lift', railLift);
   }
   stack.style.removeProperty('--left-stack-centered-height');
   for (const panel of panels)

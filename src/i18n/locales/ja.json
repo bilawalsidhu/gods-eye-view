@@ -3532,5 +3532,7 @@
   "Cable car": "ケーブルトラム",
   "Monorail": "モノレール",
   "Funicular": "ケーブルカー",
-  "Gondola": "ゴンドラ"
+  "Gondola": "ゴンドラ",
+  "Move panels back beside the rail": "パネルをレールの横に戻す",
+  "Move panels over the rail, to the edge": "パネルをレールの上、画面端へ移動"
 }

@@ -3619,5 +3619,7 @@
   "Cable car": "Kabelspårvagn",
   "Monorail": "Enskensbana",
   "Funicular": "Bergbana",
-  "Gondola": "Kabinbana"
+  "Gondola": "Kabinbana",
+  "Move panels back beside the rail": "Flytta tillbaka panelerna bredvid listen",
+  "Move panels over the rail, to the edge": "Flytta panelerna över listen, till kanten"
 }

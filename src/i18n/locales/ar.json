@@ -3967,5 +3967,7 @@
   "Cable car": "ترام كابلي",
   "Monorail": "قطار أحادي السكة",
   "Funicular": "قطار جبلي مائل",
-  "Gondola": "تلفريك"
+  "Gondola": "تلفريك",
+  "Move panels back beside the rail": "إعادة اللوحات إلى جانب الشريط",
+  "Move panels over the rail, to the edge": "نقل اللوحات فوق الشريط إلى الحافة"
 }

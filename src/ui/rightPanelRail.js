@@ -32,6 +32,20 @@ function settledLeftRailTop(leftStack, viewportHeight, getComputedStyle) {
 }
 
 /**
+ * An element's CSS `top` in pixels where it will settle: the end of a running
+ * `top` transition, else its computed value. NaN when it cannot be read.
+ */
+function settledCssTop(element, getComputedStyle) {
+  if (!element) return NaN;
+  const transition = element
+    .getAnimations?.()
+    .find((animation) => animation.transitionProperty === 'top');
+  const target = parseFloat(transition?.effect?.getKeyframes?.().at(-1)?.top);
+  if (Number.isFinite(target)) return target;
+  return parseFloat(getComputedStyle(element).top);
+}
+
+/**
  * Measure and place the right panel rail for one synchronous layout pass.
  * The caller owns scheduling, obstacle selection, disclosure preferences and
  * persistence. Auto-collapse is presentation only and reports through callbacks.
@@ -126,9 +140,20 @@ export function layoutRightPanelRail({
     viewportHeight,
     getComputedStyle,
   );
-  // Align with the left rail's buttons, which hold still while its stack moves.
-  const leftRailOffset =
-    parseFloat(leftStack?.style.getPropertyValue('--panel-rail-offset')) || 0;
+  // Align with the left rail's buttons, which hold still while its stack moves:
+  // the rail's own settled `top` inside the stack, so every left layout is
+  // followed (a layout may pin the rail to the stack's top whatever the
+  // offset says). The stack's offset is the fallback when there is no rail.
+  const leftRailInset = settledCssTop(
+    leftStack?.querySelector?.('.gev-panel-rail') ?? null,
+    getComputedStyle,
+  );
+  // A rail that sits lower in its stack has only made room above itself for
+  // the open panel's own icon, which stays at the stack's top: the column's
+  // top has not moved, so that inset is not followed.
+  const leftRailOffset = Number.isFinite(leftRailInset)
+    ? Math.min(0, leftRailInset)
+    : parseFloat(leftStack?.style.getPropertyValue('--panel-rail-offset')) || 0;
   const alignedTop = Number.isFinite(leftStackTop)
     ? leftStackTop + leftRailOffset
     : viewportHeight * 0.26;
@@ -206,6 +231,18 @@ export function layoutRightPanelRail({
       0,
     ) +
     gap * Math.max(0, measuredPanels.length - 1);
+  // An open Context panel takes the column's full height: up to just under
+  // the HUD readouts at the top of the screen, down to the usual bottom.
+  // CCTV does the same, so its feed and controls have the room.
+  const FULL_HEIGHT = new Set(['global-context-panel', 'cctv-panel']);
+  const contextOpen = panels.some(
+    (panel) =>
+      FULL_HEIGHT.has(panel.id) && !panel.classList.contains('collapsed'),
+  );
+  // Every panel starts level with the left rail, open or not, so the two
+  // rails line up in every HUD layout (Minimal has no top-right readout to
+  // push this column down) and switching between Context, CCTV and Street
+  // Level does not move it. Only the two above also stretch to the bottom.
   const layout = resolveHudRailLayout({
     viewportHeight,
     panelHeight: naturalHeight,
@@ -221,9 +258,11 @@ export function layoutRightPanelRail({
   const { safeTop, safeBottom, maxHeight: availableHeight } = layout;
   const stabilityBand = Math.max(48, viewportHeight * 0.06);
   const wasFocused = stack.classList.contains('layout-focus');
-  const shouldFocus = wasFocused
-    ? naturalHeight >= availableHeight - stabilityBand
-    : naturalHeight > availableHeight;
+  const shouldFocus =
+    contextOpen ||
+    (wasFocused
+      ? naturalHeight >= availableHeight - stabilityBand
+      : naturalHeight > availableHeight);
   const layoutTop = shouldFocus ? safeTop : layout.top;
   const collapsedHeight = visiblePanels.reduce(
     (total, panel) =>
