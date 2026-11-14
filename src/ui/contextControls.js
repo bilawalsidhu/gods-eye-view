@@ -51,6 +51,8 @@ export class ContextControls {
     this._contextRestoreState = null;
     this._contextLayerReactionPromises = new Set();
     this._preservePanelStateDuringLayerClear = false;
+    /** Layers Context isolation is switching off right now. */
+    this._isolatingLayerIds = new Set();
     this._userFacingContextNotificationTokens = new Set();
     this._clearSelectedLayersPromise = null;
     this._clearSelectedLayersManagerPromise = null;
@@ -60,18 +62,14 @@ export class ContextControls {
     if (!this.destroyed) this.actions.showToast(...args);
   }
   /**
-   * Whether Context isolation switched this layer off and leaving the mode
-   * restores it. Such a layer is suspended, not switched off by the user: a
-   * layer the user switched during the session is theirs again.
+   * Whether Context isolation is switching this layer off right now: it is
+   * suspended, and leaving the mode restores it. A switch-off by the user,
+   * inside the mode or out of it, is not.
    * @param {string} layerId Layer id.
    * @returns {boolean}
    */
   suspendsLayer(layerId) {
-    const snapshot = this._contextSessionSnapshot;
-    return Boolean(
-      snapshot?.enabledLayerIds?.has(layerId) &&
-      !snapshot.userSwitched?.has(layerId),
-    );
+    return this._isolatingLayerIds.has(layerId);
   }
   setClearBusy(...args) {
     if (!this.destroyed) this.actions.setClearBusy(...args);

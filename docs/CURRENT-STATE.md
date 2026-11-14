@@ -2235,7 +2235,9 @@ the collapse, so a panel the desktop accordion only folded has its saved and
 shared state closed too. Clear selected data layers and Context isolation
 (Contacts, Space Missions) switch the layer off without the user asking: the
 panel and its share preference stay as they are, and the layer comes back to an
-open panel. A panel opened by hand while the layer is off stays open, and its
+open panel. Only the switch-off isolation makes counts (`suspendsLayer`, true
+while `_clearLayersOutsideContextMode` switches the layer off): the user
+switching CCTV off inside Contacts closes the panel as anywhere else. A panel opened by hand while the layer is off stays open, and its
 meta line reads the catalog count, not the last active camera.
 
 ## UI disposal

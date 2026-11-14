@@ -277,7 +277,6 @@ export function recordContextSessionUserChange({
   ) {
     return false;
   }
-  snapshot.userSwitched?.add(change.layerId);
   const isCompanion = CONTEXT_COMPANIONS.has(change.layerId);
   if (change.enabled) {
     if (CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId)) return false;
