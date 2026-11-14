@@ -103,6 +103,10 @@ function fixture(
   });
   cameraPort.port.flyTo = (destination, options = {}) =>
     flights.push({ destination, ...options });
+  // What the camera follows, and where a double-click zooms.
+  cameraPort.port.followed = null;
+  cameraPort.port.follow = (target) =>
+    (cameraPort.port.followed = target ?? null);
   const camera = {
     setHeight: (next) =>
       cameraPort.setPose({
@@ -112,8 +116,10 @@ function fixture(
     moveEnd: () => cameraPort.emit('moveEnd'),
   };
   const viewer = {};
+  let picked = null;
   const { draw, unbind } = bindFakeDraw(viewer, {
     camera: cameraPort.port,
+    query: { pick: () => picked },
     frame: { requestRender() {}, on: () => () => {} },
     ...(quality ? { quality } : {}),
   });
@@ -127,11 +133,23 @@ function fixture(
   ];
   // The scene's click dispatcher: `click(hit)` clicks over a drawn item.
   const clickHandlers = new Set();
+  const doubleHandlers = new Set();
   const input = {
     onClick(fn) {
       clickHandlers.add(fn);
       return () => clickHandlers.delete(fn);
     },
+    onPointer(type, fn) {
+      if (type !== 'dblclick') return () => {};
+      doubleHandlers.add(fn);
+      return () => doubleHandlers.delete(fn);
+    },
+    stockEnabled: (name) => name === 'dblclickFollow',
+  };
+  // `dblclick(hit)` double-clicks over a drawn item.
+  const dblclick = (hit) => {
+    picked = hit;
+    for (const fn of [...doubleHandlers]) fn({ position: { x: 10, y: 10 } });
   };
   const click = (topHit) => {
     for (const fn of [...clickHandlers])
@@ -172,6 +190,13 @@ function fixture(
     items,
     click,
     clickHandlers,
+    dblclick,
+    cameraPort: cameraPort.port,
+    /** The id of the layer's live draw set named `part`. */
+    setId: (part) =>
+      [...draw.sets.values()].find(
+        (set) => !set.disposed && set.spec.id.endsWith(`:${part}`),
+      )?.spec.id,
   };
 }
 
@@ -1300,4 +1325,52 @@ test('zoomed out, a hotspot is one beacon; off, nothing draws; destroyed, the se
   assert.deepEqual(items('points'), []);
   layer.destroy();
   assert.deepEqual(items('points'), []);
+});
+
+test('a double-click follows a marker until the markers are drawn anew, and zooms to a hotspot outline', async (t) => {
+  const { layer, items, dblclick, cameraPort, setId } = fixture(t, {
+    height: 500_000,
+    source: {
+      getOutline: async () => ({
+        polygons: [
+          {
+            outer: [
+              [30, 45],
+              [40, 45],
+              [40, 52],
+              [30, 52],
+            ],
+            holes: [],
+          },
+        ],
+        borders: [],
+        disputed: [],
+      }),
+    },
+  });
+  const zooms = [];
+  cameraPort.flyToBounds = (sphere) => zooms.push(sphere);
+  layer.enable();
+  await layer.update();
+  await flush();
+  const marker = [...items('points'), ...items('icons')].find((item) =>
+    String(item.id).startsWith('news:report:major~'),
+  );
+  const set = setId(items('points').includes(marker) ? 'points' : 'icons');
+  dblclick({ set, id: marker.id, surface: false });
+  assert.ok(cameraPort.followed, 'the marker is followed');
+  assert.deepEqual(cameraPort.followed.position(), marker.pos);
+  // A render draws every marker anew, as the entities were.
+  await layer.update();
+  await flush();
+  assert.equal(cameraPort.followed, null, 'drawn anew: no longer followed');
+  // Each line a hotspot box or outline draws is zoomed to.
+  const line = [...items('boxes'), ...items('outline-lines')].find(
+    (item) => item.show !== false,
+  );
+  const part = items('boxes').includes(line) ? 'boxes' : 'outline-lines';
+  assert.ok(line, 'a box or outline is drawn');
+  dblclick({ set: setId(part), id: line.id, surface: false });
+  assert.ok(zooms.at(-1)?.radius > 0, 'it is zoomed to');
+  assert.equal(cameraPort.followed, null);
 });

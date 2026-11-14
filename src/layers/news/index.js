@@ -1,5 +1,9 @@
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import {
+  drawnItemTarget,
+  followOnDoubleClick,
+} from '../../data/stockFollow.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { cssColor } from '../../render/color.js';
 import {
@@ -218,10 +222,15 @@ export function createNewsLayer({
   if (drawPictureCards !== null && typeof drawPictureCards !== 'function')
     throw new TypeError('News picture cards must be a function');
 
+  const outlineItems = new Map();
   let viewer = null,
     // The layer's draw sets (`sets.icons` and the rest), made on init.
     sets = null,
     clickOff = null,
+    // The follow a double-click started, and what each set draws now (the
+    // markers by set, the outlines by id), for it to follow or zoom to.
+    stockFollow = null,
+    drawnMarkers = new Map(),
     listener = null,
     runNavigation = null,
     request = null,
@@ -881,6 +890,19 @@ export function createNewsLayer({
     horizon.update(cullTargets, { quiet: true });
     for (const kind of ['halos', 'points', 'icons', 'boxes'])
       sets[kind].set(list[kind]);
+    // Every marker was drawn anew as an entity: that ended a follow of one.
+    stockFollow?.retain(
+      (key) =>
+        !['halos', 'points', 'icons', 'boxes'].some((kind) =>
+          key.startsWith(`${sets[kind].id}:`),
+        ),
+    );
+    drawnMarkers = new Map(
+      ['halos', 'points', 'icons', 'boxes'].map((kind) => [
+        sets[kind].id,
+        new Map(list[kind].map((item) => [item.id, item])),
+      ]),
+    );
     updatePulse();
     if (drawPictureCards)
       // At every height: zoomed out, a hotspot's reports give way to its
@@ -1026,6 +1048,8 @@ export function createNewsLayer({
     for (const [index, area] of disputed.entries())
       for (const [k, points] of area.rings.entries())
         line(`${pickId}~disputed${index}.${k}`, closed(points), 2, dotted);
+    for (const item of [...parts.fills, ...parts.borders])
+      outlineItems.set(item.id, item);
     if (parts.fills.length) sets.outlineFills.upsert(parts.fills);
     if (parts.borders.length) sets.outlineLines.upsert(parts.borders);
     outlineDisputed.set(key, disputed);
@@ -1410,11 +1434,37 @@ export function createNewsLayer({
       if (id && isOwnedByOtherLayer(NEWS_LAYER_ID, id)) return;
       if (selectedId && !picked?.id) layer.setParams({ clear: true });
     });
+    // A double-click follows a marker and zooms to an outline, as the
+    // default renderer did for their entities.
+    stockFollow = followOnDoubleClick({
+      viewer,
+      inputFor,
+      name: NEWS_LAYER_ID,
+      enabled: () => enabled && !destroyed,
+      targetFor: followTargetFor,
+    });
   }
 
   function removeSelection() {
     clickOff?.();
     clickOff = null;
+    stockFollow?.destroy();
+    stockFollow = null;
+  }
+
+  /**
+   * What a double-click on a hit follows or zooms to, as the default
+   * renderer did for the entity it was: a marker is followed, an outline or
+   * hotspot box zoomed to; an item not shown takes no part.
+   */
+  function followTargetFor(hit) {
+    if (!sets || hit.surface) return null;
+    const item =
+      drawnMarkers.get(hit.set)?.get(hit.id) ??
+      (hit.set === sets.outlineFills.id || hit.set === sets.outlineLines.id
+        ? outlineItems.get(hit.id)
+        : null);
+    return item && item.show !== false ? drawnItemTarget(hit.set, item) : null;
   }
 
   function feedView() {
@@ -1760,6 +1810,7 @@ export function createNewsLayer({
       if (sets) for (const set of Object.values(sets)) set.dispose();
       sets = null;
       outlineParts.clear();
+      outlineItems.clear();
       outlineDisputed.clear();
       viewer = null;
       listener = null;
