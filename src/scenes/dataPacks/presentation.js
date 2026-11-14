@@ -78,8 +78,14 @@ export function createPackPresentations(
   function followPoints(setId, items) {
     pointSets.set(setId, new Map(items.map((item) => [item.id, item])));
     if (stockFollow) return;
-    // A scene that takes no input has no double-click.
-    const input = findInput(viewer);
+    // A scene that takes no input (or a headless one, with no page to take
+    // it from) has no double-click.
+    let input = null;
+    try {
+      input = findInput(viewer);
+    } catch {
+      input = null;
+    }
     if (!input) return;
     stockFollow = followOnDoubleClick({
       viewer,

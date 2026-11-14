@@ -61,8 +61,14 @@ function joinDoubleClick(viewer, setId, lineFor) {
   let shared = doubleClicks.get(viewer);
   if (!shared) {
     const lines = new Map();
-    // A scene that takes no input has no double-click.
-    const input = findInput(viewer);
+    // A scene that takes no input (or a headless one, with no page to take
+    // it from) has no double-click.
+    let input = null;
+    try {
+      input = findInput(viewer);
+    } catch {
+      input = null;
+    }
     shared = {
       lines,
       follow: input
