@@ -1,6 +1,9 @@
 <script setup>
 import RailChips from '../rail/RailChips.vue';
 import RailRowList from '../rail/RailRowList.vue';
+import RowRange from './RowRange.vue';
+import RowSlider from './RowSlider.vue';
+import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 
@@ -12,6 +15,8 @@ defineProps({
   onToggle: { type: Function, default: () => {} },
   onChip: { type: Function, default: () => {} },
   onListItem: { type: Function, default: () => {} },
+  onSlider: { type: Function, default: () => {} },
+  onRange: { type: Function, default: () => {} },
 });
 </script>
 
@@ -28,6 +33,7 @@ defineProps({
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
+      :data-library-entry="item.libraryEntry || undefined"
       ><div class="data-toggle-top"
         ><div class="data-toggle-left"
           ><span class="data-icon" aria-hidden="true">{{ item.icon }}</span
@@ -55,6 +61,23 @@ defineProps({
           ><RailChips
             :chips="item.controls.chips"
             :on-select="(chip) => onChip(item.id, chip.id)"
+          /><RowSwitch
+            v-if="item.controls.segmented"
+            :segmented="item.controls.segmented"
+            :on-select="(optionId) => onChip(item.id, optionId)"
+          /><RowSlider
+            v-if="item.controls.slider"
+            :slider="item.controls.slider"
+            :on-input="
+              (value) => onSlider(item.id, item.controls.slider.id, value)
+            "
+          /><RowRange
+            v-if="item.controls.range"
+            :range="item.controls.range"
+            :on-select="
+              (end, value) =>
+                onRange(item.id, item.controls.range.id, end, value)
+            "
           /><span
             v-for="(entry, index) in item.controls.legend"
             :key="index"

@@ -6,7 +6,7 @@
 export class ShellFacade {
   /** Observe camera ownership transfers through the navigation owner. */
   subscribeCameraHandoff(listener) {
-    return this._navigation.subscribeCameraHandoff(listener);
+    return this._navigation?.subscribeCameraHandoff(listener);
   }
 
   get _models3dEnabled() {
@@ -889,6 +889,10 @@ export class ShellFacade {
 
   get _preservePanelStateDuringLayerClear() {
     return this._contextControls?._preservePanelStateDuringLayerClear ?? false;
+  }
+
+  _contextSuspendsLayer(layerId) {
+    return this._contextControls?.suspendsLayer(layerId) ?? false;
   }
 
   _runUserFacingContextAction(...args) {

@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 import {
   PUSH_TO_TALK_HOLD_DELAY_MS,
   MICROPHONE_VISUALIZER_GATE,
@@ -55,7 +55,12 @@ export class RealtimeInput {
   bindPushToTalkShortcut() {
     if (this.shortcutKeyDownHandler) return;
     this.shortcutKeyDownHandler = (event) => {
-      if (!shouldHandlePushToTalkKeyDown(event)) return;
+      // Space types in chat; it never talks while chat is open.
+      if (
+        this.ui.state?.chat?.open === true ||
+        !shouldHandlePushToTalkKeyDown(event)
+      )
+        return;
       if (event.repeat) {
         if (this.spaceKeyHeld && !this.pushToTalkHoldPreservesNative)
           event.preventDefault();
@@ -119,7 +124,7 @@ export class RealtimeInput {
           this.ui.update('root', { pushToTalk: 'held' });
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
-            this.setStatus('listening', t('Release Space to send'));
+            this.setStatus('listening', msg('Release Space to send'));
         } else {
           this.start({ pushToTalk: true });
           // start() performs a controlled stop() before connecting. Restore the
@@ -196,7 +201,7 @@ export class RealtimeInput {
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening')
-      this.setStatus('listening', t('Hold Space to talk'));
+      this.setStatus('listening', msg('Hold Space to talk'));
     else this.updateVoiceButtonLabel();
   }
 

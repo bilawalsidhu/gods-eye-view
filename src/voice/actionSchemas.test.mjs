@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { GEV_ACTION_SCHEMAS, createActionTools } from './actionSchemas.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { createAreaStore } from '../data/areaStore.js';
+import { createAreaResolver } from '../data/areaResolver.js';
+import { findAdminCandidates } from '../data/adminBoundaries.js';
 import {
   validateArgs,
   validateCall,
@@ -49,7 +52,14 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    '7f113854cdfe3114b9edd69f49995502276c718ce8878320161a68bafb63ebe2',
+    // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
+    // area scopes and the osm-places layer; natural-region candidates and the
+    // tightened area tool wording follow review.
+    // control_cockpit states the own-layer entry rule (Contacts not required).
+    // move_camera tilt takes an optional pitchDeg angle, described as
+    // absolute with its -45 default, with steps sent as a direction.
+    // show_street_level (map, source, photo) adds one tool.
+    '0c27f62062001e6a07241cd301c3d357f55e9b74f66cd2904d16590510337468',
   );
 });
 
@@ -77,6 +87,37 @@ test('descriptions customize wording without changing immutable shared arguments
     JSON.stringify(GEV_ACTION_SCHEMAS).includes('"description"'),
     false,
   );
+});
+
+test('every emitted area candidate round-trips through the production schema', async () => {
+  const candidateSchema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'resolve_area',
+  ).parameters.properties.candidateId;
+  const resolver = createAreaResolver({
+    store: createAreaStore(),
+    findAdminCandidates,
+  });
+  const ambiguous = await resolver.resolve({ query: 'Georgia' });
+  assert.equal(ambiguous.needsClarification, true);
+  for (const choice of ambiguous.candidates) {
+    assert.ok(choice.candidateId.length >= candidateSchema.minLength);
+    assert.ok(choice.candidateId.length <= candidateSchema.maxLength);
+    assert.match(choice.candidateId, new RegExp(candidateSchema.pattern, 'u'));
+    assert.equal(
+      (await resolver.resolve({ candidateId: choice.candidateId })).ok,
+      true,
+    );
+  }
+  assert.equal(ambiguous.candidates[0].candidateId.length, 44);
+  const grammar = new RegExp(candidateSchema.pattern, 'u');
+  for (const malformed of [
+    'ne:state:bad slug',
+    'ne:state:../../etc',
+    'ne:state:!!!',
+    'ne:state:a_b',
+  ])
+    assert.doesNotMatch(malformed, grammar);
+  assert.ok(`ne:state:${'x'.repeat(80)}`.length > candidateSchema.maxLength);
 });
 
 test('metadata cannot add tools, fields, types or enum values', () => {
@@ -112,6 +153,10 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'next_satellite_pass',
         'set_cyber_sonar',
         'set_voice_inactivity_timeout',
+        'resolve_area',
+        'find_imagery',
+        'osm_query',
+        'show_street_level',
       ].includes(tool.name),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
@@ -134,6 +179,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
     'stop',
   ]);
   motion.enum = motion.enum.filter((value) => value !== 'rotate_globe');
+  // Tilt to an angle is additive.
+  delete property('move_camera').pitchDeg;
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
     (id) =>
@@ -164,6 +211,13 @@ test('all legacy action arguments are byte-identical after removing the delibera
   analystScopeKind.enum = analystScopeKind.enum.filter(
     (key) => key !== 'pointer',
   );
+  // Area handles add three scope kinds and their two identifiers.
+  const scope = property('analyst_query').scope;
+  scope.properties.kind.enum = scope.properties.kind.enum.filter(
+    (kind) => !['area', 'drawn', 'annotation'].includes(kind),
+  );
+  delete scope.properties.areaId;
+  delete scope.properties.id;
   // The analyst centre now requires a real coordinate.
   const center = property('analyst_query').scope.properties.center;
   delete center.required;
@@ -271,4 +325,16 @@ test('direct voice timeout schema accepts None and exact integers, rejects malfo
     assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
   for (const minutes of [-1, 61, 1.5, '5'])
     assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
+});
+
+test('tilt accepts an angle with no direction', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'move_camera',
+  ).parameters;
+  assert.deepEqual(validateArgs(schema, { motion: 'tilt', pitchDeg: -45 }), []);
+  assert.deepEqual(validateArgs(schema, { motion: 'tilt' }), []);
+  // No range in the schema (prompt budget): the runner clamps to -89..-5.
+  assert.ok(
+    validateArgs(schema, { motion: 'tilt', pitchDeg: 'steep' }).length > 0,
+  );
 });

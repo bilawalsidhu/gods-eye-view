@@ -1,4 +1,5 @@
 import { interruptGlobeRotation } from '../cameraVerbs.js';
+import { normalizeDisplayText } from '../data/displayText.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -14,6 +15,7 @@ import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
+import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
 import {
   hudViewportSamples,
   placeLookupView,
@@ -35,6 +37,10 @@ import {
 } from '../data/contextStore.js';
 import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
 import {
+  NEAREST_RADIUS_MAX_M as STREET_LEVEL_WIDE_RADIUS_M,
+  STREET_LEVEL_LAYER_ID,
+} from '../layers/streetLevel/policy.js';
+import {
   createAnalystEngine,
   normalizeAnalystSpec,
   selectAnalystRows,
@@ -47,10 +53,14 @@ import {
   flyRoute,
   interruptCameraMotion,
   adjustOrbitRange,
+  manualCameraInputCount,
+  moveCameraArgsError,
+  getActiveCameraMotion,
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
+import { watchCameraOwner } from '../navigationPolicy.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
@@ -60,6 +70,14 @@ import {
   activeContactsWindow,
   TRACKABLE_FAMILIES,
 } from '../agent/worldPacket.js';
+import { createVoiceAreas } from './areaActions.js';
+import { findImagery } from './imageryActions.js';
+import { osmQuery } from './osmActions.js';
+import { createOsmFeatureSource } from '../sources/osmFeatures.js';
+import {
+  OSM_PLACES_CREDIT,
+  registerDynamicCredit,
+} from '../data/dataCredits.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -268,6 +286,8 @@ export function createGevActionRunner({
   speechBuilders = null,
   deixis = null,
   readVoicePanelOperation = null,
+  osmSearch = null,
+  areaOptions = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -276,14 +296,48 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
+  // The latest voice flight. A tilt, orbit, pan or rotate in the same reply
+  // as "fly to X" waits for it to land: run at once, its navigation
+  // cancelled the flight, or the flight (still geocoding) then replaced the
+  // motion. The wait follows later fly-tos (voiceFlightTarget).
+  let voiceFlight = null;
+  // Waiters to tell when a newer voice flight begins.
+  const voiceFlightWatchers = new Set();
+  // Camera handoffs (navigation stamps) seen, and how many of them voice
+  // fly-tos made. A search, share link or import that stamps during a flight
+  // leaves it flying; the motion queued behind it then yields to that one.
+  // The voice fly-tos of the latest reply that sent one: whether any moved
+  // the camera, and whether one found nothing. A motion of that reply run
+  // after its fly-to found nothing (Gemini runs a reply's calls one by one)
+  // has no flight to wait on, and must not move the old view instead.
+  let replyFlights = null;
+  let cameraHandoffs = 0;
+  let voiceFlightHandoffs = 0;
+  const otherHandoffs = () => cameraHandoffs - voiceFlightHandoffs;
+  const unsubscribeCameraHandoff =
+    styleManager?.subscribeCameraHandoff?.(() => {
+      cameraHandoffs += 1;
+    }) ?? null;
   let analystEngine;
-  const resolveRegionRing = (name, signal) =>
-    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+  // Area handles live for this runner (the page): resolve_area, the
+  // analyst's region/area/drawn scopes, find_imagery and osm_query all read
+  // the same store.
+  const voiceAreas = createVoiceAreas({
+    viewer,
+    annotations,
+    placeSearch,
+    annotationResolver,
+    ...(areaOptions || {}),
+  });
+  const searchOsmFeatures = osmSearch || createOsmFeatureSource();
+  const resolveRegionRing = (name, options) =>
+    voiceAreas.resolveRegion(name, options);
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
       analystProviders(viewer, dataManager, {
         placeSearch,
         resolveRegionRing,
+        resolveAreaScope: voiceAreas.resolveAreaScope,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
@@ -405,13 +459,30 @@ export function createGevActionRunner({
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
-      if (adjustOrbitRange(zoomOut ? factor : 1 / factor)) {
+      const held = adjustOrbitRange(zoomOut ? factor : 1 / factor);
+      if (held) {
+        const direction = zoomOut ? 'out' : 'in';
+        if (!held.changed) {
+          return {
+            ok: false,
+            action: 'adjust_camera_zoom',
+            direction,
+            amount: amt,
+            error: `Not zoomed: the ${held.kind} is already at its ${zoomOut ? 'farthest' : 'closest'} range.`,
+          };
+        }
         return {
           ok: true,
           action: 'adjust_camera_zoom',
-          direction: zoomOut ? 'out' : 'in',
+          direction,
           amount: amt,
-          orbitRadiusAdjusted: true,
+          [held.kind === 'tilt' ? 'tiltRangeAdjusted' : 'orbitRadiusAdjusted']:
+            true,
+          // A tilt to an angle names the angle the new range now ends it at.
+          ...(held.pitchDeg !== undefined && {
+            pitchDeg: held.pitchDeg,
+            note: held.note,
+          }),
         };
       }
     }
@@ -438,7 +509,7 @@ export function createGevActionRunner({
         const pending = dataManager.getAll?.().find((l) => l.id === layerId);
         reportProgress('layer', pending?.name || layerId);
       }
-      const changeOptions = { origin: 'voice' };
+      const changeOptions = { origin: actionIntentOrigin(runOptions) };
       if (runOptions.signal) changeOptions.signal = runOptions.signal;
       let changed = false;
       let changeError = null;
@@ -729,6 +800,20 @@ export function createGevActionRunner({
           onGround: false,
         },
       };
+    }
+
+    if (name === 'show_street_level') {
+      return showStreetLevel(args, {
+        viewer,
+        dataManager,
+        styleManager,
+        placeSearch,
+        runGevAction,
+        runOptions,
+        current,
+        reportProgress,
+        otherHandoffs,
+      });
     }
 
     if (name === 'set_visual_style') {
@@ -1103,34 +1188,104 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      return flyToRequestedLocation(viewer, args, {
+      // Chained fly-tos: a grab during an earlier one still flying counts.
+      // The flight replaced is the last one that moved, past lookups that
+      // found nothing.
+      const prior = voiceFlightTarget(voiceFlight);
+      const flight = trackVoiceFlight(
+        prior && !prior.done ? prior.inputCount : undefined,
+        prior,
+      );
+      // Navigation by anything but a voice fly-to since this one began.
+      flight.handoffs = otherHandoffs();
+      voiceFlight = flight;
+      const reply = voiceReplyOf(runOptions);
+      if (reply !== null && replyFlights?.reply !== reply)
+        replyFlights = { reply, moved: false, foundNothing: false };
+      const replyRecord = reply !== null ? replyFlights : null;
+      for (const notify of [...voiceFlightWatchers]) notify();
+      // A motion already running (one the model sent before this fly-to) is
+      // stopped when the flight takes navigation; the result says so.
+      let stoppedMotion = null;
+      const noteStop =
+        (hook) =>
+        (...hookArgs) => {
+          const before = getActiveCameraMotion();
+          const handoffsBefore = cameraHandoffs;
+          try {
+            return hook(...hookArgs);
+          } finally {
+            // A voice fly-to's own stamps are not another navigation, even
+            // for the flight it replaces (a later lookup may find nothing).
+            voiceFlightHandoffs += cameraHandoffs - handoffsBefore;
+            if (
+              before &&
+              !stoppedMotion &&
+              getActiveCameraMotion()?.motionId !== before.motionId
+            )
+              stoppedMotion = before.kind;
+          }
+        };
+      const flown = flyToRequestedLocation(viewer, args, {
+        onFlightEnd: flight.settle,
         onProgress: reportProgress,
         placeSearch,
         searchNavigation,
         signal: runOptions.signal,
         runImmediate:
           typeof styleManager?.runImmediateLocationNavigation === 'function'
-            ? (navigate) =>
-                styleManager.runImmediateLocationNavigation(navigate)
+            ? noteStop((navigate) =>
+                styleManager.runImmediateLocationNavigation(navigate),
+              )
             : null,
         beginDeferred:
           typeof styleManager?.beginDeferredLocationNavigation === 'function'
-            ? () => styleManager.beginDeferredLocationNavigation()
+            ? noteStop(() => styleManager.beginDeferredLocationNavigation())
             : null,
         reassertDeferred:
           typeof styleManager?.reassertDeferredLocationNavigation === 'function'
-            ? (generation) =>
-                styleManager.reassertDeferredLocationNavigation(generation)
+            ? noteStop((generation) =>
+                styleManager.reassertDeferredLocationNavigation(generation),
+              )
             : null,
-        onStart: () => {
+        onStart: noteStop(() => {
           if (typeof styleManager?.beginLocationNavigation === 'function') {
             styleManager.beginLocationNavigation();
             return;
           }
           interruptCameraMotion('nav:fly_to_location');
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
-        },
+        }),
       });
+      // No flight started: nothing to wait for. A lookup that was not found,
+      // threw, or was cancelled once a newer voice fly-to had begun (which
+      // takes navigation from it) moved nothing, so a queued motion looks
+      // past it to the flight it replaced. One cancelled while still the
+      // latest voice flight lost navigation to something else (a search, a
+      // share link, Cockpit): the motion then refuses. A flight its own hooks
+      // already settled (cancelled mid-air) keeps its status.
+      const notStarted = () => {
+        if (!flight.done) flight.movedNothing = true;
+        flight.settle('failed');
+      };
+      flown.then((result) => {
+        if (result?.ok === true) return;
+        if (result?.cancelled && voiceFlight === flight)
+          flight.settle('failed');
+        else notStarted();
+      }, notStarted);
+      // After the outcome above, which marks a lookup that moved nothing.
+      const noteReply = (result) => {
+        if (!replyRecord) return;
+        if (result?.ok === true) replyRecord.moved = true;
+        else if (flight.movedNothing) replyRecord.foundNothing = true;
+      };
+      flown.then(noteReply, () => noteReply(null));
+      return flown.then((result) =>
+        stoppedMotion && result && typeof result === 'object'
+          ? { ...result, stoppedMotion }
+          : result,
+      );
     }
 
     if (name === 'adjust_camera_zoom') {
@@ -1161,6 +1316,65 @@ export function createGevActionRunner({
       return nextIssPass(viewer, dataManager, args);
     }
 
+    if (name === 'resolve_area') {
+      return voiceAreas.resolveAreaAction(args, {
+        signal: runOptions.signal,
+        isCurrent: current,
+        progress: reportProgress,
+      });
+    }
+
+    if (name === 'find_imagery') {
+      return findImagery(
+        {
+          dataManager,
+          viewer,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'recent-imagery', enabled },
+              runOptions,
+            ),
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
+    if (name === 'osm_query') {
+      return osmQuery(
+        {
+          dataManager,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          viewBox: () => cameraViewBox(viewer),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'osm-places', enabled },
+              runOptions,
+            ),
+          search: searchOsmFeatures,
+          onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
+          // The listed places become the analyst's "last answer", so
+          // "which of those…" filters them and never an older set.
+          rememberResults: (rows, presentation, { truncated = false } = {}) => {
+            if (!current()) return;
+            if (rows)
+              ensureAnalystEngine().remember('osm-places', rows, {
+                presentation,
+                truncated,
+              });
+            else analystEngine?.reset();
+          },
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
     if (name === 'analyst_query') {
       return runAnalystQuery(
         ensureAnalystEngine(),
@@ -1173,6 +1387,85 @@ export function createGevActionRunner({
     }
 
     if (name === 'move_camera') {
+      const motion = String(args.motion || '').toLowerCase();
+      // A lookup that already found nothing does not hide the last flight
+      // that moved: running now would cancel that flight mid-air.
+      const pending = voiceFlightTarget(voiceFlight);
+      const reply = voiceReplyOf(runOptions);
+      if (
+        VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
+        !(pending && !pending.done) &&
+        reply !== null &&
+        replyFlights?.reply === reply &&
+        replyFlights.foundNothing &&
+        !replyFlights.moved
+      )
+        return {
+          ok: false,
+          action: 'move_camera',
+          motion,
+          error: `Not run: the fly-to in this reply found nothing, so the ${motion} was not run at the old view.`,
+        };
+      if (
+        VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
+        pending &&
+        !pending.done
+      ) {
+        // Bad arguments are refused now, not after waiting on the flight.
+        const argsError = moveCameraArgsError(args);
+        if (argsError) return argsError;
+        const deadline = Date.now() + VOICE_FLIGHT_WAIT_MS;
+        const start = pending;
+        // Act on where the camera lands. Whatever a flight reports, a later
+        // fly-to replaces it, and the wait moves to that one as soon as it
+        // begins (a stalled geocode must not hold the motion past a newer
+        // flight that landed). A geocode that loses navigation reports
+        // failed, and a flight left flying while the next place is looked up
+        // can still land; running there would take navigation and cancel the
+        // newer one. A later lookup that found nothing moved nothing, so the
+        // motion looks past it to the last flight that did move the camera.
+        let flight = start;
+        let status;
+        for (;;) {
+          status = await waitForVoiceFlight(
+            flight,
+            runOptions.signal,
+            deadline,
+            voiceFlightWatchers,
+          );
+          if (status === 'aborted' || status === 'timeout' || !current()) break;
+          const target = voiceFlightTarget(voiceFlight, start);
+          if (!target || (target === flight && status !== 'newer')) break;
+          flight = target;
+        }
+        if (!current())
+          return { ok: false, action: 'move_camera', cancelled: true };
+        if (status !== 'arrived' || flight.movedNothing)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: the flight this ${motion} was waiting for did not arrive.`,
+          };
+        // The flight lands even when the user grabs the globe mid-flight;
+        // the queued motion must not take the camera back from them.
+        if (manualCameraInputCount() !== flight.inputCount)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: the user moved the camera during the flight, so the ${motion} was dropped.`,
+          };
+        // A search, share link or import that took navigation during the
+        // flight leaves it flying; running now would cancel that navigation.
+        if (otherHandoffs() !== flight.handoffs)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: another navigation took the camera during the flight, so the ${motion} was dropped.`,
+          };
+      }
       return moveCamera(args, (navigate, releaseOptions) =>
         runManagedVoiceNavigation(
           styleManager,
@@ -1352,10 +1645,31 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-  // Lifetimes: the runner lives for the page; conversation state — the
+  // Lifetimes: the runner lives for the page (area handles included, so an
+  // outline stays countable across mic sessions); conversation state — the
   // analyst's follow-up memory and any write still in flight — lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
+  // Calls emitted by one assistant response are siblings rather than newer
+  // user intent. The new spatial actions share mutable surfaces (area board,
+  // imagery panel, OSM layer/follow-up memory), so serialize those siblings in
+  // event order just as analyst_query already was. A genuinely newer group or
+  // direct call still invalidates the older attempt.
+  const serializedSiblingActions = new Set([
+    'analyst_query',
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
+  ]);
+  let serializedAttempt = 0;
+  let serializedSiblingGroup = null;
+  let serializedSiblingTail = Promise.resolve();
+  // Direct/programmatic callers do not necessarily arrive through
+  // createVoiceSession, so the runner must own the conversation lifetime of
+  // its serialized spatial workflows as well. Reset/dispose abort the real
+  // provider/catalog work, not just the eventual commit, while area handles
+  // remain owned by voiceAreas for the page lifetime.
+  let conversationAbort = new AbortController();
   let disposed = false;
   async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
     if (disposed)
@@ -1366,56 +1680,114 @@ export function createGevActionRunner({
         error: 'Voice ended.',
       };
     const epoch = conversation;
+    let attempt = null;
+    let releaseSerializedSibling = null;
+    if (serializedSiblingActions.has(name)) {
+      const siblingGroup = callerOptions.authorityGroup || null;
+      if (siblingGroup) {
+        if (siblingGroup !== serializedSiblingGroup) {
+          serializedSiblingGroup = siblingGroup;
+          serializedSiblingTail = Promise.resolve();
+          serializedAttempt++;
+        }
+        attempt = serializedAttempt;
+        const predecessor = serializedSiblingTail;
+        const completion = new Promise((resolve) => {
+          releaseSerializedSibling = resolve;
+        });
+        serializedSiblingTail = predecessor.then(() => completion);
+        await predecessor;
+      } else {
+        serializedSiblingGroup = null;
+        serializedSiblingTail = Promise.resolve();
+        attempt = ++serializedAttempt;
+      }
+    }
+    const runnerSignal = serializedSiblingActions.has(name)
+      ? conversationAbort.signal
+      : null;
+    const signal = runnerSignal
+      ? callerOptions.signal
+        ? AbortSignal.any([runnerSignal, callerOptions.signal])
+        : runnerSignal
+      : callerOptions.signal;
     const runOptions = {
       ...callerOptions,
+      ...(signal ? { signal } : {}),
       isCurrent: () =>
+        !signal?.aborted &&
         epoch === conversation &&
+        (attempt === null || attempt === serializedAttempt) &&
         !disposed &&
         (typeof callerOptions.isCurrent !== 'function' ||
           callerOptions.isCurrent()),
     };
-    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Point-and-ask: 'pointer' and referent:n become real targets here, from
-    // the turn's pointer snapshot and the latest numbered result.
-    const deictic = resolveDeicticArgs(name, input, {
-      pointer: deixis?.pointer?.activeSnapshot?.() || null,
-      referents: deixis?.referents || null,
-      imageFrame: deixis?.imageFrame?.() || null,
-      cameraKey: deixis?.cameraKey?.() || null,
-    });
-    if (deictic.error) {
-      return attachVoiceResult(
-        name,
-        { ok: false, action: name, error: deictic.error },
-        input,
-        builders,
-      );
-    }
-    const referentGeneration = deixis?.referents?.generation?.();
-    let result = await runGevAction(name, deictic.args, runOptions);
-    if (deictic.used && result && typeof result === 'object')
-      result = { ...result, resolvedFrom: deictic.used };
-    const out = attachVoiceResult(name, result, deictic.args, builders);
-    // Only an accepted, still-current result may become "the last list": a
-    // cancelled turn or one finishing after the session ended must not
-    // repopulate a cleared registry.
-    const stillCurrent =
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-    if (stillCurrent)
-      deixis?.referents?.recordResult?.(name, out, {
-        since: referentGeneration,
+    try {
+      const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+      if (attempt !== null && !runOptions.isCurrent()) {
+        return attachVoiceResult(
+          name,
+          {
+            ok: false,
+            action: name,
+            code: 'CANCELLED',
+            cancelled: true,
+            error: 'This request was superseded.',
+          },
+          input,
+          builders,
+        );
+      }
+      // Point-and-ask: 'pointer' and referent:n become real targets here, from
+      // the turn's pointer snapshot and the latest numbered result.
+      const deictic = resolveDeicticArgs(name, input, {
+        pointer: deixis?.pointer?.activeSnapshot?.() || null,
+        referents: deixis?.referents || null,
+        imageFrame: deixis?.imageFrame?.() || null,
+        cameraKey: deixis?.cameraKey?.() || null,
       });
-    if (stillCurrent && deictic.used?.source === 'pointer')
-      deixis?.onPointerUsed?.();
-    return out;
+      if (deictic.error) {
+        return attachVoiceResult(
+          name,
+          { ok: false, action: name, error: deictic.error },
+          input,
+          builders,
+        );
+      }
+      const referentGeneration = deixis?.referents?.generation?.();
+      let result = await runGevAction(name, deictic.args, runOptions);
+      if (deictic.used && result && typeof result === 'object')
+        result = { ...result, resolvedFrom: deictic.used };
+      const out = attachVoiceResult(name, result, deictic.args, builders);
+      // Only an accepted, still-current result may become "the last list": a
+      // cancelled turn or one finishing after the session ended must not
+      // repopulate a cleared registry.
+      const stillCurrent =
+        !runOptions.signal?.aborted &&
+        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      if (stillCurrent)
+        deixis?.referents?.recordResult?.(name, out, {
+          since: referentGeneration,
+        });
+      if (stillCurrent && deictic.used?.source === 'pointer')
+        deixis?.onPointerUsed?.();
+      return out;
+    } finally {
+      releaseSerializedSibling?.();
+    }
   }
   /**
    * A voice session ended: invalidate every write still in flight, then
-   * forget the analyst's "last answer".
+   * forget the analyst's "last answer". Area handles stay (page lifetime).
    */
   runVoiceAction.resetConversation = () => {
+    replyFlights = null;
+    conversationAbort.abort();
+    conversationAbort = new AbortController();
     conversation++;
+    serializedAttempt++;
+    serializedSiblingGroup = null;
+    serializedSiblingTail = Promise.resolve();
     analystEngine?.reset();
   };
   /** Voice was removed: nothing may run or write again. */
@@ -1423,6 +1795,8 @@ export function createGevActionRunner({
     if (disposed) return;
     runVoiceAction.resetConversation();
     disposed = true;
+    unsubscribeCameraHandoff?.();
+    voiceAreas.dispose();
   };
   return runVoiceAction;
 }
@@ -2470,7 +2844,7 @@ async function trackEntity(
       () => {
         let trackedOk = false;
         if (family.kind === 'vessel') {
-          trackedOk = !!module.selectById?.(found.mmsi);
+          trackedOk = !!module.selectById?.(found.id ?? found.mmsi);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
@@ -2583,6 +2957,29 @@ function stopAllTracking(viewer, dataManager) {
 }
 
 /**
+ * The imagery filter the lit source honours when it is narrower than the
+ * default (360° or flat only, or SINCE), or null.
+ * @returns {{ pano?: string, sinceDays?: number, label: string } | null}
+ */
+export function activeImageryFilter(ui) {
+  const filter = ui?.filter || {};
+  const controls = ui?.filterControls || {};
+  const out = {};
+  const names = [];
+  if (controls.pano && (filter.pano === 'pano' || filter.pano === 'flat')) {
+    out.pano = filter.pano;
+    names.push(filter.pano === 'pano' ? '360°' : 'flat-photo');
+  }
+  if (controls.since && Number(filter.sinceDays) > 0) {
+    out.sinceDays = Number(filter.sinceDays);
+    names.push('SINCE');
+  }
+  if (!names.length) return null;
+  out.label = `${names.join(' and ')} filter${names.length > 1 ? 's' : ''}`;
+  return out;
+}
+
+/**
  * Frames entities near the current view target with a cinematic pull-back:
  * oblique high pitch for aircraft/ships, shallow wide pitch for satellites.
  * When entries are found and detection is OFF, auto-enables panoptic
@@ -2692,6 +3089,116 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
       };
     },
   );
+}
+
+let voiceFlightCount = 0;
+
+/**
+ * The model reply a voice call belongs to: Gemini's turn (`reply`), or the
+ * OpenAI response its sibling calls share (`authorityGroup`). Null when the
+ * caller names none.
+ */
+function voiceReplyOf(options) {
+  return options?.reply ?? options?.authorityGroup ?? null;
+}
+
+/**
+ * A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once.
+ * `replaced` is the last flight that moved when this one began (past lookups
+ * that found nothing), landed or not. It is kept only while this one may turn
+ * out to have moved nothing (a lookup that found no place), so a queued
+ * motion can look past it to that flight and its outcome.
+ */
+function trackVoiceFlight(
+  inputCount = manualCameraInputCount(),
+  replaced = null,
+) {
+  const flight = {
+    done: false,
+    seq: (voiceFlightCount += 1),
+    replaced,
+    movedNothing: false,
+    // Manual input after this means the user took the camera mid-flight.
+    inputCount,
+    status: null,
+    // Waiters to tell when this flight ends.
+    watchers: new Set(),
+    settle: (status) => {
+      if (flight.done) return;
+      flight.done = true;
+      flight.status = status;
+      // Kept only past a lookup that found nothing, and then straight to the
+      // flight that moved, so a run of such lookups holds no chain.
+      flight.replaced = flight.movedNothing
+        ? voiceFlightTarget(flight.replaced)
+        : null;
+      for (const notify of [...flight.watchers]) notify(status);
+      flight.watchers.clear();
+    },
+  };
+  return flight;
+}
+
+/**
+ * The flight a motion queued since `start` acts on: the latest one that
+ * actually started. A lookup that found nothing moved nothing, so look past
+ * it to the flight it replaced, but never to one older than `start` (a flight
+ * from an earlier reply). Null when every later lookup found nothing. With
+ * no `start`, the latest flight that started, back through lookups that
+ * found nothing.
+ */
+function voiceFlightTarget(latest, start = null) {
+  let flight = latest;
+  while (flight?.movedNothing) flight = flight.replaced;
+  return flight && (!start || flight.seq >= start.seq) ? flight : null;
+}
+
+/**
+ * Longest a motion waits for its flight (geocode plus flight, which is about
+ * 2 s) before giving up. The wait also holds the tool output, and on Gemini
+ * the later tools in the turn.
+ */
+const VOICE_FLIGHT_WAIT_MS = 15_000;
+
+/**
+ * Motions that act on the place the camera ends up at, so one sent beside a
+ * fly-to waits for it. Stop is not one, and rotate_globe turns the
+ * whole Earth from Globe View rather than at a place.
+ */
+const VOICE_FLIGHT_WAITING_MOTIONS = new Set([
+  'tilt',
+  'orbit',
+  'pan',
+  'rotate',
+]);
+
+/**
+ * Wait for a voice flight to end, or for a newer one to begin ('newer'):
+ * 'timeout' or 'aborted' if neither happens. A flight that has ended answers
+ * at once. Every listener is removed when the wait ends, so a flight that
+ * never settles holds nothing.
+ */
+function waitForVoiceFlight(flight, signal, deadline, newerWatchers) {
+  if (signal?.aborted) return Promise.resolve('aborted');
+  if (flight.done) return Promise.resolve(flight.status);
+  return new Promise((resolve) => {
+    const finish = (status) => {
+      clearTimeout(timer);
+      signal?.removeEventListener?.('abort', onAbort);
+      flight.watchers.delete(finish);
+      newerWatchers?.delete(onNewer);
+      resolve(status);
+    };
+    const onAbort = () => finish('aborted');
+    const onNewer = () => finish('newer');
+    const timer = setTimeout(
+      () => finish('timeout'),
+      Math.max(0, deadline - Date.now()),
+    );
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    flight.watchers.add(finish);
+    newerWatchers?.add(onNewer);
+  });
 }
 
 /** Run one validated voice camera mutation through the UI-owned authority seam. */
@@ -3245,6 +3752,425 @@ function normalizeStyle(value) {
   return null;
 }
 
+/** The application panel that holds the street-level photo. */
+const STREET_LEVEL_PANEL_ID = 'street-level-panel';
+
+/**
+ * The layer-state origin of an action's changes. The assistant's are the
+ * user's own choices and persist; a link replays someone else's view
+ * (`origin: 'programmatic'`) and never writes the recipient's preferences.
+ */
+function actionIntentOrigin(runOptions) {
+  return runOptions?.origin === 'programmatic' ? 'programmatic' : 'voice';
+}
+
+/**
+ * Whether cockpit, clean view, recording or scene playback hides the panel a
+ * street-level photo opens in. Embed mode uses clean view for its globe but
+ * lifts the photo out of the hidden rail.
+ */
+function streetLevelPanelHidden() {
+  const body = globalThis.document?.body;
+  const embedded = body?.classList?.contains('ui-embed') === true;
+  return EXCLUSIVE_SURFACE_CLASSES.some(
+    (mode) =>
+      body?.classList?.contains(mode) &&
+      !(embedded && mode === 'ui-clean-view'),
+  );
+}
+
+/**
+ * "Show me <place> on Street View / on Mapillary": fly there, light the source
+ * (and its map) and open the nearest image. Each stage reports its own
+ * failure, so speech can say which part did not happen. `autoOpen: false`
+ * (links) stops short of a billed load: the panel is armed for OPEN.
+ */
+export async function showStreetLevel(args, context) {
+  // After any await a newer turn, a navigation, a globe gesture or a mode
+  // that hides the panel may have taken over: each later stage checks again.
+  const owner = watchCameraOwner(context.viewer, context.styleManager);
+  // A photo held up while the request switches its source is let go however
+  // the request ends: replaced by then, or closed if its source stayed off.
+  let releaseViewer = null;
+  const holdViewer = (layerModule) => {
+    releaseViewer ??= layerModule.holdViewer?.() ?? null;
+  };
+  try {
+    return await requestStreetLevel(args, { ...context, owner, holdViewer });
+  } finally {
+    releaseViewer?.();
+    owner.stop();
+  }
+}
+
+async function requestStreetLevel(
+  args,
+  {
+    dataManager,
+    styleManager,
+    runGevAction,
+    owner,
+    holdViewer = () => {},
+    runOptions = {},
+    current = () => true,
+    reportProgress = () => {},
+    otherHandoffs = () => 0,
+  },
+) {
+  const action = 'show_street_level';
+  // Navigations other than voice fly-tos (this request's own flight) so far.
+  const handoffs = otherHandoffs();
+  let provider = null;
+  let providerName = null;
+  let label = null;
+  const fail = (stage, error, extra = {}) => ({
+    ok: false,
+    action,
+    stage,
+    cancelled: !current(),
+    error,
+    ...(provider ? { provider } : {}),
+    ...(providerName ? { providerName } : {}),
+    ...(label ? { label } : {}),
+    ...(atViewCentre ? { atViewCentre } : {}),
+    ...extra,
+  });
+  let atViewCentre = false;
+  const query = String(args.query || '').trim();
+  const latitude = Number(args.latitude);
+  const longitude = Number(args.longitude);
+  const coordinatesGiven = args.latitude != null && args.longitude != null;
+  const hasCoordinates =
+    coordinatesGiven && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+  if (coordinatesGiven && !hasCoordinates)
+    return fail(
+      'location',
+      'Latitude must be within ±90° and longitude within ±180°',
+    );
+  // A referent that is a layer entity (deixis): located when the flight starts.
+  const entity =
+    args.entity && typeof args.entity === 'object' && args.entity.id
+      ? args.entity
+      : null;
+  const layerModule =
+    dataManager?.layers?.get?.(STREET_LEVEL_LAYER_ID)?.module || null;
+  if (!layerModule || typeof layerModule.openNearest !== 'function')
+    return fail('provider', 'Street Level is unavailable');
+  const providerIds = Array.isArray(layerModule.providerIds)
+    ? layerModule.providerIds
+    : [];
+
+  // The source: asked for, else the one lit now, else the first registered.
+  const requested = String(args.provider || '')
+    .trim()
+    .toLowerCase();
+  if (requested) {
+    if (!providerIds.includes(requested))
+      return fail(
+        'provider',
+        `${requested} is not a street-level imagery source here`,
+      );
+    provider = requested;
+  } else {
+    const params = dataManager.getLayerParams?.(STREET_LEVEL_LAYER_ID) || {};
+    provider =
+      providerIds.find((id) => params[id] === true) || providerIds[0] || null;
+  }
+  if (!provider)
+    return fail('provider', 'No street-level imagery source is configured');
+  const status = layerModule.providerStatus?.(provider) || null;
+  providerName = status?.name || provider;
+
+  // The key first: without one nothing changes, as with a chip.
+  if (status && (status.keyRequired === true || status.configured === false))
+    return fail('key', status.error || `${providerName} needs its key`, {
+      keyRejected: status.keyRejected === true,
+      keyAlternatives: layerModule.getUIState?.()?.keyAlternatives || [],
+    });
+
+  // A hidden panel refuses before the camera leaves a recording or scene.
+  const hidden = (extra = {}) =>
+    fail(
+      'view',
+      msg(
+        'Street-level photos are hidden in the current view. Leave it first.',
+      ),
+      extra,
+    );
+  if (streetLevelPanelHidden()) return hidden();
+  const interrupted = (stage, extra = {}) => {
+    if (!current())
+      return fail(stage, 'Street-level request was cancelled', {
+        cancelled: true,
+        location,
+        ...extra,
+      });
+    if (owner.taken())
+      return fail(stage, 'The camera moved on before the photo opened', {
+        cancelled: true,
+        superseded: true,
+        location,
+        ...extra,
+      });
+    if (streetLevelPanelHidden()) return hidden({ location, ...extra });
+    return null;
+  };
+
+  // Then the place: a name that geocodes to nothing changes nothing else.
+  label =
+    query ||
+    (entity ? String(entity.label || entity.id) : '') ||
+    (hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '') ||
+    'the view centre';
+  atViewCentre = !query && !hasCoordinates && !entity;
+  let point = null;
+  let location = null;
+  // No place at all: the layer looks at the ground under the screen centre,
+  // as the OPEN button does. `fly: false` (tests) keeps the camera for a
+  // point given by its coordinates.
+  if (atViewCentre || (args.fly === false && hasCoordinates)) {
+    if (hasCoordinates) point = { lat: latitude, lon: longitude };
+  } else {
+    try {
+      location = await runGevAction(
+        'fly_to_location',
+        {
+          ...(entity
+            ? { entity }
+            : hasCoordinates
+              ? { latitude, longitude }
+              : { query }),
+          viewMode: 'close',
+          waitForArrival: true,
+        },
+        runOptions,
+      );
+    } catch (error) {
+      // A geocoder that throws (offline, a provider down) is this stage's
+      // failure too, not an error past the action.
+      return fail('location', `Could not arrive at ${label}`, {
+        cancelled: !current(),
+        detail: String(error?.message || error),
+      });
+    }
+    if (location?.ok !== true || !current())
+      return fail(
+        'location',
+        location?.error || `Could not arrive at ${location?.label || label}`,
+        { cancelled: !current() || Boolean(location?.cancelled), location },
+      );
+    // An item, or a named place flown to by its coordinates, keeps its name:
+    // such a flight reports only coordinates.
+    label =
+      entity || (query && hasCoordinates) ? label : location.label || label;
+    if (
+      !Number.isFinite(location.latitude) ||
+      !Number.isFinite(location.longitude)
+    )
+      return fail(
+        'location',
+        `${label} has no position to look for imagery at`,
+        { location },
+      );
+    point = { lat: location.latitude, lon: location.longitude };
+  }
+
+  // A mode that hides the panel may have started during the flight. The
+  // camera is the request's from where its flight landed, unless another
+  // navigation took it during the flight.
+  if (location && otherHandoffs() === handoffs) owner.claim();
+  const arrived = interrupted('view');
+  if (arrived) return arrived;
+
+  // The source's map, when it needs one (Street View: Google 3D only).
+  const requiredStack = layerModule.requiredMapStack?.(provider) || null;
+  const activeStack = styleManager?.mapStackController?.getActiveId?.() ?? null;
+  if (requiredStack && activeStack !== requiredStack) {
+    reportProgress('map', requiredStack);
+    const map = await runGevAction(
+      'set_map_stack',
+      { stack: requiredStack },
+      runOptions,
+    );
+    if (map?.ok !== true && current())
+      return fail(
+        'map',
+        map?.error ||
+          `${providerName} needs the ${requiredStack} map, which is not available`,
+        { map, location },
+      );
+    const stop = interrupted('map', { map });
+    if (stop) return stop;
+  }
+
+  // Light the source the way a chip click does, so the choice is kept. An
+  // open photo of another source stays up until this request replaces it.
+  const openPhoto = layerModule.getUIState?.()?.street;
+  if (openPhoto?.open === true && openPhoto.providerId !== provider)
+    holdViewer(layerModule);
+  const switches = Object.fromEntries(
+    providerIds.map((id) => [id, id === provider]),
+  );
+  let accepted = true;
+  if (typeof dataManager.setLayerParams === 'function')
+    accepted =
+      dataManager.setLayerParams(STREET_LEVEL_LAYER_ID, switches, {
+        origin: actionIntentOrigin(runOptions),
+      }) !== false;
+  else layerModule.setProviderEnabled?.(provider, true);
+  if (!accepted)
+    return fail('provider', `${providerName} could not be switched on`, {
+      location,
+    });
+  let layer = null;
+  if (!dataManager.isEnabled?.(STREET_LEVEL_LAYER_ID)) {
+    layer = await runGevAction(
+      'set_layer_visibility',
+      { layerId: STREET_LEVEL_LAYER_ID, enabled: true },
+      runOptions,
+    );
+    if (layer?.ok !== true && current())
+      return fail(
+        'layer',
+        layer?.error || 'Street Level could not be enabled',
+        { cancelled: Boolean(layer?.cancelled), layer, location },
+      );
+    const stop = interrupted('layer', { layer });
+    if (stop) return stop;
+  }
+
+  // Listed now that its map is up, and lit.
+  const ui = layerModule.getUIState?.() || {};
+  const snapshot =
+    (ui.providers || []).find((entry) => entry.id === provider) || null;
+  if (!snapshot)
+    return fail(
+      'provider',
+      ui.coverage?.hint || `${providerName} is not available on this map`,
+      { location },
+    );
+  if (snapshot.on !== true)
+    return fail('provider', `${providerName} could not be switched on`, {
+      location,
+    });
+
+  // A link never loads a billed photo by itself: it arms OPEN instead.
+  if (args.autoOpen === false && status?.billed === true) {
+    // A photo of another place must not stay up beside the armed request.
+    if (layerModule.getUIState?.()?.street?.open === true)
+      layerModule.closeViewer?.();
+    layerModule.armNearest?.(point, {
+      providerIds: [provider],
+      ...(snapshot.groundClick === true
+        ? { radiusM: STREET_LEVEL_WIDE_RADIUS_M }
+        : {}),
+    });
+    return {
+      ok: true,
+      action,
+      provider,
+      providerName,
+      label,
+      armed: true,
+      flew: location !== null,
+      ...(location ? { location: location.label } : {}),
+    };
+  }
+
+  // Street View has no coverage to click, so it searches wider: a geocoded
+  // landmark is rarely within 50 m of a street. An open photo stays up while
+  // this looks and closes if nothing opens; a found photo loads only while
+  // the camera and the panel are still the request's.
+  reportProgress('imagery', label);
+  const opened = await layerModule.openNearest(point, {
+    providerIds: [provider],
+    frame: false,
+    replace: true,
+    proceed: () => current() && !owner.taken() && !streetLevelPanelHidden(),
+    // Under the screen centre, not the middle of a tilted view's footprint;
+    // this request is the user's own, not a link's armed one.
+    ...(point ? {} : { aim: 'screen-centre', armed: false }),
+    ...(runOptions.signal ? { signal: runOptions.signal } : {}),
+    ...(snapshot.groundClick === true
+      ? { radiusM: STREET_LEVEL_WIDE_RADIUS_M }
+      : {}),
+  });
+  const street = layerModule.getUIState?.()?.street || {};
+  // A photo that opened after the camera moved on, or into a panel hidden
+  // meanwhile, is closed again.
+  const late = interrupted('imagery');
+  if (late) {
+    if (opened === true) layerModule.closeViewer?.();
+    return late;
+  }
+  if (opened !== true) {
+    // Why nothing opened: the key, a change under the lookup, or no imagery.
+    const after = layerModule.providerStatus?.(provider) || status || {};
+    if (after.keyRequired === true || after.keyRejected === true)
+      return fail(
+        'key',
+        street.error || after.error || `${providerName} needs its key`,
+        { keyRejected: after.keyRejected === true, location },
+      );
+    if (
+      !dataManager.isEnabled?.(STREET_LEVEL_LAYER_ID) ||
+      after.on === false ||
+      after.available === false
+    )
+      return fail(
+        'imagery',
+        street.error || 'Street Level changed while it looked for imagery',
+        { cancelled: true, location },
+      );
+    // The screen centre is sky: nothing was looked up.
+    if (street.nearestOutcome === 'sky')
+      return fail('imagery', street.error || 'Aim the view at a street', {
+        location,
+        aim: 'sky',
+      });
+    // The source or the viewer failed: an error, not missing coverage.
+    if (street.nearestOutcome !== 'empty')
+      return fail(
+        'imagery',
+        street.error || `${providerName} imagery could not be opened`,
+        { location, imageryError: true },
+      );
+    // An imagery filter the source honours can hide every photo here; say
+    // so, or the answer reads as "no coverage" when one switch would do.
+    const filter = activeImageryFilter(layerModule.getUIState?.());
+    const reason = street.error || `No ${providerName} imagery near ${label}`;
+    return fail(
+      'imagery',
+      filter ? `${reason} with the ${filter.label} on` : reason,
+      { location, noImagery: true, ...(filter ? { filter } : {}) },
+    );
+  }
+  // Every explicit request shows its photo, also one replacing a photo whose
+  // panel or phone sheet the user had closed. Embed mode lifts the photo.
+  if (!globalThis.document?.body?.classList?.contains('ui-embed')) {
+    styleManager?.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
+      persist: false,
+    });
+    styleManager?.revealPanel?.(STREET_LEVEL_PANEL_ID);
+  }
+  return {
+    ok: true,
+    action,
+    provider,
+    providerName,
+    label,
+    imageId: street.imageId ?? null,
+    title: street.title ?? null,
+    capturedAt: street.capturedAt ?? null,
+    capturedAtPrecision: street.capturedAtPrecision ?? null,
+    position: street.position ?? null,
+    externalUrl: street.externalUrl ?? null,
+    flew: location !== null,
+    ...(atViewCentre ? { atViewCentre } : {}),
+    ...(location ? { location: location.label } : {}),
+  };
+}
+
 async function flyToRequestedLocation(
   viewer,
   args,
@@ -3257,6 +4183,7 @@ async function flyToRequestedLocation(
     runImmediate = null,
     beginDeferred = null,
     reassertDeferred = null,
+    onFlightEnd = null,
   } = {},
 ) {
   const requestedRangeM = Number(args.rangeM);
@@ -3280,12 +4207,19 @@ async function flyToRequestedLocation(
           settleArrival = resolve;
         })
       : null;
-  const arrivalHooks = arrival
-    ? {
-        onComplete: () => settleArrival?.('arrived'),
-        onCancel: () => settleArrival?.('cancelled'),
-      }
-    : {};
+  const arrivalHooks =
+    arrival || onFlightEnd
+      ? {
+          onComplete: () => {
+            settleArrival?.('arrived');
+            onFlightEnd?.('arrived');
+          },
+          onCancel: () => {
+            settleArrival?.('cancelled');
+            onFlightEnd?.('cancelled');
+          },
+        }
+      : {};
   const afterArrival = async (result, label) => {
     if (!arrival || result?.ok !== true) return result;
     onProgress('fly', label);
@@ -3309,11 +4243,25 @@ async function flyToRequestedLocation(
     );
     if (result === false)
       return cancelled(CITY_POIS[locationId]?.name || locationId);
+    // Where the camera went: the first POI for a close view, else the middle
+    // of the city's overview bounds.
+    const city = CITY_POIS[locationId];
+    const overview =
+      !(rangeM || args.viewMode === 'close') && Boolean(city?.viewBounds);
+    const centre = overview
+      ? {
+          lat:
+            (city.viewBounds.southwest.lat + city.viewBounds.northeast.lat) / 2,
+          lon:
+            (city.viewBounds.southwest.lng + city.viewBounds.northeast.lng) / 2,
+        }
+      : city?.pois?.[0] || null;
     const response = {
       ok: Boolean(result),
       action: 'fly_to_location',
       locationId,
       label: CITY_POIS[locationId]?.name || locationId,
+      ...(centre ? { latitude: centre.lat, longitude: centre.lon } : {}),
       rangeM: result?.range ? Math.round(result.range) : rangeM || null,
       navigationMode: rangeM
         ? 'explicit-range'
@@ -3374,6 +4322,7 @@ async function flyToRequestedLocation(
         action: 'fly_to_location',
         query,
         label: poi?.name || query,
+        ...(poi ? { latitude: poi.lat, longitude: poi.lon } : {}),
         navigationMode: rangeM ? 'preset-poi-range' : 'preset-poi',
         rangeM: result?.range ? Math.round(result.range) : rangeM || null,
       };
@@ -3404,6 +4353,10 @@ async function flyToRequestedLocation(
       action: 'fly_to_location',
       query,
       label: destination?.label || query,
+      ...(Number.isFinite(destination?.latitude) &&
+      Number.isFinite(destination?.longitude)
+        ? { latitude: destination.latitude, longitude: destination.longitude }
+        : {}),
       navigationMode: destination?.navigationMode || null,
       rangeM: destination?.rangeM || rangeM || null,
     };
@@ -3531,8 +4484,13 @@ function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
         ?.module?.getAnalystRecords?.()
         .filter(
           (item) =>
-            String(item.icao24 ?? item.mmsi ?? item.noradId ?? item.id) ===
-            String(id),
+            String(
+              item.icao24 ??
+                item.vesselId ??
+                item.mmsi ??
+                item.noradId ??
+                item.id,
+            ) === String(id),
         ) || [];
     // Bikeshare uses station names as IDs: retain the coordinate identity
     // even if a namesake disappears. Moving records use their fresh fix.
@@ -3881,8 +4839,14 @@ async function aircraftProximityWindowForQuery(
       layerKeys: wanted,
       coverage,
       unanswered: [...(result?.unanswered || [])],
-      scopeLabel: answer.scopeLabel,
-      scopeDetail: answer.display.scope,
+      presentation: {
+        scopeLabel: answer.scopeLabel,
+        display: answer.display,
+        coverageScope: coverage.scope,
+        coverageNote: coverage.note,
+        centeredOn: answer.window.centeredOn,
+        window: answer.window,
+      },
     },
   };
 }
@@ -4591,13 +5555,7 @@ function uniqueStrings(values) {
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
 function sanitizeLabel(value) {
-  const text = String(value || '');
-  let out = '';
-  for (const ch of text) {
-    const code = ch.codePointAt(0);
-    out += code < 0x20 || code === 0x7f ? ' ' : ch; // drop control chars incl. newlines
-  }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return normalizeDisplayText(value, 120);
 }
 
 function cachePrecision(service) {
@@ -4714,10 +5672,8 @@ function compactProperties(props) {
 }
 
 function cleanText(value) {
-  if (value == null || typeof value === 'object') return '';
-  const text = String(value).trim();
-  if (!text || text === 'undefined' || text === 'null') return '';
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const text = normalizeDisplayText(value);
+  return text === 'undefined' || text === 'null' ? '' : text;
 }
 
 function layerTitle(layerId) {
@@ -4771,6 +5727,7 @@ function analystProviders(
         placeSearch,
       ),
     isWarming = () => false,
+    resolveAreaScope = null,
   } = {},
 ) {
   // Per-layer truncation seen by the last getRecords call.
@@ -4825,6 +5782,7 @@ function analystProviders(
       return note ? note.trim() : null;
     },
     resolveRegionRing,
+    ...(resolveAreaScope ? { resolveAreaScope } : {}),
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -4860,9 +5818,19 @@ function analystProviders(
   };
 }
 
+/** The camera's view rectangle as [west, south, east, north] degrees, or null. */
+function cameraViewBox(viewer) {
+  const rect = viewer?.camera?.computeViewRectangle?.();
+  if (!rect) return null;
+  return [rect.west, rect.south, rect.east, rect.north].map((radians) =>
+    Cesium.Math.toDegrees(radians),
+  );
+}
+
 /** Identity fields every compact analyst item keeps when present. */
 const ANALYST_IDENTITY_FIELDS = Object.freeze([
   'icao24',
+  'vesselId',
   'mmsi',
   'registration',
   'label',
@@ -4872,11 +5840,28 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Keys that identify an analyst record. The referent registry, track_entity,
+ * locateLayerEntity and follow-up filters match on them, so they skip
+ * display-text normalization.
+ */
+const ANALYST_CANONICAL_FIELDS = new Set([
+  'layerKey',
+  'id',
+  'icao24',
+  'vesselId',
+  'mmsi',
+  'noradId',
+  'registration',
+  'callsign',
+  'routeId',
+]);
+
+/**
  * Compact one analyst record for the voice payload: identity, position (so a
  * follow-up can fly to it), distance, and that layer's manifest fields with
  * times as ISO text. The full record set stays engine-side for follow-ups.
  *
- * `icao24`/`mmsi` ride along because the tool instructions tell the model to
+ * `icao24`/`vesselId`/`mmsi` ride along because the tool instructions tell the model to
  * hand this result straight to track_entity, and `id` is a DISPLAY label
  * (callsign, else registration, else hex). A callsign-less contact therefore
  * handed track_entity a tail number the lookup could not resolve, and the
@@ -4908,6 +5893,11 @@ function compactAnalystItem(r) {
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
+  // Canonical keys stay raw: bikeshare's id is the raw station name.
+  for (const key of Object.keys(compact)) {
+    if (typeof compact[key] === 'string' && !ANALYST_CANONICAL_FIELDS.has(key))
+      compact[key] = normalizeDisplayText(compact[key]);
+  }
   return compact;
 }
 
@@ -4919,6 +5909,9 @@ const ANALYST_REFUSAL_FIELDS = Object.freeze([
   'layers',
   'layerStatus',
   'cancelled',
+  'needsClarification',
+  'candidates',
+  'query',
 ]);
 
 const VIEWPORT_COVERAGE_NOTE = 'the flights layer loads by viewport';
@@ -4967,7 +5960,7 @@ async function runAnalystQuery(
   args = {},
   _layerEnabledAt,
   isCurrent = () => true,
-  signal = undefined,
+  signal = null,
 ) {
   let entityWindow = null;
   const result = await analystEngine.query(
@@ -4981,8 +5974,8 @@ async function runAnalystQuery(
       followUp: Boolean(args.followUp),
     },
     {
-      isCurrent,
       signal,
+      isCurrent,
       beforeCommit: async (candidate) => {
         const projected = await aircraftProximityWindowForQuery(
           dataManager,
@@ -5011,8 +6004,8 @@ async function runAnalystQuery(
       code: result.code || null,
       error: result.error,
     };
-    // The engine's semantic fields pass through unchanged: a cancellation
-    // stays a cancellation.
+    // The engine's semantic fields pass through unchanged: a clarification
+    // keeps its candidates, a cancellation stays a cancellation.
     for (const key of ANALYST_REFUSAL_FIELDS)
       if (result[key] !== undefined) refusal[key] = result[key];
     if (result.coverage) refusal.coverage = result.coverage;
@@ -5085,7 +6078,9 @@ async function runAnalystQuery(
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),
+    ...(result.areaId ? { areaId: result.areaId } : {}),
     ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
+    ...(result.window ? { window: result.window } : {}),
     // Every count names its scope in words; a bare number is what made two
     // honest answers look like a contradiction.
     scopeLabel: result.scopeLabel,

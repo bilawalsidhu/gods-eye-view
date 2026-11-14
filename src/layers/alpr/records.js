@@ -1,7 +1,8 @@
+import { normalizeDisplayText } from '../../data/displayText.js';
 import { QUERY_LIMIT, QUERY_SNAP_DEGREES } from './policy.js';
 
 function textTag(value) {
-  const t = String(value ?? '').trim();
+  const t = normalizeDisplayText(value);
   return t || null;
 }
 

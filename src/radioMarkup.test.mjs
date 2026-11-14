@@ -25,11 +25,15 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 31-tool inventory', () => {
+test('Realtime schema exposes the authoritative 35-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 31);
+  assert.equal(tools.length, 35);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 31, 'tool names are unique');
+  assert.equal(new Set(names).size, 35, 'tool names are unique');
+  assert.ok(names.includes('resolve_area'));
+  assert.ok(names.includes('find_imagery'));
+  assert.ok(names.includes('osm_query'));
+  assert.ok(names.includes('show_street_level'));
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('set_voice_inactivity_timeout'));
@@ -199,6 +203,12 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'track_entity',
     // Point-and-ask: 'pointer' sentinels and referent arguments.
     'annotate_map',
+    // Voice geometry: new tools.
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
+    // Street-level photos: a new composite tool, not an edit to a shipped one.
+    'show_street_level',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
@@ -225,10 +235,17 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     camera.description,
     'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
   );
+  // Tilt to an angle adds an absolute pitchDeg with its -45° default, and
+  // names tilt steps among the direction's uses; check them, then restore
+  // the legacy fields for the pin.
   assert.equal(
     camera.parameters.properties.direction.description,
-    'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
+    'Pan/rotate/tilt steps; orbit/rotate_globe default right.',
   );
+  assert.equal(camera.parameters.properties.pitchDeg.type, 'number');
+  assert.match(camera.parameters.properties.pitchDeg.description, /^Absolute;/);
+  assert.match(camera.parameters.properties.pitchDeg.description, /-45 default/);
+  delete camera.parameters.properties.pitchDeg;
   assert.equal(camera.parameters.properties.mode.description, 'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.');
   camera.parameters.properties.mode.description = 'once = bounded eased nudge (default); continuous = until stop/manual input.';
   camera.parameters.properties.motion.enum =

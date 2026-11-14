@@ -136,6 +136,9 @@ socket/watchdog on server close and re-reads configuration after restart.
 The portable `gods-eye-view/sources/adsb-lol` export normalizes existing aircraft
 records without importing Node middleware or a renderer. Browser layer/controller
 separation is outside this server extraction.
+The portable `gods-eye-view/sources/planespotters` export reads a Planespotters
+photo answer (upstream or a server's cached shape) into one host-checked,
+credited thumbnail; it has no fetch, DOM or Node dependency.
 
 ## Place-search and routing providers
 
@@ -163,7 +166,8 @@ local composition mounts them in the same order. Importing the entry performs
 no acquisition; factory calls create independent cache state.
 
 `gods-eye-view/sources/space` owns only fixed upstream URL construction: the
-CelesTrak group/TLE query and Launch Library's recent 30-day detailed feed.
+CelesTrak group/TLE and SATCAT record queries and Launch Library's recent
+30-day detailed feed.
 Callers supply the group or end date and own validation, credentials, transport,
 response limits and cache policy. The boundary gate checks this portable entry
 separately from the Node providers. Satellite rendering and launch replay remain
@@ -630,8 +634,9 @@ source-time fallback and model-owned ground policy. The renderer supplies that
 ownership fact and handles stale-ground lifting, Cesium history and primitives;
 record reconciliation does not import the engine or application.
 
-`layers/vessels/records` owns plain AIS metadata, stable MMSI identity and bounded
-retention. `layers/vessels/ingestion` owns source requests and feed state through
+`layers/vessels/records` owns plain AIS metadata, identity by the stable id the
+source gives (an MMSI only for a feed that has nothing else; the MMSI itself is
+an attribute) and bounded retention. `layers/vessels/ingestion` owns source requests and feed state through
 explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.

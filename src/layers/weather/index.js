@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
+import { weatherFrameSource } from './source.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
@@ -52,7 +53,8 @@ const utc = (value) =>
     : t('Unavailable');
 
 /** A per-application observation layer, using the existing layer lifecycle and
- * row controls. History is transient: shared links always open latest imagery. */
+ * row controls. Its time is the world clock's, so a link made away from live
+ * opens its imagery at that time; one made live opens the latest. */
 export function createWeatherLayer({
   feed,
   clock,
@@ -65,6 +67,7 @@ export function createWeatherLayer({
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
+  // A feed may also supply decoded frames; see weatherFrameSource.
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
   const satellite = !radar && !lightning;
@@ -108,7 +111,8 @@ export function createWeatherLayer({
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
   const unsubscribeClock = clock?.subscribe(() => {
-    if (!clock.getState().playing || suspended()) rendering?.cancelPrefetch?.();
+    if (!clock.getState().advancing || suspended())
+      rendering?.cancelPrefetch?.();
     notify();
   });
   const observationDelayed = () =>
@@ -210,7 +214,7 @@ export function createWeatherLayer({
     if (
       !enabled ||
       suspended() ||
-      !(clock ? clock.getState().playing : playing)
+      !(clock ? clock.getState().advancing : playing)
     )
       return;
     const times = manifest?.times ?? [];
@@ -286,6 +290,7 @@ export function createWeatherLayer({
         cesium,
         getHost,
         onChange: notify,
+        frameSource: weatherFrameSource(feed),
       });
       checkHost(false);
       eventTarget?.addEventListener?.(

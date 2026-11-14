@@ -14,11 +14,16 @@ import MissionDetail from './panels/MissionDetail.vue';
 import MissionRoster from './panels/MissionRoster.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 import UiButton from '../kit/UiButton.vue';
+import { cockpitEntryFace } from '../cockpitPresentation.js';
 
 // ContextControls presents the mode switch and the nearby sites search and
 // publishes them; until it does, the panel shows its initial markup.
 const { view: ctx } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
+// The entry names the subject it would ride (cockpitEntryFace).
+const entry = computed(() =>
+  cockpitEntryFace(cockpit.value?.entryKind, cockpit.value?.entryFace),
+);
 // While the Bhote Koshi event is on, its panel is the rail's only content.
 const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
 // The Scene runtime chip SceneControls presents while a scene plays.
@@ -32,6 +37,10 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
     <RailPanel id="weather-panel" hidden :title="t('WEATHER')" sideways rail-scroller>
       <template #badge><span id="weather-panel-count" :aria-label="t('Active weather products')">0</span></template>
       <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
+    <RailPanel id="news-panel" hidden :title="t('NEWS')" sideways rail-scroller>
+      <template #badge><span id="news-panel-count" :aria-label="t('News items in the feed')">0</span></template>
+      <div id="news-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
     <RailPanel id="recent-imagery-panel" hidden :title="t('RECENT IMAGERY')" sideways rail-scroller>
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
@@ -56,8 +65,8 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
           <div class="global-context-actions" :aria-label="t('Contact Context actions')">
             <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable">
-              <span class="material-symbols-outlined" aria-hidden="true">flight</span>
-              <span>{{ t('COCKPIT') }}</span>
+              <span class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</span>
+              <span>{{ entry.label }}</span>
             </button>
             <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)">{{ t('SEARCH NEARBY SITES') }}</button>
             <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" :aria-label="t('Reclassify tracked contact as TR-3B')" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')">🛸</UiButton>

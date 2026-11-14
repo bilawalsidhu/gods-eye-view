@@ -364,7 +364,12 @@ const layers = [
   },
   {
     id: 'street-level',
-    aliases: ['street level', 'street-level imagery', 'mapillary'],
+    aliases: [
+      'street level',
+      'street-level imagery',
+      'mapillary',
+      'street view',
+    ],
     context: false,
     noQuery: 'street-level imagery; no countable records',
   },
@@ -419,6 +424,23 @@ const layers = [
     noQuery: 'cable records are not loaded for queries',
   },
   {
+    // Results of the last osm_query ("hospitals in Kathmandu").
+    id: 'osm-places',
+    aliases: ['osm places', 'map search results', 'search results'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        kind: ['t'],
+        operator: ['t'],
+        emergency: ['t'],
+        wheelchair: ['t'],
+        openingHours: ['t'],
+        city: ['t'],
+      },
+    },
+  },
+  {
     // Global Context owns this layer; voice reaches it through
     // set_context_mode, never a bare toggle.
     id: 'military-awareness',
@@ -436,6 +458,16 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // The Realtime prompt is at its 55,500-character budget; voice toggle and
+  // query for this layer wait until there is room.
+  'drone-airspace':
+    'informational airspace layer; no room in the prompt budget',
+  // Same budget: a historical wreck archive waits for room too.
+  shipwrecks: 'historical shipwreck archive; no room in the prompt budget',
+  news: 'browsed in the News panel; voice tools are a later step',
+  'wildlife-sightings':
+    'community observation layer; no room in the prompt budget',
+  rail: 'train layer; no room in the prompt budget, and "trains" still names transit',
 });
 
 const TYPE_NAMES = Object.freeze({

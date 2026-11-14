@@ -39,8 +39,6 @@ export const GROUND_SCALE = 0.8;
 // the slots go to either the nearest planes ('proximity') or every in-view plane ('all'), each
 // backed by a hard cap so a draw-call explosion can't tank the frame (no instancing yet).
 
-export const PLANE_MODEL_URL = '/models/airplane.glb';
-
 export const MODEL_ALT_CEIL_M = 800000;
 // m: below this camera altitude, draw 3D models (raised so it's easy to trigger)
 
@@ -55,10 +53,6 @@ export const TRACKED_MODEL_MIN_PX = 40;
 export const TRACKED_MODEL_MAX_PX = 200;
 // owner-selected close-range tracked-target feel
 
-export const MODEL_NATIVE_RADIUS_M = 34.41;
-
-export const MODEL_SCALE = 1;
-// airplane.glb is transform-applied and baked to real-world meters
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
 
 export const MODEL_MAX = 150;
@@ -90,20 +84,11 @@ export const MODEL_ALL_KEEP_M = 450000;
 // all: KEEP modeled planes out to 450 km
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
-// airplane.glb nose is opposite Cesium heading-0
+// every fleet model is nose -X: opposite Cesium heading 0
 // Owner launch-polish direction: models should read as clean light silhouettes,
-// with only a weak diffuse contribution from the existing approved textures.
+// with only a weak diffuse contribution from the models' own colours.
 
 export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
-
-// Grounded-model belly offset: airplane.glb's centred origin sits 6.719 m ABOVE its
-// lowest vertex (glTF Y-up scene AABB with node transforms applied — same reader as
-// modelScale.test.mjs, measured after its 24× transform bake). × class multiplier ≈ 5.0–9.7 m
-// of lift, so a ground-snapped model rests its lowest geometry (gear/belly) ON the sampled
-// tile skin instead of sinking to the fuselage-centerline origin. Locked against the GLB
-// by modelScale.test.mjs.
-
-export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
 export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
 
@@ -132,7 +117,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -146,6 +131,15 @@ export const TRAIL_MAX_POINTS = 400;
 /** @constant {number} Display latency in seconds (= one poll interval). */
 
 export const RENDER_DELAY_SEC = 30;
+
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (state) => state.timeline?.active() === true;
+
+/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
+ *  following the clock, whose snapshots are loaded ahead of the time. */
+export const displayDelayMs = (state) =>
+  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 
@@ -194,9 +188,58 @@ export const LANDED_SPEED_MAX_MPS = 23;
 
 export const FLEET_DR_INTERVAL_MS = 80;
 
+/**
+ * The icon-to-model rules the aircraft layers follow, as the Vessels, Transit
+ * and Rail layers take them (`createFleetModelLayer`): the same altitude
+ * ceiling, minimum pixel size, proximity/all caps, add/keep radii and
+ * eligibility cadence, so every layer turns icons into models at one distance.
+ */
+export const FLEET_MODEL_POLICY = Object.freeze({
+  altitudeCeilingM: MODEL_ALT_CEIL_M,
+  minimumPixelSize: MODEL_MIN_PX,
+  cap: MODEL_MAX,
+  capAll: MODEL_MAX_ALL,
+  addM: MODEL_PROX_ADD_M,
+  addAllM: MODEL_ALL_ADD_M,
+  keepM: MODEL_PROX_KEEP_M,
+  keepAllM: MODEL_ALL_KEEP_M,
+  intervalMs: FLEET_DR_INTERVAL_MS,
+});
+
 /** @constant {number} Max ms between rotation passes while the camera is idle. */
 
 export const ROTATION_REFRESH_MS = 1000;
+
+/**
+ * @constant {number} Dead-reckoning cadence (ms) for contacts hidden behind the
+ * horizon. The worldwide feed carries ~13k contacts and a zoomed-in view shows
+ * well under 1% of them; the rest still need positions for hidden-inclusive
+ * proximity queries, but ~1 s old (≈250 m for an airliner) is well inside the
+ * 30 s poll's own uncertainty. Each hidden contact is re-reckoned on one tick in
+ * every HIDDEN_CONTACT_DR_TICKS, staggered by id so no tick carries them all.
+ */
+
+export const HIDDEN_CONTACT_DR_INTERVAL_MS = 1000;
+
+export const HIDDEN_CONTACT_DR_TICKS = Math.max(
+  1,
+  Math.round(HIDDEN_CONTACT_DR_INTERVAL_MS / FLEET_DR_INTERVAL_MS),
+);
+
+/**
+ * Stable slot in [0, HIDDEN_CONTACT_DR_TICKS) for a contact id, so each hidden
+ * contact re-reckons on the same tick of every rotation.
+ * @param {string} id Contact id (ICAO24).
+ * @returns {number}
+ */
+
+export function hiddenContactDrPhase(id) {
+  const text = String(id);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++)
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash % HIDDEN_CONTACT_DR_TICKS;
+}
 
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */
@@ -222,6 +265,11 @@ export const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 
 export const ENRICH_DISPATCH_GAP_MS = 200;
+
+/** A lookup whose source failed (an outage, a timeout, a restarting server) may
+ *  be asked again after this long; a real "not found" answer never is. */
+
+export const ENRICH_RETRY_COOLDOWN_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Ambient fleet type enrichment (2026-07-02 field data: OpenSky's live
@@ -435,3 +483,6 @@ export const FLOOR_SEED_GRACE_MS = 90_000;
  *  reloads synchronously. */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;

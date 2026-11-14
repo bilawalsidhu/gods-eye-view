@@ -1,0 +1,2320 @@
+{
+ "a139": {
+  "category": "helicopters",
+  "file": "helicopters/a139.glb",
+  "min": [
+   -8.045,
+   -6.626,
+   -1.575
+  ],
+  "max": [
+   7.638,
+   6.626,
+   2.979
+  ],
+  "length": 15.683,
+  "beam": 13.253,
+  "clearance": 1.575,
+  "tris": 1464,
+  "icon": "heli"
+ },
+ "a320": {
+  "category": "aircraft",
+  "file": "aircraft/a320.glb",
+  "min": [
+   -18.785,
+   -17.806,
+   -3.063
+  ],
+  "max": [
+   18.785,
+   17.806,
+   7.56
+  ],
+  "length": 37.57,
+  "beam": 35.611,
+  "clearance": 3.063,
+  "tris": 2338,
+  "icon": "jet"
+ },
+ "a333": {
+  "category": "aircraft",
+  "file": "aircraft/a333.glb",
+  "min": [
+   -31.845,
+   -29.842,
+   -4.251
+  ],
+  "max": [
+   31.845,
+   29.842,
+   10.854
+  ],
+  "length": 63.69,
+  "beam": 59.684,
+  "clearance": 4.251,
+  "tris": 2338,
+  "icon": "widebody"
+ },
+ "a343": {
+  "category": "aircraft",
+  "file": "aircraft/a343.glb",
+  "min": [
+   -31.845,
+   -29.842,
+   -3.343
+  ],
+  "max": [
+   31.845,
+   29.842,
+   10.854
+  ],
+  "length": 63.69,
+  "beam": 59.684,
+  "clearance": 3.343,
+  "tris": 2638,
+  "icon": "quad"
+ },
+ "a359": {
+  "category": "aircraft",
+  "file": "aircraft/a359.glb",
+  "min": [
+   -33.4,
+   -32.106,
+   -4.83
+  ],
+  "max": [
+   33.4,
+   32.106,
+   11.233
+  ],
+  "length": 66.8,
+  "beam": 64.212,
+  "clearance": 4.83,
+  "tris": 2338,
+  "icon": "widebody"
+ },
+ "a388": {
+  "category": "aircraft",
+  "file": "aircraft/a388.glb",
+  "min": [
+   -36.36,
+   -39.291,
+   -4.827
+  ],
+  "max": [
+   37.527,
+   39.291,
+   14.899
+  ],
+  "length": 73.887,
+  "beam": 78.582,
+  "clearance": 4.827,
+  "tris": 2658,
+  "icon": "quad"
+ },
+ "articulated_bus": {
+  "category": "transit",
+  "file": "transit/articulated_bus.glb",
+  "min": [
+   -9.05,
+   -1.32,
+   -0.0
+  ],
+  "max": [
+   9.05,
+   1.355,
+   3.33
+  ],
+  "length": 18.1,
+  "beam": 2.675,
+  "clearance": 0.0,
+  "tris": 604,
+  "icon": "bus"
+ },
+ "as50": {
+  "category": "helicopters",
+  "file": "helicopters/as50.glb",
+  "min": [
+   -5.465,
+   -4.709,
+   -1.365
+  ],
+  "max": [
+   6.023,
+   4.709,
+   2.267
+  ],
+  "length": 11.488,
+  "beam": 9.418,
+  "clearance": 1.365,
+  "tris": 1488,
+  "icon": "heli"
+ },
+ "at72": {
+  "category": "aircraft",
+  "file": "aircraft/at72.glb",
+  "min": [
+   -13.585,
+   -13.255,
+   -1.402
+  ],
+  "max": [
+   13.585,
+   13.255,
+   5.503
+  ],
+  "length": 27.17,
+  "beam": 26.509,
+  "clearance": 1.402,
+  "tris": 2300,
+  "icon": "turboprop"
+ },
+ "b06": {
+  "category": "helicopters",
+  "file": "helicopters/b06.glb",
+  "min": [
+   -6.695,
+   -1.029,
+   -1.265
+  ],
+  "max": [
+   5.294,
+   1.029,
+   1.91
+  ],
+  "length": 11.989,
+  "beam": 2.057,
+  "clearance": 1.265,
+  "tris": 1476,
+  "icon": "heli"
+ },
+ "b407": {
+  "category": "helicopters",
+  "file": "helicopters/b407.glb",
+  "min": [
+   -7.137,
+   -5.335,
+   -1.315
+  ],
+  "max": [
+   5.83,
+   5.335,
+   2.128
+  ],
+  "length": 12.967,
+  "beam": 10.67,
+  "clearance": 1.315,
+  "tris": 1500,
+  "icon": "heli"
+ },
+ "b738": {
+  "category": "aircraft",
+  "file": "aircraft/b738.glb",
+  "min": [
+   -19.735,
+   -17.802,
+   -2.528
+  ],
+  "max": [
+   19.735,
+   17.802,
+   8.122
+  ],
+  "length": 39.47,
+  "beam": 35.603,
+  "clearance": 2.528,
+  "tris": 2350,
+  "icon": "jet"
+ },
+ "b744": {
+  "category": "aircraft",
+  "file": "aircraft/b744.glb",
+  "min": [
+   -35.33,
+   -31.777,
+   -3.786
+  ],
+  "max": [
+   35.809,
+   31.777,
+   12.595
+  ],
+  "length": 71.139,
+  "beam": 63.554,
+  "clearance": 3.786,
+  "tris": 2910,
+  "icon": "quad"
+ },
+ "b763": {
+  "category": "aircraft",
+  "file": "aircraft/b763.glb",
+  "min": [
+   -27.45,
+   -23.692,
+   -3.852
+  ],
+  "max": [
+   27.45,
+   23.692,
+   10.008
+  ],
+  "length": 54.9,
+  "beam": 47.385,
+  "clearance": 3.852,
+  "tris": 2338,
+  "icon": "widebody"
+ },
+ "b77w": {
+  "category": "aircraft",
+  "file": "aircraft/b77w.glb",
+  "min": [
+   -36.95,
+   -31.752,
+   -5.444
+  ],
+  "max": [
+   36.95,
+   31.752,
+   11.469
+  ],
+  "length": 73.9,
+  "beam": 63.504,
+  "clearance": 5.444,
+  "tris": 2186,
+  "icon": "widebody"
+ },
+ "b789": {
+  "category": "aircraft",
+  "file": "aircraft/b789.glb",
+  "min": [
+   -31.4,
+   -29.449,
+   -4.769
+  ],
+  "max": [
+   31.4,
+   29.449,
+   10.973
+  ],
+  "length": 62.8,
+  "beam": 58.898,
+  "clearance": 4.769,
+  "tris": 2186,
+  "icon": "widebody"
+ },
+ "balloon": {
+  "category": "other",
+  "file": "other/balloon.glb",
+  "min": [
+   -8.5,
+   -8.5,
+   -5.95
+  ],
+  "max": [
+   8.5,
+   8.5,
+   19.55
+  ],
+  "length": 16.999,
+  "beam": 16.999,
+  "clearance": 5.95,
+  "tris": 504,
+  "icon": "balloon"
+ },
+ "barrel_yellow": {
+  "category": "buoys",
+  "file": "buoys/barrel_yellow.glb",
+  "min": [
+   -0.85,
+   -0.5,
+   -0.3
+  ],
+  "max": [
+   0.85,
+   0.5,
+   0.85
+  ],
+  "length": 1.7,
+  "beam": 1.0,
+  "clearance": 0.3,
+  "tris": 80,
+  "icon": "buoy"
+ },
+ "bcs3": {
+  "category": "aircraft",
+  "file": "aircraft/bcs3.glb",
+  "min": [
+   -19.35,
+   -17.439,
+   -3.196
+  ],
+  "max": [
+   19.35,
+   17.439,
+   7.086
+  ],
+  "length": 38.7,
+  "beam": 34.879,
+  "clearance": 3.196,
+  "tris": 2338,
+  "icon": "jet"
+ },
+ "be20": {
+  "category": "aircraft",
+  "file": "aircraft/be20.glb",
+  "min": [
+   -6.67,
+   -8.139,
+   -0.871
+  ],
+  "max": [
+   7.162,
+   8.139,
+   3.351
+  ],
+  "length": 13.832,
+  "beam": 16.278,
+  "clearance": 0.871,
+  "tris": 2386,
+  "icon": "turboprop"
+ },
+ "blimp": {
+  "category": "other",
+  "file": "other/blimp.glb",
+  "min": [
+   -37.5,
+   -8.427,
+   -10.6
+  ],
+  "max": [
+   37.5,
+   8.427,
+   8.427
+  ],
+  "length": 75.0,
+  "beam": 16.855,
+  "clearance": 10.6,
+  "tris": 1044,
+  "icon": "balloon"
+ },
+ "bulk_carrier": {
+  "category": "ships",
+  "file": "ships/bulk_carrier.glb",
+  "min": [
+   -98.8,
+   -16.0,
+   -10.88
+  ],
+  "max": [
+   95.0,
+   16.0,
+   30.76
+  ],
+  "length": 193.8,
+  "beam": 32.0,
+  "clearance": 10.88,
+  "tris": 3121,
+  "icon": "ship"
+ },
+ "buoy_cardinal_east": {
+  "category": "buoys",
+  "file": "buoys/buoy_cardinal_east.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   5.7
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 654,
+  "icon": "buoy"
+ },
+ "buoy_cardinal_north": {
+  "category": "buoys",
+  "file": "buoys/buoy_cardinal_north.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   5.7
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 606,
+  "icon": "buoy"
+ },
+ "buoy_cardinal_south": {
+  "category": "buoys",
+  "file": "buoys/buoy_cardinal_south.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   5.7
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 606,
+  "icon": "buoy"
+ },
+ "buoy_cardinal_west": {
+  "category": "buoys",
+  "file": "buoys/buoy_cardinal_west.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   5.7
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 654,
+  "icon": "buoy"
+ },
+ "buoy_isolated_danger": {
+  "category": "buoys",
+  "file": "buoys/buoy_isolated_danger.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   5.65
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 986,
+  "icon": "buoy"
+ },
+ "buoy_lateral_port": {
+  "category": "buoys",
+  "file": "buoys/buoy_lateral_port.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   4.95
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 558,
+  "icon": "buoy"
+ },
+ "buoy_lateral_starboard": {
+  "category": "buoys",
+  "file": "buoys/buoy_lateral_starboard.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   4.95
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 528,
+  "icon": "buoy"
+ },
+ "buoy_safe_water": {
+  "category": "buoys",
+  "file": "buoys/buoy_safe_water.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   4.95
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 694,
+  "icon": "buoy"
+ },
+ "buoy_special": {
+  "category": "buoys",
+  "file": "buoys/buoy_special.glb",
+  "min": [
+   -1.56,
+   -1.56,
+   -3.2
+  ],
+  "max": [
+   1.56,
+   1.56,
+   5.202
+  ],
+  "length": 3.12,
+  "beam": 3.12,
+  "clearance": 3.2,
+  "tris": 514,
+  "icon": "buoy"
+ },
+ "c17": {
+  "category": "aircraft",
+  "file": "aircraft/c17.glb",
+  "min": [
+   -26.52,
+   -25.688,
+   -3.467
+  ],
+  "max": [
+   28.899,
+   25.688,
+   11.893
+  ],
+  "length": 55.419,
+  "beam": 51.377,
+  "clearance": 3.467,
+  "tris": 2768,
+  "icon": "widebody"
+ },
+ "c172": {
+  "category": "aircraft",
+  "file": "aircraft/c172.glb",
+  "min": [
+   -4.416,
+   -5.39,
+   -1.49
+  ],
+  "max": [
+   4.548,
+   5.39,
+   1.97
+  ],
+  "length": 8.964,
+  "beam": 10.78,
+  "clearance": 1.49,
+  "tris": 2162,
+  "icon": "light"
+ },
+ "c30j": {
+  "category": "aircraft",
+  "file": "aircraft/c30j.glb",
+  "min": [
+   -14.895,
+   -19.801,
+   -2.328
+  ],
+  "max": [
+   15.001,
+   19.801,
+   9.051
+  ],
+  "length": 29.896,
+  "beam": 39.602,
+  "clearance": 2.328,
+  "tris": 2800,
+  "icon": "turboprop"
+ },
+ "c56x": {
+  "category": "aircraft",
+  "file": "aircraft/c56x.glb",
+  "min": [
+   -7.895,
+   -8.413,
+   -0.911
+  ],
+  "max": [
+   8.028,
+   8.413,
+   3.458
+  ],
+  "length": 15.923,
+  "beam": 16.827,
+  "clearance": 0.911,
+  "tris": 2198,
+  "icon": "rear_jet"
+ },
+ "cable_tram": {
+  "category": "transit",
+  "file": "transit/cable_tram.glb",
+  "min": [
+   -4.3,
+   -1.445,
+   -0.0
+  ],
+  "max": [
+   4.3,
+   1.445,
+   3.13
+  ],
+  "length": 8.6,
+  "beam": 2.89,
+  "clearance": 0.0,
+  "tris": 384,
+  "icon": "tram"
+ },
+ "can_red": {
+  "category": "buoys",
+  "file": "buoys/can_red.glb",
+  "min": [
+   -0.8,
+   -0.8,
+   -0.6
+  ],
+  "max": [
+   0.8,
+   0.8,
+   1.18
+  ],
+  "length": 1.6,
+  "beam": 1.6,
+  "clearance": 0.6,
+  "tris": 228,
+  "icon": "buoy"
+ },
+ "can_red_cylinder": {
+  "category": "buoys",
+  "file": "buoys/can_red_cylinder.glb",
+  "min": [
+   -0.8,
+   -0.8,
+   -0.6
+  ],
+  "max": [
+   0.8,
+   0.8,
+   1.9
+  ],
+  "length": 1.6,
+  "beam": 1.6,
+  "clearance": 0.6,
+  "tris": 308,
+  "icon": "buoy"
+ },
+ "car": {
+  "category": "other",
+  "file": "other/car.glb",
+  "min": [
+   -2.31,
+   -0.906,
+   0.019
+  ],
+  "max": [
+   2.3,
+   0.906,
+   1.948
+  ],
+  "length": 4.61,
+  "beam": 1.812,
+  "clearance": 0.0,
+  "tris": 206,
+  "icon": "vehicle"
+ },
+ "car_carrier": {
+  "category": "ships",
+  "file": "ships/car_carrier.glb",
+  "min": [
+   -101.0,
+   -16.0,
+   -8.96
+  ],
+  "max": [
+   100.0,
+   18.315,
+   38.525
+  ],
+  "length": 201.0,
+  "beam": 34.315,
+  "clearance": 8.96,
+  "tris": 3949,
+  "icon": "ship"
+ },
+ "city_bus": {
+  "category": "transit",
+  "file": "transit/city_bus.glb",
+  "min": [
+   -6.05,
+   -1.32,
+   -0.0
+  ],
+  "max": [
+   6.05,
+   1.355,
+   3.33
+  ],
+  "length": 12.1,
+  "beam": 2.675,
+  "clearance": 0.0,
+  "tris": 432,
+  "icon": "bus"
+ },
+ "cl35": {
+  "category": "aircraft",
+  "file": "aircraft/cl35.glb",
+  "min": [
+   -10.46,
+   -10.446,
+   -1.189
+  ],
+  "max": [
+   12.27,
+   10.446,
+   4.351
+  ],
+  "length": 22.73,
+  "beam": 20.892,
+  "clearance": 1.189,
+  "tris": 2434,
+  "icon": "rear_jet"
+ },
+ "coach": {
+  "category": "transit",
+  "file": "transit/coach.glb",
+  "min": [
+   -6.51,
+   -1.32,
+   -0.0
+  ],
+  "max": [
+   6.5,
+   1.355,
+   3.739
+  ],
+  "length": 13.01,
+  "beam": 2.675,
+  "clearance": 0.0,
+  "tris": 474,
+  "icon": "bus"
+ },
+ "commuter_emu": {
+  "category": "transit",
+  "file": "transit/commuter_emu.glb",
+  "min": [
+   -49.05,
+   -1.53,
+   -0.0
+  ],
+  "max": [
+   49.05,
+   1.53,
+   5.733
+  ],
+  "length": 98.1,
+  "beam": 3.06,
+  "clearance": 0.0,
+  "tris": 1570,
+  "icon": "rail"
+ },
+ "conical_green": {
+  "category": "buoys",
+  "file": "buoys/conical_green.glb",
+  "min": [
+   -0.85,
+   -0.85,
+   -0.6
+  ],
+  "max": [
+   0.85,
+   0.85,
+   1.7
+  ],
+  "length": 1.7,
+  "beam": 1.7,
+  "clearance": 0.6,
+  "tris": 172,
+  "icon": "buoy"
+ },
+ "conical_green_cone": {
+  "category": "buoys",
+  "file": "buoys/conical_green_cone.glb",
+  "min": [
+   -0.85,
+   -0.85,
+   -0.6
+  ],
+  "max": [
+   0.85,
+   0.85,
+   2.42
+  ],
+  "length": 1.7,
+  "beam": 1.7,
+  "clearance": 0.6,
+  "tris": 222,
+  "icon": "buoy"
+ },
+ "container_ship": {
+  "category": "ships",
+  "file": "ships/container_ship.glb",
+  "min": [
+   -159.9,
+   -24.0,
+   -13.92
+  ],
+  "max": [
+   150.0,
+   24.0,
+   47.94
+  ],
+  "length": 309.9,
+  "beam": 48.0,
+  "clearance": 13.92,
+  "tris": 14337,
+  "icon": "ship"
+ },
+ "crj9": {
+  "category": "aircraft",
+  "file": "aircraft/crj9.glb",
+  "min": [
+   -18.1,
+   -12.347,
+   -1.339
+  ],
+  "max": [
+   18.396,
+   12.347,
+   5.684
+  ],
+  "length": 36.496,
+  "beam": 24.694,
+  "clearance": 1.339,
+  "tris": 2334,
+  "icon": "rear_jet"
+ },
+ "cruise_ship": {
+  "category": "ships",
+  "file": "ships/cruise_ship.glb",
+  "min": [
+   -168.0,
+   -22.5,
+   -8.4
+  ],
+  "max": [
+   150.0,
+   22.5,
+   67.55
+  ],
+  "length": 318.0,
+  "beam": 45.0,
+  "clearance": 8.4,
+  "tris": 3759,
+  "icon": "passenger"
+ },
+ "dh8d": {
+  "category": "aircraft",
+  "file": "aircraft/dh8d.glb",
+  "min": [
+   -16.4,
+   -13.916,
+   -1.339
+  ],
+  "max": [
+   16.4,
+   13.916,
+   5.709
+  ],
+  "length": 32.8,
+  "beam": 27.832,
+  "clearance": 1.339,
+  "tris": 2364,
+  "icon": "turboprop"
+ },
+ "double_decker": {
+  "category": "transit",
+  "file": "transit/double_decker.glb",
+  "min": [
+   -5.55,
+   -1.32,
+   -0.0
+  ],
+  "max": [
+   5.55,
+   1.355,
+   4.387
+  ],
+  "length": 11.1,
+  "beam": 2.675,
+  "clearance": 0.0,
+  "tris": 442,
+  "icon": "bus"
+ },
+ "dredger": {
+  "category": "ships",
+  "file": "ships/dredger.glb",
+  "min": [
+   -53.0,
+   -10.06,
+   -7.0
+  ],
+  "max": [
+   50.0,
+   11.0,
+   17.955
+  ],
+  "length": 103.0,
+  "beam": 21.06,
+  "clearance": 7.0,
+  "tris": 2597,
+  "icon": "ship"
+ },
+ "e175": {
+  "category": "aircraft",
+  "file": "aircraft/e175.glb",
+  "min": [
+   -15.84,
+   -12.917,
+   -2.427
+  ],
+  "max": [
+   15.84,
+   12.917,
+   5.818
+  ],
+  "length": 31.68,
+  "beam": 25.835,
+  "clearance": 2.427,
+  "tris": 2338,
+  "icon": "jet"
+ },
+ "e55p": {
+  "category": "aircraft",
+  "file": "aircraft/e55p.glb",
+  "min": [
+   -7.95,
+   -8.042,
+   -0.896
+  ],
+  "max": [
+   8.222,
+   8.042,
+   3.469
+  ],
+  "length": 16.172,
+  "beam": 16.084,
+  "clearance": 0.896,
+  "tris": 2414,
+  "icon": "rear_jet"
+ },
+ "ec35": {
+  "category": "helicopters",
+  "file": "helicopters/ec35.glb",
+  "min": [
+   -6.834,
+   -5.1,
+   -1.365
+  ],
+  "max": [
+   5.304,
+   5.1,
+   2.0
+  ],
+  "length": 12.138,
+  "beam": 10.2,
+  "clearance": 1.365,
+  "tris": 1420,
+  "icon": "heli"
+ },
+ "ec45": {
+  "category": "helicopters",
+  "file": "helicopters/ec45.glb",
+  "min": [
+   -7.472,
+   -5.5,
+   -1.54
+  ],
+  "max": [
+   6.032,
+   5.5,
+   2.65
+  ],
+  "length": 13.504,
+  "beam": 11.0,
+  "clearance": 1.54,
+  "tris": 1420,
+  "icon": "heli"
+ },
+ "fast_ferry": {
+  "category": "ships",
+  "file": "ships/fast_ferry.glb",
+  "min": [
+   -22.4,
+   -5.56,
+   -1.32
+  ],
+  "max": [
+   20.0,
+   5.56,
+   8.3
+  ],
+  "length": 42.4,
+  "beam": 11.12,
+  "clearance": 1.32,
+  "tris": 4754,
+  "icon": "passenger"
+ },
+ "feeder": {
+  "category": "ships",
+  "file": "ships/feeder.glb",
+  "min": [
+   -79.95,
+   -11.5,
+   -6.67
+  ],
+  "max": [
+   75.0,
+   11.5,
+   28.09
+  ],
+  "length": 154.95,
+  "beam": 23.0,
+  "clearance": 6.67,
+  "tris": 3519,
+  "icon": "ship"
+ },
+ "ferry": {
+  "category": "ships",
+  "file": "ships/ferry.glb",
+  "min": [
+   -70.2,
+   -12.9,
+   -5.28
+  ],
+  "max": [
+   65.05,
+   12.9,
+   31.575
+  ],
+  "length": 135.25,
+  "beam": 25.8,
+  "clearance": 5.28,
+  "tris": 3157,
+  "icon": "passenger"
+ },
+ "fire_truck": {
+  "category": "other",
+  "file": "other/fire_truck.glb",
+  "min": [
+   -5.51,
+   -1.5,
+   0.027
+  ],
+  "max": [
+   5.5,
+   1.5,
+   4.08
+  ],
+  "length": 11.01,
+  "beam": 3.0,
+  "clearance": 0.0,
+  "tris": 314,
+  "icon": "vehicle"
+ },
+ "fishing_boat": {
+  "category": "ships",
+  "file": "ships/fishing_boat.glb",
+  "min": [
+   -7.2,
+   -2.0,
+   -1.2
+  ],
+  "max": [
+   6.0,
+   2.0,
+   5.753
+  ],
+  "length": 13.2,
+  "beam": 4.0,
+  "clearance": 1.2,
+  "tris": 2839,
+  "icon": "boat"
+ },
+ "funicular": {
+  "category": "transit",
+  "file": "transit/funicular.glb",
+  "min": [
+   -7.05,
+   -1.345,
+   -0.0
+  ],
+  "max": [
+   7.05,
+   1.345,
+   5.43
+  ],
+  "length": 14.1,
+  "beam": 2.69,
+  "clearance": 0.0,
+  "tris": 308,
+  "icon": "rail"
+ },
+ "general_cargo": {
+  "category": "ships",
+  "file": "ships/general_cargo.glb",
+  "min": [
+   -47.7,
+   -7.0,
+   -5.32
+  ],
+  "max": [
+   45.0,
+   7.0,
+   18.846
+  ],
+  "length": 92.7,
+  "beam": 14.0,
+  "clearance": 5.32,
+  "tris": 2797,
+  "icon": "ship"
+ },
+ "generic_heli": {
+  "category": "helicopters",
+  "file": "helicopters/generic_heli.glb",
+  "min": [
+   -7.37,
+   -5.5,
+   -1.365
+  ],
+  "max": [
+   5.927,
+   5.5,
+   2.28
+  ],
+  "length": 13.297,
+  "beam": 11.0,
+  "clearance": 1.365,
+  "tris": 1272,
+  "icon": "heli"
+ },
+ "generic_plane": {
+  "category": "aircraft",
+  "file": "aircraft/generic_plane.glb",
+  "min": [
+   -18.0,
+   -16.66,
+   -2.906
+  ],
+  "max": [
+   18.0,
+   16.66,
+   7.373
+  ],
+  "length": 36.0,
+  "beam": 33.32,
+  "clearance": 2.906,
+  "tris": 2166,
+  "icon": "jet"
+ },
+ "generic_vessel": {
+  "category": "ships",
+  "file": "ships/generic_vessel.glb",
+  "min": [
+   -21.6,
+   -4.5,
+   -2.7
+  ],
+  "max": [
+   20.0,
+   4.5,
+   11.6
+  ],
+  "length": 41.6,
+  "beam": 9.0,
+  "clearance": 2.7,
+  "tris": 2389,
+  "icon": "ship"
+ },
+ "glf4": {
+  "category": "aircraft",
+  "file": "aircraft/glf4.glb",
+  "min": [
+   -13.46,
+   -11.79,
+   -1.189
+  ],
+  "max": [
+   15.73,
+   11.79,
+   5.022
+  ],
+  "length": 29.19,
+  "beam": 23.58,
+  "clearance": 1.189,
+  "tris": 2474,
+  "icon": "rear_jet"
+ },
+ "glider": {
+  "category": "aircraft",
+  "file": "aircraft/glider.glb",
+  "min": [
+   -3.4,
+   -7.396,
+   -0.398
+  ],
+  "max": [
+   3.561,
+   7.396,
+   1.384
+  ],
+  "length": 6.961,
+  "beam": 14.793,
+  "clearance": 0.398,
+  "tris": 2314,
+  "icon": "light"
+ },
+ "gondola": {
+  "category": "transit",
+  "file": "transit/gondola.glb",
+  "min": [
+   -1.05,
+   -0.938,
+   0.014
+  ],
+  "max": [
+   1.05,
+   0.938,
+   4.6
+  ],
+  "length": 2.1,
+  "beam": 1.876,
+  "clearance": 0.0,
+  "tris": 282,
+  "icon": "unknown"
+ },
+ "h47": {
+  "category": "helicopters",
+  "file": "helicopters/h47.glb",
+  "min": [
+   -10.3,
+   -9.151,
+   -2.588
+  ],
+  "max": [
+   13.921,
+   8.103,
+   4.78
+  ],
+  "length": 24.221,
+  "beam": 17.254,
+  "clearance": 2.588,
+  "tris": 1430,
+  "icon": "heli_tandem"
+ },
+ "h60": {
+  "category": "helicopters",
+  "file": "helicopters/h60.glb",
+  "min": [
+   -10.774,
+   -8.18,
+   -1.765
+  ],
+  "max": [
+   9.13,
+   8.18,
+   3.265
+  ],
+  "length": 19.904,
+  "beam": 16.36,
+  "clearance": 1.765,
+  "tris": 1560,
+  "icon": "heli"
+ },
+ "h64": {
+  "category": "helicopters",
+  "file": "helicopters/h64.glb",
+  "min": [
+   -9.875,
+   -7.315,
+   -1.475
+  ],
+  "max": [
+   8.545,
+   7.315,
+   2.742
+  ],
+  "length": 18.42,
+  "beam": 14.63,
+  "clearance": 1.475,
+  "tris": 2040,
+  "icon": "heli"
+ },
+ "high_speed": {
+  "category": "transit",
+  "file": "transit/high_speed.glb",
+  "min": [
+   -103.1,
+   -1.555,
+   -0.0
+  ],
+  "max": [
+   103.1,
+   1.555,
+   5.285
+  ],
+  "length": 206.2,
+  "beam": 3.11,
+  "clearance": 0.0,
+  "tris": 2844,
+  "icon": "rail"
+ },
+ "inland_cargo": {
+  "category": "ships",
+  "file": "ships/inland_cargo.glb",
+  "min": [
+   -56.32,
+   -5.725,
+   -3.0
+  ],
+  "max": [
+   55.0,
+   5.725,
+   9.995
+  ],
+  "length": 111.32,
+  "beam": 11.45,
+  "clearance": 3.0,
+  "tris": 3277,
+  "icon": "ship"
+ },
+ "inland_tanker": {
+  "category": "ships",
+  "file": "ships/inland_tanker.glb",
+  "min": [
+   -56.32,
+   -5.725,
+   -3.2
+  ],
+  "max": [
+   55.0,
+   5.725,
+   7.5
+  ],
+  "length": 111.32,
+  "beam": 11.45,
+  "clearance": 3.2,
+  "tris": 2709,
+  "icon": "tanker"
+ },
+ "intercity": {
+  "category": "transit",
+  "file": "transit/intercity.glb",
+  "min": [
+   -91.4,
+   -1.545,
+   -0.0
+  ],
+  "max": [
+   91.45,
+   1.545,
+   5.933
+  ],
+  "length": 182.85,
+  "beam": 3.09,
+  "clearance": 0.0,
+  "tris": 3168,
+  "icon": "rail"
+ },
+ "k35r": {
+  "category": "aircraft",
+  "file": "aircraft/k35r.glb",
+  "min": [
+   -20.765,
+   -19.541,
+   -2.478
+  ],
+  "max": [
+   28.186,
+   19.541,
+   8.482
+  ],
+  "length": 48.951,
+  "beam": 39.082,
+  "clearance": 2.478,
+  "tris": 2626,
+  "icon": "jet"
+ },
+ "light_rail": {
+  "category": "transit",
+  "file": "transit/light_rail.glb",
+  "min": [
+   -14.1,
+   -1.405,
+   -0.0
+  ],
+  "max": [
+   14.1,
+   1.405,
+   5.641
+  ],
+  "length": 28.2,
+  "beam": 2.81,
+  "clearance": 0.0,
+  "tris": 760,
+  "icon": "tram"
+ },
+ "lng_carrier": {
+  "category": "ships",
+  "file": "ships/lng_carrier.glb",
+  "min": [
+   -152.25,
+   -23.0,
+   -11.5
+  ],
+  "max": [
+   145.0,
+   23.0,
+   45.38
+  ],
+  "length": 297.25,
+  "beam": 46.0,
+  "clearance": 11.5,
+  "tris": 2951,
+  "icon": "tanker"
+ },
+ "md11": {
+  "category": "aircraft",
+  "file": "aircraft/md11.glb",
+  "min": [
+   -30.8,
+   -25.74,
+   -4.162
+  ],
+  "max": [
+   33.345,
+   25.74,
+   10.88
+  ],
+  "length": 64.145,
+  "beam": 51.48,
+  "clearance": 4.162,
+  "tris": 2476,
+  "icon": "widebody"
+ },
+ "metro": {
+  "category": "transit",
+  "file": "transit/metro.glb",
+  "min": [
+   -57.55,
+   -1.53,
+   -0.0
+  ],
+  "max": [
+   57.55,
+   1.53,
+   3.691
+  ],
+  "length": 115.1,
+  "beam": 3.06,
+  "clearance": 0.0,
+  "tris": 2226,
+  "icon": "subway"
+ },
+ "monorail": {
+  "category": "transit",
+  "file": "transit/monorail.glb",
+  "min": [
+   -27.75,
+   -1.53,
+   0.0
+  ],
+  "max": [
+   27.75,
+   1.53,
+   3.587
+  ],
+  "length": 55.5,
+  "beam": 3.06,
+  "clearance": 0.0,
+  "tris": 814,
+  "icon": "subway"
+ },
+ "motor_yacht": {
+  "category": "ships",
+  "file": "ships/motor_yacht.glb",
+  "min": [
+   -9.92,
+   -2.3,
+   -1.15
+  ],
+  "max": [
+   9.2,
+   2.3,
+   5.46
+  ],
+  "length": 19.12,
+  "beam": 4.6,
+  "clearance": 1.15,
+  "tris": 2477,
+  "icon": "boat"
+ },
+ "mq9": {
+  "category": "aircraft",
+  "file": "aircraft/mq9.glb",
+  "min": [
+   -5.5,
+   -9.8,
+   -1.616
+  ],
+  "max": [
+   5.85,
+   9.8,
+   1.582
+  ],
+  "length": 11.35,
+  "beam": 19.6,
+  "clearance": 1.616,
+  "tris": 1936,
+  "icon": "light"
+ },
+ "p28a": {
+  "category": "aircraft",
+  "file": "aircraft/p28a.glb",
+  "min": [
+   -3.901,
+   -5.228,
+   -1.341
+  ],
+  "max": [
+   3.877,
+   5.228,
+   1.801
+  ],
+  "length": 7.778,
+  "beam": 10.457,
+  "clearance": 1.341,
+  "tris": 2136,
+  "icon": "light"
+ },
+ "patrol": {
+  "category": "ships",
+  "file": "ships/patrol.glb",
+  "min": [
+   -36.0,
+   -4.5,
+   -2.7
+  ],
+  "max": [
+   30.0,
+   4.5,
+   19.6
+  ],
+  "length": 66.0,
+  "beam": 9.0,
+  "clearance": 2.7,
+  "tris": 2587,
+  "icon": "ship"
+ },
+ "pc12": {
+  "category": "aircraft",
+  "file": "aircraft/pc12.glb",
+  "min": [
+   -7.62,
+   -8.053,
+   -1.435
+  ],
+  "max": [
+   7.3,
+   8.053,
+   3.396
+  ],
+  "length": 14.92,
+  "beam": 16.106,
+  "clearance": 1.435,
+  "tris": 2292,
+  "icon": "turboprop"
+ },
+ "pile_green_cone": {
+  "category": "buoys",
+  "file": "buoys/pile_green_cone.glb",
+  "min": [
+   -0.35,
+   -0.35,
+   -1.5
+  ],
+  "max": [
+   0.35,
+   0.35,
+   4.72
+  ],
+  "length": 0.7,
+  "beam": 0.7,
+  "clearance": 1.5,
+  "tris": 138,
+  "icon": "buoy"
+ },
+ "pile_red_cylinder": {
+  "category": "buoys",
+  "file": "buoys/pile_red_cylinder.glb",
+  "min": [
+   -0.35,
+   -0.35,
+   -1.5
+  ],
+  "max": [
+   0.35,
+   0.35,
+   4.72
+  ],
+  "length": 0.7,
+  "beam": 0.7,
+  "clearance": 1.5,
+  "tris": 168,
+  "icon": "buoy"
+ },
+ "pilot_boat": {
+  "category": "ships",
+  "file": "ships/pilot_boat.glb",
+  "min": [
+   -10.54,
+   -2.88,
+   -1.3
+  ],
+  "max": [
+   8.5,
+   2.88,
+   8.716
+  ],
+  "length": 19.04,
+  "beam": 5.76,
+  "clearance": 1.3,
+  "tris": 2985,
+  "icon": "boat"
+ },
+ "product_tanker": {
+  "category": "ships",
+  "file": "ships/product_tanker.glb",
+  "min": [
+   -58.76,
+   -9.5,
+   -6.46
+  ],
+  "max": [
+   56.5,
+   9.5,
+   25.672
+  ],
+  "length": 115.26,
+  "beam": 19.0,
+  "clearance": 6.46,
+  "tris": 2995,
+  "icon": "tanker"
+ },
+ "psv": {
+  "category": "ships",
+  "file": "ships/psv.glb",
+  "min": [
+   -45.05,
+   -9.5,
+   -6.27
+  ],
+  "max": [
+   42.5,
+   9.5,
+   24.119
+  ],
+  "length": 87.55,
+  "beam": 19.0,
+  "clearance": 6.27,
+  "tris": 3059,
+  "icon": "ship"
+ },
+ "pushback": {
+  "category": "other",
+  "file": "other/pushback.glb",
+  "min": [
+   -3.0,
+   -1.45,
+   0.024
+  ],
+  "max": [
+   3.0,
+   1.45,
+   2.1
+  ],
+  "length": 6.0,
+  "beam": 2.9,
+  "clearance": 0.0,
+  "tris": 176,
+  "icon": "vehicle"
+ },
+ "r44": {
+  "category": "helicopters",
+  "file": "helicopters/r44.glb",
+  "min": [
+   -7.116,
+   -0.744,
+   -1.14
+  ],
+  "max": [
+   5.079,
+   0.744,
+   2.03
+  ],
+  "length": 12.195,
+  "beam": 1.488,
+  "clearance": 1.14,
+  "tris": 1172,
+  "icon": "heli"
+ },
+ "radio_mast": {
+  "category": "other",
+  "file": "other/radio_mast.glb",
+  "min": [
+   -0.7,
+   -0.815,
+   0.0
+  ],
+  "max": [
+   1.2,
+   0.815,
+   11.8
+  ],
+  "length": 1.9,
+  "beam": 1.63,
+  "clearance": 0.0,
+  "tris": 940,
+  "icon": "vehicle"
+ },
+ "regional_dmu": {
+  "category": "transit",
+  "file": "transit/regional_dmu.glb",
+  "min": [
+   -24.75,
+   -1.53,
+   -0.0
+  ],
+  "max": [
+   24.75,
+   1.53,
+   4.36
+  ],
+  "length": 49.5,
+  "beam": 3.06,
+  "clearance": 0.0,
+  "tris": 770,
+  "icon": "rail"
+ },
+ "river_cruise": {
+  "category": "ships",
+  "file": "ships/river_cruise.glb",
+  "min": [
+   -69.12,
+   -5.7,
+   -1.8
+  ],
+  "max": [
+   67.5,
+   5.7,
+   9.9
+  ],
+  "length": 136.62,
+  "beam": 11.4,
+  "clearance": 1.8,
+  "tris": 2675,
+  "icon": "passenger"
+ },
+ "s76": {
+  "category": "helicopters",
+  "file": "helicopters/s76.glb",
+  "min": [
+   -8.949,
+   -6.705,
+   -1.525
+  ],
+  "max": [
+   7.428,
+   6.705,
+   2.776
+  ],
+  "length": 16.377,
+  "beam": 13.41,
+  "clearance": 1.525,
+  "tris": 1356,
+  "icon": "heli"
+ },
+ "sailboat": {
+  "category": "ships",
+  "file": "ships/sailboat.glb",
+  "min": [
+   -7.8,
+   -2.05,
+   -2.695
+  ],
+  "max": [
+   6.5,
+   2.05,
+   18.698
+  ],
+  "length": 14.3,
+  "beam": 4.1,
+  "clearance": 2.695,
+  "tris": 2421,
+  "icon": "sail"
+ },
+ "spar_lateral_port": {
+  "category": "buoys",
+  "file": "buoys/spar_lateral_port.glb",
+  "min": [
+   -0.47,
+   -0.47,
+   -1.5
+  ],
+  "max": [
+   0.47,
+   0.47,
+   3.36
+  ],
+  "length": 0.94,
+  "beam": 0.94,
+  "clearance": 1.5,
+  "tris": 290,
+  "icon": "buoy"
+ },
+ "spar_lateral_starboard": {
+  "category": "buoys",
+  "file": "buoys/spar_lateral_starboard.glb",
+  "min": [
+   -0.47,
+   -0.47,
+   -1.5
+  ],
+  "max": [
+   0.47,
+   0.47,
+   3.36
+  ],
+  "length": 0.94,
+  "beam": 0.94,
+  "clearance": 1.5,
+  "tris": 262,
+  "icon": "buoy"
+ },
+ "speedboat": {
+  "category": "ships",
+  "file": "ships/speedboat.glb",
+  "min": [
+   -4.96,
+   -1.3,
+   -0.55
+  ],
+  "max": [
+   4.45,
+   1.3,
+   2.03
+  ],
+  "length": 9.41,
+  "beam": 2.6,
+  "clearance": 0.55,
+  "tris": 2369,
+  "icon": "boat"
+ },
+ "spherical_green": {
+  "category": "buoys",
+  "file": "buoys/spherical_green.glb",
+  "min": [
+   -0.75,
+   -0.739,
+   -0.4
+  ],
+  "max": [
+   0.75,
+   0.739,
+   1.25
+  ],
+  "length": 1.5,
+  "beam": 1.477,
+  "clearance": 0.4,
+  "tris": 344,
+  "icon": "buoy"
+ },
+ "spherical_yellow": {
+  "category": "buoys",
+  "file": "buoys/spherical_yellow.glb",
+  "min": [
+   -0.75,
+   -0.739,
+   -0.4
+  ],
+  "max": [
+   0.75,
+   0.739,
+   1.25
+  ],
+  "length": 1.5,
+  "beam": 1.477,
+  "clearance": 0.4,
+  "tris": 344,
+  "icon": "buoy"
+ },
+ "spherical_yellow_x": {
+  "category": "buoys",
+  "file": "buoys/spherical_yellow_x.glb",
+  "min": [
+   -0.75,
+   -0.739,
+   -0.4
+  ],
+  "max": [
+   0.75,
+   0.739,
+   2.019
+  ],
+  "length": 1.5,
+  "beam": 1.477,
+  "clearance": 0.4,
+  "tris": 380,
+  "icon": "buoy"
+ },
+ "sr22": {
+  "category": "aircraft",
+  "file": "aircraft/sr22.glb",
+  "min": [
+   -4.3,
+   -5.723,
+   -1.325
+  ],
+  "max": [
+   4.124,
+   5.723,
+   1.765
+  ],
+  "length": 8.424,
+  "beam": 11.446,
+  "clearance": 1.325,
+  "tris": 2428,
+  "icon": "light"
+ },
+ "stake_green_cone": {
+  "category": "buoys",
+  "file": "buoys/stake_green_cone.glb",
+  "min": [
+   -0.198,
+   -0.198,
+   -1.5
+  ],
+  "max": [
+   0.198,
+   0.198,
+   3.63
+  ],
+  "length": 0.396,
+  "beam": 0.396,
+  "clearance": 1.5,
+  "tris": 78,
+  "icon": "buoy"
+ },
+ "stake_red_cylinder": {
+  "category": "buoys",
+  "file": "buoys/stake_red_cylinder.glb",
+  "min": [
+   -0.154,
+   -0.154,
+   -1.5
+  ],
+  "max": [
+   0.154,
+   0.154,
+   3.63
+  ],
+  "length": 0.308,
+  "beam": 0.308,
+  "clearance": 1.5,
+  "tris": 108,
+  "icon": "buoy"
+ },
+ "stake_yellow_x": {
+  "category": "buoys",
+  "file": "buoys/stake_yellow_x.glb",
+  "min": [
+   -0.08,
+   -0.232,
+   -1.5
+  ],
+  "max": [
+   0.08,
+   0.232,
+   3.769
+  ],
+  "length": 0.16,
+  "beam": 0.463,
+  "clearance": 1.5,
+  "tris": 64,
+  "icon": "buoy"
+ },
+ "superyacht": {
+  "category": "ships",
+  "file": "ships/superyacht.glb",
+  "min": [
+   -36.0,
+   -5.25,
+   -3.15
+  ],
+  "max": [
+   30.0,
+   5.25,
+   17.565
+  ],
+  "length": 66.0,
+  "beam": 10.5,
+  "clearance": 3.15,
+  "tris": 2689,
+  "icon": "passenger"
+ },
+ "t38": {
+  "category": "aircraft",
+  "file": "aircraft/t38.glb",
+  "min": [
+   -7.07,
+   -3.773,
+   -0.746
+  ],
+  "max": [
+   7.074,
+   3.773,
+   2.592
+  ],
+  "length": 14.144,
+  "beam": 7.546,
+  "clearance": 0.746,
+  "tris": 2246,
+  "icon": "fighter"
+ },
+ "tanker": {
+  "category": "ships",
+  "file": "ships/tanker.glb",
+  "min": [
+   -130.0,
+   -22.0,
+   -14.96
+  ],
+  "max": [
+   125.0,
+   22.0,
+   35.608
+  ],
+  "length": 255.0,
+  "beam": 44.0,
+  "clearance": 14.96,
+  "tris": 3393,
+  "icon": "tanker"
+ },
+ "tex2": {
+  "category": "aircraft",
+  "file": "aircraft/tex2.glb",
+  "min": [
+   -5.452,
+   -4.993,
+   -1.293
+  ],
+  "max": [
+   5.134,
+   4.993,
+   2.168
+  ],
+  "length": 10.586,
+  "beam": 9.986,
+  "clearance": 1.293,
+  "tris": 2380,
+  "icon": "turboprop"
+ },
+ "tour_boat": {
+  "category": "ships",
+  "file": "ships/tour_boat.glb",
+  "min": [
+   -14.5,
+   -3.0,
+   -1.68
+  ],
+  "max": [
+   12.5,
+   3.0,
+   5.57
+  ],
+  "length": 27.0,
+  "beam": 6.0,
+  "clearance": 1.68,
+  "tris": 2449,
+  "icon": "boat"
+ },
+ "tower": {
+  "category": "other",
+  "file": "other/tower.glb",
+  "min": [
+   -0.696,
+   -1.135,
+   -0.016
+  ],
+  "max": [
+   1.296,
+   1.135,
+   60.6
+  ],
+  "length": 1.992,
+  "beam": 2.27,
+  "clearance": 0.016,
+  "tris": 568,
+  "icon": "vehicle"
+ },
+ "tram": {
+  "category": "transit",
+  "file": "transit/tram.glb",
+  "min": [
+   -15.0,
+   -1.28,
+   -0.0
+  ],
+  "max": [
+   15.0,
+   1.28,
+   5.241
+  ],
+  "length": 30.0,
+  "beam": 2.56,
+  "clearance": 0.0,
+  "tris": 1004,
+  "icon": "tram"
+ },
+ "trawler": {
+  "category": "ships",
+  "file": "ships/trawler.glb",
+  "min": [
+   -12.1,
+   -6.338,
+   -2.8
+  ],
+  "max": [
+   11.0,
+   6.338,
+   12.529
+  ],
+  "length": 23.1,
+  "beam": 12.676,
+  "clearance": 2.8,
+  "tris": 3121,
+  "icon": "ship"
+ },
+ "trolleybus": {
+  "category": "transit",
+  "file": "transit/trolleybus.glb",
+  "min": [
+   -6.05,
+   -1.32,
+   -0.0
+  ],
+  "max": [
+   6.05,
+   1.355,
+   5.656
+  ],
+  "length": 12.1,
+  "beam": 2.675,
+  "clearance": 0.0,
+  "tris": 458,
+  "icon": "bus"
+ },
+ "tug": {
+  "category": "ships",
+  "file": "ships/tug.glb",
+  "min": [
+   -15.8,
+   -5.35,
+   -3.7
+  ],
+  "max": [
+   14.4,
+   5.35,
+   14.1
+  ],
+  "length": 30.2,
+  "beam": 10.7,
+  "clearance": 3.7,
+  "tris": 3661,
+  "icon": "ship"
+ },
+ "ultralight": {
+  "category": "aircraft",
+  "file": "aircraft/ultralight.glb",
+  "min": [
+   -3.51,
+   -5.243,
+   -1.217
+  ],
+  "max": [
+   3.6,
+   5.243,
+   1.644
+  ],
+  "length": 7.11,
+  "beam": 10.486,
+  "clearance": 1.217,
+  "tris": 2068,
+  "icon": "light"
+ },
+ "v22": {
+  "category": "aircraft",
+  "file": "aircraft/v22.glb",
+  "min": [
+   -8.74,
+   -11.647,
+   -1.468
+  ],
+  "max": [
+   8.74,
+   11.647,
+   4.569
+  ],
+  "length": 17.48,
+  "beam": 23.294,
+  "clearance": 1.468,
+  "tris": 2250,
+  "icon": "turboprop"
+ },
+ "van": {
+  "category": "other",
+  "file": "other/van.glb",
+  "min": [
+   -2.76,
+   -1.0,
+   0.019
+  ],
+  "max": [
+   2.75,
+   1.0,
+   2.438
+  ],
+  "length": 5.51,
+  "beam": 2.0,
+  "clearance": 0.0,
+  "tris": 206,
+  "icon": "vehicle"
+ }
+}

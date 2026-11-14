@@ -314,9 +314,15 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayCameraToken++;
     if (layerState._replayCameraRemover) layerState._replayCameraRemover();
     layerState._replayCameraRemover = null;
-    layerState._viewer?.camera?.cancelFlight();
-    if (layerState._viewer?.camera)
+    // Cancel the layer's own flights, never one navigation started after
+    // taking the camera.
+    if (
+      (stoppedLaunchId || !layerState._cameraReleased) &&
+      layerState._viewer?.camera
+    ) {
+      layerState._viewer.camera.cancelFlight();
       layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    }
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;

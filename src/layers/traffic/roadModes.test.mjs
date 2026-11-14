@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { PbfWriter } from 'pbf';
 import {
   flowSegmentsToRoads,
   resolveRoadMode,
   selectTrafficRoads,
 } from './roadModes.js';
+import { createFlowTileSource } from './flowSource.js';
 import { createTrafficSource } from './source.js';
 import { createTrafficLayer } from './index.js';
 import {
@@ -14,6 +16,7 @@ import {
   serializeStoredLayerState,
   parseStoredLayerState,
 } from '../../data/layerState.js';
+import { tileToBBox } from '../../data/tomtomTiles.js';
 
 const coordinates = [
   [-97.744, 30.267],
@@ -115,6 +118,133 @@ test('a full-coverage TomTom line is two-way and covers both OSM directions', ()
   const roads = selectTrafficRoads([{ ...main, oneway: 0 }], [both], 'hybrid');
   assert.equal(roads.length, 1);
   assert.equal(roads[0].directFlow, true);
+});
+test("opposite TomTom sides of one street share a two-way street's dots", () => {
+  // About 1 m and 20 m north of `coordinates`, drawn westbound.
+  const back = (dLat) => ({
+    ...flow,
+    coords: coordinates.map(([lon, lat]) => [lon, lat + dLat]).reverse(),
+  });
+  const weights = (segments) =>
+    flowSegmentsToRoads(segments).map((road) => road.densityWeight ?? 1);
+  assert.deepEqual(weights([flow, back(0.00001)]), [0.5, 0.5]);
+  assert.deepEqual(weights([flow]), [1], 'a lone side keeps the one-way share');
+  assert.deepEqual(
+    weights([flow, back(0.00018)]),
+    [1, 1],
+    'a divided carriageway keeps one-way shares',
+  );
+  assert.deepEqual(
+    weights([
+      flow,
+      {
+        ...flow,
+        coords: coordinates.map(([lon, lat]) => [lon, lat + 0.00001]),
+      },
+    ]),
+    [1, 1],
+    'same-direction lines are not a pair',
+  );
+  assert.deepEqual(
+    weights([{ ...flow, coverage: 'full' }, back(0.00001)]),
+    [1, 1],
+    'a full-coverage line is not a side, and pairs with nothing',
+  );
+});
+test('a TomTom side paired along only part of its length keeps its share', () => {
+  // Westbound partners about 1 m north, from the start of `flow` to 30% and
+  // to 60% of its length: one or two of its three sample points.
+  const partner = (toLon) => ({
+    ...flow,
+    coords: [
+      [toLon, 30.26701],
+      [-97.744, 30.26701],
+    ],
+  });
+  const weightOfFlow = (other) =>
+    flowSegmentsToRoads([flow, other])[0].densityWeight ?? 1;
+  assert.equal(weightOfFlow(partner(-97.7434)), 1);
+  assert.equal(weightOfFlow(partner(-97.7428)), 0.5);
+});
+test('a TomTom side that doubles back beside itself is not its own pair', () => {
+  // East along `coordinates`, then back west about 1 m north.
+  const hairpin = {
+    ...flow,
+    coords: [...coordinates, [-97.742, 30.26701], [-97.744, 30.26701]],
+  };
+  assert.equal(flowSegmentsToRoads([hairpin])[0].densityWeight ?? 1, 1);
+});
+/** A flow tile of one-way Major roads; each line is [x, y, x, y, ...]. */
+function flowTile(lines) {
+  const writer = new PbfWriter();
+  writer.writeMessage(3, writeFlowLayer, lines);
+  return writer.finish();
+}
+function writeFlowLayer(lines, layer) {
+  layer.writeVarintField(15, 2);
+  layer.writeStringField(1, 'Traffic flow');
+  layer.writeVarintField(5, 4096);
+  layer.writeStringField(3, 'traffic_level');
+  layer.writeMessage(4, (_, value) => value.writeDoubleField(3, 0.6), null);
+  layer.writeStringField(3, 'road_type');
+  layer.writeMessage(
+    4,
+    (_, value) => value.writeStringField(1, 'Major road'),
+    null,
+  );
+  layer.writeStringField(3, 'traffic_road_coverage');
+  layer.writeMessage(
+    4,
+    (_, value) => value.writeStringField(1, 'one_side'),
+    null,
+  );
+  for (const xy of lines) {
+    // MoveTo one point, LineTo the rest, as zigzag deltas.
+    const geometry = [9];
+    for (let i = 0; i < xy.length; i++) {
+      if (i === 2) geometry.push(2 | ((xy.length / 2 - 1) << 3));
+      const delta = xy[i] - (i < 2 ? 0 : xy[i - 2]);
+      geometry.push((delta << 1) ^ (delta >> 31));
+    }
+    layer.writeMessage(
+      2,
+      (_, feature) => {
+        feature.writeVarintField(3, 2);
+        feature.writePackedVarint(2, [0, 0, 1, 1, 2, 2]);
+        feature.writePackedVarint(4, geometry);
+      },
+      null,
+    );
+  }
+}
+test('TomTom sides clipped by their tile and the view pair only with other lines', async () => {
+  // A one-way hairpin turning in the tile buffer, its arms one tile unit
+  // (about 2 m) apart, and a separate opposite pair. The tile clip cuts the
+  // hairpin into two arms; the view clip then cuts every line again.
+  const lines = [
+    [500, 1000, 4300, 1000, 4300, 1001, 500, 1001],
+    [-200, 3000, 4300, 3000],
+    [4300, 3001, -200, 3001],
+  ];
+  const source = createFlowTileSource({
+    fetchImpl: async () => new Response(flowTile(lines)),
+  });
+  const tile = tileToBBox(12, 935, 1686);
+  const west = tile.west + (tile.east - tile.west) * 0.2;
+  const { segments } = await source.fetchFlowDetail({
+    ...tile,
+    west,
+    east: tile.east - 1e-9,
+    south: tile.south + 1e-9,
+  });
+  assert.equal(segments.length, 4);
+  assert.ok(
+    segments.every((s) => s.coords.every(([lon]) => lon >= west - 1e-10)),
+  );
+  assert.deepEqual(
+    flowSegmentsToRoads(segments).map((road) => road.densityWeight ?? 1),
+    [1, 1, 0.5, 0.5],
+  );
 });
 test('bearing and distance reject nearby crossing and separate OSM roads', () => {
   const parallel = {
