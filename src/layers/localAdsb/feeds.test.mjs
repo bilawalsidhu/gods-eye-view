@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { LOCAL_RECEIVERS_URL, createLocalReceiverFeeds } from './feeds.js';
+import {
+  createLocalAdsbAltitudeGate,
+  gateLocalAdsbAltitude,
+} from '../../sources/adsbRecords.js';
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -98,6 +102,75 @@ test('configured feeds poll every second between start and stop, on the browser 
   assert.equal(calls.length, 3, 'no polling once stopped');
   assert.equal(feeds.getState().polling, false);
   assert.equal(seen.at(-1), false);
+});
+
+test('transport jitter rebases liveness without inventing altitude observations', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const base = 1_000_000;
+  const report = (altitudeFt, at, messages) =>
+    aircraft({
+      altitudeFt,
+      altitudeObservedAt: null,
+      feedId: 'feed-1',
+      feedSnapshotAt: at,
+      messageCount: messages,
+      lastPositionAt: at,
+      lastMessageAt: at,
+    });
+  const cachedBad = payload([report(108_800, base + 1_000, 2)], base + 1_000);
+  const { fetchImpl } = route([
+    payload([report(35_000, base, 1)], base),
+    cachedBad,
+    cachedBad,
+    cachedBad,
+    payload([report(108_800, base + 8_000, 3)], base + 8_000),
+    payload([report(108_800, base + 9_000, 4)], base + 9_000),
+  ]);
+  let clock = base;
+  const feeds = createLocalReceiverFeeds({ fetchImpl, now: () => clock });
+  t.after(() => feeds.destroy());
+  const gate = createLocalAdsbAltitudeGate();
+  feeds.start();
+  await flush();
+  gateLocalAdsbAltitude(feeds.getState().records[0], gate, clock);
+  for (const delay of [20, 740, 5_500]) {
+    clock = base + 1_000 + delay;
+    t.mock.timers.tick(1_000);
+    await flush();
+    const record = feeds.getState().records[0];
+    assert.equal(
+      record.lastMessageAt,
+      clock,
+      'transport clock changes on every receipt',
+    );
+    assert.equal(
+      record.feedSnapshotAt,
+      base + 1_000,
+      'raw source clock survives rebasing',
+    );
+    assert.equal(record.altitudeObservedAt, null);
+    const held = gateLocalAdsbAltitude(record, gate, clock);
+    assert.equal(held.altitudeFt, 35_000);
+    assert.equal(held.altitudeQuality, 'held-after-rejection');
+  }
+  assert.equal(
+    gate.rejected,
+    1,
+    'cached value produces one refusal despite >500 ms latency swings',
+  );
+  for (const at of [base + 8_000, base + 9_000]) {
+    clock = at;
+    t.mock.timers.tick(1_000);
+    await flush();
+    const result = gateLocalAdsbAltitude(
+      feeds.getState().records[0],
+      gate,
+      clock,
+    );
+    assert.equal(result.altitudeFt, at === base + 8_000 ? 35_000 : 108_800);
+    if (at === base + 9_000)
+      assert.equal(result.altitudeQuality, 'inferred-reanchor');
+  }
 });
 
 test('an aircraft a feed drops is kept until 60 s after its last message', async (t) => {
