@@ -18,8 +18,10 @@ import {
   drawOf,
   findCamera,
   findGlobe,
+  findInput,
   findQuery,
 } from '../render/rendererOf.js';
+import { drawnItemTarget, followOnDoubleClick } from '../data/stockFollow.js';
 import { cssColor } from '../render/color.js';
 import { markBaseTileset } from '../render/baseTilesets.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
@@ -88,6 +90,28 @@ function libraryRowControls(getExtent, onZoom, onRemove, legend = []) {
  * given; otherwise the manifest's static `display.legend` (a tile layer's
  * colour scale). Labels travel with the colours, so colour is never alone.
  */
+/**
+ * A double-click on one of a library layer's drawn items follows it (a
+ * point) or zooms to it (a line or area), as the default renderer did for
+ * the entities they were; null on a scene that takes no input.
+ * @param {object} viewer
+ * @param {string} name The layer, for warnings.
+ * @param {() => boolean} enabled
+ * @param {(hit: {set: string, id: string}) => object|null|undefined} itemFor
+ *   The item a hit names, if it is the layer's.
+ */
+function libraryDoubleClick(viewer, name, enabled, itemFor) {
+  const input = viewer ? findInput(viewer) : null;
+  if (!input) return null;
+  return followOnDoubleClick({
+    viewer,
+    inputFor: () => input,
+    name,
+    enabled,
+    targetFor: (hit) => drawnItemTarget(hit.set, itemFor(hit)),
+  });
+}
+
 export function colorByLegend(display, counts = null) {
   const colorBy = display?.colorBy;
   if (!colorBy)
@@ -483,9 +507,13 @@ export function createLibraryTileLayer(
   let outlineCount = 0;
   let outlineEpoch = 0;
   let outlineBuilds = 0;
+  /** The outline's rings by item id, for a double-click to zoom to. */
+  let outlineItems = new Map();
+  let outlineZoom = null;
 
   function removeOutline() {
     outlineEpoch += 1;
+    outlineItems = new Map();
     try {
       outline?.dispose();
     } catch {
@@ -510,27 +538,27 @@ export function createLibraryTileLayer(
       );
       if (epoch !== outlineEpoch || !enabled || !rings.length) return;
       const color = cssColor(OUTLINE_COLOR);
+      // Pickable, as the polyline entities were: a double-click on a
+      // border zooms to it.
       const set = drawOf(viewer).lines({
         id: `${id}:outline:${++outlineBuilds}`,
-        pickable: false,
       });
+      const items = rings.map((ring, index) => ({
+        id: String(index),
+        positions: ring.map(([lon, lat]) => fromDegrees(lon, lat, 0)),
+        widthPx: OUTLINE_WIDTH_PX,
+        mode: 'draped',
+        clampTo: 'both',
+        style: { kind: 'solid', color },
+      }));
       try {
-        set.set(
-          rings.map((ring, index) => ({
-            id: String(index),
-            positions: ring.map(([lon, lat]) => fromDegrees(lon, lat, 0)),
-            widthPx: OUTLINE_WIDTH_PX,
-            mode: 'draped',
-            clampTo: 'both',
-            style: { kind: 'solid', color },
-            pickable: false,
-          })),
-        );
+        set.set(items);
       } catch (error) {
         set.dispose();
         throw error;
       }
       outline = set;
+      outlineItems = new Map(items.map((item) => [item.id, item]));
       outlineCount = rings.length;
       if (outlineMode !== 'bbox')
         registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
@@ -626,6 +654,13 @@ export function createLibraryTileLayer(
       const off = mapStackController?.subscribe?.(followMap);
       unsubscribeMap = typeof off === 'function' ? off : null;
       void drawOutline();
+      if (outlineMode && !outlineZoom)
+        outlineZoom = libraryDoubleClick(
+          viewer,
+          id,
+          () => enabled,
+          (hit) => (hit.set === outline?.id ? outlineItems.get(hit.id) : null),
+        );
       requestRender(`library-tiles:${entry.id}`);
     },
     async disable() {
@@ -634,6 +669,8 @@ export function createLibraryTileLayer(
       unsubscribeMap = null;
       detach();
       removeOutline();
+      outlineZoom?.destroy();
+      outlineZoom = null;
       requestRender(`library-tiles:${entry.id}`);
     },
     async destroy() {
@@ -642,6 +679,8 @@ export function createLibraryTileLayer(
       unsubscribeMap = null;
       detach();
       removeOutline();
+      outlineZoom?.destroy();
+      outlineZoom = null;
       viewer = null;
     },
     getStats() {
@@ -728,6 +767,9 @@ export function createLibraryViewLayer(
   let enabled = false;
   /** The sets drawing the current view's features, or null. */
   let drawn = null;
+  /** Each build's items by set id, then item id, for a double-click. */
+  const itemsOf = new WeakMap();
+  let stockFollow = null;
   let builds = 0;
   let controller = null;
   let timer = null;
@@ -758,6 +800,8 @@ export function createLibraryViewLayer(
   }
 
   function clear() {
+    // Removing the entities ended the default renderer's follow of one.
+    stockFollow?.stop();
     disposeSets(drawn);
     drawn = null;
     loadedKey = null;
@@ -829,6 +873,19 @@ export function createLibraryViewLayer(
       sets.fills.set(fills);
       sets.lines.set(lines);
       sets.dots.set(dots);
+      itemsOf.set(
+        sets,
+        new Map(
+          [
+            [sets.fills.id, fills],
+            [sets.lines.id, lines],
+            [sets.dots.id, dots],
+          ].map(([setId, list]) => [
+            setId,
+            new Map(list.map((item) => [item.id, item])),
+          ]),
+        ),
+      );
     } catch (caught) {
       disposeSets(sets);
       throw caught;
@@ -921,6 +978,8 @@ export function createLibraryViewLayer(
       const previous = drawn;
       drawn = sets;
       for (const set of Object.values(sets)) set.show = true;
+      // Replacing the entities ended the default renderer's follow of one.
+      if (previous) stockFollow?.stop();
       disposeSets(previous);
       count = result.features.length;
       truncated = result.truncated;
@@ -972,18 +1031,28 @@ export function createLibraryViewLayer(
       registerDynamicCredit(viewer, libraryCredit(entry));
       removeMoveEnd?.();
       removeMoveEnd = findCamera(viewer)?.on('moveEnd', schedule) ?? null;
+      stockFollow ??= libraryDoubleClick(
+        viewer,
+        id,
+        () => enabled,
+        (hit) => (drawn ? itemsOf.get(drawn)?.get(hit.set)?.get(hit.id) : null),
+      );
       await refresh();
     },
     async disable() {
       enabled = false;
       stop();
       clear();
+      stockFollow?.destroy();
+      stockFollow = null;
       render();
     },
     async destroy() {
       enabled = false;
       stop();
       clear();
+      stockFollow?.destroy();
+      stockFollow = null;
       viewer = null;
     },
     getStats() {

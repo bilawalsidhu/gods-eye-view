@@ -157,6 +157,8 @@ test('a bbox outline draws on the ground with the drape, and goes with it', asyn
   const [ring] = [...set.items.values()];
   assert.equal(ring.mode, 'draped');
   assert.equal(ring.positions.length, 5);
+  assert.notEqual(set.spec.pickable, false, 'picked, as its entity was');
+  assert.notEqual(ring.pickable, false);
   assert.equal(layer.getDiagnostics().outlineRings, 1);
   await layer.disable();
   assert.equal(set.disposed, true);
