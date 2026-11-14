@@ -9,6 +9,7 @@ import {
   presentLibraryProperties,
   validLibraryGeometry,
 } from './formats.js';
+import { LIBRARY_ENTRIES } from './catalog.js';
 import { validateLibraryManifest } from './manifest.js';
 
 const point = (lon, lat, properties = {}) => ({
@@ -300,4 +301,78 @@ test('a colorBy field, nested or not, becomes the flat colour key', () => {
     },
   );
   assert.equal(properties.__gevColorKey, 'Wildfires');
+});
+
+test('SPC Day 1 catalog entry presents ranked NOAA polygon risk categories', async () => {
+  const spc = LIBRARY_ENTRIES.find(
+    ({ id }) => id === 'spc-day1-convective-outlook',
+  );
+  assert.ok(spc, 'SPC Day 1 entry must be registered in the catalog');
+  const url =
+    'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson';
+  assert.equal(spc.source.url, url);
+  assert.equal(spc.source.format, 'geojson');
+  assert.equal(spc.source.fetch, 'browser-direct');
+  assert.equal(spc.source.cacheSeconds, 900);
+
+  // The DN values and published fills follow SPC's categorical risk scale.
+  const categories = [
+    ['TSTM', 2, 'General thunderstorms', '#c1e9c1'],
+    ['MRGL', 3, 'Marginal', '#66a366'],
+    ['SLGT', 4, 'Slight', '#ffe066'],
+    ['ENH', 5, 'Enhanced', '#ffa366'],
+    ['MDT', 6, 'Moderate', '#e06666'],
+    ['HIGH', 8, 'High', '#ee99ee'],
+  ];
+  const valid = '2026-11-14T12:00:00Z';
+  const expires = '2026-11-15T12:00:00Z';
+  const upstream = {
+    type: 'FeatureCollection',
+    features: categories.map(([key, dn, label], index) => ({
+      type: 'Feature',
+      properties: {
+        LABEL: key,
+        LABEL2: label,
+        DN: dn,
+        VALID_ISO: valid,
+        EXPIRE_ISO: expires,
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [index - 120, 35],
+            [index - 119.75, 35],
+            [index - 119.75, 35.25],
+            [index - 120, 35],
+          ],
+        ],
+      },
+    })),
+  };
+
+  let requestedUrl;
+  const collection = await loadLibraryDataset(spc, async (requested) => {
+    requestedUrl = requested;
+    return JSON.stringify(upstream);
+  });
+  assert.equal(requestedUrl, url, 'the browser requests the SPC feed');
+  assert.equal(collection.truncated, false);
+  const expected = [...categories].reverse();
+  assert.deepEqual(
+    collection.features.map(({ properties }) => [
+      properties.__gevColorKey,
+      properties.name,
+    ]),
+    expected.map(([key, , label]) => [key, label]),
+    'higher-risk categories stay first and use their own label',
+  );
+  assert.equal(collection.features[0].properties.__gevRank, 600);
+  assert.equal(collection.features.at(-1).properties.__gevRank, 0);
+  assert.deepEqual(collection.features[0].properties.__gevDetails, [
+    `VALID_ISO: ${valid}`,
+    `EXPIRE_ISO: ${expires}`,
+  ]);
+  for (const [key, , , color] of categories)
+    assert.equal(spc.display.colorBy.colors[key], color, key);
 });
