@@ -1050,10 +1050,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Pistes extend the generated layer enums and alias hint; voice geometry
   // adds the analyst area scopes and the osm-places layer.
   // control_cockpit states the own-layer entry rule (Contacts not required).
-  assert.equal(block.length, 31372, 'serialized tool schema length drifted');
+  // PennDOT Traffic Cams extends the generated layer enums and alias hints.
+  assert.equal(block.length, 31418, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '7f593e78c232db972b04441f830b6a60f93916a6e5bc5a68eca7422cd1035508',
+    '6f246155314037e30232bc2ab54e60d65beff33245df8acf8cb0857d457e976c',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

@@ -12,6 +12,55 @@ export const ALLOCATION_STRATEGIES = Object.freeze([
   ALLOCATION_WEIGHTED,
 ]);
 
+/** Ambient camera names yield to icons outside city views. */
+export const CAMERA_LABEL_MAX_ALTITUDE_M = 30_000;
+
+export function cameraLabelPolicy(altitudeM) {
+  if (!Number.isFinite(altitudeM) || altitudeM >= CAMERA_LABEL_MAX_ALTITUDE_M)
+    return { limit: 0, spacingPx: 200 };
+  if (altitudeM >= 15_000) return { limit: 12, spacingPx: 200 };
+  if (altitudeM >= 5_000) return { limit: 15, spacingPx: 160 };
+  return { limit: 17, spacingPx: 120 };
+}
+
+export function detectionLabelVisibleAtAltitude(type, altitudeM) {
+  return type !== 'CAM' || cameraLabelPolicy(altitudeM).limit > 0;
+}
+
+/** Cap camera names independently of detection density and other label types. */
+export function limitCameraLabelCandidates(candidates, altitudeM, incumbents) {
+  if (!candidates.some((candidate) => candidate.type === 'CAM'))
+    return candidates;
+  const policy = cameraLabelPolicy(altitudeM);
+  const cameras = candidates.filter((candidate) => candidate.type === 'CAM');
+  cameras.sort(
+    (a, b) =>
+      Number(incumbents?.has(b.key) || false) -
+        Number(incumbents?.has(a.key) || false) ||
+      a.centerDistance - b.centerDistance ||
+      String(a.key).localeCompare(String(b.key)),
+  );
+  const kept = [];
+  const keys = new Set();
+  for (const candidate of cameras) {
+    if (kept.length >= policy.limit) break;
+    if (
+      kept.some(
+        (other) =>
+          (candidate.screenX - other.screenX) ** 2 +
+            (candidate.screenY - other.screenY) ** 2 <
+          policy.spacingPx ** 2,
+      )
+    )
+      continue;
+    kept.push(candidate);
+    keys.add(candidate.key);
+  }
+  return candidates.filter(
+    (candidate) => candidate.type !== 'CAM' || keys.has(candidate.key),
+  );
+}
+
 // The keyhole's default 1% outside opacity is appropriate for text, but it
 // made side aircraft brackets effectively disappear while the same contacts
 // remained eligible. AIR geometry therefore gets a readable floor, without

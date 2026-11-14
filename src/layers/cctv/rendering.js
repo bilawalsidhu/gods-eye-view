@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -10,7 +11,7 @@ import {
   ACTIVE_COVERAGE_EDGE,
   IDLE_COVERAGE_EDGE_MUTED,
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL,
-  VIEW_CELL_PX,
+  cctvViewDensity,
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
 } from './policy.js';
@@ -153,7 +154,7 @@ export function createRendering({
    *
    * The same pass thins the view so a large catalog stays readable and cheap:
    * icons well off screen hide, and each camera competes for a world-anchored
-   * cell sized to VIEW_CELL_PX at its distance (healthiest first, then a stable
+   * cell sized for the view height at its distance (healthiest first, then a stable
    * id order). The active camera shows whenever it is above the horizon
    * and near the screen, even in a crowded cell. The shown records become
    * `_viewRecords`, the working set for geometry, cards and the camera picker;
@@ -194,11 +195,14 @@ export function createRendering({
     const cz = viewer.z * inverseRadii.z;
     const limbSquared = cx * cx + cy * cy + cz * cz - 1;
     const activeId = layerState._activeCameraId;
+    const density = cctvViewDensity(camera.positionCartographic?.height);
     const project = screenProjector(scene, camera, width, height);
     const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
-    const shown = [];
+    let shown = [];
     const cells = new Map();
     for (const record of layerState._records) {
+      if (!cameraIsEnabled(record.camera, layerState._cameraCategories))
+        continue;
       const position = record.billboard?.position;
       if (!position) continue;
       const vx = position.x * inverseRadii.x - cx;
@@ -223,9 +227,16 @@ export function createRendering({
       const dy = position.y - viewer.y;
       const dz = position.z - viewer.z;
       const cellM =
-        VIEW_CELL_PX *
+        density.cellPx *
         metresPerPixelPerMetre *
         Math.sqrt(dx * dx + dy * dy + dz * dz);
+      record.viewScreenX = screen.x;
+      record.viewScreenY = screen.y;
+      record.viewOnScreen =
+        screen.x >= 0 &&
+        screen.x <= width &&
+        screen.y >= 0 &&
+        screen.y <= height;
       if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
         record.viewPass = pass;
         shown.push(record);
@@ -239,6 +250,48 @@ export function createRendering({
     for (const { record } of cells.values()) {
       record.viewPass = pass;
       shown.push(record);
+    }
+    if (density.separationPx > 0) {
+      // World cells keep winners steady during a pan. A screen-space pass
+      // also handles tilted views, where different ground cells can overlap.
+      shown.sort(
+        (a, b) =>
+          Number(b.camera.id === activeId) - Number(a.camera.id === activeId) ||
+          Number(b.viewOnScreen) - Number(a.viewOnScreen) ||
+          viewRank(a) - viewRank(b),
+      );
+      const grid = new Map();
+      const kept = [];
+      const spacing = density.separationPx;
+      for (const record of shown) {
+        const x = record.viewScreenX;
+        const y = record.viewScreenY;
+        const col = Math.floor(x / spacing);
+        const row = Math.floor(y / spacing);
+        let crowded = kept.length >= density.maxIcons;
+        for (let dx = -1; dx <= 1 && !crowded; dx++) {
+          for (let dy = -1; dy <= 1 && !crowded; dy++) {
+            for (const other of grid.get(`${col + dx}:${row + dy}`) || []) {
+              if (
+                (other.viewScreenX - x) ** 2 + (other.viewScreenY - y) ** 2 <
+                spacing ** 2
+              ) {
+                crowded = true;
+                break;
+              }
+            }
+          }
+        }
+        if (crowded && record.camera.id !== activeId) {
+          record.viewPass = 0;
+          continue;
+        }
+        kept.push(record);
+        const key = `${col}:${row}`;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(record);
+      }
+      shown = kept;
     }
     for (const record of layerState._records) {
       const bb = record.billboard;

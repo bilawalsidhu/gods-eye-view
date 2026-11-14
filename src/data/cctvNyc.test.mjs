@@ -377,6 +377,9 @@ for (const [label, flag] of [
 
 test('the shared catalog slots are not raised to make room for this pack', () => {
   assert.equal(CCTV_SHARED_SOURCE_SLOTS, 4000);
+});
+
+test('NYC keeps its own default pack budget', () => {
   assert.equal(DEFAULT_NYC_MAX_SOURCES, 250);
 });
 

@@ -3960,5 +3960,6 @@
   "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
   "Reload": "إعادة التحميل",
   "Retry": "إعادة المحاولة",
-  "Reset view": "إعادة ضبط العرض"
+  "Reset view": "إعادة ضبط العرض",
+  "PennDOT Traffic Cams": "كاميرات المرور في PennDOT"
 }

@@ -1,3 +1,4 @@
+import { cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import { CCTV_FOCUS_RESULT } from './policy.js';
 
@@ -20,6 +21,8 @@ export function createNavigation({
 
     let best = null;
     for (const record of layerState._records) {
+      if (!cameraIsEnabled(record.camera, layerState._cameraCategories))
+        continue;
       const distKm = parts.model.haversineKm(
         lat,
         lon,
@@ -40,8 +43,14 @@ export function createNavigation({
    */
 
   function openingCameraId() {
+    const nearest = nearestCameraIdToViewer();
+    if (nearest) return nearest;
+    // The static fallback must also respect the category toggles: a PennDOT
+    // category turned off leaves the curated catalog as the opening pool.
     return (
-      nearestCameraIdToViewer() || layerState._records[0]?.camera?.id || null
+      layerState._records.find(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      )?.camera.id || null
     );
   }
 
@@ -148,14 +157,18 @@ export function createNavigation({
       }
     }
 
+    const records = layerState._records.filter(({ camera }) =>
+      cameraIsEnabled(camera, layerState._cameraCategories),
+    );
+    if (!records.length) return;
     const nextIdx = cctvCycleIndex(
-      layerState._records.findIndex(
+      records.findIndex(
         (record) => record.camera.id === layerState._activeCameraId,
       ),
       1,
-      layerState._records.length,
+      records.length,
     );
-    parts.selection.setActiveCamera(layerState._records[nextIdx].camera.id);
+    parts.selection.setActiveCamera(records[nextIdx].camera.id);
     layerState._lastHopAt = nowMs;
   }
 

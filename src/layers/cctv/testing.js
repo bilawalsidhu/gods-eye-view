@@ -1,3 +1,4 @@
+import { cameraCategoryCounts, cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 
 export function createTesting({ state: layerState, services, parts, source }) {
@@ -91,9 +92,11 @@ export function createTesting({ state: layerState, services, parts, source }) {
     coverageMode = 'on',
     showProjection = false,
     healthById = new Map(),
+    cameraCategories = { general: true, penndot: true },
     openingCameraProvisional = false,
   } = {}) {
     layerState._viewer = viewer;
+    layerState._cameraCategories = { ...cameraCategories };
     layerState._records = Array.isArray(records) ? records : [];
     layerState._recordById = new Map(
       layerState._records

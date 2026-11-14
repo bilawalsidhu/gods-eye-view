@@ -5,18 +5,26 @@ export const DEFAULT_AUSTIN_ROWS_URL =
 /** Default cap on Austin cameras after distance-based prioritization. */
 export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
 /**
+/**
  * Slots every pack shares round-robin before any reservation applies. A
- * reserved pack (Québec, World) only takes capacity above this floor, so a
- * cap at or below it thins every region evenly (see cap.js).
+ * reserved pack (Québec, World, and opt-in statewide 511PA) only takes
+ * capacity above this floor, so a cap at or below it thins every region
+ * evenly (see cap.js).
  */
 export const CCTV_SHARED_SOURCE_SLOTS = 4000;
 /**
  * Catalog-wide default: the 4,000 shared slots plus room reserved for the
- * 1,120 Québec and 2,230 World image locations.
+ * 1,120 Québec, 2,230 World image, and up to 2,000 opt-in 511PA locations,
+ * and room for the combined shipped pack budgets, including statewide
+ * Pennsylvania, rather than thinning a new statewide feed to a few hundred
+ * cameras. Operators can still choose a smaller shared budget for
+ * constrained installations.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 7350;
+export const DEFAULT_CCTV_MAX_SOURCES = 12000;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
-export const CCTV_MAX_SOURCES_CEILING = 8000;
+export const CCTV_MAX_SOURCES_CEILING = 20000;
+/** Full current 511PA catalog, with room for growth before its own cap. */
+export const DEFAULT_PENNDOT_MAX_SOURCES = 2000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */

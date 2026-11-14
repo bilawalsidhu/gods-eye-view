@@ -468,6 +468,10 @@ export const DATA_CREDITS = [
       'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
   },
   {
+    key: '511pa-cctv',
+    html: 'Pennsylvania traffic cameras: images © <a href="https://511pa.com/cctv" target="_blank" rel="noopener">PennDOT / 511PA</a>. Locations and availability from 511PA; camera direction may change.',
+  },
+  {
     key: 'gbfs',
     html:
       'Bikeshare availability: GBFS operator feeds ' +

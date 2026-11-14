@@ -434,7 +434,8 @@
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "server/providers/cctv/penndot.js"
     ],
     "external": []
   },
@@ -2185,7 +2186,8 @@
       "src/i18n/locales/sv.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/cctv/categories.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -3817,7 +3819,9 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/layers/cctv/categories.js",
+      "src/app/layers/cameraCategories.js"
     ],
     "external": [
       "hls.js",
@@ -4535,7 +4539,9 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/cctv/categories.js",
+      "src/app/layers/cameraCategories.js"
     ],
     "external": [
       "hls.js",

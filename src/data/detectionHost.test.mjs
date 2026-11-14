@@ -366,6 +366,81 @@ function settleFrame(env) {
   env.postRender.raise();
 }
 
+test('dense camera names tighten on scroll while camera brackets and other labels stay visible', () => {
+  const env = installEnvironment({ width: 1440, height: 1000 });
+  const objects = Array.from({ length: 30 }, (_, i) => ({
+    position: new Cesium.Cartesian3(
+      -0.85 + (i % 6) * 0.32,
+      -0.8 + Math.floor(i / 6) * 0.36,
+      6_356_752,
+    ),
+    sourceId: `camera-${i}`,
+    id: `CAMERA-${i}`,
+    type: 'CAM',
+  }));
+  objects.push({
+    position: new Cesium.Cartesian3(0.9, 0.9, 6_356_752),
+    sourceId: 'aircraft',
+    id: 'AIRCRAFT',
+    type: 'AIR',
+  });
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(
+      env.viewer,
+      [{ id: 'cameras', getDetectableObjects: () => objects }],
+      () => {},
+    );
+    setMode('DENSE');
+    const paint = (height, elapsed = 250) => {
+      env.viewer.camera.positionCartographic.height = height;
+      env.viewer.camera.positionWC.z = 10_000_000 + height;
+      env.ctx.calls.length = 0;
+      env.advance(elapsed);
+      env.postRender.raise();
+      return new Set(
+        env.ctx.calls
+          .filter(
+            ([name, text]) =>
+              name === 'fillText' && String(text).startsWith('CAMERA-'),
+          )
+          .map(([, text]) => text),
+      );
+    };
+    paint(500);
+    const close = paint(500);
+    assert.ok(close.size > 0 && close.size <= 17);
+    assert.ok(paint(7500).size <= 15);
+    assert.ok(
+      paint(20000, 1).size <= 12,
+      'a cap reduction applies even before the next solve',
+    );
+    assert.equal(
+      paint(35000, 1).size,
+      0,
+      'zooming out removes even fading camera names immediately',
+    );
+    paint(35000);
+    assert.equal(
+      getDetectionDiagnostics().visibleCount,
+      objects.length,
+      'all camera brackets remain',
+    );
+    assert.ok(
+      env.ctx.calls.some(
+        ([name, text]) => name === 'fillText' && text === 'AIRCRAFT',
+      ),
+    );
+    paint(500, 1500);
+    assert.ok(
+      paint(500).size > 0,
+      'camera names return after the normal arbiter cooldown',
+    );
+  } finally {
+    env.cleanup();
+  }
+});
+
 test('detection lifecycle re-hosts unchanged painters behind the sole host listener', () => {
   // Opts into the telemetry banner: this test reads it as the repaint probe.
   const env = installEnvironment({ search: '?detectDebug=1' });

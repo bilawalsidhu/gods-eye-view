@@ -1548,6 +1548,16 @@ this can take longer than simply revealing hidden entities. Destruction clears
 the parsed cache as well. A disable during loading cannot leave a completed
 build hidden in the scene.
 
+The Cameras data group has independent **Cameras** and **PennDOT Traffic Cams**
+switches. The latter contains only the statewide 511PA catalog; curated webcams
+and manually configured webcams remain in Cameras. Either category can be enabled
+alone or both together. They share one
+camera viewer, geometry/media owner and playback limits. The picker, cycling,
+nearest-camera action, detection and coverage honor the enabled categories;
+switching off a category releases its active camera without changing the other
+category. Counts are reported separately. Share token `9` preserves PennDOT's
+switch and mirrors the existing CCTV viewer options; token `c` keeps Cameras.
+
 CCTV exposes a factory through `./layers/cctv`. Catalog and health requests,
 frame/media URLs, camera records, ground placement, geometry queues, playback,
 projection, cards, calibration and interaction have separate components. The
@@ -1570,6 +1580,16 @@ keeps one camera per ground cell sized to the view, preferring a healthy feed,
 and the cells are anchored to the ground so a pan keeps the same cameras. The
 active camera always shows. Ground placement and coverage geometry load only
 for the cameras in view, with at most two attempts per camera and view regime.
+Marker spacing grows above 25 km viewer altitude, with overview caps of 160,
+80, 40 and 20 cameras at 25 km, 100 km, 500 km and 2,000 km respectively.
+A screen-space spacing pass also prevents overlapping markers in tilted views.
+Ambient thumbnails drop to eight at 50 km and hide at 100 km; zooming back in
+restores city detail. The full catalog and selected feed remain available.
+Ambient camera name callouts use a stricter text-only budget: at most 17 below
+5 km viewer altitude, 15 below 15 km, 12 below 30 km, and none at or above
+30 km. Minimum anchor spacing grows from 120 to 200 pixels. These limits apply
+even at maximum detection density and while old labels fade; camera icons,
+brackets and the selected camera's own title retain their existing behavior.
 The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
@@ -2374,10 +2394,41 @@ id-hash fallback at low confidence.
 
 Once enabled, the 250 cameras nearest the five borough cores load.
 `CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The default catalog limit is
-7,350: 4,000 shared round-robin slots, plus room above them for the 1,120
-Québec locations and 2,230 World image sources. Lower explicit
-`CCTV_MAX_SOURCES` values are honored; reservations only use the capacity
-above the 4,000 shared slots.
+12,000: 4,000 shared round-robin slots, plus room above them for the 1,120
+Québec locations, the 2,230 World image sources and the opt-in 511PA pack.
+Lower explicit `CCTV_MAX_SOURCES` values are honored; reservations only use the capacity
+
+## Pennsylvania 511PA cameras and expanded catalog capacity
+
+The opt-in `511pa` pack (`CCTV_511PA_ENABLED=1`) loads statewide camera metadata, following
+all 100-row pages of the public 511PA catalog. Published WGS84 coordinates locate
+the markers; blocked or hidden views are excluded, and missing video falls back
+to still images. `CCTV_511PA_COUNTIES` can restrict the catalog to one or more
+counties; `all` is the default once enabled. Leave the enabled flag unset to avoid upstream requests. `CCTV_511PA_MAX_SOURCES` defaults to 2,000, above
+the entire available statewide catalog checked on November 3, 2026 (1,445 views).
+Camera availability can change; the catalog flags do not prove every stream is
+working. Traffic direction labels do not establish a PTZ camera's heading.
+
+The shared catalog budget now defaults to 12,000, with a configurable hard
+ceiling of 20,000. The default fits the combined shipped source-pack budgets,
+including full Pennsylvania coverage when enabled, without granting a special
+allocation to one state. Explicit lower `CCTV_MAX_SOURCES` values retain the fair round-robin
+allocation and trim reporting. Metadata capacity is separate from visible
+card and live-video work: ambient cards still top out at 40, and the HLS relay
+still permits two demand-owned sessions with bounded memory and idle expiry.
+
+PennDOT video uses the public player's two-step authorization, origin headers,
+and clear fragmented MP4 HLS; signed URLs stay on the server. Snapshots remain
+available as a fallback, and authorization requests honor upstream rate limits.
+Public viewing does not grant feed-redistribution rights; see the PennDOT
+agreement and attribution details in `DATA_SOURCES.md` before public deployment.
+
+Validation: `node --test src/data/cctv*.test.mjs` checks full default pack budgets,
+large merged catalogs, explicit smaller caps, pagination, token handling and
+both HLS containers. `node scripts/qa-cctv-catalog.mjs` uses a 12,000-camera
+fixture against a running app to verify client completeness, selection of the
+last PA camera, decoded frames and bounded visible-card/frame work. It uses no
+live video tokens; `QA_BASE_URL` selects another dev or preview server.
 
 ## City of Toronto RESCU CCTV source pack
 
@@ -2394,8 +2445,8 @@ cameras return a 200 "Image Unavailable" placeholder frame instead of an error.
 By default all ~336 cameras load, nearest downtown first.
 `CCTV_TORONTO_MAX_SOURCES` sets the pack cap (8–500) and
 `CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the default
-7,350-source catalog limit with the other packs; Québec and the World image
-pack have reserved slots and the remaining sources use round-robin allocation.
+12,000-source catalog limit with the other packs; Québec, the World image
+pack and opt-in 511PA have reserved slots and the remaining sources use round-robin allocation.
 
 ## Lithuania CCTV source pack
 
@@ -6756,10 +6807,10 @@ silently demoting every later lookup for the session.
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
-  on the main road spine. `CCTV_MAX_SOURCES` defaults to 7,350: 4,000 shared
-  round-robin slots plus 3,350 reserved Québec and World image slots.
-  Reservations only use capacity above the 4,000 shared slots, so at 4,000 or
-  less every pack, Québec and World included, shares the cap round-robin.
+  on the main road spine. `CCTV_MAX_SOURCES` defaults to 12,000: 4,000 shared
+  round-robin slots plus reserved Québec, World image and opt-in 511PA slots
+  (up to 2,000 each pack budget). Reservations only use capacity above the
+  4,000 shared slots, so at 4,000 or less every pack shares the cap round-robin.
   ~1,100 cameras total, all RAW PRIOR poses, stills-first. The catalog lives for 15 minutes; once
   it expires, `/api/cctv` keeps answering from it while one background refresh reloads every
   pack, so only the very first load waits for the slowest pack (a live first load took about

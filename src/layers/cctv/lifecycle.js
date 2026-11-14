@@ -1,3 +1,4 @@
+import { cameraCategoryCounts, cameraIsEnabled } from './categories.js';
 import * as Cesium from 'cesium';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
@@ -108,6 +109,7 @@ export function createLifecycle({
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
     layerState._records = [];
+    layerState._cameraCategoryCounts = { general: 0, penndot: 0 };
     layerState._recordById = new Map();
     layerState._viewRecords = [];
     layerState._cameraIndexCache = null;
@@ -299,7 +301,12 @@ export function createLifecycle({
         layerState._recordById.set(camera.id, record);
       }
 
-      layerState._count = layerState._records.length;
+      layerState._cameraCategoryCounts = cameraCategoryCounts(
+        layerState._records,
+      );
+      layerState._count = layerState._records.filter(({ camera }) =>
+        cameraIsEnabled(camera, layerState._cameraCategories),
+      ).length;
       // No camera is picked here: enable() opens on the one nearest the
       // viewer, unless restored params selected one first.
 

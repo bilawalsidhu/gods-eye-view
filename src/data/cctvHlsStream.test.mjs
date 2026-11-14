@@ -9,6 +9,10 @@ import {
 const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
 const base = 'https://camera.example/live/list.m3u8';
+const mp4Playlist =
+  '#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-MEDIA-SEQUENCE:20\n' +
+  '#EXT-X-MAP:URI="camera_init.mp4?token=private"\n' +
+  '#EXTINF:2,\na.mp4?token=private\n#EXTINF:2,\nb.mp4?token=private\n#EXTINF:2,\nc.mp4?token=private\n';
 
 test('high-resolution HLS segments play while the retained session cache stays bounded', async (t) => {
   // Giroc publishes roughly ten-second TS segments; one measured 6,437,120
@@ -126,6 +130,241 @@ test('downloads reject redirect responses, oversized declared and chunked bodies
   );
 });
 
+test('fMP4 parser carries the initialization map through segment trimming and pins all references', () => {
+  const parsed = parseHlsMedia(mp4Playlist, base, 2);
+  assert.deepEqual(
+    parsed.map((item) => item.seq),
+    [21, 22],
+  );
+  assert.ok(parsed.every((item) => item.extension === 'mp4'));
+  assert.ok(
+    parsed.every(
+      (item) =>
+        item.initUri ===
+        'https://camera.example/live/camera_init.mp4?token=private',
+    ),
+  );
+  for (const bad of [
+    mp4Playlist.replace(
+      'camera_init.mp4?token=private',
+      '//evil.example/init.mp4',
+    ),
+    mp4Playlist.replace(
+      'camera_init.mp4?token=private',
+      'https://user@camera.example/init.mp4',
+    ),
+    mp4Playlist.replace(
+      'camera_init.mp4?token=private',
+      'http://camera.example/init.mp4',
+    ),
+    mp4Playlist.replace(
+      'camera_init.mp4?token=private',
+      'data:video/mp4,hello',
+    ),
+    mp4Playlist.replace('camera_init.mp4?token=private', 'init.ts'),
+    mp4Playlist.replace(
+      'URI="camera_init.mp4?token=private"',
+      'URI="camera_init.mp4",BYTERANGE="10@0"',
+    ),
+    mp4Playlist.replace(
+      'URI="camera_init.mp4?token=private"',
+      'URI="camera_init.mp4",URI="other.mp4"',
+    ),
+    mp4Playlist.replace('#EXTINF:2,', '#EXT-X-BYTERANGE:10@0\n#EXTINF:2,'),
+    mp4Playlist.replace(
+      '#EXT-X-VERSION:7',
+      '#EXT-X-KEY:METHOD=AES-128,URI="key"',
+    ),
+    mp4Playlist.replace(
+      '#EXT-X-VERSION:7',
+      '#EXT-X-SESSION-KEY:METHOD=AES-128,URI="key"',
+    ),
+    mp4Playlist.replace('#EXT-X-MAP:URI="camera_init.mp4?token=private"\n', ''),
+    mp4Playlist.replace('a.mp4?token=private', '//evil.example/a.mp4'),
+    mp4Playlist.replace(
+      'a.mp4?token=private',
+      'https://user@camera.example/a.mp4',
+    ),
+    mp4Playlist.replace('a.mp4?token=private', 'a.ts'),
+  ])
+    assert.throws(() => parseHlsMedia(bad, base));
+  for (const limit of [0, -1, Infinity, 1.5])
+    assert.throws(() => parseHlsMedia(mp4Playlist, base, limit));
+});
+
+test('fMP4 init is downloaded once, shares the session budget, and is served only to its lease', async () => {
+  const seen = [];
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, segments: 2, sessionBytes: 8, pollMs: 100000 },
+    fetchImpl: async (url) => {
+      seen.push(url);
+      return new Response(
+        url.endsWith('.m3u8')
+          ? mp4Playlist
+          : url.includes('_init.mp4')
+            ? 'in'
+            : 'seg',
+      );
+    },
+  });
+  try {
+    const entry = await manager.ensure('fmp4', base, 'viewer');
+    await entry.polling;
+    assert.deepEqual(manager.stats(), { sessions: 1, bytes: 8 });
+    assert.equal(seen.filter((url) => url.includes('_init.mp4')).length, 1);
+    const output = await manager.buildPlaylist(entry, 'fmp4', 'viewer');
+    assert.match(output, /#EXT-X-VERSION:7/);
+    assert.match(
+      output,
+      /#EXT-X-MAP:URI="\/api\/cctv\/media\/fmp4\/init_0\.mp4\?session=/,
+    );
+    assert.match(output, /seg_0\.mp4/);
+    assert.doesNotMatch(output, /token=private|camera\.example/);
+    assert.equal(
+      manager.getInitSegment('fmp4', entry.token, 0, 'viewer').toString(),
+      'in',
+    );
+    assert.equal(
+      manager.getInitSegment('fmp4', 'old-token', 0, 'viewer'),
+      null,
+    );
+    assert.equal(manager.getInitSegment('fmp4', entry.token, 0, 'other'), null);
+    assert.equal(manager.getSegment('fmp4', entry.token, 0, 'viewer'), null);
+    assert.equal(
+      manager.getSegment('fmp4', entry.token, 0, 'viewer', 'mp4').toString(),
+      'seg',
+    );
+    manager.release('fmp4', 'viewer');
+    assert.deepEqual(manager.stats(), { sessions: 0, bytes: 0 });
+    assert.equal(entry.initSegments.size, 0);
+    assert.equal(
+      manager.getInitSegment('fmp4', entry.token, 0, 'viewer'),
+      null,
+    );
+  } finally {
+    await manager.shutdown();
+  }
+});
+
+test('fMP4 cache evicts an unreferenced initialization object and keeps local map identity', async () => {
+  const changing =
+    mp4Playlist +
+    '#EXT-X-MAP:URI="second_init.mp4"\n#EXTINF:2,\nd.mp4\n#EXTINF:2,\ne.mp4\n';
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, sessionBytes: 8, pollMs: 100000 },
+    fetchImpl: async (url) =>
+      new Response(
+        url.endsWith('.m3u8')
+          ? changing
+          : url.includes('_init.mp4')
+            ? 'in'
+            : 'seg',
+      ),
+  });
+  try {
+    const entry = await manager.ensure('fmp4', base);
+    await entry.polling;
+    assert.deepEqual(manager.stats(), { sessions: 1, bytes: 8 });
+    assert.equal(entry.initSegments.size, 1);
+    assert.equal(manager.getInitSegment('fmp4', entry.token, 0), null);
+    assert.equal(
+      manager.getInitSegment('fmp4', entry.token, 1).toString(),
+      'in',
+    );
+    const output = await manager.buildPlaylist(entry, 'fmp4');
+    assert.match(output, /init_1\.mp4/);
+    assert.doesNotMatch(output, /init_0\.mp4/);
+  } finally {
+    await manager.shutdown();
+  }
+});
+
+test('an initialization-map change invalidates reused upstream sequences', async () => {
+  let current = mp4Playlist;
+  let resolverCameraId;
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 5 },
+    resolveUrl: async (url, _signal, cameraId) => {
+      resolverCameraId = cameraId;
+      return url;
+    },
+    fetchImpl: async (url) =>
+      new Response(url.endsWith('.m3u8') ? current : 'bytes'),
+  });
+  try {
+    const entry = await manager.ensure('fmp4', base);
+    await entry.polling;
+    current = mp4Playlist.replace('camera_init.mp4', 'second_init.mp4');
+    for (let i = 0; i < 100 && entry.nextSeq < 6; i++)
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(resolverCameraId, 'fmp4');
+    assert.equal(entry.nextSeq, 6);
+    const output = await manager.buildPlaylist(entry, 'fmp4');
+    assert.match(output, /init_0\.mp4/);
+    assert.match(
+      output,
+      /#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI="[^"\n]+init_1\.mp4/,
+    );
+    assert.match(output, /seg_5\.mp4/);
+  } finally {
+    await manager.shutdown();
+  }
+});
+
+test('fMP4 init downloads and init-plus-segment retention stay bounded', async () => {
+  for (const limits of [
+    { ...HLS_LIMITS, initBytes: 1, pollMs: 100000 },
+    { ...HLS_LIMITS, sessionBytes: 4, pollMs: 100000 },
+  ]) {
+    const manager = createHlsPuller({
+      limits,
+      fetchImpl: async (url) =>
+        new Response(
+          url.endsWith('.m3u8')
+            ? mp4Playlist
+            : url.includes('_init.mp4')
+              ? 'in'
+              : 'seg',
+        ),
+    });
+    try {
+      const entry = await manager.ensure('fmp4', base);
+      await entry.polling;
+      assert.equal(entry.failures, 1);
+      assert.equal(entry.initSegments.size, 0);
+      assert.deepEqual(manager.stats(), { sessions: 1, bytes: 0 });
+    } finally {
+      await manager.shutdown();
+    }
+  }
+});
+
+test('shutdown aborts an in-flight initialization download and cannot retain late bytes', async () => {
+  let initStarted;
+  const started = new Promise((resolve) => {
+    initStarted = resolve;
+  });
+  let initSignal;
+  const manager = createHlsPuller({
+    fetchImpl: async (url, { signal }) => {
+      if (url.endsWith('.m3u8')) return new Response(mp4Playlist);
+      initSignal = signal;
+      initStarted();
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true,
+        }),
+      );
+    },
+  });
+  const entry = await manager.ensure('fmp4', base);
+  await started;
+  await manager.shutdown();
+  assert.equal(initSignal.aborted, true);
+  assert.equal(entry.initSegments.size, 0);
+  assert.deepEqual(manager.stats(), { sessions: 0, bytes: 0 });
+});
+
 test('one session is reserved before await; disk-free cache and capacity remain bounded', async () => {
   const manager = createHlsPuller({
     limits: {
@@ -151,6 +390,7 @@ test('one session is reserved before await; disk-free cache and capacity remain 
   assert.match(text, /seg_0\.ts\?session=/);
   assert.equal(manager.getSegment('a', 'stale-token', 0), null);
   assert.equal(manager.getSegment('a', a.token, 0).length, 3);
+  assert.equal(manager.getSegment('a', a.token, 0, 'legacy', 'mp4'), null);
   manager.stop('a', 'stale-token');
   assert.equal(manager.stats().sessions, 1);
   manager.stop('a', a.token);
