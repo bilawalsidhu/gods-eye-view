@@ -87,18 +87,34 @@ test('includes active updates and drops cancellations', () => {
   assert.deepEqual(snapshot.alerts.map((item) => item.id), ['live', 'update']);
 });
 
-test('skips one malformed alert without rejecting the whole snapshot', () => {
+test('preserves comparison signs and skips control characters per alert', () => {
   const snapshot = normalizeCapSnapshot(
     payload([
       alert({
+        identifier: 'thresholds',
+        info: [
+          {
+            ...alert().info[0],
+            description: 'Gusts >60 mph; hail <1 inch.',
+          },
+        ],
+      }),
+      alert({
         identifier: 'malformed',
-        info: [{ ...alert().info[0], description: 'Gusts >60 mph' }],
+        info: [{ ...alert().info[0], description: 'Unsafe\u0001text' }],
       }),
       alert({ identifier: 'valid' }),
     ]),
     { now: Date.parse('2026-01-01T00:00:00Z') },
   );
-  assert.deepEqual(snapshot.alerts.map((item) => item.id), ['valid']);
+  assert.deepEqual(snapshot.alerts.map((item) => item.id), [
+    'thresholds',
+    'valid',
+  ]);
+  assert.equal(
+    snapshot.alerts[0].description,
+    'Gusts >60 mph; hail <1 inch.',
+  );
 });
 
 test('resolves forecast, county and fire zones with bounded concurrency and caches results', async () => {

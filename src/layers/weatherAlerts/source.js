@@ -16,7 +16,7 @@ const text = (value, max = 512) => {
     typeof value !== 'string' ||
     !value.trim() ||
     value.length > max ||
-    /[\u0000-\u0008\u000b\u000c\u000e-\u001f<>]/.test(value)
+    /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)
   )
     throw malformed();
   return value.trim();
