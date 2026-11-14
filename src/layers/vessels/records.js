@@ -31,6 +31,8 @@ export function normalizeVessel(row) {
     speed: finiteNumber(row.speed),
     course: finiteNumber(row.course),
     heading: finiteNumber(row.heading),
+    // A virtual aid to navigation: a mark with nothing physical there.
+    virtual: row.virtual === true,
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
     missedRefreshes: 0,
@@ -160,6 +162,7 @@ export class VesselRecords {
         record.speed = next.speed;
         record.course = next.course;
         record.heading = next.heading;
+        record.virtual = next.virtual;
         record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;

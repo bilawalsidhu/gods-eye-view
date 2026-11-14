@@ -251,6 +251,7 @@
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
+      "src/data/vesselTypes.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "server/providers/acartia.js",
@@ -1514,6 +1515,7 @@
     "exports": ["./layers/flights"],
     "modules": [
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
@@ -1593,6 +1595,7 @@
       "src/layers/flights/modelSpec.js",
       "src/layers/flights/policy.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
@@ -4817,6 +4820,7 @@
       "src/data/aircraftClass.js",
       "src/data/aircraftEmergency.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js"
     ],
     "external": []
@@ -5207,6 +5211,7 @@
     "exports": ["./layers/transit/standalone"],
     "modules": [
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/aircraftClass.js",
       "src/i18n/marker.js",
       "src/data/fleetModelInstances.js",
@@ -5299,6 +5304,7 @@
     "modules": [
       "src/i18n/marker.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetModelInstances.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftModelLighting.js",

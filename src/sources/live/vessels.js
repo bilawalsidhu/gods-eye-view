@@ -55,6 +55,8 @@ export function normalizeVesselObservation(row, reference = null, id = null) {
       epoch(row.last_position_epoch, 1000) ??
       epoch(Date.parse(row.last_position_UTC)),
     altitudeDatum: 'sea-surface',
+    // A virtual aid to navigation: a mark broadcast with nothing there.
+    virtual: row.virtual === true,
   };
 }
 

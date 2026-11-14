@@ -776,6 +776,8 @@
   "TANKER": "ناقلة",
   "OTHER": "أخرى",
   "VESSEL": "سفينة",
+  "AID TO NAVIGATION": "مساعدة ملاحية",
+  "VIRTUAL": "افتراضي",
   "POS: LIVE": "الموضع: مباشر",
   "POS: {time}Z": "الموضع: {time}Z",
   "AIS: --": "AIS: --",
