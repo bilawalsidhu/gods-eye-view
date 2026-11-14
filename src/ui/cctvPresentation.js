@@ -101,6 +101,10 @@ function metaText(state, enabled, activeCamera, catalogCount) {
       : '';
     // A partner-supplied feed inside a pack names its owner here.
     const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
+    // Hardware maker / product line, when the pack publishes it.
+    const hardware = activeCamera.hardwareLabel
+      ? ` · ${activeCamera.hardwareLabel}`
+      : '';
     const calBadge = activeCamera.calBadge
       ? _calBadgeLabel(activeCamera.calBadge)
       : '';
@@ -116,7 +120,7 @@ function metaText(state, enabled, activeCamera, catalogCount) {
           projection: projLabel,
           calBadge: calBadge ? ` · ${calBadge}` : '',
           provider,
-          status: `${credit}${statusMsg}`,
+          status: `${credit}${hardware}${statusMsg}`,
         },
       ),
     );

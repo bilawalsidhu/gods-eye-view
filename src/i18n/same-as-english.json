@@ -47,7 +47,9 @@
     "▲ {frp} MW",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "de": [
     "1090 MHz",
@@ -249,7 +251,9 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "es": [
     "1 min/s",
@@ -411,7 +415,9 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "fr": [
     "1 min/s",
@@ -633,7 +639,9 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "it": [
     "1 min/s",
@@ -839,7 +847,9 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "ja": [
     "1090 MHz",
@@ -905,7 +915,9 @@
     "▲ {frp} MW",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "pt": [
     "1 min/s",
@@ -1067,7 +1079,9 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "ru": [
     "1900–1945",
@@ -1104,7 +1118,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "{maker} (PTZ)"
   ],
   "sv": [
     "STATION",
@@ -1264,7 +1279,9 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "uk": [
     "1900–1945",
@@ -1295,7 +1312,8 @@
     "{division}, {country}",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "{maker} (PTZ)"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1366,7 +1384,8 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "{maker} (PTZ)"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1437,7 +1456,8 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "{maker} (PTZ)"
   ],
   "he": [
     "{speed} kn",
@@ -1537,6 +1557,8 @@
     "Ironbow",
     "ICAO: {id}",
     "MMSI: {id}",
-    "NORAD: {id}"
+    "NORAD: {id}",
+    "HW {label}",
+    "{maker} (PTZ)"
   ]
 }
