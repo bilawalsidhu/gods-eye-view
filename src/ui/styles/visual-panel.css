@@ -158,7 +158,9 @@ body.mobile-shell #pp-toggles .visual-presets {
   margin-top: 0.2rem;
 }
 
-#pp-toggles .pp-toggle-group {
+/* The card skin below is the default look; the Cyber HUD keeps its own red
+   skin for these controls (cyber.css), so the skin stands aside there. */
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-toggle-group {
   width: 100%;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.03);
@@ -167,8 +169,11 @@ body.mobile-shell #pp-toggles .visual-presets {
 }
 
 /* The header row of a card, and the lone Clean UI button. */
-#pp-toggles .pp-toggle-group > .pp-toggle-btn,
-#pp-toggles .pp-panel-body > .pp-toggle-btn {
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > .pp-toggle-btn,
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-panel-body > .pp-toggle-btn {
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -183,20 +188,20 @@ body.mobile-shell #pp-toggles .visual-presets {
   -webkit-backdrop-filter: none;
 }
 
-#pp-toggles .pp-panel-body > .pp-toggle-btn {
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-panel-body > .pp-toggle-btn {
   background: rgba(255, 255, 255, 0.03) !important;
   border: 1px solid rgba(255, 255, 255, 0.07) !important;
   border-radius: 10px !important;
 }
 
-#pp-toggles .pp-toggle-btn .pp-icon {
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-toggle-btn .pp-icon {
   width: 18px;
   font-size: 15px;
   text-align: center;
   color: rgba(199, 214, 222, 0.75);
 }
 
-#pp-toggles .pp-toggle-btn .pp-label {
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-toggle-btn .pp-label {
   color: rgba(236, 244, 248, 0.9);
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -206,9 +211,16 @@ body.mobile-shell #pp-toggles .visual-presets {
 
 /* An on/off pill at the right of every button header (Scope keeps its
    checkbox, which already says it). */
-#pp-toggles .pp-toggle-group > button.pp-toggle-btn::after,
-#pp-toggles .pp-panel-body > button.pp-toggle-btn::after {
-  content: var(--pp-pill-off, 'OFF');
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > button.pp-toggle-btn::after,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-panel-body
+  > button.pp-toggle-btn::after {
+  /* The state is the button's own (aria-pressed); the pill only shows it. */
+  content: var(--pp-pill-off, 'OFF') / '';
   margin-inline-start: auto;
   padding: 2px 8px;
   color: rgba(199, 214, 222, 0.5);
@@ -219,34 +231,62 @@ body.mobile-shell #pp-toggles .visual-presets {
   border-radius: 999px;
 }
 
-#pp-toggles .pp-toggle-group > button.pp-toggle-btn.active::after,
-#pp-toggles .pp-toggle-group > button.pp-toggle-btn[aria-pressed='true']::after,
-#pp-toggles .pp-panel-body > button.pp-toggle-btn.active::after {
-  content: var(--pp-pill-on, 'ON');
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > button.pp-toggle-btn.active::after,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > button.pp-toggle-btn[aria-pressed='true']::after,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-panel-body
+  > button.pp-toggle-btn.active::after {
+  content: var(--pp-pill-on, 'ON') / '';
   color: #7af0ff;
   border-color: rgba(54, 220, 255, 0.5);
   background: rgba(54, 220, 255, 0.1);
 }
 
-#pp-toggles .pp-toggle-btn.active .pp-icon,
-#pp-toggles .pp-toggle-btn[aria-pressed='true'] .pp-icon,
-#pp-toggles .pp-toggle-btn.active .pp-label,
-#pp-toggles .pp-toggle-btn[aria-pressed='true'] .pp-label {
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-toggle-btn.active .pp-icon,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-btn[aria-pressed='true']
+  .pp-icon,
+:root:not([data-ui-theme='cyber']) #pp-toggles .pp-toggle-btn.active .pp-label,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-btn[aria-pressed='true']
+  .pp-label {
   color: #7af0ff;
 }
 
-#pp-toggles .pp-toggle-group > .pp-toggle-btn:hover,
-#pp-toggles .pp-panel-body > .pp-toggle-btn:hover {
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > .pp-toggle-btn:hover,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-panel-body
+  > .pp-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.04) !important;
 }
 
-#pp-toggles .pp-scope-toggle input[type='checkbox'] {
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-scope-toggle
+  input[type='checkbox'] {
   margin-inline-start: auto;
 }
 
 /* Settings inside a card: separated by hairlines, no boxes of their own. */
-#pp-toggles .pp-toggle-group .pp-slider-row.visible,
-#pp-toggles
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  .pp-slider-row.visible,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
   .pp-toggle-group
   .pp-slider-row:not([class*='cyber-sonar']):is(
     .visible,
@@ -262,8 +302,14 @@ body.mobile-shell #pp-toggles .visual-presets {
 }
 
 /* The Dense button lights green elsewhere; in a card it uses the shared pill. */
-#pp-toggles .pp-toggle-group > .pp-toggle-btn.panoptic,
-#pp-toggles .pp-toggle-group > .pp-toggle-btn.active {
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > .pp-toggle-btn.panoptic,
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  .pp-toggle-group
+  > .pp-toggle-btn.active {
   color: inherit;
 }
 
@@ -295,4 +341,9 @@ body.mobile-shell #pp-toggles .visual-presets {
   color: #fff;
   border-color: rgba(54, 220, 255, 0.5);
   background: rgba(54, 220, 255, 0.06);
+}
+
+/* Clean UI is an action, not a setting, so it has no on/off pill. */
+#pp-toggles #clean-view-toggle::after {
+  content: none;
 }
