@@ -7,6 +7,10 @@ import {
   HEIGHT_SAMPLE_MAX_ALTITUDE_M,
   withinViewBounds,
 } from './policy.js';
+import {
+  TERRAIN_NEED,
+  createTerrainSurface,
+} from '../../services/terrainSurface.js';
 
 /** Surface preparation off the render path, shared by markers and history. */
 export function createHeight({ state, services, parts }) {
@@ -47,35 +51,44 @@ export function createHeight({ state, services, parts }) {
     return cameraAltitude() <= HEIGHT_SAMPLE_MAX_ALTITUDE_M;
   }
 
+  // Loaded-terrain heights come from the application's shared reader, which
+  // keeps them per point and rations the reads (services/terrainSurface.js).
+  // A layer built without one keeps its own.
+  const sharedSurface = services.ground.terrainSurface;
+  const terrainSurface = sharedSurface || createTerrainSurface();
+
   /**
    * The floor under a vehicle, and the best fallback if its own cell is cold.
    * @param {number} lat
    * @param {number} lon
+   * @param {?object} [entry] The vehicle, for a fixture floor.
+   * @param {number} [need] How much the answer matters; see TERRAIN_NEED.
    * @returns {{cell: string, height: number|null, prior: number|null}}
    */
-  const terrainPoint = new Cesium.Cartographic();
-  function requestHeight(lat, lon, entry = null) {
+  function requestHeight(lat, lon, entry = null, need = TERRAIN_NEED.PATH) {
     const coarse = coarseFloorCoord(lat, lon);
     const cell = `${coarse.lat},${coarse.lon}`;
     const fixtureFloor =
       entry?.qaFloorM ?? state._qaFixtureFloors?.get(entry?.key);
     if (Number.isFinite(fixtureFloor))
       return { cell, height: fixtureFloor, prior: null };
-    // On a terrain globe, use the loaded surface under the marker. This is
-    // synchronous cache work and does not launch a terrain request.
+    // On a terrain globe, use the loaded surface under the marker. This reads
+    // tiles already loaded and does not launch a terrain request.
     const globe = state._viewer?.scene?.globe;
     if (globe?.show === true) {
-      Cesium.Cartographic.fromDegrees(lon, lat, 0, terrainPoint);
-      const rendered = globe.getHeight?.(terrainPoint);
-      const flat =
+      if (
         state._viewer?.terrainProvider instanceof
-        Cesium.EllipsoidTerrainProvider;
-      if (Number.isFinite(rendered) || flat)
-        return {
-          cell,
-          height: (flat ? 0 : rendered) + GROUND_FLOOR_LIFT_M,
-          prior: null,
-        };
+        Cesium.EllipsoidTerrainProvider
+      ) {
+        // Nothing is asked of the terrain while the globe is flat: show the
+        // reader the flat provider, so the heights kept from the terrain
+        // before it do not come back with the terrain after it.
+        terrainSurface.observe(state._viewer);
+        return { cell, height: GROUND_FLOOR_LIFT_M, prior: null };
+      }
+      const rendered = terrainSurface.height(state._viewer, lat, lon, need);
+      if (Number.isFinite(rendered))
+        return { cell, height: rendered + GROUND_FLOOR_LIFT_M, prior: null };
     }
     const floor = cachedGroundFloor(lat, lon);
     if (Number.isFinite(floor)) {
@@ -107,6 +120,7 @@ export function createHeight({ state, services, parts }) {
   function rereadFloors() {
     state._floorTimer = null;
     if (!state._enabled) return;
+    const waitingBefore = terrainSurface.waitingCount();
     const onGround = nearGround(),
       candidates = [];
     const entries = [...state._vehicles.values()].filter(
@@ -120,6 +134,13 @@ export function createHeight({ state, services, parts }) {
         Number(b.key === state._selectedKey) -
         Number(a.key === state._selectedKey),
     );
+    // Every vehicle's own position before any trail: the first trails of a
+    // pass must not spend the budget the last markers are waiting on.
+    for (const entry of entries) {
+      const newest = entry.fixes.at(-1);
+      if (newest)
+        requestHeight(newest.lat, newest.lon, entry, TERRAIN_NEED.MARKER);
+    }
     for (const entry of entries) {
       const cells = new Map();
       const collect = (point, answer) => {
@@ -141,7 +162,12 @@ export function createHeight({ state, services, parts }) {
       };
       parts.trails.prepareEntry(entry, collect);
       const newest = entry.fixes.at(-1);
-      const answer = requestHeight(newest.lat, newest.lon, entry);
+      const answer = requestHeight(
+        newest.lat,
+        newest.lon,
+        entry,
+        TERRAIN_NEED.MARKER,
+      );
       entry.heightCell = answer.cell;
       // The selected vehicle's path also offers its history, newest segment
       // first; the vehicle's own cell is read where its newest fix is.
@@ -227,7 +253,11 @@ export function createHeight({ state, services, parts }) {
     for (const entry of entries) parts.trails.prepareEntry(entry);
     parts.rendering.requestVisibility();
     governorRequestRender('transit-floor');
-    if (state._floorAttempts++ < FLOOR_REREAD_ATTEMPTS)
+    // A pass that ran out of terrain budget before reaching every point
+    // comes back for the rest. Each pass reads its budget, and points stop
+    // falling due once the terrain settles, so this ends.
+    const waiting = terrainSurface.waitingCount() - waitingBefore;
+    if (state._floorAttempts++ < FLOOR_REREAD_ATTEMPTS || waiting > 0)
       state._floorTimer = setTimeout(rereadFloors, FLOOR_REREAD_MS);
   }
 
@@ -258,6 +288,8 @@ export function createHeight({ state, services, parts }) {
     }
     state._floorAttempts = 0;
     state._heightDirty.clear();
+    // The shared reader's heights belong to every layer still showing.
+    if (!sharedSurface) terrainSurface.clear();
   }
 
   return {
@@ -267,5 +299,7 @@ export function createHeight({ state, services, parts }) {
     anchorFloors,
     rereadFloors,
     clear,
+    /** Terrain read counters since the layer was created, for checks. */
+    terrainStats: () => terrainSurface.stats(),
   };
 }

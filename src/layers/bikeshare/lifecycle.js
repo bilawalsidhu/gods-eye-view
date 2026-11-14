@@ -44,6 +44,7 @@ export function createLifecycle({
       layerState._inFlightInfo = new Map();
       layerState._inFlightStatus = new Map();
       layerState._stationRenderMap = new Map();
+      parts.rendering?.stopHeightRefinement?.();
       layerState._clickHandler = null;
       layerState._selectedKey = null;
       layerState._selectedEntity = null;
@@ -134,6 +135,7 @@ export function createLifecycle({
 
       parts.ingestion.abortAllInFlight();
       parts.viewport.deactivateAllCities();
+      parts.rendering?.stopHeightRefinement?.();
       layerState._cityRuntime.clear();
       layerState._pointCollection.show = false;
       layerState._count = 0;
@@ -165,6 +167,7 @@ export function createLifecycle({
         layerState._cameraChangedAttached = false;
       }
       parts.ingestion.abortAllInFlight();
+      parts.rendering?.stopHeightRefinement?.();
       if (layerState._pointCollection) {
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;

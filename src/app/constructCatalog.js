@@ -175,7 +175,7 @@ export function createApplicationCatalog({
           displayParams: () => flights.getParams(),
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
-        createApplicationBikeshare({ source: sources.bikeshare }),
+        createApplicationBikeshare({ surface, source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),
         createApplicationRecentImagery({ source: sources['recent-imagery'] }),
         createApplicationOsmPlaces(),
@@ -205,7 +205,10 @@ export function createApplicationCatalog({
         }),
         createApplicationCyclones({ feed: sources.cyclones }),
         ...createOsmOverlayLayers(),
-        ...createInfrastructureLayers(localGeoJsonServices),
+        ...createInfrastructureLayers({
+          ...localGeoJsonServices,
+          terrainSurface: surface.groundFloor.terrainSurface,
+        }),
         createApplicationCables({ source: sources.cables }),
         createApplicationRail({
           surface,

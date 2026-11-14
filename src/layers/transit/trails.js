@@ -8,6 +8,7 @@ import {
 } from '../../data/contactPlayback.js';
 import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
+import { TERRAIN_NEED } from '../../services/terrainSurface.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
 const MODE_COLOR = {
@@ -72,8 +73,13 @@ export function createTrails({ state, services, parts, source }) {
       b = {};
     let vertices = 0,
       signature = '';
-    const floor = (point) => {
-      const answer = parts.height.requestHeight(point.lat, point.lon, entry);
+    const floor = (point, need = TERRAIN_NEED.PATH) => {
+      const answer = parts.height.requestHeight(
+        point.lat,
+        point.lon,
+        entry,
+        need,
+      );
       if (collect) collect(point, answer);
       return answer.height;
     };
@@ -99,12 +105,6 @@ export function createTrails({ state, services, parts, source }) {
           lon: a.lon + ((b.lon - a.lon) * i) / n,
         });
     }
-    for (let i = 0; i < entry.track.count; i++) {
-      readFix(entry.track, i, a);
-      const h = floor(a);
-      if (h !== null) correctHeight(entry.track, a.seq, h);
-    }
-    const order = [];
     const activeIndex = Math.max(
       0,
       Math.min(
@@ -112,6 +112,18 @@ export function createTrails({ state, services, parts, source }) {
         entry.sample.fromSeq - entry.track.baseSeq,
       ),
     );
+    for (let i = 0; i < entry.track.count; i++) {
+      readFix(entry.track, i, a);
+      // Fixes behind an unselected vehicle are kept but not drawn.
+      const h = floor(
+        a,
+        entry === selected || i >= activeIndex
+          ? TERRAIN_NEED.PATH
+          : TERRAIN_NEED.BACKGROUND,
+      );
+      if (h !== null) correctHeight(entry.track, a.seq, h);
+    }
+    const order = [];
     for (let i = activeIndex; i + 1 < entry.track.count; i++) order.push(i);
     if (entry === selected)
       for (let i = activeIndex - 1; i >= 0; i--) order.push(i);

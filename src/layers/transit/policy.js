@@ -77,7 +77,6 @@ export const FLOOR_WARM_PER_POLL = 300;
 export const FLOOR_REREAD_MS = 900;
 /** Re-reads before a poll's cycle gives up and waits for the next poll. */
 export const FLOOR_REREAD_ATTEMPTS = 6;
-
 // --- Rendering ---
 /** On-screen glyph size in CSS px at the near end of the distance ramp. */
 export const MARKER_PIXEL_SIZE = 20;

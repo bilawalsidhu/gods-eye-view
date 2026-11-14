@@ -11,7 +11,13 @@ import {
   POINT_HEIGHT_OFFSET_M,
   MAX_TOTAL_POINTS,
   COLOR_OUTLINE,
+  HEIGHT_REFINE_BUDGET_MS,
+  HEIGHT_REFINE_INTERVAL_MS,
 } from './policy.js';
+import {
+  createTerrainSurface,
+  TERRAIN_NEED,
+} from '../../services/terrainSurface.js';
 
 export function createRendering({
   state: layerState,
@@ -20,6 +26,14 @@ export function createRendering({
   source,
 }) {
   const { governorRequestRender } = services.render;
+  // The terrain globe's loaded surface: the application's shared reader, or
+  // the layer's own when it is built without one.
+  const terrainSurface =
+    services.ground?.terrainSurface || createTerrainSurface();
+  /** Stations drawn at the fallback height, waiting for their ground height. */
+  let heightQueue = [];
+  let heightTimer = null;
+  const heightPoint = new Cesium.Cartographic();
 
   /**
    * Resolve the effective dock capacity for a station.
@@ -87,8 +101,10 @@ export function createRendering({
   }
 
   /**
-   * Create a Cartesian3 position for a station, terrain-clamped when possible.
-   * Falls back to a fixed small height offset if terrain sampling is unsupported.
+   * Create a Cartesian3 position for a station at the fallback height. Its
+   * ground height is found afterwards (refineHeights): a city's stations are
+   * drawn at once, and finding hundreds of heights in the same task held the
+   * main thread for most of a second.
    * @param {Object} station - Station info object with lat/lon.
    * @returns {Cesium.Cartesian3|null} World position, or null if coordinates are invalid.
    */
@@ -97,18 +113,78 @@ export function createRendering({
     const lon = Number(station?.lon);
     const lat = Number(station?.lat);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return Cesium.Cartesian3.fromDegrees(lon, lat, POINT_HEIGHT_OFFSET_M);
+  }
 
-    let height = POINT_HEIGHT_OFFSET_M;
-    // Sample terrain height so points sit on ground rather than at ellipsoid level
-    if (layerState._viewer?.scene?.sampleHeightSupported) {
-      const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-      const sampled = layerState._viewer.scene.sampleHeight(carto);
-      if (Number.isFinite(sampled)) {
-        height = sampled + POINT_HEIGHT_OFFSET_M;
-      }
+  /**
+   * The ground height under a station, or undefined when the scene cannot say.
+   * A terrain globe answers from its loaded surface, which is cheap. Where it
+   * cannot (the globe is hidden under photorealistic tiles, or draws no tile
+   * at the point) the scene renders the depth there, at a millisecond or more
+   * a point.
+   */
+
+  function sampleGroundHeight(lat, lon) {
+    const viewer = layerState._viewer;
+    const scene = viewer?.scene;
+    if (!scene) return undefined;
+    // A station is a marker: its one read is not left for a later window.
+    // The step's own time budget bounds what a pass spends.
+    const terrain = terrainSurface.height(
+      viewer,
+      lat,
+      lon,
+      TERRAIN_NEED.MARKER,
+    );
+    if (Number.isFinite(terrain)) return terrain;
+    if (!scene.sampleHeightSupported) return undefined;
+    Cesium.Cartographic.fromDegrees(lon, lat, 0, heightPoint);
+    const sampled = scene.sampleHeight(heightPoint);
+    return Number.isFinite(sampled) ? sampled : undefined;
+  }
+
+  /**
+   * Move queued stations onto the ground for a few milliseconds, then leave
+   * the rest to the next step. A station the scene has no height for keeps
+   * the fallback height, as it did when heights were read while drawing.
+   */
+
+  function refineHeights() {
+    heightTimer = null;
+    const started = performance.now();
+    let moved = false;
+    while (
+      heightQueue.length > 0 &&
+      performance.now() - started < HEIGHT_REFINE_BUDGET_MS
+    ) {
+      const { record, lat, lon } = heightQueue.pop();
+      const ground = sampleGroundHeight(lat, lon);
+      if (ground === undefined) continue;
+      record.point.position = Cesium.Cartesian3.fromDegrees(
+        lon,
+        lat,
+        ground + POINT_HEIGHT_OFFSET_M,
+      );
+      moved = true;
+      // The highlight and card of a selected station copy its position.
+      if (layerState._selectedKey === record.key)
+        parts.selection._selectStation(record.key);
     }
+    if (moved) governorRequestRender('bikeshare-heights');
+    scheduleHeightRefinement();
+  }
 
-    return Cesium.Cartesian3.fromDegrees(lon, lat, height);
+  function scheduleHeightRefinement() {
+    if (heightTimer !== null || heightQueue.length === 0) return;
+    heightTimer = setTimeout(refineHeights, HEIGHT_REFINE_INTERVAL_MS);
+  }
+
+  /** Drop every queued station and the pending step. */
+
+  function stopHeightRefinement() {
+    heightQueue = [];
+    clearTimeout(heightTimer);
+    heightTimer = null;
   }
 
   /**
@@ -178,7 +254,7 @@ export function createRendering({
         id: key,
       });
 
-      layerState._stationRenderMap.set(key, {
+      const record = {
         key,
         cityId,
         stationId: station.stationId,
@@ -191,12 +267,19 @@ export function createRendering({
         isInstalled: station.isInstalled,
         isRenting: station.isRenting,
         isReturning: station.isReturning,
+      };
+      layerState._stationRenderMap.set(key, record);
+      heightQueue.push({
+        record,
+        lat: Number(station.lat),
+        lon: Number(station.lon),
       });
 
       runtime.stationKeys.add(key);
     }
 
     layerState._count = layerState._stationRenderMap.size;
+    scheduleHeightRefinement();
   }
 
   /**
@@ -223,6 +306,12 @@ export function createRendering({
       layerState._pointCollection.remove(record.point);
       layerState._stationRenderMap.delete(key);
     }
+
+    // Its stations no longer wait for a height.
+    heightQueue = heightQueue.filter(
+      ({ record }) => layerState._stationRenderMap.get(record.key) === record,
+    );
+    if (heightQueue.length === 0) stopHeightRefinement();
 
     layerState._cityRuntime.delete(cityId);
     layerState._count = layerState._stationRenderMap.size;
@@ -280,5 +369,10 @@ export function createRendering({
     ensureCityPoints,
     removeCityPoints,
     applyStatusToPoints,
+    stopHeightRefinement,
+    /** Stations still waiting for their ground height. */
+    pendingHeightCount: () => heightQueue.length,
+    /** Whether a refinement step is waiting on a timer. */
+    heightRefinementScheduled: () => heightTimer !== null,
   };
 }

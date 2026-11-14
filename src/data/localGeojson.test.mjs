@@ -23,9 +23,10 @@ import {
 } from '../renderGovernor.js';
 
 /** The catalog's services, with the overlay host each test supplies. */
-const createLocalGeoJsonLayer = (options) =>
+const createLocalGeoJsonLayer = (options, services = {}) =>
   createLayer(options, {
     ...localGeoJsonServices,
+    ...services,
     overlayHost: options.overlayHost ?? localGeoJsonServices.overlayHost,
   });
 
@@ -58,10 +59,15 @@ class MockLayerEvent {
  * @param {boolean} [options.sampleHeightSupported] Scene height-sampling capability.
  * @param {Function} [options.sampleHeight] Initial scene.sampleHeight behavior
  *   (default: throws like a scene whose tiles are not sampleable yet).
+ * @param {number[][]} [options.points] `[lon, lat]` sites to load
+ *   instead of the single dam polygon.
+ * @param {object} [options.services] Extra services for the layer.
  */
 async function createRealLocalLayerHarness({
   sampleHeightSupported = false,
   sampleHeight = () => { throw new Error('tiles not sampleable yet'); },
+  points = null,
+  services = {},
 } = {}) {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
@@ -72,7 +78,22 @@ async function createRealLocalLayerHarness({
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
-    text: async () => JSON.stringify({
+    text: async () => points ? points.map(([lon, lat], index) => JSON.stringify({
+      type: 'Feature',
+      id: `site-${index}`,
+      properties: { name: `Site ${index}` },
+      // A small outline: the layer stems its centre. (Cesium draws a point
+      // feature as a canvas pin, which Node cannot make.)
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [lon - 0.001, lat - 0.001],
+          [lon + 0.001, lat - 0.001],
+          [lon, lat + 0.001],
+          [lon - 0.001, lat - 0.001],
+        ]],
+      },
+    })).join('\n') : JSON.stringify({
       type: 'Feature',
       id: 'real-dam',
       properties: { name: 'Runtime Dam', tags: { associated_river: 'Test River' } },
@@ -149,7 +170,7 @@ async function createRealLocalLayerHarness({
       setInputAction() {},
       destroy() {},
     }),
-  });
+  }, services);
   try {
     await layer.enable(viewer);
   } finally {
@@ -903,12 +924,13 @@ test('settled terrain refinement lifts an already sampled stem without another G
   env.preRender.raise();
   assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01, 'wait for the refined mesh to settle');
   globe.tilesLoaded = true;
-  clock.advance(500);
+  // The terrain surface reuses a height for 2 s before reading the mesh again.
+  clock.advance(2_100);
   env.preRender.raise();
   assert.ok(Math.abs(baseHeightM(env) - 120) < 0.01, 'a parked marker must follow the refined floor');
 
   terrain = 110;
-  clock.advance(500);
+  clock.advance(2_100);
   env.preRender.raise();
   assert.ok(Math.abs(baseHeightM(env) - 120) < 0.01, 'a lower floor must not flatten existing geometry');
   terrain = 140;
@@ -1493,3 +1515,161 @@ test('globe-LOD re-selects during continuous motion, without ever seeing a moveE
   assert.deepEqual(env.layer.getLodDiagnostics(), parked, 'a parked camera never re-selects');
 });
 
+
+/** A loaded terrain globe that counts its ray casts. */
+function countingTerrain(height) {
+  const globe = {
+    show: true,
+    tilesLoaded: true,
+    reads: 0,
+    getHeight: () => { globe.reads += 1; return height; },
+  };
+  return globe;
+}
+
+/** Height of every stem base, in entity order. */
+function allBaseHeightsM(env) {
+  return env.dataSources[0].entities.values.map(
+    (entity) => Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian).height,
+  );
+}
+
+const SAMPLE_SITES = [
+  [-97.70, 30.20], [-97.69, 30.20], [-97.70, 30.21], [-97.69, 30.21], [-97.695, 30.205],
+];
+
+test('repeated walks over a grounded stem reuse its terrain height instead of re-casting it', async (t) => {
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 117,
+  });
+  const clock = installFakeClock(t);
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  const globe = countingTerrain(117);
+  env.viewer.scene.globe = globe;
+  setCameraAltitude(env, 20_000);
+  for (let walk = 0; walk < 40; walk += 1) {
+    env.preRender.raise();
+    clock.advance(500);
+  }
+  assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01);
+  // 20 s parked: a few reads while the surface settles, then none.
+  assert.ok(globe.reads <= 8, `${globe.reads} terrain ray casts over 40 parked walks`);
+  const settled = globe.reads;
+  for (let walk = 0; walk < 20; walk += 1) {
+    env.preRender.raise();
+    clock.advance(500);
+  }
+  assert.equal(globe.reads, settled, 'a parked camera over settled terrain casts no more rays');
+});
+
+test('repeated walks past an unseen base do not re-cast its terrain height', async (t) => {
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 117,
+  });
+  const clock = installFakeClock(t);
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  const globe = countingTerrain(117);
+  env.viewer.scene.globe = globe;
+  setCameraAltitude(env, 20_000);
+  env.setBaseInView(false);
+  for (let walk = 0; walk < 40; walk += 1) {
+    env.preRender.raise();
+    clock.advance(500);
+  }
+  assert.equal(env.sampleCalls.count, 0);
+  assert.ok(globe.reads <= 8, `${globe.reads} terrain ray casts over 40 walks past an unseen base`);
+});
+
+test('terrain heights come from the shared surface the host supplies, in degrees', async (t) => {
+  const asked = [];
+  const terrainSurface = {
+    height: (viewer, lat, lon, need) => { asked.push({ viewer, lat, lon, need }); return 130; },
+  };
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 117,
+    points: [[-97.695, 30.205]],
+    services: { terrainSurface },
+  });
+  const clock = installFakeClock(t);
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  const globe = countingTerrain(117);
+  env.viewer.scene.globe = globe;
+  setCameraAltitude(env, 20_000);
+  env.preRender.raise();
+  assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01, 'the sample is floored by the globe itself');
+  clock.advance(500);
+  env.preRender.raise();
+  assert.ok(asked.length >= 2);
+  for (const call of asked) {
+    assert.equal(call.viewer, env.viewer);
+    assert.ok(Math.abs(call.lat - 30.205) < 0.002 && Math.abs(call.lon + 97.695) < 0.002,
+      `asked at ${call.lat}, ${call.lon}`);
+  }
+  assert.ok(Math.abs(baseHeightM(env) - 130) < 0.01, 'the refined floor comes from the shared surface');
+  assert.equal(globe.reads, 1, 'only the floor under a fresh sample is read from the globe directly');
+});
+
+test('a walk of expensive ground samples stops at its budget and later frames finish the rest', async (t) => {
+  const heights = new Map();
+  let clock = null;
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true,
+    points: SAMPLE_SITES,
+    sampleHeight: (carto) => {
+      clock.advance(15); // one GPU depth render
+      const height = 100 + heights.size;
+      heights.set(`${carto.longitude},${carto.latitude}`, height);
+      return height;
+    },
+  });
+  _resetRenderGovernorForTest();
+  const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
+  installRenderGovernor({ scene: governorScene });
+  governorScene.renders = 0; // discard the governor's own install settling frame
+  clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+    _resetRenderGovernorForTest();
+  });
+  setCameraAltitude(env, 20_000);
+
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, 1, 'one 15 ms sample spends the walk budget');
+  assert.equal(governorScene.renders, 1, 'the walk asks for the frame that continues it');
+
+  // The following frames arrive well inside the 450 ms walk interval.
+  for (let frame = 2; frame <= SAMPLE_SITES.length; frame += 1) {
+    clock.advance(16);
+    env.preRender.raise();
+    assert.equal(env.sampleCalls.count, frame, 'each frame takes up where the last stopped');
+  }
+  assert.equal(governorScene.renders, SAMPLE_SITES.length - 1, 'no frame is requested once every site is sampled');
+  clock.advance(16);
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, SAMPLE_SITES.length, 'nothing is sampled twice');
+
+  const expected = env.dataSources[0].entities.values.map((entity) => {
+    const carto = entity.__localBaseCarto;
+    return heights.get(`${carto.longitude},${carto.latitude}`);
+  });
+  assert.deepEqual(allBaseHeightsM(env).map((h) => Math.round(h * 100) / 100), expected);
+  for (const entity of env.dataSources[0].entities.values) {
+    const stem = entity.polyline.positions.getValue();
+    assert.ok(Cesium.Cartesian3.equals(stem[0], entity.__localBaseCartesian), 'each stem stands on its sampled base');
+  }
+});
+
+test('cheap ground samples are all taken on the first walk, at the same heights as paced ones', async (t) => {
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true,
+    points: SAMPLE_SITES,
+    sampleHeight: () => 117,
+  });
+  installFakeClock(t);
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  setCameraAltitude(env, 20_000);
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, SAMPLE_SITES.length);
+  for (const height of allBaseHeightsM(env)) assert.ok(Math.abs(height - 117) < 0.01);
+});
