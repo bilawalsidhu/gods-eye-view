@@ -79,6 +79,9 @@ export function createSelection({
         record,
       )
     ) {
+      // Picking the camera a settled move re-opened is still a choice: later
+      // settled moves must leave it alone.
+      layerState._openingCameraProvisional = false;
       // Browser-only feeds have a separate player; a reselect retries it
       // without re-running activation or touching the projection geometry.
       if (parts.model.isBrowserOverlayCamera(record.camera)) {
