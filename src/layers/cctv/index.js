@@ -73,6 +73,7 @@ export function createCctvLayer({ services, source }) {
       deriveCalBadge: parts.calibration.deriveCalBadge,
       computeFrustumGeometry: parts.geometry.computeFrustumGeometry,
       activationProbeClampRange: parts.geometry.activationProbeClampRange,
+      flatGroundAxisDistance: parts.geometry.flatGroundAxisDistance,
       frameSignatureFromPixels: parts.frames.frameSignatureFromPixels,
       _createCctvProjectionPlaneForTest:
         parts.testing._createCctvProjectionPlaneForTest,

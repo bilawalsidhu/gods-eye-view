@@ -236,21 +236,106 @@ test('OSRM routing preserves aliases, cache, span guards and upstream failure be
     assert.equal((await request(route, url)).body.error, error);
   assert.equal(calls, 1);
   now += 600001;
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response('offline', { status: 503 }),
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json(
+      { code: 'NoRoute', message: 'Impossible route between points' },
+      { status: 400 },
+    ),
   );
-  assert.deepEqual((await request(route, query)).body, {
-    ok: false,
-    error: 'no route found',
-  });
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response('x', { headers: { 'content-type': 'text/html' } }),
+  const noRoute = await request(route, query);
+  assert.equal(noRoute.statusCode, 200);
+  assert.deepEqual(noRoute.body, { ok: false, error: 'no route found' });
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ code: 'NoRoute', routes: [] }),
   );
   assert.equal((await request(route, query)).body.error, 'no route found');
+});
+
+test('a routing outage is reported as one, not as "no route found"', async (t) => {
+  const route = '/api/route';
+  const query = '?profile=car&coords=-97,30;-97.01,30.01';
+  for (const response of [
+    () => new Response('offline', { status: 503 }),
+    () => new Response('blocked', { status: 403 }),
+    () => new Response('x', { headers: { 'content-type': 'text/html' } }),
+    () =>
+      new Response('<html>', {
+        headers: { 'content-type': 'application/json' },
+      }),
+    () => Promise.reject(new TypeError('fetch failed')),
+    () => Promise.reject(new DOMException('aborted', 'AbortError')),
+  ]) {
+    _resetRouteUpstreamForTest();
+    const request = install(installRouteMiddleware);
+    t.mock.method(globalThis, 'fetch', async () => response());
+    const result = await request(route, query);
+    assert.equal(result.statusCode, 502);
+    assert.deepEqual(result.body, {
+      ok: false,
+      error: 'routing service unavailable',
+    });
+  }
+});
+
+test('callers sharing one failed upstream call all hear the outage, and it is not cached', async (t) => {
+  _resetRouteUpstreamForTest();
+  _setRouteUpstreamIntervalForTest(0);
+  t.after(() => _resetRouteUpstreamForTest());
+  const request = install(installRouteMiddleware);
+  let calls = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    await gate;
+    return new Response('offline', { status: 503 });
+  });
+  const route = '/api/route';
+  const query = '?profile=car&coords=-97,30;-97.01,30.01';
+  const all = [
+    request(route, `${query}&steps=1`),
+    request(route, `${query}&steps=1`),
+    request(route, query),
+  ];
+  await Promise.resolve();
+  release();
+  for (const result of await Promise.all(all)) {
+    assert.equal(result.statusCode, 502);
+    assert.equal(result.body.error, 'routing service unavailable');
+  }
+  assert.equal(calls, 1);
+  assert.equal((await request(route, query)).statusCode, 502);
+  assert.equal(calls, 2, 'the next request asks the routing service again');
+});
+
+test('a budget spent in the outbound queue is reported as busy, not as an outage', async (t) => {
+  _resetRouteUpstreamForTest();
+  // The second request waits 13 s for its slot, past the 12 s budget.
+  _setRouteUpstreamIntervalForTest(13_000);
+  t.after(() => _resetRouteUpstreamForTest());
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const request = install(installRouteMiddleware);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return Response.json(osrmRouteWithSteps(2));
+  });
+  const first = request(
+    '/api/route',
+    '?profile=car&coords=-97,30;-97.01,30.01',
+  );
+  const second = request(
+    '/api/route',
+    '?profile=foot&coords=-97,30;-97.01,30.01',
+  );
+  assert.equal((await first).body.ok, true);
+  t.mock.timers.tick(13_000);
+  const result = await second;
+  assert.equal(result.statusCode, 429);
+  assert.match(result.body.error, /routing busy/);
+  assert.equal(calls, 1, 'the spent request never reaches the routing service');
 });
 
 /** One OSRM route with `count` maneuvers, for the step tests. */

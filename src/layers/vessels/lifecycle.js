@@ -248,6 +248,7 @@ export function createLifecycle({
       if (state.preRenderRemover) {
         state.preRenderRemover();
       }
+      components.rendering.destroyModels();
       resetState();
     },
   };

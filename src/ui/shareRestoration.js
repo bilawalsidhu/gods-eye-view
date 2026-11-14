@@ -317,7 +317,9 @@ export class ShareRestoration {
       // the shared flight having landed.
       const vessel = this._sharedVessel(state);
       if (vessel) void this._restoreSharedVessel(vessel, current);
-      settle({ status: 'settled', share, layers, tracking });
+      // The token tells listeners whether anyone navigated after the
+      // restore's flight landed (while the layers were still loading).
+      settle({ status: 'settled', share, layers, tracking, navigationToken });
     } catch (error) {
       if (!current()) return;
       this.shareLinkManager.completeInitialRestore(state.restoreToken);

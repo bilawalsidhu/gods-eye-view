@@ -673,12 +673,15 @@ test('public transit documentation uses courtesy attribution and the approved gr
     new URL('../../DATA_SOURCES.md', import.meta.url),
     'utf8',
   );
+  // The Transit layer's own rows; the Rail layer's rows for the same
+  // operators quote their licences.
   const rows = data
     .split('\n')
-    .filter((line) =>
-      /^\| \*\*(MBTA|CapMetro|Metro Transit|OVapi|Entur|TransLink|HSL)/.test(
-        line,
-      ),
+    .filter(
+      (line) =>
+        /^\| \*\*(MBTA|CapMetro|Metro Transit|OVapi|Entur|TransLink|HSL)/.test(
+          line,
+        ) && /^\| [^|]+\| Transit layer /.test(line),
     );
   assert.equal(rows.length, 7);
   for (const row of rows) {

@@ -48,6 +48,7 @@ import {
   countryGroups,
   countryOnly,
   disputedLabel,
+  eventPicture,
   feedCardView,
   feedQueryFor,
   hotspotLabel,
@@ -63,6 +64,7 @@ import {
   normalizeFilters,
   passesFilters,
   reportMarkerPosition,
+  reportSeverity,
   reportsInView,
   severityStyle,
   shortTitle,
@@ -167,6 +169,14 @@ const emptyInView = () => ({
  * chosen: outlines (disputed areas dotted) and the geocoded reports as
  * markers, the big events as picture cards. The News panel renders the feed
  * this layer publishes through getRowControls().feed.
+ *
+ * `pictureCards(cards, { selectedId })`, when given, draws the picture cards
+ * instead of the layer: it is called on every render with one card per
+ * pictured event on the map, at every height (zoomed out too, where the
+ * hotspots stand as beacons), in rank order (`{ id, title, lat, lon,
+ * publishedAt, severity, color, image, video, credit }`), and the selected
+ * report's id or null, whose own card the layer still draws at its marker; it
+ * is called with no cards when the layer is turned off.
  */
 export function createNewsLayer({
   source,
@@ -178,6 +188,7 @@ export function createNewsLayer({
   openUrl = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
   getViewCentre = viewCentre,
   registerCredit = registerDynamicCredit,
+  pictureCards: drawPictureCards = null,
 } = {}) {
   if (
     typeof source?.getHotspots !== 'function' ||
@@ -185,6 +196,8 @@ export function createNewsLayer({
   )
     throw new TypeError('News requires a news source');
   if (!overlayHost) throw new TypeError('News requires an overlay host');
+  if (drawPictureCards !== null && typeof drawPictureCards !== 'function')
+    throw new TypeError('News picture cards must be a function');
 
   let viewer = null,
     dataSource = null,
@@ -679,6 +692,53 @@ export function createNewsLayer({
     }
   }
 
+  // What a host's picture cards are chosen from when the hotspots stand as
+  // beacons: every report the close-up view would mark, and the selection.
+  function cardable() {
+    const current = selected();
+    const all = localMode() ? localReports(NEWS_MAP_LIMIT) : mapReports;
+    return current && !all.some((r) => r.id === current.id)
+      ? [...all, current]
+      : all;
+  }
+
+  // With a `pictureCards` function the host draws the picture cards: one per
+  // event on the map with a picture (its most severe, then newest report),
+  // most severe then newest first, at its marker. The host chooses which
+  // stand; a click on one calls setParams({ reportId, focus: true }).
+  function hostCards(drawn) {
+    const events = new Set();
+    return drawn
+      .filter((r) => r.pins.length && onMap(r) && eventPicture(r))
+      .sort(
+        (a, b) =>
+          reportSeverity(b) - reportSeverity(a) ||
+          (b.event?.lastAt || b.publishedAt || '').localeCompare(
+            a.event?.lastAt || a.publishedAt || '',
+          ),
+      )
+      .filter((report) => {
+        const event = report.event?.id || report.id;
+        if (events.has(event)) return false;
+        events.add(event);
+        return true;
+      })
+      .map((report) => {
+        const picture = eventPicture(report);
+        return {
+          id: report.id,
+          title: report.titleEn || report.title,
+          ...reportMarkerPosition(report, 0),
+          publishedAt: report.event?.lastAt || report.publishedAt || null,
+          severity: reportSeverity(report),
+          color: severityStyle(report).color,
+          image: picture.url,
+          video: picture.video || null,
+          credit: picture.credit,
+        };
+      });
+  }
+
   // The selected report's card: what, where, how attested, the link to the
   // original article ("Source: host ↗"), which a click on it opens, and the
   // service it came through.
@@ -775,7 +835,13 @@ export function createNewsLayer({
       .filter((target) => target.position);
     horizon.update();
     updatePulse();
-    pictureCards(drawn, current, labels);
+    if (drawPictureCards)
+      // At every height: zoomed out, a hotspot's reports give way to its
+      // beacon, but their pictures still stand (the host keeps them apart).
+      drawPictureCards(enabled ? hostCards(detail ? drawn : cardable()) : [], {
+        selectedId: enabled ? selectedId : null,
+      });
+    else pictureCards(drawn, current, labels);
     selectedCard(current, labels);
     if (enabled)
       overlayHost.setEntries(NEWS_OVERLAY_SOURCE_ID, labels, { moving: false });
@@ -1442,6 +1508,7 @@ export function createNewsLayer({
       }
       overlayHost.clearSource(NEWS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, false);
+      drawPictureCards?.([], { selectedId: null });
       requestRender();
       notify();
     },

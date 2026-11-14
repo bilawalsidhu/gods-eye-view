@@ -20,17 +20,13 @@ export function createFlightState({ source, services }) {
    *  layer); see followsClock and displayDelayMs in policy.js. */
   flightState.timeline = null;
 
-  /** Per-class model spec. Hangar-fleet classes (CLASS_MODEL_REAL) ship GLBs
-   *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
-   *  they render at scale 1 with their own measured belly lift and bounding
-   *  radius. Every other class keeps the shared-airplane.glb formula
-   *  (MODEL_SCALE × CLASS_SCALE_3D). nativeRadiusM is PER SCALE UNIT — pixel-cap
-   *  math multiplies it by `scale`, so world radius = nativeRadiusM × scale in
-   *  both branches. The code-side MIX tint dominates every existing asset so
-   *  class silhouettes stay light without modifying third-party GLBs/textures. */
-  /*  Specs are static per class, and the detection weld now asks for one per
-   *  MODELED contact per frame (up to the fleet cap) on top of the 12 Hz fleet
-   *  pass — so this is memoized, as militaryFlights.js already does. */
+  /** Model spec per aircraft type and emitter category (aircraftLayerModelSpec in
+   *  flights/modelSpec.js): the procedural fleet model that draws the type, life size,
+   *  with its measured clearance, bounding radius and trail anchor. nativeRadiusM is PER
+   *  SCALE UNIT — pixel-cap math multiplies it by `scale`. The code-side MIX tint dominates
+   *  every model so silhouettes stay light (and this layer's own colour). Memoized: the
+   *  detection weld asks for one per MODELED contact per frame on top of the 12 Hz fleet
+   *  pass. */
 
   flightState._specCache = new Map();
 
@@ -79,15 +75,10 @@ export function createFlightState({ source, services }) {
   // throttle the "more planes in view than the cap" console notice
   // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
   // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
-  // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
-  // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
+  // alpha after the fleet model set is loaded so the model is ready to render the instant the
+  // billboard fades — no gap, no double-image. The set loads once at init (fleetModels.js).
 
   flightState._planeModelLoaded = false;
-
-  /** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm */
-
-  flightState._preloadModel = null;
 
   flightState._scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
 

@@ -10,6 +10,9 @@ export const WORLD_FOCUS_FRAMING = Object.freeze({
   vessel: Object.freeze({ radiusM: 150, rangeM: 1200, pitchDeg: -30 }),
   fire: Object.freeze({ radiusM: 400, rangeM: 3000, pitchDeg: -35 }),
   sighting: Object.freeze({ radiusM: 250, rangeM: 2500, pitchDeg: -40 }),
+  // A stopped train's one fly-to, and the frame a moving train is followed
+  // in (src/layers/rail/follow.js): the train and the track either side.
+  train: Object.freeze({ radiusM: 200, rangeM: 2500, pitchDeg: -35 }),
   'sighting-area': Object.freeze({
     radiusM: 11000,
     rangeM: 60000,

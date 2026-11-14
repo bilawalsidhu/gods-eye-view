@@ -2,7 +2,11 @@ import * as Cesium from 'cesium';
 import { julianAt } from '../../time/julian.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
-import { civilAircraftModelSpec } from './modelSpec.js';
+import {
+  aircraftLayerModelSpec,
+  aircraftModelSpecCacheKey,
+} from './modelSpec.js';
+import { createFleetModel } from '../../data/fleetModelInstances.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
@@ -41,7 +45,10 @@ import {
   STALE_ALPHA,
   displayDelayMs,
 } from './policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -115,11 +122,14 @@ export function createRendering({
     return Number.POSITIVE_INFINITY;
   }
 
-  function _modelSpec(klass) {
-    const cached = flightState._specCache.get(klass);
+  /** The fleet model an aircraft draws with, by its type and emitter category. */
+  function _modelSpec(meta) {
+    const key = aircraftModelSpecCacheKey(meta);
+    const cached = flightState._specCache.get(key);
     if (cached) return cached;
-    const spec = civilAircraftModelSpec(klass);
-    flightState._specCache.set(klass, spec);
+    const spec = aircraftLayerModelSpec(meta);
+    // Not cached before the model set loads: the answer changes once it has.
+    if (spec.model) flightState._specCache.set(key, spec);
     return spec;
   }
 
@@ -185,11 +195,12 @@ export function createRendering({
    * @returns {void}
    */
 
-  /** Model tint, mirroring the billboard color rules. */
+  /** Model colour: the mesh's own (white), tinted cyan while tracked and red
+   *  while broadcasting an emergency. */
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return Cesium.Color.CYAN;
-    return _fleetBillboardColor(icao24);
+    return _isEmergency(icao24) ? EMERGENCY_TINT : Cesium.Color.WHITE;
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -309,7 +320,7 @@ export function createRendering({
       Cesium.Ellipsoid.WGS84,
       flightState._scratchGroundCarto,
     );
-    carto.height = h + _modelSpec(meta.klass).bellyM;
+    carto.height = h + _modelSpec(meta).bellyM;
     return Cesium.Cartesian3.fromRadians(
       carto.longitude,
       carto.latitude,
@@ -416,16 +427,13 @@ export function createRendering({
     return !!model && model.ready === true && model.show === true;
   }
 
-  /** Spec identity for a LOADED model: URL and scale together (same-URL classes
-   *  differ by scale — airliner vs quadjet both ship airplane.glb). */
+  /** Spec identity for a LOADED model: the model and its scale together (one
+   *  model draws several types, each at its own length). */
 
-  const _specKeyFor = (klass) => {
-    const spec = _modelSpec(klass);
-    return `${spec.url}@${spec.scale}`;
-  };
+  const _specKeyFor = (meta) => _modelSpec(meta).key;
 
-  /** Class-change model sync (enrichment AND poll-path klass updates): when the
-   *  aircraft's live model or in-flight load no longer matches its class's spec,
+  /** Type-change model sync (enrichment AND poll-path type/category updates): when the
+   *  aircraft's live model or in-flight load no longer matches its type's spec,
    *  drop it so the eligibility pass reloads the right asset at the right scale.
    *  Gap-proof: the fleet billboard is re-shown BEFORE the release so the
    *  contact never goes invisible for the tick gap; _releaseModel's generation
@@ -433,7 +441,7 @@ export function createRendering({
    *  the same rule (its billboard entity is always the fallback visual). */
 
   function _syncModelToClass(icao24) {
-    const key = _specKeyFor(flightState.records.data.get(icao24)?.klass);
+    const key = _specKeyFor(flightState.records.data.get(icao24));
     const current = flightState._models.get(icao24);
     if (
       (current && current._gevSpecKey !== key) ||
@@ -478,6 +486,11 @@ export function createRendering({
       flightState._irReloadQueue = null;
   }
 
+  /** A Cesium Model of `spec` from the fleet set loaded up front (no fetch mid-session). */
+  function _createModel(spec, options) {
+    return createFleetModel(spec, options, { resolveAsset });
+  }
+
   /** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
 
   async function _ensureModel(icao24) {
@@ -497,6 +510,8 @@ export function createRendering({
       _modelCap()
     )
       return;
+    // Until the fleet model set has loaded the aircraft stays a billboard.
+    if (!_modelSpec(flightState.records.data.get(icao24)).model) return;
     const epoch = flightState._modelEpoch; // lifecycle token: if destroy() bumps it, this load is dead
     const gen = flightState._modelGen.get(icao24) || 0; // capture; if it changes during the load, we're stale
     flightState._modelPending.add(icao24);
@@ -505,21 +520,17 @@ export function createRendering({
     // aircraft mid-load, the post-await admission below rejects the stale asset.
     // Boost state likewise: the creation options bake it in, so a mid-load
     // toggle must reject too (the reload queue only covers ADMITTED models).
-    const specKey = _specKeyFor(flightState.records.data.get(icao24)?.klass);
+    const specKey = _specKeyFor(flightState.records.data.get(icao24));
     const loadIrBoost = flightState._irBoost;
     try {
-      const spec = _modelSpec(flightState.records.data.get(icao24)?.klass);
-      model = await Cesium.Model.fromGltfAsync({
-        url: resolveAsset(spec.url),
+      const spec = _modelSpec(flightState.records.data.get(icao24));
+      model = await _createModel(spec, {
         asynchronous: false,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // Launch presentation keeps the code-side tint dominant for every approved
-        // model; IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : spec.blendAmount,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
@@ -560,7 +571,7 @@ export function createRendering({
       flightState._models.has(icao24) ||
       flightState._models.size >= _modelCap() ||
       // Class reclassified mid-load → this GLB/scale is for the OLD class.
-      _specKeyFor(flightState.records.data.get(icao24)?.klass) !== specKey ||
+      _specKeyFor(flightState.records.data.get(icao24)) !== specKey ||
       // IR boost flipped mid-load → this model baked the wrong shader/tint.
       flightState._irBoost !== loadIrBoost;
     if (stale) {
@@ -716,6 +727,9 @@ export function createRendering({
       return;
     }
     if (
+      // Until the fleet model set has loaded the billboard carries it.
+      _modelSpec(flightState.records.data.get(flightState._trackedIcao))
+        .model &&
       !flightState._trackedModel &&
       !flightState._trackedModelLoading &&
       parts.tracking._trackedModelLoadAllowed()
@@ -723,23 +737,19 @@ export function createRendering({
       flightState._trackedModelLoading = true;
       const gen = flightState._trackedModelGen;
       const trackedSpec = _modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       const trackedKey = _specKeyFor(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       const trackedIrBoost = flightState._irBoost;
-      Cesium.Model.fromGltfAsync({
-        url: resolveAsset(trackedSpec.url),
+      _createModel(trackedSpec, {
         asynchronous: false,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // The tracked aircraft uses the same dominant light tint as the fleet;
-        // IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : trackedSpec.blendAmount,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
@@ -766,7 +776,7 @@ export function createRendering({
           // _trackedModel was still null): drop the stale asset; driver reloads.
           if (
             _specKeyFor(
-              flightState.records.data.get(flightState._trackedIcao)?.klass,
+              flightState.records.data.get(flightState._trackedIcao),
             ) !== trackedKey ||
             flightState._irBoost !== trackedIrBoost
           ) {
@@ -840,7 +850,7 @@ export function createRendering({
       _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       const spec = _modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,

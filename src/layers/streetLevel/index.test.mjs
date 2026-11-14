@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getEventListeners } from 'node:events';
 import * as Cesium from 'cesium';
 import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
@@ -12,6 +13,9 @@ import {
   fakeStreetLevelProvider as fakeProvider,
 } from '../../testSupport/streetLevelFakes.mjs';
 import { setLocale } from '../../i18n/index.js';
+// Loaded up front: it brings Vue, which reads `document` once when it loads,
+// and several tests here stand a bare fake document in for the page.
+import { createGevActionRunner } from '../../voice/gevActions.js';
 
 /**
  * A layer over `source` and `photoViewer`, initialised on a stand-in viewer
@@ -362,7 +366,11 @@ function fakeViewer() {
 }
 
 /** A layer over `providers`, initialised and enabled on a stand-in viewer. */
-async function enabledLayer(t, providers = [fakeProvider()]) {
+async function enabledLayer(
+  t,
+  providers = [fakeProvider()],
+  { services, setup } = {},
+) {
   const saved = globalThis.document;
   // A pose moves the position marker, whose glyph is drawn on a canvas.
   const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
@@ -370,7 +378,11 @@ async function enabledLayer(t, providers = [fakeProvider()]) {
     createElement: () => ({ getContext: () => drawing }),
   });
   const viewer = fakeViewer();
-  const layer = createStreetLevelLayer({ providers });
+  setup?.(viewer);
+  const layer = createStreetLevelLayer({
+    providers,
+    ...(services ? { services } : {}),
+  });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {
@@ -944,6 +956,54 @@ test('the button’s “centre of the view” is the ground under the middle of 
   assert.ok(Math.abs(lookups[0].lon - -121.4937) < 1e-9);
 });
 
+test('OPEN after a link armed opens at its point only while the view centre is still near it', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point, options) => {
+      lookups.push({ point, radiusM: options?.radiusM ?? null });
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
+  });
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider], services: { scenePick } });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  // About 120 m from the view centre: the link's spot is still in view.
+  layer.armNearest({ lat: 38.5808, lon: -121.494 }, { radiusM: 250 });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  assert.deepEqual(lookups.at(-1), {
+    point: { lat: 38.5808, lon: -121.494 },
+    radiusM: 250,
+  });
+  // The user flew to Paris after the link armed in Sacramento: OPEN looks
+  // under the view centre, and the link's radius goes with its point.
+  layer.armNearest({ lat: 48.8584, lon: 2.2945 }, { radiusM: 250 });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  const press = lookups.at(-1);
+  assert.ok(Math.abs(press.point.lat - 38.5799) < 1e-9, 'the view centre');
+  assert.ok(Math.abs(press.point.lon - -121.4937) < 1e-9);
+  assert.equal(press.radiusM, null, 'the default radius');
+  assert.equal(layer.getUIState().street.armed, null, 'dropped');
+});
+
 test('the button aimed at the sky opens nothing, and says to aim at a street', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
   const scenePick = await import('../../data/scenePick.js');
@@ -1118,6 +1178,732 @@ test('switching source by params clears a failed lookup’s error; reapplying th
   assert.equal(second.getUIState().street.error, kept);
 });
 
+test('openNearest searches wider on request, never past the cap, and says how far it looked', async (t) => {
+  const { layer, fake } = await withStreetView(t, { nearest: () => null });
+  layer.setProviderEnabled('google', true);
+  await settle();
+  await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false, radiusM: 250 },
+  );
+  assert.equal(fake.lookups.at(-1).radius, 250);
+  assert.equal(
+    layer.getUIState().street.error,
+    'No street-level imagery within 250 m of that point',
+  );
+  await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false, radiusM: 5000 },
+  );
+  assert.equal(fake.lookups.at(-1).radius, 250, 'capped');
+  await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false },
+  );
+  assert.equal(fake.lookups.at(-1).radius, 50, 'a click keeps the default');
+});
+
+test('a caller’s signal retires a nearest lookup: nothing opens after it fires', async (t) => {
+  let answer = null;
+  const { layer, fake } = await withStreetView(t, {
+    nearest: () => 'pano-a',
+  });
+  const lib = fake.library;
+  const service = lib.StreetViewService.prototype.getPanorama;
+  lib.StreetViewService.prototype.getPanorama = function (request) {
+    return new Promise((resolve, reject) => {
+      answer = () => service.call(this, request).then(resolve, reject);
+    });
+  };
+  layer.setProviderEnabled('google', true);
+  await settle();
+  const controller = new AbortController();
+  const pending = layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false, signal: controller.signal },
+  );
+  await settle();
+  controller.abort();
+  answer?.();
+  assert.equal(await pending, false);
+  const street = layer.getUIState().street;
+  assert.equal(street.open, false, 'the retired lookup opened nothing');
+  assert.equal(street.loading, false, 'no stuck spinner');
+  assert.equal(street.error, null, 'and reports no missing imagery');
+  const refused = await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false, signal: controller.signal },
+  );
+  assert.equal(refused, false, 'an already-aborted signal asks nothing');
+});
+
+test('providerStatus reports name, key state and billing on any map', async (t) => {
+  const { layer } = await withStreetView(t, { mapStack: 'osm' });
+  const google = layer.providerStatus('google');
+  assert.equal(google.name, 'Google Street View');
+  assert.equal(google.billed, true, 'every Street View load is billed');
+  assert.equal(google.available, false, 'not on this map');
+  assert.equal(google.keyRequired, false);
+  assert.equal(layer.providerStatus('mapillary').billed, false);
+  assert.equal(layer.providerStatus('nope'), null);
+  assert.equal(layer.requiredMapStack('google'), 'photoreal');
+  assert.equal(layer.requiredMapStack('mapillary'), null);
+});
+
+test('an armed lookup asks nothing until the OPEN press, then opens at its point and radius once', async (t) => {
+  const { layer, fake, mapillaryLookups } = await withStreetView(t);
+  layer.setProviderEnabled('google', true);
+  await settle();
+  const before = fake.lookups.length;
+  layer.armNearest(
+    { lat: 38.57986, lon: -121.49372 },
+    { providerIds: ['google'], radiusM: 250 },
+  );
+  await settle();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  // The click gate: arming is free. No provider was asked, nothing opened.
+  assert.equal(
+    fake.lookups.length,
+    before,
+    'no Google lookup before the press',
+  );
+  assert.deepEqual(mapillaryLookups, [], 'no Mapillary lookup either');
+  assert.equal(layer.getUIState().street.open, false);
+  assert.equal(layer.getUIState().street.loading, false);
+  assert.deepEqual(layer.getUIState().street.armed, {
+    point: { lat: 38.57986, lon: -121.49372 },
+    providerIds: ['google'],
+    radiusM: 250,
+  });
+  // The OPEN button: no point, aimed at the screen centre.
+  const opened = await layer.openNearest(undefined, {
+    providerIds: ['google'],
+    frame: false,
+    aim: 'screen-centre',
+  });
+  assert.equal(opened, true);
+  assert.equal(
+    fake.lookups.length,
+    before + 1,
+    'exactly one lookup for the press',
+  );
+  const request = fake.lookups.at(-1);
+  assert.deepEqual(
+    request.location,
+    { lat: 38.57986, lng: -121.49372 },
+    'the armed point, not the screen centre',
+  );
+  assert.equal(request.radius, 250);
+  assert.equal(layer.getUIState().street.armed, null, 'used once');
+  layer.armNearest({ lat: 1, lon: 2 }, { providerIds: ['google'] });
+  layer.closeViewer();
+  assert.equal(layer.getUIState().street.armed, null, 'closing clears it');
+  layer.armNearest({ lat: 1, lon: 2 }, { providerIds: ['google'] });
+  await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false },
+  );
+  assert.deepEqual(
+    fake.lookups.at(-1).location,
+    { lat: 38.58, lng: -121.49 },
+    'an explicit point wins',
+  );
+  assert.equal(layer.getUIState().street.armed, null);
+  // Only the OPEN press consumes the armed point: "street view here" after a
+  // pan is a new request at the view centre, and it drops the armed one.
+  layer.closeViewer();
+  layer.armNearest(
+    { lat: 10, lon: 20 },
+    { providerIds: ['google'], radiusM: 250 },
+  );
+  await layer.openNearest(null, { providerIds: ['google'], frame: false });
+  const centre = fake.lookups.at(-1);
+  assert.notDeepEqual(
+    centre.location,
+    { lat: 10, lng: 20 },
+    'the view centre, not the armed point',
+  );
+  assert.equal(centre.radius, 50, 'and the default radius');
+  assert.equal(layer.getUIState().street.armed, null, 'dropped');
+  // Opening any image, or switching the layer off, clears it too.
+  layer.armNearest({ lat: 10, lon: 20 }, { providerIds: ['google'] });
+  await layer.openImage('google', 'pano-a');
+  assert.equal(layer.getUIState().street.armed, null, 'cleared by an open');
+  layer.armNearest({ lat: 10, lon: 20 }, { providerIds: ['google'] });
+  layer.disable();
+  assert.equal(layer.getUIState().street.armed, null, 'cleared by disable');
+});
+
+test('a caller’s signal: an aborted one asks nothing, and a provider that ignores the abort still opens nothing', async (t) => {
+  const { layer, fake } = await withStreetView(t);
+  layer.setProviderEnabled('google', true);
+  await settle();
+  const before = fake.lookups.length;
+  const done = new AbortController();
+  done.abort();
+  assert.equal(
+    await layer.openNearest(
+      { lat: 38.58, lon: -121.49 },
+      { providerIds: ['google'], frame: false, signal: done.signal },
+    ),
+    false,
+  );
+  assert.equal(
+    fake.lookups.length,
+    before,
+    'an already-aborted signal asks nothing',
+  );
+});
+
+test('a provider that ignores the abort and answers late still opens nothing', async (t) => {
+  let seen = null;
+  let release = null;
+  const slow = fakeProvider({
+    nearestImage: async (_point, { signal } = {}) => {
+      seen = signal;
+      await new Promise((resolve) => {
+        release = resolve;
+      });
+      return 'late-image';
+    },
+  });
+  const { layer: ignoring } = await enabledLayer(t, [slow]);
+  const { fakeHost } =
+    await import('../../testSupport/googleStreetViewFakes.mjs');
+  ignoring.attachViewerHost(fakeHost());
+  const controller = new AbortController();
+  const pending = ignoring.openNearest(
+    { lat: 1, lon: 2 },
+    { frame: false, signal: controller.signal },
+  );
+  await settle();
+  controller.abort();
+  assert.equal(seen?.aborted, true, 'the provider sees the abort');
+  release();
+  assert.equal(await pending, false);
+  const street = ignoring.getUIState().street;
+  assert.equal(street.open, false, 'the late answer opened nothing');
+  assert.equal(street.loading, false, 'no stuck spinner');
+  assert.equal(street.error, null);
+});
+
+test('providerStatus reports a keyless source on any map', async (t) => {
+  const keyless = await withStreetView(t, {
+    mapStack: 'osm',
+    mapillaryKeyless: true,
+  });
+  await settle();
+  const mapillary = keyless.layer.providerStatus('mapillary');
+  assert.equal(mapillary.configured, false);
+  assert.equal(mapillary.keyRequired, true);
+  assert.equal(mapillary.keyRejected, false);
+});
+
+test('providerStatus reports the key state as unknown until the status call answers', async (t) => {
+  // A freshly loaded sl= link meets its source in this state: unknown is not
+  // "needs its key", or the link would fail on a cold load.
+  const pending = fakeProvider();
+  pending.requiresKeyId = 'mapillary';
+  const create = pending.create;
+  pending.create = (context) => ({
+    ...create(context),
+    status: () => new Promise(() => {}),
+  });
+  const { layer } = await enabledLayer(t, [pending]);
+  const status = layer.providerStatus(pending.id);
+  assert.equal(status.configured, null);
+  assert.equal(status.keyRequired, false);
+});
+
+test('providerStatus reports a refused key on any map', async (t) => {
+  const refused = await withStreetView(t, { mapStack: 'osm' });
+  refused.loader.refuseKey();
+  await settle();
+  const google = refused.layer.providerStatus('google');
+  assert.equal(
+    google.keyRequired,
+    true,
+    'a refused key gates like a missing one',
+  );
+  assert.equal(google.keyRejected, true);
+  assert.equal(google.available, false, 'still not on this map');
+});
+
+test('an armed lookup dies with its source: switched off, or its map gone', async (t) => {
+  const { layer, stack } = await withStreetView(t);
+  layer.setProviderEnabled('google', true);
+  await settle();
+  layer.armNearest(
+    { lat: 1, lon: 2 },
+    { providerIds: ['google'], radiusM: 250 },
+  );
+  layer.setProviderEnabled('google', false);
+  assert.equal(
+    layer.getUIState().street.armed,
+    null,
+    'switching the source off clears it',
+  );
+  layer.setProviderEnabled('google', true);
+  layer.armNearest(
+    { lat: 1, lon: 2 },
+    { providerIds: ['google'], radiusM: 250 },
+  );
+  // Lighting Mapillary instead (one source at a time) turns Google off too.
+  layer.setProviderEnabled('mapillary', true);
+  assert.equal(
+    layer.getUIState().street.armed,
+    null,
+    'another source lit clears it',
+  );
+  layer.setProviderEnabled('google', true);
+  layer.armNearest(
+    { lat: 1, lon: 2 },
+    { providerIds: ['google'], radiusM: 250 },
+  );
+  // A map-stack notify that keeps Google 3D (a silent re-settle) keeps it.
+  stack.switchTo('photoreal');
+  assert.notEqual(
+    layer.getUIState().street.armed,
+    null,
+    'a notify on the same map keeps it',
+  );
+  stack.switchTo('osm');
+  assert.equal(
+    layer.getUIState().street.armed,
+    null,
+    'leaving Google 3D clears it',
+  );
+  // Arming notifies, so a panel can show the state.
+  let notified = 0;
+  const unsubscribe = layer.subscribe(() => notified++);
+  stack.switchTo('photoreal');
+  await settle();
+  const before = notified;
+  layer.armNearest({ lat: 1, lon: 2 }, { providerIds: ['google'] });
+  await settle();
+  assert.ok(notified > before, 'subscribers hear about the armed lookup');
+  unsubscribe();
+});
+
+test('a lookup armed with no point opens under the middle of the screen on the press', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point, options) => {
+      lookups.push({ ...point, radiusM: options?.radiusM ?? null });
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
+  });
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  // Registered before the layer exists, so a throwing create() still
+  // restores the document; destroy() runs first, while the stub is in place.
+  let layer = null;
+  t.after(() => {
+    layer?.destroy();
+    globalThis.document = saved;
+  });
+  layer = create({ providers: [provider], services: { scenePick } });
+  layer.init(viewer);
+  layer.enable(viewer);
+  layer.armNearest(null, { providerIds: [provider.id], radiusM: 250 });
+  assert.equal(
+    layer.getUIState().street.armed.point,
+    null,
+    'no point stored, not 0,0',
+  );
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  assert.equal(lookups.length, 1);
+  assert.ok(
+    Math.abs(lookups[0].lat - 38.5799) < 1e-9,
+    'the screen centre, not Null Island',
+  );
+  assert.ok(Math.abs(lookups[0].lon - -121.4937) < 1e-9);
+  assert.equal(lookups[0].radiusM, 250, 'with the armed radius');
+});
+
+test('the action over the real layer: a billed link arms without a lookup, and one press makes exactly one at the point', async (t) => {
+  const { layer, fake, viewer } = await withStreetView(t);
+  // The runner wires pointer tracking to the clock and camera.
+  viewer.clock ??= { onTick: { addEventListener: () => () => {} } };
+  viewer.camera.moveEnd ??= { addEventListener() {} };
+  const dataManager = {
+    layers: new Map([['street-level', { module: layer }]]),
+    isEnabled: () => true,
+    getLayerParams: () => layer.getParams(),
+    setLayerParams: (_id, params) => {
+      layer.setParams(params);
+      return true;
+    },
+    getAll: () => [{ id: 'street-level', name: 'Street Level', enabled: true }],
+  };
+  const styleManager = {
+    mapStackController: { getActiveId: () => 'photoreal' },
+    setMapStack: async () => ({ ok: true, activeStack: 'photoreal' }),
+  };
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+  const before = fake.lookups.length;
+  const armed = await runner('show_street_level', {
+    latitude: 38.57986,
+    longitude: -121.49372,
+    provider: 'google',
+    fly: false,
+    autoOpen: false,
+  });
+  assert.equal(armed.ok, true, armed.error);
+  assert.equal(armed.armed, true);
+  assert.equal(armed.providerName, 'Google Street View');
+  await settle();
+  assert.equal(fake.lookups.length, before, 'arming made no Google request');
+  assert.deepEqual(
+    layer
+      .getUIState()
+      .providers.filter((p) => p.on)
+      .map((p) => p.id),
+    ['google'],
+  );
+  assert.equal(layer.getUIState().street.open, false);
+  // The OPEN button.
+  assert.equal(
+    await layer.openNearest(undefined, {
+      providerIds: ['google'],
+      frame: false,
+      aim: 'screen-centre',
+    }),
+    true,
+  );
+  assert.equal(fake.lookups.length, before + 1, 'one request for the press');
+  assert.deepEqual(fake.lookups.at(-1).location, {
+    lat: 38.57986,
+    lng: -121.49372,
+  });
+  assert.equal(fake.lookups.at(-1).radius, 250);
+  assert.equal(layer.getUIState().street.imageId, 'pano-a');
+  // The same call without the gate opens at once, with one request.
+  layer.closeViewer();
+  const opened = await runner('show_street_level', {
+    latitude: 38.57986,
+    longitude: -121.49372,
+    provider: 'google',
+    fly: false,
+  });
+  assert.equal(opened.ok, true, opened.error);
+  assert.equal(opened.imageId, 'pano-a');
+  assert.equal(fake.lookups.length, before + 2);
+});
+
+test('openNearest keeps honouring the caller after the lookup: an abort while the viewer loads opens nothing', async (t) => {
+  let releaseMount = null;
+  const provider = fakeProvider({ nearestImage: async () => 'img-1' });
+  const create = provider.create;
+  provider.create = (context) => {
+    const instance = create(context);
+    const mount = instance.viewer.mount;
+    instance.viewer.mount = async (...args) => {
+      await new Promise((resolve) => {
+        releaseMount = resolve;
+      });
+      return mount(...args);
+    };
+    return instance;
+  };
+  const { layer } = await enabledLayer(t, [provider]);
+  const { fakeHost } =
+    await import('../../testSupport/googleStreetViewFakes.mjs');
+  layer.attachViewerHost(fakeHost());
+  const controller = new AbortController();
+  const pending = layer.openNearest(
+    { lat: 1, lon: 2 },
+    { frame: false, signal: controller.signal },
+  );
+  for (let i = 0; i < 20 && !releaseMount; i++) await settle();
+  assert.ok(releaseMount, 'the lookup answered and the viewer is mounting');
+  controller.abort();
+  releaseMount();
+  assert.equal(await pending, false);
+  assert.deepEqual(provider.calls.open, [], 'the photo was never opened');
+  assert.equal(layer.getUIState().street.open, false);
+  assert.equal(layer.getUIState().street.loading, false);
+});
+
+for (const rejectsOnAbort of [true, false]) {
+  test(`cancelling a lookup over an open photo clears its spinner (provider rejects: ${rejectsOnAbort})`, async (t) => {
+    const answer = deferred();
+    const provider = fakeProvider({
+      nearestImage: (_point, { signal }) => {
+        if (rejectsOnAbort)
+          signal.addEventListener('abort', () => answer.reject(signal.reason), {
+            once: true,
+          });
+        return answer.promise;
+      },
+    });
+    const { layer } = await enabledLayer(t, [provider]);
+    const { fakeHost } =
+      await import('../../testSupport/googleStreetViewFakes.mjs');
+    layer.attachViewerHost(fakeHost());
+    assert.equal(
+      await layer.openImage('mapillary', 'existing', { frame: false }),
+      true,
+    );
+    const controller = new AbortController();
+    const pending = layer.openNearest(
+      { lat: 1, lon: 2 },
+      { frame: false, signal: controller.signal },
+    );
+    assert.equal(layer.getUIState().street.loading, true);
+    controller.abort();
+    if (!rejectsOnAbort) answer.resolve('late-image');
+    assert.equal(await pending, false);
+    const street = layer.getUIState().street;
+    assert.equal(
+      street.loading,
+      false,
+      'the cancelled lookup owns and clears the spinner',
+    );
+    assert.equal(street.open, true, 'the existing photo remains open');
+    assert.equal(street.error, null);
+    assert.deepEqual(
+      provider.calls.open,
+      ['existing'],
+      'no replacement photo opens',
+    );
+  });
+}
+
+for (const rejectsOnAbort of [true, false]) {
+  test(`retired lookups release the caller listener (provider rejects: ${rejectsOnAbort})`, async (t) => {
+    let answer;
+    const provider = fakeProvider({
+      nearestImage: (_point, { signal }) => {
+        answer = deferred();
+        if (rejectsOnAbort)
+          signal.addEventListener('abort', () => answer.reject(signal.reason), {
+            once: true,
+          });
+        return answer.promise;
+      },
+    });
+    const { layer } = await enabledLayer(t, [provider]);
+    const lifetime = new AbortController();
+    for (let i = 0; i < 3; i++) {
+      const pending = layer.openNearest(
+        { lat: 1, lon: 2 },
+        { frame: false, signal: lifetime.signal },
+      );
+      assert.equal(getEventListeners(lifetime.signal, 'abort').length, 1);
+      layer.closeViewer();
+      if (!rejectsOnAbort) answer.resolve('late-image');
+      assert.equal(await pending, false);
+      assert.equal(
+        getEventListeners(lifetime.signal, 'abort').length,
+        0,
+        'closing the lookup releases its listener on the application lifetime',
+      );
+    }
+    assert.equal(lifetime.signal.aborted, false);
+  });
+}
+
+test('an aborted older lookup leaves its replacement’s spinner alone', async (t) => {
+  const answers = [];
+  const provider = fakeProvider({
+    nearestImage: (_point, { signal } = {}) =>
+      new Promise((resolve, reject) => {
+        answers.push(resolve);
+        signal?.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+        );
+      }),
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  const { fakeHost } =
+    await import('../../testSupport/googleStreetViewFakes.mjs');
+  layer.attachViewerHost(fakeHost());
+  const older = new AbortController();
+  const first = layer.openNearest(
+    { lat: 1, lon: 2 },
+    { frame: false, signal: older.signal },
+  );
+  await settle();
+  // A newer request replaces it, and its caller withdraws the old one too.
+  const second = layer.openNearest({ lat: 3, lon: 4 }, { frame: false });
+  older.abort();
+  assert.equal(await first, false);
+  assert.equal(
+    layer.getUIState().street.loading,
+    true,
+    'the newer lookup is still loading',
+  );
+  answers.at(-1)(null);
+  assert.equal(await second, false);
+  assert.equal(layer.getUIState().street.loading, false);
+  assert.match(
+    layer.getUIState().street.error,
+    /No street-level imagery/,
+    'the newer lookup reports its own result',
+  );
+});
+
+test('show_street_level opens a KartaView photo, and a plain link opens it at once since it is not billed', async (t) => {
+  const mapillary = fakeProvider();
+  let nearest = 'kv-1';
+  const kartaview = fakeProvider({
+    id: 'kartaview',
+    pickPrefix: 'kv:',
+    nearestImage: async () => nearest,
+  });
+  kartaview.name = 'KartaView';
+  kartaview.label = 'KARTAVIEW';
+  kartaview.defaultOn = false;
+  // As the real provider: 360° / flat and SINCE (the setFilter log stays in
+  // the fake's closure).
+  kartaview.filters = Object.freeze(['pano', 'since']);
+  const { layer, viewer } = await enabledLayer(t, [mapillary, kartaview]);
+  const { fakeHost } =
+    await import('../../testSupport/googleStreetViewFakes.mjs');
+  layer.attachViewerHost(fakeHost());
+  viewer.clock ??= { onTick: { addEventListener: () => () => {} } };
+  viewer.camera.moveEnd ??= { addEventListener() {} };
+  const dataManager = {
+    layers: new Map([['street-level', { module: layer }]]),
+    isEnabled: () => true,
+    getLayerParams: () => layer.getParams(),
+    setLayerParams: (_id, params) => {
+      layer.setParams(params);
+      return true;
+    },
+    getAll: () => [{ id: 'street-level', name: 'Street Level', enabled: true }],
+  };
+  const styleManager = {
+    mapStackController: { getActiveId: () => 'osm' },
+    setMapStack: async () => ({ ok: false, error: 'no map switch expected' }),
+  };
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+  // The way a plain sl=kartaview link calls it: autoOpen false.
+  const result = await runner('show_street_level', {
+    latitude: 52.52,
+    longitude: 13.405,
+    provider: 'kartaview',
+    fly: false,
+    autoOpen: false,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.armed, undefined, 'not armed: KartaView bills nothing');
+  assert.equal(result.provider, 'kartaview');
+  assert.equal(result.providerName, 'KartaView');
+  assert.deepEqual(
+    layer
+      .getUIState()
+      .providers.filter((p) => p.on)
+      .map((p) => p.id),
+    ['kartaview'],
+  );
+  assert.deepEqual(kartaview.calls.open, ['kv-1']);
+  assert.equal(layer.providerStatus('kartaview').billed, false);
+  assert.equal(layer.requiredMapStack('kartaview'), null);
+
+  // With 360° only on, an empty search names the filter, not just "no imagery".
+  layer.closeViewer?.();
+  layer.setParams({ pano: 'pano' });
+  nearest = null;
+  const empty = await runner('show_street_level', {
+    latitude: 52.52,
+    longitude: 13.405,
+    provider: 'kartaview',
+    fly: false,
+  });
+  assert.deepEqual([empty.ok, empty.stage], [false, 'imagery']);
+  assert.equal(empty.filter?.pano, 'pano');
+  assert.match(empty.error, /with the 360° filter on$/);
+  layer.setParams({ pano: 'all' });
+  const plain = await runner('show_street_level', {
+    latitude: 52.52,
+    longitude: 13.405,
+    provider: 'kartaview',
+    fly: false,
+  });
+  assert.equal(plain.ok, false);
+  assert.equal(plain.filter, undefined, 'no filter, no hint');
+  assert.doesNotMatch(plain.error, /filter/);
+});
+
+test('show_street_level switches from KartaView to Panoramax and opens its photo at once, unbilled', async (t) => {
+  const mapillary = fakeProvider();
+  const kartaview = fakeProvider({ id: 'kartaview', pickPrefix: 'kv:' });
+  kartaview.name = 'KartaView';
+  kartaview.defaultOn = false;
+  const panoramax = fakeProvider({
+    id: 'panoramax',
+    pickPrefix: 'px:',
+    nearestImage: async () => 'px-1',
+  });
+  panoramax.name = 'Panoramax';
+  panoramax.label = 'PANORAMAX';
+  panoramax.defaultOn = false;
+  const { layer, viewer } = await enabledLayer(t, [
+    mapillary,
+    kartaview,
+    panoramax,
+  ]);
+  const { fakeHost } =
+    await import('../../testSupport/googleStreetViewFakes.mjs');
+  layer.attachViewerHost(fakeHost());
+  viewer.clock ??= { onTick: { addEventListener: () => () => {} } };
+  viewer.camera.moveEnd ??= { addEventListener() {} };
+  layer.setParams({ mapillary: false, kartaview: true, panoramax: false });
+  const dataManager = {
+    layers: new Map([['street-level', { module: layer }]]),
+    isEnabled: () => true,
+    getLayerParams: () => layer.getParams(),
+    setLayerParams: (_id, params) => {
+      layer.setParams(params);
+      return true;
+    },
+    getAll: () => [{ id: 'street-level', name: 'Street Level', enabled: true }],
+  };
+  const styleManager = {
+    mapStackController: { getActiveId: () => 'osm' },
+    setMapStack: async () => ({ ok: false, error: 'no map switch expected' }),
+  };
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+  // The way a plain sl=panoramax link calls it: autoOpen false.
+  const result = await runner('show_street_level', {
+    latitude: 48.8874,
+    longitude: 2.3495,
+    provider: 'panoramax',
+    fly: false,
+    autoOpen: false,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.armed, undefined, 'not armed: Panoramax bills nothing');
+  assert.equal(result.providerName, 'Panoramax');
+  assert.deepEqual(
+    layer
+      .getUIState()
+      .providers.filter((p) => p.on)
+      .map((p) => p.id),
+    ['panoramax'],
+    'KartaView switched off',
+  );
+  assert.deepEqual(panoramax.calls.open, ['px-1']);
+  assert.deepEqual(kartaview.calls.open, [], 'nothing asked of KartaView');
+  assert.equal(layer.providerStatus('panoramax').billed, false);
+  assert.equal(layer.requiredMapStack('panoramax'), null);
+});
+
 test('the panel says why a lit Street View draws nothing off Google 3D', async (t) => {
   const { presentStreetLevelPanel } =
     await import('../../ui/streetLevelPresentation.js');
@@ -1126,6 +1912,88 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
   stack.switchTo('esri-imagery');
   const view = presentStreetLevelPanel(layer.getUIState());
   assert.match(view.meta, /Google Street View needs the Google 3D map/);
+});
+
+test('OPEN aimed at the sky after a link armed opens nothing: never the far link point', async (t) => {
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point) => {
+      lookups.push(point);
+      return null;
+    },
+  });
+  const { layer } = await enabledLayer(t, [provider], {
+    services: { scenePick },
+    setup: (viewer) => {
+      // Every pick misses the ground: the screen centre is sky.
+      Object.assign(viewer.scene, {
+        pickPositionSupported: true,
+        pickPosition: () => undefined,
+      });
+      viewer.globe = { pick: () => undefined };
+      viewer.scene.canvas.clientWidth = 1000;
+      viewer.scene.canvas.clientHeight = 600;
+    },
+  });
+  layer.armNearest({ lat: 48.8584, lon: 2.2945 }, { radiusM: 250 });
+  assert.equal(
+    await layer.openNearest(undefined, { aim: 'screen-centre' }),
+    false,
+  );
+  assert.deepEqual(lookups, [], 'no paid Paris lookup from another city’s sky');
+  const street = layer.getUIState().street;
+  assert.equal(street.nearestOutcome, 'sky');
+  assert.match(street.error, /Aim the middle of the view/);
+});
+
+test('a request of its own (armed: false) neither uses nor drops the link’s armed point', async (t) => {
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point, options) => {
+      lookups.push({ point, radiusM: options?.radiusM ?? null });
+      return null;
+    },
+  });
+  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  const { layer } = await enabledLayer(t, [provider], {
+    services: { scenePick },
+    setup: (viewer) => {
+      Object.assign(viewer.scene, {
+        pickPositionSupported: true,
+        pickPosition: (at) =>
+          at.x === 500 && at.y === 300 ? centre : undefined,
+      });
+      viewer.scene.canvas.clientWidth = 1000;
+      viewer.scene.canvas.clientHeight = 600;
+    },
+  });
+  // About 120 m away: an OPEN press would take the link's spot.
+  layer.armNearest({ lat: 38.5808, lon: -121.494 }, { radiusM: 250 });
+  await layer.openNearest(undefined, { aim: 'screen-centre', armed: false });
+  const asked = lookups.at(-1);
+  assert.ok(Math.abs(asked.point.lat - 38.5799) < 1e-9, 'the screen centre');
+  assert.equal(asked.radiusM, null, 'its own radius');
+  assert.equal(layer.getUIState().street.nearestOutcome, 'empty');
+  assert.deepEqual(
+    layer.getUIState().street.armed?.point,
+    { lat: 38.5808, lon: -121.494 },
+    'still armed for the OPEN press',
+  );
+});
+
+test('a failing source is not reported as missing imagery', async (t) => {
+  const provider = fakeProvider({
+    nearestImage: async () => {
+      throw new Error('Mapillary graph HTTP 500');
+    },
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  assert.equal(await layer.openNearest({ lat: 1, lon: 2 }), false);
+  const street = layer.getUIState().street;
+  assert.equal(street.nearestOutcome, null);
+  assert.equal(street.error, 'Mapillary graph HTTP 500');
 });
 
 /** Mapillary (keyless unless `mapillary` says otherwise) plus KartaView. */
@@ -1182,4 +2050,84 @@ test('filter-only updates keep the lit source, even a chosen keyless Mapillary',
       JSON.stringify(params),
     );
   }
+});
+
+test('a replacing lookup keeps the viewer open while it looks, so EXPAND stays with the new photo', async (t) => {
+  const answers = ['img-1', 'img-2'];
+  const provider = posingProvider({
+    nearestImage: async () => answers.shift(),
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  assert.equal(await layer.openNearest({ lat: 1, lon: 2 }), true);
+  const seen = [];
+  const unsubscribe = layer.subscribe(() =>
+    seen.push(layer.getUIState().street.open),
+  );
+  t.after(unsubscribe);
+  assert.equal(
+    await layer.openNearest({ lat: 3, lon: 4 }, { replace: true }),
+    true,
+  );
+  assert.ok(seen.length > 0);
+  assert.ok(!seen.includes(false), 'never published closed on the way');
+  assert.deepEqual(provider.calls.open, ['img-1', 'img-2']);
+});
+
+test('a replacing lookup that finds nothing closes the old photo and keeps its own message', async (t) => {
+  const answers = ['img-1', null];
+  const provider = posingProvider({
+    nearestImage: async () => answers.shift(),
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  await layer.openNearest({ lat: 1, lon: 2 });
+  assert.equal(
+    await layer.openNearest({ lat: 3, lon: 4 }, { replace: true }),
+    false,
+  );
+  const street = layer.getUIState().street;
+  assert.equal(street.open, false, 'no photo of another place');
+  assert.equal(street.nearestOutcome, 'empty');
+  assert.match(street.error, /No street-level imagery within 50 m/);
+});
+
+test('a found photo the viewer cannot load keeps its error on the open viewer', async (t) => {
+  const provider = posingProvider({ nearestImage: async () => 'img-1' });
+  const create = provider.create;
+  provider.create = (context) => {
+    const instance = create(context);
+    instance.viewer.open = async () => {
+      throw new Error('Image could not be opened');
+    };
+    return instance;
+  };
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  assert.equal(
+    await layer.openNearest({ lat: 1, lon: 2 }, { replace: true }),
+    false,
+  );
+  const street = layer.getUIState().street;
+  assert.equal(street.open, true);
+  assert.equal(street.error, 'Image could not be opened');
+});
+
+test('proceed() is asked after the lookup: false loads nothing and clears the spinner', async (t) => {
+  const provider = posingProvider({ nearestImage: async () => 'img-1' });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  let asked = 0;
+  const opened = await layer.openNearest(
+    { lat: 1, lon: 2 },
+    { proceed: () => (asked++, false) },
+  );
+  assert.equal(opened, false);
+  assert.equal(asked, 1);
+  assert.deepEqual(provider.calls.open, [], 'the viewer never loads it');
+  assert.equal(layer.getUIState().street.loading, false);
+  assert.equal(
+    await layer.openNearest({ lat: 1, lon: 2 }, { proceed: () => true }),
+    true,
+  );
 });

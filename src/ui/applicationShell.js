@@ -4,7 +4,11 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
-import { initMobileShell } from './mobileShell.js';
+import {
+  initMobileShell,
+  MOBILE_SHELL_MEDIA_QUERY,
+  sheetForPanelId,
+} from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -61,6 +65,7 @@ import { useHudStore } from './stores/hud.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
+import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
@@ -92,7 +97,7 @@ export class StyleManager extends ShellFacade {
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
-   *   picker, for a host that does not initialize Core's locale.
+   *   picker, for a host that offers its own language choice.
    */
   constructor(
     viewer,
@@ -160,6 +165,8 @@ export class StyleManager extends ShellFacade {
     });
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
+    // Scrolling at a screen edge steps through that side's rail panels.
+    this._removeRailEdgeScroll = installRailEdgeScroll();
     this._feedback = new ShellFeedback({
       readLayers: () => withPlacePacks(this._dataManager?.getAll?.() || []),
     });
@@ -396,6 +403,9 @@ export class StyleManager extends ShellFacade {
             owner: 'cockpit-orbit',
             switchPolicy: 'esri-if-photoreal',
           }) ?? null,
+        // The application's own first-person subjects
+        // (src/cockpitSubjectProviders.js), checked by the coordinator.
+        cockpitSubjects: services.cockpitSubjects,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -760,7 +770,7 @@ export class StyleManager extends ShellFacade {
     this._lifetime.own(
       onLocaleChange(() => nextTick(() => this._sizeDisplayLabelColumn())),
     );
-    // A host that does not initialize Core's locale shows no picker.
+    // A host that offers its own language choice shows no picker.
     if (this._localePickerEnabled === false) return;
     this._publishLocalePicker();
   }
@@ -1143,6 +1153,7 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
+        revealPanel: () => this.revealPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1192,6 +1203,11 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        // Clear selected data layers and Context isolation switch the layer
+        // off without the user asking: the panel keeps its state for both.
+        preservePanelState: () =>
+          this._preservePanelStateDuringLayerClear ||
+          this._contextSuspendsLayer('cctv'),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
       },
@@ -1256,6 +1272,20 @@ export class StyleManager extends ShellFacade {
     } = {},
   ) {
     return this._panelChrome.setPanelCollapsed(...arguments);
+  }
+
+  /**
+   * Bring a panel into view on a phone, where the rails show only as tab
+   * sheets: opens the sheet that holds it. Does nothing above 720px.
+   * @param {string} panelId - DOM id of the panel.
+   * @returns {void}
+   */
+  revealPanel(panelId) {
+    const sheet = sheetForPanelId(panelId);
+    if (!globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches) return;
+    if (sheet) this._mobileShell?.setSheet(sheet);
+    // The sheet opens at its top; a panel lower in the rail is scrolled to.
+    document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });
   }
 
   /**
@@ -1364,9 +1394,12 @@ export class StyleManager extends ShellFacade {
       };
     }
     if (!target.available) {
+      // The controller knows why (Google 3D: no Maps key; others: no ion token).
       return {
         ok: false,
-        error: `${target.label} requires a Cesium ion token`,
+        error:
+          target.unavailableReason ||
+          `${target.label} requires a Cesium ion token`,
         activeStack: this.mapStackController.getActiveId(),
       };
     }
@@ -1826,6 +1859,7 @@ export class StyleManager extends ShellFacade {
     const { destroyTrackedReadout, destroyWorldOverlay, destroyDetection } =
       this.services;
     if (this._disposed) return;
+    this._removeRailEdgeScroll?.();
     this._shareRestoration.destroy();
     this._feedback.clearLoadingStatus();
     this._disposed = true;

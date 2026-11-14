@@ -18,6 +18,7 @@ export class LayerPresentation {
     this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
       if (change.type === 'status') this.refresh();
+      else if (change.type === 'registrations') this._panel?.rerender();
       else if (change.type === 'destroy-all') this.destroy();
       else {
         const reason =

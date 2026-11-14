@@ -406,17 +406,20 @@ export function createSubject({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * The tracked airliner's Planespotters photo, for the Contacts panel.
+   * The subject's photo, for the Contacts panel: the tracked airliner's
+   * Planespotters photo, or the selected vessel's Open Vessel Photos photo.
    *
-   * Only the flights layer looks photos up, and only for the plane it tracks;
-   * a vessel, an installation, a military aircraft or an untracked flight has
-   * none.
+   * The flights layer looks photos up only for the plane it tracks, the
+   * vessel layer only for the vessel selected; an installation, a military
+   * aircraft or an untracked flight has none.
    * @param {{layerId: string, id: string}|null} subject Current subject.
    * @param {?object} [tracked] The subject's tracked descriptor, when the
    *   caller already has it.
-   * @returns {?{src: string, width: ?number, height: ?number, photographer: string, link: string}}
+   * @returns {?{src: string, width: ?number, height: ?number, photographer: string, link: string, licence?: string}}
    */
   function resolveSubjectPhoto(subject, tracked = trackedSubjectOf(subject)) {
+    if (subject?.layerId === 'ais-live-vessels')
+      return aisLiveVesselsLayer.getVesselPhoto?.(subject.id) ?? null;
     return subject?.layerId === 'flights' && tracked?.photo
       ? tracked.photo
       : null;
@@ -517,10 +520,15 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const latitude = Number(record.latitude);
     const longitude = Number(record.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    // A vessel reads as its name and MMSI; a vessel named by its MMSI alone
+    // already carries it.
+    const label = String(record.label || record.id);
+    const mmsi = String(record.properties?.mmsi || '');
     return {
       layerId: record.layerId,
       id: record.properties?.vesselId || record.id,
-      label: record.label || record.id,
+      // i18n-ignore: MMSI is a radio identity code, as on the vessel card
+      label: mmsi && !label.includes(mmsi) ? `${label} · MMSI ${mmsi}` : label,
       memberNames: record.properties?.memberNames || [],
       position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
     };

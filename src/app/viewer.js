@@ -375,8 +375,15 @@ export function installGlobeInViewRecovery(
   };
 }
 
-/** Cesium.Viewer options of the standard globe viewer. */
-export function applicationViewerOptions(creditContainer) {
+/**
+ * Cesium.Viewer options of the standard globe viewer. `showRenderLoopErrors`
+ * false leaves render errors to the caller's own notice instead of Cesium's
+ * panel.
+ */
+export function applicationViewerOptions(
+  creditContainer,
+  { showRenderLoopErrors = true } = {},
+) {
   return {
     timeline: false,
     animation: false,
@@ -396,16 +403,21 @@ export function applicationViewerOptions(creditContainer) {
     creditContainer,
     msaaSamples: 4,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
+    showRenderLoopErrors,
   };
 }
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
+export function createApplicationViewer({
+  container,
+  creditContainer,
+  showRenderLoopErrors,
+}) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
     container,
-    applicationViewerOptions(creditContainer),
+    applicationViewerOptions(creditContainer, { showRenderLoopErrors }),
   );
   try {
     viewer.targetFrameRate = 60;

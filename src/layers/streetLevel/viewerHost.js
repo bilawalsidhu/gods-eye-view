@@ -73,6 +73,19 @@ export function createViewerHost({ state, parts }) {
       active.unsubscribe();
       active.adapter.unmount();
       active = null;
+      // The photo being replaced belonged to that source: none of its details
+      // (id, place, author, link) describe the one loading now.
+      const { open, loading, error, providerId, providerName, providerLabel } =
+        state.street;
+      Object.assign(state.street, freshStreet(), {
+        open,
+        loading,
+        error,
+        providerId,
+        providerName,
+        providerLabel,
+      });
+      parts.marker.clear();
     }
     const adapter = entry.instance.viewer;
     const promise = (async () => {
@@ -99,12 +112,17 @@ export function createViewerHost({ state, parts }) {
   }
 
   /**
-   * Open an image: true once its first pose is in, false if it failed or was
-   * overtaken. `frame: false` leaves the camera where it is.
+   * Open an image: true once its first pose is in, false if it failed, was
+   * overtaken, or `signal` fired first. An abort while the viewer mounts or
+   * loads closes the photo: nothing opens for a request that was withdrawn.
    */
-  async function open(providerId, imageId, { frame = true } = {}) {
+  async function open(
+    providerId,
+    imageId,
+    { frame = true, signal = null } = {},
+  ) {
     const entry = state.providers.get(providerId);
-    if (!entry || !imageId) return false;
+    if (!entry || !imageId || signal?.aborted) return false;
     if (!state.street.host) {
       // A nearest-image lookup may have set it; nothing is loading now.
       state.street.loading = false;
@@ -115,6 +133,10 @@ export function createViewerHost({ state, parts }) {
     }
     const seq = ++openSeq;
     const current = () => seq === openSeq;
+    const onAbort = () => {
+      if (current()) close();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
     // Claimed now, honoured after loading only if nothing newer took the camera.
     const ticket = frame ? parts.framing.begin() : null;
     Object.assign(state.street, {
@@ -138,6 +160,7 @@ export function createViewerHost({ state, parts }) {
       if (current())
         state.street.error = error?.message || msg('Image could not be opened');
     } finally {
+      signal?.removeEventListener('abort', onAbort);
       if (current()) state.street.loading = false;
       notify();
     }
@@ -165,6 +188,11 @@ export function createViewerHost({ state, parts }) {
     active?.adapter.resize();
   }
 
+  /** Stop a sequence playing in the open photo (adapters that play). */
+  function stopPlayback() {
+    active?.adapter.stopPlayback?.();
+  }
+
   function setRenderMode(mode) {
     state.street.renderMode = mode === 'fill' ? 'fill' : 'letterbox';
     active?.adapter.setRenderMode?.(state.street.renderMode);
@@ -187,5 +215,27 @@ export function createViewerHost({ state, parts }) {
     active = null;
   }
 
-  return { attach, open, close, resize, setRenderMode, unmount };
+  /**
+   * Destroy `providerId`'s viewer and leave the panel's state alone: what a
+   * request leaves behind once it replaced or closed that source's photo.
+   */
+  function release(providerId) {
+    if (active?.id !== providerId && mounting?.id !== providerId) return;
+    const pending = mounting;
+    mounting = null;
+    active?.unsubscribe();
+    (active?.adapter ?? pending?.adapter)?.unmount();
+    active = null;
+  }
+
+  return {
+    attach,
+    open,
+    close,
+    resize,
+    setRenderMode,
+    stopPlayback,
+    unmount,
+    release,
+  };
 }
