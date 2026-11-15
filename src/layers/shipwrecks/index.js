@@ -159,6 +159,11 @@ export function createShipwrecksLayer({
       (a, b) => (a.casualties || 0) - (b.casualties || 0),
     );
     for (const record of ordered) {
+      // On the ellipsoid, with no height reference. A ground-clamped billboard
+      // reads the terrain height as it is created, and that read for every
+      // wreck in one pass froze the page for seconds. Wrecks lie at sea, the
+      // depth test is off and the card already sits here, so the marker
+      // shows in the same place.
       const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
       const size = markerPixelSize(record.casualties);
       const billboard = _markers.add({
@@ -167,7 +172,6 @@ export function createShipwrecksLayer({
         image: _images[eraOf(record)],
         width: size,
         height: size,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
       const pin = {

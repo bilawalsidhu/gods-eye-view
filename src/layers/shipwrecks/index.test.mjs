@@ -163,6 +163,20 @@ test('markers sit on the wreck: no eye offset, bigger toll drawn last', async ()
   assert.equal(h.markers.billboards[2].width, markerPixelSize(1500));
 });
 
+test('markers are placed without a terrain height read each', async () => {
+  // A ground-clamped billboard reads the terrain height when it is created;
+  // for every wreck in one pass that froze the page for seconds.
+  const h = harness({ snapshots: [snapshot([wreck('a'), wreck('b')])] });
+  h.layer.enable();
+  await h.layer.update();
+  assert.equal(h.markers.billboards.length, 2);
+  for (const billboard of h.markers.billboards) {
+    assert.equal(billboard.heightReference, undefined);
+    const { height } = Cesium.Cartographic.fromCartesian(billboard.position);
+    assert.equal(Math.abs(height) < 1e-6, true);
+  }
+});
+
 test('an unchanged snapshot does not rebuild the markers', async () => {
   const records = [wreck('a')];
   const h = harness({
