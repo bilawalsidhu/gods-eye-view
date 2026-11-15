@@ -16,11 +16,23 @@ body.context-docked #right-context-rail {
   height: 100vh !important;
 }
 
+/* The map credits stay readable beside the column: their row ends short of
+   it. creditAttribution.test.mjs pins this. */
+body.context-docked:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  #cesium-credits {
+  max-width: calc(100vw - 3rem - var(--context-dock-width));
+}
+
 body.context-docked #right-context-rail > .gev-panel-rail {
   display: none;
 }
 
-body.context-docked #right-context-rail > :not(#global-context-panel):not(.gev-panel-rail) {
+body.context-docked
+  #right-context-rail
+  > :not(#global-context-panel):not(.gev-panel-rail) {
   display: none !important;
 }
 
@@ -165,7 +177,8 @@ body.mobile-shell .context-dock-btn {
 /* While a search is typed, what cannot match steps aside so the matches lead:
    the weather, the view's own figures, the route and altitude graph, and the
    layer switches. The radius stays: it sets how far the search looks. */
-.context-searching :is(
+.context-searching
+  :is(
     .spot-conditions__weather,
     .spot-conditions__loading,
     .spot-conditions__source,

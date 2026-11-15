@@ -217,6 +217,7 @@ const RECOGNIZED = new Set([
   '#command-dock.dock-has-two-pinned-trays #control-panel.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
 ]);
 
+const DOCKED_RAIL = 'body.context-docked #right-context-rail';
 const ELEMENT_KEYS = ['#cesium-credits', '#command-dock', '#right-context-rail', '.dock-popover-content'];
 
 // Any of these on a modelled element's own box changes the geometry this pin
@@ -412,6 +413,9 @@ test('the model refuses every cascade construct it cannot resolve', () => {
   for (const { rule, part } of ownBoxEntries()) {
     const guarded = rule.decls.filter((decl) => GUARDED_PROPS.has(decl.prop));
     if (!guarded.length) continue;
+    // Expanded Context covers the right edge top to bottom; the credit row
+    // stops short of it instead (the docked-Context test below).
+    if (part === DOCKED_RAIL) continue;
     if (!RECOGNIZED.has(part)) {
       complaints.push(`unrecognized selector positions a modelled element: "${part}" (${guarded.map((d) => d.prop).join(', ')})`);
       continue;
@@ -601,6 +605,32 @@ test('the full-width context rail clears the required credit at every modelled v
     });
   }
   assert.deepEqual(failures, [], `context rail re-enters the credit band at ${failures.join(', ')}`);
+});
+
+test('expanded Context and the credit row never overlap', () => {
+  const docked = RULES.filter((rule) => rule.parts.includes(DOCKED_RAIL));
+  assert.equal(docked.length, 1, 'expanded Context has exactly one rule for its column');
+  assert.deepEqual(docked[0].media, [], 'the expanded column applies at every width');
+  const decl = (prop) => docked[0].decls.find((d) => d.prop === prop)?.value;
+  assert.equal(decl('right'), '0');
+  assert.equal(decl('width'), 'var(--context-dock-width)');
+  // The credit row starts under 3rem from the left and may run to its
+  // max-width: with 3rem and the column's width taken off, it ends short of
+  // the column.
+  for (const base of [CREDIT_SELECTORS[1], MINIMAL_HUD_CREDIT]) {
+    const selector = base.replace('body:not(', 'body.context-docked:not(');
+    assert.ok(compareSpecificity(specificity(selector), specificity(base)) > 0);
+    for (const width of WIDTHS) {
+      const left = resolve([base], 'left', width, 'credit').decl.value;
+      const rem = /^(\d*\.?\d+)rem$/.exec(left);
+      assert.ok(rem && Number(rem[1]) < 3, `at ${width}px the credit starts at ${left}`);
+      assert.equal(
+        resolve([base, selector], 'max-width', width, 'docked credit').decl.value,
+        'calc(100vw - 3rem - var(--context-dock-width))',
+        `at ${width}px the credit row can run under expanded Context`,
+      );
+    }
+  }
 });
 
 test('the dock anchor changes at 720px — the 2vh cancellation is band-limited', () => {

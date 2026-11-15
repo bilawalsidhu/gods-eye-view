@@ -152,7 +152,7 @@ test('Context async action buttons remain focused while busy', () => {
   assert.match(clearButton, /:aria-busy=/);
 });
 
-test('Context header holds only its title, edge switch and collapse control', () => {
+test('Context header holds its title, search, expand, edge switch and collapse control', () => {
   const panel = html.match(
     /<div id="global-context-panel"[\s\S]*?<div class="cyber-panel-body[ "]/,
   );
@@ -174,6 +174,10 @@ test('Context header holds only its title, edge switch and collapse control', ()
   assert.deepEqual(tags, [
     'span.panel-title',
     'span.panel-divider',
+    'button.context-dock-btn',
+    'span.material-symbols-outlined',
+    'button.context-dock-btn',
+    'span.material-symbols-outlined',
     'button.panel-edge-btn',
     'span.material-symbols-outlined',
     'button.panel-collapse-btn',
