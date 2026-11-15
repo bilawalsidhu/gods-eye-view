@@ -257,6 +257,9 @@ test('MGRS squares across a zone edge, Norway and Svalbard', () => {
   assert.ok(parseGridReference('33X VG 12345 67890'));
   // A square that lands outside its zone's longitudes.
   assert.equal(parseGridReference('18T SL 50000 50000'), null);
+  // Squares touching the antimeridian, from either side.
+  for (const text of ['1HBD1970044714', '60TYQ364873', '1QAC860142'])
+    assert.ok(parseGridReference(text), text);
 });
 
 test('a UTM N is the northern hemisphere where band N does not fit', () => {

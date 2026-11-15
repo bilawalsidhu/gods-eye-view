@@ -257,7 +257,11 @@ function parseMgrs(text) {
   const [zoneWest, zoneEast] = zoneLongitudes(zone, band);
   const lonSlack =
     slack / Math.max(Math.cos((point.lat * Math.PI) / 180), 0.01);
-  return point.lon >= zoneWest - lonSlack && point.lon <= zoneEast + lonSlack
+  // Compare across the antimeridian unwrapped: zone 1 starts at 180°W.
+  let lon = point.lon;
+  if (lon - zoneWest > 180) lon -= 360;
+  if (zoneEast - lon > 180) lon += 360;
+  return lon >= zoneWest - lonSlack && lon <= zoneEast + lonSlack
     ? point
     : null;
 }
