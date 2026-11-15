@@ -8557,7 +8557,9 @@ and the timeline time alone at a past time.
 The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
 has no time controls of its own: `weatherClock.world` is the world clock it
 follows, where time moves. A weather row's `play`, `latest` and `step` params
-move that world clock as the timeline does.
+move that world clock as the timeline does. A weather layer built without a shared
+clock keeps one of its own on the page's world clock for its lifetime; it has
+no frame replay of its own either way.
 
 Source, opacity and coverage navigation live in the WEATHER panel's cards, not
 in the rows; the panel shows the frame time and has no time controls. The
