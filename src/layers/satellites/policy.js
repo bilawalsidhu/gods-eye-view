@@ -31,7 +31,16 @@ export const ISS_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 export const ORBIT_PATH_STEPS = 180;
 // points per orbital path
 
+/** How often every core satellite takes a fresh SGP4 sample (wall ms). */
 export const POSITION_UPDATE_MS = 1000;
+/**
+ * Between SGP4 samples every point is reckoned each frame from its last one
+ * (motion.js). A sample this far from the world time is taken again, so a
+ * point is never more than about 10 m off SGP4 however fast time plays.
+ */
+export const ORBIT_SAMPLE_HORIZON_MS = 30_000;
+/** Beyond this from its sample a point is left where it is until sampled again. */
+export const ORBIT_RECKON_LIMIT_MS = 120_000;
 /** How far either side of now SGP4 on current element sets stays meaningful. */
 export const SATELLITE_COVERAGE_MS = 14 * 24 * 3_600_000;
 
@@ -41,7 +50,6 @@ export const SATELLITE_COVERAGE_MS = 14 * 24 * 3_600_000;
  * drifts a few degrees a day.
  */
 export const ORBIT_REBAKE_MS = 30 * 60_000;
-// re-propagate every 1s (SGP4 is smooth at this rate)
 
 export const RING_ROTATION_MS = 1000;
 // re-align baked orbit rings to current GMST every 1s
@@ -79,6 +87,14 @@ export const DENSE_GROUP_PATH = 'starlink';
 
 export const DENSE_REFRESH_FRAMES = 300;
 // full dense pass spread over ~300 frames (~5s @ 60fps)
+
+/**
+ * The most dense extras sampled in one frame while time plays fast (~4 ms).
+ * Past about 10 minutes of world time a second the full dense set no longer
+ * fits within ORBIT_RECKON_LIMIT_MS, and its points move only as they are
+ * sampled.
+ */
+export const DENSE_SAMPLES_PER_FRAME_MAX = 2000;
 
 export const DENSE_CREATE_CHUNK = 1500;
 // satrec builds per macro-task while loading
