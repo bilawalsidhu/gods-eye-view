@@ -3629,5 +3629,14 @@
   "Scope opacity": "Scope-opacitet",
   "How dark the scope shades the view outside the keyhole": "Hur mycket scopet mörkar vyn utanför nyckelhålet",
   "Reset to default": "Återställ till standard",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Återställ Visuellt till standard: Normal stil, HUD, scope, etiketter och effekter"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Återställ Visuellt till standard: Normal stil, HUD, scope, etiketter och effekter",
+  "All layers": "Alla lager",
+  "On": "På",
+  "Off": "Av",
+  "Search layers": "Sök lager",
+  "Filter layers": "Filtrera lager",
+  "Status": "Status",
+  "Search layers…": "Sök lager…",
+  "Layer groups": "Lagergrupper",
+  "Jump to {name}": "Gå till {name}"
 }

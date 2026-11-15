@@ -3803,5 +3803,14 @@
   "Scope opacity": "Непрозорість прицілу",
   "How dark the scope shades the view outside the keyhole": "Наскільки приціл затемнює вигляд за межами прицілу",
   "Reset to default": "Скинути до типових",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Скинути «Візуал» до типових налаштувань: звичайний вигляд, HUD, приціл, підписи та ефекти"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Скинути «Візуал» до типових налаштувань: звичайний вигляд, HUD, приціл, підписи та ефекти",
+  "All layers": "Усі шари",
+  "On": "Увімкнені",
+  "Off": "Вимкнені",
+  "Search layers": "Пошук шарів",
+  "Filter layers": "Фільтр шарів",
+  "Status": "Стан",
+  "Search layers…": "Пошук шарів…",
+  "Layer groups": "Групи шарів",
+  "Jump to {name}": "Перейти до «{name}»"
 }

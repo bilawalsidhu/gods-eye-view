@@ -3977,5 +3977,14 @@
   "Scope opacity": "عتامة المنظار",
   "How dark the scope shades the view outside the keyhole": "مدى تعتيم المنظار للعرض خارج الفتحة",
   "Reset to default": "إعادة التعيين إلى الافتراضي",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "إعادة المرئيات إلى إعداداتها الافتراضية: المظهر العادي وHUD والمنظار والتسميات والمؤثرات"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "إعادة المرئيات إلى إعداداتها الافتراضية: المظهر العادي وHUD والمنظار والتسميات والمؤثرات",
+  "All layers": "كل الطبقات",
+  "On": "تشغيل",
+  "Off": "إيقاف",
+  "Search layers": "البحث في الطبقات",
+  "Filter layers": "تصفية الطبقات",
+  "Status": "الحالة",
+  "Search layers…": "ابحث في الطبقات…",
+  "Layer groups": "مجموعات الطبقات",
+  "Jump to {name}": "الانتقال إلى {name}"
 }

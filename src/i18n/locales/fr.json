@@ -3716,5 +3716,14 @@
   "Scope opacity": "Opacité de la lunette",
   "How dark the scope shades the view outside the keyhole": "À quel point la lunette assombrit la vue hors de l'ouverture",
   "Reset to default": "Rétablir les valeurs par défaut",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Rétablir les valeurs par défaut de Visuel : aspect Normal, HUD, lunette, libellés et effets"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Rétablir les valeurs par défaut de Visuel : aspect Normal, HUD, lunette, libellés et effets",
+  "All layers": "Toutes les couches",
+  "On": "Actives",
+  "Off": "Inactives",
+  "Search layers": "Rechercher des couches",
+  "Filter layers": "Filtrer les couches",
+  "Status": "État",
+  "Search layers…": "Rechercher des couches…",
+  "Layer groups": "Groupes de couches",
+  "Jump to {name}": "Aller à {name}"
 }

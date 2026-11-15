@@ -3716,5 +3716,14 @@
   "Scope opacity": "Opacidade da mira",
   "How dark the scope shades the view outside the keyhole": "Quanto a mira escurece a vista fora do visor",
   "Reset to default": "Redefinir para o padrão",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Redefinir o Visual para o padrão: aparência Normal, HUD, mira, rótulos e efeitos"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Redefinir o Visual para o padrão: aparência Normal, HUD, mira, rótulos e efeitos",
+  "All layers": "Todas as camadas",
+  "On": "Ativadas",
+  "Off": "Desativadas",
+  "Search layers": "Pesquisar camadas",
+  "Filter layers": "Filtrar camadas",
+  "Status": "Estado",
+  "Search layers…": "Pesquisar camadas…",
+  "Layer groups": "Grupos de camadas",
+  "Jump to {name}": "Ir para {name}"
 }

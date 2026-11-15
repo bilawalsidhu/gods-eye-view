@@ -3716,5 +3716,14 @@
   "Scope opacity": "Opacità dello scope",
   "How dark the scope shades the view outside the keyhole": "Quanto lo scope scurisce la vista fuori dal foro",
   "Reset to default": "Ripristina predefiniti",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Ripristina Visuale ai valori predefiniti: aspetto Normale, HUD, scope, etichette ed effetti"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Ripristina Visuale ai valori predefiniti: aspetto Normale, HUD, scope, etichette ed effetti",
+  "All layers": "Tutti i livelli",
+  "On": "Attivi",
+  "Off": "Disattivati",
+  "Search layers": "Cerca livelli",
+  "Filter layers": "Filtra livelli",
+  "Status": "Stato",
+  "Search layers…": "Cerca livelli…",
+  "Layer groups": "Gruppi di livelli",
+  "Jump to {name}": "Vai a {name}"
 }

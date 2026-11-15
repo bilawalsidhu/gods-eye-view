@@ -3542,5 +3542,14 @@
   "Scope opacity": "視域不透明度",
   "How dark the scope shades the view outside the keyhole": "視域遮罩使視域之外的畫面變暗的程度",
   "Reset to default": "還原預設",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "將視覺還原為預設設定：常規外觀、HUD、視域、標籤和效果"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "將視覺還原為預設設定：常規外觀、HUD、視域、標籤和效果",
+  "All layers": "全部圖層",
+  "On": "已開啟",
+  "Off": "已關閉",
+  "Search layers": "搜尋圖層",
+  "Filter layers": "篩選圖層",
+  "Status": "狀態",
+  "Search layers…": "搜尋圖層…",
+  "Layer groups": "圖層分組",
+  "Jump to {name}": "跳至{name}"
 }
