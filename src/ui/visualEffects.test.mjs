@@ -8,7 +8,7 @@ import {
   MILITARY_DETECTION_PRESET,
 } from './visualPresets.js';
 
-function fixture() {
+function fixture(overrides = {}) {
   let time = 0;
   let next = 0;
   const frames = new Map();
@@ -52,6 +52,7 @@ function fixture() {
     now: () => time,
     wallNow: () => 10_000 + time,
     createStage: (options) => ({ ...options, enabled: true }),
+    ...overrides,
   });
   function tick(value) {
     time = value;
@@ -146,6 +147,111 @@ test('only visible animated stages keep the animation clock and render hold aliv
   f.tick(1100);
   assert.equal(f.frames.size, 0);
   assert.equal(f.holds.size, 0);
+  f.effects.destroy();
+});
+
+test('night vision and FLIR step their clock at 15 Hz and ask for one frame a step', () => {
+  for (const name of ['surveillance', 'thermal']) {
+    const f = fixture();
+    f.effects.initStyles();
+    const stage = f.effects.stages[name];
+    f.effects.setStageIntensity(stage, 1);
+    const steps = () =>
+      f.requests.filter((reason) => reason === 'style-anim').length;
+    f.tick(1000);
+    assert.equal(stage.uniforms.time, 1);
+    assert.equal(f.holds.size, 0, 'no continuous render while idle');
+    assert.equal(steps(), 1);
+    assert.equal(f.frames.size, 1, 'the clock keeps running');
+    for (const time of [1016, 1033, 1050]) f.tick(time);
+    assert.equal(stage.uniforms.time, 1, 'the clock holds between steps');
+    assert.equal(steps(), 1, 'no frame is asked for between steps');
+    f.tick(1067);
+    assert.equal(stage.uniforms.time, 16 / 15);
+    assert.equal(steps(), 2);
+    f.tick(2000);
+    assert.equal(stage.uniforms.time, 2);
+    assert.equal(steps(), 3);
+    f.effects.setStageIntensity(stage, 0);
+    f.tick(2100);
+    assert.equal(f.frames.size, 0);
+    f.effects.destroy();
+  }
+});
+
+test('a crossfade into a stepped style is still drawn every frame', () => {
+  const f = fixture();
+  f.effects.initStyles();
+  f.effects.startTransition('thermal', 0, 1);
+  f.tick(250);
+  assert.equal(f.holds.has('style-anim'), true);
+  f.tick(500);
+  assert.equal(f.effects.stages.thermal.uniforms.intensity, 1);
+  f.tick(520);
+  assert.equal(f.holds.size, 0, 'the hold ends with the crossfade');
+  assert.equal(f.frames.size, 1);
+  f.effects.destroy();
+});
+
+test('a style with passes is one composite whose uniforms reach every pass', () => {
+  const created = [];
+  const composites = [];
+  const f = fixture({
+    createStage: (options) => {
+      const stage = { ...options, enabled: true };
+      created.push(stage);
+      return stage;
+    },
+    createComposite: (options) => {
+      const composite = {
+        ...options,
+        get enabled() {
+          return options.stages[0].enabled;
+        },
+        set enabled(value) {
+          for (const stage of options.stages) stage.enabled = value;
+        },
+      };
+      composites.push(composite);
+      return composite;
+    },
+  });
+  f.effects.initStyles();
+  assert.deepEqual(
+    composites.map((composite) => composite.name),
+    ['godsEyeView_surveillance', 'godsEyeView_thermal'],
+  );
+  assert.equal(f.stages.size, 5, 'one pipeline entry per style');
+  const composite = f.effects.stages.surveillance;
+  const [rows, main] = composite.stages;
+  assert.equal(composite.inputPreviousStageTexture, false);
+  assert.equal(rows.name, 'godsEyeView_surveillance_bloomRows');
+  assert.equal(main.uniforms.bloomRowsTexture, rows.name);
+  assert.deepEqual(Object.keys(rows.uniforms), ['gain']);
+  assert.deepEqual(Object.keys(composite.uniforms), [
+    'intensity',
+    'time',
+    'gain',
+    'bloom',
+    'scanlineStr',
+    'pixelation',
+  ]);
+  assert.equal(rows.enabled, false);
+  assert.equal(main.enabled, false);
+  // Cesium swaps a stage's uniforms object on its first frame.
+  main.uniforms = { ...main.uniforms };
+  composite.uniforms.gain = 0.9;
+  assert.equal(main.uniforms.gain, 0.9);
+  assert.equal(rows.uniforms.gain(), 0.9);
+  f.effects.setStageIntensity(composite, 1);
+  assert.equal(main.uniforms.intensity, 1);
+  assert.equal(rows.enabled, true);
+  assert.equal(main.enabled, true);
+  assert.equal(
+    created.filter((stage) => stage.name.startsWith('godsEyeView_thermal'))
+      .length,
+    2,
+  );
   f.effects.destroy();
 });
 

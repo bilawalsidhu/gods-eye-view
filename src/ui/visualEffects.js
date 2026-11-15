@@ -1,4 +1,4 @@
-import { PostProcessStage } from 'cesium';
+import { PostProcessStage, PostProcessStageComposite } from 'cesium';
 import {
   bloomStrengthFromIntensity,
   clampBloomIntensity,
@@ -26,6 +26,7 @@ export class VisualEffects {
     now = () => performance.now(),
     wallNow = () => Date.now(),
     createStage = (options) => new PostProcessStage(options),
+    createComposite = (options) => new PostProcessStageComposite(options),
   }) {
     this.viewer = viewer;
     this.requestRender = requestRender;
@@ -36,6 +37,7 @@ export class VisualEffects {
     this.now = now;
     this.wallNow = wallNow;
     this.createStage = createStage;
+    this.createComposite = createComposite;
     this.stages = {};
     this.transitions = new Map();
     this.startTime = wallNow();
@@ -60,16 +62,67 @@ export class VisualEffects {
         uniforms.time = 0.0;
       for (const [name, meta] of Object.entries(shader.uniforms || {}))
         uniforms[name] = meta.default;
-      const stage = this.createStage({
-        name: `godsEyeView_${name}`,
-        fragmentShader: shader.fragmentShader,
+      const stage = this.createStyleStage(
+        `godsEyeView_${name}`,
+        shader,
         uniforms,
-      });
+      );
       stage.enabled = false;
       this.viewer.scene.postProcessStages.add(stage);
       this.stages[name] = stage;
     }
     this.stageEntries = Object.entries(this.stages);
+  }
+
+  /**
+   * One stage for a single-pass style. A style with `passes` becomes a
+   * composite: each pass reads the scene, the main shader reads the scene and
+   * each pass's output, and the composite answers to the style's name,
+   * `enabled` and `uniforms` as a single stage would.
+   *
+   * Cesium replaces a stage's `uniforms` object on its first frame, so the
+   * composite's uniforms and the passes' read the main stage's current object
+   * each time rather than the one it was created with.
+   */
+  createStyleStage(name, shader, uniforms) {
+    if (!shader.passes?.length)
+      return this.createStage({
+        name,
+        fragmentShader: shader.fragmentShader,
+        uniforms,
+      });
+    let main = null;
+    const shared = {};
+    for (const uniform of Object.keys(uniforms))
+      Object.defineProperty(shared, uniform, {
+        enumerable: true,
+        get: () => main.uniforms[uniform],
+        set: (value) => {
+          main.uniforms[uniform] = value;
+        },
+      });
+    const passes = shader.passes.map((pass) => {
+      const passName = `${name}_${pass.name}`;
+      uniforms[pass.texture] = passName;
+      return this.createStage({
+        name: passName,
+        fragmentShader: pass.fragmentShader,
+        uniforms: Object.fromEntries(
+          pass.uniforms.map((uniform) => [uniform, () => shared[uniform]]),
+        ),
+      });
+    });
+    main = this.createStage({
+      name: `${name}_main`,
+      fragmentShader: shader.fragmentShader,
+      uniforms,
+    });
+    return this.createComposite({
+      name,
+      stages: [...passes, main],
+      inputPreviousStageTexture: false,
+      uniforms: shared,
+    });
   }
 
   initPostProcess(sharpenIntensity = this.sharpenIntensity) {
@@ -213,16 +266,29 @@ export class VisualEffects {
           this.transitions.delete(name);
         }
       }
+      // A style with `timeHz` moves its clock in steps and asks for one frame
+      // a step; any other animated style is drawn every frame.
       let animatedStageVisible = false;
-      for (const [, stage] of this.stageEntries) {
+      let everyFrame = this.transitions.size > 0;
+      let stepped = false;
+      for (const [name, stage] of this.stageEntries) {
         if (stage.enabled && stage.uniforms.time !== undefined) {
-          stage.uniforms.time = elapsedSec;
-          if (stage.uniforms.intensity > 0.001) animatedStageVisible = true;
+          const hz = STYLES[name].timeHz;
+          const time = hz ? Math.floor(elapsedSec * hz) / hz : elapsedSec;
+          if (stage.uniforms.intensity > 0.001) {
+            animatedStageVisible = true;
+            if (!hz) everyFrame = true;
+            else if (time !== stage.uniforms.time) stepped = true;
+          }
+          stage.uniforms.time = time;
         }
       }
       const needed = this.transitions.size > 0 || animatedStageVisible;
-      if (needed) this.holdRender('style-anim');
-      else this.releaseRender('style-anim');
+      if (everyFrame) this.holdRender('style-anim');
+      else {
+        this.releaseRender('style-anim');
+        if (stepped) this.requestRender('style-anim');
+      }
       this.frameId = needed ? this.requestFrame(update) : null;
     };
     this.frameId = this.requestFrame(update);

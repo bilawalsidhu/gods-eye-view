@@ -13,8 +13,55 @@ import { msg } from '../i18n/marker.js';
  *   pixelation (1-6)  — sensor resolution pixelation grid size
  *   palette (0-1)     — 0 = monochrome FLIR, 1 = Ironbow "Predator" color ramp
  */
+
+/**
+ * The hot-spot bloom is a 9x9 Gaussian over samples three texels apart. Its
+ * weight is a product of a row weight and a column weight, and the stage
+ * reads its input with nearest sampling, so this pass sums the nine samples
+ * of each row once per texel and the main pass sums nine of those: 18 reads
+ * for each pixel where one pass took 81, with the same result. The row sum is
+ * written across two 8-bit channels, as in the night-vision bloom.
+ */
+const FLIR_BLOOM_ROWS_SHADER = /* glsl */ `
+    uniform sampler2D colorTexture;
+    uniform vec2 colorTextureDimensions;
+    uniform float sensitivity;
+    uniform float mode;
+    in vec2 v_textureCoordinates;
+
+    void main() {
+      vec2 texel = 1.0 / colorTextureDimensions;
+      float sens = mix(0.25, 1.0, sensitivity);
+      float isBlackHot = step(0.5, mode);
+      float rowSum = 0.0;
+      float rowW = 0.0;
+      for (int x = -4; x <= 4; x++) {
+        vec2 offset = vec2(float(x), 0.0) * texel * 3.0;
+        float sLuma = dot(texture(colorTexture, v_textureCoordinates + offset).rgb, vec3(0.299, 0.587, 0.114));
+        float sMapped = clamp((sLuma - (0.5 - sens * 0.5)) / sens, 0.0, 1.0);
+        float sFinal = mix(sMapped, 1.0 - sMapped, isBlackHot);
+        float w = exp(-0.5 * float(x * x) / 8.0);
+        rowSum += smoothstep(0.6, 1.0, sFinal) * w;
+        rowW += w;
+      }
+      float scaled = rowSum / rowW * 255.0;
+      out_FragColor = vec4(floor(scaled) / 255.0, fract(scaled), 0.0, 1.0);
+    }
+  `;
+
 export const thermalShader = {
   name: 'thermal',
+  // The drifting noise and the frame counter step at this rate, and the scene
+  // is redrawn at it while the style is the only thing moving.
+  timeHz: 15,
+  passes: [
+    {
+      name: 'bloomRows',
+      texture: 'bloomRowsTexture',
+      uniforms: ['sensitivity', 'mode'],
+      fragmentShader: FLIR_BLOOM_ROWS_SHADER,
+    },
+  ],
   uniforms: {
     sensitivity: { default: 0.75, min: 0, max: 1, label: msg('Sensitivity') },
     bloom: { default: 0.65, min: 0, max: 1, label: msg('Bloom') },
@@ -24,6 +71,7 @@ export const thermalShader = {
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;
+    uniform sampler2D bloomRowsTexture;
     uniform vec2 colorTextureDimensions;
     uniform float intensity;
     uniform float time;
@@ -209,21 +257,15 @@ export const thermalShader = {
 
       // ── Hot-spot bloom/bleed ────────────────────────────
       // Sample a wider area for bloom on bright spots
+      // Rows were summed by the bloomRows pass; the columns are summed here.
       float bloomSample = 0.0;
       float bloomWeight = 0.0;
       for (int y = -4; y <= 4; y++) {
-        for (int x = -4; x <= 4; x++) {
-          vec2 offset = vec2(float(x), float(y)) * texel * 3.0;
-          float sLuma = dot(texture(colorTexture, uv + offset).rgb, vec3(0.299, 0.587, 0.114));
-          float sMapped = clamp((sLuma - (0.5 - sens * 0.5)) / sens, 0.0, 1.0);
-          float sFinal = mix(sMapped, 1.0 - sMapped, isBlackHot);
-          float w = exp(-0.5 * float(x * x + y * y) / 8.0);
-          // Only bloom the "hot" pixels (bright in WHOT, dark values in BHOT...
-          // but since we already inverted, just bloom high values)
-          float hotness = smoothstep(0.6, 1.0, sFinal);
-          bloomSample += hotness * w;
-          bloomWeight += w;
-        }
+        vec2 offset = vec2(0.0, float(y)) * texel * 3.0;
+        vec2 rows = texture(bloomRowsTexture, uv + offset).rg;
+        float w = exp(-0.5 * float(y * y) / 8.0);
+        bloomSample += (rows.r + rows.g / 255.0) * w;
+        bloomWeight += w;
       }
       bloomSample /= bloomWeight;
       thermalColor += bloomSample * bloom * 0.8;
