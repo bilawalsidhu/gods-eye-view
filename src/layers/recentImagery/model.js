@@ -313,8 +313,15 @@ export function parseCandidateKey(key) {
 
 const cloudOf = (granule) => (finite(granule?.cloud) ? granule.cloud : null);
 
-function buildCandidate(product, day, granules) {
+/** Min and max known scene cloud of some granules, or null when none is known. */
+function cloudRange(granules) {
   const clouds = granules.map(cloudOf).filter((value) => value !== null);
+  return clouds.length
+    ? { min: Math.min(...clouds), max: Math.max(...clouds) }
+    : null;
+}
+
+function buildCandidate(product, day, granules) {
   const starts = granules
     .map((granule) => Date.parse(granule.timeStart))
     .filter(Number.isFinite);
@@ -326,9 +333,7 @@ function buildCandidate(product, day, granules) {
     product,
     day,
     granules,
-    cloud: clouds.length
-      ? { min: Math.min(...clouds), max: Math.max(...clouds) }
-      : null,
+    cloud: cloudRange(granules),
     timeRange:
       starts.length && ends.length
         ? {
@@ -429,6 +434,31 @@ function pointInPolygon(lon, lat, ring) {
   return inside;
 }
 
+/** The four corners and centre of a normalized box, as [lon, lat]. */
+function boxSamples({ west, south, east, north }) {
+  return [
+    [west, south],
+    [east, south],
+    [east, north],
+    [west, north],
+    [(west + east) / 2, (south + north) / 2],
+  ];
+}
+
+/** Signed area of the turn a → b → c. */
+const turn = ([ax, ay], [bx, by], [cx, cy]) =>
+  (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+
+/** Whether segments ab and cd cross at a point inside both; touching is not. */
+function segmentsCross(a, b, c, d) {
+  return turn(a, b, c) * turn(a, b, d) < 0 && turn(c, d, a) * turn(c, d, b) < 0;
+}
+
+const footprintOf = (granule) =>
+  Array.isArray(granule?.footprint) && granule.footprint.length >= 3
+    ? granule.footprint
+    : null;
+
 /**
  * How much of the box a candidate's granule footprints cover, sampled at the
  * four corners and the centre: `full`, `partial`, or `unknown` without
@@ -440,18 +470,10 @@ function pointInPolygon(lon, lat, ring) {
 export function coverageFor(candidate, box) {
   const normalized = normalizeBox(box);
   const footprints = (candidate?.granules || [])
-    .map((granule) => granule?.footprint)
-    .filter((ring) => Array.isArray(ring) && ring.length >= 3);
+    .map(footprintOf)
+    .filter(Boolean);
   if (!normalized || !footprints.length) return 'unknown';
-  const { west, south, east, north } = normalized;
-  const samples = [
-    [west, south],
-    [east, south],
-    [east, north],
-    [west, north],
-    [(west + east) / 2, (south + north) / 2],
-  ];
-  return samples.every(([lon, lat]) =>
+  return boxSamples(normalized).every(([lon, lat]) =>
     footprints.some((ring) => pointInPolygon(lon, lat, ring)),
   )
     ? 'full'
@@ -459,20 +481,157 @@ export function coverageFor(candidate, box) {
 }
 
 /**
+ * The granules whose imagery lands in the box. CMR matches any granule that
+ * touches the search box, so a 110 km HLS tile clipping one edge would
+ * otherwise let its own clouds condemn a clear box. A footprint overlaps when
+ * it holds a box sample, the box holds one of its vertices (a tile wholly
+ * inside a large box), or one of its edges crosses a box edge (a band across
+ * the box between the samples). Granules without footprints are kept; when
+ * nothing is known to overlap, every granule is.
+ * @param {object} candidate
+ * @param {object} [box] Degrees box.
+ * @returns {Array<object>}
+ */
+export function granulesOverBox(candidate, box) {
+  const granules = candidate?.granules || [];
+  const normalized = normalizeBox(box);
+  if (!normalized) return granules;
+  const { west, south, east, north } = normalized;
+  const samples = boxSamples(normalized);
+  const corners = samples.slice(0, 4);
+  const edges = (points) =>
+    points.map((point, i) => [point, points[(i + 1) % points.length]]);
+  const boxEdges = edges(corners);
+  const overlapping = granules.filter((granule) => {
+    const ring = footprintOf(granule);
+    if (!ring) return true;
+    return (
+      samples.some(([lon, lat]) => pointInPolygon(lon, lat, ring)) ||
+      ring.some(
+        ([lon, lat]) =>
+          lon >= west && lon <= east && lat >= south && lat <= north,
+      ) ||
+      edges(ring).some(([a, b]) =>
+        boxEdges.some(([c, d]) => segmentsCross(a, b, c, d)),
+      )
+    );
+  });
+  return overlapping.length ? overlapping : granules;
+}
+
+/** Points per side of the grid that weighs each granule by its share of the box. */
+const AREA_GRID = 9;
+
+/**
+ * The centres of an AREA_GRID × AREA_GRID split of the box, as [lon, lat]:
+ * each point stands for an equal share of its area (points on the edges would
+ * give a sliver along an edge a whole row's weight).
+ */
+function areaGrid({ west, south, east, north }) {
+  const points = [];
+  for (let i = 0; i < AREA_GRID; i++)
+    for (let j = 0; j < AREA_GRID; j++)
+      points.push([
+        west + ((east - west) * (i + 0.5)) / AREA_GRID,
+        south + ((north - south) * (j + 0.5)) / AREA_GRID,
+      ]);
+  return points;
+}
+
+/**
+ * Each grid point's granules, or null when the grid cannot weigh them: no
+ * box, a granule without a footprint, or no point under any footprint.
+ */
+function gridCover(candidate, box) {
+  const normalized = normalizeBox(box);
+  const granules = candidate?.granules || [];
+  if (!normalized || !granules.length || !granules.every(footprintOf))
+    return null;
+  const cover = areaGrid(normalized)
+    .map(([lon, lat]) =>
+      granules.filter((granule) =>
+        pointInPolygon(lon, lat, footprintOf(granule)),
+      ),
+    )
+    .filter((over) => over.length);
+  return cover.length ? cover : null;
+}
+
+/**
+ * The box's scene cloud, weighted by area: the mean over a grid on the box of
+ * the worst granule at each point, so a tile that overlaps the box by a
+ * sliver counts for its sliver. Without footprints to weigh, the worst
+ * granule over the box. Null when a granule that counts has unknown cloud.
+ * @param {object} candidate
+ * @param {object} [box] Degrees box.
+ * @returns {number | null}
+ */
+export function boxCloud(candidate, box) {
+  const cover = gridCover(candidate, box);
+  if (cover) {
+    let sum = 0;
+    for (const over of cover) {
+      const clouds = over.map(cloudOf);
+      if (clouds.includes(null)) return null;
+      sum += Math.max(...clouds);
+    }
+    return Math.round(sum / cover.length);
+  }
+  let worst = -Infinity;
+  for (const granule of granulesOverBox(candidate, box)) {
+    const cloud = cloudOf(granule);
+    if (cloud === null) return null;
+    worst = Math.max(worst, cloud);
+  }
+  return Number.isFinite(worst) ? worst : null;
+}
+
+/** The granules that cover part of the box's grid, else those over the box. */
+function granulesInBox(candidate, box) {
+  const cover = gridCover(candidate, box);
+  return cover ? [...new Set(cover.flat())] : granulesOverBox(candidate, box);
+}
+
+/**
+ * A candidate as seen from the box: its coverage, and the scene cloud range
+ * of only the granules over the box, so the card shows the cloud that ranked
+ * it. The granules themselves are kept for drawing.
+ * @param {object} candidate
+ * @param {object} box Degrees box.
+ * @returns {object}
+ */
+export function scopeToBox(candidate, box) {
+  return {
+    ...candidate,
+    coverage: coverageFor(candidate, box),
+    cloud: cloudRange(granulesInBox(candidate, box)),
+  };
+}
+
+/**
+ * A cloudy day this many scene-cloud points worse than the clearest one still
+ * wins when it is newer: recency is the layer's point, and scene cloud is too
+ * coarse a measure to trade days for a few points.
+ */
+const CLOUD_TOLERANCE = 10;
+
+/**
  * Pick the START HERE day. Coverage first: a present HLS day that covers the
  * whole box (`full`, or `unknown` without footprints) beats a newer sliver at
- * the box edge, which changes none of the frame when draped. Within a tier
- * the newest day whose granules ALL have known cloud ≤ `maxCloud` wins
- * (`clear`), else the newest (`cloudy`); only slivers left → `partial`; else
- * the newest non-empty VIIRS day (`overview`). `certain` is false when the
- * catalog was truncated.
+ * the box edge, which changes none of the frame when draped. Cloud is judged
+ * only on the granules over the box (see `granulesOverBox`). Within a tier
+ * the newest day whose granules all have known cloud ≤ `maxCloud` wins
+ * (`clear`); otherwise the least cloudy day, preferring a newer one within
+ * `CLOUD_TOLERANCE` points of it (`cloudy`); only slivers left → `partial`;
+ * else the newest non-empty VIIRS day (`overview`). `certain` is false when
+ * the catalog was truncated.
  * @param {Array<object>} candidates
- * @param {{ maxCloud?: number, truncated?: boolean }} [options]
+ * @param {{ maxCloud?: number, truncated?: boolean, box?: object }} [options]
  * @returns {{ candidate: object | null, reason: 'clear' | 'cloudy' | 'partial' | 'overview' | null, certain: boolean }}
  */
 export function rankLatest(
   candidates,
-  { maxCloud = MAX_CLOUD_FOR_CLEAR, truncated = false } = {},
+  { maxCloud = MAX_CLOUD_FOR_CLEAR, truncated = false, box = null } = {},
 ) {
   const sorted = mergeCandidates([candidates]);
   const certain = !truncated;
@@ -483,21 +642,32 @@ export function rankLatest(
     present(c) &&
     c.granules.length > 0;
   const coversBox = (c) => c.coverage !== 'partial';
-  const clearSky = (c) =>
-    c.granules.every((granule) => {
-      const cloud = cloudOf(granule);
-      return cloud !== null && cloud <= maxCloud;
-    });
+  const clouds = new Map();
+  const cloudOver = (c) => {
+    if (!clouds.has(c)) clouds.set(c, boxCloud(c, box));
+    return clouds.get(c);
+  };
+  const clearSky = (c) => {
+    const cloud = cloudOver(c);
+    return cloud !== null && cloud <= maxCloud;
+  };
+  /** Newest day within tolerance of the clearest known cloud, else the newest. */
+  const leastCloudy = (list) => {
+    const known = list.filter((c) => cloudOver(c) !== null);
+    if (!known.length) return list[0];
+    const best = Math.min(...known.map(cloudOver));
+    return known.find((c) => cloudOver(c) <= best + CLOUD_TOLERANCE);
+  };
   const tiers = [
     [(c) => hlsDay(c) && coversBox(c) && clearSky(c), 'clear'],
-    [(c) => hlsDay(c) && coversBox(c), 'cloudy'],
+    [(c) => hlsDay(c) && coversBox(c), 'cloudy', leastCloudy],
     [(c) => hlsDay(c) && clearSky(c), 'partial'],
     [hlsDay, 'partial'],
     [(c) => c.product === 'VIIRS' && present(c), 'overview'],
   ];
-  for (const [matches, reason] of tiers) {
-    const candidate = sorted.find(matches);
-    if (candidate) return { candidate, reason, certain };
+  for (const [matches, reason, choose = (list) => list[0]] of tiers) {
+    const list = sorted.filter(matches);
+    if (list.length) return { candidate: choose(list), reason, certain };
   }
   return { candidate: null, reason: null, certain };
 }
