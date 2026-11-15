@@ -10,7 +10,7 @@
   cut, ending in `…`); `worldClock.coverage()` keeps `marks` as the sorted
   times and adds `markDetails`, the merged marks themselves. A zoom or a pan clears the
   hovered label, and a label is never wider than the track (samehkhamis,
-  #0000).
+  #1745).
 - The timeline marks only events: launches, and earthquakes of magnitude 6
   and up while the Earthquakes layer is on (about one every two days
   worldwide). It no longer draws a tick for every weather frame, which came
@@ -24,7 +24,7 @@
   `gods-eye-view/layers/earthquakes` adds `EARTHQUAKE_MARK_MAGNITUDE`,
   `earthquakeMagnitudeTitle`, `earthquakeMarkLabel` and `earthquakeCoverage`.
   A weather row's `step` param goes to the previous or next weather frame
-  (samehkhamis, #0000).
+  (samehkhamis, #1745).
 - The main timeline is the only time control. The Weather panel no longer
   has a slider, step buttons, Latest or Play of its own; it shows the frame
   time instead: the newest frame and its age while live, the timeline time
@@ -45,4 +45,4 @@
   `setTarget`, `step`, `latest`, `play`, `pause` or `togglePlay`, its state
   no longer has `playing`, and it no longer attaches itself to the world
   clock as a driver; move time with the world clock (`gods-eye-view/time`,
-  also `weatherClock.world`) instead (samehkhamis, #0000).
+  also `weatherClock.world`) instead (samehkhamis, #1745).
