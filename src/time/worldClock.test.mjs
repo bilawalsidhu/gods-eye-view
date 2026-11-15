@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorldClock, WORLD_CLOCK_TICK_MS } from './worldClock.js';
+import {
+  createWorldClock,
+  WORLD_CLOCK_MARK_LABEL_LENGTH,
+  WORLD_CLOCK_TICK_MS,
+} from './worldClock.js';
 
 function fakeTime() {
   const t = {
@@ -357,7 +361,7 @@ test('a coverage that throws counts as none', (t) => {
   assert.equal(clock.coverage(), null);
 });
 
-test('continuous play runs past every driver, and live resets the rate', () => {
+test('continuous play runs past every driver, and live keeps the rate chosen', () => {
   const t = fakeTime();
   const clock = createWorldClock(t.options);
   const calls = [];
@@ -368,7 +372,13 @@ test('continuous play runs past every driver, and live resets the rate', () => {
   t.advance(1_000);
   assert.equal(clock.now(), t.wall - 61_000 + 30_000);
   clock.goLive();
-  assert.equal(clock.getRate(), 1);
+  assert.equal(clock.getRate(), 30);
+  assert.equal(clock.now(), t.wall, 'live is the wall clock, whatever the rate');
+  // Play with no rate given runs at the one chosen.
+  clock.seek(t.wall - 60_000);
+  clock.play({ continuous: true });
+  t.advance(1_000);
+  assert.equal(clock.now(), t.wall - 61_000 + 30_000);
 });
 
 test('continuous play holds while a layer waits, and goes on from there', () => {
@@ -458,4 +468,24 @@ test('a seek or a return to live counts as a jump; play does not', () => {
   assert.equal(clock.getState().jumps, 2);
   clock.goLive();
   assert.equal(clock.getState().jumps, 2, 'already live is no jump');
+});
+
+test('a mark label longer than the timeline shows is cut, ending in an ellipsis', () => {
+  const clock = createWorldClock(fakeTime().options);
+  const long = `${'A'.repeat(58)}  BEYOND THE CUT`;
+  clock.register({
+    id: 'long',
+    coverage: () => ({
+      start: 1,
+      end: 2,
+      marks: [
+        { time: 1, label: long },
+        { time: 2, label: 'B'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH) },
+      ],
+    }),
+  });
+  const [cut, whole] = clock.coverage().markDetails;
+  assert.equal(cut.label, `${'A'.repeat(58)}…`);
+  assert.ok(cut.label.length <= WORLD_CLOCK_MARK_LABEL_LENGTH);
+  assert.equal(whole.label, 'B'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH));
 });

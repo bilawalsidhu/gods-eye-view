@@ -86,10 +86,29 @@ test('the frame time shows with any observed product; the panel has no time cont
   view.update([wind, radar]);
   assert.equal(frameTime(f).hidden, false);
   assert.equal(frameTime(f).textContent, '01:05 UTC · 12 min ago');
-  f.state({ timeline: [ticks[0]] });
+  f.state({
+    timeline: [ticks[0]],
+    products: [{ id: radar.id, shown: ticks[0], selected: ticks[0] }],
+  });
   assert.equal(frameTime(f).textContent, '01:00 UTC · 17 min ago');
-  f.state({ timeline: [] });
+  f.state({ timeline: [], products: [] });
   assert.equal(frameTime(f).hidden, true);
+  // Suspended products (reduced motion, a hidden page) leave the timeline;
+  // live, their newest frame still shows.
+  f.state({
+    timeline: [],
+    products: [
+      { id: radar.id, shown: ticks[1], selected: ticks[1], suspended: true },
+      {
+        id: 'weather-lightning',
+        shown: null,
+        selected: ticks[0],
+        suspended: true,
+      },
+    ],
+  });
+  assert.equal(frameTime(f).hidden, false);
+  assert.equal(frameTime(f).textContent, '01:05 UTC · 12 min ago');
   f.state({ timeline: ticks, mode: 'history', target: ticks[0] });
   assert.equal(frameTime(f).textContent, '01:00 UTC');
   assert.equal(

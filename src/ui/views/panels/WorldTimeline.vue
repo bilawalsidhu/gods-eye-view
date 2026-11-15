@@ -112,8 +112,10 @@ const view = computed(() => {
 });
 const zoomed = computed(() => zoom.value !== null);
 const viewLength = () => view.value.end - view.value.start;
-// Show `length` of the span ending at `viewEnd`, held to the span.
+// Show `length` of the span ending at `viewEnd`, held to the span. A zoom
+// or a pan moves the ticks from under the pointer, so its label goes.
 function showView(length, viewEnd) {
+  hovered.value = null;
   const { start, end } = span.value;
   if (length >= end - start) {
     showWhole();
@@ -141,6 +143,7 @@ const follow = (ms) => {
 };
 const offView = (ms) => ms < view.value.start || ms > view.value.end;
 const showWhole = () => {
+  hovered.value = null;
   zoom.value = null;
   panned = false;
 };

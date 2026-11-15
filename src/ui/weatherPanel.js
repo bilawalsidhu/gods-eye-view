@@ -118,9 +118,17 @@ export function createWeatherPanel({
       'weather-lightning': t('Lightning density'),
     };
     // While live, the newest frame and its age; at a past time, the timeline
-    // time alone. The world timeline moves the time.
-    const shownTime =
-      state.mode === 'latest' ? state.timeline.at(-1) : state.target;
+    // time alone. The world timeline moves the time. Live, each product's
+    // newest frame counts, suspended or not (reduced motion, a hidden page),
+    // as the timeline leaves those out.
+    const newest = () => {
+      const times = (state.products ?? [])
+        .map(({ selected }) => selected)
+        .filter((time) => Number.isFinite(Date.parse(time)))
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+      return times.at(-1) ?? state.timeline.at(-1);
+    };
+    const shownTime = state.mode === 'latest' ? newest() : state.target;
     const frameTime =
       showObserved && shownTime
         ? state.mode === 'history'

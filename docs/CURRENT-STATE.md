@@ -8545,7 +8545,9 @@ that timeline but are not marks on it: the timeline marks only events (launches,
 and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
 step to those, or along the track where there are none. A mark may carry a
 label (a launch's mission name, cut to 27 characters in capitals as the mission
-index shows names; an earthquake's magnitude and place). The pointer within
+index shows names; an earthquake's magnitude and place) of up to 60 characters;
+a longer one ends in `…`, and a label is never wider than the track. A zoom or
+a pan clears a hovered label. The pointer within
 6 px of a tick shows its label over the track, and a tap there goes to the
 mark's time exactly; a tap elsewhere goes to the time under it and a drag
 scrubs. With the handle on a mark, its label follows the time in the handle's
@@ -8570,14 +8572,21 @@ every frame shows. Hidden documents, reduced motion and unavailable imagery
 hosts suspend products. Re-enabling or
 restoring a host joins the retained history target. The wind row explicitly says
 “Forecast · does not follow history” while the observed clock is in history mode.
-The Weather panel's frame time shows the newest frame and its age while live,
-and the timeline time alone at a past time.
+The Weather panel's frame time shows the newest frame and its age while live
+(each product's newest, suspended products included), and the timeline time
+alone at a past time.
 The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
 has no time controls of its own: `weatherClock.world` is the world clock it
 follows, where time moves. A weather row's `play`, `latest` and `step` params
-move that world clock as the timeline does. A weather layer built without a shared
-clock keeps one of its own on the page's world clock for its lifetime; it has
-no frame replay of its own either way.
+move that world clock as the timeline does: `play` runs at the speed chosen on
+the timeline (the world clock keeps its rate while paused and live), from the
+start of the covered time when live or at its end, and does nothing while
+every product the row shows is suspended. A weather layer built without a
+shared clock builds one of its own on the page's world clock when first
+enabled (`createWeatherClock({ shared: false })`) and keeps it for its
+lifetime; destroying it leaves the world's time where it is, and only the last
+shared weather clock destroyed sends the world live. Neither has a frame replay
+of its own.
 
 Source, opacity and coverage navigation live in the WEATHER panel's cards, not
 in the rows; the panel shows the frame time and has no time controls. The

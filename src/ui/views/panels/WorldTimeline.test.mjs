@@ -669,3 +669,71 @@ test('a tick shows its label on hover, and a tap by it goes to its mark', async 
   await nextTick();
   assert.equal(tip(), null);
 });
+
+test('the pointer shows the nearer of two ticks within 6 px, and a zoom or a pan clears it', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 10 * 86_400_000;
+  // Two ticks 8 px apart on a 1000 px track, at 200 and 208 px.
+  const first = start + (now - start) * 0.2;
+  const second = start + (now - start) * 0.208;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({
+      start,
+      end: now,
+      marks: [
+        { time: first, label: 'FIRST', kind: 'launch' },
+        { time: second, label: 'SECOND', kind: 'launch' },
+      ],
+    }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  Object.defineProperty(track, 'clientWidth', { value: 1_000 });
+  track.getBoundingClientRect = () => ({ left: 0, width: 1_000, top: 0, height: 24 });
+  const pointer = (type, clientX) =>
+    track.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX, pointerId: 1 }));
+  const tip = () => bar().querySelector('.world-timeline-mark-label');
+  // Where the first tick sits now, in px along the track.
+  const firstAt = () =>
+    Number.parseFloat(bar().querySelector('.world-timeline-tick').style.left) * 10;
+  // The handle between them, so a zoom keeps both in view.
+  worldClock.seek((first + second) / 2);
+  await nextTick();
+  pointer('pointermove', 203);
+  await nextTick();
+  assert.equal(tip()?.textContent, 'FIRST');
+  pointer('pointermove', 205);
+  await nextTick();
+  assert.equal(tip()?.textContent, 'SECOND', 'the nearer of the two');
+
+  // A wheel zoom moves the ticks from under the pointer: the label goes.
+  track.dispatchEvent(new WheelEvent('wheel', { deltaY: -200, cancelable: true }));
+  await nextTick();
+  assert.equal(track.classList.contains('is-zoomed'), true);
+  assert.equal(tip(), null, 'a zoom clears the label');
+  // So does a pan, by wheel or by drag.
+  pointer('pointermove', firstAt());
+  await nextTick();
+  assert.equal(tip()?.textContent, 'FIRST');
+  track.dispatchEvent(
+    new WheelEvent('wheel', { deltaY: 40, shiftKey: true, cancelable: true }),
+  );
+  await nextTick();
+  assert.equal(tip(), null, 'a pan clears the label');
+
+  // A tap between them goes to the nearer mark.
+  track.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await nextTick();
+  assert.equal(track.classList.contains('is-zoomed'), false);
+  pointer('pointerdown', 205);
+  pointer('pointerup', 205);
+  await nextTick();
+  assert.equal(worldClock.now(), second, 'a tap goes to the nearer mark');
+});

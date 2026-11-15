@@ -68,12 +68,18 @@ const followers = new WeakMap();
  * history at the world's time otherwise. It never moves the world clock
  * itself; the world's own controls (its timeline) move time, and while the
  * world plays it stops at each next frame until that frame loads.
+ *
+ * `shared` (the default) is a clock several layers share, such as the
+ * catalog's: the last shared clock destroyed leaves the world live. A clock
+ * one layer keeps for itself (`shared: false`) leaves the world's time where
+ * it is.
  */
 export function createWeatherClock({
   now = Date.now,
   setTimeout = globalThis.setTimeout,
   clearTimeout = globalThis.clearTimeout,
   world = createWorldClock({ now }),
+  shared = true,
 } = {}) {
   const registry = new Map();
   const listeners = new Set();
@@ -270,10 +276,13 @@ export function createWeatherClock({
       stopWaiting();
       world.gate(holdId, null);
       unfollowWorld();
-      // The last weather clock leaves the world live, as a new one expects.
-      const left = followers.get(world) - 1;
-      followers.set(world, left);
-      if (left === 0) world.goLive();
+      // The last shared weather clock leaves the world live, as a new one
+      // expects.
+      if (shared) {
+        const left = followers.get(world) - 1;
+        followers.set(world, left);
+        if (left === 0) world.goLive();
+      }
       for (const release of releases.values()) release();
       releases.clear();
       for (const entry of registry.values()) entry.controller?.abort();
@@ -340,7 +349,7 @@ export function createWeatherClock({
     world.gate(holdId, next);
   }
   const unfollowWorld = world.subscribe(followWorld);
-  followers.set(world, (followers.get(world) ?? 0) + 1);
+  if (shared) followers.set(world, (followers.get(world) ?? 0) + 1);
   followWorld(world.getState());
   return api;
 }

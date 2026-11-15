@@ -490,6 +490,7 @@ afterEach(() => {
   for (const layer of harnessed) layer.destroy();
   harnessed.clear();
   worldClock.goLive();
+  worldClock.setRate(1);
 });
 function layerHarness({
   clock,
@@ -497,6 +498,7 @@ function layerHarness({
   feed,
   id,
   eventTarget = target(),
+  enable = true,
 } = {}) {
   const stages = [];
   const motion = target({ matches: reducedMotion });
@@ -570,7 +572,7 @@ function layerHarness({
     createRendering: () => rendering,
   });
   layer.init(viewer);
-  layer.enable();
+  if (enable) layer.enable();
   harnessed.add(layer);
   return {
     layer,
@@ -621,6 +623,70 @@ test('without a clock the layer keeps one of its own on the world clock and lets
   assert.ok(h.clears() >= 1);
 });
 
+test('a layer without a clock leaves the world clock alone until enabled, and never sends it live', async (t) => {
+  const past = Date.parse(times[0]) - 3_600_000;
+  worldClock.seek(past);
+  const subscribe = t.mock.method(worldClock, 'subscribe');
+  const gate = t.mock.method(worldClock, 'gate');
+  const h = layerHarness({ enable: false });
+  h.layer.getRowControls();
+  h.layer.getDiagnostics();
+  h.layer.setParams({ play: true, step: -1 });
+  assert.equal(subscribe.mock.callCount(), 0, 'off, no clock is built');
+  assert.equal(gate.mock.callCount(), 0);
+  assert.equal(worldClock.isPlaying(), false);
+  h.layer.destroy();
+  harnessed.delete(h.layer);
+  assert.equal(worldClock.now(), past, 'never on, the world is where it was');
+  assert.equal(worldClock.isLive(), false);
+
+  const on = layerHarness({ enable: false });
+  on.layer.enable();
+  assert.equal(subscribe.mock.callCount(), 1, 'built on first enable');
+  const update = on.layer.update();
+  await flush();
+  on.stages.at(-1)?.finish();
+  await update;
+  on.layer.disable();
+  on.layer.enable();
+  assert.equal(subscribe.mock.callCount(), 1, 'built once');
+  on.layer.destroy();
+  harnessed.delete(on.layer);
+  assert.equal(
+    worldClock.isLive(),
+    false,
+    'its own clock does not send it live',
+  );
+  assert.equal(worldClock.now(), past);
+});
+
+test('a row plays at the speed the world clock keeps, from the start at the end of the covered time', async () => {
+  const h = layerHarness();
+  const update = h.layer.update();
+  await flush();
+  h.stages[0].finish();
+  await update;
+  // A speed chosen on the timeline, while live.
+  worldClock.setRate(3_600);
+  h.layer.setParams({ play: true });
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getRate(), 3_600, 'played at the speed chosen');
+  assert.ok(
+    worldClock.now() - Date.parse(times[0]) < 3_600_000,
+    'live, play starts at the start of the covered time',
+  );
+  h.layer.setParams({ play: true });
+  assert.equal(worldClock.isPlaying(), false);
+  // Paused at the end of the covered time (it reaches to now), play starts
+  // again from the start, as the timeline's does.
+  worldClock.seek(worldClock.wallNow() + 1_000);
+  h.layer.setParams({ play: true });
+  assert.equal(worldClock.isPlaying(), true);
+  assert.ok(worldClock.now() - Date.parse(times[0]) < 3_600_000);
+  assert.equal(worldClock.getRate(), 3_600);
+  worldClock.pause();
+});
+
 test('reduced motion offers no play; steps still move the world clock from frame to frame', async () => {
   const h = layerHarness({ reducedMotion: true });
   const update = h.layer.update();
@@ -631,6 +697,10 @@ test('reduced motion offers no play; steps still move the world clock from frame
     h.layer.getRowControls().chips.some((chip) => chip.id === 'play'),
     false,
   );
+  // Play, which the row does not offer, does nothing while it is suspended.
+  h.layer.setParams({ play: true });
+  assert.equal(worldClock.isPlaying(), false);
+  assert.equal(worldClock.isLive(), true);
   // A step back from live goes to the newest frame, and the next one back
   // to the frame before it.
   h.layer.setParams({ step: -1 });

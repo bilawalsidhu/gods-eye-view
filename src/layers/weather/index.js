@@ -56,20 +56,24 @@ const utc = (value) =>
     : t('Unavailable');
 
 /**
- * Move `world`, the world clock, as its timeline does: `play` toggles play
- * (from the start of the covered time when live) and `latest` goes live.
- * `step` (-1 or 1) goes to the previous or next of `frames`, the weather
- * frames; the timeline does not mark them, so this is the row's own way to
- * step through them.
+ * Move `world`, the world clock, as its timeline does: `play` toggles play at
+ * the world clock's rate (the speed the timeline chose), from the start of the
+ * covered time when live or at its end, unless `canPlay` is false; `latest`
+ * goes live. `step` (-1 or 1) goes to the previous or next of `frames`, the
+ * weather frames; the timeline does not mark them, so this is the row's own
+ * way to step through them.
  */
-function moveWorldTime(world, frames, { play, latest, step }) {
+function moveWorldTime(world, frames, { play, latest, step }, canPlay) {
   if (!world) return;
   if (play === true) {
     const state = world.getState();
     if (state.playing) world.pause();
-    else {
+    else if (canPlay) {
       const covered = world.coverage();
-      if (state.live && covered) world.seek(covered.start);
+      // The covered time reaches to now, as the timeline's track does.
+      const end = covered && Math.max(covered.end, world.wallNow());
+      if (covered && (state.live || state.timeMs >= end))
+        world.seek(Math.min(covered.start, state.timeMs));
       world.play({ continuous: true });
     }
   }
@@ -90,11 +94,21 @@ function moveWorldTime(world, frames, { play, latest, step }) {
   }
 }
 
+// What a layer that has not built its own clock yet reads: live, no frames.
+const IDLE_CLOCK = Object.freeze({
+  mode: 'latest',
+  target: null,
+  advancing: false,
+  timeline: [],
+  products: [],
+});
+
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. Its time is the world clock's, so a link made away from live
  * opens its imagery at that time; one made live opens the latest. Its frames
  * follow `clock`, a weather clock several layers share; without one the layer
- * keeps its own on the page's world clock, for its lifetime. The feed may also
+ * builds its own on the page's world clock when first enabled and keeps it
+ * for its lifetime; that clock never sends the world live. The feed may also
  * name its source with `sourceName(kind)`, `kind` being 'radar', 'lightning'
  * or 'satellite'; NOAA nowCOAST is named otherwise. */
 export function createWeatherLayer({
@@ -109,10 +123,10 @@ export function createWeatherLayer({
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
-  const ownClock = sharedClock
-    ? null
-    : createWeatherClock({ world: worldClock });
-  const clock = sharedClock ?? ownClock;
+  // Without a shared clock the layer builds its own when first enabled, so a
+  // layer never turned on leaves the world clock alone.
+  let ownClock = null;
+  let clock = sharedClock ?? null;
   // A feed may also supply decoded frames; see weatherFrameSource.
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
@@ -181,23 +195,31 @@ export function createWeatherLayer({
     return spaced;
   };
   const maxGap = () => spacedTimes().gap;
-  const isLatest = () => clock.getState().mode === 'latest';
+  const clockState = () => clock?.getState() ?? IDLE_CLOCK;
+  const isLatest = () => clockState().mode === 'latest';
   const getHost = () =>
     imageryHost?.() ?? { collection: viewer?.imageryLayers, kind: 'globe' };
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
-  const unsubscribeClock = clock.subscribe(() => {
+  const onClock = () => {
     if (!clock.getState().advancing || suspended())
       rendering?.cancelPrefetch?.();
     notify();
-  });
+  };
+  let unsubscribeClock = clock?.subscribe(onClock) ?? null;
+  const ensureClock = () => {
+    if (clock) return;
+    ownClock = createWeatherClock({ world: worldClock, shared: false });
+    clock = ownClock;
+    unsubscribeClock = clock.subscribe(onClock);
+  };
   const observationDelayed = () =>
     manifest?.latest &&
     Date.now() - Date.parse(manifest.latest) > spacedTimes().delay;
   const suspended = () => hostHidden || documentRef?.hidden || motion?.matches;
   const onVisibility = () => {
     if (suspended()) rendering?.cancelPrefetch?.();
-    void clock.refresh();
+    void clock?.refresh();
     notify();
   };
 
@@ -234,7 +256,7 @@ export function createWeatherLayer({
     return true;
   }
   function registerClock() {
-    if (unregisterClock || !rendering || !enabled) return;
+    if (unregisterClock || !rendering || !enabled || !clock) return;
     unregisterClock = clock.register({
       id,
       get maxGapMs() {
@@ -247,7 +269,7 @@ export function createWeatherLayer({
     });
   }
   async function warmNext(time) {
-    if (!enabled || suspended() || !clock.getState().advancing) return;
+    if (!enabled || suspended() || !clockState().advancing) return;
     // The world plays on past the newest frame, never round to the first.
     const times = manifest?.times ?? [];
     const next = times[times.indexOf(time) + 1];
@@ -297,7 +319,7 @@ export function createWeatherLayer({
       if (owner === generation) {
         loading = Boolean(request && !request.signal.aborted);
         notify();
-        if (isLatest()) void clock.refresh();
+        if (isLatest()) void clock?.refresh();
       }
     }
   }
@@ -345,6 +367,7 @@ export function createWeatherLayer({
     },
     enable() {
       enabled = true;
+      ensureClock();
       if (!removeCamera) {
         removeCamera = viewer.camera.moveEnd?.addEventListener(() => {
           checkHost();
@@ -458,7 +481,7 @@ export function createWeatherLayer({
         error = null;
         loading = false;
         rendering?.clear();
-        void clock.refresh();
+        void clock?.refresh();
         if (enabled) void layer.update(viewer);
       }
       if (infraredChanged && enabled && manifest) {
@@ -492,11 +515,14 @@ export function createWeatherLayer({
       // does, and every layer that follows it moves along. A step goes
       // through every shown observation's frames, and this row's own even
       // while it is suspended.
+      // Play does nothing while every observation it would show is suspended
+      // (reduced motion, a hidden page, no imagery host), as the row says.
       if (enabled)
         moveWorldTime(
           clock.world,
           [...clock.getTimeline(), ...(manifest?.times ?? [])],
           params,
+          clock.getState().products.some(({ suspended }) => !suspended),
         );
       notify();
     },
@@ -508,7 +534,7 @@ export function createWeatherLayer({
           : { product, opacity };
     },
     getRowControls() {
-      const shared = clock.getState();
+      const shared = clockState();
       const followLatest = isLatest();
       // Source-described text is data: shown as is, never translated.
       const display = weatherDisplay(manifest);
@@ -830,7 +856,7 @@ export function createWeatherLayer({
       };
     },
     getDiagnostics() {
-      const shared = clock.getState();
+      const shared = clockState();
       return {
         ...rendering?.getDiagnostics(),
         playing: shared.advancing,
@@ -845,8 +871,10 @@ export function createWeatherLayer({
     },
     destroy() {
       layer.disable();
-      unsubscribeClock();
+      unsubscribeClock?.();
+      unsubscribeClock = null;
       ownClock?.destroy();
+      if (ownClock) clock = ownClock = null;
       removeCamera?.();
       removeCamera = null;
       motion?.removeEventListener?.('change', onVisibility);

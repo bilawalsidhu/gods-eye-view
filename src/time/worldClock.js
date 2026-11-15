@@ -33,6 +33,8 @@
  */
 
 const MARK_TEXT = ['label', 'id', 'kind'];
+/** The longest label a mark carries, ellipsis and all. */
+export const WORLD_CLOCK_MARK_LABEL_LENGTH = 60;
 
 /**
  * A mark (a number, or `{time, label?, id?, kind?}`) in its one shape, or
@@ -51,6 +53,10 @@ function readMark(input) {
     const value = input[key];
     if (typeof value === 'string' && value.trim()) mark[key] = value.trim();
   }
+  if (mark.label?.length > WORLD_CLOCK_MARK_LABEL_LENGTH)
+    mark.label = `${mark.label
+      .slice(0, WORLD_CLOCK_MARK_LABEL_LENGTH - 1)
+      .trimEnd()}…`;
   return Object.freeze(mark);
 }
 
@@ -235,15 +241,17 @@ export function createWorldClock({
       jumps += 1;
       changed();
     },
-    /** Back to the wall clock; playback stops and its rate goes back to 1. */
+    /**
+     * Back to the wall clock; playback stops. The rate stays as chosen, so
+     * the next play, from wherever it starts, runs at it.
+     */
     goLive() {
-      if (live && !playing && rate === 1) return;
+      if (live && !playing) return;
       const stepping = active;
       live = true;
       cursorMs = null;
       playing = false;
       active = null;
-      rate = 1;
       jumps += 1;
       // Its driven(false) finds nothing left to stop.
       stepping?.driver.pause();
@@ -314,7 +322,10 @@ export function createWorldClock({
       if (ms === null || ms === undefined) gates.delete(id);
       else if (isWorldTime(ms)) gates.set(id, ms);
     },
-    /** Simulated ms per real ms for continuous playback. */
+    /**
+     * Simulated ms per real ms for continuous playback. It holds while paused
+     * and live, so any play (`play()` with no rate) runs at the one chosen.
+     */
     setRate(nextRate) {
       if (!Number.isFinite(nextRate) || nextRate <= 0)
         throw new RangeError('World clock rate must be positive');
@@ -419,7 +430,8 @@ export function createWorldClock({
      * `marks` are the moments in that span worth going to (a launch, a strong
      * earthquake), drawn as ticks the timeline's arrow keys step to. Each is
      * an epoch ms number, or `{time, label?, id?, kind?}`: `label` is short
-     * text the timeline shows for it (a name, `M6.4 · a place`), `id` the
+     * text the timeline shows for it (a name, `M6.4 · a place`; one longer
+     * than WORLD_CLOCK_MARK_LABEL_LENGTH is cut to it, ending in `…`), `id` the
      * layer's own key for the event and `kind` what sort of event it is.
      * Numbers and objects may be mixed; a mark with no finite time is
      * ignored, as are a label, id or kind that is not a non-empty string.

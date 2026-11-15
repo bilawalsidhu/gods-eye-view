@@ -199,8 +199,8 @@ the unregister; call `worldClock.coverageChanged()` when that time changes.
 `{ start, end, marks? }` in epoch ms. `marks` are the moments worth going to,
 drawn as ticks the timeline's arrow keys step to and a tap on or within 6 px of
 snaps to. Each mark is a number, or `{ time, label?, id?, kind? }`: `label` is
-short text shown when the pointer is on the tick and told with the time while
-the handle is on the mark, `id` the layer's own key for the event and `kind`
+short text (cut to 60 characters, ending in `…`) shown when the pointer is on
+the tick and told with the time while the handle is on the mark, `id` the layer's own key for the event and `kind`
 what sort of event it is (`'launch'`, `'earthquake'`). The two forms may be
 mixed; a mark without a finite time, and a `label`, `id` or `kind` that is not
 a non-empty string, are ignored. `worldClock.coverage()` returns the union of

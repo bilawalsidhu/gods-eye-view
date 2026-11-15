@@ -96,7 +96,12 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       span: spanOf(state),
     });
   const time = shallowRef(read());
-  const speed = shallowRef('real');
+  // The speed the world clock keeps, where it is one of those offered.
+  const speed = shallowRef(
+    Object.keys(WORLD_TIME_SPEEDS).find(
+      (key) => WORLD_TIME_SPEEDS[key] === worldClock.getRate(),
+    ) ?? 'real',
+  );
   const rate = () => WORLD_TIME_SPEEDS[speed.value];
   let ticker = null;
   const syncTicker = () => {
@@ -141,16 +146,16 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     },
     speed,
     /**
-     * Choose how fast play runs; playing, it changes at once. A driver steps
-     * at its own pace, so a speed chosen while one plays takes playback over
-     * from where it is.
+     * Choose how fast play runs: the world clock keeps it, so any play runs
+     * at it (a layer's own Play too), and playing, it changes at once. A
+     * driver steps at its own pace, so a speed chosen while one plays takes
+     * playback over from where it is.
      */
     setSpeed(next) {
       if (!Object.hasOwn(WORLD_TIME_SPEEDS, next)) return;
       speed.value = next;
       const { playing, stepping } = worldClock.getState();
-      if (!playing) return;
-      if (!stepping) return worldClock.setRate(rate());
+      if (!playing || !stepping) return worldClock.setRate(rate());
       worldClock.pause();
       worldClock.play({ rate: rate(), continuous: true });
     },
