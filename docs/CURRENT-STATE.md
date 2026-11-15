@@ -8566,7 +8566,12 @@ Playback advances two seconds after all products settle, wraps, and stops with
 fewer than two union times or when all products are suspended. Hidden documents,
 reduced motion and unavailable imagery hosts suspend products. Re-enabling or
 restoring a host joins the retained history target. The wind row explicitly says
-“Forecast · does not follow history” while the observed clock is in history mode.
+“Forecast · does not follow history” while the observed clock is in history mode,
+unless a host follows the world clock for `wind` (`weatherClock.follows('wind')`):
+its source then follows the timeline and the row says nothing of it. In history
+mode, frame ages and the “Source observations delayed” status are measured from
+the timeline time rather than the wall clock, and the timeline readout shows the
+time alone; live, they count from now as before.
 The catalog exposes `weatherClock` and destroys it with its lifetime signal.
 
 Source, opacity, coverage navigation and transport controls live in the WEATHER

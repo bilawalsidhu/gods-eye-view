@@ -120,9 +120,17 @@ export function createWeatherLayer({
       rendering?.cancelPrefetch?.();
     notify();
   });
+  // Ages and delays are measured from the time the layer shows: the world
+  // clock's time at a past time, the wall clock while live.
+  const worldNow = () => {
+    const shared = clock?.getState();
+    return shared?.mode === 'history' && shared.target
+      ? Date.parse(shared.target)
+      : Date.now();
+  };
   const observationDelayed = () =>
     manifest?.latest &&
-    Date.now() - Date.parse(manifest.latest) >
+    worldNow() - Date.parse(manifest.latest) >
       (product === 'clouds' ? 240 : lightning ? 45 : 20) * 60_000;
   const stop = () => {
     if (clock) return;
@@ -573,7 +581,7 @@ export function createWeatherLayer({
       const index = times.indexOf(time);
       const current = index >= 0;
       const age = time
-        ? Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 60000))
+        ? Math.max(0, Math.floor((worldNow() - Date.parse(time)) / 60000))
         : null;
       const lag =
         age === null

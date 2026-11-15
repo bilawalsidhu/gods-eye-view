@@ -258,8 +258,9 @@ export function createWindLayer({
       return { model, overlay, paused, units };
     },
     getRowControls() {
+      // A source that follows the timeline shows the wind at its time.
       const historyStatus =
-        clock?.getState().mode === 'history'
+        clock?.getState().mode === 'history' && !clock.follows?.('wind')
           ? t('Forecast · does not follow history')
           : null;
       const valid = formatWindValidTime(manifest?.cycle?.validIso);

@@ -454,3 +454,19 @@ test('a parameter replacement during manager enable does not roll the layer back
   assert.equal(layer.getStats().count, 4);
   await manager.destroyAll();
 });
+
+test('wind whose source follows the timeline drops the note that it does not follow the timeline', async () => {
+  const { createWeatherClock } = await import('../weather/clock.js');
+  const { createWorldClock } = await import('../../time/worldClock.js');
+  const world = createWorldClock();
+  const clock = createWeatherClock({ world });
+  const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
+  world.follow('wind');
+  await clock.setTarget('2026-09-14T12:00:00.000Z');
+  assert.equal(clock.getState().mode, 'history');
+  assert.doesNotMatch(layer.getRowControls().info, /does not follow history/);
+  world.follow('wind', false);
+  assert.match(layer.getRowControls().info, /Forecast · does not follow history/);
+  layer.destroy();
+  clock.destroy();
+});

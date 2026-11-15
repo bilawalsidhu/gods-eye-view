@@ -2681,3 +2681,44 @@ test('the layer hands rendering a frame source only when its feed is one', () =>
   assert.equal(typeof seen[1].getTile, 'function');
   assert.equal(seen[1].getImage, undefined);
 });
+
+test('at a past time a frame is aged and its source judged delayed from the timeline time', async (t) => {
+  // Live at twenty minutes past the newest frame: the source is late.
+  t.mock.method(Date, 'now', () => Date.parse(times[2]) + 25 * 60_000);
+  const clock = createWeatherClock();
+  const h = layerHarness({ clock });
+  t.after(() => {
+    h.layer.destroy();
+    clock.destroy();
+  });
+  const update = h.layer.update();
+  await flush();
+  h.stages.at(-1).finish();
+  await update;
+  await flush();
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Source observations delayed',
+  );
+  assert.match(h.layer.getRowControls().summary.detail, /25m ago/);
+
+  // Years later, the world clock is moved back to the newest frame.
+  Date.now.mock.mockImplementation(() => Date.parse('2032-01-01T00:00:00Z'));
+  void clock.setTarget(times[2]);
+  await flush();
+  h.stages.at(-1)?.finish();
+  await flush();
+  assert.equal(clock.getState().mode, 'history');
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.summary.status, null);
+  assert.match(controls.summary.detail, /History · 09-15 20:10 UTC · 0m ago/);
+  assert.equal(h.layer.getStats().stale, false);
+
+  // Ten minutes after the newest frame, the frame is ten minutes old.
+  void clock.setTarget('2026-09-15T20:20:00.000Z');
+  await flush();
+  h.stages.at(-1)?.finish();
+  await flush();
+  assert.match(h.layer.getRowControls().summary.detail, /10m ago · nearest/);
+  assert.equal(h.layer.getRowControls().summary.status, null);
+});
