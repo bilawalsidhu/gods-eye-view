@@ -62,13 +62,10 @@ export function resolveHudRailLayout({
 }
 
 /**
- * Tactical HUD gives an expanded right-rail panel the whole control lane.
- * Other HUD layouts keep collapsed launchers visible for quick switching.
- *
- * @param {object} input Current rail state.
- * @param {string} input.hudVariant Active HUD layout variant.
- * @param {boolean} input.hasExpandedPanel Whether any rail panel is expanded.
- * @returns {boolean} Whether collapsed sibling launchers should be hidden.
+ * Whether the Tactical layout hid collapsed right panels beside an expanded
+ * one. The rail now enforces one open panel per side in every layout; this
+ * stays exported from `./ui/layout` for hosts that imported it.
+ * @deprecated
  */
 export function shouldHideCollapsedRightPanels({
   hudVariant,

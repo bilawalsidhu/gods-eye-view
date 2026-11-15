@@ -1,6 +1,17 @@
 import * as Cesium from 'cesium';
 import { gstime } from 'satellite.js';
-import { ISS_NORAD, POSITION_UPDATE_MS, RING_ROTATION_MS } from './policy.js';
+import { reckonEarthFixed, sampleOrbit } from './motion.js';
+import {
+  ISS_NORAD,
+  ORBIT_REBAKE_MS,
+  ORBIT_RECKON_LIMIT_MS,
+  ORBIT_SAMPLE_HORIZON_MS,
+  POSITION_UPDATE_MS,
+  RING_ROTATION_MS,
+} from './policy.js';
+
+/** Scratch for a point's reckoned position. */
+const _reckoned = new Cesium.Cartesian3();
 
 export function createRendering({
   state: layerState,
@@ -42,26 +53,28 @@ export function createRendering({
     const sat = layerState._catalog.get(noradId);
     if (!sat || !layerState._viewer) return;
 
-    const bakeDate = new Date();
+    const bakeDate = new Date(layerState.now());
     const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
     if (basePositions.length < 2) return;
 
     const pathColor = color || Cesium.Color.CYAN;
+    // Kept so the Cockpit's orbit dim (cockpitSubject.js) restores exactly.
+    const baseColor = pathColor.withAlpha(0.6);
+    const baseDepthFailColor = pathColor.withAlpha(0.35);
+    const instanceId = `satellite-orbit:${noradId}`;
 
     const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
+        id: instanceId,
         geometry: new Cesium.PolylineGeometry({
           positions: basePositions,
           width: noradId === ISS_NORAD ? 2.5 : 2.0,
           vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
         }),
         attributes: {
-          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            pathColor.withAlpha(0.6),
-          ),
-          depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            pathColor.withAlpha(0.35),
-          ),
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(baseColor),
+          depthFailColor:
+            Cesium.ColorGeometryInstanceAttribute.fromColor(baseDepthFailColor),
         },
       }),
       appearance: new Cesium.PolylineColorAppearance({ translucent: true }),
@@ -75,10 +88,17 @@ export function createRendering({
 
     layerState._orbitPaths.set(noradId, {
       primitive,
+      color: pathColor,
+      bakeMs: bakeDate.getTime(),
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.
       gmstAtBake: gstime(bakeDate),
+      instanceId,
+      baseColor,
+      baseDepthFailColor,
+      // The alpha multiple last written to the instance (1: as built).
+      alphaFactor: 1,
     });
   }
 
@@ -113,8 +133,15 @@ export function createRendering({
   function _updateOrbitPathRotations(nowDate) {
     if (layerState._orbitPaths.size === 0) return;
 
-    for (const path of layerState._orbitPaths.values()) {
+    for (const [noradId, path] of [...layerState._orbitPaths]) {
       if (!path.primitive) continue;
+      // The rotation keeps the ring under the dot for minutes; the plane
+      // itself precesses, so a world time moved far from the bake re-bakes.
+      if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
+        _hideOrbitPath(noradId);
+        _showOrbitPath(noradId, path.color);
+        continue;
+      }
       parts.orbits.orbitFrameModelMatrix(
         path.gmstAtBake,
         nowDate,
@@ -137,39 +164,73 @@ export function createRendering({
   }
 
   /**
-   * Propagate all CORE satellite positions and update point primitives.
-   * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
-   * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
+   * Take a fresh SGP4 sample of every CORE satellite (motion.js); the points
+   * move from these each frame in _reckonPoints. (About 1,300 core
+   * satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms, fine at the
+   * 1s/200ms cadence.) Dense extras are excluded: they are sampled on the
+   * round-robin budget in _propagateDenseChunk.
+   * @returns {number} How many satellites were sampled.
    */
 
   function _propagateAll() {
-    const now = new Date();
+    const nowMs = layerState.now();
     let updated = 0;
 
-    for (const [noradId, sat] of layerState._catalog) {
+    for (const sat of layerState._catalog.values()) {
       if (sat.group === 'dense') continue;
-      const pos = parts.orbits.propagatePosition(sat.satrec, now);
-      if (!pos) continue;
-
-      const cartesian = Cesium.Cartesian3.fromDegrees(
-        pos.longitude,
-        pos.latitude,
-        pos.altitude,
-      );
-      const point = layerState._points.get(noradId);
-      if (point) {
-        point.position = cartesian;
-        updated++;
-      }
+      if (_sample(sat, nowMs)) updated++;
     }
 
     return updated;
   }
 
   /**
+   * Sample one satellite's orbit at `atMs` into its reused sample.
+   * @returns {boolean} Whether SGP4 had a state for that time.
+   */
+
+  function _sample(sat, atMs) {
+    const sample = sampleOrbit(sat.satrec, atMs, sat.orbitSample);
+    if (!sample) return false;
+    sat.orbitSample = sample;
+    return true;
+  }
+
+  /**
+   * Move every shown point to where its satellite is at the world time,
+   * reckoned from its last sample, so points glide every frame between
+   * samples instead of stepping once a second. A core sample more than
+   * ORBIT_SAMPLE_HORIZON_MS from the world time (time playing fast, or a
+   * seek) is taken again first; dense extras are resampled by their own
+   * round-robin. A hidden point is moved when it is shown again, and the
+   * tracked satellite is placed by its per-frame path.
+   * @param {number} nowMs World time, epoch ms.
+   */
+
+  function _reckonPoints(nowMs) {
+    const gmst = gstime(new Date(nowMs));
+    for (const [noradId, point] of layerState._points) {
+      if (!point.show || noradId === layerState._trackedNorad) continue;
+      const sat = layerState._catalog.get(noradId);
+      if (!sat || sat.reckonedAtMs === nowMs) continue;
+      let sample = sat.orbitSample;
+      if (
+        sat.group !== 'dense' &&
+        (!sample || Math.abs(nowMs - sample[0]) > ORBIT_SAMPLE_HORIZON_MS)
+      )
+        sample = _sample(sat, nowMs) ? sat.orbitSample : null;
+      if (!sample || Math.abs(nowMs - sample[0]) > ORBIT_RECKON_LIMIT_MS)
+        continue;
+      point.position = reckonEarthFixed(sample, nowMs, gmst, _reckoned); // setter clones
+      sat.reckonedAtMs = nowMs;
+    }
+  }
+
+  /**
    * Shared scene.preRender tick (single definition for init + enable):
-   * - core fleet propagation at 200ms-tracked / 1s-idle cadence,
-   * - dense extras on a per-frame round-robin budget,
+   * - core fleet SGP4 samples at 200ms-tracked / 1s-idle cadence,
+   * - dense extras sampled on a per-frame round-robin budget,
+   * - every point reckoned from its sample each frame (motion.js),
    * - tracked satellite's point primitive per frame (WS-D2),
    * - orbit ring GMST re-alignment every ~1s (WS-D1).
    */
@@ -191,7 +252,12 @@ export function createRendering({
       layerState._lastPropagation = now;
     }
 
-    if (layerState._params.showPoints) parts.catalog._propagateDenseChunk();
+    if (layerState._params.showPoints) {
+      const worldMs = layerState.now();
+      parts.catalog._propagateDenseChunk(worldMs - layerState._lastReckonMs);
+      layerState._lastReckonMs = worldMs;
+      _reckonPoints(worldMs);
+    }
 
     // Keep the tracked dot on the per-frame epoch shared with label + camera —
     // runs after _propagateAll so the per-frame sample wins over the 200ms one.
@@ -203,6 +269,10 @@ export function createRendering({
       }
     }
 
+    // While the Cockpit rides the tracked satellite, keep its marks hidden.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
+
     _updatePointFocus(now);
 
     // Hidden standalone orbit primitives do not need GMST matrix writes while
@@ -211,7 +281,7 @@ export function createRendering({
       layerState._params.showOrbits &&
       now - layerState._lastRingRotation >= RING_ROTATION_MS
     ) {
-      _updateOrbitPathRotations(new Date(now));
+      _updateOrbitPathRotations(new Date(layerState.now()));
       layerState._lastRingRotation = now;
     }
   }
@@ -313,6 +383,7 @@ export function createRendering({
     _updateOrbitPathRotations,
     _hideOrbitPath,
     _propagateAll,
+    _reckonPoints,
     _preRenderTick,
     _updatePointFocus,
     applySatellitePointFocusDeemphasis,

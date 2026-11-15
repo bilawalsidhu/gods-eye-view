@@ -94,11 +94,10 @@ export function mergeDotenvIntoEnv(loaded, env = process.env) {
  * @param {string} [options.root] The checkout root; the repository's own by
  *   default, overridable so a test can point it at a fixture directory.
  */
-export function standaloneViteConfig({
-  command,
-  mode,
-  root: configRoot = root,
-}) {
+export function standaloneViteConfig(
+  { command, mode, root: configRoot = root },
+  { nominatimStorageDir } = {},
+) {
   // The files are read directly, because loadEnv resolves a key from
   // process.env first — an empty variable there would hide the file's real
   // value before the merge ever saw it.
@@ -109,7 +108,11 @@ export function standaloneViteConfig({
   const tools = standaloneVoiceTools();
   return createBrowserViteConfig({
     plugins: [
-      ...localProviderPlugins({ realtime: { tools }, gemini: { tools } }),
+      ...localProviderPlugins({
+        realtime: { tools },
+        gemini: { tools },
+        nominatimStorageDir,
+      }),
       localMcpPlugin(),
       googleTokenUnavailablePlugin(),
       apiNotFoundPlugin(),
@@ -117,6 +120,7 @@ export function standaloneViteConfig({
     ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
+    photonUrl: process.env.PHOTON_URL,
     mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
@@ -126,4 +130,8 @@ export function standaloneViteConfig({
 }
 
 /** Load this checkout's configuration and attach its local provider middleware. */
-export default defineConfig((options) => standaloneViteConfig(options));
+export function standaloneConfig(options, extra) {
+  return standaloneViteConfig(options, extra);
+}
+
+export default defineConfig(standaloneConfig);

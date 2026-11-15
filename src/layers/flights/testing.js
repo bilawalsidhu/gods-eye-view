@@ -190,8 +190,20 @@ export function createTesting({
     );
   }
 
-  /** Exercise the exact asynchronous fleet loader and return its admitted model. */
+  /** Forget every enrichment lookup and the dispatch clock, so a test that
+   *  moved `Date.now` leaves no future-dated drip or cool-down behind. */
+  function _resetEnrichmentForTest() {
+    flightState._enrichQueue.length = 0;
+    flightState._enrichSeen.clear();
+    flightState._enrichRetryAfter.clear();
+    flightState._enrichLastDispatchMs = 0;
+    if (flightState._enrichDripTimer) {
+      clearTimeout(flightState._enrichDripTimer);
+      flightState._enrichDripTimer = null;
+    }
+  }
 
+  /** Exercise the exact asynchronous fleet loader and return its admitted model. */
   async function _ensureFleetModelForTest(icao24) {
     await parts.rendering._ensureModel(icao24);
     return flightState._models.get(icao24) || null;
@@ -212,5 +224,6 @@ export function createTesting({
     _trackedBillboardColorForTest,
     _driveFleetModelHandoffForTest,
     _ensureFleetModelForTest,
+    _resetEnrichmentForTest,
   };
 }

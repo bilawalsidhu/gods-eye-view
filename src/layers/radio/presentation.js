@@ -1,3 +1,5 @@
+import { getLocale } from '../../i18n/index.js';
+
 export function createPresentation({
   state: layerState,
   services,
@@ -10,9 +12,26 @@ export function createPresentation({
     return layerState._acceptedCatalogSnapshot;
   }
 
+  /** Build the station categories, labelled in the current locale. */
+
+  function buildCategories() {
+    layerState._categories = Object.freeze(
+      parts.categories
+        .buildRadioCategories(layerState._stations)
+        .map((category) => Object.freeze(category)),
+    );
+    layerState._categoriesLocale = getLocale();
+  }
+
   /** Return an immutable snapshot consumed by the right-rail UI. */
 
   function getRadioUIState() {
+    // Labels follow a language switch the next time the state is read.
+    if (
+      layerState._categories.length &&
+      layerState._categoriesLocale !== getLocale()
+    )
+      buildCategories();
     const visible = parts.queries.visibleStations();
     const selected = parts.queries.selectedStation();
     return Object.freeze({
@@ -98,6 +117,7 @@ export function createPresentation({
   return {
     getRadioAcceptedCatalogSnapshot,
     getRadioUIState,
+    buildCategories,
     emitState,
     subscribeToRadio,
     subscribeToRadioPlaybackControls,

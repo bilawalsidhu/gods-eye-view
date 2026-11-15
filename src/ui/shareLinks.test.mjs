@@ -12,6 +12,7 @@ import {
 } from './shareFollow.js';
 import { createDefaultLayerState } from '../data/layerState.js';
 import { parseSharePath, shareLinkUrl } from '../share/shareLinkPath.js';
+import { worldClock } from '../time/worldClock.js';
 import {
   decodeShareView,
   encodeShareView,
@@ -234,7 +235,9 @@ test('a code that fails its check restores nothing and says so', async (t) => {
     (await page.owner.initialRestorePromise).status,
     'not-requested',
   );
-  assert.deepEqual(page.notices, ["This share link can't be opened"]);
+  assert.deepEqual(page.notices, [
+    { message: "This share link can't be opened" },
+  ]);
   // The default start's first address write leaves the bad link behind.
   page.manager._updateHash();
   assert.equal(page.location.pathname, '/');
@@ -334,9 +337,10 @@ test('a thing that is not reporting leaves the view at its last-known fix, with 
   await flush();
   assert.equal(page.notices.length, 1);
   assert.match(
-    page.notices[0],
-    /^A1B2C3 isn't reporting now — showing where it was at .+/,
+    page.notices[0].message,
+    /^The shared flight isn't reporting now — showing where it was at .+/,
   );
+  assert.equal(page.notices[0].detail, 'ICAO: A1B2C3');
   // A long link names no fix and keeps the existing notice.
   page.owner._initialShareState = { shareView: null };
   page.owner._handleShareTrackingRestoreStatus({
@@ -345,19 +349,48 @@ test('a thing that is not reporting leaves the view at its last-known fix, with 
     label: 'flight',
     classification: 'expired',
   });
-  assert.equal(page.notices[1], 'Shared flight follow expired');
+  assert.deepEqual(page.notices[1], {
+    message: 'Shared flight follow expired',
+  });
 });
 
-test('the not-reporting notice names the id and the time of the fix', () => {
+test('the not-reporting notice is a sentence per kind with the id on a second line', () => {
   const at = new Date(2026, 9, 26, 14, 5).getTime();
+  const flight = sharedFixNotice(
+    { kind: 'aircraft', id: 'a1b2c3' },
+    at,
+    at + 60_000,
+  );
   assert.match(
-    sharedFixNotice({ kind: 'aircraft', id: 'a1b2c3' }, at, at + 60_000),
-    /^A1B2C3 isn't reporting now — showing where it was at .*05/,
+    flight.message,
+    /^The shared flight isn't reporting now — showing where it was at .*05/,
   );
+  assert.equal(flight.detail, 'ICAO: A1B2C3');
+  assert.deepEqual(
+    sharedFixNotice({ kind: 'military_aircraft', id: 'ae01ce' }, null),
+    {
+      message:
+        "The shared military flight isn't reporting now — showing where it was last seen",
+      detail: 'ICAO: AE01CE',
+    },
+  );
+  assert.deepEqual(sharedFixNotice({ kind: 'vessel', id: '366999712' }, null), {
+    message:
+      "The shared vessel isn't reporting now — showing where it was last seen",
+    detail: 'MMSI: 366999712',
+  });
   assert.equal(
-    sharedFixNotice({ kind: 'vessel', id: '366999712' }, null),
-    "366999712 isn't reporting now — showing where it was last seen",
+    sharedFixNotice(
+      { kind: 'vessel', id: '3F2504E0-4F89-11D3-9A0C-0305E82C3301' },
+      null,
+    ).detail,
+    'Vessel UUID: 3f2504e0-4f89-11d3-9a0c-0305e82c3301',
   );
+  assert.deepEqual(sharedFixNotice({ kind: 'satellite', id: '25544' }, null), {
+    message:
+      "The shared satellite isn't reporting now — showing where it was last seen",
+    detail: 'NORAD: 25544',
+  });
 });
 
 test('a shared vessel is selected once the vessel feed has it', async (t) => {
@@ -398,7 +431,11 @@ test('a shared vessel is selected once the vessel feed has it', async (t) => {
     page.runAll();
   }
   assert.equal(await missing, false);
-  assert.match(page.notices.at(-1), /^366999712 isn't reporting now/);
+  assert.match(
+    page.notices.at(-1).message,
+    /^The shared vessel isn't reporting now/,
+  );
+  assert.equal(page.notices.at(-1).detail, 'MMSI: 366999712');
 });
 
 test('the share button links to /share/<code>, following the followed entity', (t) => {
@@ -551,4 +588,175 @@ test('long links and hash navigation are unaffected by a share code start', asyn
   await flush();
   assert.equal(page.restores.length, 2);
   assert.equal(page.restores[1].style, 'normal');
+});
+
+const VESSEL_UUID = '0770e3ca-b896-c307-f499-4f9df2b8f86b';
+const VESSEL_AT = { lat: 51.93012, lon: 4.05118, alt: 46.6 };
+
+/** A camera `offset` from the vessel, as Cesium places it (WGS84). */
+function cameraAround(offset) {
+  const vessel = Cesium.Cartesian3.fromDegrees(
+    VESSEL_AT.lon,
+    VESSEL_AT.lat,
+    VESSEL_AT.alt,
+  );
+  const local = followOffsetToEnu(offset);
+  return {
+    vessel,
+    camera: Cesium.Matrix4.multiplyByPoint(
+      Cesium.Transforms.eastNorthUpToFixedFrame(vessel),
+      new Cesium.Cartesian3(local.east, local.north, local.up),
+      new Cesium.Cartesian3(),
+    ),
+  };
+}
+
+test('a selected vessel is the subject when the camera follows nothing', (t) => {
+  installPage(t, 'https://gev.example/');
+  const offset = { range: 6400, heading: 250, pitch: -28 };
+  const { vessel, camera } = cameraAround(offset);
+  const viewer = fakeViewer();
+  viewer.camera.positionWC = camera;
+  const fixAtMs = Math.floor(NOW_MS / 1000) * 1000 - 90_000;
+  let selected = { id: VESSEL_UUID, position: vessel, observedAtMs: fixAtMs };
+  const readSelectedVessel = () => selected;
+  const subject = readShareFollowSubject({
+    viewer,
+    nowMs: NOW_MS,
+    readSelectedVessel,
+  });
+  assert.equal(subject.kind, 'vessel');
+  assert.equal(subject.id, VESSEL_UUID);
+  // The fix is the vessel's drawn position at the format's precision.
+  assert.deepEqual(subject.lastKnown, {
+    lat: 51.9301,
+    lon: 4.0512,
+    alt: 47,
+    observedAtMs: fixAtMs,
+  });
+  // The inverse of the derived camera, from the user's camera: within the
+  // offset's whole degrees of the camera that placed it.
+  // (The fix is rounded to 10⁻⁴°, about 11 m, before the offset is taken.)
+  assert.ok(Math.abs(subject.offset.range - offset.range) <= 20);
+  assert.ok(Math.abs(subject.offset.heading - offset.heading) <= 1);
+  assert.ok(Math.abs(subject.offset.pitch - offset.pitch) <= 1);
+
+  // The share button's link opens with its camera where this one is.
+  const manager = new ShareLinkManager(viewer);
+  manager.setFollowSubjectProvider(({ nowMs }) =>
+    readShareFollowSubject({ viewer, nowMs, readSelectedVessel }),
+  );
+  const href = manager.buildLink({ nowMs: NOW_MS });
+  const code = parseSharePath(new URL(href).pathname).code;
+  const { state } = decodeShareView(code, { nowMs: NOW_MS });
+  assert.deepEqual(state.view.entity, { kind: 'vessel', id: VESSEL_UUID });
+  assert.equal(state.view.lastKnown.observedAtMs, fixAtMs);
+  const opened = Cesium.Cartesian3.fromDegrees(state.lon, state.lat, state.alt);
+  const missM = Cesium.Cartesian3.distance(opened, camera);
+  // Whole degrees at 6.4 km are at most about 80 m; 10⁻⁴° is about 11 m.
+  assert.ok(missM < 100, `${missM.toFixed(1)} m from the camera`);
+  // The UUID costs 13 bytes more than an ICAO address: 16 against 3.
+  manager.setFollowSubjectProvider(() => ({
+    ...subject,
+    kind: 'aircraft',
+    id: 'a1b2c3',
+  }));
+  const aircraft = parseSharePath(
+    new URL(manager.buildLink({ nowMs: NOW_MS })).pathname,
+  ).code;
+  assert.ok(
+    code.length - aircraft.length <= 18,
+    `${code.length} against ${aircraft.length} characters`,
+  );
+  manager.destroy();
+
+  // A camera below the vessel's horizon cannot be carried: a place view.
+  viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(4.0512, 54, 900);
+  assert.equal(
+    readShareFollowSubject({ viewer, nowMs: NOW_MS, readSelectedVessel }),
+    null,
+  );
+  // Nor can one at the vessel.
+  viewer.camera.positionWC = vessel;
+  assert.equal(
+    readShareFollowSubject({ viewer, nowMs: NOW_MS, readSelectedVessel }),
+    null,
+  );
+  // With nothing selected there is no subject.
+  viewer.camera.positionWC = camera;
+  selected = null;
+  assert.equal(
+    readShareFollowSubject({ viewer, nowMs: NOW_MS, readSelectedVessel }),
+    null,
+  );
+});
+
+test('a followed aircraft or satellite keeps priority over a selected vessel', () => {
+  const { vessel, camera } = cameraAround({
+    range: 2400,
+    heading: 30,
+    pitch: -20,
+  });
+  const readSelectedVessel = () => ({
+    id: VESSEL_UUID,
+    position: vessel,
+    observedAtMs: NOW_MS,
+  });
+  const viewer = {
+    camera: { positionWC: camera },
+    clock: { currentTime: Cesium.JulianDate.now() },
+    trackedEntity: {
+      gevTrackedId: 'satellites:25544',
+      gevDisplayPosition: () => vessel,
+    },
+  };
+  const subject = readShareFollowSubject({ viewer, readSelectedVessel });
+  assert.equal(subject.kind, 'satellite');
+  // A followed entity the share format cannot name is still followed: the
+  // link is a place view, not the selected vessel.
+  viewer.trackedEntity.gevTrackedId = 'local-adsb:abc';
+  assert.equal(readShareFollowSubject({ viewer, readSelectedVessel }), null);
+});
+
+test('a link to a UUID vessel at a world time selects it once its snapshot has it', async (t) => {
+  t.after(() => worldClock.goLive());
+  const worldTime = Math.floor((NOW_MS - 3_600_000) / 1000) * 1000;
+  const code = encodeShareView({
+    view: {
+      kind: 'thing',
+      entity: { kind: 'vessel', id: VESSEL_UUID },
+      offset: { range: 3200, heading: 20, pitch: -30 },
+      lastKnown: { ...VESSEL_AT, alt: 47, observedAtMs: worldTime },
+    },
+    sharedAtMs: Math.floor(NOW_MS / 1000) * 1000,
+    worldTime,
+  });
+  const page = openPage(t, `http://localhost/share/${code}`);
+  // The link opens paused at its world time.
+  assert.equal(worldClock.isLive(), false);
+  assert.equal(worldClock.now(), worldTime);
+  // The vessel layer: its records are the snapshot at the clock's time, which
+  // arrives a moment after the layer turns on.
+  const records = new Set();
+  const selected = [];
+  page.owner._dataManager = {
+    layers: new Map([
+      [
+        'ais-live-vessels',
+        {
+          module: {
+            hasContact: (id) => (records.size ? records.has(id) : null),
+            selectById: (id) => records.has(id) && selected.push(id) > 0,
+          },
+        },
+      ],
+    ]),
+  };
+  await restore(page);
+  assert.deepEqual(selected, []);
+  if (worldClock.now() === worldTime) records.add(VESSEL_UUID);
+  page.runAll();
+  await flush();
+  assert.deepEqual(selected, [VESSEL_UUID]);
+  assert.deepEqual(page.notices, []);
 });

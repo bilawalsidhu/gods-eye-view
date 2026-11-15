@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createVoiceInactivity } from './inactivity.js';
 import { RealtimeTurns } from '../realtimeTurns.js';
 import { observeNativeActivity } from './nativeActivity.js';
+import { createTestVoiceUi } from '../../testSupport/voiceUi.mjs';
 // Deliberately small native-shaped fixtures exercise wrapper contracts, not devices.
 function gemini(onChange = () => {}) {
   const callbacks = [];
@@ -686,15 +687,7 @@ test('actual OpenAI failed-response error/listening recovery preserves only prov
       runner: async () => ({ ok: true }),
       backend: {},
       debugSink: null,
-      ui: {
-        root: {
-          dataset: {},
-          classList: { remove() {} },
-          querySelectorAll: () => [],
-        },
-        status: {},
-        detail: {},
-      },
+      ui: createTestVoiceUi(),
       onSessionEvent(event) {
         if (event.type === 'state') states.push(event.state);
         observer?.handle(event);

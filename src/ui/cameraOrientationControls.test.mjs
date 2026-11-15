@@ -49,23 +49,25 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
   return { viewer, calls, target: surface };
 }
 
-class FakeButton extends EventTarget {
-  constructor() {
-    super();
-    this.attributes = new Map();
-    this.style = {
-      setProperty: (name, value) => this.attributes.set(name, value),
-    };
-  }
-  setAttribute(name, value) {
-    this.attributes.set(name, String(value));
-  }
-  getAttribute(name) {
-    return this.attributes.get(name);
-  }
-  click() {
-    this.dispatchEvent(new Event('click'));
-  }
+/**
+ * Record what the controls publish as the globe actions store keeps it:
+ * `state` is the latest, and `publishes` counts the changes.
+ */
+function recorder() {
+  const bar = {
+    state: null,
+    publishes: 0,
+    publish(state) {
+      if (
+        bar.state?.tilted === state.tilted &&
+        bar.state?.heading === state.heading
+      )
+        return;
+      bar.state = state;
+      bar.publishes += 1;
+    },
+  };
+  return bar;
 }
 
 /**
@@ -277,29 +279,29 @@ test('the button shows the state the next click will produce, at every range', (
   for (const range of [3_000, 18_000_000]) {
     const { viewer } = createRealViewer(AUSTIN_GROUND);
     orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
-    const tiltButton = new FakeButton();
+    const bar = recorder();
     const controls = bindCameraOrientationControls({
       viewer,
-      elements: { tiltButton, northButton: new FakeButton() },
+      publish: bar.publish,
       runNavigation: (_noun, navigate) => navigate(),
     });
 
     assert.equal(
-      tiltButton.getAttribute('aria-pressed'),
-      'false',
+      bar.state.tilted,
+      false,
       `straight down at ${range} m must not read as tilted`,
     );
-    tiltButton.click();
+    controls.tilt();
     assert.equal(
-      tiltButton.getAttribute('aria-pressed'),
-      'true',
+      bar.state.tilted,
+      true,
       `after one click at ${range} m the button must read tilted`,
     );
     // And the exact refresh that runs when the camera settles must agree.
     controls.refreshTilt();
     assert.equal(
-      tiltButton.getAttribute('aria-pressed'),
-      'true',
+      bar.state.tilted,
+      true,
       `the settled state at ${range} m must agree with the commanded one`,
     );
     controls.destroy();
@@ -309,13 +311,13 @@ test('the button shows the state the next click will produce, at every range', (
 test('the needle follows a rotation too small for the camera-changed threshold', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
   orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);
-  const northButton = new FakeButton();
+  const bar = recorder();
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton: new FakeButton(), northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
-  assert.equal(northButton.getAttribute('--camera-heading'), '0deg');
+  assert.equal(bar.state.heading, 0);
 
   // Ten degrees is far below Cesium's default percentageChanged, so
   // `camera.changed` may never fire for it; the per-frame signal must.
@@ -326,23 +328,23 @@ test('the needle follows a rotation too small for the camera-changed threshold',
   orbit(viewer, AUSTIN_GROUND, 10, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
   assert.equal(
-    northButton.getAttribute('--camera-heading'),
-    '10deg',
+    bar.state.heading,
+    10,
     `needle must follow a 10 degree rotation (camera.changed fired ${changedFired} time(s))`,
   );
 
   orbit(viewer, AUSTIN_GROUND, 13, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
-  assert.equal(northButton.getAttribute('--camera-heading'), '13deg');
+  assert.equal(bar.state.heading, 13);
   controls.destroy();
 });
 
 test('north-up indicator follows real heading including the 360-degree seam', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
-  const northButton = new FakeButton();
+  const bar = recorder();
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
   for (const [heading, active] of [
@@ -355,66 +357,49 @@ test('north-up indicator follows real heading including the 360-degree seam', ()
   ]) {
     orbit(viewer, AUSTIN_GROUND, heading, Cesium.Math.toRadians(-80), 5_000);
     viewer.scene.preRender.raiseEvent();
-    assert.equal(
-      northButton.getAttribute('data-north-up'),
-      String(active),
-      `heading ${heading}`,
-    );
+    assert.equal(bar.state.heading === 0, active, `heading ${heading}`);
   }
   controls.destroy();
 });
 
-test('a settled camera writes nothing, and teardown releases every signal', () => {
+test('a settled camera publishes no change, and teardown releases every signal', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
   orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);
-  const tiltButton = new FakeButton();
-  const northButton = new FakeButton();
-  let writes = 0;
-  const count = (element) => {
-    const setAttribute = element.setAttribute.bind(element);
-    const setProperty = element.style.setProperty.bind(element.style);
-    element.setAttribute = (name, value) => {
-      writes += 1;
-      setAttribute(name, value);
-    };
-    element.style.setProperty = (name, value) => {
-      writes += 1;
-      setProperty(name, value);
-    };
-  };
-  count(tiltButton);
-  count(northButton);
-
+  const bar = recorder();
   const preRenderBefore = viewer.scene.preRender.numberOfListeners;
   const moveEndBefore = viewer.camera.moveEnd.numberOfListeners;
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton, northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
   assert.equal(viewer.scene.preRender.numberOfListeners, preRenderBefore + 1);
   assert.equal(viewer.camera.moveEnd.numberOfListeners, moveEndBefore + 1);
 
-  writes = 0;
+  bar.publishes = 0;
   for (let i = 0; i < 60; i += 1) viewer.scene.preRender.raiseEvent();
-  assert.equal(writes, 0, '60 frames of a settled camera write nothing');
+  assert.equal(
+    bar.publishes,
+    0,
+    '60 frames of a settled camera publish no change',
+  );
 
   orbit(viewer, AUSTIN_GROUND, 47, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
-  assert.ok(writes > 0, 'a rotated camera updates the needle');
-  writes = 0;
+  assert.ok(bar.publishes > 0, 'a rotated camera updates the needle');
+  bar.publishes = 0;
   for (let i = 0; i < 20; i += 1) viewer.scene.preRender.raiseEvent();
-  assert.equal(writes, 0, 'and then goes quiet again');
+  assert.equal(bar.publishes, 0, 'and then goes quiet again');
 
   controls.destroy();
   assert.equal(viewer.scene.preRender.numberOfListeners, preRenderBefore);
   assert.equal(viewer.camera.moveEnd.numberOfListeners, moveEndBefore);
-  writes = 0;
+  bar.publishes = 0;
   orbit(viewer, AUSTIN_GROUND, 120, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
   viewer.camera.moveEnd.raiseEvent();
-  tiltButton.click();
-  assert.equal(writes, 0, 'a destroyed binding writes nothing');
+  controls.tilt();
+  assert.equal(bar.publishes, 0, 'a destroyed binding publishes nothing');
 });
 
 test('a sky-facing camera yields no frame and both actions decline', () => {
@@ -487,13 +472,12 @@ test('north-up preserves target pitch and range', () => {
 
 test('bindings route both controls and release every listener on destroy', () => {
   const { viewer } = createViewer();
-  const tiltButton = new FakeButton();
-  const northButton = new FakeButton();
+  const bar = recorder();
   const navigations = [];
   const toasts = [];
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton, northButton },
+    publish: bar.publish,
     runNavigation(noun, navigate) {
       navigations.push(noun);
       return navigate();
@@ -501,20 +485,20 @@ test('bindings route both controls and release every listener on destroy', () =>
     showToast: (message) => toasts.push(message),
   });
 
-  tiltButton.click();
-  northButton.click();
+  controls.tilt();
+  controls.northUp();
   assert.deepEqual(navigations, ['camera', 'camera']);
   assert.deepEqual(toasts, ['Tilted view', 'North up']);
   // The button shows the state the click just commanded, not a re-measurement.
-  assert.equal(tiltButton.getAttribute('aria-pressed'), 'true');
-  assert.equal(northButton.getAttribute('--camera-heading'), '90deg');
+  assert.equal(bar.state.tilted, true);
+  assert.equal(bar.state.heading, 90);
 
   viewer.camera.heading = -1e-12;
   controls.sync();
-  assert.equal(northButton.getAttribute('--camera-heading'), '0deg');
+  assert.equal(bar.state.heading, 0);
 
   controls.destroy();
-  tiltButton.click();
+  controls.tilt();
   assert.deepEqual(navigations, ['camera', 'camera']);
   assert.equal(STRAIGHT_DOWN_PITCH, Cesium.Math.toRadians(-89));
 });
@@ -663,22 +647,21 @@ test('rapid tilt presses reverse direction and north-up keeps the requested tilt
   const { viewer } = createRealViewer(target);
   orbit(viewer, target, 90, OBLIQUE_PITCH, 1000);
   viewer.scene.preUpdate = new Cesium.Event();
-  const tiltButton = new FakeButton();
-  const northButton = new FakeButton();
+  const bar = recorder();
   let controls;
   controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton, northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => {
       controls.cancel();
       return navigate();
     },
   });
-  tiltButton.click();
-  tiltButton.click();
-  assert.equal(tiltButton.getAttribute('aria-pressed'), 'true');
-  tiltButton.click();
-  northButton.click();
+  controls.tilt();
+  controls.tilt();
+  assert.equal(bar.state.tilted, true);
+  controls.tilt();
+  controls.northUp();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
   time = 650;
   viewer.scene.preUpdate.raiseEvent();

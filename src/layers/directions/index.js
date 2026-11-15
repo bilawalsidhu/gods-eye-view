@@ -31,6 +31,7 @@ import {
   quantitySeparator,
   unitLabel,
 } from '../../ui/unitLabels.js';
+import { distanceParts } from '../../data/distanceFormat.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -108,17 +109,12 @@ export const FLIGHT_PROGRESS_MS = 250;
  * @returns {string}
  */
 export function routeDistanceText(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '';
-  if (meters < 100) return formatQuantity(Math.round(meters), 'm');
-  const tens = Math.round(meters / 10) * 10;
-  if (tens < 1000) return formatQuantity(tens, 'm');
-  const km = meters / 1000;
-  return km < 10
-    ? formatQuantity(km, 'km', {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      })
-    : formatQuantity(Math.round(km), 'km');
+  const parts = distanceParts(meters, { metreStep: 10, exactBelowM: 100 });
+  if (!parts) return '';
+  return formatQuantity(parts.value, parts.unit, {
+    minimumFractionDigits: parts.digits,
+    maximumFractionDigits: parts.digits,
+  });
 }
 
 /**

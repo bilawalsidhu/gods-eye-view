@@ -5,6 +5,7 @@ import {
   checkCatalog,
   extractMessages,
   findUnmarked,
+  markedTemplate,
   readCatalog,
   shippedLocales,
   unmarkedMarkup,
@@ -109,6 +110,32 @@ test('unmarkedMarkup finds text and attributes without data-i18n*', () => {
     [],
   );
   assert.deepEqual(texts('<!-- Note --><span>— 42 —</span>'), []);
+});
+
+test('markedTemplate rejects data-i18n* attributes in a Vue template', () => {
+  const view = [
+    '<script setup>',
+    "const note = 'data-i18n';",
+    '</script>',
+    '<template>',
+    '  <!-- no data-i18n here -->',
+    '  <span data-i18n>Normal</span>',
+    '  <b title="Explains data-i18n" data-i18n-title>{{ t(\'Go\') }}</b>',
+    '  <i :data-i18n="true" />',
+    '</template>',
+  ].join('\n');
+  assert.deepEqual(markedTemplate('View.vue', view), [
+    { where: 'View.vue:6', text: 'data-i18n: use t() in a Vue template' },
+    { where: 'View.vue:7', text: 'data-i18n-title: use t() in a Vue template' },
+    { where: 'View.vue:8', text: 'data-i18n: use t() in a Vue template' },
+  ]);
+  assert.deepEqual(
+    markedTemplate(
+      'View.vue',
+      '<template><b :title="t(\'Pin\')">x</b></template>',
+    ),
+    [],
+  );
 });
 
 test('unmarkedScript finds literals that reach the page without t/tn/msg', () => {

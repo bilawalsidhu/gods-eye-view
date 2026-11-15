@@ -168,10 +168,12 @@ export function createLifecycle({ state, services, parts }) {
         entry.detectContact = null;
         parts.rendering.cancelWake(entry);
         destroyTrack(entry.track);
+        entry.placement?.forget(entry.key);
       }
       state._vehicles.clear();
       parts.height.clear();
       state._selectedKey = null;
+      state._cockpitSubjectKey = null;
       state._lastUpdate = null;
       state._error = null;
       state._limitWarned = false;
@@ -236,6 +238,7 @@ export function createLifecycle({ state, services, parts }) {
           parts.rendering.onPreRender,
         );
       }
+      parts.rendering.startModels();
       parts.viewport.runProximityCheck();
       restoreSpriteOrder(viewer);
     },
@@ -297,8 +300,10 @@ export function createLifecycle({ state, services, parts }) {
         entry.detectContact = null;
         parts.rendering.cancelWake(entry);
         destroyTrack(entry.track);
+        entry.placement?.forget(entry.key);
       }
       state._vehicles.clear();
+      parts.rendering.stopModels();
       parts.height.clear();
       state._markers?.removeAll();
       state._animatedMarkers?.removeAll();
@@ -339,6 +344,7 @@ export function createLifecycle({ state, services, parts }) {
      */
     destroy(viewer) {
       this.disable(viewer);
+      parts.rendering.stopModels(true);
       if (state._markers) {
         unregisterSpriteCollection('transit', state._markers);
         viewer?.scene?.primitives?.remove(state._markers);

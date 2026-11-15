@@ -303,6 +303,96 @@ test('Space Missions reads the active catalog through the real proxy while unkno
   assert.deepEqual(fetched, ['active'], 'rejected groups never reach upstream');
 });
 
+test('SATCAT is proxied per core group for a day, separately from TLEs, and served stale on failure', async (t) => {
+  isolateDisk(t);
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(console, 'warn', () => {});
+  const csv =
+    'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,OWNER\nSL-16 R/B,1992-093B,22285,R/B,,CIS\n';
+  const fetched = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const parsed = new URL(url);
+    fetched.push(`${parsed.pathname}?${parsed.searchParams.get('GROUP')}`);
+    return new Response(csv);
+  });
+  const written = [];
+  t.mock.method(fsp, 'writeFile', async (file) => {
+    written.push(String(file).split(/[\\/]/).pop());
+  });
+  const request = install(celestrakProxy());
+  for (const group of ['/starlink', '/active', '/../visual', '/nope'])
+    assert.equal(
+      (await request('/api/celestrak-satcat', group)).status,
+      400,
+      group,
+    );
+  assert.deepEqual(fetched, [], 'rejected groups never reach upstream');
+
+  const first = await request('/api/celestrak-satcat', '/visual');
+  assert.equal(first.status, 200);
+  assert.equal(first.body, csv);
+  assert.equal(first.headers['x-satcat-cache'], 'MISS');
+  assert.deepEqual(fetched, ['/satcat/records.php?visual']);
+  assert.deepEqual(
+    written,
+    ['celestrak-satcat-visual.json'],
+    'its own disk cache',
+  );
+
+  now += 23 * 3600_000;
+  assert.equal(
+    (await request('/api/celestrak-satcat', '/visual')).headers[
+      'x-satcat-cache'
+    ],
+    'HIT',
+    'a day-long cache, unlike the 6 h TLEs',
+  );
+  now += 2 * 3600_000;
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('<html>busy</html>'),
+  );
+  const stale = await request('/api/celestrak-satcat', '/visual');
+  assert.equal(stale.body, csv, 'an error page never replaces good records');
+  assert.equal(stale.headers['x-satcat-cache'], 'STALE-ERROR');
+});
+
+test('a SATCAT failure never holds off the TLEs, but CelesTrak throttling holds off both', async (t) => {
+  isolateDisk(t);
+  t.mock.method(console, 'warn', () => {});
+  const tle =
+    'ISS (ZARYA)\n1 25544U 98067A   24001.00000000  .00016717  00000-0  10270-3 0  9001\n2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.50000000    04\n';
+  let satcatAnswer = () => new Response('<html>not csv</html>');
+  const fetched = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const parsed = new URL(url);
+    fetched.push(parsed.pathname);
+    return parsed.pathname.startsWith('/satcat/')
+      ? satcatAnswer()
+      : new Response(tle);
+  });
+  const request = install(celestrakProxy());
+  assert.equal((await request('/api/celestrak-satcat', '/sar')).status, 502);
+  const starlink = await request('/api/celestrak', '/starlink');
+  assert.equal(starlink.status, 200, 'the TLE feed is not cooling down');
+  assert.equal(starlink.body, tle);
+
+  // A 429 is CelesTrak throttling this client: every feed waits it out.
+  satcatAnswer = () =>
+    new Response('slow down', {
+      status: 429,
+      headers: { 'Retry-After': '120' },
+    });
+  const throttled = install(celestrakProxy());
+  await throttled('/api/celestrak-satcat', '/visual');
+  const before = fetched.length;
+  const held = await throttled('/api/celestrak', '/geo');
+  assert.equal(held.status, 502);
+  assert.equal(fetched.length, before, 'nothing went upstream');
+});
+
 test('CelesTrak admits a same-origin request behind the documented reverse proxy and refuses foreign origins', async (t) => {
   isolateDisk(t);
   let calls = 0;

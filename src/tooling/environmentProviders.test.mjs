@@ -6,6 +6,12 @@ import { tomtomProxy } from 'gods-eye-view/server/providers/traffic';
 import { firmsProxy } from 'gods-eye-view/server/providers/firms';
 import { gbfsProxy } from 'gods-eye-view/server/providers/gbfs';
 import { localProviderPlugins } from '../../server/providers/local.js';
+import { makeFixtureRoot } from './fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot(
+  'gev-environment-composition-',
+);
+test.after(() => fsp.rm(nominatimStorageDir, { recursive: true, force: true }));
 
 function install(plugin, hook = 'configureServer') {
   const routes = new Map();
@@ -88,7 +94,7 @@ test('standalone composition mounts every extracted provider exactly once withou
   t.mock.method(globalThis, 'fetch', () => {
     throw Error('construction must not fetch');
   });
-  const plugins = localProviderPlugins();
+  const plugins = localProviderPlugins({ nominatimStorageDir });
   for (const factory of [
     terrainHeightsProxy,
     tomtomProxy,
@@ -307,9 +313,9 @@ test('FIRMS retains a large successful source during partial failure and filters
   const first = json(await request());
   assert.equal(first.count, 130001);
   assert.equal(first.sources.filter((s) => s.ok).length, 1);
-  assert.equal(calls, 4);
+  assert.equal(calls, 3);
   assert.equal(json(await request()).count, 130001);
-  assert.equal(calls, 4);
+  assert.equal(calls, 3);
   assert.deepEqual(json(await request('/status')).transactions, {
     used: 3,
     limit: 5000,

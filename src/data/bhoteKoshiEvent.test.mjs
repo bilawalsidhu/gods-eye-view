@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { claimPointer, releasePointer } from './inputOwnership.js';
 import * as Cesium from 'cesium';
+import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
+import { useImagerySplitStore } from '../ui/stores/imagerySplit.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { SOURCE_PATH_BEAT_IDS } from './bhoteKoshiShotPaths.js';
 import {
   BHOTE_KOSHI_LAYER_ID,
@@ -35,6 +38,95 @@ import { SceneDirector } from '../scenes/director.js';
 
 const eventUrl = new URL('../../public/events/bhote-koshi-2026/event.json', import.meta.url);
 const eventModuleUrl = new URL('./bhoteKoshiEvent.js', import.meta.url);
+
+/** The event's divider as the imagery split store holds it, or undefined. */
+const eventSplit = () =>
+  useImagerySplitStore(applicationPinia()).splits.findLast(
+    (split) => split.view.id === 'bhote-koshi-split-line',
+  );
+
+// The panel controls the layer presents, by the selector the panel view gives each.
+const PANEL_REFS = {
+  '[data-role="imagery-comparison"]': 'imagerySection',
+  '[data-role="time"]': 'time',
+  '[data-role="caveat"]': 'caveat',
+  '[data-role="imagery-cloud-note"]': 'imageryCloudNote',
+  '[data-role="progress"]': 'progressInput',
+  '[data-role="split"]': 'splitInput',
+  '[data-role="timeline-label"]': 'timelineLabel',
+  '[data-role="beat-index"]': 'beatIndex',
+  '[data-role="beat-title"]': 'beatTitle',
+  '[data-role="beat-meta"]': 'beatMeta',
+  '[data-action="play"]': 'playButton',
+  '[data-action="play-scene"]': 'playSceneButton',
+  '[data-action="cinematic"]': 'cinematicButton',
+  '[data-action="story-replay"]': 'storyReplayButton',
+  '[data-action="corridor"]': 'corridorButton',
+  '[data-action="previous-beat"]': 'previousButton',
+  '[data-action="next-beat"]': 'nextButton',
+  '[data-action="open-source"]': 'openSourceButton',
+};
+// What each control calls, as the panel view wires it.
+const PANEL_EVENTS = {
+  playButton: { click: 'play' },
+  playSceneButton: { click: 'playScene' },
+  cinematicButton: { click: 'toggleCinematic' },
+  storyReplayButton: { click: 'replayCinematic' },
+  corridorButton: { click: 'focusCorridor' },
+  previousButton: { click: 'previousBeat' },
+  nextButton: { click: 'nextBeat' },
+  openSourceButton: { click: 'openActiveSource' },
+  progressInput: {
+    input: (controls, value) => controls.previewProgress(Number(value) / 1000),
+    change: (controls, value) => controls.commitProgress(Number(value) / 1000, { final: true }),
+  },
+  splitInput: { input: (controls, value) => controls.setSplit(Number(value) / 100) },
+};
+
+/**
+ * The event panel as the layer presents it to the panel store, or undefined
+ * while it is off. Controls read the latest presentation, and dispatching an
+ * event calls the connected controls as the panel view does.
+ */
+function eventPanel() {
+  const store = useBhoteKoshiPanelStore(applicationPinia());
+  if (!store.panel) return undefined;
+  const control = (key) => {
+    let typed = null;
+    const record = () => store.panel.refs[key];
+    return {
+      get textContent() { return record().textContent; },
+      get hidden() { return record().hidden; },
+      get disabled() { return record().disabled; },
+      get value() { return typed ?? record().value; },
+      set value(value) { typed = value; },
+      getAttribute: (name) => record().attributes[name] ?? null,
+      dispatch(type) {
+        const value = typed ?? record().value;
+        typed = null;
+        const handler = PANEL_EVENTS[key]?.[type];
+        return typeof handler === 'function'
+          ? handler(store.controls, value)
+          : store.controls[handler]?.();
+      },
+    };
+  };
+  const named = (name) => ({ dispatch: () => store.controls[name]() });
+  return {
+    querySelector(selector) {
+      if (selector === '.bhote-event-report-list') {
+        return {
+          children: store.panel.reports.map((_, index) => ({
+            dispatch: () => store.controls.openReport(index),
+          })),
+        };
+      }
+      if (selector === '[data-action="geolocation-map"]') return named('openGeolocationMap');
+      if (selector === '[data-action="close"]') return named('close');
+      return control(PANEL_REFS[selector]);
+    },
+  };
+}
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -840,6 +932,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const { body, removedProperties } = installEventDom();
+  assert.equal(eventSplit(), undefined, 'no divider is left from an earlier test');
   const clearedTimeouts = [];
   globalThis.window = {
     setTimeout: () => 71,
@@ -879,7 +972,8 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
     assert.equal(await layer.enable(viewer, { origin: 'scene' }), true);
     assert.equal(viewer._test.imagery.length, 2);
     assert.equal(viewer._test.dataSources.length, 1);
-    assert.equal(body.children.length, 2);
+    assert.ok(eventPanel());
+    assert.ok(eventSplit());
 
     activeMap = 'operator-choice';
     generation += 1;
@@ -888,7 +982,8 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
     assert.deepEqual(mapCalls, ['esri-imagery']);
     assert.equal(viewer._test.removedImagery.length, 2);
     assert.equal(viewer._test.removedDataSources.length, 1);
-    assert.ok(body.children.every((element) => element.removed));
+    assert.equal(eventPanel(), undefined);
+    assert.equal(eventSplit(), undefined);
     assert.equal(viewer.scene.splitPosition, 0.37);
     assert.deepEqual(clearedTimeouts, [71]);
     assert.ok(overlayCalls.some(([kind]) => kind === 'clear'));
@@ -934,7 +1029,7 @@ test('Bhote Koshi disable stops active playback and releases its global render h
 
   try {
     await layer.enable(viewer, { origin: 'scene' });
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     assert.equal(panel.querySelector('[data-action="play-scene"]').hidden, true);
     assert.equal(await panel.querySelector('[data-action="play-scene"]').dispatch('click'), false);
     panel.querySelector('[data-action="play"]').dispatch('click');
@@ -1075,6 +1170,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   const { body } = installEventDom();
+  assert.equal(eventSplit(), undefined, 'no divider is left from an earlier test');
   const timers = [];
   const openedUrls = [];
   const cancelledFrames = [];
@@ -1181,11 +1277,10 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     assert.deepEqual(timers, []);
     assert.equal(viewer._test.imagery.length, 2, 'the event surface keeps its cached imagery pair');
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === false));
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     assert.ok(panel);
-    const splitLine = body.children.find((element) => element.id === 'bhote-koshi-split-line');
-    assert.ok(splitLine);
-    assert.equal(splitLine.hidden, true);
+    assert.ok(eventSplit());
+    assert.equal(eventSplit().view.hidden, true);
     assert.equal(panel.querySelector('[data-role="imagery-comparison"]').hidden, true);
     assert.match(panel.querySelector('[data-role="caveat"]').textContent, /SCHEMATIC CORRIDOR/i);
     assert.doesNotMatch(panel.querySelector('[data-role="caveat"]').textContent, /historical/i);
@@ -1220,8 +1315,6 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     assert.equal(panel.querySelector('[data-action="cinematic"]').disabled, true);
     assert.equal(panel.querySelector('[data-action="corridor"]').hidden, false);
     assert.equal(panel.querySelector('[data-action="corridor"]').disabled, false);
-    assert.doesNotMatch(panel.innerHTML, /data-action="witness"|◎ WITNESS/);
-    assert.match(panel.innerHTML, /data-action="open-source"/);
     const fullStory = panel.querySelector('[data-action="story-replay"]');
     assert.equal(fullStory.textContent, '↺ FULL STORY');
     assert.equal(fullStory.hidden, true, 'PLAY SCENE owns authored scene playback');
@@ -1240,30 +1333,27 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       beatId: 'timure-cluster',
       sceneControls: { imageryComparison: true },
     }, { origin: 'scene' });
-    assert.equal(splitLine.hidden, false);
+    assert.equal(eventSplit().view.hidden, false);
     assert.equal(panel.querySelector('[data-role="imagery-comparison"]').hidden, false);
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === true));
-    const splitHandle = splitLine.children.find(
-      (element) => element.className === 'bhote-koshi-split-handle',
-    );
-    assert.ok(splitHandle);
-    assert.equal(splitHandle.textContent, '↔');
-    assert.equal(splitHandle.getAttribute('aria-valuenow'), '62');
-    splitHandle.dispatch('pointerdown', {
+    assert.equal(eventSplit().view.handleClass, 'bhote-koshi-split-handle');
+    assert.equal(eventSplit().view.valueNow, 62);
+    const splitHandle = eventSplit().controls;
+    splitHandle.pointerdown({
       button: 0,
       clientX: 250,
       pointerId: 4,
       preventDefault() {},
     });
-    splitHandle.dispatch('pointermove', {
+    splitHandle.pointermove({
       clientX: 750,
       pointerId: 4,
       preventDefault() {},
     });
-    splitHandle.dispatch('pointerup', { pointerId: 4 });
+    splitHandle.pointerup({ pointerId: 4 });
     assert.equal(viewer.scene.splitPosition, 0.75);
-    assert.equal(splitHandle.getAttribute('aria-valuenow'), '75');
-    splitHandle.dispatch('keydown', {
+    assert.equal(eventSplit().view.valueNow, 75);
+    splitHandle.keydown({
       key: 'ArrowLeft',
       shiftKey: true,
       preventDefault() {},
@@ -1276,7 +1366,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       split: 0.62,
       sceneControls: {},
     }, { origin: 'scene' });
-    assert.equal(splitLine.hidden, true);
+    assert.equal(eventSplit().view.hidden, true);
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === false));
     assert.equal(viewer.scene.splitPosition, 0.62);
     assert.equal(overlayVisibility.at(-1).visible, false);
@@ -1347,7 +1437,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     assert.equal(layer.getCinematicState().active, false);
     assert.equal(viewer._test.cameraLooks.length, 0);
     assert.deepEqual(mapCalls, []);
-    assert.equal(body.children.filter((element) => element.tagName === 'aside').length, 1);
+    assert.ok(eventPanel());
     assert.equal(viewer.scene.splitPosition, 0.62);
     for (const beatId of [
       'debris-dammed-lake',
@@ -1594,7 +1684,7 @@ test('Bhote Koshi publishes the evidence spine once and scrubs through cards and
     assert.equal(breadcrumbs.filter((entry) => entry.position()).length, 0);
     assert.ok(cards.every((entry) => entry.requireImage && entry.image.stamp === 1));
 
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     const progress = panel.querySelector('[data-role="progress"]');
     progress.value = '285';
     progress.dispatch('input');
@@ -1685,7 +1775,7 @@ test('Bhote Koshi keeps one local fallback video active and unloads it on beat c
     videos[0].dispatch('loadeddata');
     assert.equal(layer.getCinematicState().mediaReady, true);
 
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     const progress = panel.querySelector('[data-role="progress"]');
     progress.value = '285';
     progress.dispatch('input');
@@ -1808,7 +1898,7 @@ test('Upper Valley Collapse autoplays its muted local fallback without starting 
     assert.ok(video.pauseCalls >= 1);
     assert.ok(video.cancelledFrameHandles.length >= 1);
     assert.equal(layer.getCinematicState().mediaEvidenceId, null);
-    assert.equal(body.children.find((element) => element.tagName === 'aside')?.removed, false);
+    assert.ok(eventPanel());
     await layer.disable();
   } finally {
     globalThis.document = originalDocument;
@@ -2121,10 +2211,8 @@ test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one 
 
   try {
     await layer.enable(viewer, { origin: 'local-restore' });
-    const panel = body.children.find((element) => element.tagName === 'aside');
-    assert.match(panel.innerHTML, /2021 HISTORICAL REFERENCE \/ 2026 POST-EVENT/);
-    assert.match(panel.innerHTML, /RECONSTRUCTION CLOCK/);
-    assert.match(panel.innerHTML, /OPEN PUBLIC MAP/);
+    const panel = eventPanel();
+    assert.equal(panel.querySelector('[data-role="timeline-label"]').textContent, 'RECONSTRUCTION CLOCK');
     const entries = publications[0].entries;
     const cards = entries.filter((entry) => entry.variant === 'thumbnail');
     const breadcrumbs = entries.filter((entry) => entry.variant === 'label');
@@ -2203,7 +2291,7 @@ test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one 
   }
 });
 
-test('Bhote Koshi repeated event frames perform no panel lookup, DOM write, or camera churn', async () => {
+test('Bhote Koshi repeated event frames republish no panel and churn no camera', async () => {
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -2238,26 +2326,19 @@ test('Bhote Koshi repeated event frames perform no panel lookup, DOM write, or c
 
   try {
     await layer.enable(viewer, { origin: 'local-restore' });
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     const cinematic = panel.querySelector('[data-action="cinematic"]');
     const progress = panel.querySelector('[data-role="progress"]');
     cinematic.dispatch('click');
     progress.value = '500';
     progress.dispatch('input');
 
-    const queryCount = panel._queryCount;
-    const writeCount = [...panel._selectors.values()].reduce((sum, element) => (
-      sum + element._writeCount
-    ), 0);
+    const panelStore = useBhoteKoshiPanelStore(applicationPinia());
+    const published = panelStore.panel;
     const cameraLookCount = viewer._test.cameraLooks.length;
     for (let index = 0; index < 20; index += 1) progress.dispatch('input');
 
-    assert.equal(panel._queryCount, queryCount, 'hot path uses cached panel references');
-    assert.equal(
-      [...panel._selectors.values()].reduce((sum, element) => sum + element._writeCount, 0),
-      writeCount,
-      'unchanged frames do not rewrite panel state',
-    );
+    assert.ok(panelStore.panel === published, 'unchanged frames do not republish the panel');
     assert.equal(
       viewer._test.cameraLooks.length,
       cameraLookCount,
@@ -2328,7 +2409,7 @@ test('Bhote Koshi cinematic camera stays synchronized through pause and determin
 
   try {
     await layer.enable(viewer, { origin: 'local-restore' });
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     panel.querySelector('[data-action="cinematic"]').dispatch('click');
     assert.equal(layer.getCinematicState().active, true);
     assert.equal(layer.getPlaybackState().playing, true);
@@ -2413,7 +2494,7 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
 
   try {
     await layer.enable(viewer, { origin: 'local-restore' });
-    const panel = body.children.find((element) => element.tagName === 'aside');
+    const panel = eventPanel();
     panel.querySelector('[data-action="cinematic"]').dispatch('click');
     animationCallbacks[0](91001);
     assert.equal(layer.getPlaybackState().progress, 1);

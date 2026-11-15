@@ -106,8 +106,6 @@
   min-height: 0;
   overflow: hidden;
   background: #03080d;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(107, 232, 255, 0.36) transparent;
 }
 
 .bhote-embedded-callout.is-youtube {

@@ -94,7 +94,9 @@ test('the Scene status line shows an operator-typed shot title as typed', async 
   const director = {
     _renderSceneSelect() {},
     _renderShotList() {},
-    _updateStatus: (text) => statuses.push(text),
+    // The director words its status through a function (it follows the locale).
+    _updateStatus: (text) =>
+      statuses.push(typeof text === 'function' ? text() : text),
     _logEvent() {},
   };
   const adapter = createScenePlaybackAdapter(director, 4);

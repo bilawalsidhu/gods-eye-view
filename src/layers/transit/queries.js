@@ -1,5 +1,5 @@
 import {
-  ACTIVATION_ALTITUDE_M,
+  ACTIVATION_ENTER_ALTITUDE_M,
   FEED_STALE_AFTER_MS,
   aggregateTransitFeedHealth,
   transitDetectionClass,
@@ -45,6 +45,11 @@ export function transitCountLabel(vehicles, stations) {
   if (hasStations) return t('{count} stations', { count: String(stations) });
   return '';
 }
+
+/** Regions, not feeds: one region can carry several feeds (Rio has two). */
+const TRANSIT_REGION_COUNT = new Set(
+  TRANSIT_ENABLED_FEEDS.map((feed) => feed.region),
+).size;
 
 /**
  * The registry entry behind a vehicle. Live feeds answer first so a feed the
@@ -166,7 +171,9 @@ export function createQueries({ state, parts }) {
     const visible = [];
     for (const entry of state._visible) {
       const marker = entry.marker;
-      if (!marker?.position || marker.show === false) continue;
+      // A vehicle drawn as its 3D model is present though its marker is hidden.
+      if (!marker?.position) continue;
+      if (marker.show === false && entry.modelOwnsVisual !== true) continue;
       visible.push(entry);
     }
     let chosen = visible;
@@ -384,6 +391,11 @@ export function createQueries({ state, parts }) {
       const stationCount = drawnStations().length;
       const stationNote = stationCount ? ` · ${stationCount} stations` : '';
       if (state._enabled && active.length === 0) {
+        // English: the analyst's empty note and the row's prompt, both shown
+        // through translateStatusMessage (ui/statusText.js).
+        const note = state._altitudeGateOpen
+          ? `No feed here yet · ${TRANSIT_REGION_COUNT} regions available`
+          : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: stationCount,
           countLabel: transitCountLabel(0, stationCount),
@@ -393,15 +405,10 @@ export function createQueries({ state, parts }) {
           error: stationCount === 0 ? state._stationError || null : null,
           source: 'GTFS-RT · SNCF',
           status: 'zoom-in',
-          // English data (the analyst's empty note to the model); the voice
-          // card shows it through NOTE_PATTERNS (voice/resultDisplay.js).
           // The station network is already drawn, so the prompt is about the
-          // live fleet only.
-          coverage:
-            (state._altitudeGateOpen
-              ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
-              : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`) +
-            stationNote,
+          // live fleet only; the station count rides on the coverage note.
+          statusMessage: note,
+          coverage: note + stationNote,
         };
       }
       // Age is shown by the same rule the row state uses, so the text and the

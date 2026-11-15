@@ -1,5 +1,12 @@
+import { SNAPSHOT_FEED_STATES } from '../../../src/data/layerSnapshot.js';
 import {
-  HUD_SUMMARY_INSTRUCTIONS,
+  HUD_SUMMARY_MAX_CHARS,
+  HUD_SUMMARY_MAX_UNSPACED_CHARS,
+  HUD_SUMMARY_RESPONSE_FORMAT,
+  hudSummaryInput,
+  hudSummaryInstructions,
+  hudSummaryIsUnspaced,
+  hudSummaryLocale,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
@@ -18,14 +25,58 @@ function extractOpenAiResponseText(data) {
     .trim();
 }
 
-function toFiveWordHudSummary(value) {
-  return String(value || '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .trim()
+/** Parse the summary and normalize the canonical feed state. */
+function parseHudSummaryReply(text, locale) {
+  let reply = null;
+  try {
+    reply = JSON.parse(text);
+  } catch {
+    /* not JSON: no summary */
+  }
+  const feedState = SNAPSHOT_FEED_STATES.includes(reply?.feedState)
+    ? reply.feedState
+    : null;
+  return {
+    summary: toHudSummary(reply?.summary, locale),
+    feedState,
+  };
+}
+
+function toHudSummary(value, requested) {
+  const locale = hudSummaryLocale(requested);
+  const words = String(value || '')
+    .normalize('NFC')
+    // Marks, and apostrophes and dots inside a word, belong to it: ar vowel
+    // signs, fr d'Orléans, ja サンフランシスコ・ベイエリア.
+    .replace(/[^\p{L}\p{M}\p{N}\s'’·・-]/gu, ' ')
     .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 5)
-    .join(' ');
+    .map((word) => word.replace(/^['’·・-]+|['’·・-]+$/gu, ''))
+    .filter(Boolean);
+  // Characters, not words: the model counts Rue de Rivoli as one word.
+  const max = hudSummaryIsUnspaced(locale)
+    ? HUD_SUMMARY_MAX_UNSPACED_CHARS
+    : HUD_SUMMARY_MAX_CHARS;
+  return capAtWord(words.join(' '), max, locale);
+}
+
+/**
+ * Cut `text` to `max` characters at a word boundary; a first word longer
+ * than that is cut where the cap falls.
+ */
+function capAtWord(text, max, locale) {
+  const graphemes = [
+    ...new Intl.Segmenter(locale, { granularity: 'grapheme' }).segment(text),
+  ];
+  if (graphemes.length <= max) return text;
+  const cut = graphemes[max].index;
+  let end = 0;
+  for (const { index, segment } of new Intl.Segmenter(locale, {
+    granularity: 'word',
+  }).segment(text)) {
+    if (index + segment.length > cut) break;
+    end = index + segment.length;
+  }
+  return text.slice(0, end).trim() || text.slice(0, cut);
 }
 
 async function handleHudSummary(req, res) {
@@ -77,14 +128,18 @@ async function handleHudSummary(req, res) {
         model:
           process.env.OPENAI_HUD_SUMMARY_MODEL ||
           OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
-        instructions: HUD_SUMMARY_INSTRUCTIONS,
-        input: JSON.stringify(context),
+        instructions: hudSummaryInstructions(context?.locale),
+        input: hudSummaryInput(context),
+        text: { format: HUD_SUMMARY_RESPONSE_FORMAT },
         reasoning: { effort: 'minimal' },
-        max_output_tokens: 100,
+        max_output_tokens: 200,
       }),
     });
     const data = await response.json().catch(() => ({}));
-    const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
+    const { summary, feedState } = parseHudSummaryReply(
+      extractOpenAiResponseText(data),
+      context?.locale,
+    );
     res.statusCode = response.ok && summary ? 200 : response.status || 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
@@ -93,6 +148,7 @@ async function handleHudSummary(req, res) {
     res.end(
       JSON.stringify({
         summary: summary || null,
+        feedState,
         // Never relay `data.error.message`: that is OpenAI's own wording, and
         // it carries request ids, organization hints and quota phrasing.
         error: response.ok ? null : 'OpenAI HUD summary request failed',
@@ -110,4 +166,4 @@ async function handleHudSummary(req, res) {
   }
 }
 
-export { handleHudSummary };
+export { handleHudSummary, parseHudSummaryReply };

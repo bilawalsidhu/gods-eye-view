@@ -1,6 +1,7 @@
 import { observeTrafficSurface } from './surface.js';
 import * as Cesium from 'cesium';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { resolveRoadMode } from './roadModes.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -81,10 +82,15 @@ export function createLifecycle({
       if (layerState._enabled) return;
       layerState._enabled = true;
       layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
-      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
+      // OpenFreeMap metadata, unless only TomTom roads can be drawn.
+      if (
+        resolveRoadMode(layerState._roadMode, true, layerState._roadModes) !==
+        'tomtom'
+      )
+        source.prefetch?.();
       parts.animation.syncRenderDemand();
       layerState._lastAnimTime = 0;
-      layerState._pointCollection.show = true;
+      layerState._pointCollection.show = layerState._showDots;
 
       layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
         parts.animation.animate,

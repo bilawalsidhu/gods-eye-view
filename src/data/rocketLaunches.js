@@ -39,10 +39,6 @@ export const missionRosterEntries = layer.missionRosterEntries;
 export const missionHoverPreviewRange = layer.missionHoverPreviewRange;
 export const createMissionRosterPreviewOwnership =
   layer.createMissionRosterPreviewOwnership;
-export const bindMissionRosterItemKeyboardPreview =
-  layer.bindMissionRosterItemKeyboardPreview;
-export const captureMissionRosterFocus = layer.captureMissionRosterFocus;
-export const restoreMissionRosterFocus = layer.restoreMissionRosterFocus;
 export const resolveMissionRosterPreviewLaunch =
   layer.resolveMissionRosterPreviewLaunch;
 export const formatMissionEventTime = layer.formatMissionEventTime;

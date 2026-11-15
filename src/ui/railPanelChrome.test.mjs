@@ -141,9 +141,19 @@ test('a collapsed launcher drops its divider so English titles fit whole', () =>
 });
 
 test('the default theme geometry change leaves cyber gutters alone', () => {
-  for (const surface of ['.data-panel-inner', '.global-context-panel-inner']) {
+  for (const surface of [
+    '.data-panel-inner',
+    '.utilities-panel-inner',
+    '.global-context-panel-inner',
+  ]) {
+    // A surface may share its rule with another (`.data-panel-inner,
+    // .utilities-panel-inner {`).
     const base = rules.find(
-      ({ selector, body }) => selector === surface && /padding:/.test(body),
+      ({ selector, body }) =>
+        selector
+          .split(',')
+          .map((part) => part.trim())
+          .includes(surface) && /padding:/.test(body),
     );
     assert.match(base?.body || '', /padding:\s*14px 16px 12px/, surface);
   }

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
-import { PLANE_MODEL_URL } from './policy.js';
+import { loadFleetModelSet } from '../../data/fleetModels.js';
+import { forgetPlacedAircraft } from './placed.js';
 
 export function createLifecycle({
   flightState,
@@ -53,35 +54,29 @@ export function createLifecycle({
       registerSpriteCollection('flights', flightState._billboardCollection);
       flightState._modelCollection = new Cesium.PrimitiveCollection();
       viewer.scene.primitives.add(flightState._modelCollection);
-      // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
-      // (keeps the retained instance referenced; never rendered). Captured against this epoch so a
-      // destroy/re-init mid-load doesn't flip the flag for a torn-down lifecycle.
-      if (!flightState._preloadModel) {
+      // Every fleet model loads once, up front, for every layer that draws
+      // them (fleetModels.js), so no model is fetched while the session runs.
+      // Captured against this epoch so a destroy/re-init mid-load doesn't flip
+      // the flag for a torn-down lifecycle.
+      {
         const epoch = flightState._modelEpoch;
-        Cesium.Model.fromGltfAsync({
-          url: resolveAsset(PLANE_MODEL_URL),
-          asynchronous: false,
-        })
-          .then((m) => {
-            if (epoch === flightState._modelEpoch) {
-              flightState._preloadModel = m;
+        loadFleetModelSet({ resolveAsset })
+          .then(() => {
+            if (epoch === flightState._modelEpoch)
               flightState._planeModelLoaded = true;
-            } else {
-              try {
-                m.destroy();
-              } catch {
-                /* gone */
-              }
-            }
           })
           .catch(() => {
-            /* tracked plane just stays a billboard a beat longer */
+            /* aircraft stay billboards */
           });
       }
       flightState._billboards = new Map();
       flightState._cullPositions.clear();
       flightState._detectionObjects = new Map();
       flightState.records.data = new Map();
+      forgetPlacedAircraft(
+        services.placement,
+        flightState._positionHistory.keys(),
+      );
       flightState._positionHistory = new Map();
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
@@ -190,6 +185,7 @@ export function createLifecycle({
         );
       }
       restoreSpriteOrderOnEnable('flights', viewer);
+      flightState.timeline?.start();
     },
 
     /**
@@ -198,6 +194,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer
      */
     disable(viewer) {
+      flightState.timeline?.stop();
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._billboardCollection)
@@ -240,6 +237,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer
      */
     destroy(viewer) {
+      flightState.timeline?.stop();
       flightState.lifetime.abort();
       flightState._enrichActive = 0;
       flightState._enrichLastDispatchMs = 0;
@@ -293,25 +291,22 @@ export function createLifecycle({
       flightState._modelEpoch += 1; // invalidate any in-flight load from this lifecycle (settles post-destroy)
       flightState._modelPending.clear();
       flightState._modelGen.clear();
-      if (flightState._preloadModel) {
-        try {
-          flightState._preloadModel.destroy();
-        } catch {
-          /* gone */
-        }
-        flightState._preloadModel = null;
-      }
       flightState._planeModelLoaded = false;
       flightState._billboards.clear();
       flightState._cullPositions.clear();
       flightState._detectionObjects.clear();
       flightState.records.data.clear();
+      forgetPlacedAircraft(
+        services.placement,
+        flightState._positionHistory.keys(),
+      );
       flightState._positionHistory.clear();
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
       flightState._displayFloorState.clear();
       flightState._enrichQueue.length = 0;
       flightState._enrichSeen.clear();
+      flightState._enrichRetryAfter.clear();
       if (flightState._enrichDripTimer) {
         clearTimeout(flightState._enrichDripTimer);
         flightState._enrichDripTimer = null;

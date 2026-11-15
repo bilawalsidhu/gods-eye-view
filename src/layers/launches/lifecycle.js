@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { worldClock } from '../../time/worldClock.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -111,6 +112,46 @@ export function createLaunchHover({
   };
 }
 
+/** The camera pose to give back, in world coordinates. */
+function captureCameraView(viewer) {
+  const camera = viewer?.camera;
+  if (!camera?.positionWC) return null;
+  return {
+    destination: Cesium.Cartesian3.clone(camera.positionWC),
+    orientation: {
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+    },
+  };
+}
+
+function sameCameraView(camera, view) {
+  return (
+    Cesium.Cartesian3.equalsEpsilon(
+      camera.positionWC,
+      view.destination,
+      0,
+      1,
+    ) &&
+    ['heading', 'pitch', 'roll'].every((key) =>
+      Cesium.Math.equalsEpsilon(camera[key], view.orientation[key], 0, 1e-6),
+    )
+  );
+}
+
+/** Restore the pre-entry view if the entry flight still holds the camera. */
+function restoreCameraView(viewer, view, landedView) {
+  const camera = viewer?.camera;
+  if (!camera) return;
+  if (!landedView) camera.cancelFlight?.();
+  else if (!sameCameraView(camera, landedView)) return;
+  camera.setView(view);
+}
+
+/** The longest name a timeline mark carries, as in the mission index. */
+const MARK_LABEL_LENGTH = 27;
+
 export function createLifecycle({
   state: layerState,
   services,
@@ -119,6 +160,33 @@ export function createLifecycle({
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   let hover = null;
+  // While on, the launches loaded span the time from the first to the last,
+  // each one a mark labelled with its mission's name (the launch's where it
+  // has none), cut short and in capitals as the mission index shows names.
+  // Registered once; off, the layer has no time to show, and each step tells
+  // the clock once it has settled.
+  worldClock.register({
+    id: 'rocket-launches',
+    coverage: () => {
+      if (!layerState._enabled) return null;
+      const marks = layerState._launches
+        .map((launch) => ({
+          time: Date.parse(launch.launchTime),
+          label: parts.overlays
+            .shortMissionLabel(
+              launch.missionName || launch.name,
+              MARK_LABEL_LENGTH,
+            )
+            .toUpperCase(),
+          ...(launch.id != null ? { id: String(launch.id) } : {}),
+          kind: 'launch',
+        }))
+        .filter(({ time }) => Number.isFinite(time))
+        .sort((a, b) => a.time - b.time);
+      if (!marks.length) return null;
+      return { start: marks[0].time, end: marks.at(-1).time, marks };
+    },
+  });
 
   const methods = {
     init(viewer) {
@@ -194,14 +262,34 @@ export function createLifecycle({
         }
         throw error;
       }
+      layerState.coverageChanged();
     },
 
     async _enableBody() {
       layerState._updateDirty = false;
       if (layerState._dataSource) layerState._dataSource.show = true;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
-      parts.selection.focusFullGlobe(layerState._viewer);
-      document.getElementById('cockpit-context')?.setAttribute('hidden', '');
+      if (layerState._lastUpdate === null) {
+        // A new attempt at an index that never loaded starts from loading.
+        layerState._lastError = null;
+        parts.panel.renderMissionRoster();
+        // Kept until the mission index loads, so an entry that never does
+        // gives the view back. A newer flight takes the camera and drops it.
+        layerState._entryCameraView = captureCameraView(layerState._viewer);
+        layerState._entryLandedView = null;
+      }
+      const token = layerState._lifecycleToken;
+      const flying = parts.selection.focusFullGlobe(layerState._viewer, {
+        complete: () => {
+          if (token === layerState._lifecycleToken)
+            layerState._entryLandedView = captureCameraView(layerState._viewer);
+        },
+        cancel: () => {
+          if (token === layerState._lifecycleToken)
+            layerState._entryCameraView = null;
+        },
+      });
+      if (!flying) layerState._entryCameraView = null;
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(
           layerState._selectedLaunchId,
@@ -215,12 +303,21 @@ export function createLifecycle({
       hover?.reset();
       layerState._sourceController.abort();
       layerState._enabled = false;
+      const entryView = layerState._entryCameraView;
+      layerState._entryCameraView = null;
+      if (entryView)
+        restoreCameraView(
+          layerState._viewer,
+          entryView,
+          layerState._entryLandedView,
+        );
       releaseContinuousRender('rocket-launches');
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
       parts.ingestion.clearPostTleRetry();
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
+      layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       if (layerState._dataSource) layerState._dataSource.show = false;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
@@ -232,6 +329,7 @@ export function createLifecycle({
       parts.overlays.clearMissionOverlaySources();
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.renderMissionPanel();
+      layerState.coverageChanged();
     },
 
     async destroy(viewer) {
@@ -245,6 +343,7 @@ export function createLifecycle({
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
+      layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       parts.ingestion.clearPostTleRetry();
       if (layerState._clickHandler) layerState._clickHandler.destroy();
@@ -262,13 +361,7 @@ export function createLifecycle({
       layerState._animationStarts.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
-      layerState._missionPanel?.remove();
-      layerState._missionPanel = null;
-      if (layerState._missionRoster) {
-        layerState._missionRoster.onclick = null;
-      }
-      layerState._missionRosterPreviewOwnership = null;
-      layerState._missionRoster = null;
+      parts.panel.clearMissionPanel();
       layerState._viewer = null;
       if (layerState._dataSource)
         viewer.dataSources.remove(layerState._dataSource, true);

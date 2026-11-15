@@ -72,3 +72,16 @@ export function tleCatalogNumber(line) {
   const field = String(line).slice(2, 7);
   return decodeCatalogField(field.replace(/^ +/, ''));
 }
+
+/**
+ * Launch year from TLE line 1's international designator (columns 10-11);
+ * null when the designator is blank.
+ * @param {string} line1
+ * @returns {number|null}
+ */
+export function tleLineLaunchYear(line1) {
+  const digits = String(line1 || '').slice(9, 11);
+  if (!/^\d{2}$/.test(digits)) return null;
+  const shortYear = Number(digits);
+  return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
+}

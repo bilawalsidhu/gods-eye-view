@@ -14,6 +14,8 @@ qa-shots/
 output/
 .gev-logs/
 .gev-cache/
+# Local build output, e.g. rail path packs (scripts/build-rail-paths.mjs).
+.cache/
 .gev-backups/
 # Browser QA gate evidence (screenshots, console and network dumps).
 qa-artifacts/

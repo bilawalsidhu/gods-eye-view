@@ -57,7 +57,7 @@ try {
       persist: false,
       syncShare: false,
     });
-    manager._sliderPanel.classList.remove('collapsed');
+    manager._presentPanel(manager._sliderPanel, { collapsed: false });
     const slider = manager._sliderContainer.querySelector('input');
     window.__qaOldSlider = slider;
     const name = 'pixelation';
@@ -140,9 +140,11 @@ try {
       hudBefore,
     ),
   );
-  const displayBefore = await page.evaluate(() => {
+  const displayBefore = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     manager._setBloomEnabled(true);
+    // The Display view shows the slider row on its next render.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     manager._bloomSlider.value = '80';
     manager._bloomSlider.dispatchEvent(new Event('input', { bubbles: true }));
     manager._bloomSlider.focus();
@@ -263,7 +265,7 @@ try {
     'destroyed Display controls cannot change settings',
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
-      manager._displayControls.destroy();
+      manager._displayBindings._detachDisplayControls();
       const before = manager.bloomEnabled;
       const contrast = manager._bloomStage.uniforms.contrast;
       manager._bloomBtn.click();

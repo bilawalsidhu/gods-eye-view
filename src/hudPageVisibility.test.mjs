@@ -6,6 +6,7 @@
 // setup as hudAltitudeDatum.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { registerHooks } from 'node:module';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
@@ -29,10 +30,7 @@ registerHooks({
 const { IntelHUD } = await import('./hud.js');
 
 function installHiddenPage() {
-  const elements = new Map(
-    ['hud-alt', 'hud-summary', 'hud-mgrs', 'hud-latlon', 'hud-bottom-line', 'hud-gsd', 'hud-coll', 'hud-ona', 'hud-mode']
-      .map((id) => [id, { textContent: '' }]),
-  );
+  const { elements, publish } = hudReadouts();
   const previousDocument = globalThis.document;
   globalThis.document = {
     hidden: true,
@@ -54,6 +52,7 @@ function installHiddenPage() {
   return {
     alt: () => elements.get('hud-alt').textContent,
     viewer,
+    publish,
     restore() {
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -66,11 +65,15 @@ test('the HUD readout pauses in a hidden page but keeps updating in an inline pa
   const page = installHiddenPage();
   let hud;
   try {
-    hud = new IntelHUD(page.viewer);
+    hud = new IntelHUD(page.viewer, { publish: page.publish });
     hud._visible = true;
 
     t.mock.timers.tick(250);
-    assert.equal(page.alt(), '', 'a hidden page skips the telemetry tick');
+    assert.equal(
+      page.alt(),
+      'ALT: --m   SUN: --° EL',
+      'a hidden page skips the telemetry tick',
+    );
 
     globalThis.GEV_EMBED_INLINE = true;
     t.mock.timers.tick(250);

@@ -1,10 +1,21 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
 import {
   readAircraftInfo,
+  readSatelliteInfo,
+  readVesselInfo,
+  readSubjectCandidate,
+  readSubjectLayerId,
+  subjectContext,
+  subjectInfo,
+  entryCandidates,
+  resolveEntry,
+  resolveEntryKind,
   dispatchCockpitModeChanged,
   toggleTrackedTr3b,
   syncTr3bToggle,
   syncEntry,
+  refreshSubjectWords,
+  publishPresenceView,
   navigateContext,
   _adoptTrackedEntity,
   enter,
@@ -12,15 +23,55 @@ import {
 } from './cockpitTrackingController.js';
 import { update } from './cockpitCamera.js';
 import {
+  beginOrbital,
+  endOrbital,
+  resetOrbitalLook,
+  jumpToSensorSwath,
+  onOrbitalWheel,
+  stepOrbitalZoom,
+  turnOrbitalLook,
+  updateOrbital,
+  updateOrbitalHud,
+} from './cockpitOrbitalView.js';
+import {
+  onOrbitalClick,
+  onOrbitalDoubleClick,
+  routeSceneClick,
+  toggleOrbitalFocus,
+} from './cockpitOrbitalFocus.js';
+import {
+  handleOrbitalSignalClick,
+  refreshOrbitalSignals,
+  updateOrbitalSignals,
+} from './cockpitOrbitalSignals.js';
+import { rideOrbitalSatellite } from './cockpitOrbitalSatellites.js';
+import {
+  publishInstrumentsView,
+  publishRouteView,
   updateHud,
   updateRoute,
+  updateRadar,
+  presentLook,
   syncWeatherToggle,
   setVisionMode,
   cycleVisionMode,
   clearPredictiveRoute,
 } from './cockpitInstruments.js';
-import { updateContext } from './cockpitContext.js';
 import {
+  publishContextView,
+  showContextCard,
+  updateContext,
+} from './cockpitContext.js';
+import { createContextState } from './cockpitContextState.js';
+import { createBriefState } from './cockpitBriefPages.js';
+import {
+  createInstrumentState,
+  createRouteState,
+  createVisionState,
+} from './cockpitInstrumentState.js';
+import { onLocaleChange } from '../i18n/index.js';
+import {
+  publishBriefView,
   showBriefPage,
   setBriefAutoRotate,
   startBriefRotation,
@@ -29,10 +80,13 @@ import {
   maybeRefreshRegionalBrief,
   renderRegionalBriefStatus,
   renderRegionalBrief,
+  relocalizeBrief,
 } from './cockpitBriefing.js';
 import {
+  dropCockpitSignal,
+  dropContextSnapshotSignals,
   handleSignalClick,
-  renderCockpitSignals,
+  publishCockpitSignals,
   pushCockpitSignal,
   updateCockpitSignals,
 } from './cockpitSignals.js';
@@ -43,8 +97,24 @@ import {
   syncContextLayout,
   syncSignalLayout,
 } from './cockpitLayout.js';
-import { onKeyDown } from './cockpitInput.js';
+import {
+  onKeyDown,
+  onSceneDoubleClick,
+  onScenePointerDown,
+  routeSceneDoubleClick,
+} from './cockpitInput.js';
+import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
+import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
+import { stepLook } from '../cockpitLook.js';
+import { createCockpitSubjectCaller } from '../cockpitSubjectProviders.js';
 import * as Cesium from 'cesium';
+
+/** Whether the user asked for reduced motion: look turns then jump. */
+function prefersReducedMotion() {
+  return Boolean(
+    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+  );
+}
 
 export class CockpitViewController {
   constructor(
@@ -55,9 +125,16 @@ export class CockpitViewController {
       getInitialVisionMode = null,
       onCameraTakeover = null,
       isEntryAllowed = null,
+      isBridgeEntryAllowed = null,
+      isOrbitEntryAllowed = null,
+      subjectProviders = [],
+      isSubjectEntryAllowed = null,
+      isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
+      onRide = null,
       restoreTrackingFrame = null,
+      publish = {},
     } = {},
   ) {
     this.viewer = viewer;
@@ -65,6 +142,38 @@ export class CockpitViewController {
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
+    /**
+     * 'aircraft', 'vessel', 'satellite' or a provider's kind while active;
+     * which subject the camera rides.
+     */
+    this.subjectKind = null;
+    /**
+     * The application's subject providers (cockpitSubjectProviders.js),
+     * checked by the coordinator; the one ridden while active, else null.
+     */
+    this.subjectProviders = Array.isArray(subjectProviders)
+      ? subjectProviders
+      : [];
+    this.subjectProvider = null;
+    /** The ridden provider subject's last frame and normalized HUD view. */
+    this.lastSubjectFrame = null;
+    this.subjectHud = null;
+    /** The Live Signals rows the provider's HUD view pushed. */
+    this.subjectSignalKeys = new Set();
+    /** Provider methods run through one guard: a throw warns once. */
+    this.callSubject = createCockpitSubjectCaller();
+    /** The look's rest pitch for a provider's view; null on a bridge. */
+    this.lookRestPitchDeg = null;
+    /**
+     * The vessel subject's id or the satellite's NORAD id; aircraft are
+     * identified by trackedEntity.
+     */
+    this.subjectId = null;
+    /**
+     * The orbital view's zoom, look and saved field of view while a
+     * satellite is ridden (src/ui/cockpitOrbitalView.js); null otherwise.
+     */
+    this.orbital = null;
     this.trackedEntity = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
@@ -77,47 +186,26 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    this.lastCompassSignature = '';
+    /** The height an application subject's frame last stood at (m). */
+    this.subjectHeightM = null;
+    /** The ground clamp's eased lift under that subject's eye (m). */
+    this.subjectLiftM = null;
+    /**
+     * Where the bridge view is turned to (`lookTarget`) and where the camera
+     * looks on its way there (`lookView`): yaw off the bow, starboard
+     * positive, and absolute pitch. Aircraft never turn it.
+     */
+    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    this.lookView = { ...this.lookTarget };
+    this.lookLastMs = 0;
     this.entry = document.getElementById('cockpit-entry');
     this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
     this.mapViewButton = document.getElementById('map-view-switch');
-    this.resetGlobeButton = document.getElementById('cockpit-reset-globe');
     this.hud = document.getElementById('cockpit-hud');
     this.entryFocusOrigin = null;
-    this.callsign = document.getElementById('cockpit-callsign');
-    this.speed = document.getElementById('cockpit-speed-value');
-    this.speedRim = document.getElementById('cockpit-speed-rim');
-    this.speedRimValue = document.getElementById('cockpit-speed-rim-value');
-    this.speedRimTicks = Array.from(
-      document.querySelectorAll('[data-speed-rim-tick]'),
-    );
-    this.altitude = document.getElementById('cockpit-altitude-value');
-    this.altitudeRim = document.getElementById('cockpit-altitude-rim');
-    this.altitudeRimValue = document.getElementById(
-      'cockpit-altitude-rim-value',
-    );
-    this.altitudeRimTicks = Array.from(
-      document.querySelectorAll('[data-altitude-rim-tick]'),
-    );
-    this.headingValue = document.getElementById('cockpit-heading-value');
-    this.compassTape = document.getElementById('cockpit-compass-tape');
-    this.clock = document.getElementById('cockpit-clock');
-    this.position = document.getElementById('cockpit-position');
-    this.aircraftMeta = document.getElementById('cockpit-aircraft-meta');
-    this.route = document.getElementById('cockpit-route');
-    this.routeFrom = document.getElementById('cockpit-route-from');
-    this.routeTo = document.getElementById('cockpit-route-to');
-    this.routeStatus = document.getElementById('cockpit-route-status');
-    this.routeDirection = document.getElementById('cockpit-route-direction');
-    this.routeDirectionLabel = document.getElementById(
-      'cockpit-route-direction-label',
-    );
     this.visionPrevious = document.getElementById('cockpit-vision-previous');
     this.visionCurrent = document.getElementById('cockpit-vision-current');
-    this.visionCurrentLabel = document.getElementById(
-      'cockpit-vision-current-label',
-    );
     this.visionNext = document.getElementById('cockpit-vision-next');
     this.visionMode = 'optical';
     this.onVisionChange = onVisionChange;
@@ -128,70 +216,46 @@ export class CockpitViewController {
     this.onCameraTakeover = onCameraTakeover;
     this.onEntered = onEntered;
     this.onExited = onExited;
+    this.onRide = onRide;
     this.restoreTrackingFrame =
       typeof restoreTrackingFrame === 'function'
         ? restoreTrackingFrame
         : () => false;
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
+    // Without a supplied gate there is no vessel layer to ride either.
+    this.isBridgeEntryAllowed =
+      typeof isBridgeEntryAllowed === 'function'
+        ? isBridgeEntryAllowed
+        : () => false;
+    // Nor a satellite layer to ride without one.
+    this.isOrbitEntryAllowed =
+      typeof isOrbitEntryAllowed === 'function'
+        ? isOrbitEntryAllowed
+        : () => false;
+    // Nor a provider's subject without a gate for it.
+    this.isSubjectEntryAllowed =
+      typeof isSubjectEntryAllowed === 'function'
+        ? isSubjectEntryAllowed
+        : () => false;
+    this.isUtilityDisclosureOpen =
+      typeof isUtilityDisclosureOpen === 'function'
+        ? isUtilityDisclosureOpen
+        : () => false;
     this.context = document.getElementById('cockpit-context');
-    this.contextSubject = document.getElementById('cockpit-context-subject');
-    this.contextNearestLabel = document.getElementById(
-      'cockpit-context-nearest-label',
-    );
-    this.contextBearing = document.getElementById('cockpit-context-bearing');
-    this.contextDistance = document.getElementById('cockpit-context-distance');
-    this.contextDirection = document.getElementById(
-      'cockpit-context-direction',
-    );
-    this.contextUncertainty = document.getElementById(
-      'cockpit-context-uncertainty',
-    );
-    this.contextUpdated = document.getElementById('cockpit-context-updated');
-    this.contextCohorts = new Map(
-      Array.from(document.querySelectorAll('[data-context-cohort]')).map(
-        (element) => [element.dataset.contextCohort, element],
-      ),
-    );
     this.contextPrevious = document.getElementById('cockpit-context-previous');
     this.contextNext = document.getElementById('cockpit-context-next');
     this.contextToggle = document.getElementById('cockpit-context-toggle');
     this.weatherToggle = document.getElementById('cockpit-weather-toggle');
-    this.weatherState = document.getElementById('cockpit-weather-state');
     this.contextCollapsed = false;
     this.signalStream = document.getElementById('cockpit-signal-stream');
     this.signalList = document.getElementById('cockpit-signal-list');
     this.signalToggle = document.getElementById('cockpit-signal-toggle');
-    this.briefKicker = document.getElementById('cockpit-brief-kicker');
-    this.briefSubtitle = document.getElementById('cockpit-brief-subtitle');
     this.briefPrevious = document.getElementById('cockpit-brief-previous');
     this.briefNext = document.getElementById('cockpit-brief-next');
     this.briefAutoToggle = document.getElementById('cockpit-brief-auto');
-    this.briefPosition = document.getElementById('cockpit-brief-position');
-    this.briefSource = document.getElementById('cockpit-brief-source');
-    this.briefPages = Array.from(
-      document.querySelectorAll('[data-cockpit-brief-page]'),
-    );
     this.briefTabs = Array.from(
       document.querySelectorAll('[data-cockpit-brief-index]'),
-    );
-    this.newsStatus = document.getElementById('cockpit-news-status');
-    this.newsList = document.getElementById('cockpit-news-list');
-    this.localPlace = document.getElementById('cockpit-local-place');
-    this.localCoordinates = document.getElementById(
-      'cockpit-local-coordinates',
-    );
-    this.localTemperature = document.getElementById(
-      'cockpit-local-temperature',
-    );
-    this.localWind = document.getElementById('cockpit-local-wind');
-    this.localWindDirection = document.getElementById(
-      'cockpit-local-wind-direction',
-    );
-    this.localCondition = document.getElementById('cockpit-local-condition');
-    this.localCloud = document.getElementById('cockpit-local-cloud');
-    this.localPrecipitation = document.getElementById(
-      'cockpit-local-precipitation',
     );
     this.signalCollapsed = false;
     this.signalUserCollapsed = false;
@@ -199,8 +263,46 @@ export class CockpitViewController {
     this.signalSignatures = new Map();
     this.briefPageIndex = 0;
     this.briefAutoRotateEnabled = false;
+    // Cockpit's views render what these receive.
+    this.publishPresence = publish.presence ?? (() => {});
+    this.publishBrief = publish.brief ?? (() => {});
+    this.publishContext = publish.context ?? (() => {});
+    this.publishInstruments = publish.instruments ?? (() => {});
+    this.publishRoute = publish.route ?? (() => {});
+    this.publishVision = publish.vision ?? (() => {});
+    this.publishSignals = publish.signals ?? (() => {});
+    this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
+    this.publishRadar = publish.radar ?? (() => {});
+    this.publishOrbital = publish.orbital ?? (() => {});
+    /** The bridge radar's range in nautical miles; kept across bridges. */
+    this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
+    this.presence = {
+      active: false,
+      entryAvailable: false,
+      // Which subject the entry button would enter, and the active subject.
+      entryKind: null,
+      // A provider's entry face, `{icon, label}`; null for the built-ins.
+      entryFace: null,
+      subjectKind: null,
+      // While a provider's subject is ridden: its HUD and exit labels, and
+      // `{aheadLabel}` when it looks around.
+      subjectGeneric: false,
+      subjectLabels: null,
+      subjectLook: null,
+      tr3b: null,
+      context: false,
+      // The Contact and briefing cards' collapse, which their toggles show.
+      contextCollapsed: false,
+      signalCollapsed: false,
+    };
+    this.instruments = createInstrumentState();
+    this.routeView = createRouteState();
+    this.routeSignature = null;
+    this.contextView = createContextState();
+    this.brief = createBriefState();
     this.briefTimer = null;
-    this.lastAircraftInfo = null;
+    // The last aircraft or vessel the HUD drew.
+    this.lastSubjectInfo = null;
     this.regionalBrief = null;
     this.regionalBriefAnchor = null;
     this.regionalBriefFetchedAt = 0;
@@ -223,7 +325,7 @@ export class CockpitViewController {
     this.scratchAnchorCartographic = new Cesium.Cartographic();
     this.scratchCameraCartographic = new Cesium.Cartographic();
     this.scratchTargetCartographic = new Cesium.Cartographic();
-    this._listenerRemovers = [];
+    this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can
@@ -236,6 +338,29 @@ export class CockpitViewController {
       }),
     );
     this._listen(this.entry, 'click', () => this.enter());
+    // Double-clicking the followed track is a third way in.
+    this._listen(
+      viewer.scene?.canvas,
+      'pointerdown',
+      () => this.onScenePointerDown(),
+      true,
+    );
+    this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // In orbit a click on a mapped point keeps the camera on it.
+    this._listenerRemovers.push(routeSceneClick.call(this));
+    // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
+    // off while the Cockpit holds the camera).
+    this._listen(
+      viewer.scene?.canvas,
+      'wheel',
+      (event) => this.onOrbitalWheel(event),
+      { passive: false },
+    );
+    // The readout's entry renders inside the Intel HUD, which may mount after
+    // this controller; delegated like the radar's range button.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-entry-readout')) this.enter();
+    });
     this._listen(this.tr3bToggle, 'click', () => this.toggleTrackedTr3b());
     this._listen(this.mapViewButton, 'click', () => this.exit());
     this._listen(this.visionPrevious, 'click', () => this.cycleVisionMode(-1));
@@ -251,8 +376,7 @@ export class CockpitViewController {
       this.setContextCollapsed(!this.contextCollapsed),
     );
     this._listen(this.weatherToggle, 'click', () => {
-      const enabled =
-        this.weatherToggle.getAttribute('aria-pressed') !== 'true';
+      const enabled = !this.contextView.weather;
       this.syncWeatherToggle(enabled);
       window.dispatchEvent(
         new CustomEvent('gev:cockpit-weather-toggle', {
@@ -262,6 +386,26 @@ export class CockpitViewController {
     });
     this._listen(window, 'gev:cockpit-weather-state', (event) => {
       this.syncWeatherToggle(event?.detail?.enabled !== false);
+    });
+    // The radar mounts only on a bridge, so its range button is delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-radar-range'))
+        this.cycleRadarRange();
+    });
+    // The look-ahead button shows only on a turned bridge view; delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-look-ahead')) this.lookAhead();
+    });
+    // The orbital HUD mounts only in orbit, so its controls are delegated.
+    this._listen(document, 'click', (event) => {
+      const target = event.target;
+      if (target?.closest?.('#cockpit-orbital-zoom-in'))
+        this.stepOrbitalZoom(1);
+      else if (target?.closest?.('#cockpit-orbital-zoom-out'))
+        this.stepOrbitalZoom(-1);
+      else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+      else if (target?.closest?.('#cockpit-orbital-sensor'))
+        this.jumpToSensorSwath();
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -304,11 +448,137 @@ export class CockpitViewController {
   readAircraftInfo() {
     return readAircraftInfo.call(this);
   }
+  readVesselInfo() {
+    return readVesselInfo.call(this);
+  }
+  readSatelliteInfo() {
+    return readSatelliteInfo.call(this);
+  }
+  beginOrbital() {
+    return beginOrbital.call(this);
+  }
+  endOrbital() {
+    return endOrbital.call(this);
+  }
+  updateOrbital(nowMs) {
+    return updateOrbital.call(this, nowMs);
+  }
+  updateOrbitalHud(info, nowMs) {
+    return updateOrbitalHud.call(this, info, nowMs);
+  }
+  /**
+   * Step the orbital view's optical zoom (the + and − keys and buttons).
+   * @param {number} direction Positive zooms in, negative out.
+   * @returns {boolean} True when the zoom changed.
+   */
+  stepOrbitalZoom(direction) {
+    return stepOrbitalZoom.call(this, direction);
+  }
+  jumpToSensorSwath() {
+    return jumpToSensorSwath.call(this);
+  }
+  onOrbitalWheel(event) {
+    return onOrbitalWheel.call(this, event);
+  }
+  /**
+   * A click on the orbital picture: on a mapped point in reach it keeps the
+   * camera on that point; anywhere else it ends such a focus.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when the click focused a point.
+   */
+  onOrbitalClick(position) {
+    return onOrbitalClick.call(this, position);
+  }
+  /**
+   * A double-click on the orbital picture: on a mapped ground point it keeps
+   * or starts the focus there instead of letting Cesium track the point.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when it was taken.
+   */
+  onOrbitalDoubleClick(position) {
+    return onOrbitalDoubleClick.call(this, position);
+  }
+  /**
+   * A site's orbital Live Signals row: focus that site, switch to it, or end
+   * the focus held on it.
+   * @param {string} key The site's id in the Mapped Installations layer.
+   * @returns {boolean} True when the focus changed.
+   */
+  toggleOrbitalFocus(key) {
+    return toggleOrbitalFocus.call(this, key);
+  }
+  /** Rebuild the orbital Live Signals rows now. */
+  refreshOrbitalSignals() {
+    return refreshOrbitalSignals.call(this);
+  }
+  /** Rebuild the orbital Live Signals rows on their clock. */
+  updateOrbitalSignals(nowMs) {
+    return updateOrbitalSignals.call(this, nowMs);
+  }
+  /**
+   * Ride the satellite an orbital Live Signals row names (RETURN goes back).
+   * @param {number|string} noradId
+   * @returns {boolean} True when the ridden satellite changed.
+   */
+  rideOrbitalSatellite(noradId) {
+    return rideOrbitalSatellite.call(this, noradId);
+  }
+  /**
+   * A click on an orbital Live Signals row.
+   * @returns {boolean} True in orbit.
+   */
+  handleOrbitalSignalClick(layerId, id) {
+    return handleOrbitalSignalClick.call(this, layerId, id);
+  }
+  /**
+   * Tilt the orbital view one arrow step off nadir.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True in an orbital view.
+   */
+  turnOrbitalLook(step) {
+    return turnOrbitalLook.call(this, step);
+  }
+  /**
+   * The NADIR control and the Home and 0 keys in orbit: back to pure nadir.
+   * Focus leaves the button before it hides.
+   * @returns {boolean} True in an orbital view.
+   */
+  orbitalNadir() {
+    const button = document.getElementById('cockpit-orbital-nadir');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    const reset = resetOrbitalLook.call(this);
+    if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return reset;
+  }
+  readSubjectCandidate(provider) {
+    return readSubjectCandidate.call(this, provider);
+  }
+  subjectContext() {
+    return subjectContext.call(this);
+  }
+  subjectInfo(frame) {
+    return subjectInfo.call(this, frame);
+  }
+  entryCandidates(nowMs) {
+    return entryCandidates.call(this, nowMs);
+  }
+  resolveEntry(nowMs) {
+    return resolveEntry.call(this, nowMs);
+  }
+  readSubjectLayerId() {
+    return readSubjectLayerId.call(this);
+  }
+  resolveEntryKind() {
+    return resolveEntryKind.call(this);
+  }
   dispatchCockpitModeChanged(active, info) {
     return dispatchCockpitModeChanged.call(this, active, info);
   }
   toggleTrackedTr3b() {
     return toggleTrackedTr3b.call(this);
+  }
+  publishPresenceView() {
+    return publishPresenceView.call(this);
   }
   syncTr3bToggle(info) {
     return syncTr3bToggle.call(this, info);
@@ -316,14 +586,17 @@ export class CockpitViewController {
   syncEntry() {
     return syncEntry.call(this);
   }
+  refreshSubjectWords() {
+    return refreshSubjectWords.call(this);
+  }
   navigateContext(direction, options) {
     return navigateContext.call(this, direction, options);
   }
   _adoptTrackedEntity(nowMs, suppliedInfo) {
     return _adoptTrackedEntity.call(this, nowMs, suppliedInfo);
   }
-  enter() {
-    return enter.call(this);
+  enter(options) {
+    return enter.call(this, options);
   }
   exit(options) {
     return exit.call(this, options);
@@ -331,11 +604,82 @@ export class CockpitViewController {
   update() {
     return update.call(this);
   }
+  publishInstrumentsView() {
+    return publishInstrumentsView.call(this);
+  }
+  publishRouteView() {
+    return publishRouteView.call(this);
+  }
   updateHud(info, nowMs, forceContext) {
     return updateHud.call(this, info, nowMs, forceContext);
   }
   updateRoute(info) {
     return updateRoute.call(this, info);
+  }
+  updateRadar(info) {
+    return updateRadar.call(this, info);
+  }
+  /** Step the bridge radar to its next range and redraw it at once. */
+  cycleRadarRange() {
+    this.radarRangeNm = nextRadarRange(this.radarRangeNm);
+    if (this.active && this.subjectKind === 'vessel' && this.lastSubjectInfo)
+      this.updateRadar(this.lastSubjectInfo);
+  }
+  presentLook() {
+    return presentLook.call(this);
+  }
+  /** Whether the active view looks around: a bridge, or a provider's with `look`. */
+  get looksAround() {
+    return (
+      this.active &&
+      (this.subjectKind === 'vessel' || Boolean(this.subjectProvider?.look))
+    );
+  }
+  /** Where the look rests: the bridge's pitch, or the provider's. */
+  get lookRestPitch() {
+    return Number.isFinite(this.lookRestPitchDeg)
+      ? this.lookRestPitchDeg
+      : VESSEL_BRIDGE_PITCH_DEG;
+  }
+  /**
+   * Turn the bridge view one arrow step (see `lookKeyStep`). The camera
+   * eases there unless the user prefers reduced motion.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True when a bridge view was turned.
+   */
+  turnLook(step) {
+    if (!this.looksAround || !step) return false;
+    this.lookTarget = stepLook(this.lookTarget, step);
+    if (prefersReducedMotion()) this.lookView = { ...this.lookTarget };
+    this.presentLook();
+    this.publishInstrumentsView();
+    return true;
+  }
+  /**
+   * Point the bridge view back over the bow at the rest pitch.
+   * @param {{immediate?: boolean}} [options] Jump there instead of easing,
+   *   as entry and exit do.
+   */
+  resetLook({ immediate = false } = {}) {
+    this.lookTarget = { yawDeg: 0, pitchDeg: this.lookRestPitch };
+    if (immediate || prefersReducedMotion())
+      this.lookView = { ...this.lookTarget };
+    this.lookLastMs = performance.now();
+    this.presentLook();
+    this.publishInstrumentsView();
+  }
+  /**
+   * The LOOK AHEAD control and the Home and 0 keys: ease the bridge view
+   * back over the bow. Focus leaves the button before it hides.
+   * @returns {boolean} True on a bridge.
+   */
+  lookAhead() {
+    if (!this.looksAround) return false;
+    const button = document.getElementById('cockpit-look-ahead');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    this.resetLook();
+    if (hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return true;
   }
   syncWeatherToggle(enabled) {
     return syncWeatherToggle.call(this, enabled);
@@ -349,8 +693,17 @@ export class CockpitViewController {
   clearPredictiveRoute() {
     return clearPredictiveRoute.call(this);
   }
+  publishContextView() {
+    return publishContextView.call(this);
+  }
+  showContextCard(visible) {
+    return showContextCard.call(this, visible);
+  }
   updateContext(info, heading) {
     return updateContext.call(this, info, heading);
+  }
+  publishBriefView() {
+    return publishBriefView.call(this);
   }
   showBriefPage(index, options) {
     return showBriefPage.call(this, index, options);
@@ -373,17 +726,31 @@ export class CockpitViewController {
   renderRegionalBriefStatus(status, info) {
     return renderRegionalBriefStatus.call(this, status, info);
   }
+  relocalizeBrief() {
+    return relocalizeBrief.call(this);
+  }
   renderRegionalBrief(payload, info) {
     return renderRegionalBrief.call(this, payload, info);
   }
-  renderCockpitSignals() {
-    return renderCockpitSignals.call(this);
+  publishCockpitSignals() {
+    return publishCockpitSignals.call(this);
   }
   pushCockpitSignal(key, tone, title, detail, target) {
     return pushCockpitSignal.call(this, key, tone, title, detail, target);
   }
-  updateCockpitSignals(snapshot, unknownCount) {
-    return updateCockpitSignals.call(this, snapshot, unknownCount);
+  dropCockpitSignal(key) {
+    return dropCockpitSignal.call(this, key);
+  }
+  dropContextSnapshotSignals() {
+    return dropContextSnapshotSignals.call(this);
+  }
+  updateCockpitSignals(snapshot, unknownCount, partialPicture) {
+    return updateCockpitSignals.call(
+      this,
+      snapshot,
+      unknownCount,
+      partialPicture,
+    );
   }
   scheduleContextLayout() {
     return scheduleContextLayout.call(this);
@@ -403,9 +770,48 @@ export class CockpitViewController {
   onKeyDown(event) {
     return onKeyDown.call(this, event);
   }
+  onSceneDoubleClick(position, nowMs) {
+    return onSceneDoubleClick.call(this, position, nowMs);
+  }
+  onScenePointerDown(nowMs) {
+    return onScenePointerDown.call(this, nowMs);
+  }
 
   handleSignalClick(event) {
     return handleSignalClick.call(this, event);
+  }
+
+  /**
+   * Word every Cockpit surface again in the current locale. In flight the
+   * last reading is shown again; otherwise the surfaces go back to their
+   * placeholders, which the next entry replaces.
+   */
+  relocalize() {
+    if (this.destroyed) return;
+    this.relocalizeBrief();
+    this.publishVision(createVisionState(this.visionMode));
+    this.routeSignature = null;
+    // A provider's words, ridden or on the entry, follow the language.
+    this.refreshSubjectWords();
+    if (!this.active) this.syncEntry();
+    if (this.active && this.lastSubjectInfo) {
+      this.rewordingSignals = true;
+      try {
+        this.updateHud(this.lastSubjectInfo, performance.now(), true);
+      } finally {
+        this.rewordingSignals = false;
+      }
+      return;
+    }
+    this.instruments = createInstrumentState();
+    this.publishInstrumentsView();
+    this.routeView = createRouteState();
+    this.publishRouteView();
+    this.contextView = {
+      ...createContextState(),
+      weather: this.contextView.weather,
+    };
+    this.publishContextView();
   }
 
   /** Revoke new work before the shell awaits layer restoration. */

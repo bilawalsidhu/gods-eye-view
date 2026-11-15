@@ -180,12 +180,11 @@ html:not([lang='en'])
   min-width: 0;
   width: 100%;
   min-height: 30px;
-  color: var(--text-primary);
-  background: #09121b;
-  border: 1px solid var(--glass-border);
   border-radius: 4px;
   font: inherit;
   font-size: 0.65rem;
+  --gev-field-background: #09121b;
+  --gev-field-border-color: var(--glass-border);
 }
 #gev-voice-control:hover .gev-voice-provider-field,
 #gev-voice-control:focus-within .gev-voice-provider-field {

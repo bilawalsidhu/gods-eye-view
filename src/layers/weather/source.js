@@ -104,6 +104,75 @@ export function weatherTileUrl(product, time, { size } = {}) {
   return `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;
 }
 
+/**
+ * Decoded pixels a host hands the weather layer. The layer takes ownership:
+ * it draws them once and closes a VideoFrame or ImageBitmap afterwards, so a
+ * host returns a fresh object for every call.
+ * @typedef {ImageBitmap|ImageData|HTMLCanvasElement|OffscreenCanvas|VideoFrame} WeatherPixels
+ */
+
+/**
+ * A weather feed may also be a frame source: a host can supply decoded frames
+ * in place of the bounded image and tile routes. Both methods are optional and
+ * independent; a product or path without one keeps the routes.
+ *
+ * `getFrameImage` returns one image exactly `size` pixels, covering the
+ * product's whole extent, or with `bbox` ({ west, south, east, north }
+ * degrees) a detail window of it. `getFrameTile` returns one `size`-pixel tile
+ * of the geographic tiling scheme, or null for a transparent tile. Rows run
+ * top-down (north first), as an image does. Both honour `signal`.
+ * @typedef {object} WeatherFrameFeed
+ * @property {(request: { product: string, time: string,
+ *   size: { width: number, height: number },
+ *   bbox: { west: number, south: number, east: number, north: number } | null,
+ *   signal: AbortSignal }) => Promise<WeatherPixels>} [getFrameImage]
+ * @property {(request: { product: string, time: string, z: number, x: number,
+ *   y: number, size: number, signal: AbortSignal })
+ *   => Promise<WeatherPixels | null>} [getFrameTile]
+ */
+
+/**
+ * The frame source a feed provides, or null when it has neither method. A
+ * missing method is left undefined, so that path keeps the routes.
+ * @param {WeatherFrameFeed | undefined} feed
+ * @returns {{ getImage?: Function, getTile?: Function } | null}
+ */
+export function weatherFrameSource(feed) {
+  const image = typeof feed?.getFrameImage === 'function';
+  const tile = typeof feed?.getFrameTile === 'function';
+  if (!image && !tile) return null;
+  return {
+    getImage: image
+      ? ({ product, time, size, bbox = null, signal }) =>
+          feed.getFrameImage({ product, time, size, bbox, signal })
+      : undefined,
+    getTile: tile
+      ? ({ product, time, z, x, y, size, signal }) =>
+          feed.getFrameTile({ product, time, z, x, y, size, signal })
+      : undefined,
+  };
+}
+
+/** Width and height of supplied pixels; a VideoFrame draws at its display size. */
+export function weatherPixelSize(pixels) {
+  return {
+    width: pixels?.displayWidth ?? pixels?.width,
+    height: pixels?.displayHeight ?? pixels?.height,
+  };
+}
+
+/** Draw supplied pixels at the canvas origin, at their own size. */
+export function drawWeatherPixels(context, pixels) {
+  if (typeof ImageData !== 'undefined' && pixels instanceof ImageData)
+    context.putImageData(pixels, 0, 0);
+  else context.drawImage(pixels, 0, 0);
+}
+
+/** Release supplied pixels that hold decoder or GPU memory. */
+export function closeWeatherPixels(pixels) {
+  if (typeof pixels?.close === 'function') pixels.close();
+}
+
 /** Acquisition is lazy and shares the application's existing source contract. */
 export function createWeatherSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
