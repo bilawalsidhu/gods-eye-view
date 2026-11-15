@@ -3812,5 +3812,6 @@
   "Status": "Состояние",
   "Search layers…": "Поиск слоёв…",
   "Layer groups": "Группы слоёв",
-  "Jump to {name}": "Перейти к «{name}»"
+  "Jump to {name}": "Перейти к «{name}»",
+  "No layers match": "Нет подходящих слоёв"
 }

@@ -3638,5 +3638,6 @@
   "Status": "Status",
   "Search layers…": "Sök lager…",
   "Layer groups": "Lagergrupper",
-  "Jump to {name}": "Gå till {name}"
+  "Jump to {name}": "Gå till {name}",
+  "No layers match": "Inga lager matchar"
 }

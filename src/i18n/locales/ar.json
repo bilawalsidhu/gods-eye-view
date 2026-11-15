@@ -3986,5 +3986,6 @@
   "Status": "الحالة",
   "Search layers…": "ابحث في الطبقات…",
   "Layer groups": "مجموعات الطبقات",
-  "Jump to {name}": "الانتقال إلى {name}"
+  "Jump to {name}": "الانتقال إلى {name}",
+  "No layers match": "لا توجد طبقات مطابقة"
 }

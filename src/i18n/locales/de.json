@@ -3638,5 +3638,6 @@
   "Status": "Status",
   "Search layers…": "Ebenen suchen…",
   "Layer groups": "Ebenengruppen",
-  "Jump to {name}": "Zu {name} springen"
+  "Jump to {name}": "Zu {name} springen",
+  "No layers match": "Keine passenden Ebenen"
 }

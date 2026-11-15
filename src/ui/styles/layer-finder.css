@@ -151,10 +151,10 @@
   display: none !important;
 }
 
-#data-toggles.is-filtering[data-shown='0']::after {
-  content: 'No layers match';
-  display: block;
-  padding: 1rem 0.5rem;
+.layer-finder__empty {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0.6rem 0.5rem;
   color: rgba(199, 214, 222, 0.5);
   font-size: 0.72rem;
   text-align: center;
@@ -162,6 +162,7 @@
 
 .layer-finder__menu {
   max-height: 60vh;
+  box-sizing: border-box;
   overflow-y: auto;
   min-width: 170px;
 }
@@ -175,7 +176,12 @@
   text-transform: uppercase;
 }
 
-.layer-finder__menu-head:not(:first-child) {
+/* Each group of options lays out as part of the menu's grid. */
+.layer-finder__menu > span {
+  display: contents;
+}
+
+.layer-finder__menu > span + span > .layer-finder__menu-head {
   margin-top: 0.2rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }

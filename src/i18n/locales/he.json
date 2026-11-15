@@ -3725,5 +3725,6 @@
   "Status": "מצב",
   "Search layers…": "חיפוש שכבות…",
   "Layer groups": "קבוצות שכבות",
-  "Jump to {name}": "מעבר אל {name}"
+  "Jump to {name}": "מעבר אל {name}",
+  "No layers match": "אין שכבות תואמות"
 }

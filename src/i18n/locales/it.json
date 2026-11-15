@@ -3725,5 +3725,6 @@
   "Status": "Stato",
   "Search layers…": "Cerca livelli…",
   "Layer groups": "Gruppi di livelli",
-  "Jump to {name}": "Vai a {name}"
+  "Jump to {name}": "Vai a {name}",
+  "No layers match": "Nessun livello corrisponde"
 }

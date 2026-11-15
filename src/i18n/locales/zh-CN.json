@@ -3551,5 +3551,6 @@
   "Status": "状态",
   "Search layers…": "搜索图层…",
   "Layer groups": "图层分组",
-  "Jump to {name}": "跳转到{name}"
+  "Jump to {name}": "跳转到{name}",
+  "No layers match": "没有匹配的图层"
 }

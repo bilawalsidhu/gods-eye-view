@@ -3725,5 +3725,6 @@
   "Status": "Estado",
   "Search layers…": "Buscar capas…",
   "Layer groups": "Grupos de capas",
-  "Jump to {name}": "Ir a {name}"
+  "Jump to {name}": "Ir a {name}",
+  "No layers match": "Ninguna capa coincide"
 }

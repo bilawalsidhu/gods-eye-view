@@ -3551,5 +3551,6 @@
   "Status": "状態",
   "Search layers…": "レイヤーを検索…",
   "Layer groups": "レイヤーのグループ",
-  "Jump to {name}": "{name} へ移動"
+  "Jump to {name}": "{name} へ移動",
+  "No layers match": "一致するレイヤーはありません"
 }

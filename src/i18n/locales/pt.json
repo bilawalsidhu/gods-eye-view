@@ -3725,5 +3725,6 @@
   "Status": "Estado",
   "Search layers…": "Pesquisar camadas…",
   "Layer groups": "Grupos de camadas",
-  "Jump to {name}": "Ir para {name}"
+  "Jump to {name}": "Ir para {name}",
+  "No layers match": "Nenhuma camada corresponde"
 }
