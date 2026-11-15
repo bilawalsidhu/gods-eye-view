@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
+  AID_TO_NAVIGATION_STYLE,
   vesselTypeCss,
   vesselOverlayCohortLimit,
   VESSEL_OVERLAY_SOURCE_ID,
@@ -22,9 +23,21 @@ import {
   followsClock,
 } from './policy.js';
 import { vesselPositionAt } from './motion.js';
+import {
+  fleetModelSet,
+  loadFleetModelSet,
+  vesselModelSpec,
+} from '../../data/fleetModels.js';
+import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
+import { isAidToNavigation } from '../../data/vesselTypes.js';
 
 /** How often vessels move on as the world clock plays (wall ms). */
 const FOLLOW_POSITION_MS = 250;
+/** A frame is asked for this often while a placement moves live vessels. */
+const PLACEMENT_FRAME_MS = 1000;
+
+/** How often the vessels near enough for a model are gathered again (wall ms). */
+const MODEL_CANDIDATES_MS = 500;
 
 export function createRendering({
   vesselState,
@@ -47,21 +60,70 @@ export function createRendering({
       visual = { billboard: record.billboard || null };
       visualRecords.set(record, visual);
     }
-    // Following the world clock, a vessel is drawn where it was at the time.
+    // Following the world clock, a vessel is drawn where it was at the time;
+    // live, where a host-supplied placement draws it, if one does.
     const { lat, lon } = followsClock(vesselState)
       ? vesselPositionAt(record, vesselState.worldNow())
-      : record;
+      : (services.placement?.place(record.id, vesselState._aisRuntime.now()) ??
+        record);
     const heightM = components.queries.vesselDatumHeightM(
       components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
     );
     visual.position = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
+    // A ship model's origin is its waterline: the sea surface, unlifted.
+    visual.waterline = Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      heightM - VESSEL_LIFT_M,
+    );
     visual.surfacePosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
     visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
       visual.position,
       new Cesium.Cartesian3(),
     );
+    if (services.placement) {
+      visual.drawnLat = lat;
+      visual.drawnLon = lon;
+    }
     return visual;
+  }
+
+  /**
+   * Move a prepared vessel visual to `lat`/`lon`, writing into its own
+   * positions rather than allocating new ones: the placement pass runs for
+   * every drawn vessel several times a second.
+   */
+  function moveRecordVisual(visual, lat, lon) {
+    const heightM = components.queries.vesselDatumHeightM(
+      components.tracking.currentGeoidN(lat, lon),
+      VESSEL_LIFT_M,
+    );
+    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      heightM,
+      ellipsoid,
+      visual.position,
+    );
+    Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      heightM - VESSEL_LIFT_M,
+      ellipsoid,
+      visual.waterline,
+    );
+    Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      0,
+      ellipsoid,
+      visual.surfacePosition,
+    );
+    ellipsoid.geodeticSurfaceNormal(visual.position, visual.normal);
+    visual.drawnLat = lat;
+    visual.drawnLon = lon;
   }
 
   function resetRecordVisuals() {
@@ -101,6 +163,7 @@ export function createRendering({
   }
 
   function ensureCollections(viewer) {
+    ensureModels(viewer);
     if (!viewer || state.billboardCollection) return;
     state.billboardCollection = new Cesium.BillboardCollection({
       blendOption: Cesium.BlendOption.TRANSLUCENT,
@@ -166,12 +229,14 @@ export function createRendering({
    * Best available real-world direction of travel for a vessel, degrees
    * clockwise from north (true heading preferred, course-over-ground fallback).
    * Screen rotation is computed from this by the shared projected-rotation
-   * pass in updateVisibility — never directly from the compass value.
+   * pass in updateVisibility — never directly from the compass value. An aid
+   * to navigation is fixed, so it has none.
    * @param {Object} record - Vessel record.
    * @returns {number} Course in degrees (0 when unknown).
    */
 
   function vesselCourseDeg(record) {
+    if (isAidToNavigation(record)) return 0;
     const direction = record.heading ?? record.course;
     return Number.isFinite(direction) ? direction : 0;
   }
@@ -179,6 +244,7 @@ export function createRendering({
   /**
    * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
    * The shape points north (up) so billboard rotation maps directly to heading.
+   * An aid to navigation, which has no heading, is a ringed disc instead.
    * One icon is generated per color+variant and reused across all billboards.
    * @param {Object} record - Vessel record (drives per-type tint).
    * @param {boolean} selected - True for the white/brighter selected variant.
@@ -186,21 +252,176 @@ export function createRendering({
    */
 
   function shipIcon(record, selected) {
-    const cssColor = selected ? '#ffffff' : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}`;
+    const aid = isAidToNavigation(record);
+    const cssColor = selected
+      ? '#ffffff'
+      : aid
+        ? AID_TO_NAVIGATION_STYLE.css
+        : vesselTypeCss(record.type);
+    const key = `${cssColor}:${selected ? 'selected' : 'normal'}:${aid ? 'aid' : 'ship'}`;
     if (vesselState.shipIconCache.has(key))
       return vesselState.shipIconCache.get(key);
 
     const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
     const strokeWidth = selected ? 1.1 : 0.7;
+    const shape = aid
+      ? `<circle r="8" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth * 2}"/>
+      <circle r="3" fill="${stroke}"/>`
+      : `<path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
     <g transform="translate(16,16)">
-      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
+      ${shape}
     </g>
   </svg>`;
     const icon = 'data:image/svg+xml;base64,' + btoa(svg);
     vesselState.shipIconCache.set(key, icon);
     return icon;
+  }
+
+  // Under the DISPLAY rail's 3D toggle, vessels near the camera are drawn as
+  // the project's procedural fleet models at their reported length and beam,
+  // on the aircraft layers' icon-to-model rules (services.fleet). The fleet
+  // set loads once, up front, when the layer starts.
+  let fleetModels = null;
+  /** Items drawn last frame, and the map the next frame's are gathered into. */
+  let modelItems = new Map();
+  let spareItems = new Map();
+  let modelCandidatesAtMs = -Infinity;
+  const modelOccluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
+
+  function ensureModels(viewer) {
+    const fleet = services.fleet;
+    if (!viewer || fleetModels || !fleet?.policy) return;
+    loadFleetModelSet({ resolveAsset: fleet.resolveAsset }).catch(() => {
+      /* models stay off; vessels keep their icons */
+    });
+    fleetModels = createFleetModelLayer({
+      viewer,
+      display: fleet.display,
+      policy: fleet.policy,
+      resolveAsset: fleet.resolveAsset,
+      // A hull below the waterline would show through a plain globe.
+      waterline: true,
+    });
+  }
+
+  /**
+   * Whether a vessel's chevron is drawn: on the camera's side of the Earth,
+   * not the bridge camera's own vessel, and not drawn by its model. The
+   * visibility pass and the model handoff both decide by this.
+   */
+  function billboardShown(record, occluder) {
+    const visual = getVisual(record);
+    return (
+      isVisible(visual.surfacePosition, occluder) &&
+      record.id !== state.cockpitSubjectId &&
+      !visual.modelOwnsVisual
+    );
+  }
+
+  /**
+   * The model item for `record`, its spec rebuilt only when its type or size
+   * changes; null for a virtual aid to navigation, which keeps its disc: no
+   * buoy stands there (vesselModelSpec).
+   */
+  function modelItem(record, set) {
+    if (record.virtual === true) return null;
+    let item = modelItems.get(record.id);
+    if (!item || item.record !== record)
+      item = { record, pickId: record, tint: null, modelOwnsVisual: false };
+    const specKey = `${record.type}|${record.mmsi}|${record.length}|${record.beam}|${record.name}`;
+    if (item.specKey !== specKey) {
+      item.specKey = specKey;
+      item.spec = vesselModelSpec(set, record);
+    }
+    item.position = getVisual(record).waterline;
+    // An aid to navigation is a fixed mark: it does not turn to a heading.
+    item.headingDeg = item.spec?.fixed ? 0 : vesselCourseDeg(record);
+    item.show = record.id !== state.cockpitSubjectId;
+    return item;
+  }
+
+  /** Gather the vessels within the models' keep radius of the camera into `into`. */
+  function gatherModelItems(set, into) {
+    const camera = state.viewer?.camera;
+    if (!camera?.positionWC) return;
+    const policy = services.fleet.policy;
+    const keepM =
+      services.fleet.display?.()?.models3dMode === 'all'
+        ? policy.keepAllM
+        : policy.keepM;
+    const limitSq = keepM * keepM * 1.44;
+    for (const record of state.records.all) {
+      const waterline = getVisual(record).waterline;
+      if (!waterline) continue;
+      if (
+        Cesium.Cartesian3.distanceSquared(camera.positionWC, waterline) >
+        limitSq
+      )
+        continue;
+      const item = modelItem(record, set);
+      if (item) into.set(record.id, item);
+    }
+  }
+
+  /** Give a vessel's chevron back when its model no longer draws it. */
+  function handBackVisual(record, occluder) {
+    const visual = getVisual(record);
+    if (!visual.modelOwnsVisual) return;
+    visual.modelOwnsVisual = false;
+    if (visual.billboard)
+      visual.billboard.show = billboardShown(record, occluder);
+  }
+
+  function updateModels() {
+    if (!fleetModels) return;
+    const camera = state.viewer?.camera;
+    const occluder = camera?.positionWC ? modelOccluder : null;
+    if (occluder) occluder.cameraPosition = camera.positionWC;
+    if (!fleetModels.active()) {
+      if (modelItems.size) {
+        modelItems.clear();
+        fleetModels.frame(modelItems, performance.now());
+        for (const record of state.records.all)
+          handBackVisual(record, occluder);
+      }
+      return;
+    }
+    const set = fleetModelSet();
+    const now = performance.now();
+    const next = spareItems;
+    next.clear();
+    if (now - modelCandidatesAtMs >= MODEL_CANDIDATES_MS) {
+      modelCandidatesAtMs = now;
+      gatherModelItems(set, next);
+    } else {
+      for (const [id, item] of modelItems)
+        if (state.records.byId.get(id) === item.record) {
+          const kept = modelItem(item.record, set);
+          if (kept) next.set(id, kept);
+        }
+    }
+    for (const [id, item] of modelItems)
+      if (next.get(id) !== item) handBackVisual(item.record, occluder);
+    spareItems = modelItems;
+    modelItems = next;
+    fleetModels.frame(modelItems, now);
+    for (const item of modelItems.values()) {
+      const visual = getVisual(item.record);
+      if (item.modelOwnsVisual) {
+        visual.modelOwnsVisual = true;
+        if (visual.billboard) visual.billboard.show = false;
+      } else handBackVisual(item.record, occluder);
+    }
+    if (fleetModels.settling) governorRequestRender('ais-vessels-models');
+  }
+
+  function destroyModels() {
+    fleetModels?.destroy();
+    fleetModels = null;
+    modelItems = new Map();
+    spareItems = new Map();
+    modelCandidatesAtMs = -Infinity;
   }
 
   // Vessels move only when a poll lands, so the layer does not hold the
@@ -215,7 +436,9 @@ export function createRendering({
     if (state.preRenderRemover || !viewer) return;
     state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
       if (followsClock(vesselState)) followClockPositions();
+      else if (services.placement && state.feed.enabled) followPlacements();
       updateVisibility();
+      if (state.feed.enabled) updateModels();
     });
   }
 
@@ -234,6 +457,50 @@ export function createRendering({
       const visual = prepareRecordVisual(record);
       if (visual.billboard) visual.billboard.position = visual.position;
     }
+  }
+
+  // Live with a host-supplied placement, vessels move on between refreshes:
+  // drawn where it places them at most every FOLLOW_POSITION_MS, with a frame
+  // asked for every PLACEMENT_FRAME_MS while it places any drawn vessel, so
+  // they move while the scene idles.
+  let placedAtWallMs = -Infinity;
+  let placing = false;
+  let placementFrameTimer = null;
+  function followPlacements() {
+    const wallMs = performance.now();
+    if (wallMs - placedAtWallMs >= FOLLOW_POSITION_MS) {
+      placedAtWallMs = wallMs;
+      placing = false;
+      const nowMs = vesselState._aisRuntime.now();
+      // Drawn vessels only, as a sprite or a model: a hidden one is placed
+      // again when it is drawn.
+      for (const record of state.records.all) {
+        const visual = visualRecords.get(record);
+        if (!visual?.position) continue;
+        if (!visual.billboard?.show && !visual.modelOwnsVisual) continue;
+        const placed = services.placement.place(record.id, nowMs);
+        if (placed) placing = true;
+        const { lat, lon } = placed ?? record;
+        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+        moveRecordVisual(visual, lat, lon);
+        if (visual.billboard) visual.billboard.position = visual.position;
+      }
+    }
+    if (placing && placementFrameTimer === null)
+      placementFrameTimer = vesselState._aisRuntime.setTimeout(() => {
+        placementFrameTimer = null;
+        if (state.feed.enabled && !followsClock(vesselState))
+          governorRequestRender('ais-vessels-placement');
+      }, PLACEMENT_FRAME_MS);
+  }
+
+  /** Stop asking for placement frames (the layer turned off or went away). */
+  function cancelPlacementFrame() {
+    placedAtWallMs = -Infinity;
+    placing = false;
+    if (placementFrameTimer === null) return;
+    vesselState._aisRuntime.clearTimeout(placementFrameTimer);
+    placementFrameTimer = null;
   }
 
   function scheduleTrailingVisibilityPass(now) {
@@ -306,9 +573,13 @@ export function createRendering({
         const visible = isVisible(visual.surfacePosition, occluder);
         if (visual.billboard) {
           // The bridge camera sits on this sprite; showing it would fill the view.
+          // The same rule as billboardShown, its horizon test already made.
           visual.billboard.show =
-            visible && record.id !== state.cockpitSubjectId;
-          if (visible && doRotations && scene) {
+            visible &&
+            record.id !== state.cockpitSubjectId &&
+            !visual.modelOwnsVisual;
+          // An aid's disc is never turned (vesselCourseDeg).
+          if (visible && doRotations && scene && !isAidToNavigation(record)) {
             const rot = screenProjectedRotation(
               scene,
               visual.position,
@@ -582,6 +853,13 @@ export function createRendering({
     if (state.billboardCollection) {
       state.billboardCollection.show = show;
     }
+    fleetModels?.setVisible(show);
+    if (!show && fleetModels) {
+      fleetModels.clear();
+      for (const item of modelItems.values())
+        getVisual(item.record).modelOwnsVisual = false;
+      modelItems.clear();
+    }
     vesselState._vesselOverlayHost.setVisible(VESSEL_OVERLAY_SOURCE_ID, show);
   }
   return {
@@ -599,6 +877,8 @@ export function createRendering({
     installRuntime,
     updateVisibility,
     cancelTrailingVisibilityPass,
+    cancelPlacementFrame,
+    followPlacements,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,
@@ -607,5 +887,7 @@ export function createRendering({
     labelPriority,
     hasUsefulName,
     setVisible,
+    updateModels,
+    destroyModels,
   };
 }

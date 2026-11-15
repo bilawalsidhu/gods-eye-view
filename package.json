@@ -298,6 +298,7 @@
     },
     "./sources/rail-service": "./src/sources/railService.js",
     "./layers/rail/source": "./src/layers/rail/source.js",
+    "./layers/rail/paths": "./src/data/railPaths.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js",
     "./server/providers/mapillary": {
       "node": "./server/providers/mapillary.js"

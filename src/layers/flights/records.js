@@ -6,6 +6,11 @@ import {
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { aircraftEmergency } from '../../data/aircraftEmergency.js';
 import {
+  aircraftCallsignRule,
+  aircraftModelSpec,
+  fleetModelSet,
+} from '../../data/fleetModels.js';
+import {
   approxDistanceKm,
   GROUND_FLOOR_CLAMP_RADIUS_KM,
   GROUND_FLOOR_WARM_MAX_ALT_M,
@@ -21,6 +26,7 @@ export class FlightRecords {
     cachedGroundFloor,
     floorAltitudeM,
     now = () => Date.now(),
+    fleetModels = fleetModelSet,
   }) {
     this.services = {
       geoidHeight,
@@ -29,6 +35,8 @@ export class FlightRecords {
     };
     /** The time records are judged at: the layer's clock. */
     this.now = now;
+    /** The loaded fleet model set, or null before it loads. */
+    this.fleetModels = fleetModels;
     this.data = new Map();
     // Facts about an airframe, not a moment, kept across a reset.
     this.airframes = new Map();
@@ -92,7 +100,6 @@ export class FlightRecords {
       verticalRateMps: vertical_rate,
     } = observation;
 
-    const onGround = on_ground === true;
     this.missingPolls.delete(icao24);
     // Sticky merge: OpenSky intermittently drops callsign/velocity/track for
     // aircraft it still positions — hold last-known-good instead of
@@ -102,6 +109,27 @@ export class FlightRecords {
     // The airframe's facts: this record's, or those kept across a reset.
     const airframe = prevMeta ?? this.airframes.get(icao24);
     this.airframes.delete(icao24);
+    // A ground vehicle or ground station (a feed's ZVEH or GRND: a model
+    // built standing, catalog category `other`) takes the feed's own type,
+    // which no airframe lookup knows; every other aircraft keeps waiting for
+    // its looked-up type. With no altitude at all it stands on the ground,
+    // where it is, instead of at the airborne default.
+    const groundModel = (typeCode) =>
+      drawnAsGroundModel(
+        this.fleetModels(),
+        typeCode,
+        category,
+        stickyText(callsign, prevMeta?.callsign),
+      );
+    const feedType = observation.typeCode || null;
+    const typeCode =
+      airframe?.typeCode ??
+      (feedType && groundModel(feedType) ? feedType : null);
+    const onGround =
+      on_ground === true ||
+      (!Number.isFinite(baro_alt) &&
+        !Number.isFinite(geo_alt) &&
+        groundModel(typeCode));
     // Grounded planes with no baro reading sit at 0 m, not the 10 km
     // airborne default (a parked plane must never float).
     // NOTE (height-datum fix): `alt` stays the AVIATION field — the sticky
@@ -319,8 +347,9 @@ export class FlightRecords {
         prevMeta?.lastContactEpochMs,
         null,
       ),
-      // adsbdb enrichment — written by the enrichment callbacks, carried across polls:
-      typeCode: airframe?.typeCode ?? null,
+      // adsbdb enrichment — written by the enrichment callbacks, carried
+      // across polls; a ground vehicle's or station's from the feed:
+      typeCode,
       typeName: airframe?.typeName ?? null,
       registration: airframe?.registration ?? null,
       airline: routeHeld ? (airframe.airline ?? null) : null,
@@ -407,4 +436,34 @@ export class FlightRecords {
     this.fixRepeated.delete(id);
     this.geoidNCache.delete(id);
   }
+}
+
+/** Per loaded fleet model set: whether a type, category and callsign rule draw a ground model. */
+const groundModelCaches = new WeakMap();
+
+/**
+ * Whether an aircraft of this type, emitter category and callsign is drawn
+ * with a model built standing on the ground (catalog category `other`: an
+ * airport vehicle, a ground station's mast). False before the set loads.
+ * Answered once per type, category and callsign rule matched.
+ * @param {object|null} set The loaded fleet model set.
+ * @param {string|null} typeCode
+ * @param {string|number|null} category
+ * @param {string|null} callsign
+ * @returns {boolean}
+ */
+function drawnAsGroundModel(set, typeCode, category, callsign) {
+  if (!set || !typeCode) return false;
+  let cache = groundModelCaches.get(set);
+  if (!cache) groundModelCaches.set(set, (cache = new Map()));
+  const rule = aircraftCallsignRule(set.types, typeCode, callsign);
+  const key = `${typeCode}|${category ?? ''}|${rule}`;
+  let ground = cache.get(key);
+  if (ground === undefined) {
+    ground =
+      aircraftModelSpec(set, { typeCode, category, callsign }).category ===
+      'other';
+    cache.set(key, ground);
+  }
+  return ground;
 }

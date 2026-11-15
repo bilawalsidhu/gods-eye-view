@@ -164,10 +164,10 @@ export function createEnrichment({
             const bb = flightState._billboards.get(icao24);
             if (bb)
               parts.rendering._applyFleetBillboardPresentation(icao24, bb);
-            // Hangar fleet: the class's GLB/scale may have changed — resync the
-            // live model, any in-flight load, and the tracked standalone model.
-            parts.rendering._syncModelToClass(icao24);
           }
+          // The type picks the fleet model and its length — resync the live
+          // model, any in-flight load, and the tracked standalone model.
+          parts.rendering._syncModelToClass(icao24);
         }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);

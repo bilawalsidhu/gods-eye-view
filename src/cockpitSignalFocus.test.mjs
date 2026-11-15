@@ -209,7 +209,7 @@ test('rows render the signals the controller presents', async (t) => {
   );
   assert.equal(status.className, 'warning');
   assert.equal(status.querySelector('div > strong').textContent, 'UNKNOWN');
-  assert.equal(status.querySelector('button'), null);
+  assert.equal(status.querySelector('button') === null, true);
 });
 
 test('actual Context refresh retains the focused signal button across unchanged and changed details', async (t) => {
@@ -315,7 +315,7 @@ test('removing the focused identity uses the shown briefing tab once and permits
   assert.equal(document.activeElement === f.signalTab(), true);
   assert.equal(f.focusCalls(), calls + 1);
   assert.equal(f.losses(), 0);
-  assert.equal(f.signalTab().closest('[hidden]'), null);
+  assert.equal(f.signalTab().closest('[hidden]') === null, true);
   // Traversal carries on forward from the footer tab.
   f.tab();
   assert.equal(document.activeElement === f.pageTab(1), true);

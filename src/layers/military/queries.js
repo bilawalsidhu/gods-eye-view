@@ -484,9 +484,7 @@ export function createQueries({
         // contacts read the translation the fleet tick already wrote into their
         // modelMatrix; sprite-owned contacts keep `bb.position`, where sprite and bracket
         // are co-located anyway.
-        const spec = modelOwnsVisual
-          ? parts.rendering._modelSpec(info?.klass)
-          : null;
+        const spec = modelOwnsVisual ? parts.rendering._modelSpec(info) : null;
         const pos = isTracked
           ? parts.motion._trackedVisualCached() || bb.position
           : modelOwnsVisual

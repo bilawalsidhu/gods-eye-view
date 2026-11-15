@@ -1,74 +1,15 @@
 import * as Cesium from 'cesium';
+
 /**
- * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
+ * Model-space anchors on the aircraft layers' fleet models: where brackets
+ * and readouts sit (a model's visual centre) and where a tracked trail
+ * attaches (its aft-belly point, measured per model in fleetTrailAnchors.js
+ * and handed to the layers with each model's spec by fleetModels.js).
  *
- * glTF stores these assets Y-up. Cesium's model frame is Z-up, so a glTF
- * centre `[x, y, z]` becomes `[x, -z, y]` before the layer's ENU modelMatrix
- * is applied. Values remain in native model units; callers supply the Model's
+ * Values are native model units in raw glTF axes; callers supply the Model's
  * effective rendered `computedScale` because Cesium does not bake it into
  * modelMatrix and may raise it above `scale` to satisfy minimumPixelSize.
  */
-const CENTERED_MODEL = Object.freeze([0, 0, 0]);
-
-export const MODEL_VISUAL_CENTER_NATIVE = Object.freeze({
-  '/models/airplane.glb': CENTERED_MODEL,
-  '/models/jet.glb': CENTERED_MODEL,
-});
-
-/**
- * Aft-belly trail attachment points, measured on each approved model's actual
- * MESH SURFACE. Every bundled asset is baked to one convention (see
- * aircraftClass.js): origin at the bbox centre, X = length with the NOSE at
- * local −X, glTF Y = up (Cesium-local Z here).
- *
- * Each value is the point of the hull's CENTRELINE PROFILE (the y = 0 slice of
- * the mesh) closest to that model's aft-belly AABB corner. Three things follow
- * from that construction, and each is asserted rather than described in
- * modelScale.test.mjs:
- *
- *   ON THE HULL. This is the correction that matters. The previous round put
- *       the anchor ON the AABB corner itself, reasoning that an anchor aft of
- *       every vertex makes non-intersection geometric. It does — but an AABB
- *       corner is EMPTY SPACE, and on these airframes it is a long way from
- *       any of them: 4.80 m out for airplane.glb and 6.14 m for jet.glb in
- *       native units, which at the 450 m framing is a visible gap between the
- *       aircraft and the end of its own trail. The trail must terminate on the
- *       aeroplane, so the anchor is a surface point.
- *
- *   AFT. The head segment is drawn from a point behind the aircraft to this
- *       anchor, so an anchor near the middle makes the segment enter at the
- *       tail and stop mid-fuselage — a line drawn through the airframe. These
- *       sit at 83–96 % of each model's aft extreme, on the aft-most hull the
- *       centreline has.
- *
- *   BELOW. Nothing of the aircraft is lower than the anchor at or behind its
- *       own station, so the trail leaves from underneath the way a wake does
- *       rather than out of the roof. On most assets that is a frank belly
- *       point; on jet.glb the aft centreline profile has swept up into the
- *       tail cone by then, so the anchor sits just above the model's vertical
- *       centre (+0.13 native on a 5.63 m half-height) at the exhaust — which
- *       is where a fast jet's wake leaves it anyway.
- *
- * Y stays on the centreline — the profile is sliced at y = 0 rather than taking
- * the nearest surface point in the round — so the attachment cannot drift
- * screen-left or screen-right as the aircraft turns. (The unconstrained nearest
- * point would put jet.glb's anchor 1.29 m off-axis.) Values are native model
- * units; callers scale them by Cesium's effective `computedScale`.
- *
- * Locked against the shipped GLBs by modelScale.test.mjs, which re-reads the
- * POSITION buffers and re-derives every property above — re-measure, never
- * re-guess, when an asset changes.
- */
-export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
-  '/models/airplane.glb': Object.freeze([24.0879, -2.2163, 0]),
-  '/models/jet.glb': Object.freeze([18.9103, 0.1266, 0]),
-  '/models/bell206.glb': Object.freeze([5.2077, -0.0005, 0]),
-  '/models/c172.glb': Object.freeze([3.6816, -0.2425, 0]),
-  '/models/citation2.glb': Object.freeze([6.8804, -0.6136, 0]),
-  '/models/mq9.glb': Object.freeze([5.1951, -1.1516, 0]),
-  '/models/b789.glb': Object.freeze([30.1007, -3.4814, 0]),
-  '/models/atr72.glb': Object.freeze([12.9785, -1.2935, 0]),
-});
 
 /** @constant Cesium's OWN axis correction for a glTF loaded with the
  *  `Model.fromGltfAsync` defaults (upAxis Y, forwardAxis Z), assembled from its
@@ -135,27 +76,6 @@ export function modelAnchorWorld(model, nativeAnchor, result) {
 }
 
 /**
- * Return the model-local visual centre for an approved bundled GLB.
- * Assets absent from the table were audited as origin-centred.
- * @param {string} url Bundled model URL.
- * @returns {readonly number[]} Cesium-local `[x, y, z]` native-unit offset.
- */
-export function visualCenterForModel(url) {
-  return MODEL_VISUAL_CENTER_NATIVE[url] || CENTERED_MODEL;
-}
-
-/**
- * Return the model-local aft-belly attachment point for a tracked trail.
- * Unknown future assets safely fall back to their visual centre until their
- * geometry is measured and added to the table.
- * @param {string} url Bundled model URL.
- * @returns {readonly number[]} Cesium-local `[x, y, z]` native-unit offset.
- */
-export function trailAnchorForModel(url) {
-  return MODEL_TRAIL_ANCHOR_NATIVE[url] || visualCenterForModel(url);
-}
-
-/**
  * Where a trail head segment should START being drawn: the whole segment, a
  * shortened piece of it, or nothing at all.
  *
@@ -171,7 +91,7 @@ export function trailAnchorForModel(url) {
  * mistake matters:
  *
  *  - Testing segment LENGTH against the radius hid real trail. With
- *    `airplane.glb`'s 34.41 m radius and 24.09 m tail anchor, a prior fix 58 m
+ *    an airliner model's 34.41 m radius and 24.09 m tail anchor, a prior fix 58 m
  *    aft gives a 33.98 m segment — under the radius, so suppressed — even
  *    though ~23.6 m of it is in open air behind the aircraft. It also made the
  *    whole segment pop in at once on crossing ~58.4 m.
