@@ -29,7 +29,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.well-record-dialog { position: fixed; inset: 0; margin: auto; width: min(28rem, calc(100vw - 32px)); box-sizing: border-box; font: 12px/1.5 var(--font-mono, monospace); background: #0b1018; color: #dbe4ea; border: 1px solid #33434c; border-radius: 12px; padding: 16px; max-height: 75vh; overflow: auto; }
+.well-record-dialog { position: fixed; inset: 0; margin: auto; width: min(28rem, calc(100vw - 32px)); box-sizing: border-box; font: 12px/1.5 var(--font-mono, monospace); background: var(--menu-bg); color: var(--text-primary); border: 1px solid var(--glass-border-hover); border-radius: 12px; padding: 16px; max-height: 75vh; overflow: auto; }
 h3 { font-size: 14px; margin: 0 0 8px; }
 select { max-width: 100%; }
 </style>

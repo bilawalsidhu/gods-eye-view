@@ -11,236 +11,44 @@ import {
   _setTrackedOverlayHostForTest,
 } from '../data/trackedReadout.js';
 import { getSelectedEntityContext } from '../data/contextStore.js';
-import { claimPointer, releasePointer } from '../data/inputOwnership.js';
-import {
-  usgwdPack,
-  usgwdRecord,
-} from '../layers/usGroundwater/records.fixture.mjs';
+import { findPickOwner } from '../data/pickRegistry.js';
 
-/** A small in-memory Rainfolk-shaped source: six Texas records. */
-const createFixtureWellSource = () => ({
-  label: 'Rainfolk',
-  viewport: true,
-  getSnapshot: async () => ({
-    ...usgwdPack(
-      Array.from({ length: 6 }, (_, i) =>
-        usgwdRecord(i + 1, {
-          lon: -97.74 + i * 0.01,
-          lat: 30.27,
-          depthFt: 21 + i,
-        }),
-      ),
-      { description: 'Partial Rainfolk source records' },
-    ),
-    catalogTotal: 6,
-  }),
-});
-const recordId = (n) => `USGWD-${'a'.repeat(64)}-SYN_${n}`;
-import { createUsGroundwaterLayer } from '../layers/usGroundwater/index.js';
+// The shared selection store and the card bridge live on window.
+globalThis.window ??= new EventTarget();
+globalThis.document ??= { querySelector: () => null };
 
-test('standalone wells use the viewport source without fetching on construction', () => {
-  const old = globalThis.location;
-  try {
-    globalThis.location = new URL('http://localhost/?wellPilot=indexed');
-    assert.equal(
-      createStandaloneLayerSources()['us-groundwater'].viewport,
-      true,
-    );
-  } finally {
-    globalThis.location = old;
-  }
-});
-
-test('wheel motion requests current detail before moveEnd, preserves last good data and releases sensitivity on OFF', async () => {
-  const f = fixtureViewer();
-  f.viewer.camera.changed = new Cesium.Event();
-  f.viewer.camera.percentageChanged = 0.5;
-  let bounds = Cesium.Rectangle.fromDegrees(-125, 24, -66, 50);
-  f.viewer.camera.computeViewRectangle = () => bounds;
-  const sample = await createFixtureWellSource().getSnapshot();
-  const requests = [];
-  const layer = createUsGroundwaterLayer({
-    source: {
-      viewport: true,
-      getSnapshot(options) {
-        if (!requests.length) {
-          requests.push(options);
-          return Promise.resolve(sample);
-        }
-        return new Promise((resolve) => requests.push({ ...options, resolve }));
-      },
-    },
-  });
-  layer.init(f.viewer);
-  try {
-    await layer.enable();
-    assert.equal(f.viewer.camera.percentageChanged, 0.05);
-    const original = layer.getRecords();
-    for (let i = 0; i < 12; i++) f.viewer.camera.changed.raiseEvent(0.06);
-    assert.equal(layer.getStats().loading, true);
-    await new Promise((resolve) => setTimeout(resolve, 230));
-    assert.equal(
-      requests.length,
-      2,
-      'motion is throttled, not postponed until stopping',
-    );
-    assert.deepEqual(
-      layer.getRecords(),
-      original,
-      'pending work keeps real last-good locations',
-    );
-    bounds = Cesium.Rectangle.fromDegrees(-150, 29, -149, 30);
-    requests[1].resolve({ ...sample, records: [] });
-    await new Promise(setImmediate);
-    assert.deepEqual(
-      layer.getRecords(),
-      original,
-      'completion for an obsolete camera cannot blank the display',
-    );
-    f.viewer.camera.changed.raiseEvent(0.06);
-    f.viewer.camera.moveEnd.raiseEvent();
-    assert.equal(requests.length, 3, 'settled view starts immediately');
-    layer.disable();
-    assert.equal(requests[2].signal.aborted, true);
-    assert.equal(f.viewer.camera.percentageChanged, 0.5);
-    requests[2].resolve(sample);
-    await new Promise((resolve) => setTimeout(resolve, 230));
-    assert.equal(requests.length, 3, 'OFF cancels the trailing timer');
-    assert.equal(layer.getStats().representedLocationCount, 0);
-  } finally {
-    layer.destroy();
-  }
-});
-
-test('manifest catalog count survives pan, zoom and OFF while map representation changes', async () => {
-  const f = fixtureViewer();
-  const detail = await createFixtureWellSource().getSnapshot();
-  detail.catalogTotal = 1042777;
-  detail.coverage.indexed = true;
-  detail.records = detail.records.slice(0, 1);
-  const counts = {
-    schemaVersion: 1,
-    kind: 'gev-well-count-view',
-    total: 1042777,
-    degrees: 2,
-    coverageComplete: false,
-    reason: 'test',
-    cells: [{ bounds: [-104, 28, -102, 30], count: 7200 }],
-  };
-  const views = [counts, detail, counts];
-  const layer = createUsGroundwaterLayer({
-    source: {
-      viewport: true,
-      async getSnapshot() {
-        return views.shift() ?? counts;
-      },
-    },
-  });
-  layer.init(f.viewer);
-  try {
-    assert.equal(await layer.enable(), true);
-    assert.equal(layer.getStats().count, 1042777);
-    assert.equal(layer.getStats().representedLocationCount, 7200);
-    f.viewer.camera.positionCartographic.height = 1000;
-    f.viewer.camera.moveEnd.raiseEvent();
-    await new Promise(setImmediate);
-    assert.equal(layer.getStats().catalogCount, 1042777);
-    assert.equal(layer.getStats().representedLocationCount, 1);
-    const dot = f.viewer.dataSources.get(0).entities.values[0];
-    assert.equal(
-      dot.billboard.width.getValue(),
-      12,
-      'detail after aggregate transition has explicit dot dimensions',
-    );
-    assert.equal(dot.billboard.height.getValue(), 12);
-    assert.equal(
-      dot.point,
-      undefined,
-      'do not reuse clamped PointVisualizer dimensions',
-    );
-    f.viewer.camera.positionCartographic.height = 6000000;
-    f.viewer.camera.moveEnd.raiseEvent();
-    await new Promise(setImmediate);
-    assert.equal(layer.getStats().count, 1042777);
-    assert.equal(layer.getStats().representedLocationCount, 7200);
-    layer.disable();
-    assert.equal(layer.getStats().count, 1042777);
-    assert.equal(layer.getStats().representedLocationCount, 0);
-    assert.equal(await layer.enable(), true);
-    assert.equal(layer.getStats().count, 1042777);
-  } finally {
-    layer.destroy();
-  }
-});
-
-test('main layer viewport lifecycle ignores stale packs and cancels disabled loads', async () => {
-  const fixture = fixtureViewer();
-  const sample = await createFixtureWellSource().getSnapshot();
-  const requests = [];
-  const source = {
-    viewport: true,
-    getSnapshot: ({ signal, bounds }) => {
-      if (!requests.length) {
-        requests.push({ signal, bounds });
-        return Promise.resolve(sample);
-      }
-      return new Promise((resolve) =>
-        requests.push({ signal, bounds, resolve }),
-      );
-    },
-  };
-  const layer = createUsGroundwaterLayer({ source });
-  layer.init(fixture.viewer);
-  try {
-    assert.equal(await layer.enable(), true);
-    fixture.viewer.camera.moveEnd.raiseEvent();
-    fixture.viewer.camera.moveEnd.raiseEvent();
-    assert.equal(requests[1].signal.aborted, true);
-    const small = structuredClone(sample);
-    small.records = small.records.slice(0, 1);
-    delete small.catalogTotal;
-    requests[2].resolve(small);
-    await new Promise(setImmediate);
-    requests[1].resolve(sample);
-    await new Promise(setImmediate);
-    assert.equal(layer.getRecords().length, 1);
-    assert.equal(
-      layer.getStats().catalogCount,
-      null,
-      'a pack without a catalog total reports none',
-    );
-    fixture.viewer.camera.moveEnd.raiseEvent();
-    layer.disable();
-    assert.equal(requests[3].signal.aborted, true);
-    requests[3].resolve(sample);
-    await new Promise(setImmediate);
-    assert.equal(layer.getStats().visible, 0);
-    assert.equal(fixture.viewer.dataSources.length, 0);
-  } finally {
-    layer.destroy();
-  }
+const wells = Array.from({ length: 6 }, (_, i) => ({
+  id: `W${i + 1}`,
+  recordId: `TX${i + 1}`,
+  state: 'Texas',
+  longitude: -97.74 + i * 0.01,
+  latitude: 30.27,
+  depthFt: 21 + i,
+  capacityGpm: null,
+  screenDepthFt: null,
+  screenLengthFt: null,
+  constructedYear: null,
+  reportedYear: null,
+}));
+const fixtureSource = () => ({
+  getSnapshot: async () => ({ records: wells, total: 6, limited: false }),
 });
 
 function fixtureViewer() {
   const dataSources = new Cesium.DataSourceCollection();
-  const moveEnd = new Cesium.Event();
-  const listeners = new Set();
   const events = new Map();
   const canvas = {
+    clientWidth: 1440,
+    clientHeight: 900,
     disableRootEvents: true,
     onwheel: null,
     getBoundingClientRect: () => ({ left: 0, top: 0 }),
-    addEventListener(type, listener) {
-      listeners.add(listener);
-      events.set(type, listener);
-    },
-    removeEventListener(_type, listener) {
-      listeners.delete(listener);
-    },
+    addEventListener: (type, listener) => events.set(type, listener),
+    removeEventListener: (type) => events.delete(type),
   };
   return {
     dataSources,
-    listeners,
+    events,
     click() {
       const event = {
         button: 0,
@@ -248,31 +56,37 @@ function fixtureViewer() {
         clientY: 50,
         preventDefault() {},
       };
-      assert.ok(events.has('mousedown'), 'uses Cesium mouse input');
       events.get('mousedown')(event);
       events.get('mouseup')(event);
     },
     viewer: {
       dataSources,
       camera: {
-        computeViewRectangle: () =>
-          Cesium.Rectangle.fromDegrees(-125, 24, -66, 50),
-        // Keep the fixture records above the horizon; height separately drives the detail gate.
-        positionWC: Cesium.Cartesian3.fromDegrees(-96, 38, 9500000),
+        changed: new Cesium.Event(),
+        moveEnd: new Cesium.Event(),
+        percentageChanged: 0.5,
         positionCartographic: { height: 25000 },
-        moveEnd,
+        computeViewRectangle: () =>
+          Cesium.Rectangle.fromDegrees(-98, 30, -97, 31),
       },
-      scene: { canvas },
+      scene: {
+        canvas,
+        preRender: new Cesium.Event(),
+        globe: { getHeight: () => 430 },
+        requestRender() {},
+        pick: () => undefined,
+        cartesianToCanvasCoordinates: () => undefined,
+      },
     },
   };
 }
 
-test('main GEV catalog exposes the well layer through its lifecycle', async (t) => {
+function wellCatalog(t) {
   const lifetime = new AbortController();
-  t.after(async () => lifetime.abort());
-  const catalog = createApplicationCatalog({
+  t.after(() => lifetime.abort());
+  return createApplicationCatalog({
     sources: createStandaloneLayerSources({
-      'us-groundwater': createFixtureWellSource(),
+      'us-groundwater': fixtureSource(),
     }),
     signal: lifetime.signal,
     surface: createSurfaceServices({
@@ -281,18 +95,27 @@ test('main GEV catalog exposes the well layer through its lifecycle', async (t) 
       eventTarget: null,
     }),
   });
+}
+
+test('the standalone source is built without fetching anything', () => {
+  const fetched = globalThis.fetch;
+  globalThis.fetch = () => assert.fail('no request before the layer is on');
+  try {
+    const source = createStandaloneLayerSources()['us-groundwater'];
+    assert.equal(typeof source.getSnapshot, 'function');
+  } finally {
+    globalThis.fetch = fetched;
+  }
+});
+
+test('the catalog layer turns on and off through the layer manager', async (t) => {
+  const catalog = wellCatalog(t);
   const layer = catalog.get('us-groundwater');
   assert.ok(layer);
   assert.equal(catalog.getSourceAvailability('us-groundwater').available, true);
   assert.equal(catalog.metadata.find(({ id }) => id === layer.id)?.token, '03');
-  const viewer = fixtureViewer();
-  let renderRequests = 0;
-  viewer.viewer.scene.requestRender = () => {
-    renderRequests += 1;
-  };
-  const postRender = new Cesium.Event();
-  viewer.viewer.scene.postRender = postRender;
-  const manager = new LayerLifecycle(viewer.viewer, {
+  const fixture = fixtureViewer();
+  const manager = new LayerLifecycle(fixture.viewer, {
     getSourceAvailability: catalog.getSourceAvailability,
   });
   for (const item of catalog.layers) manager.register(item);
@@ -302,290 +125,66 @@ test('main GEV catalog exposes the well layer through its lifecycle', async (t) 
   const row = manager.getAll().find(({ id }) => id === 'us-groundwater');
   assert.equal(row.enabled, true);
   assert.equal(row.stats.count, 6);
-  assert.equal(row.stats.visible, 6);
-  assert.equal(row.stats.coverageComplete, false);
   assert.equal(row.stats.countLabel, '6');
-  assert.match(row.stats.coverage, /Partial Rainfolk/);
-  assert.equal(viewer.dataSources.length, 1);
-  assert.ok(
-    renderRequests > 0,
-    'enabling requests a frame in idle-render mode',
-  );
-  const beforeReady = renderRequests;
-  assert.equal(postRender.numberOfListeners, 2);
-  postRender.raiseEvent();
-  assert.equal(
-    renderRequests,
-    beforeReady + 1,
-    'one readiness frame after Cesium visualizer update',
-  );
-  assert.equal(
-    postRender.numberOfListeners,
-    1,
-    'only the live visibility gate remains after the readiness frame',
-  );
-  postRender.raiseEvent();
-  assert.equal(renderRequests, beforeReady + 1);
-  assert.deepEqual(
-    layer.getRecords().map(({ id }) => id),
-    [1, 2, 3, 4, 5, 6].map(recordId),
-  );
+  assert.equal(row.stats.visible, 6);
+  assert.equal(fixture.dataSources.get(0).entities.values.length, 6);
+  assert.equal(findPickOwner('us-groundwater:W4'), 'us-groundwater');
 
   assert.equal(await manager.setEnabled('us-groundwater', false), true);
-  assert.equal(viewer.dataSources.length, 0);
-  assert.equal(viewer.listeners.size, 0);
-  assert.ok(renderRequests > 1, 'disable requests a cleanup frame');
-  assert.equal(await manager.setEnabled('us-groundwater', true), true);
-  assert.equal(postRender.numberOfListeners, 2);
-  await manager.setEnabled('us-groundwater', false);
-  assert.equal(
-    postRender.numberOfListeners,
-    0,
-    'disable cancels the readiness callback',
-  );
-  const afterDisable = renderRequests;
-  postRender.raiseEvent();
-  assert.equal(
-    renderRequests,
-    afterDisable,
-    'disabled layer schedules no more frames',
-  );
+  assert.equal(fixture.dataSources.get(0).entities.values.length, 0);
+  assert.equal(fixture.events.size, 0, 'the click handler is released');
+  assert.equal(findPickOwner('us-groundwater:W4'), null);
+  assert.equal(fixture.viewer.camera.moveEnd.numberOfListeners, 0);
 });
 
-test('main catalog marker pick publishes well details to the actual shared card bridge', async (t) => {
-  const oldWindow = globalThis.window;
-  const oldDocument = globalThis.document;
-  globalThis.window = new EventTarget();
-  globalThis.document = { querySelector: () => null };
-  const lifetime = new AbortController();
+test('a picked well publishes its card through the shared tracked-card bridge', async (t) => {
   const writes = [];
-  const visible = [];
   const clears = [];
   _setTrackedOverlayHostForTest({
     setEntries: (id, entries) => writes.push({ id, entries }),
-    setVisible: (id, show) => visible.push({ id, show }),
+    setVisible: () => {},
     clearSource: (id) => clears.push(id),
   });
-  const catalog = createApplicationCatalog({
-    sources: createStandaloneLayerSources({
-      'us-groundwater': createFixtureWellSource(),
-    }),
-    signal: lifetime.signal,
-    surface: createSurfaceServices({
-      terrainSource: { getHeights: async () => [] },
-      signal: lifetime.signal,
-      eventTarget: null,
-    }),
-  });
-  const layer = catalog.get('us-groundwater');
+  const layer = wellCatalog(t).get('us-groundwater');
+  const fixture = fixtureViewer();
+  const viewer = fixture.viewer;
   t.after(() => {
     layer.destroy();
     destroyTrackedReadout();
     _setTrackedOverlayHostForTest();
-    lifetime.abort();
-    globalThis.window = oldWindow;
-    globalThis.document = oldDocument;
   });
-  const owned = fixtureViewer();
-  const viewer = owned.viewer;
-  viewer.scene.requestRender = () => {};
-  viewer.scene.globe = { getHeight: () => 430 };
   initTrackedReadout(viewer);
   layer.init(viewer);
-  assert.equal(await layer.enable(), true);
-  const ny = owned.dataSources
+  layer.enable();
+  assert.equal(await layer.update(), true);
+  const marker = fixture.dataSources
     .get(0)
-    .entities.getById(`us-groundwater:${recordId(4)}`);
-  assert.ok(ny, 'the source record participates in this fixture view');
-  viewer.scene.pick = () => ({ id: ny, primitive: {} });
+    .entities.getById('us-groundwater:W4');
+  viewer.scene.pick = () => ({ id: marker, primitive: {} });
 
-  const lease = claimPointer('draw');
-  try {
-    owned.click();
-    assert.equal(writes.length, 0, 'drawing owns the pointer');
-  } finally {
-    releasePointer(lease);
-  }
-  owned.click();
-  assert.equal(viewer.selectedEntity, ny);
-  assert.equal(getSelectedEntityContext().entity, ny);
+  fixture.click();
+  assert.equal(viewer.selectedEntity, marker);
+  assert.equal(getSelectedEntityContext().entity, marker);
   const published = writes.at(-1);
   assert.equal(published.id, 'tracked');
   const card = published.entries[0];
   assert.equal(card.title, 'Water well record');
-  assert.equal(card.paintLane, 'tracked');
-  assert.equal(card.protected, true);
-  assert.ok(
-    card.details.every((line) => line.length <= 68),
-    'well card lines stay within the native monospace card width',
-  );
-  assert.ok(visible.some(({ id, show }) => id === 'tracked' && show));
-  assert.match(card.details.join('\n'), /Well depth: 24 ft/);
-  assert.match(card.details.join('\n'), /not current performance/);
-  assert.match(card.details.join('\n'), /Source: USGWD SYN_4/);
-  const visual = Cesium.Cartographic.fromCartesian(card.position());
-  assert.ok(Math.abs(visual.height - 430) < 0.001);
+  assert.equal(card.accent, '#f5b942');
+  assert.deepEqual(card.details, [
+    'Well depth: 24 ft',
+    'Texas',
+    'Historical record; not current conditions.',
+    'Source: USGWD TX4',
+  ]);
+  const anchor = Cesium.Cartographic.fromCartesian(card.position());
+  assert.ok(Math.abs(anchor.height - 430) < 0.001);
 
-  const beforeMiss = writes.length;
+  const before = writes.length;
   viewer.scene.pick = () => ({ id: { id: 'another-layer' } });
-  owned.click();
-  assert.equal(writes.length, beforeMiss, 'unowned picks do not publish cards');
-  const beforeClear = clears.length;
+  fixture.click();
+  assert.equal(writes.length, before, 'another layer’s pick publishes nothing');
+
   layer.disable();
   assert.equal(getSelectedEntityContext(), null);
-  assert.ok(clears.length > beforeClear, 'disable clears the card host');
-  assert.equal(owned.listeners.size, 0);
-});
-test('camera movement during initial load, count/detail transitions and disposal never commit stale data', async (t) => {
-  // Cesium's mouse handler reads `document`; do not depend on test order.
-  const previousDocument = globalThis.document;
-  globalThis.document ??= { querySelector: () => null };
-  t.after(() => {
-    globalThis.document = previousDocument;
-  });
-  const f = fixtureViewer();
-  f.viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  const requests = [];
-  const source = {
-    viewport: true,
-    getSnapshot: ({ signal, bounds }) =>
-      new Promise((resolve, reject) =>
-        requests.push({ signal, bounds, resolve, reject }),
-      ),
-  };
-  const layer = createUsGroundwaterLayer({ source });
-  layer.init(f.viewer);
-  const starting = layer.enable();
-  await new Promise(setImmediate);
-  f.viewer.camera.computeViewRectangle = () =>
-    Cesium.Rectangle.fromDegrees(-104, 29, -103, 30);
-  f.viewer.camera.moveEnd.raiseEvent();
-  await new Promise(setImmediate);
-  assert.equal(requests[0].signal.aborted, true);
-  const sample = await createFixtureWellSource().getSnapshot();
-  sample.coverage.indexed = true;
-  sample.records = sample.records.slice(0, 1);
-  requests[1].resolve(sample);
-  await new Promise(setImmediate);
-  requests[0].resolve({ ...sample, records: [] });
-  assert.equal(await starting, true);
-  assert.equal(layer.getRecords().length, 1);
-  const counts = {
-    schemaVersion: 1,
-    kind: 'gev-well-count-view',
-    total: 10,
-    degrees: 2,
-    coverageComplete: false,
-    reason: 'test',
-    cells: [{ bounds: [-104, 28, -102, 30], count: 10 }],
-  };
-  f.viewer.camera.moveEnd.raiseEvent();
-  requests[2].resolve(counts);
-  await new Promise(setImmediate);
-  assert.equal(layer.getStats().count, 10);
-  assert.deepEqual(layer.getRecords(), []);
-  let drill;
-  f.viewer.camera.flyTo = (options) => {
-    drill = options.destination;
-  };
-  f.viewer.scene.pick = () => ({
-    id: f.viewer.dataSources.get(0).entities.values[0],
-  });
-  f.click();
-  assert.equal(
-    drill,
-    undefined,
-    'internal count evidence never triggers a camera flight',
-  );
-  assert.equal(f.viewer.scene.groundPrimitives.length, 0);
-  assert.equal(
-    f.viewer.dataSources.get(0).entities.values.length,
-    0,
-    'counts allocate no representative well',
-  );
-  f.viewer.camera.moveEnd.raiseEvent();
-  requests[3].reject(new Error('synthetic failure'));
-  await new Promise(setImmediate);
-  assert.equal(layer.getStats().count, 10);
-  f.viewer.camera.moveEnd.raiseEvent();
-  requests[4].resolve(sample);
-  await new Promise(setImmediate);
-  assert.equal(f.viewer.scene.groundPrimitives.length, 0);
-  layer.disable();
-  assert.equal(f.viewer.dataSources.length, 0);
-  assert.equal(f.viewer.camera.moveEnd.numberOfListeners, 0);
-  const again = layer.enable();
-  await new Promise(setImmediate);
-  requests[5].resolve(counts);
-  assert.equal(await again, true);
-  layer.destroy();
-  assert.equal(f.viewer.scene.groundPrimitives.length, 0);
-  assert.equal(f.viewer.dataSources.length, 0);
-});
-
-test('one enable operation follows repeated initial moves and settles the actual manager ON', async () => {
-  const f = fixtureViewer(),
-    requests = [];
-  const source = {
-    viewport: true,
-    getSnapshot: ({ signal, bounds }) =>
-      new Promise((resolve) => requests.push({ signal, bounds, resolve })),
-  };
-  const layer = createUsGroundwaterLayer({ source });
-  const manager = new LayerLifecycle(f.viewer);
-  manager.register(layer);
-  let settled = false;
-  const enabling = manager.setEnabled('us-groundwater', true).then((value) => {
-    settled = true;
-    return value;
-  });
-  await new Promise(setImmediate);
-  for (let i = 0; i < 3; i++) {
-    f.viewer.camera.computeViewRectangle = () =>
-      Cesium.Rectangle.fromDegrees(-104 + i * 0.1, 29, -103 + i * 0.1, 30);
-    f.viewer.camera.moveEnd.raiseEvent();
-    await new Promise(setImmediate);
-    assert.equal(requests[i].signal.aborted, true);
-    assert.equal(settled, false);
-  }
-  const pack = await createFixtureWellSource().getSnapshot();
-  requests[3].resolve(pack);
-  assert.equal(await enabling, true);
-  const row = manager.getAll().find((r) => r.id === 'us-groundwater');
-  assert.equal(row.enabled, true);
-  for (const old of requests.slice(0, 3)) old.resolve({ ...pack, records: [] });
-  await new Promise(setImmediate);
-  assert.equal(layer.getRecords().length, 6);
-  assert.equal(await manager.setEnabled('us-groundwater', false), true);
-  assert.equal(
-    manager.getAll().find((r) => r.id === 'us-groundwater').enabled,
-    false,
-  );
-  layer.destroy();
-});
-test('disable cancels the same pending enable promptly even when transport ignores abort', async () => {
-  const f = fixtureViewer(),
-    requests = [];
-  const layer = createUsGroundwaterLayer({
-    source: {
-      viewport: true,
-      getSnapshot: ({ signal }) =>
-        new Promise((resolve) => requests.push({ signal, resolve })),
-    },
-  });
-  layer.init(f.viewer);
-  const enabling = layer.enable();
-  await new Promise(setImmediate);
-  f.viewer.camera.moveEnd.raiseEvent();
-  await new Promise(setImmediate);
-  layer.disable();
-  assert.equal(await enabling, false);
-  assert.equal(requests[1].signal.aborted, true);
-  const pack = await createFixtureWellSource().getSnapshot();
-  for (const r of requests) r.resolve(pack);
-  await new Promise(setImmediate);
-  assert.equal(f.viewer.dataSources.length, 0);
-  assert.equal(f.viewer.camera.moveEnd.numberOfListeners, 0);
-  assert.deepEqual(layer.getRecords(), []);
-  layer.destroy();
+  assert.ok(clears.length > 0, 'turning the layer off clears the card');
 });

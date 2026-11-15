@@ -213,15 +213,16 @@ not toggle this layer yet (prompt budget, as for the airspace layer).
 ## Water Wells — Rainfolk USGWD
 
 The Infrastructure group includes **Water Wells** (`us-groundwater`, share-link
-token `03`), off by default. It loads Rainfolk's pinned, hash-verified 50-state
-USGWD release (`VITE_RAINFOLK_WELLS_RELEASE` overrides it; a change needs a
-rebuild) for the area in view. Below 50 km camera height it shows each source
-record as a hollow marker; clicking one opens the tracked card with available
-depth, reported capacity, construction years and source identity, and
-overlapping records open a small chooser. A view with more than 2,000 records
-shows none and reports "Detail limited"; counts are never drawn as clusters.
-Every index, tile and count file is checked against its SHA-256 before use.
-Credits and per-state notices are in
+token `03`), off by default. It loads Rainfolk's pinned 50-state USGWD release
+(`VITE_RAINFOLK_WELLS_RELEASE` overrides it; a change needs a rebuild) for the
+area in view. Every file is named by its SHA-256 and checked against it,
+starting from the pinned root index. Below 50 km camera height each source
+record is a hollow amber marker; clicking one opens the tracked card with the
+available depth, reported capacity, construction year and source identity, and
+overlapping records open a small chooser. Above 50 km nothing is loaded and
+the row reads "Zoom in to see wells". A view wider than 2° or holding more than
+2,000 records draws none and the row reads "Too many wells in this view; zoom
+in closer". Credits and per-state notices are in
 [US_GROUNDWATER_SOURCES.md](US_GROUNDWATER_SOURCES.md).
 
 ## Wildlife Sightings — iNaturalist and Acartia

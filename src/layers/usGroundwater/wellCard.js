@@ -1,6 +1,8 @@
-/** The native tactical card measures one string per line in its monospace font.
- * Supply bounded lines locally; do not change other layers' card layout.
- * Source URLs remain canonical in context metadata, with display-only breaks.
+import { formatNumber, t } from '../../i18n/index.js';
+
+/**
+ * The tracked card measures one string per line in its monospace font, so
+ * long lines are broken here rather than in the shared card layout.
  */
 export function wrapWellCardLine(value, limit = 68) {
   let text = String(value).trim();
@@ -15,8 +17,9 @@ export function wrapWellCardLine(value, limit = 68) {
   return lines;
 }
 
-/** Leave room for native tactical-card padding at the current canvas width.
- * The tracked detail font is 11px monospace; 7.2px per column is conservative.
+/**
+ * Columns that fit the card at this canvas width. The detail font is 11px
+ * monospace; 7.2px per column leaves room for the card's padding.
  */
 export function wellCardColumns(canvasWidth) {
   return Number.isFinite(canvasWidth) && canvasWidth > 0
@@ -24,46 +27,39 @@ export function wellCardColumns(canvasWidth) {
     : 68;
 }
 
-/** Short list/label text: the source dataset and its own record id. */
-export function wellRecordLabel(record) {
-  return `${record.source} ${record.metadata?.sourceRecordId || record.id}`;
+/** Short name for lists: the dataset and its own record id. */
+export function wellLabel(record) {
+  return `USGWD ${record.recordId}`;
 }
 
-export function wellDisplayName(record) {
-  return `USGWD ${record.metadata?.sourceRecordId || record.id}`;
-}
-
-/** Citizen-facing facts from admitted fields only; source quantities are historical reports. */
-export function historicalWellCardLines(record) {
+/** Card lines in the UI language, from the fields the record actually has. */
+export function wellCardLines(record) {
+  const number = (value) => formatNumber(value, { maximumFractionDigits: 2 });
   const lines = [];
-  for (const [field, label, unit] of [
-    ['Well Depth (Feet)', 'Well depth', 'ft'],
-    ['Well Capacity (GPM)', 'Reported capacity', 'gal/min'],
-    ['Screen Depth (Feet)', 'Screen depth', 'ft'],
-    ['Length of Screen (Feet)', 'Screen length', 'ft'],
-  ]) {
-    const q = record.metadata?.quantities?.[field];
-    if (
-      q?.quality === 'valid' &&
-      q.unit === unit &&
-      Number.isFinite(q.value) &&
-      q.value >= 0
-    )
-      lines.push(
-        `${label}: ${q.value.toLocaleString('en-US', { maximumSignificantDigits: 21 })} ${unit}`,
-      );
-  }
-  for (const [field, label] of [
-    ['Year Well was Constructed', 'Constructed'],
-    ['Year Reported', 'Reported'],
-  ]) {
-    const year = record.metadata?.sourceYears?.[field];
-    if (year?.precision === 'year' && /^[0-9]{4}$/.test(year.year))
-      lines.push(`${label}: ${year.year}`);
-  }
+  if (record.depthFt !== null)
+    lines.push(t('Well depth: {value} ft', { value: number(record.depthFt) }));
+  if (record.capacityGpm !== null)
+    lines.push(
+      t('Reported capacity: {value} gal/min', {
+        value: number(record.capacityGpm),
+      }),
+    );
+  if (record.screenDepthFt !== null)
+    lines.push(
+      t('Screen depth: {value} ft', { value: number(record.screenDepthFt) }),
+    );
+  if (record.screenLengthFt !== null)
+    lines.push(
+      t('Screen length: {value} ft', { value: number(record.screenLengthFt) }),
+    );
+  if (record.constructedYear)
+    lines.push(t('Constructed: {year}', { year: record.constructedYear }));
+  if (record.reportedYear)
+    lines.push(t('Reported: {year}', { year: record.reportedYear }));
   if (!lines.length)
-    lines.push('No usable size or capacity details available.');
-  lines.push('Historical source record; not current performance.');
-  lines.push(`Source: USGWD ${record.metadata?.sourceRecordId || record.id}`);
+    lines.push(t('No size or capacity details in this record.'));
+  if (record.state) lines.push(record.state);
+  lines.push(t('Historical record; not current conditions.'));
+  lines.push(t('Source: {value}', { value: wellLabel(record) }));
   return lines;
 }

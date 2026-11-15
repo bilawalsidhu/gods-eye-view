@@ -7,7 +7,7 @@ import { createWellRecordUi } from './wellRecordUi.js';
 import WellRecordsView from './views/WellRecordsView.vue';
 import { createRecordPicker } from '../layers/usGroundwater/recordPicker.js';
 
-test('Vue record actions retain keyed focus, navigate, reject disabled actions and release missing records', async () => {
+test('Vue record actions retain keyed focus, navigate and release missing records', async () => {
   const host = document.body.appendChild(document.createElement('div'));
   const actions = document.body.appendChild(document.createElement('div'));
   actions.id = 'world-overlay-actions';
@@ -21,7 +21,6 @@ test('Vue record actions retain keyed focus, navigate, reject disabled actions a
       { id: 'a', label: 'record a' },
       { id: 'b', label: 'record b' },
     ],
-    disabled: false,
     select: (id) => {
       selected = id;
     },
@@ -47,12 +46,6 @@ test('Vue record actions retain keyed focus, navigate, reject disabled actions a
   assert.equal(document.activeElement, second);
   second.click();
   assert.equal(selected, 'b');
-  selected = null;
-  ui.publishRecords({ ...view, disabled: true });
-  await nextTick();
-  second.click();
-  assert.equal(selected, null);
-  assert.equal(second.getAttribute('aria-disabled'), 'true');
   ui.publishRecords(null);
   await nextTick();
   assert.equal(document.activeElement, map);

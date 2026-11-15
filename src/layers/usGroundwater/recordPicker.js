@@ -1,11 +1,15 @@
 import * as Cesium from 'cesium';
-/** Resolve overlapping loaded records, never aggregate representatives. */
+
+const screenPoint = (viewer, entity) => {
+  const position = entity.position?.getValue?.(Cesium.JulianDate.now());
+  return position && viewer.scene.cartesianToCanvasCoordinates?.(position);
+};
+
+/** Well markers within `radius` pixels of a click, nearest first. */
 export function recordsAtPixel(viewer, entities, pixel, radius = 10) {
-  const now = Cesium.JulianDate.now();
   return entities
     .flatMap((entity) => {
-      const pos = entity.position?.getValue?.(now);
-      const point = pos && viewer.scene.cartesianToCanvasCoordinates?.(pos);
+      const point = screenPoint(viewer, entity);
       const distance = point
         ? Math.hypot(point.x - pixel.x, point.y - pixel.y)
         : Infinity;
@@ -16,9 +20,41 @@ export function recordsAtPixel(viewer, entities, pixel, radius = 10) {
         a.distance - b.distance ||
         String(a.entity.id).localeCompare(String(b.entity.id)),
     )
-    .map((x) => x.entity);
+    .map((hit) => hit.entity);
 }
-/** Portable owner publishes plain choices; the host owns their UI. */
+
+/** Up to `limit` well markers on the canvas, nearest its centre first. */
+export function recordsOnScreen(viewer, entities, limit = 50) {
+  const canvas = viewer.scene.canvas;
+  const width = canvas?.clientWidth;
+  const height = canvas?.clientHeight;
+  if (!(width > 0 && height > 0)) return [];
+  return entities
+    .flatMap((entity) => {
+      const point = screenPoint(viewer, entity);
+      return point &&
+        point.x >= 0 &&
+        point.y >= 0 &&
+        point.x <= width &&
+        point.y <= height
+        ? [
+            {
+              entity,
+              distance: Math.hypot(point.x - width / 2, point.y - height / 2),
+            },
+          ]
+        : [];
+    })
+    .sort(
+      (a, b) =>
+        a.distance - b.distance ||
+        String(a.entity.id).localeCompare(String(b.entity.id)),
+    )
+    .slice(0, limit)
+    .map((hit) => hit.entity);
+}
+
+/** Several records under one click: publish the choices; the host draws them. */
 export function createRecordPicker(onSelect, publishChoices = () => {}) {
   let generation = 0;
   function close() {
@@ -33,11 +69,7 @@ export function createRecordPicker(onSelect, publishChoices = () => {}) {
     publishChoices({
       records: entities.map((entity) => ({
         id: String(entity.id),
-        label:
-          entity.gevWellRecordLabel ||
-          entity.gevLabelModel?.title ||
-          entity.name ||
-          String(entity.id),
+        label: entity.name || String(entity.id),
       })),
       select(id) {
         if (current !== generation) return;
