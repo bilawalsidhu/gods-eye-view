@@ -1,6 +1,21 @@
+<script>
+import { ref as moduleRef } from 'vue';
+
+// The header buttons and the bar under the header are two instances that
+// share one finder.
+const finder = {
+  query: moduleRef(''),
+  show: moduleRef('all'),
+  searching: moduleRef(false),
+  filtering: moduleRef(false),
+  category: moduleRef(''),
+  categories: moduleRef([]),
+};
+</script>
+
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { t } from '../../../i18n/index.js';
+import { msg, t } from '../../../i18n/index.js';
 
 // Search and filter for the Data Layers list. The rows are rendered elsewhere
 // (LayerRows), so this works on the list as it stands: it marks rows that
@@ -11,27 +26,19 @@ const props = defineProps({
   part: { type: String, default: 'buttons' },
 });
 
-const state = globalThis.__gevLayerFinder ??= {
-  query: ref(''),
-  show: ref('all'),
-  searching: ref(false),
-  filtering: ref(false),
-  category: ref(''),
-  categories: ref([]),
-};
-const { query, show, searching, filtering, category, categories } = state;
+const { query, show, searching, filtering, category, categories } = finder;
 const input = ref(null);
 
 const SHOWS = [
-  { id: 'all', label: 'All layers' },
-  { id: 'on', label: 'On' },
-  { id: 'off', label: 'Off' },
+  { id: 'all', label: msg('All layers') },
+  { id: 'on', label: msg('On') },
+  { id: 'off', label: msg('Off') },
 ];
 
 function apply() {
   const list = document.getElementById('data-toggles');
   if (!list) return;
-  const q = query.value.trim().toLowerCase();
+  const q = query.value.trim().toLocaleLowerCase();
   let heading = null;
   let headingHasRows = false;
   let shown = 0;
@@ -48,7 +55,15 @@ function apply() {
       continue;
     }
     if (!el.classList.contains('data-toggle-row')) continue;
-    const name = `${el.dataset.layerName || ''} ${el.querySelector('.data-toggle-meta')?.textContent || ''}`.toLowerCase();
+    // The name on screen, in the UI language, and the English name too.
+    const name = [
+      el.querySelector('.data-name')?.textContent,
+      el.dataset.layerName,
+      el.querySelector('.data-toggle-meta')?.textContent,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase();
     const on = (el.querySelector('.data-toggle-btn')?.dataset.feedState || 'off') !== 'off';
     const match =
       (!q || name.includes(q)) &&
