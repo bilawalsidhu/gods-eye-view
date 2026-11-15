@@ -1,27 +1,82 @@
 import { msg, t } from '../../i18n/index.js';
 import {
   featureLabel,
+  featureParts,
   featureReference,
   normalizeFeatures,
 } from './geometry.js';
 import * as Cesium from 'cesium';
 
-const SOURCE_FEATURE_INDEX = '__gevSourceFeatureIndex';
-
-function indexedCollection(features) {
-  return {
-    type: 'FeatureCollection',
-    features: features.map((feature, index) => ({
-      ...feature,
-      properties: {
-        ...feature.properties,
-        [SOURCE_FEATURE_INDEX]: index,
-      },
-    })),
-  };
-}
+const toCartesian = ([lon, lat, height]) =>
+  Cesium.Cartesian3.fromDegrees(lon, lat, height ?? 0);
 
 export function createIngestion({ state, parts, source }) {
+  /**
+   * Turn the two feature collections into what rendering draws. Every part
+   * of a multipart feature is its own line or marker with its own pick
+   * record, all sharing the feature's reference; a feature gets one
+   * reference stem however many parts it has.
+   */
+  function describeScene(cableFeatures, landingFeatures) {
+    const lines = [];
+    const markers = [];
+    const references = [];
+    const add = (features, kind, style) => {
+      for (const feature of features) {
+        const reference = featureReference(feature);
+        if (!reference) continue;
+        const label = featureLabel(feature);
+        const base = Cesium.Cartesian3.fromDegrees(
+          reference.lon,
+          reference.lat,
+          0,
+        );
+        const drawn = featureParts(feature);
+        const pick = () =>
+          parts.interaction.registerPick({ kind, reference, label });
+        for (const line of drawn.lines)
+          lines.push({
+            info: pick(),
+            base,
+            positions: line.map(toCartesian),
+            color: style.lineColor(feature),
+            width: style.lineWidth,
+          });
+        for (const point of drawn.points)
+          markers.push({
+            info: pick(),
+            base,
+            position: toCartesian(point),
+            hasHeight: point.length > 2,
+            color: style.color,
+          });
+        references.push({
+          reference,
+          label,
+          kind,
+          color: style.color,
+          feature,
+        });
+      }
+    };
+    add(cableFeatures, 'cable', {
+      color: state.cableColor,
+      lineWidth: 2.5,
+      lineColor: (feature) => {
+        const css = feature?.properties?.color;
+        const color = css && Cesium.Color.fromCssColorString(String(css));
+        return (color || state.cableColor).withAlpha(0.92);
+      },
+    });
+    const landingLine = state.landingColor.withAlpha(0.9);
+    add(landingFeatures, 'landing-point', {
+      color: state.landingColor,
+      lineWidth: 2,
+      lineColor: () => landingLine,
+    });
+    return { lines, markers, references };
+  }
+
   async function load(viewer) {
     if (state._loading || state._loaded) return;
 
@@ -30,10 +85,10 @@ export function createIngestion({ state, parts, source }) {
     state._loadingLabel = t('loading...');
     // Ownership token (the militaryAwareness activationId pattern): a
     // disable/abort followed by a fresh enable starts a NEWER load while this
-    // one is still settling. The stale load must bail after every await and
+    // one is still settling. The stale load must bail after its await and
     // must never touch shared lifecycle state or the viewer it no longer
     // owns — clearing `_loading`/`_abort` for the successor is how duplicate
-    // or post-destroy data sources got added.
+    // or post-destroy primitives would get added.
     const generation = ++state._loadGeneration;
     const abort = new AbortController();
     state._abort = abort;
@@ -41,169 +96,33 @@ export function createIngestion({ state, parts, source }) {
       generation === state._loadGeneration && !abort.signal.aborted;
 
     try {
-      let cableJson = state._cachedCableJson;
-      let landingJson = state._cachedLandingJson;
-      if (!cableJson || !landingJson) {
-        ({ cables: cableJson, landingPoints: landingJson } = await source.fetch(
-          abort.signal,
-        ));
-        if (!owns()) return;
-        if (
-          !Array.isArray(cableJson?.features) ||
-          !Array.isArray(landingJson?.features)
-        ) {
-          throw new TypeError(
-            'A cable source must return cables and landingPoints GeoJSON collections',
-          );
-        }
-        state._cachedCableJson = cableJson;
-        state._cachedLandingJson = landingJson;
+      const { cables: cableJson, landingPoints: landingJson } =
+        await source.fetch(abort.signal);
+      // The fetch is the only await: everything after it runs in this one
+      // turn, so no disable or destroy can land between the ownership check
+      // and the primitives reaching the scene.
+      if (!owns()) return;
+      if (
+        !Array.isArray(cableJson?.features) ||
+        !Array.isArray(landingJson?.features)
+      ) {
+        throw new TypeError(
+          'A cable source must return cables and landingPoints GeoJSON collections',
+        );
       }
 
       const cableFeatures = normalizeFeatures(cableJson, 'cable');
       const landingFeatures = normalizeFeatures(landingJson, 'landing');
-
-      const cableDataSource = await Cesium.GeoJsonDataSource.load(
-        indexedCollection(cableFeatures),
-        {
-          clampToGround: true,
-          stroke: state.cableColor.withAlpha(0.95),
-          fill: state.cableColor.withAlpha(0.18),
-          strokeWidth: 2,
-          markerColor: state.cableColor,
-          markerSize: 6,
-        },
-      );
-      if (!owns()) return;
-      const landingDataSource = await Cesium.GeoJsonDataSource.load(
-        indexedCollection(landingFeatures),
-        {
-          clampToGround: true,
-          stroke: state.landingColor.withAlpha(0.9),
-          fill: state.landingColor.withAlpha(0.35),
-          strokeWidth: 2,
-          markerColor: state.landingColor,
-          markerSize: 6,
-        },
-      );
-      if (!owns()) return;
-
-      cableDataSource.name = `${source.label} Submarine Cables`;
-      landingDataSource.name = `${source.label} Landing Points`;
-      const referenceDataSource = new Cesium.CustomDataSource(
-        `${source.label} Cable References`,
-      );
-      const addedSources = [
-        cableDataSource,
-        landingDataSource,
-        referenceDataSource,
-      ];
-
-      // dataSources.add() is itself an await point: Cesium mutates the
-      // collection on a DEFERRED tick, so a disable/destroy racing this
-      // window finds nothing to remove and the adds still materialize
-      // afterwards. Await every add to settlement (allSettled so a partial
-      // failure cannot leave an unawaited add materializing later), then
-      // re-check ownership. Pinned teardown mechanism: disable/destroy never
-      // wait for in-flight adds — the stale generation's own post-await
-      // check here guarantees cleanup by removing exactly the sources THIS
-      // generation added.
-      const addResults = await Promise.allSettled([
-        viewer.dataSources.add(cableDataSource),
-        viewer.dataSources.add(landingDataSource),
-        viewer.dataSources.add(referenceDataSource),
-      ]);
-      const rejectedAdd = addResults.find(
-        (result) => result.status === 'rejected',
-      );
-      if (!owns() || rejectedAdd) {
-        // Compensate: every add has settled by now, so removal is effective
-        // (a remove inside the deferred window would have been a no-op).
-        // Remove EVERY generation-local source regardless of settle status:
-        // Cesium's add() pushes into the collection BEFORE raising
-        // dataSourceAdded, so a REJECTED add may still have landed its
-        // mutation. remove() of a never-added source is a harmless no-op.
-        for (const source of addedSources) {
-          try {
-            viewer.dataSources.remove(source, true);
-          } catch {
-            /* collection gone */
-          }
-        }
-        if (owns() && rejectedAdd) throw rejectedAdd.reason;
-        return;
+      try {
+        parts.rendering.buildScene(
+          viewer,
+          describeScene(cableFeatures, landingFeatures),
+        );
+      } catch (error) {
+        // Leave nothing half built in the scene.
+        parts.rendering.destroyScene(viewer);
+        throw error;
       }
-
-      // Await-free commit: the viewer accepted all three sources and this
-      // load still owns the lifecycle.
-      state._cableDataSource = cableDataSource;
-      state._landingDataSource = landingDataSource;
-      state._referenceDataSource = referenceDataSource;
-
-      const cableEntities = state._cableDataSource.entities.values;
-      const landingEntities = state._landingDataSource.entities.values;
-      state._pickByEntity = new WeakMap();
-      state._referenceRecords = [];
-      state._surfaceRecords = [];
-
-      // Cesium expands multipart geometry into several entities and suffixes
-      // colliding IDs. Its copied properties retain this source index even
-      // when a provider has no ID, so every segment keeps the right owner.
-      const cableReferences = new Set();
-      cableEntities.forEach((entity) => {
-        const index = entity.properties?.[SOURCE_FEATURE_INDEX]?.getValue();
-        const feature = cableFeatures[index];
-        const reference = featureReference(feature);
-        if (!reference) return;
-
-        parts.rendering.styleCableEntity(entity, feature);
-        parts.interaction.registerPickEntity(entity, {
-          kind: 'cable',
-          reference,
-          label: featureLabel(feature),
-        });
-        state._surfaceRecords.push({
-          entity,
-          base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
-        });
-        if (cableReferences.has(index)) return;
-        cableReferences.add(index);
-        parts.rendering.addReferenceStem({
-          reference,
-          label: featureLabel(feature),
-          kind: 'cable',
-          color: state.cableColor,
-          feature,
-        });
-      });
-
-      const landingReferences = new Set();
-      landingEntities.forEach((entity) => {
-        const index = entity.properties?.[SOURCE_FEATURE_INDEX]?.getValue();
-        const feature = landingFeatures[index];
-        const reference = featureReference(feature);
-        if (!reference) return;
-
-        parts.rendering.styleLandingEntity(entity, feature);
-        parts.interaction.registerPickEntity(entity, {
-          kind: 'landing-point',
-          reference,
-          label: featureLabel(feature),
-        });
-        state._surfaceRecords.push({
-          entity,
-          base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
-        });
-        if (landingReferences.has(index)) return;
-        landingReferences.add(index);
-        parts.rendering.addReferenceStem({
-          reference,
-          label: featureLabel(feature),
-          kind: 'landing-point',
-          color: state.landingColor,
-          feature,
-        });
-      });
 
       state._count = cableFeatures.length + landingFeatures.length;
       state._loaded = true;

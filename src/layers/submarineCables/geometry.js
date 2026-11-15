@@ -77,3 +77,58 @@ export function normalizeFeatures(json, kind) {
     };
   });
 }
+
+function partPosition(value) {
+  if (!Array.isArray(value)) return null;
+  const lon = Number(value[0]);
+  const lat = Number(value[1]);
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  const height = Number(value[2]);
+  return Number.isFinite(height) ? [lon, lat, height] : [lon, lat];
+}
+
+function collectParts(geometry, out) {
+  const coordinates = geometry?.coordinates;
+  switch (geometry?.type) {
+    case 'Point': {
+      const point = partPosition(coordinates);
+      if (point) out.points.push(point);
+      break;
+    }
+    case 'MultiPoint':
+      for (const value of coordinates || []) {
+        const point = partPosition(value);
+        if (point) out.points.push(point);
+      }
+      break;
+    case 'LineString': {
+      const line = (coordinates || []).map(partPosition).filter(Boolean);
+      if (line.length >= 2) out.lines.push(line);
+      break;
+    }
+    case 'MultiLineString':
+      for (const part of coordinates || []) {
+        const line = (part || []).map(partPosition).filter(Boolean);
+        if (line.length >= 2) out.lines.push(line);
+      }
+      break;
+    case 'GeometryCollection':
+      for (const child of geometry.geometries || []) collectParts(child, out);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * The parts of a feature the layer draws: every line of a LineString or
+ * MultiLineString and every point of a Point or MultiPoint, also inside a
+ * GeometryCollection. Each is [lon, lat] or [lon, lat, height] in degrees
+ * and metres. Polygons are not drawn.
+ * @returns {{lines:number[][][],points:number[][]}}
+ */
+export function featureParts(feature) {
+  const out = { lines: [], points: [] };
+  collectParts(feature?.geometry, out);
+  return out;
+}
