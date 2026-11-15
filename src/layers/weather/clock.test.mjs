@@ -367,7 +367,7 @@ test('weather clocks sharing a world: the last one destroyed leaves it live', ()
   assert.equal(world.isPlaying(), false);
 });
 
-test('each product’s frames are world clock coverage, and support the timeline while shown', (t) => {
+test('each product’s frames span world clock coverage, with no marks, and support the timeline while shown', (t) => {
   const { clock, world } = harness(t);
   assert.equal(world.coverage(), null);
   assert.equal(world.getState().supported, false);
@@ -377,11 +377,15 @@ test('each product’s frames are world clock coverage, and support the timeline
   assert.deepEqual(world.coverage(), {
     start: Date.parse(time(0)),
     end: Date.parse(time(10)),
-    marks: [0, 5, 10].map((m) => Date.parse(time(m))),
+    marks: [],
   });
   assert.equal(world.getState().supported, true);
   unregister();
-  assert.deepEqual(world.coverage().marks, [Date.parse(time(5))]);
+  assert.deepEqual(world.coverage(), {
+    start: Date.parse(time(5)),
+    end: Date.parse(time(5)),
+    marks: [],
+  });
   clock.destroy();
   assert.equal(world.coverage(), null);
   assert.equal(world.getState().supported, false);
@@ -394,10 +398,11 @@ test('a suspended product keeps its coverage, so the way back to live stays', (t
   radar.suspended = true;
   void clock.refresh();
   assert.equal(world.getState().supported, true);
-  assert.deepEqual(
-    world.coverage().marks,
-    [0, 10].map((m) => Date.parse(time(m))),
-  );
+  assert.deepEqual(world.coverage(), {
+    start: Date.parse(time(0)),
+    end: Date.parse(time(10)),
+    marks: [],
+  });
 });
 
 test('new frames reach the world clock through refresh', (t) => {

@@ -4,6 +4,34 @@ export const EARTHQUAKE_OVERLAY_COHORT_LIMIT = 96;
 export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
 
 /**
+ * The smallest magnitude the timeline marks. Most quakes are small shakes;
+ * M6 and up come about once every two days worldwide, so each is an event
+ * worth stepping to. The map still draws every quake.
+ */
+export const EARTHQUAKE_MARK_MAGNITUDE = 6;
+
+/**
+ * The time a world clock's timeline can show for `events` (`{mag, time}`,
+ * time in ms): the span of the quakes of EARTHQUAKE_MARK_MAGNITUDE and up,
+ * each one a mark, or null with none, so the layer never stretches the
+ * timeline past what its feed covers.
+ * @returns {{start: number, end: number, marks: number[]} | null}
+ */
+export function earthquakeCoverage(events) {
+  const marks = [
+    ...new Set(
+      events
+        .filter(
+          ({ mag, time }) =>
+            mag >= EARTHQUAKE_MARK_MAGNITUDE && Number.isFinite(time),
+        )
+        .map(({ time }) => time),
+    ),
+  ].sort((a, b) => a - b);
+  return marks.length ? { start: marks[0], end: marks.at(-1), marks } : null;
+}
+
+/**
  * Color by depth:
  *  - Shallow (<70km): Red
  *  - Intermediate (70-300km): Orange

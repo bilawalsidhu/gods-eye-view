@@ -294,10 +294,10 @@ const scrub = (event) => {
   }
   store.scrub(Number(event.target.value), viewLength());
 };
-// Arrows go to the previous or next mark (a launch, a frame), or a step along
-// the track as shown; Page keys take a tenth of it; Home and End go to the
-// ends of all of it. Plus and minus zoom, and zero shows it all; with a
-// modifier they are the browser's own zoom.
+// Arrows go to the previous or next mark (a launch, a strong earthquake), or
+// a step along the track as shown where there is none; Page keys take a tenth
+// of it; Home and End go to the ends of all of it. Plus and minus zoom, and
+// zero shows it all; with a modifier they are the browser's own zoom.
 const ZOOM_KEYS = ['+', '=', '-', '0'];
 const onKey = (event) => {
   if (ZOOM_KEYS.includes(event.key)) {

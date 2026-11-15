@@ -592,8 +592,12 @@ test('without a clock the layer keeps one of its own on the world clock and lets
   h.stages[0].finish();
   await update;
   assert.equal(worldClock.follows('weather-radar'), true);
-  for (const time of times)
-    assert.ok(worldClock.coverage().marks.includes(Date.parse(time)));
+  // The frames span the timeline's time; they are not marks on it.
+  assert.deepEqual(worldClock.coverage(), {
+    start: Date.parse(times[0]),
+    end: Date.parse(times.at(-1)),
+    marks: [],
+  });
   h.layer.setParams({ play: true });
   assert.equal(worldClock.isPlaying(), true);
   assert.equal(worldClock.getState().stepping, false);
@@ -616,7 +620,7 @@ test('without a clock the layer keeps one of its own on the world clock and lets
   assert.ok(h.clears() >= 1);
 });
 
-test('reduced motion offers no play; steps still move the world clock from mark to mark', async () => {
+test('reduced motion offers no play; steps still move the world clock from frame to frame', async () => {
   const h = layerHarness({ reducedMotion: true });
   const update = h.layer.update();
   await flush();
@@ -626,8 +630,8 @@ test('reduced motion offers no play; steps still move the world clock from mark 
     h.layer.getRowControls().chips.some((chip) => chip.id === 'play'),
     false,
   );
-  // As the timeline's arrow keys do, a step back from live goes to the
-  // newest frame, and the next one back to the frame before it.
+  // A step back from live goes to the newest frame, and the next one back
+  // to the frame before it.
   h.layer.setParams({ step: -1 });
   await flush();
   assert.equal(worldClock.now(), Date.parse(times[2]));
@@ -656,7 +660,7 @@ test('a row steps forward and plays from a past time through the world clock', a
   assert.equal(
     worldClock.now(),
     Date.parse(times[2]),
-    'no mark after the newest frame',
+    'no frame after the newest',
   );
   worldClock.seek(Date.parse(times[1]));
   await flush();
@@ -1829,8 +1833,8 @@ test('a row steps the world clock through every registered observation; missing 
       .chips.filter(({ id }) =>
         ['previous', 'play', 'next', 'latest'].includes(id),
       );
-  // As the timeline's arrow keys do, a step back from live goes to the
-  // newest frame, and the next one back to the frame before it.
+  // A step back from live goes to the newest frame, and the next one back
+  // to the frame before it.
   radar.layer.setParams({ step: -1 });
   await flush();
   assert.equal(clock.getState().target, times[2]);

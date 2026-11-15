@@ -1781,7 +1781,11 @@ Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
 its entities and request lifecycle; the application supplies the overlay host
 and snapshot source. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
-destroying the layer cancels pending work and ignores late results.
+destroying the layer cancels pending work and ignores late results. While on,
+the layer registers its quakes of magnitude 6 and up
+(`EARTHQUAKE_MARK_MAGNITUDE`) with the world clock as timeline marks, spanning
+only their own times, and none while off; the map still draws every M2.5+
+quake.
 
 ## Rendered-mesh floor readings — November 9, 2026
 
@@ -8533,9 +8537,13 @@ Weather combines the GFS/ECMWF surface forecast with three observation layers:
 NOAA Rain radar (CONUS), Satellite clouds (regional GOES or slower global infrared),
 and 15-minute lightning density (Americas and Pacific). One transient observed
 clock moves all enabled observation rows with the world clock; the world
-timeline is the only time control. Each product's advertised times are marks on
-that timeline, which its arrow keys step to; each product selects its nearest
-frame at or before the world time, never a future frame or an interpolation.
+timeline is the only time control. Each product's advertised times span time on
+that timeline but are not marks on it: the timeline marks only events (launches,
+and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
+step to those, or along the track where there are none. A weather row's `step`
+param goes to the previous or next weather frame. Each product selects its
+nearest frame at or before the world time, never a future frame or an
+interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
 3 hours for hourly global infrared, but never less than one and a half of the
 feed's median frame spacing over its latest frames, so a regional feed whose

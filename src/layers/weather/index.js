@@ -57,11 +57,12 @@ const utc = (value) =>
 
 /**
  * Move `world`, the world clock, as its timeline does: `play` toggles play
- * (from the start of the covered time when live), `latest` goes live, and
- * `step` (-1 or 1) goes to the previous or next mark, a weather frame among
- * them, as the timeline's arrow keys do.
+ * (from the start of the covered time when live) and `latest` goes live.
+ * `step` (-1 or 1) goes to the previous or next of `frames`, the weather
+ * frames; the timeline does not mark them, so this is the row's own way to
+ * step through them.
  */
-function moveWorldTime(world, { play, latest, step }) {
+function moveWorldTime(world, frames, { play, latest, step }) {
   if (!world) return;
   if (play === true) {
     const state = world.getState();
@@ -75,11 +76,14 @@ function moveWorldTime(world, { play, latest, step }) {
   if (latest === true) world.goLive();
   if (step === -1 || step === 1) {
     const at = world.getState().timeMs;
-    const marks = world.coverage()?.marks ?? [];
+    const times = frames
+      .map((time) => Date.parse(time))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
     const to =
       step < 0
-        ? marks.findLast((mark) => mark < at)
-        : marks.find((mark) => mark > at);
+        ? times.findLast((frame) => frame < at)
+        : times.find((frame) => frame > at);
     if (to === undefined) return;
     world.pause();
     world.seek(to);
@@ -485,8 +489,15 @@ export function createWeatherLayer({
         );
       }
       // Time is the world's: these move the world clock as its timeline
-      // does, and every layer that follows it moves along.
-      if (enabled) moveWorldTime(clock.world, params);
+      // does, and every layer that follows it moves along. A step goes
+      // through every shown observation's frames, and this row's own even
+      // while it is suspended.
+      if (enabled)
+        moveWorldTime(
+          clock.world,
+          [...clock.getTimeline(), ...(manifest?.times ?? [])],
+          params,
+        );
       notify();
     },
     getParams() {

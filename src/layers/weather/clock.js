@@ -198,11 +198,13 @@ export function createWeatherClock({
         throw new Error(`Duplicate weather product: ${product.id}`);
       const entry = { product, controller: null };
       registry.set(product.id, entry);
-      // The product moves with the world clock, and its frames are time the
-      // world clock's timeline can show while it is on, suspended or not, so
-      // the way back to live stays on screen. Both calls notify the world's
-      // listeners, which may destroy this clock: the release is in place
-      // first, and anything acquired after a destroy is let go at once.
+      // The product moves with the world clock, and the span of its frames is
+      // time the world clock's timeline can show while it is on, suspended or
+      // not, so the way back to live stays on screen. The frames are not
+      // marks: they come every few minutes, and the timeline marks only
+      // events. Both calls notify the world's listeners, which may destroy
+      // this clock: the release is in place first, and anything acquired
+      // after a destroy is let go at once.
       let unhold = null;
       let uncover = null;
       const release = () => {
@@ -216,9 +218,12 @@ export function createWeatherClock({
         uncover = world.register({
           id: product.id,
           coverage: () => {
-            const marks = timesFor(product).map((time) => Date.parse(time));
-            return marks.length
-              ? { start: marks[0], end: marks.at(-1), marks }
+            const times = timesFor(product);
+            return times.length
+              ? {
+                  start: Date.parse(times[0]),
+                  end: Date.parse(times.at(-1)),
+                }
               : null;
           },
         });
