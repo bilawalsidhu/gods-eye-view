@@ -10,7 +10,7 @@ import {
 const STEP = 10_000;
 const WALL = Date.UTC(2026, 10, 1, 12);
 
-function harness({ timeline = true, coverage } = {}) {
+function harness({ timeline = true, coverage, spanMs } = {}) {
   const t = {
     wall: WALL,
     mono: 1_000,
@@ -34,6 +34,7 @@ function harness({ timeline = true, coverage } = {}) {
       timeline: {
         coverage: () => span,
         stepMs: STEP,
+        ...(spanMs && { spanMs }),
         subscribe(listener) {
           coverageListeners.add(listener);
           return () => coverageListeners.delete(listener);
@@ -333,5 +334,217 @@ test('a source that tells of a better answer has the paused time loaded again, n
   for (const listener of h.coverageListeners) listener();
   await flush();
   assert.equal(loads(h.calls).length, live, 'live, nothing is loaded');
+  h.follower.stop();
+});
+
+test('with fixes either side, a move back within them asks for its step once, clearing nothing and holding nothing', async () => {
+  const SPAN = 5 * STEP;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  assert.equal(loads(h.calls).length, 1);
+  // Within the step loaded: the contacts move along their fixes.
+  h.clock.seek(at + STEP / 2);
+  h.clock.seek(at + 1_000);
+  await flush();
+  assert.equal(loads(h.calls).length, 1);
+  // Back two steps: the contacts move along their fixes, and the step there
+  // stands in for every contact once it loads, bringing back any that left
+  // after it. Nothing is cleared and play does not wait.
+  const before = h.calls.length;
+  h.clock.seek(at - 2 * STEP);
+  await flush();
+  assert.deepEqual(h.calls.slice(before), [
+    { type: 'load', atMs: at - 2 * STEP, replace: true },
+  ]);
+  assert.equal(h.clock.getState().buffering, false);
+  // Moving within that step while it loads asks for nothing more.
+  h.clock.seek(at - 2 * STEP + 1_000);
+  await flush();
+  assert.equal(loads(h.calls).length, 2);
+  await h.answer();
+  h.clock.seek(at - 2 * STEP + 2_000);
+  await flush();
+  assert.equal(loads(h.calls).length, 2);
+  // Playing on from there asks for the next step, as play does.
+  h.clock.play();
+  h.advance(STEP - 2_000);
+  h.clock.coverageChanged();
+  await flush();
+  assert.deepEqual(loads(h.calls).at(-1), {
+    type: 'load',
+    atMs: at - STEP,
+    replace: false,
+  });
+  await h.answer();
+  h.clock.pause();
+  // Paused past the outer half after the newest: the step there.
+  const newest = loads(h.calls).at(-1).atMs;
+  h.clock.seek(newest + 3 * STEP + 1_000);
+  await flush();
+  assert.deepEqual(loads(h.calls).at(-1), {
+    type: 'load',
+    atMs: newest + 3 * STEP,
+    replace: false,
+  });
+  await h.answer();
+  // Beyond the fixes is a jump: the time is shown afresh, play held.
+  h.clock.seek(at - 60 * STEP);
+  await flush();
+  assert.deepEqual(loads(h.calls).at(-1), {
+    type: 'load',
+    atMs: at - 60 * STEP,
+    replace: true,
+  });
+  h.follower.stop();
+});
+
+test('playing, a seek back within the fixes does not hold play on its step', async () => {
+  const SPAN = 5 * STEP;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.play();
+  h.clock.seek(at - 2 * STEP + 1_000);
+  await flush();
+  assert.equal(loads(h.calls).at(-1).atMs, at - 2 * STEP);
+  h.advance(STEP / 4);
+  h.clock.coverageChanged();
+  await flush();
+  assert.equal(h.clock.getState().buffering, false);
+  h.follower.stop();
+});
+
+test('without a span every move back is a jump', async () => {
+  const h = harness();
+  h.follower.start();
+  const at = WALL - 600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.seek(at - STEP);
+  await flush();
+  assert.deepEqual(loads(h.calls).at(-1), {
+    type: 'load',
+    atMs: at - STEP,
+    replace: true,
+  });
+  h.follower.stop();
+});
+
+test('a snapshot the loaded fixes do not reach starts the held stretch afresh', async () => {
+  const SPAN = 5 * STEP;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 1_200_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.play();
+  h.advance(100);
+  h.clock.coverageChanged();
+  await flush();
+  // The next step is slow: play goes on without it, far past the fixes.
+  h.advance(2 * STEP);
+  h.clock.coverageChanged();
+  h.advance(SNAPSHOT_WAIT_MS);
+  h.advance(30 * STEP);
+  h.clock.coverageChanged();
+  await h.answer();
+  const far = loads(h.calls).at(-1).atMs;
+  assert.ok(far > at + STEP + 2 * SPAN, 'asked for a step past the fixes');
+  assert.equal(
+    loads(h.calls).at(-1).replace,
+    true,
+    'in place of every contact',
+  );
+  await h.answer();
+  h.clock.pause();
+  // Back between the two: no snapshot's fixes cover it, so it is a jump.
+  h.clock.seek(at + SPAN + 2 * STEP);
+  await flush();
+  assert.equal(loads(h.calls).at(-1).replace, true);
+  h.follower.stop();
+});
+
+test('the held stretch is kept to the newest stretch every contact covers', async () => {
+  const SPAN = 5 * STEP;
+  const h = harness({
+    spanMs: SPAN,
+    coverage: { start: WALL - 6 * 3_600_000, end: WALL },
+  });
+  h.follower.start();
+  const at = WALL - 3 * 3_600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.play();
+  // Playing on for well over TIMELINE_HELD_MS, a step at a time.
+  for (let k = 0; k < 160; k++) {
+    h.advance(STEP);
+    h.clock.coverageChanged();
+    await flush();
+    while (h.pending.length) await h.answer(h.pending.length - 1);
+  }
+  h.clock.pause();
+  // Back to the first snapshot's time: past what is held, so a jump.
+  h.clock.seek(at);
+  await flush();
+  assert.equal(loads(h.calls).at(-1).replace, true);
+  h.follower.stop();
+});
+
+test('a step a move back asked for that the source drops is asked again', async () => {
+  const SPAN = 5 * STEP;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.seek(at - 2 * STEP);
+  await flush();
+  const asked = loads(h.calls).length;
+  h.pending
+    .shift()
+    .reject(Object.assign(new Error('dropped'), { name: 'AbortError' }));
+  await flush();
+  h.advance(SNAPSHOT_RETRY_MS);
+  await flush();
+  assert.equal(loads(h.calls).length, asked + 1);
+  assert.equal(loads(h.calls).at(-1).atMs, at - 2 * STEP);
+  h.follower.stop();
+});
+
+test('a step a move back asked for that fails clears nothing and is asked again while paused', async () => {
+  const SPAN = 5 * STEP;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 600_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.seek(at - 3 * STEP - 1_000);
+  await flush();
+  const asked = loads(h.calls).length;
+  await h.answer(0, false);
+  assert.equal(
+    h.calls.some((call) => call.type === 'clear'),
+    false,
+  );
+  h.advance(SNAPSHOT_RETRY_MS);
+  await flush();
+  assert.equal(loads(h.calls).length, asked + 1);
+  assert.deepEqual(loads(h.calls).at(-1), {
+    type: 'load',
+    atMs: at - 4 * STEP,
+    replace: true,
+  });
   h.follower.stop();
 });

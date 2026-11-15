@@ -385,9 +385,10 @@ in view while their placed position changes; one it holds still lets the
 render loop idle and is asked again each second, moving on once its placement
 does. A placed transit vehicle is drawn at its placed point, and a placed
 train where it is placed rather than on its bound railway line. Live vessels
-a provider places move on between refreshes: redrawn in place at most every
-250 ms, with a frame asked for each second while the provider places any
-drawn vessel, and none once the layer is off.
+a provider places move on between refreshes: redrawn in place every frame,
+with the next frame asked for as soon as the fastest drawn vessel will have
+moved half a pixel on screen, at least once a second while the provider places
+any drawn vessel, and none once the layer is off.
 
 Application catalog composition accepts an optional `streetLevelProviders` list.
 An explicit list replaces the default Mapillary provider; an empty list removes
@@ -1025,7 +1026,9 @@ other map content draws over the shells, and shells are not pickable. A
 map-source change tears down one renderer and restages the shown observation on
 the other. A map without an imagery host pauses history while metadata refresh
 continues, then resumes when a host returns.
-Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
+Globe tiled products use 256 px tiles to maximum level 6, or to the level a
+feed that supplies its own tiles names for the product (`frameMaximumLevel`,
+0–12; any other answer keeps 6). The tile proxy accepts
 size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
 24-hour immutable response and eight upstream slots. The image proxy serves every
 product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
@@ -1067,7 +1070,11 @@ open latest.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
-avoiding request-dependent contrast seams.
+avoiding request-dependent contrast seams. On globe hosts, a feed that supplies
+tiles and names a level for global infrared instead has it drawn from its tiles
+to that level,
+each tile given the same display transfer as regional infrared tiles, and no
+mosaic is read.
 On globe hosts, regional infrared retains network tiles and processes each
 decoded tile once; shells process each whole frame once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
@@ -2031,7 +2038,7 @@ layer's existing lifecycle and selection guards continue to reject late work.
 ### Following the world clock
 
 A source may declare a timeline: it can answer a snapshot at a given time.
-`source.timeline` is `{ coverage(), stepMs, subscribe? }`, validated by
+`source.timeline` is `{ coverage(), stepMs, spanMs?, subscribe? }`, validated by
 `readSnapshotTimeline` (`src/sources/live/contract.js`): `coverage()` returns
 the span `{ start, end }` in epoch ms it can answer, or null while it does not
 know yet; `stepMs` is the spacing of its snapshots; the optional
@@ -2054,7 +2061,8 @@ Playing, the layer stays a snapshot ahead of the time, and play does not pass a
 snapshot still loading for more than 8 seconds. Those snapshots apply as polls
 do, so contacts move on smoothly: aircraft are drawn at the clock's time
 rather than behind it, and vessels between two fixes move along the great
-circle, never past the newer one. Records, absences and the Layers panel's age
+circle, never past the newer one, redrawn every frame with frames asked for
+as for placed live vessels (vessels out of view move on every 250 ms). Records, absences and the Layers panel's age
 are judged at the clock's time. Outside the coverage the layer shows no
 contacts and loads nothing; while the coverage is unknown it loads nothing and
 clears nothing. A snapshot that fails clears the time and is asked again after
@@ -2063,6 +2071,20 @@ failure, and nothing is cleared. A layer has one snapshot loading at a time:
 the older is aborted before a newer starts. Moving the view while vessels follow the clock asks for the new
 area at the same time. Back at live the contacts are cleared and the layer
 polls at once.
+
+A timeline may also declare `spanMs`: each record of a snapshot at a time then
+carries `fixes`, `{ atMs, lat, lon, altitudeM? }` in time order, its own track
+from `spanMs` before the time to `spanMs` after it
+(`src/time/timelineFixes.js`). The layer places each contact on its fixes at
+the clock's time, so a seek or a move back that stays within the fixes the
+loaded snapshots carry is no jump: nothing is cleared, play does not wait,
+and contacts move to the time smoothly. The snapshot at a step before the
+newest loaded is asked for once and then stands in for every contact: it
+brings back any that had left after it and drops those not there yet, while
+those it has keep their place, as their fixes put them. Paused, a time nearing
+the end of the fixes after the newest asks for the snapshot there. A contact is not drawn more than a minute before its first
+fix, as it was not there yet. Each contact keeps at most 240 fixes, at least
+20 seconds apart, and the loaded snapshot times span at most 20 minutes.
 
 A snapshot at `atMs` describes the world as it stood then: `observedAtMs` is
 at or before `atMs`, no record is observed later than `atMs`, freshness and
@@ -5027,8 +5049,8 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   Cesium entity carries no label graphic.
 > - **Phase 5 ISS and tracked-satellite labels:** The ISS path and large red
 >   point remain native, while persistent `ISS` text is a one-entry moving
->   ambient-label host source. Its getter reads the already-propagated point
->   cache, preserving the 1 Hz fleet epoch and eliminating the former second ISS
+>   ambient-label host source. Its getter reads the point's own position, which
+>   moves every frame, eliminating the former second ISS
 >   propagation. Satellite tracking continues to publish exactly one protected
 >   tracked-lane card through its entity record's `labelModel` and `_trackedDisplayCached`; the
 >   tracked entity is point-only. Tracking ISS suppresses the ambient entry and
@@ -7109,7 +7131,7 @@ silently demoting every later lookup for the session.
   `activeCameraCardEnabled` presentation option can publish the retained
   protected-card path. Disable tears the tier down completely.
   Coverage/viewshed semantics unchanged.
-- **Satellites**: orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
+- **Satellites**: every point moves every frame. Each satellite's SGP4 sample (position, velocity, gravity and its rate of change; `src/layers/satellites/motion.js`) is reckoned forward or back to the world time and turned into the Earth-fixed frame, so points glide at any play speed instead of stepping once a second. Core satellites take a fresh sample every second, or as soon as the world time is 30 s from their sample (fast play, a seek), which keeps every point within about 10 m of SGP4; Starlink extras are sampled round-robin, more per frame the faster time plays, and a point more than two minutes from its sample waits for the next one. Hidden points are not moved until shown. Orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
 - **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer selects the unified right-side Context panel's Space Missions mode and enables the required satellite layer. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from either Context or the left Data Layers rail restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills that same panel with navigation/details, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable; its text is non-interactive shared-host presentation. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Both the loaded-catalog and active-TLE lookups read the launch year from the TLE international designator through one parser (`src/sources/tle.js`); a blank or malformed designator is an unknown year, which skips the year check rather than rejecting the match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
   When no mission is selected, the Context panel presents a scrollable newest-first roster of every launch in the rolling window, including the smaller 5 px operator-colored marker, provider, and launch date. Hovering or keyboard-focusing a row shows four compact cyan corner brackets on both that roster row and its corresponding globe dot, rotates the globe at the current zoom to center it, and gives its label declutter priority without selecting it; the globe label remains unbracketed. Selecting a roster row invokes the same mission isolation and full-orbit framing as clicking its globe marker. The replay vehicle is one screen-space SVG/CSS HUD overlay rather than separate Cesium billboard, label, and reticle graphics. It is hidden during ordinary Focus and manual close views, where the standard selected launch-site label remains visible, and exists only while ascent replay is active. Its fixed pixel scale is shared by ascent and insertion, so camera range never resizes the rocket on screen before the phase boundary. Generic Launch Library pad names are reduced to their identifying suffix, and replay timestamps use a cyan state title over unprefixed white UTC date/time values. `REPLAY ASCENT` holds the unframed cyan/white rocket at the pad for a real-time `T−10` countdown, transitions through `LIFTOFF`, and attaches six tapered cyan/white ellipse waves directly below it from liftoff through insertion to convey thrust without adding scene geometry. While replay is active, the single start button is replaced by compact Play, Pause, and Cancel icon controls. Pause freezes countdown or mission time, vehicle/stage positions, camera target, labels, and thrust-wave animation; Play resumes from that exact frame, and Cancel releases replay camera ownership. The rocket and thrust group rotates from the path's live screen-space tangent, so its nose follows the visible ascent curve while the adjacent text remains upright. The camera begins as a close oblique launch chase, then smoothly widens between roughly 120 and 420 km vehicle altitude into a higher oblique context view that keeps the moving rocket targeted while exposing the ascent bend and orbit connection. At insertion the rocket/thrust glyph is replaced by the fixed-size cyan orbit dot, which the camera follows through the existing globe-scale orbit pullback. The chase camera limits per-frame yaw changes across heading wraps so it cannot abruptly cross in front of the vehicle and make ascent read in reverse; the replay-speed slider affects mission playback but not countdown duration.
   Mission world text has no native `LabelGraphics`: overview launch markers publish at most 48 ambient candidates for a 24-winner budget, while selecting a mission clears that overview source and publishes its launch-site callout, stage re-entry annotations, live/estimated payload-position readout, and orbit annotation as protected selected-lane entries. The source retains the exact former strings and colors. Static anchors reuse the Cartesian values used to build their mission geometry; the moving payload entry reads the layer's per-frame live-position cache; catalog-backed orbit annotation positions are cached in the same one-second matrix update that realigns the orbit primitive. Keyhole edge fade, horizon culling, final collision placement, and UI exclusion are owned by the shared host. Deselect restores the bounded overview, and refresh, disable, and destroy replace or clear both mission sources.
@@ -8374,7 +8396,7 @@ The Space Missions roster prioritizes data-rich records using available mission,
 When no live catalog track is available, the mission view marks the approximate orbital ring as `PROJECTED ORBIT` in purple and renders the ascent-to-insertion transfer in green; catalog-backed satellite orbits remain cyan.
 
 The replay vehicle is a smaller solid cyan silhouette without the former orange flame; its initial pad anchor uses photoreal terrain, globe height, or launch elevation fallback so it remains above the surface during tile loading. Replay begins at a close launch-complex range so pad detail remains visible before the camera widens into the ascent context view. Its initial camera heading is perpendicular to the ascent/orbit direction for a profile view, then eases into tangent tracking. Small screen-space reprojection changes are damped for the animated marker on both ascent and orbit, while large camera or phase changes snap to the authoritative path position.
-Space Missions keeps the Satellite layer available for catalog/TLE matching but suppresses its standalone fleet points and orbit rings. While those visuals are hidden, their per-frame dense propagation, one-second core point-buffer rewrite, and one-second orbit-matrix rotation are suspended; selected mission telemetry continues to propagate independently. The selected mission's live or estimated satellite marker uses fractional wall-clock time, so it moves continuously rather than creating a once-per-second position discontinuity and one-frame photoreal globe LOD pulse.
+Space Missions keeps the Satellite layer available for catalog/TLE matching but suppresses its standalone fleet points and orbit rings. While those visuals are hidden, their sampling, per-frame point moves, and one-second orbit-matrix rotation are suspended; selected mission telemetry continues to propagate independently. The selected mission's live or estimated satellite marker uses fractional wall-clock time, so it moves continuously rather than creating a once-per-second position discontinuity and one-frame photoreal globe LOD pulse.
 
 During ascent replay, the camera, Cesium callbacks, and HTML vehicle overlay share one replay sample per rendered frame. The tracked overlay is projected directly from that shared position instead of applying a second screen-space lag filter, preventing the vehicle and globe from repeatedly advancing and snapping back.
 

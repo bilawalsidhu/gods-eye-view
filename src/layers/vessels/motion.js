@@ -1,14 +1,39 @@
 /**
  * Where a vessel is at world time `tMs` while the layer follows the world
- * clock: between the fix it moved from and the fix it moved to, along the
- * great circle; at the earlier fix before it, at the newer fix after it. A
- * vessel is never projected past its newest fix.
+ * clock: on its own fixes around the time when its record carries them
+ * (`fixes`, see src/time/timelineFixes.js), else between the fix it moved
+ * from and the fix it moved to; along the great circle between two fixes, at
+ * the first before them and at the last after them. A vessel is never
+ * projected past its newest fix.
  * @param {{lat: number, lon: number, motion?: {fromLat: number, fromLon: number,
  *   fromMs: number, toLat: number, toLon: number, toMs: number}|null}} record
  * @param {number} tMs
  * @returns {{lat: number, lon: number}}
  */
 export function vesselPositionAt(record, tMs) {
+  const fixes = record?.fixes;
+  if (fixes?.length >= 2 && Number.isFinite(tMs)) {
+    const first = fixes[0];
+    const last = fixes[fixes.length - 1];
+    if (tMs <= first.atMs) return { lat: first.lat, lon: first.lon };
+    if (tMs >= last.atMs) return { lat: last.lat, lon: last.lon };
+    let low = 1;
+    let high = fixes.length - 1;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (fixes[mid].atMs < tMs) low = mid + 1;
+      else high = mid;
+    }
+    const a = fixes[low - 1];
+    const b = fixes[low];
+    return greatCircleAt(
+      a.lat,
+      a.lon,
+      b.lat,
+      b.lon,
+      b.atMs > a.atMs ? (tMs - a.atMs) / (b.atMs - a.atMs) : 1,
+    );
+  }
   const motion = record?.motion;
   if (
     !motion ||
@@ -59,4 +84,29 @@ function unit(lat, lon) {
     Math.cos(phi) * Math.sin(lambda),
     Math.sin(phi),
   ];
+}
+
+// Whether each fixes array moves, read once per array: records keep theirs
+// until a snapshot brings new ones.
+const moving = new WeakMap();
+
+/**
+ * Whether a vessel's fixes (`record.fixes`) put it in more than one place,
+ * so following the clock moves it; a moored vessel's do not.
+ * @param {Array<{lat: number, lon: number}>|null|undefined} fixes
+ * @returns {boolean}
+ */
+export function fixesMove(fixes) {
+  if (!fixes?.length) return false;
+  let moves = moving.get(fixes);
+  if (moves === undefined) {
+    const [first] = fixes;
+    moves = fixes.some(
+      (fix) =>
+        Math.abs(fix.lat - first.lat) > 1e-6 ||
+        Math.abs(fix.lon - first.lon) > 1e-6,
+    );
+    moving.set(fixes, moves);
+  }
+  return moves;
 }

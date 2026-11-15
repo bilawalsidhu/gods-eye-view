@@ -66,11 +66,10 @@ export function createTracking({
         continue;
       visual.position = components.rendering.anchorPosition(record);
       components.rendering.syncRecordIcon(record);
-      // A placed vessel is drawn again at its placement on the next pass.
-      if (services.placement) {
-        visual.drawnLat = NaN;
-        visual.drawnLon = NaN;
-      }
+      // A moving vessel is drawn again where it is on the next pass.
+      visual.drawnLat = NaN;
+      visual.drawnLon = NaN;
+      visual.followedAtMs = undefined;
     }
     // The rows moved with no poll behind them: draw the frame that shows it.
     governorRequestRender('ais-vessels-refloor');

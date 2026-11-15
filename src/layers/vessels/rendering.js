@@ -9,7 +9,7 @@ import {
 } from '../../data/vesselLabels.js';
 import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import { horizonFrom, liftedForHorizon } from '../../geo/horizon.js';
-import { distance, distanceSquared } from '../../geo/vector.js';
+import { copyInto, distance, distanceSquared, vec } from '../../geo/vector.js';
 import {
   canvasOf,
   drawOf,
@@ -29,7 +29,8 @@ import {
   CARD_MIN_SEP_PX,
   followsClock,
 } from './policy.js';
-import { vesselPositionAt } from './motion.js';
+import { fixesMove, vesselPositionAt } from './motion.js';
+import { TIMELINE_UNSEEN_MS } from '../../time/timelineFixes.js';
 import {
   fleetModelSet,
   loadFleetModelSet,
@@ -38,10 +39,15 @@ import {
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 import { isAidToNavigation } from '../../data/vesselTypes.js';
 
-/** How often vessels move on as the world clock plays (wall ms). */
-const FOLLOW_POSITION_MS = 250;
-/** A frame is asked for this often while a placement moves live vessels. */
+/** A moving vessel's next frame is asked for once it would move this far on
+ * screen (pixels), so it glides when it moves visibly and the scene idles
+ * when it does not. */
+const VESSEL_STEP_PX = 0.5;
+/** A frame is asked for at least this often while any drawn vessel moves. */
 const PLACEMENT_FRAME_MS = 1000;
+/** How often vessels not drawn move on as the world clock plays (wall ms),
+ * so one that comes into view is judged where it is. */
+const HIDDEN_FOLLOW_MS = 250;
 
 /** The ship artwork's own raster size (px). */
 const SHIP_ICON_PX = 32;
@@ -50,6 +56,9 @@ let instances = 0;
 
 /** How often the vessels near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
+
+/** Scratch for where a moved vessel was drawn. */
+const _movedFrom = vec();
 
 export function createRendering({
   vesselState,
@@ -87,10 +96,8 @@ export function createRendering({
     visual.position = anchorAt(lat, lon);
     // A ship model's origin is its waterline: the sea surface, unlifted.
     visual.waterline = anchorAt(lat, lon, 0);
-    if (services.placement) {
-      visual.drawnLat = lat;
-      visual.drawnLon = lon;
-    }
+    visual.drawnLat = lat;
+    visual.drawnLon = lon;
     return visual;
   }
 
@@ -255,10 +262,13 @@ export function createRendering({
   function iconItem(record, visual) {
     const selected = record === state.selectedRecord;
     const courseDeg = vesselCourseDeg(record);
+    // Following the clock, not there yet at the time drawn.
+    visual.seen = seenYet(record);
     return {
       id: visual.iconId,
-      // Hidden while the bridge camera rides it, or its model draws it.
-      show: !isCockpitSubject(record) && !visual.modelOwnsVisual,
+      // Hidden while the bridge camera rides it, its model draws it, or it
+      // is not there yet.
+      show: !isCockpitSubject(record) && !visual.modelOwnsVisual && visual.seen,
       pos: visual.position,
       image: shipIcon(record, selected),
       size: [SHIP_ICON_PX, SHIP_ICON_PX],
@@ -289,7 +299,7 @@ export function createRendering({
     state.icons.put({ ...iconItem(record, visual), focus: 1 });
     if (visual.position)
       visual.cullPosition = liftedForHorizon(visual.position);
-    visual.visible = isVisible(visual.cullPosition, occluder);
+    visual.visible = isVisible(visual.cullPosition, occluder, record);
   }
 
   /**
@@ -429,7 +439,7 @@ export function createRendering({
     item.position = getVisual(record).waterline;
     // An aid to navigation is a fixed mark: it does not turn to a heading.
     item.headingDeg = item.spec?.fixed ? 0 : vesselCourseDeg(record);
-    item.show = record.id !== state.cockpitSubjectId;
+    item.show = record.id !== state.cockpitSubjectId && seenYet(record);
     return item;
   }
 
@@ -511,11 +521,11 @@ export function createRendering({
     modelCandidatesAtMs = -Infinity;
   }
 
-  // Vessels move only when a poll lands, so the layer does not hold the
-  // continuous render loop. Its passes run in preRender, which idle mode fires
-  // only for rendered frames: a forced pass (new data, selection) requests its
-  // frame, a frame that moved the camera but fell inside the 800 ms cadence
-  // leaves a trailing frame so the view the camera stopped on is always
+  // The layer does not hold the continuous render loop. Its passes run in
+  // preRender, which idle mode fires only for rendered frames: moving vessels
+  // ask for the frame that next moves them visibly (askMotionFrame), a forced
+  // pass (new data, selection) requests its frame, a frame that moved the
+  // camera but fell inside the 800 ms cadence leaves a trailing frame so the view the camera stopped on is always
   // evaluated, and the continuous hold is kept only while focus emphasis is
   // animating. The trailing frame is keyed to camera motion alone: the pass's
   // own label publication requests a frame, and scheduling on that would loop.
@@ -523,71 +533,181 @@ export function createRendering({
     if (state.preRenderRemover || !viewer) return;
     state.preRenderRemover =
       findFrame(viewer)?.on('preRender', () => {
-        if (followsClock(vesselState)) followClockPositions();
-        else if (services.placement && state.feed.enabled) followPlacements();
+        if (state.feed.enabled) {
+          if (followsClock(vesselState)) followClockPositions();
+          else if (services.placement) followPlacements();
+        }
         updateVisibility();
         if (state.feed.enabled) updateModels();
       }) ?? null;
   }
 
-  // As the world clock plays, vessels between two fixes move on along them.
-  let followedAtWallMs = -Infinity;
-  let followedAtMs = null;
+  // As the world clock plays, vessels between two fixes move on along them:
+  // drawn ones every frame, each once per world time, hidden ones (which may
+  // come into view) every HIDDEN_FOLLOW_MS.
+  let hiddenFollowedAtWallMs = -Infinity;
   function followClockPositions() {
-    const wallMs = performance.now();
-    if (wallMs - followedAtWallMs < FOLLOW_POSITION_MS) return;
-    followedAtWallMs = wallMs;
     const atMs = vesselState.worldNow();
-    if (atMs === followedAtMs) return;
-    followedAtMs = atMs;
+    const motion = startMotionPass();
+    const moveHidden =
+      motion.wallMs - hiddenFollowedAtWallMs >= HIDDEN_FOLLOW_MS;
+    if (moveHidden) hiddenFollowedAtWallMs = motion.wallMs;
     for (const record of state.records.all) {
-      if (!record.motion) continue;
-      prepareRecordVisual(record);
-      syncRecordIcon(record);
+      if (!record.motion && !fixesMove(record.fixes)) continue;
+      let visual = visualRecords.get(record);
+      if (!visual?.position) {
+        visual = prepareRecordVisual(record);
+        visual.followedAtMs = atMs;
+        syncRecordIcon(record);
+        continue;
+      }
+      if (
+        visual.followedAtMs === atMs ||
+        (!drawnNow(record, visual) && !moveHidden)
+      )
+        continue;
+      visual.followedAtMs = atMs;
+      const { lat, lon } = vesselPositionAt(record, atMs);
+      // At either end of its fixes a vessel holds still.
+      if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+      moveDrawnVisual(record, visual, lat, lon, motion);
     }
+    askMotionFrame(motion);
   }
 
   // Live with a host-supplied placement, vessels move on between refreshes:
-  // drawn where it places them at most every FOLLOW_POSITION_MS, with a frame
-  // asked for every PLACEMENT_FRAME_MS while it places any drawn vessel, so
-  // they move while the scene idles.
-  let placedAtWallMs = -Infinity;
-  let placing = false;
-  let placementFrameTimer = null;
+  // drawn where it places them every frame, with the next frame asked for
+  // as soon as a drawn vessel would move visibly, so they move while the
+  // scene idles.
   function followPlacements() {
-    const wallMs = performance.now();
-    if (wallMs - placedAtWallMs >= FOLLOW_POSITION_MS) {
-      placedAtWallMs = wallMs;
-      placing = false;
-      const nowMs = vesselState._aisRuntime.now();
-      // Drawn vessels only, as a sprite or a model: a hidden one is placed
-      // again when it is drawn.
-      for (const record of state.records.all) {
-        const visual = visualRecords.get(record);
-        if (!visual?.position) continue;
-        const drawn =
-          (visual.visible && !isCockpitSubject(record)) ||
-          visual.modelOwnsVisual;
-        if (!drawn) continue;
-        const placed = services.placement.place(record.id, nowMs);
-        if (placed) placing = true;
-        const { lat, lon } = placed ?? record;
-        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
-        moveRecordVisual(record, visual, lat, lon);
-      }
+    const nowMs = vesselState._aisRuntime.now();
+    const motion = startMotionPass();
+    // Drawn vessels only, as a sprite or a model: a hidden one is placed
+    // again when it is drawn.
+    for (const record of state.records.all) {
+      const visual = visualRecords.get(record);
+      if (!visual?.position) continue;
+      if (!drawnNow(record, visual)) continue;
+      const placed = services.placement.place(record.id, nowMs);
+      if (placed) motion.moving = true;
+      const { lat, lon } = placed ?? record;
+      if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+      moveDrawnVisual(record, visual, lat, lon, motion);
     }
-    if (placing && placementFrameTimer === null)
-      placementFrameTimer = vesselState._aisRuntime.setTimeout(() => {
-        placementFrameTimer = null;
-        if (state.feed.enabled && !followsClock(vesselState))
-          governorRequestRender('ais-vessels-placement');
-      }, PLACEMENT_FRAME_MS);
+    askMotionFrame(motion);
+  }
+
+  // One pass of moving vessels: whether any drawn vessel is moving, how far
+  // the fastest moved (as an angle seen from the camera, radians, and in
+  // metres), the pass's wall time and the wall time since the pass before.
+  let motionPassWallMs = null;
+  const motionPass = {
+    pose: undefined,
+    wallMs: 0,
+    sinceMs: 0,
+    moving: false,
+    angle: 0,
+    metres: 0,
+  };
+  function startMotionPass() {
+    const wallMs = performance.now();
+    // Read once, when a drawn vessel first moves in the pass.
+    motionPass.pose = undefined;
+    motionPass.wallMs = wallMs;
+    motionPass.sinceMs =
+      motionPassWallMs === null ? 0 : wallMs - motionPassWallMs;
+    motionPass.moving = false;
+    motionPass.angle = 0;
+    motionPass.metres = 0;
+    motionPassWallMs = wallMs;
+    return motionPass;
+  }
+
+  /** The camera's pose for a motion pass, read once in it (null without one). */
+  function motionPose(motion) {
+    if (motion.pose === undefined)
+      motion.pose = state.viewer
+        ? (findCamera(state.viewer)?.pose() ?? null)
+        : null;
+    return motion.pose;
+  }
+
+  /** Whether a vessel is drawn now: its icon on the camera's side of the
+   * horizon and not the bridge camera's own vessel, or its model. */
+  function drawnNow(record, visual) {
+    return (
+      (visual.visible && !isCockpitSubject(record)) ||
+      Boolean(visual.modelOwnsVisual)
+    );
+  }
+
+  /** Move a drawn visual, noting how far it moved as seen from the camera. */
+  function moveDrawnVisual(record, visual, lat, lon, motion) {
+    const from = copyInto(visual.position, _movedFrom);
+    moveRecordVisual(record, visual, lat, lon);
+    if (!drawnNow(record, visual)) return;
+    motion.moving = true;
+    const metres = distance(from, visual.position);
+    motion.metres = Math.max(motion.metres, metres);
+    const eye = motionPose(motion)?.position;
+    if (!eye) return;
+    const range = distance(eye, from);
+    if (range > 0) motion.angle = Math.max(motion.angle, metres / range);
+  }
+
+  /** How far the fastest drawn vessel moved on screen in a pass (pixels):
+   * through the perspective view's angle, or across the 2D view's width
+   * (an orthographic projection's, `2 / m00` metres). */
+  function movedPixels(motion) {
+    const canvas = state.viewer ? canvasOf(state.viewer) : null;
+    const pose = motion.pose;
+    if (!canvas || !pose) return 0;
+    if (pose.fovy > 0 && canvas.clientHeight > 0)
+      return (
+        (motion.angle * canvas.clientHeight) / (2 * Math.tan(pose.fovy / 2))
+      );
+    if (pose.fovy > 0 || !(canvas.clientWidth > 0)) return 0;
+    let width = NaN;
+    try {
+      width = 2 / findCamera(state.viewer).matrices().projection[0];
+    } catch {
+      return 0;
+    }
+    return width > 0 ? (motion.metres * canvas.clientWidth) / width : 0;
+  }
+
+  // The timer for the next vessel frame while one is asked for, and when it
+  // is due (the AIS runtime's clock).
+  let placementFrameTimer = null;
+  let placementFrameDueMs = 0;
+  /**
+   * While a drawn vessel moves, ask for the next frame when the fastest one
+   * will have moved VESSEL_STEP_PX on screen at the speed this pass saw, and
+   * at most PLACEMENT_FRAME_MS away.
+   */
+  function askMotionFrame(motion) {
+    if (!motion.moving) return;
+    let waitMs = PLACEMENT_FRAME_MS;
+    const movedPx = movedPixels(motion);
+    if (movedPx > 0 && motion.sinceMs > 0)
+      waitMs = Math.min(waitMs, (VESSEL_STEP_PX * motion.sinceMs) / movedPx);
+    // A frame already asked for no later than this one stands.
+    const runtime = vesselState._aisRuntime;
+    const dueMs = runtime.now() + waitMs;
+    if (placementFrameTimer !== null) {
+      if (placementFrameDueMs <= dueMs) return;
+      runtime.clearTimeout(placementFrameTimer);
+    }
+    placementFrameDueMs = dueMs;
+    placementFrameTimer = runtime.setTimeout(() => {
+      placementFrameTimer = null;
+      if (state.feed.enabled) governorRequestRender('ais-vessels-placement');
+    }, waitMs);
   }
 
   /** Stop asking for placement frames (the layer turned off or went away). */
   function cancelPlacementFrame() {
-    placedAtWallMs = -Infinity;
-    placing = false;
+    motionPassWallMs = null;
     if (placementFrameTimer === null) return;
     vesselState._aisRuntime.clearTimeout(placementFrameTimer);
     placementFrameTimer = null;
@@ -629,14 +749,21 @@ export function createRendering({
       (regularPass || focusPass || !state.trailingVisibilityTimer)
         ? findCamera(state.viewer)?.pose()
         : null;
+    // Following the clock, the time drawn decides which vessels are there
+    // yet: a time that moved since the last pass (a seek while paused) gets
+    // its pass too.
+    const worldMs = followsClock(vesselState) ? vesselState.worldNow() : null;
     if (
       !regularPass &&
-      pose &&
-      poseSignature(pose) !== vesselState._lastCamPoseSig
+      ((pose && poseSignature(pose) !== vesselState._lastCamPoseSig) ||
+        worldMs !== state.visibilityWorldMs)
     )
       scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
-    if (regularPass) state.lastVisibilityUpdate = now;
+    if (regularPass) {
+      state.lastVisibilityUpdate = now;
+      state.visibilityWorldMs = worldMs;
+    }
     if (focusPass) state.lastFocusUpdate = now;
     if (!state.records.all.length) {
       // No records — flush any lingering card entries (vanished-feed case).
@@ -665,7 +792,9 @@ export function createRendering({
       const labelCandidates = [];
       for (const record of state.records.all) {
         const visual = getVisual(record);
-        visual.visible = isVisible(visual.cullPosition, occluder);
+        visual.visible = isVisible(visual.cullPosition, occluder, record);
+        // A vessel the time drawn reaches (or leaves) shows (or hides) its icon.
+        if (visual.seen !== seenYet(record)) syncRecordIcon(record);
         if (visual.visible) labelCandidates.push(record);
       }
       updateClusteredLabels(labelCandidates);
@@ -760,9 +889,21 @@ export function createRendering({
     return pose?.position ? horizonFrom(pose.position) : null;
   }
 
-  function isVisible(cullPosition, occluder) {
+  function isVisible(cullPosition, occluder, record) {
+    if (record && !seenYet(record)) return false;
     if (!cullPosition || !occluder) return true;
     return occluder.isPointVisible(cullPosition);
+  }
+
+  /** Whether a vessel is there at the time drawn: following the clock, not
+   * more than TIMELINE_UNSEEN_MS before its first fix. */
+  function seenYet(record) {
+    const first = record.fixes?.[0];
+    return (
+      !first ||
+      !followsClock(vesselState) ||
+      vesselState.worldNow() >= first.atMs - TIMELINE_UNSEEN_MS
+    );
   }
 
   /**
@@ -957,6 +1098,7 @@ export function createRendering({
     cancelTrailingVisibilityPass,
     cancelPlacementFrame,
     followPlacements,
+    followClockPositions,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,

@@ -1,10 +1,12 @@
 import { drawOf, findCamera, findQuery } from '../../render/rendererOf.js';
-import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
 import { gstime } from 'satellite.js';
+import { reckonEarthFixed, sampleOrbit } from './motion.js';
 import {
   ISS_NORAD,
   ORBIT_REBAKE_MS,
+  ORBIT_RECKON_LIMIT_MS,
+  ORBIT_SAMPLE_HORIZON_MS,
   POSITION_UPDATE_MS,
   RING_ROTATION_MS,
 } from './policy.js';
@@ -558,37 +560,76 @@ export function createRendering({
   }
 
   /**
-   * Propagate all CORE satellite positions and update their dots.
-   * (About 1,300 core satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms,
-   * fine at the 1s/200ms cadence.) Dense extras are
-   * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
+   * Take a fresh SGP4 sample of every CORE satellite (motion.js); the points
+   * move from these each frame in _reckonPoints. (About 1,300 core
+   * satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms, fine at the
+   * 1s/200ms cadence.) Dense extras are excluded: they are sampled on the
+   * round-robin budget in _propagateDenseChunk.
+   * @returns {number} How many satellites were sampled.
    */
 
   function _propagateAll() {
-    const now = new Date(layerState.now());
+    const nowMs = layerState.now();
     let updated = 0;
 
-    for (const [noradId, sat] of layerState._catalog) {
+    for (const sat of layerState._catalog.values()) {
       if (sat.group === 'dense') continue;
-      const pos = parts.orbits.propagatePosition(sat.satrec, now);
-      if (!pos) continue;
-
-      const point = layerState._points.get(noradId);
-      if (point) {
-        fromDegreesInto(pos.longitude, pos.latitude, pos.altitude, point.pos);
-        _markDirty(noradId);
-        updated++;
-      }
+      if (_sample(sat, nowMs)) updated++;
     }
 
     return updated;
   }
 
   /**
+   * Sample one satellite's orbit at `atMs` into its reused sample.
+   * @returns {boolean} Whether SGP4 had a state for that time.
+   */
+
+  function _sample(sat, atMs) {
+    const sample = sampleOrbit(sat.satrec, atMs, sat.orbitSample);
+    if (!sample) return false;
+    sat.orbitSample = sample;
+    return true;
+  }
+
+  /**
+   * Move every shown dot to where its satellite is at the world time,
+   * reckoned from its last sample, so dots glide every frame between
+   * samples instead of stepping once a second; the moved dots go to the
+   * points set with the frame's other dot changes. A core sample more than
+   * ORBIT_SAMPLE_HORIZON_MS from the world time (time playing fast, or a
+   * seek) is taken again first; dense extras are resampled by their own
+   * round-robin. A hidden dot is moved when it is shown again, and the
+   * tracked satellite is placed by its per-frame path.
+   * @param {number} nowMs World time, epoch ms.
+   */
+
+  function _reckonPoints(nowMs) {
+    const gmst = gstime(new Date(nowMs));
+    for (const [noradId, point] of layerState._points) {
+      if (!point.show || noradId === layerState._trackedNorad) continue;
+      const sat = layerState._catalog.get(noradId);
+      if (!sat || sat.reckonedAtMs === nowMs) continue;
+      let sample = sat.orbitSample;
+      if (
+        sat.group !== 'dense' &&
+        (!sample || Math.abs(nowMs - sample[0]) > ORBIT_SAMPLE_HORIZON_MS)
+      )
+        sample = _sample(sat, nowMs) ? sat.orbitSample : null;
+      if (!sample || Math.abs(nowMs - sample[0]) > ORBIT_RECKON_LIMIT_MS)
+        continue;
+      reckonEarthFixed(sample, nowMs, gmst, point.pos);
+      _markDirty(noradId);
+      sat.reckonedAtMs = nowMs;
+    }
+  }
+
+  /**
    * Shared preRender tick (single definition for init + enable):
    * - the tracked dot where the follow camera put it this frame,
-   * - core fleet propagation at 200ms-tracked / 1s-idle cadence,
-   * - dense extras on a per-frame round-robin budget,
+   * - core fleet SGP4 samples at 200ms-tracked / 1s-idle cadence,
+   * - dense extras sampled on a per-frame round-robin budget,
+   * - every dot reckoned from its sample each frame (motion.js),
    * - tracked satellite's dot sample per frame (WS-D2),
    * - orbit ring GMST re-alignment every ~1s (WS-D1),
    * - the frame's dot changes sent to the points set.
@@ -637,7 +678,12 @@ export function createRendering({
       layerState._lastPropagation = now;
     }
 
-    if (layerState._params.showPoints) parts.catalog._propagateDenseChunk();
+    if (layerState._params.showPoints) {
+      const worldMs = layerState.now();
+      parts.catalog._propagateDenseChunk(worldMs - layerState._lastReckonMs);
+      layerState._lastReckonMs = worldMs;
+      _reckonPoints(worldMs);
+    }
 
     // Keep the tracked satellite's (hidden) dot on the per-frame epoch shared
     // with label + camera — runs after _propagateAll so the per-frame sample
@@ -831,6 +877,7 @@ export function createRendering({
     _updateOrbitPathRotations,
     _hideOrbitPath,
     _propagateAll,
+    _reckonPoints,
     _preRenderTick,
     _updatePointFocus,
     applySatellitePointFocusDeemphasis,

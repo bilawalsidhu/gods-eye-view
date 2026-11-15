@@ -170,10 +170,30 @@ export function createTesting({
     return components.rendering.prepareRecordVisual(record);
   }
 
+  /** A record's visual (the record itself before it has one). Test-only seam. */
+
+  function _vesselVisualForTest(record) {
+    return components.rendering.getVisual(record);
+  }
+
   /** Run one live placement pass (a host-supplied placement). Test-only seam. */
 
   function _runPlacementPassForTest() {
     components.rendering.followPlacements();
+  }
+
+  /** Run one world-clock pass at world time `atMs`. Test-only seam. */
+
+  function _runClockPassForTest(atMs) {
+    vesselState.worldNow = () => atMs;
+    components.rendering.followClockPositions();
+  }
+
+  /** Follow the world clock, standing at world time `atMs`. Test-only seam. */
+
+  function _followClockForTest(atMs) {
+    vesselState.timeline = { active: () => true };
+    vesselState.worldNow = () => atMs;
   }
 
   /** True while a trailing visibility frame is scheduled. Test-only seam. */
@@ -204,6 +224,7 @@ export function createTesting({
   return {
     _bindVesselInteractionForTest,
     _setVesselStateForTest,
+    _followClockForTest,
     _setVesselOverlayHostForTest,
     _updateVesselCardsForTest,
     _reconcileVesselsForTest,
@@ -216,7 +237,9 @@ export function createTesting({
     _vesselRecordForTest,
     _runVisibilityPassForTest,
     _prepareVesselVisualForTest,
+    _vesselVisualForTest,
     _runPlacementPassForTest,
+    _runClockPassForTest,
     _hasTrailingVisibilityPassForTest,
   };
 }

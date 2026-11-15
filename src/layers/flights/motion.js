@@ -1,5 +1,6 @@
 import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import { renderedFrames } from '../../data/renderedFrames.js';
+import { liftGroundedHistory } from '../../data/timelineHistory.js';
 import {
   motionCourse,
   motionPosition,
@@ -185,11 +186,15 @@ export function createMotion({
         info.renderAltitudeM >= floor - 1
       )
         continue;
+      const drawnM = info.renderAltitudeM;
       info.renderAltitudeM = lifted;
       const position = fromDegrees(info.rawLon, info.rawLat, lifted);
-      const history = flightState._positionHistory.get(icao24);
-      const newest = history?.[history.length - 1];
-      if (newest) newest.position = copyInto(position, newest.position);
+      liftGroundedHistory(
+        flightState._positionHistory.get(icao24),
+        position,
+        drawnM,
+        lifted,
+      );
       // Above the ellipsoid now (or floors say otherwise next poll).
       parts.icons._applyIconPresentation(icao24);
       parts.icons._planIcon(icao24);
@@ -213,6 +218,7 @@ export function createMotion({
 
   function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
+    flightState._drUnseen = false;
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
       const position = parts.icons._iconPosition(icao24, vec());
       flightState._drCourseDeg = info?.true_track || 0;
@@ -256,6 +262,9 @@ export function createMotion({
       );
 
     const regime = _motionRegime(history, info, renderTime);
+    // Following the clock, a time well before its first fix is before it
+    // was there: it is not drawn.
+    flightState._drUnseen = regime.unseen;
     if (regime.kind === 'between' && regime.piece) {
       // Along the curve between the two reports, as the icon and the trail.
       const ms = julianToEpochMs(renderTime);

@@ -16,8 +16,13 @@ import {
   acquireInfraredMosaic,
   processInfraredImage,
 } from './infraredImage.js';
-// Bounded display detail for the hourly, approximately 3 km global product.
+// Bounded display detail for the hourly, approximately 3 km global product
+// when it is drawn from one 2048 × 1024 mosaic.
 const GLOBAL_TILE_MAXIMUM_LEVEL = 3;
+// Detail of the tiled products when the feed does not name its own.
+const TILE_MAXIMUM_LEVEL = 6;
+// The deepest level a feed may name: about 150 m a pixel.
+const SUPPLIED_MAXIMUM_LEVEL_LIMIT = 12;
 // Six decoded 2048×1024 canvases (8 MiB each) bound the cache below 50 MiB.
 const MAX_MOSAICS = 6;
 const MAX_PREFETCH_TILES = 8;
@@ -89,10 +94,33 @@ function createGlobeRendering({
   let prefetchJob = null;
   let prefetchedKey = null;
 
+  /** The deepest level the feed's own tiles of `product` go to, or null. */
+  function suppliedLevel(product) {
+    if (!frameSource?.getTile) return null;
+    let level = null;
+    try {
+      level = frameSource.maximumLevel?.(product) ?? null;
+    } catch {
+      return null;
+    }
+    return Number.isInteger(level) &&
+      level >= 0 &&
+      level <= SUPPLIED_MAXIMUM_LEVEL_LIMIT
+      ? level
+      : null;
+  }
+
+  /** Global clouds come from one mosaic unless the feed tiles them itself. */
+  function fromMosaic(product) {
+    return product === 'clouds' && suppliedLevel(product) === null;
+  }
+
   function profile(product) {
     return {
       tileSize: 256,
-      maximumLevel: product === 'clouds' ? GLOBAL_TILE_MAXIMUM_LEVEL : 6,
+      maximumLevel:
+        suppliedLevel(product) ??
+        (product === 'clouds' ? GLOBAL_TILE_MAXIMUM_LEVEL : TILE_MAXIMUM_LEVEL),
     };
   }
 
@@ -287,7 +315,7 @@ function createGlobeRendering({
           !snapshot.times.includes(time)
         )
           return false;
-        const global = snapshot.product === 'clouds';
+        const global = fromMosaic(snapshot.product);
         const tiles = global ? [] : prefetchTiles(snapshot);
         const supplied = !global && Boolean(frameSource?.getTile);
         const urls = global || supplied ? [] : tileUrls(snapshot, time, tiles);
@@ -352,7 +380,7 @@ function createGlobeRendering({
       lastError = null;
       const { west, south, east, north } = snapshot.bounds;
       const rectangle = { west, south, east, north };
-      const global = snapshot.product === 'clouds';
+      const global = fromMosaic(snapshot.product);
       const frame = {
         snapshot,
         creditSnapshot,
@@ -500,7 +528,10 @@ function createGlobeRendering({
                     maxConcurrentRequests: 6,
                   }
                 : {}),
-              ...(snapshot.product === 'clouds-regional'
+              // Infrared tiles get the display transfer the mosaic already
+              // carries.
+              ...(snapshot.product === 'clouds-regional' ||
+              snapshot.product === 'clouds'
                 ? {
                     // The transfer runs on the upright tile the renderer
                     // decoded.

@@ -420,7 +420,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
     // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
-    // Falls back to the dot's 1s-throttled position if SGP4 fails.
+    // Falls back to the dot's reckoned position if SGP4 fails.
     const trackedPosition = () => {
       const pos = _getTrackedFramePosition();
       return pos

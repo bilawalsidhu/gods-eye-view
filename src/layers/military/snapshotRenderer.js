@@ -5,6 +5,10 @@ import {
   staleHoldsForFix,
   synthesizeForwardKinematicsFix,
 } from '../../data/motionModel.js';
+import {
+  historyAfterTrail,
+  mergeAircraftTimelineFixes,
+} from '../../data/timelineHistory.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import { followsClock } from './policy.js';
 import { newestReport, pushReport } from '../../data/aircraftMotionRegime.js';
@@ -88,6 +92,18 @@ export function createMilitarySnapshotRenderer({
       if (groundFlipped) flightState._groundSnap.forget(icao24);
       const isTracked = icao24 === flightState._trackedIcao;
 
+      // Following the clock, a record may carry its own track around the
+      // time: the contact is placed on it, so the clock can move within it,
+      // back as well as on, without another snapshot.
+      const timelineHistory = followsClock(flightState)
+        ? mergeAircraftTimelineFixes(
+            flightState._positionHistory.get(icao24),
+            aircraft,
+            meta,
+            meta.speedMps,
+            snapshot.observedAtMs ?? fixEpochMs,
+          )
+        : null;
       // A host-supplied placement, if any, is told every fix as taken.
       observeLiveAircraft(
         flightState,
@@ -98,87 +114,106 @@ export function createMilitarySnapshotRenderer({
         meta.speedMps,
         meta.track,
       );
-
-      // Append to position history stamped with the FEED's fix epoch.
-      // adsb.lol's seen_pos is the AGE in seconds of the last position
-      // report, so the fix epoch is receipt time minus that age. Only
-      // append when the fix actually advances, so stale repeats don't
-      // create zero-dt segments.
-      if (!flightState._positionHistory.has(icao24)) {
-        flightState._positionHistory.set(icao24, []);
-      }
-      const history = flightState._positionHistory.get(icao24);
-      const newest = history[history.length - 1];
-      const report = newestReport(history);
-      // Whole milliseconds, as the fix times are kept. A report newer than
-      // the last report goes in, past any synthetic fix after it.
-      if (
-        !report ||
-        Math.trunc(fixEpochMs) > Math.trunc(motion._fixEpochMs(report))
-      ) {
-        // Per-fix kinematics: the fix's own velocity/track ride along so the
-        // extrapolation paths use the values that BELONG to the fix they
-        // extend, not whatever the latest poll reported.
-        pushReport(
-          history,
-          {
-            ...motion._historyFix(
-              fixEpochMs,
-              position,
-              meta.speedMps,
-              meta.track,
-            ),
-            // Drawn at an invented height: a trail seeded from history keeps no
-            // position for it.
-            inventedHeight: meta.renderAltitudeInvented === true,
-            // Whether this report was on the ground: a trail backfill joins it
-            // only across a landing or take-off it saw.
-            onGround: meta.onGround === true,
-          },
-          POSITION_HISTORY_LIMIT,
-        );
-        // Turn rate from the fix-track history — computed once per new fix
-        // (≤5 samples), consumed by the extrapolation paths at tick rate.
-        meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
-        // Trail accumulation is separate from the 5-fix DR history (PRD F2)
-        // so the visible trail keeps growing while tracked. Round 2
-        // (owner): ground traffic appends too — taxi history stays live
-        // after touchdown; _appendTrailFix floors grounded positions at
-        // the surface so the ground leg drapes instead of diving.
+      if (timelineHistory) {
         if (isTracked)
-          tracking._appendTrailFix(motion._copyPosition(position), fixEpochMs, {
-            nullAltitude: meta.renderAltitudeInvented === true,
-            track: meta.track,
-          });
+          for (const entry of historyAfterTrail(
+            timelineHistory,
+            flightState._trailFixes,
+            snapshot.observedAtMs ?? fixEpochMs,
+          ))
+            tracking._appendTrailFix(
+              motion._copyPosition(entry.position),
+              entry.epochMs,
+              { nullAltitude: entry.inventedHeight, track: entry.track },
+            );
+        flightState._positionHistory.set(icao24, timelineHistory);
+        meta.turnRateDps = 0;
       } else {
-        const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
-        if (!modelOwnsGroundVisual) {
-          liftRepeatedGroundFix(newest, position, meta.onGround);
+        // Append to position history stamped with the FEED's fix epoch.
+        // adsb.lol's seen_pos is the AGE in seconds of the last position
+        // report, so the fix epoch is receipt time minus that age. Only
+        // append when the fix actually advances, so stale repeats don't
+        // create zero-dt segments.
+        if (!flightState._positionHistory.has(icao24)) {
+          flightState._positionHistory.set(icao24, []);
         }
-        // A forward synthetic fix follows the stale rules (none while the
-        // contact holds at its report, a coast capped from the real report,
-        // never below the ground) and is a motion aid, never a trail report.
-        const kinematicsChanged =
-          newest.velocity !== meta.speedMps || newest.track !== meta.track;
-        const holds = staleHoldsForFix(newest, {
-          onGround: meta.onGround,
-          cachedGroundFloor,
-        });
-        if (kinematicsChanged && !holds) {
-          const synthetic = synthesizeForwardKinematicsFix(newest, {
-            // Following the clock, the snapshot's time is the moment it moves on from.
-            epochMs: followsClock(flightState)
-              ? snapshot.observedAtMs
-              : Date.now(),
-            velocity: meta.speedMps,
-            track: meta.track,
-            turnRateDps: meta.turnRateDps,
+        const history = flightState._positionHistory.get(icao24);
+        const newest = history[history.length - 1];
+        const report = newestReport(history);
+        // Whole milliseconds, as the fix times are kept. A report newer than
+        // the last report goes in, past any synthetic fix after it.
+        if (
+          !report ||
+          Math.trunc(fixEpochMs) > Math.trunc(motion._fixEpochMs(report))
+        ) {
+          // Per-fix kinematics: the fix's own velocity/track ride along so the
+          // extrapolation paths use the values that BELONG to the fix they
+          // extend, not whatever the latest poll reported.
+          pushReport(
+            history,
+            {
+              ...motion._historyFix(
+                fixEpochMs,
+                position,
+                meta.speedMps,
+                meta.track,
+              ),
+              // Drawn at an invented height: a trail seeded from history keeps no
+              // position for it.
+              inventedHeight: meta.renderAltitudeInvented === true,
+              // Whether this report was on the ground: a trail backfill joins it
+              // only across a landing or take-off it saw.
+              onGround: meta.onGround === true,
+            },
+            POSITION_HISTORY_LIMIT,
+          );
+          // Turn rate from the fix-track history — computed once per new fix
+          // (≤5 samples), consumed by the extrapolation paths at tick rate.
+          meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
+          // Trail accumulation is separate from the 5-fix DR history (PRD F2)
+          // so the visible trail keeps growing while tracked. Round 2
+          // (owner): ground traffic appends too — taxi history stays live
+          // after touchdown; _appendTrailFix floors grounded positions at
+          // the surface so the ground leg drapes instead of diving.
+          if (isTracked)
+            tracking._appendTrailFix(
+              motion._copyPosition(position),
+              fixEpochMs,
+              {
+                nullAltitude: meta.renderAltitudeInvented === true,
+                track: meta.track,
+              },
+            );
+        } else {
+          const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
+          if (!modelOwnsGroundVisual) {
+            liftRepeatedGroundFix(newest, position, meta.onGround);
+          }
+          // A forward synthetic fix follows the stale rules (none while the
+          // contact holds at its report, a coast capped from the real report,
+          // never below the ground) and is a motion aid, never a trail report.
+          const kinematicsChanged =
+            newest.velocity !== meta.speedMps || newest.track !== meta.track;
+          const holds = staleHoldsForFix(newest, {
+            onGround: meta.onGround,
             cachedGroundFloor,
           });
-          if (synthetic) {
-            history.push(synthetic);
-            if (history.length > POSITION_HISTORY_LIMIT) history.shift();
-            meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
+          if (kinematicsChanged && !holds) {
+            const synthetic = synthesizeForwardKinematicsFix(newest, {
+              // Following the clock, the snapshot's time is the moment it moves on from.
+              epochMs: followsClock(flightState)
+                ? snapshot.observedAtMs
+                : Date.now(),
+              velocity: meta.speedMps,
+              track: meta.track,
+              turnRateDps: meta.turnRateDps,
+              cachedGroundFloor,
+            });
+            if (synthetic) {
+              history.push(synthetic);
+              if (history.length > POSITION_HISTORY_LIMIT) history.shift();
+              meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
+            }
           }
         }
       }
