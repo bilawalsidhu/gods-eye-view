@@ -95,6 +95,27 @@ test('normalizeEarthquakeSnapshot filters events below M2.5 without dropping the
   assert.equal(rows[1].mag, 6.8);
 });
 
+test('USGS quake counts follow the catalog event type when supplied', () => {
+  const types = [
+    'earthquake',
+    'quarry blast',
+    'explosion',
+    'landslide',
+    null,
+    undefined,
+  ];
+  const features = types.map((type, index) => ({
+    id: String(index),
+    geometry: { type: 'Point', coordinates: [10, 20, 5] },
+    properties: { mag: 2.5, ...(type === undefined ? {} : { type }) },
+  }));
+  const rows = normalizeEarthquakeSnapshot({ features });
+  assert.deepEqual(
+    rows.map((row) => row.stableId),
+    ['0', '4', '5'],
+  );
+});
+
 test('normalizeEarthquakeSnapshot normalizes optional fields to null when omitted or invalid', () => {
   const geojson = {
     features: [

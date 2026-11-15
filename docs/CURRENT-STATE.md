@@ -1,5 +1,10 @@
 # God's Eye View Current State
 
+The Earthquakes layer and `get_earthquakes` count M2.5+ USGS events classified
+as `earthquake`. A refresh removes an event if USGS reclassifies it as a
+quarry blast or another type. Records with an omitted or null event type keep
+the magnitude-only behavior. A malformed non-string type rejects the snapshot.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.

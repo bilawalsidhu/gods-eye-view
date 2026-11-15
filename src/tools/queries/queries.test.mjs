@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
+import { createUsgsEarthquakeSource } from '../../layers/earthquakes/source.js';
 
 const earthquakes = {
   getSnapshot: async () => [
@@ -90,6 +91,37 @@ test('earthquakes are filtered, ordered strongest first and capped', async () =>
   const capped = await catalog.call('get_earthquakes', { limit: 2 });
   assert.equal(capped.data.truncated, true);
   assert.equal(capped.data.total, 3);
+});
+
+test('get_earthquakes excludes a USGS explosion from counts and strongest-event selection', async () => {
+  // Observed USGS event uw62216847, alongside a smaller earthquake fixture.
+  const explosion = {
+    id: 'uw62216847',
+    geometry: { type: 'Point', coordinates: [-119.422, 46.235, -0.2] },
+    properties: {
+      type: 'explosion',
+      mag: 2.8,
+      place: '5 km ESE of Benton City, Washington',
+    },
+  };
+  const quake = {
+    ...explosion,
+    id: 'quake',
+    properties: { type: 'earthquake', mag: 2.6, place: 'near the test site' },
+  };
+  const features = [explosion, quake];
+  const source = createUsgsEarthquakeSource({
+    fetchImpl: async () => Response.json({ features }),
+  });
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { earthquakes: source },
+  });
+  const result = await catalog.call('get_earthquakes', { limit: 1 });
+  assert.equal(result.data.total, 1);
+  assert.equal(result.data.truncated, false);
+  assert.equal(result.data.rows[0].id, quake.id);
+  assert.match(result.summary, /strongest M2\.6 near the test site/);
 });
 
 test('fires need an area and report a missing key as unavailable', async () => {
