@@ -1,4 +1,5 @@
 import { SceneDirector } from '../scenes/director.js';
+import { installDirectorAutomation } from '../scenes/automation.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import {
@@ -70,6 +71,10 @@ export function createApplicationTools({
     }),
   );
   onSceneDirector?.(sceneDirector);
+  // Dev builds only: window.__gevDirector for scripted capture (Playwright).
+  // Vite folds import.meta.env.DEV to false in production, dropping this.
+  if (import.meta.env?.DEV === true)
+    defer(installDirectorAutomation(sceneDirector));
   const annotations = initAnnotations({
     viewer,
     tileset,
