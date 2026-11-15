@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+An aircraft faces its reported ground track, else its true heading (readsb
+`true_heading`). With neither, it faces the way it moved since its last fix
+when that is at least 30 m (`courseFromFixes`, `src/layers/flights/records.js`);
+nearer fixes are position noise and keep its last course, and an aircraft with
+no course at all faces north.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.

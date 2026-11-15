@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FlightRecords } from './records.js';
+import { FlightRecords, courseFromFixes } from './records.js';
 
 const FLEET = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -318,4 +318,60 @@ test('a ground vehicle or station with no altitude stands on the ground; an airc
     view(),
   ).meta;
   assert.equal(unloaded.onGround, false);
+});
+
+test('a contact reported with no course faces the way it moved since its last fix', () => {
+  const store = records();
+  // Taxiing south along a runway with no track or true heading reported.
+  store.receive(
+    observation({
+      latitude: 30.1908,
+      longitude: -97.6588,
+      courseDeg: null,
+      onGround: true,
+      speedMps: 8,
+    }),
+    view(),
+  );
+  assert.equal(store.data.get('abc123').true_track, 0, 'nothing known yet');
+  store.receive(
+    observation({
+      latitude: 30.1885,
+      longitude: -97.6588,
+      courseDeg: null,
+      onGround: true,
+      speedMps: 8,
+    }),
+    view(),
+  );
+  assert.ok(Math.abs(store.data.get('abc123').true_track - 180) < 0.1);
+  // Standing still (a metre of position noise): the last course is kept.
+  store.receive(
+    observation({
+      latitude: 30.18849,
+      longitude: -97.6588,
+      courseDeg: null,
+      onGround: true,
+      speedMps: 0,
+    }),
+    view(),
+  );
+  assert.ok(Math.abs(store.data.get('abc123').true_track - 180) < 0.1);
+  // A reported course always wins.
+  store.receive(
+    observation({
+      latitude: 30.188,
+      longitude: -97.6588,
+      courseDeg: 175,
+      onGround: true,
+    }),
+    view(),
+  );
+  assert.equal(store.data.get('abc123').true_track, 175);
+});
+
+test('course from fixes ignores position noise and reads east as 90', () => {
+  assert.equal(courseFromFixes(30, -97, 30.0001, -97), null, 'about 11 m');
+  assert.ok(Math.abs(courseFromFixes(0, 0, 0, 0.01) - 90) < 1e-6);
+  assert.equal(courseFromFixes(null, 0, 0, 0.01), null);
 });

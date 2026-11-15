@@ -20,6 +20,30 @@ import {
 } from './recordPolicy.js';
 
 /** Source-independent aircraft metadata and bounded missing-poll retention. */
+/** Metres a contact must move between fixes before its course is read from them. */
+const COURSE_FROM_FIXES_MIN_M = 30;
+
+/**
+ * The course from one fix to the next, in degrees from true north, or null
+ * when either is missing or they are less than COURSE_FROM_FIXES_MIN_M apart
+ * (position noise on a parked aircraft is not a course).
+ */
+export function courseFromFixes(fromLat, fromLon, toLat, toLon) {
+  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
+  if (
+    approxDistanceKm(fromLat, fromLon, toLat, toLon) * 1000 <
+    COURSE_FROM_FIXES_MIN_M
+  )
+    return null;
+  const φ1 = (fromLat * Math.PI) / 180;
+  const φ2 = (toLat * Math.PI) / 180;
+  const Δλ = ((toLon - fromLon) * Math.PI) / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 export class FlightRecords {
   constructor({
     geoidHeight,
@@ -309,7 +333,14 @@ export class FlightRecords {
       // applies to contacts that actually flew this session.
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
-      true_track: stickyNumber(true_track, prevMeta?.true_track, 0),
+      // With no reported track or true heading, a moving contact faces the
+      // way it moved since its last fix; a still one keeps its last course.
+      true_track: stickyNumber(
+        true_track,
+        courseFromFixes(prevMeta?.rawLat, prevMeta?.rawLon, lat, lon) ??
+          prevMeta?.true_track,
+        0,
+      ),
       category: cat,
       // An adsbdb-enriched type code outranks the coarse OpenSky category.
       klass: classifyAircraft({
