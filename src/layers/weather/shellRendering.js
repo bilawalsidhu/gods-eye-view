@@ -1,4 +1,9 @@
 import { acquireWeatherImage } from './infraredImage.js';
+import {
+  INFRARED_ALPHA_T0,
+  INFRARED_ALPHA_T1,
+  infraredAmount,
+} from './infraredAlpha.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
@@ -36,6 +41,10 @@ const LIFT_STEP = 500;
 // draw nothing until the full-extent image has arrived, and sample the detail
 // image only once it has arrived. The window is west, south, east, north in the
 // full-extent image's texture coordinates.
+// `infrared` is how much of the cloud key applies, 0–1 (infraredAlpha.js has
+// the same curve for the globe's draped imagery). It is applied here, to the
+// image as it was decoded, so a 4096×2048 frame is never read back and
+// rewritten on the page, and a strength change is one uniform, not a new image.
 const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput materialInput)
 {
   czm_material material = czm_getDefaultMaterial(materialInput);
@@ -46,7 +55,8 @@ const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput material
   float useDetail = inside * step(1.5, float(detailDimensions.x));
   vec4 c = mix(coarse, texture(detail, clamp(dst, 0.0, 1.0)), useDetail);
   material.diffuse = czm_gammaCorrect(c.rgb);
-  material.alpha = c.a * alpha * step(1.5, float(imageDimensions.x));
+  float key = smoothstep(${INFRARED_ALPHA_T0.toFixed(4)}, ${INFRARED_ALPHA_T1.toFixed(4)}, pow(max(c.r, max(c.g, c.b)), 2.2));
+  material.alpha = c.a * mix(1.0, key, infrared) * alpha * step(1.5, float(imageDimensions.x));
   return material;
 }
 `;
@@ -63,6 +73,7 @@ function registerMaterial(cesium) {
         image: cesium.Material.DefaultImageId,
         detail: cesium.Material.DefaultImageId,
         alpha: 1,
+        infrared: 0,
         window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
       },
       // Diffuse and alpha share these samples, so one source, not components.
@@ -243,6 +254,12 @@ export function createShellSurface({
     setAlpha(value) {
       if (destroyed || material.uniforms.alpha === value) return;
       material.uniforms.alpha = value;
+      scene.requestRender();
+    },
+    /** How much of the infrared cloud key applies, 0–1. */
+    setInfrared(value) {
+      if (destroyed || material.uniforms.infrared === value) return;
+      material.uniforms.infrared = value;
       scene.requestRender();
     },
     /** Draw `next` inside `rect` (west, south, east, north in the full-extent
@@ -438,10 +455,11 @@ export function createWeatherShell({
   const visible = () => !hidden && !suspended();
   const boundsKey = ({ west, south, east, north }) =>
     `${west},${south},${east},${north}`;
-  const cacheKey = (time, mode, box = null) =>
-    `${time}|${infrared ? mode : 'none'}${box ? `|${boundsKey(box)}` : ''}`;
+  // One image per time and window: the infrared mode is a uniform, not pixels.
+  const cacheKey = (time, box = null) =>
+    box ? `${time}|${boundsKey(box)}` : time;
   const wantedDetail = () =>
-    current && view ? cacheKey(current.time, current.infrared, view) : null;
+    current && view ? cacheKey(current.time, view) : null;
 
   function evict(keep = []) {
     const kept = new Set([...keep, current?.key, detail?.key]);
@@ -454,12 +472,11 @@ export function createWeatherShell({
   }
   async function acquire(
     time,
-    mode,
     signal,
     { box = null, keep = [], onFetched } = {},
   ) {
     signal.throwIfAborted();
-    const key = cacheKey(time, mode, box);
+    const key = cacheKey(time, box);
     const entry = images.get(key);
     if (entry) {
       images.delete(key);
@@ -468,7 +485,8 @@ export function createWeatherShell({
     }
     const result = await acquireWeatherImage(product, time, {
       signal,
-      mode,
+      // The surface's shader applies the infrared transfer.
+      transfer: false,
       size: box ? detailSize : size,
       bbox: box,
       maxBytes: MAX_IMAGE_BYTES,
@@ -564,9 +582,7 @@ export function createWeatherShell({
     const job = { key, box: view, controller: new AbortController() };
     detailJob = job;
     job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
-    void acquire(current.time, current.infrared, job.controller.signal, {
-      box: view,
-    })
+    void acquire(current.time, job.controller.signal, { box: view })
       .then(({ texture }) => installDetail(job, texture))
       .catch(() => failDetail(job));
   }
@@ -661,6 +677,7 @@ export function createWeatherShell({
       loadMs: now() - frame.startedAt,
     };
     surface.setAlpha(alpha);
+    surface.setInfrared(infrared ? infraredAmount(frame.infrared) : 0);
     applyVisibility();
     lastError = null;
     evict();
@@ -715,7 +732,7 @@ export function createWeatherShell({
       return changed;
     },
     cancelPrefetch,
-    async prefetch(snapshot, time, { infrared: mode = 'filtered' } = {}) {
+    async prefetch(snapshot, time) {
       let job;
       try {
         if (
@@ -729,8 +746,8 @@ export function createWeatherShell({
         // Warm the next frame's detail window too while the window stays put.
         const box =
           view && viewBounds === boundsKey(snapshot.bounds) ? view : null;
-        const coarse = cacheKey(time, mode);
-        const key = box ? cacheKey(time, mode, box) : coarse;
+        const coarse = cacheKey(time);
+        const key = box ? cacheKey(time, box) : coarse;
         if (prefetchJob?.key === key || prefetchedKey === key) return false;
         cancelPrefetch();
         job = { key, controller: new AbortController() };
@@ -739,8 +756,8 @@ export function createWeatherShell({
         job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
         // Both images at once: one after the other would outlast playback's step.
         await Promise.all([
-          acquire(time, mode, signal, { keep: box ? [key] : [] }),
-          box ? acquire(time, mode, signal, { box, keep: [coarse] }) : null,
+          acquire(time, signal, { keep: box ? [key] : [] }),
+          box ? acquire(time, signal, { box, keep: [coarse] }) : null,
         ]);
         signal.throwIfAborted();
         if (prefetchJob === job) prefetchedKey = key;
@@ -782,7 +799,7 @@ export function createWeatherShell({
         infrared: mode,
         bounds,
         product: snapshot.product,
-        key: cacheKey(time, mode),
+        key: cacheKey(time),
         mosaic: { fetched: false, decodeMs: null, cached: false },
         controller: new AbortController(),
         startedAt: now(),
@@ -797,7 +814,7 @@ export function createWeatherShell({
       });
       watch(frame, signal);
       frame.timeout = setTimeout(() => fail(frame), timeoutMs);
-      void acquire(time, mode, frame.controller.signal, {
+      void acquire(time, frame.controller.signal, {
         onFetched: () => {
           frame.mosaic.fetched = true;
         },

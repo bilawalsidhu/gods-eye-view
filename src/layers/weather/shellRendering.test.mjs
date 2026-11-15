@@ -11,6 +11,7 @@ import {
   WEATHER_SHELL_HEIGHTS,
 } from './shellRendering.js';
 import { NO_IMAGERY_HOST } from './imageryHost.js';
+import { INFRARED_ALPHA_T0, INFRARED_ALPHA_T1 } from './infraredAlpha.js';
 import {
   createShellCesium,
   createShellScene,
@@ -147,12 +148,13 @@ test('surface builds a flat raised rectangle drawn in primitive order without de
     image: Cesium.Material.DefaultImageId,
     detail: Cesium.Material.DefaultImageId,
     alpha: 1,
+    infrared: 0,
     window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
   });
   const { source } = template.fabric;
   assert.match(
     source,
-    /material\.alpha = c\.a \* alpha \* step\(1\.5, float\(imageDimensions\.x\)\);/,
+    /material\.alpha = c\.a \* mix\(1\.0, key, infrared\) \* alpha \* step\(1\.5, float\(imageDimensions\.x\)\);/,
     'nothing draws before the full-extent image',
   );
   assert.match(
@@ -373,6 +375,7 @@ test('real Cesium builds the two-texture material, the opaque-pass appearance an
     /uniform sampler2D image_\d+;/,
     /uniform sampler2D detail_\d+;/,
     /uniform float alpha_\d+;/,
+    /uniform float infrared_\d+;/,
     /uniform vec4 window_\d+;/,
     /uniform ivec3 imageDimensions_\d+;/,
     /uniform ivec3 detailDimensions_\d+;/,
@@ -384,8 +387,15 @@ test('real Cesium builds the two-texture material, the opaque-pass appearance an
   assert.match(shader, /step\(1\.5, float\(detailDimensions_\d+\.x\)\)/);
   assert.match(
     shader,
-    /material\.alpha = c\.a \* alpha_\d+ \* step\(1\.5, float\(imageDimensions_\d+\.x\)\);/,
+    /material\.alpha = c\.a \* mix\(1\.0, key, infrared_\d+\) \* alpha_\d+ \* step\(1\.5, float\(imageDimensions_\d+\.x\)\);/,
     'the uniform is renamed, the material field is not',
+  );
+  // The cloud key the globe's draped imagery gets from infraredAlpha.js:
+  // brightest channel, 2.2 power, the shared thresholds.
+  assert.ok(
+    shader.includes(
+      `float key = smoothstep(${INFRARED_ALPHA_T0.toFixed(4)}, ${INFRARED_ALPHA_T1.toFixed(4)}, pow(max(c.r, max(c.g, c.b)), 2.2));`,
+    ),
   );
   assert.match(shader, /float useDetail = inside \* step/, 'locals keep names');
   const detail = { width: 4096, height: 2048 };
@@ -743,12 +753,12 @@ test('prefetch warms a decoded frame without staging and cancels cleanly', async
   h.shell.clear();
 });
 
-test('infrared frames get the display transfer; radar and lightning keep their pixels', async () => {
-  for (const [product, transfer] of [
-    ['clouds-regional', true],
-    ['clouds', true],
-    ['radar', false],
-    ['lightning', false],
+test('infrared frames reach the shader as decoded, with the cloud key as a uniform; radar and lightning get none', async () => {
+  for (const [product, amount] of [
+    ['clouds-regional', 1],
+    ['clouds', 1],
+    ['radar', 0],
+    ['lightning', 0],
   ]) {
     const h = harness({ product });
     const pending = h.shell.setFrame(snapshot(product), times[0]);
@@ -756,11 +766,10 @@ test('infrared frames get the display transfer; radar and lightning keep their p
     const image = h.material().uniforms.image;
     assert.equal(image.source, h.decoded[0], 'drawn into a canvas');
     assert.equal(h.decoded[0].closed, true);
-    assert.equal(image.pixels !== undefined, transfer, product);
-    if (transfer)
-      assert.deepEqual([...image.pixels], [194, 0, 0, 98], 'clouds only');
+    assert.equal(image.pixels, undefined, `${product}: pixels never rewritten`);
     h.render();
     assert.equal(await pending, true);
+    assert.equal(h.material().uniforms.infrared, amount, product);
     assert.equal(
       h.shell.getDiagnostics().height,
       WEATHER_SHELL_HEIGHTS[product],
@@ -769,20 +778,28 @@ test('infrared frames get the display transfer; radar and lightning keep their p
   }
 });
 
-test('an infrared mode change restages the same time with its own cached canvas', async () => {
+test('an infrared mode change is a uniform on the same image: no fetch, no new canvas', async () => {
   const h = harness({ product: 'clouds' });
   assert.equal(await show(h, times[0]), true);
-  const filtered = h.material().uniforms.image;
+  const image = h.material().uniforms.image;
+  assert.equal(h.material().uniforms.infrared, 1);
   assert.equal(await show(h, times[0]), true, 'same frame is a no-op');
   assert.equal(h.fetches.length, 1);
+  const renders = h.scene.renders;
   assert.equal(await show(h, times[0], { infrared: 'full' }), true);
-  const full = h.material().uniforms.image;
-  assert.notEqual(full, filtered);
-  assert.deepEqual([...full.pixels], [194, 0, 0, 200]);
+  assert.equal(h.material().uniforms.image, image);
+  assert.equal(h.material().uniforms.infrared, 0);
   assert.equal(h.shell.getDiagnostics().infrared, 'full');
+  assert.ok(h.scene.renders > renders, 'the new strength is drawn');
+  assert.equal(await show(h, times[0], { infrared: 40 }), true);
+  assert.equal(h.material().uniforms.infrared, 0.4);
+  assert.equal(h.shell.getDiagnostics().infrared, 40);
   assert.equal(await show(h, times[0], { infrared: 'filtered' }), true);
-  assert.equal(h.material().uniforms.image, filtered, 'cache hit');
-  assert.equal(h.fetches.length, 2);
+  assert.equal(h.material().uniforms.image, image);
+  assert.equal(h.material().uniforms.infrared, 1);
+  assert.equal(h.fetches.length, 1);
+  assert.equal(h.decoded.length, 1);
+  assert.equal(h.shell.getDiagnostics().cache.mosaics, 1);
   h.shell.clear();
 });
 
