@@ -187,7 +187,10 @@ instances. Configure sources with `application/sources` before registration or
 state restoration, and release them after the consumers stop. The catalog
 constructor (`application/layers`) also requires `wind`, `weather` and
 `cyclones` sources with `getSnapshot` for the Weather layers, and owns the
-observed-history clock those layers share for the catalog's lifetime.
+observed-history clock those layers share for the catalog's lifetime. That
+clock, the catalog's `weatherClock`, follows the world clock (`gods-eye-view/time`)
+and has no time controls of its own: move time with the world clock's `seek`,
+`play`, `pause` and `goLive` (`weatherClock.world` is the one it follows).
 A `weather` source may also supply decoded frames: an optional
 `getFrameImage({ product, time, size, bbox, signal })` returns a whole-extent or
 detail image and an optional `getFrameTile({ product, time, z, x, y, size,

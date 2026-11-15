@@ -14,9 +14,10 @@
  * src/time/snapshotTimeline.js); otherwise they stay live.
  *
  * Playback is continuous (`cursor + elapsed × rate`) unless a driver takes
- * it: weather replay steps its observed frames itself and moves the clock as
- * it goes, so play and pause hand over to it. Several drivers may be attached;
- * play goes to the newest that can play, pause to the one playing.
+ * it: a driver steps the clock itself and moves it as it goes, so play and
+ * pause hand over to it. Several drivers may be attached; play goes to the
+ * newest that can play, pause to the one playing. Layers that load frames
+ * (weather) do not drive it: they gate continuous play at their next frame.
  */
 
 /** The span a JS Date can hold, either side of 1970. */

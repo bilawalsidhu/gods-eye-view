@@ -35,6 +35,16 @@ const deferred = () => {
 const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
 };
+// Time moves on the world clock the weather clock follows, as the timeline
+// moves it.
+const seekTo = (clock, time) => {
+  clock.world.seek(Date.parse(time));
+  return flush();
+};
+const goLive = (clock) => {
+  clock.world.goLive();
+  return flush();
+};
 function event() {
   const listeners = new Set();
   return {
@@ -1765,7 +1775,7 @@ test('a delayed installation failure retains the replacement and does not throw 
   h.rendering.clear();
 });
 
-test('one row steps every registered observation; missing frames hide and latest restores each product', async (t) => {
+test('a row steps the world clock through every registered observation; missing frames hide and latest goes live', async (t) => {
   const clock = createWeatherClock();
   const radar = layerHarness({ clock });
   const satellite = layerHarness({
@@ -1798,6 +1808,14 @@ test('one row steps every registered observation; missing frames hide and latest
       .chips.filter(({ id }) =>
         ['previous', 'play', 'next', 'latest'].includes(id),
       );
+  // As the timeline's arrow keys do, a step back from live goes to the
+  // newest frame, and the next one back to the frame before it.
+  radar.layer.setParams({ step: -1 });
+  await flush();
+  assert.equal(clock.getState().target, times[2]);
+  assert.equal(clock.world.isPlaying(), false);
+  for (const h of [radar, satellite]) h.stages.at(-1)?.finish();
+  await flush();
   radar.layer.setParams({ step: -1 });
   await flush();
   assert.equal(clock.getState().target, times[1]);
@@ -1849,6 +1867,33 @@ test('one row steps every registered observation; missing frames hide and latest
   assert.equal(clock.getState().products.length, 1);
 });
 
+test('a row’s play and latest move the world clock as its timeline does', async (t) => {
+  const clock = createWeatherClock();
+  const { world } = clock;
+  const h = layerHarness({ clock });
+  t.after(() => {
+    h.layer.destroy();
+    clock.destroy();
+  });
+  const update = h.layer.update();
+  await flush();
+  h.stages.at(-1).finish();
+  await update;
+  h.layer.setParams({ play: true });
+  assert.equal(world.isPlaying(), true);
+  assert.equal(world.getState().stepping, false, 'the world plays on its own');
+  assert.ok(
+    world.now() - Date.parse(times[0]) < 1_000,
+    'from the start when live',
+  );
+  h.layer.setParams({ play: true });
+  assert.equal(world.isPlaying(), false);
+  h.layer.setParams({ latest: true });
+  assert.equal(world.isLive(), true);
+  await flush();
+  assert.equal(clock.getState().mode, 'latest');
+});
+
 test('history manifest expiry hides imagery without jumping to latest; host resume keeps the target', async (t) => {
   const clock = createWeatherClock();
   let value = snapshot;
@@ -1861,7 +1906,7 @@ test('history manifest expiry hides imagery without jumping to latest; host resu
   await flush();
   h.stages.at(-1).finish();
   await update;
-  const history = clock.setTarget(times[0]);
+  const history = seekTo(clock, times[0]);
   await flush();
   h.stages.at(-1).finish();
   await history;
@@ -1930,7 +1975,7 @@ test('satellite global selection uses the three-hour gap and preserves the share
   await flush();
   h.stages.at(-1).finish();
   await update;
-  await clock.setTarget(times[0]);
+  await seekTo(clock, times[0]);
   assert.equal(
     h.layer.getDiagnostics().hidden,
     true,
@@ -1989,7 +2034,8 @@ test('satellite clouds from an hourly feed draw all through each hour and read l
   );
 
   // Forty-five minutes past a frame, between it and the next, it still shows.
-  const between = clock.setTarget(
+  const between = seekTo(
+    clock,
     new Date(Date.parse(hourly[0]) + 45 * 60_000).toISOString(),
   );
   await flush();
@@ -2016,11 +2062,11 @@ test('switching to history cancels a still-loading latest refresh and a later ta
   const update = h.layer.update();
   await flush();
   const latest = h.stages.at(-1);
-  const oldHistory = clock.setTarget(times[0]);
+  const oldHistory = seekTo(clock, times[0]);
   await flush();
   assert.equal(latest.signal.aborted, true);
   const oldStage = h.stages.at(-1);
-  const current = clock.setTarget(times[1]);
+  const current = seekTo(clock, times[1]);
   await flush();
   assert.equal(oldStage.signal.aborted, true);
   h.stages.at(-1).finish();
@@ -2330,8 +2376,9 @@ test('failed prefetch leaves the current frame and errors unchanged and releases
   assert.deepEqual(h.rendering.getDiagnostics(), before);
 });
 
-test('layer warms the next advertised observation only after a successful playing frame, wrapping at the end', async (t) => {
+test('as the world plays, the layer warms the next advertised observation after each frame that shows', async (t) => {
   const clock = createWeatherClock();
+  const { world } = clock;
   const h = layerHarness({ clock });
   const warmed = [];
   let cancels = 0;
@@ -2349,45 +2396,45 @@ test('layer warms the next advertised observation only after a successful playin
   await flush();
   h.stages.at(-1).finish();
   await updated;
-  assert.equal(warmed.length, 0);
-  const play = clock.play();
+  await seekTo(clock, times[0]);
+  h.stages.at(-1).finish();
   await flush();
+  assert.equal(warmed.length, 0, 'paused, nothing is warmed');
+  world.play({ rate: 1e-9, continuous: true });
+  assert.equal(clock.getState().advancing, true);
+  await seekTo(clock, times[1]);
   assert.equal(warmed.length, 0, 'still staging');
   h.stages.at(-1).finish();
-  await play;
+  await flush();
   assert.deepEqual(
     warmed.map(({ time }) => time),
-    [times[0]],
+    [times[2]],
   );
   assert.deepEqual(warmed[0].options, { infrared: 100 });
-  const next = clock.setTarget(times[0]);
-  await flush();
-  h.stages.at(-1).finish();
-  await next;
-  assert.deepEqual(
-    warmed.map(({ time }) => time),
-    [times[0], times[1]],
-  );
-  const failed = clock.setTarget(times[1]);
-  await flush();
+  await seekTo(clock, times[0]);
   h.stages.at(-1).finish(false);
-  await failed;
-  assert.equal(warmed.length, 2);
-  const priorCancels = cancels;
-  clock.pause();
-  assert.ok(cancels > priorCancels);
-  const paused = clock.setTarget(times[2]);
   await flush();
+  assert.equal(warmed.length, 1, 'a failed frame warms nothing');
+  await seekTo(clock, times[2]);
   h.stages.at(-1).finish();
-  await paused;
-  assert.equal(warmed.length, 2);
-  await clock.play();
+  await flush();
+  assert.equal(warmed.length, 1, 'the world plays on past the newest frame');
+  const priorCancels = cancels;
+  world.pause();
+  await flush();
+  assert.ok(cancels > priorCancels);
+  await seekTo(clock, times[1]);
+  h.stages.at(-1).finish();
+  await flush();
+  assert.equal(warmed.length, 1);
+  world.play({ rate: 1e-9, continuous: true });
   h.documentRef.hidden = true;
   h.documentRef.emit('visibilitychange');
   await flush();
-  h.stages.at(-1).finish();
+  h.stages.at(-1)?.finish();
   await flush();
-  assert.equal(warmed.length, 2, 'hidden products do not prefetch');
+  assert.equal(warmed.length, 1, 'hidden products do not prefetch');
+  world.goLive();
 });
 
 for (const product of ['radar', 'clouds-regional', 'lightning']) {
