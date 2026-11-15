@@ -10,6 +10,69 @@ import {
   searchEntities,
   viewSummary,
 } from '../../data/entityContext.js';
+import { formatDate, formatNumber, t } from '../../i18n/index.js';
+
+const FACT_DATE = Object.freeze({
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * Words from entityContext (a fact's, an insight's or a warning's `words`) in
+ * the active language, or `fallback` (its English as given) when it has none.
+ * @param {?{text?: string, values?: object, context?: string, fixed?: number, date?: number}} words
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function sayWords(words, fallback = '') {
+  if (!words) return fallback;
+  if (words.date !== undefined) return formatDate(words.date, FACT_DATE);
+  const digits =
+    words.fixed === undefined
+      ? { maximumFractionDigits: 2 }
+      : {
+          minimumFractionDigits: words.fixed,
+          maximumFractionDigits: words.fixed,
+        };
+  const values = {};
+  for (const [name, value] of Object.entries(words.values || {}))
+    values[name] =
+      typeof value === 'number'
+        ? formatNumber(value, digits)
+        : value && typeof value === 'object'
+          ? sayWords(value)
+          : value;
+  if (words.context) values.context = words.context;
+  return t(words.text, values);
+}
+
+/** A fact's or insight's value in the active language. */
+export const factValue = (fact) => sayWords(fact?.words, fact?.value ?? '');
+
+/**
+ * A fact's label in the active language. Labels whose plain English means
+ * something else elsewhere in the catalog take a context here.
+ */
+export function factLabel(fact) {
+  if (fact?.label === 'Country') return t('Country', { context: 'place' });
+  return t(fact?.label || '', fact?.labelValues);
+}
+
+/**
+ * A figure split for a tile, so its number can lead: `{number, unit}` in the
+ * active language. A value that does not start with its number shows whole.
+ */
+export function factFigure(fact) {
+  const words = fact?.words;
+  if (words?.text?.startsWith('{n}') && typeof words.values?.n === 'number')
+    return {
+      number: sayWords({ ...words, text: '{n}' }),
+      unit: sayWords({ ...words, values: { ...words.values, n: '' } }).trim(),
+    };
+  return { number: factValue(fact), unit: '' };
+}
 
 /** How often an open card re-reads its item, so moving things stay current. */
 const REFRESH_MS = 2000;

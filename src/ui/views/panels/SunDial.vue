@@ -201,7 +201,7 @@ const dial = computed(() => {
     shadow,
     day: elevation > 0,
     elevation: Math.round(elevation),
-    direction: compass[Math.round(bearing / 45) % 8],
+    direction: t(compass[Math.round(bearing / 45) % 8]),
     shine,
     clock,
     gnomon: {
@@ -310,7 +310,7 @@ const caption = computed(() =>
         />
         <text v-for="(line, i) in dial.hours" :key="`t${line.h}`" :x="line.label.x" :y="line.label.y + 2.6">{{ ROMAN[i] }}</text>
       </g>
-      <text :x="dial.poleLabel.x" :y="dial.poleLabel.y + 3" class="sun-dial__pole">{{ dial.poleText }}</text>
+      <text :x="dial.poleLabel.x" :y="dial.poleLabel.y + 3" class="sun-dial__pole">{{ t(dial.poleText) }}</text>
 
       <!-- The shadow, then the gnomon standing over it. -->
       <polygon v-if="dial.shadow" :points="dial.shadow" fill="#000" opacity="0.6" filter="url(#sun-dial-shadow)" />
@@ -356,7 +356,7 @@ const caption = computed(() =>
           :x="c.x * 20"
           :y="c.y * 20 + 2.3"
           :class="['sun-dial__compass-label', { north: c.k === 'N' }]"
-        >{{ c.k }}</text>
+        >{{ t(c.k) }}</text>
       </g>
     </svg>
     <figcaption>{{ caption }}</figcaption>

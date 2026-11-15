@@ -1,12 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { onLocaleChange, t } from '../../../i18n/index.js';
+import { formatNumber, onLocaleChange, t } from '../../../i18n/index.js';
 import { compassName, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
 import { distanceKm } from '../../../data/entityContext.js';
 import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
 import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
 import UiSlider from '../../kit/UiSlider.js';
-import { useEntityCardStore } from '../../stores/entityCard.js';
+import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { shownLayerName } from '../../layerNames.js';
 
@@ -44,7 +44,7 @@ let readingHazards = 0;
 let settle = null;
 
 const radiusKm = contextRadiusKm;
-const radiusText = computed(() => `${radiusKm.value.toLocaleString()} km`);
+const radiusText = computed(() => t('{n} km', { n: formatNumber(radiusKm.value) }));
 const radiusIndex = computed(() => Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(radiusKm.value)));
 const pickRadius = (index) => setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
 
@@ -101,7 +101,7 @@ const alerts = computed(() => {
   void tick.value;
   return store
     .alertsAt(props.lat, props.lon, { radiusKm: radiusKm.value, limit: searching.value ? 40 : 4 })
-    .filter((alert) => matchesContextSearch(alert.title, alert.text));
+    .filter((alert) => matchesContextSearch(alert.title, sayWords(alert.words, alert.text), alert.text));
 });
 const shownHazards = computed(() =>
   hazards.value.filter((hazard) => matchesContextSearch(hazard.title, hazard.detail, hazardLayers.value[hazard.kind]?.name)).slice(0, searching.value ? 12 : 5),
@@ -142,18 +142,25 @@ const weatherFacts = computed(() => {
   if (!now) return [];
   const facts = [];
   if (Number.isFinite(now.windKph)) {
-    const from = Number.isFinite(now.windDirectionDeg)
-      ? ` ${compassName(now.windDirectionDeg)}`
-      : '';
-    facts.push({ label: t('Wind'), value: `${round(now.windKph)} km/h${from}` });
+    const speed = t('{n} km/h', { n: formatNumber(round(now.windKph)) });
+    facts.push({
+      label: t('Wind'),
+      value: Number.isFinite(now.windDirectionDeg) ? t('{speed} {direction}', { speed, direction: t(compassName(now.windDirectionDeg)) }) : speed,
+    });
   }
-  if (Number.isFinite(now.cloudCoverPct)) facts.push({ label: t('Cloud'), value: `${round(now.cloudCoverPct)}%` });
+  if (Number.isFinite(now.cloudCoverPct)) facts.push({ label: t('Cloud'), value: t('{n}%', { n: formatNumber(round(now.cloudCoverPct)) }) });
   if (Number.isFinite(now.visibilityM))
     facts.push({
       label: t('Visibility'),
-      value: now.visibilityM >= 10_000 ? `${round(now.visibilityM / 1000)} km` : `${(now.visibilityM / 1000).toFixed(1)} km`,
+      value: t('{n} km', {
+        n: formatNumber(now.visibilityM >= 10_000 ? round(now.visibilityM / 1000) : Number((now.visibilityM / 1000).toFixed(1))),
+      }),
     });
-  if (Number.isFinite(now.precipitationMm)) facts.push({ label: t('Rain'), value: `${now.precipitationMm.toFixed(1)} mm` });
+  if (Number.isFinite(now.precipitationMm))
+    facts.push({
+      label: t('Rain'),
+      value: t('{n} mm', { n: formatNumber(now.precipitationMm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
+    });
   return facts;
 });
 
@@ -161,7 +168,8 @@ const articles = computed(() =>
   props.entity ? [] : (brief.value?.articles || []).filter((article) => matchesContextSearch(article.title, article.domain)).slice(0, 3),
 );
 
-const distance = (km) => (km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km).toLocaleString()} km`);
+const distance = (km) =>
+  t('{n} km', { n: km < 10 ? formatNumber(km, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(km)) });
 function ago(ms) {
   if (!Number.isFinite(ms)) return '';
   const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
@@ -300,7 +308,7 @@ const sources = computed(() => {
                 <span class="spot-conditions__row-dot" aria-hidden="true"></span>{{ hazardLayers[hazard.kind].name }}
               </span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(hazard.distanceKm) }} {{ hazard.direction }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(hazard.distanceKm) }} {{ t(hazard.direction) }}</span>
           </button>
         </li>
       </ul>
@@ -319,7 +327,7 @@ const sources = computed(() => {
             <span class="material-symbols-outlined" aria-hidden="true">{{ alert.icon }}</span>
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ alert.title }}</span>
-              <span class="spot-conditions__row-detail">{{ alert.text }}</span>
+              <span class="spot-conditions__row-detail">{{ sayWords(alert.words, alert.text) }}</span>
             </span>
             <span class="spot-conditions__row-meta">{{ distance(alert.distanceKm) }}</span>
           </button>
@@ -339,7 +347,7 @@ const sources = computed(() => {
             <span class="material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span>
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ item.title }}</span>
-              <span class="spot-conditions__row-detail">{{ item.layerName }}</span>
+              <span class="spot-conditions__row-detail">{{ shownLayerName(item.layerName, item.layerId) }}</span>
             </span>
             <span class="spot-conditions__row-meta">{{ distance(item.distanceKm) }}</span>
           </button>

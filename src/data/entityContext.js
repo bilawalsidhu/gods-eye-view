@@ -1,5 +1,7 @@
 import { getContextStore } from './contextStore.js';
 import { msg } from '../i18n/marker.js';
+import { AIRCRAFT_CLASS_LABELS } from './aircraftClass.js';
+import { aircraftEmergency } from './aircraftEmergency.js';
 
 /**
  * One way to read any thing on the map, whichever layer holds it.
@@ -17,10 +19,11 @@ import { msg } from '../i18n/marker.js';
 /**
  * How a layer's items are named and drawn, by layer id. `headline` names the
  * fields that lead a card as its big figures, in order; `name` is what an
- * item without a name of its own goes by.
+ * item without a name of its own goes by. `kind` is also the English the card
+ * shows, through t(), for what the item is.
  */
 const AIRCRAFT = {
-  kind: 'aircraft',
+  kind: msg('aircraft'),
   icon: 'flight',
   moving: true,
   headline: ['altitudeM', 'speedMps', 'heading'],
@@ -30,71 +33,71 @@ const KINDS = Object.freeze({
   military: AIRCRAFT,
   'local-adsb': AIRCRAFT,
   'ais-live-vessels': {
-    kind: 'vessel',
+    kind: msg('vessel'),
     icon: 'directions_boat',
     moving: true,
     headline: ['speedKts', 'courseDeg', 'navStatus'],
   },
   satellites: {
-    kind: 'satellite',
+    kind: msg('satellite'),
     icon: 'satellite_alt',
     moving: true,
     headline: ['altitudeM', 'speedMps'],
   },
-  'rocket-launches': { kind: 'launch', icon: 'rocket_launch' },
+  'rocket-launches': { kind: msg('launch'), icon: 'rocket_launch' },
   'local-firms': {
-    kind: 'fire',
+    kind: msg('fire'),
     icon: 'local_fire_department',
     headline: ['frp', 'confidence'],
-    name: 'Fire detection',
+    name: msg('Fire detection'),
   },
   'fire-perimeters': {
-    kind: 'fire perimeter',
+    kind: msg('fire perimeter'),
     icon: 'local_fire_department',
     headline: ['acres', 'containedPct'],
   },
   earthquakes: {
-    kind: 'earthquake',
+    kind: msg('earthquake'),
     icon: 'earthquake',
     headline: ['magnitude', 'depthKm'],
   },
   'weather-cyclones': {
-    kind: 'storm',
+    kind: msg('storm'),
     icon: 'cyclone',
     headline: ['windKt', 'pressureHpa'],
   },
   'air-quality': {
-    kind: 'air quality station',
+    kind: msg('air quality station'),
     icon: 'air',
     headline: ['value', 'band'],
   },
-  'military-installations': { kind: 'installation', icon: 'factory' },
-  'local-dams': { kind: 'dam', icon: 'factory', headline: ['capacity'] },
+  'military-installations': { kind: msg('installation'), icon: 'factory' },
+  'local-dams': { kind: msg('dam'), icon: 'factory', headline: ['capacity'] },
   'local-datacenters': {
-    kind: 'data centre',
+    kind: msg('data centre'),
     icon: 'factory',
     headline: ['capacity'],
   },
-  'osm-places': { kind: 'place', icon: 'location_on' },
+  'osm-places': { kind: msg('place'), icon: 'location_on' },
   transit: {
-    kind: 'vehicle',
+    kind: msg('vehicle'),
     icon: 'train',
     moving: true,
     headline: ['speedMps', 'courseDeg'],
   },
   bikeshare: {
-    kind: 'bike station',
+    kind: msg('bike station'),
     icon: 'pedal_bike',
     headline: ['bikesAvailable', 'docksAvailable'],
   },
-  'alpr-cameras': { kind: 'plate reader', icon: 'videocam' },
-  cctv: { kind: 'camera', icon: 'videocam' },
+  'alpr-cameras': { kind: msg('plate reader'), icon: 'videocam' },
+  cctv: { kind: msg('camera'), icon: 'videocam' },
   'drone-airspace': {
-    kind: 'airspace',
+    kind: msg('airspace'),
     icon: 'pentagon',
     headline: ['lowerAltitude', 'upperAltitude'],
   },
-  'wildlife-sightings': { kind: 'sighting', icon: 'pets' },
+  'wildlife-sightings': { kind: msg('sighting'), icon: 'pets' },
 });
 
 /** Fields a record may name itself by, best first. */
@@ -220,76 +223,76 @@ const FACT_ORDER = [
 
 /** Plain labels for record fields. Unlisted fields are spelled out. */
 const FACT_LABELS = Object.freeze({
-  callsign: 'Callsign',
-  registration: 'Registration',
-  operator: 'Operator',
-  aircraftClass: 'Aircraft class',
-  routeOrigin: 'From',
-  routeDestination: 'To',
-  altitudeM: 'Altitude',
-  speedMps: 'Speed',
-  speedKts: 'Speed',
-  heading: 'Heading',
-  courseDeg: 'Course',
-  verticalRateMps: 'Vertical rate',
-  squawk: 'Squawk',
-  emergencyBroadcast: 'Emergency',
-  onGround: 'On the ground',
-  originCountry: 'Country',
-  lastContactAtMs: 'Last contact',
-  shipType: 'Ship type',
-  destination: 'Destination',
-  navStatus: 'Status',
-  magnitude: 'Magnitude',
-  depthKm: 'Depth',
-  timeMs: 'Time',
-  place: 'Place',
-  frp: 'Fire power',
-  confidence: 'Confidence',
-  satellite: 'Satellite',
-  sensor: 'Sensor',
-  acqTime: 'Detected',
-  acres: 'Area',
-  containedPct: 'Contained',
-  discoveredTime: 'Discovered',
-  category: 'Type',
-  windKt: 'Wind',
-  pressureHpa: 'Pressure',
-  classification: 'Class',
-  basin: 'Basin',
-  value: 'Index',
-  band: 'Level',
-  risk: 'Health risk',
-  bikesAvailable: 'Bikes',
-  docksAvailable: 'Docks',
-  lowerAltitude: 'Floor',
-  upperAltitude: 'Ceiling',
-  timesOfUse: 'Active',
-  mode: 'Mode',
-  noradId: 'NORAD ID',
-  satelliteClass: 'Class',
-  mmsi: 'MMSI',
-  icao24: 'ICAO24',
-  capacity: 'Capacity',
-  output: 'Output',
-  river: 'River',
-  class: 'Class',
-  kind: 'Type',
-  'addr:city': 'City',
-  'addr:state': 'State',
-  'addr:country': 'Country',
-  'addr:street': 'Street',
-  start_date: 'Opened',
-  height: 'Height',
-  'plant:source': 'Source',
-  'plant:output:electricity': 'Output',
-  'generator:source': 'Source',
-  'capacity:it_load': 'IT load',
-  waterway: 'Waterway',
-  military: 'Military',
-  landuse: 'Land use',
-  power: 'Power',
-  telecom: 'Telecom',
+  callsign: msg('Callsign'),
+  registration: msg('Registration'),
+  operator: msg('Operator'),
+  aircraftClass: msg('Aircraft class'),
+  routeOrigin: msg('From'),
+  routeDestination: msg('To'),
+  altitudeM: msg('Altitude'),
+  speedMps: msg('Speed'),
+  speedKts: msg('Speed'),
+  heading: msg('Heading'),
+  courseDeg: msg('Course'),
+  verticalRateMps: msg('Vertical rate'),
+  squawk: msg('Squawk'),
+  emergencyBroadcast: msg('Emergency'),
+  onGround: msg('On the ground'),
+  originCountry: msg('Country'),
+  lastContactAtMs: msg('Last contact'),
+  shipType: msg('Ship type'),
+  destination: msg('Destination'),
+  navStatus: msg('Status'),
+  magnitude: msg('Magnitude'),
+  depthKm: msg('Depth'),
+  timeMs: msg('Time'),
+  place: msg('Place'),
+  frp: msg('Fire power'),
+  confidence: msg('Confidence'),
+  satellite: msg('Satellite'),
+  sensor: msg('Sensor'),
+  acqTime: msg('Detected'),
+  acres: msg('Area'),
+  containedPct: msg('Contained'),
+  discoveredTime: msg('Discovered'),
+  category: msg('Type'),
+  windKt: msg('Wind'),
+  pressureHpa: msg('Pressure'),
+  classification: msg('Class'),
+  basin: msg('Basin'),
+  value: msg('Index'),
+  band: msg('Level'),
+  risk: msg('Health risk'),
+  bikesAvailable: msg('Bikes'),
+  docksAvailable: msg('Docks'),
+  lowerAltitude: msg('Floor'),
+  upperAltitude: msg('Ceiling'),
+  timesOfUse: msg('Active'),
+  mode: msg('Mode'),
+  noradId: msg('NORAD ID'),
+  satelliteClass: msg('Class'),
+  mmsi: msg('MMSI'),
+  icao24: msg('ICAO24'),
+  capacity: msg('Capacity'),
+  output: msg('Output'),
+  river: msg('River'),
+  class: msg('Class'),
+  kind: msg('Type'),
+  'addr:city': msg('City'),
+  'addr:state': msg('State'),
+  'addr:country': msg('Country'),
+  'addr:street': msg('Street'),
+  start_date: msg('Opened'),
+  height: msg('Height'),
+  'plant:source': msg('Source'),
+  'plant:output:electricity': msg('Output'),
+  'generator:source': msg('Source'),
+  'capacity:it_load': msg('IT load'),
+  waterway: msg('Waterway'),
+  military: msg('Military'),
+  landuse: msg('Land use'),
+  power: msg('Power'),
+  telecom: msg('Telecom'),
 });
 
 /** OSM bookkeeping tags that say nothing about the place itself. */
@@ -315,7 +318,7 @@ const finite = (value) =>
 
 /** What a layer's items are, and the glyph that stands for them. */
 export function entityKind(layerId) {
-  return KINDS[layerId] || { kind: 'feature', icon: 'location_on' };
+  return KINDS[layerId] || { kind: msg('feature'), icon: 'location_on' };
 }
 
 /** Latitude and longitude of a record, whichever names it uses. */
@@ -379,15 +382,16 @@ const isEpochMs = (value) =>
  * @param {*} value
  * @param {object} [options]
  * @param {number} [options.nowMs]
- * @returns {{value: string, age?: number}|null}
+ * @returns {{value: string, words?: object, age?: number}|null} `value` is
+ *   the English; `words` (see words()) is what the UI shows through t().
  */
 /** Codes the feeds use, in words. */
 const CODE_WORDS = Object.freeze({
   motion: {
-    moving: 'Moving',
-    stopped: 'Stopped',
-    waiting: 'Waiting for update',
-    'no-fix': 'No recent fix',
+    moving: msg('Moving'),
+    stopped: msg('Stopped'),
+    waiting: msg('Waiting for update'),
+    'no-fix': msg('No recent fix'),
   },
   // GTFS-RT vehicle states, as the operator last reported them.
   status: {
@@ -396,36 +400,81 @@ const CODE_WORDS = Object.freeze({
     STOPPED_AT: msg('Stopped at a stop'),
   },
   occupancy: {
-    EMPTY: 'Empty',
-    MANY_SEATS_AVAILABLE: 'Many seats free',
-    FEW_SEATS_AVAILABLE: 'Few seats free',
-    STANDING_ROOM_ONLY: 'Standing room only',
-    CRUSHED_STANDING_ROOM_ONLY: 'Crowded',
-    FULL: 'Full',
-    NOT_ACCEPTING_PASSENGERS: 'Not taking passengers',
+    EMPTY: msg('Empty'),
+    MANY_SEATS_AVAILABLE: msg('Many seats free'),
+    FEW_SEATS_AVAILABLE: msg('Few seats free'),
+    STANDING_ROOM_ONLY: msg('Standing room only'),
+    CRUSHED_STANDING_ROOM_ONLY: msg('Crowded'),
+    FULL: msg('Full'),
+    NOT_ACCEPTING_PASSENGERS: msg('Not taking passengers'),
   },
   classification: {
-    TD: 'Tropical depression',
-    TS: 'Tropical storm',
-    HU: 'Hurricane',
-    MH: 'Major hurricane',
-    TY: 'Typhoon',
-    STY: 'Super typhoon',
-    TC: 'Tropical cyclone',
-    SD: 'Subtropical depression',
-    SS: 'Subtropical storm',
-    PTC: 'Post-tropical cyclone',
+    TD: msg('Tropical depression'),
+    TS: msg('Tropical storm'),
+    HU: msg('Hurricane'),
+    MH: msg('Major hurricane'),
+    TY: msg('Typhoon'),
+    STY: msg('Super typhoon'),
+    TC: msg('Tropical cyclone'),
+    SD: msg('Subtropical depression'),
+    SS: msg('Subtropical storm'),
+    PTC: msg('Post-tropical cyclone'),
   },
-  category: { WF: 'Wildfire', RX: 'Prescribed burn' },
+  category: { WF: msg('Wildfire'), RX: msg('Prescribed burn') },
   basin: {
-    AL: 'Atlantic',
-    EP: 'Eastern Pacific',
-    CP: 'Central Pacific',
-    WP: 'Western Pacific',
-    IO: 'Indian Ocean',
-    SH: 'Southern Hemisphere',
+    AL: msg('Atlantic'),
+    EP: msg('Eastern Pacific'),
+    CP: msg('Central Pacific'),
+    WP: msg('Western Pacific'),
+    IO: msg('Indian Ocean'),
+    SH: msg('Southern Hemisphere'),
   },
+  // Transit modes, as plainWord would spell the feed's codes.
+  mode: {
+    bus: msg('Bus'),
+    trolleybus: msg('Trolleybus'),
+    tram: msg('Tram'),
+    cable_tram: msg('Cable tram'),
+    subway: msg('Subway'),
+    monorail: msg('Monorail'),
+    rail: msg('Rail'),
+    funicular: msg('Funicular'),
+    aerial_lift: msg('Aerial lift'),
+    ferry: msg('Ferry'),
+    unknown: msg('Unknown'),
+  },
+  aircraftClass: AIRCRAFT_CLASS_LABELS,
 });
+/**
+ * A feed code in English words (`classification` `HU` → `Hurricane`), for the
+ * UI to show through t(); '' when the code has none.
+ */
+export function codeWord(field, code) {
+  return CODE_WORDS[field]?.[text(code)] || '';
+}
+/** Code words whose English means something else elsewhere in the catalog. */
+const CODE_CONTEXTS = Object.freeze({ 'motion:stopped': 'vehicle motion' });
+
+/**
+ * Words for the UI to show through t(): `{text, values?, context?, fixed?}`
+ * is English with `{placeholders}` (numbers in `values` are formatted for the
+ * language, with `fixed` decimals when given); `{date}` is a moment shown as
+ * a date. Each fact, insight and warning that has them keeps its English in
+ * `value` too, for search, matching and tests.
+ */
+function words(text, values, { context, fixed } = {}) {
+  const out = { text };
+  if (values) out.values = values;
+  if (context) out.context = context;
+  if (fixed !== undefined) out.fixed = fixed;
+  return out;
+}
+const said = (value, text, values, options) => ({
+  value,
+  words: words(text, values, options),
+});
+/** A number rounded to at most `digits` decimals, as `round` shows it. */
+const roundTo = (n, digits = 0) => Number(n.toFixed(digits));
 
 /** A feed's bare lowercase word as people write it: `data_center` → `Data center`. */
 function plainWord(shown) {
@@ -438,19 +487,19 @@ function plainWord(shown) {
 function shipTypeName(code) {
   const n = Number(code);
   if (!Number.isInteger(n) || n < 1 || n > 99) return '';
-  if (n === 30) return 'Fishing';
-  if (n === 31 || n === 32 || n === 52) return 'Tug';
-  if (n === 35) return 'Military';
-  if (n === 36) return 'Sailing';
-  if (n === 37) return 'Pleasure craft';
-  if (n === 50) return 'Pilot vessel';
-  if (n === 51) return 'Search and rescue';
-  if (n === 55) return 'Law enforcement';
-  if (n >= 40 && n <= 49) return 'High-speed craft';
-  if (n >= 60 && n <= 69) return 'Passenger';
-  if (n >= 70 && n <= 79) return 'Cargo';
-  if (n >= 80 && n <= 89) return 'Tanker';
-  return 'Other';
+  if (n === 30) return msg('Fishing');
+  if (n === 31 || n === 32 || n === 52) return msg('Tug');
+  if (n === 35) return msg('Military');
+  if (n === 36) return msg('Sailing');
+  if (n === 37) return msg('Pleasure craft');
+  if (n === 50) return msg('Pilot vessel');
+  if (n === 51) return msg('Search and rescue');
+  if (n === 55) return msg('Law enforcement');
+  if (n >= 40 && n <= 49) return msg('High-speed craft');
+  if (n >= 60 && n <= 69) return msg('Passenger');
+  if (n >= 70 && n <= 79) return msg('Cargo');
+  if (n >= 80 && n <= 89) return msg('Tanker');
+  return msg('Other');
 }
 
 export function formatFact(
@@ -458,14 +507,21 @@ export function formatFact(
   value,
   { nowMs = Date.now(), kind = '' } = {},
 ) {
-  if (field === 'shipType' && shipTypeName(value))
-    return { value: shipTypeName(value) };
-  if (value === true) return { value: 'Yes' };
+  if (field === 'shipType' && shipTypeName(value)) {
+    const name = shipTypeName(value);
+    return said(name, name);
+  }
+  if (value === true) return said('Yes', msg('Yes'));
   if (value === false || value === null || value === undefined) return null;
   const number = typeof value === 'number' ? value : null;
   if (number !== null && !Number.isFinite(number)) return null;
   const round = (n, digits = 0) =>
     n.toLocaleString('en-US', { maximumFractionDigits: digits });
+  // A figure with its unit: English for the value, words for the UI.
+  const figure = (n, digits, text, english) =>
+    said(english.replace('{n}', round(n, digits)), text, {
+      n: roundTo(n, digits),
+    });
   if (number !== null) {
     if (
       /AtMs$|^timeMs$|^acqTime$|^observedMs$|^updatedTime$/.test(field) &&
@@ -481,44 +537,50 @@ export function formatFact(
           year: 'numeric',
           timeZone: 'UTC',
         }),
+        words: { date: number },
       };
     // Aviation altitudes read in feet; orbits in kilometres.
     if (field === 'altitudeM')
-      return {
-        value:
-          number >= 100_000
-            ? `${round(number / 1000)} km`
-            : `${round(number * 3.28084)} ft`,
-      };
+      return number >= 100_000
+        ? figure(number / 1000, 0, msg('{n} km'), '{n} km')
+        : figure(number * 3.28084, 0, msg('{n} ft'), '{n} ft');
     // Orbital speeds read in km/s, road and rail in km/h, the rest in knots.
     if (field === 'speedMps' && number >= 2000)
-      return { value: `${round(number / 1000, 2)} km/s` };
+      return figure(number / 1000, 2, msg('{n} km/s'), '{n} km/s');
     if (field === 'speedMps' && kind === 'vehicle')
-      return { value: `${round(number * 3.6)} km/h` };
-    if (field === 'speedMps') return { value: `${round(number * 1.94384)} kt` };
-    if (field === 'speedKts') return { value: `${round(number, 1)} kt` };
+      return figure(number * 3.6, 0, msg('{n} km/h'), '{n} km/h');
+    if (field === 'speedMps')
+      return figure(number * 1.94384, 0, msg('{n} kt'), '{n} kt');
+    if (field === 'speedKts') return figure(number, 1, msg('{n} kt'), '{n} kt');
     if (field === 'verticalRateMps')
-      return { value: `${round(number * 196.85)} ft/min` };
+      return figure(number * 196.85, 0, msg('{n} ft/min'), '{n} ft/min');
     if (/^(heading|courseDeg)$/.test(field))
-      return { value: `${round(number)}°` };
-    if (field === 'depthKm') return { value: `${round(number, 1)} km` };
-    if (field === 'magnitude') return { value: `M ${round(number, 1)}` };
-    if (field === 'frp') return { value: `${round(number, 1)} MW` };
+      return figure(number, 0, msg('{n}°'), '{n}°');
+    if (field === 'depthKm') return figure(number, 1, msg('{n} km'), '{n} km');
+    if (field === 'magnitude') return figure(number, 1, msg('M {n}'), 'M {n}');
+    if (field === 'frp') return figure(number, 1, msg('{n} MW'), '{n} MW');
     if (field === 'confidence' && number <= 1)
-      return { value: `${round(number * 100)}%` };
-    if (/Pct$/.test(field)) return { value: `${round(number)}%` };
-    if (/Kt$/.test(field)) return { value: `${round(number)} kt` };
-    if (/Hpa$/.test(field)) return { value: `${round(number)} hPa` };
-    if (field === 'acres') return { value: `${round(number)} acres` };
-    if (/Km$/.test(field)) return { value: `${round(number, 1)} km` };
-    if (/M$/.test(field)) return { value: `${round(number)} m` };
-    return { value: round(number, 2) };
+      return figure(number * 100, 0, msg('{n}%'), '{n}%');
+    if (/Pct$/.test(field)) return figure(number, 0, msg('{n}%'), '{n}%');
+    if (/Kt$/.test(field)) return figure(number, 0, msg('{n} kt'), '{n} kt');
+    if (/Hpa$/.test(field)) return figure(number, 0, msg('{n} hPa'), '{n} hPa');
+    if (field === 'acres')
+      return figure(number, 0, msg('{n} acres'), '{n} acres');
+    if (/Km$/.test(field)) return figure(number, 1, msg('{n} km'), '{n} km');
+    if (/M$/.test(field)) return figure(number, 0, msg('{n} m'), '{n} m');
+    // A bare number: only its digits follow the language.
+    return figure(number, 2, '{n}', '{n}');
   }
   const raw = text(value);
   if (!raw) return null;
+  const coded = CODE_WORDS[field]?.[raw];
+  if (coded)
+    return said(coded, coded, null, {
+      context: CODE_CONTEXTS[`${field}:${raw}`],
+    });
   // Identifiers and names stay exactly as the feed gives them.
   const verbatim = KEY_FIELDS.includes(field) || TITLE_FIELDS.includes(field);
-  const shown = CODE_WORDS[field]?.[raw] || (verbatim ? raw : plainWord(raw));
+  const shown = verbatim ? raw : plainWord(raw);
   return { value: shown.length > 80 ? `${shown.slice(0, 77)}…` : shown };
 }
 
@@ -555,6 +617,7 @@ export function recordFacts(
           FACT_LABELS[field] ||
           spellOut(field),
         value: formatted.value,
+        ...(formatted.words ? { words: formatted.words } : {}),
       });
   }
   return { facts, observedAgeMs };
@@ -742,45 +805,64 @@ function storeRecord(identity) {
  */
 /** What a transponder code means when it is one of the emergency codes. */
 const EMERGENCY_SQUAWKS = Object.freeze({
-  7500: 'Hijack (squawk 7500)',
-  7600: 'Radio failure (squawk 7600)',
-  7700: 'Emergency (squawk 7700)',
+  7500: msg('Hijack (squawk 7500)'),
+  7600: msg('Radio failure (squawk 7600)'),
+  7700: msg('Emergency (squawk 7700)'),
 });
+
+/**
+ * A record's warnings as `{value, words}`: the English and, for the ones this
+ * module words, what the UI shows through t(). A layer's own alert text has
+ * no words; it shows as the feed gives it.
+ */
+function warningEntries(record) {
+  if (!record) return [];
+  const found = [];
+  const kind = text(record.emergencyKind);
+  if (record.emergency === true || (kind && kind.toLowerCase() !== 'none')) {
+    // A known ADS-B emergency goes by its name; another word as given.
+    const named = kind ? aircraftEmergency({ emergency: kind })?.label : '';
+    found.push(
+      kind
+        ? said(`Emergency: ${named || kind}`, msg('Emergency: {kind}'), {
+            kind: named ? words(named) : kind,
+          })
+        : said('Emergency declared', msg('Emergency declared')),
+    );
+  }
+  const squawk = EMERGENCY_SQUAWKS[Number(record.squawk)];
+  if (squawk && !found.length) found.push(said(squawk, squawk));
+  if (record.tsunami === true || Number(record.tsunami) === 1)
+    found.push(said('Tsunami warning issued', msg('Tsunami warning issued')));
+  // `alert` is left out: feeds use it for a level (an earthquake's PAGER
+  // colour), not a warning to read out.
+  for (const field of ['warning', 'advisory']) {
+    const value = text(record[field]);
+    if (value && !found.some((entry) => entry.value === value))
+      found.push({ value, words: null });
+  }
+  return found;
+}
 
 /**
  * Warnings a record carries, most serious first: an aircraft emergency or
  * emergency squawk, a tsunami flag, or a layer's own alert text. These lead
  * the card, ahead of any facts.
  * @param {?object} record
- * @returns {string[]}
+ * @returns {string[]} In English; cards and alerts also carry their words.
  */
 export function recordWarnings(record) {
-  if (!record) return [];
-  const found = [];
-  const kind = text(record.emergencyKind);
-  if (record.emergency === true || (kind && kind.toLowerCase() !== 'none'))
-    found.push(kind ? `Emergency: ${kind}` : 'Emergency declared');
-  const squawk = EMERGENCY_SQUAWKS[Number(record.squawk)];
-  if (squawk && !found.length) found.push(squawk);
-  if (record.tsunami === true || Number(record.tsunami) === 1)
-    found.push('Tsunami warning issued');
-  // `alert` is left out: feeds use it for a level (an earthquake's PAGER
-  // colour), not a warning to read out.
-  for (const field of ['warning', 'advisory']) {
-    const value = text(record[field]);
-    if (value && !found.includes(value)) found.push(value);
-  }
-  return found;
+  return warningEntries(record).map((entry) => entry.value);
 }
 
 /** What a routine transponder code says, for the codes with a meaning. */
 const SQUAWK_MEANINGS = Object.freeze({
-  1200: 'VFR, no flight plan',
-  7000: 'VFR conspicuity',
-  2000: 'IFR, no code yet',
-  7500: 'Hijack',
-  7600: 'Radio failure',
-  7700: 'Emergency',
+  1200: msg('VFR, no flight plan'),
+  7000: msg('VFR conspicuity'),
+  2000: msg('IFR, no code yet'),
+  7500: msg('Hijack'),
+  7600: msg('Radio failure'),
+  7700: msg('Emergency'),
 });
 
 /** Speed of sound (m/s) at a height, from the standard atmosphere. */
@@ -796,8 +878,9 @@ function speedOfSound(heightM) {
  * than repeat the facts listed below them.
  * @param {?object} record
  * @param {{nowMs?: number}} [options]
- * @returns {Array<{label: string, labelValues?: object, value: string}>}
- *   `label` is English for t(), with `labelValues` filling its placeholders.
+ * @returns {Array<{label: string, labelValues?: object, value: string, words?: object}>}
+ *   `label` is English for t(), with `labelValues` filling its placeholders;
+ *   `value` is the English and `words` what the UI shows (see words()).
  */
 export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
   if (!record) return [];
@@ -809,17 +892,24 @@ export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
       (finite(record.speedKts) !== null ? record.speedKts * 0.514444 : null),
   );
   if (record.onGround === true)
-    out.push({ label: msg('Phase'), value: 'On the ground' });
-  else if (climbMps !== null) {
-    const fpm = climbMps * 196.85;
     out.push({
       label: msg('Phase'),
-      value:
-        fpm > 300
-          ? `Climbing ${Math.round(fpm / 100) * 100} ft/min`
-          : fpm < -300
-            ? `Descending ${Math.round(-fpm / 100) * 100} ft/min`
-            : 'Cruising, level',
+      ...said('On the ground', msg('On the ground')),
+    });
+  else if (climbMps !== null) {
+    const fpm = climbMps * 196.85;
+    const rate = Math.round(Math.abs(fpm) / 100) * 100;
+    out.push({
+      label: msg('Phase'),
+      ...(fpm > 300
+        ? said(`Climbing ${rate} ft/min`, msg('Climbing {n} ft/min'), {
+            n: rate,
+          })
+        : fpm < -300
+          ? said(`Descending ${rate} ft/min`, msg('Descending {n} ft/min'), {
+              n: rate,
+            })
+          : said('Cruising, level', msg('Cruising, level'))),
     });
   }
   if (altitudeM !== null && altitudeM > 900)
@@ -830,24 +920,30 @@ export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
   if (speedMps !== null && altitudeM !== null && speedMps > 60)
     out.push({
       label: msg('Mach'),
-      value: `M ${(speedMps / speedOfSound(altitudeM)).toFixed(2)}`,
+      ...said(
+        `M ${(speedMps / speedOfSound(altitudeM)).toFixed(2)}`,
+        msg('M {n}'),
+        { n: roundTo(speedMps / speedOfSound(altitudeM), 2) },
+        { fixed: 2 },
+      ),
     });
   const squawk = Number(record.squawk);
   if (SQUAWK_MEANINGS[squawk])
     out.push({
       label: msg('Squawk {code}'),
       labelValues: { code: String(record.squawk) },
-      value: SQUAWK_MEANINGS[squawk],
+      ...said(SQUAWK_MEANINGS[squawk], SQUAWK_MEANINGS[squawk]),
     });
   const seen = finite(record.lastContactAtMs ?? record.timeMs);
   if (seen !== null) {
     const seconds = Math.max(0, Math.round((nowMs - seen) / 1000));
     out.push({
       label: msg('Signal'),
-      value:
-        seconds < 90
-          ? `${seconds} s ago`
-          : `${Math.round(seconds / 60)} min ago`,
+      ...(seconds < 90
+        ? said(`${seconds} s ago`, msg('{n} s ago'), { n: seconds })
+        : said(`${Math.round(seconds / 60)} min ago`, msg('{n} min ago'), {
+            n: Math.round(seconds / 60),
+          })),
     });
   }
   return out;
@@ -904,6 +1000,9 @@ export function describeEntity(
   const key = record
     ? recordKey(layerId, record)
     : `${layerId}:${text(identity.id) || title}`;
+  const warnings = warningEntries(record);
+  const aircraftClass =
+    kind.kind === 'aircraft' ? text(record?.aircraftClass) || null : null;
   return {
     key,
     layerId,
@@ -914,14 +1013,19 @@ export function describeEntity(
     // The fields that lead the card as its big figures.
     headline: kind.headline || [],
     title,
+    // The kind's own name, when the item goes by it, for the UI to translate.
+    titleWords: kind.name && title === kind.name ? words(kind.name) : null,
     lat: at?.lat ?? null,
     lon: at?.lon ?? null,
     altitudeM: finite(record?.altitudeM ?? identity.altitudeM),
     facts: facts.filter((fact) => fact.value !== title),
-    warnings: recordWarnings(record),
+    warnings: warnings.map((entry) => entry.value),
+    // The same warnings for the UI to show: words, or null to show as given.
+    warningWords: warnings.map((entry) => entry.words),
     // For the aircraft card's model and route line.
-    aircraftClass:
-      kind.kind === 'aircraft' ? text(record?.aircraftClass) || null : null,
+    aircraftClass,
+    // Its class's English name, for the UI to translate; null when unknown.
+    aircraftClassName: AIRCRAFT_CLASS_LABELS[aircraftClass] || null,
     insights:
       kind.kind === 'aircraft' ? aircraftInsights(record, { nowMs }) : [],
     operator: text(record?.operator) || null,
@@ -1125,14 +1229,14 @@ function tallyBy(records, labelOf, { keep = 4 } = {}) {
 }
 
 const AIRCRAFT_CLASS_NAMES = {
-  airliner: 'Airliners',
-  widebody: 'Widebodies',
-  bizjet: 'Business jets',
-  light: 'Light aircraft',
-  helicopter: 'Helicopters',
-  turboprop: 'Turboprops',
-  fastjet: 'Fast jets',
-  quadjet: 'Four-engine jets',
+  airliner: msg('Airliners'),
+  widebody: msg('Widebodies'),
+  bizjet: msg('Business jets'),
+  light: msg('Light aircraft'),
+  helicopter: msg('Helicopters'),
+  turboprop: msg('Turboprops'),
+  fastjet: msg('Fast jets'),
+  quadjet: msg('Four-engine jets'),
 };
 
 /**
@@ -1212,7 +1316,11 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     });
     splits.push({
       title: msg('Mode'),
-      parts: tallyBy(records, (record) => plainWord(text(record.mode))),
+      parts: tallyBy(
+        records,
+        (record) =>
+          CODE_WORDS.mode[record.mode] || plainWord(text(record.mode)),
+      ),
     });
     const operators = tallyBy(records, (record) => text(record.operator));
     if (operators.length > 1)
@@ -1246,12 +1354,12 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
       return m === null
         ? ''
         : m >= 6
-          ? 'M6 and above'
+          ? msg('M6 and above')
           : m >= 5
-            ? 'M5 to 6'
+            ? msg('M5 to 6')
             : m >= 4
-              ? 'M4 to 5'
-              : 'Below M4';
+              ? msg('M4 to 5')
+              : msg('Below M4');
     };
     splits.push({ title: msg('Magnitude'), parts: tallyBy(records, band) });
   }
@@ -1473,7 +1581,7 @@ export function alertsNear(
   const found = [];
   for (const layer of enabledLayers(dataManager)) {
     for (const record of layerRecords(dataManager, layer.id)) {
-      const warnings = recordWarnings(record);
+      const warnings = warningEntries(record);
       if (!warnings.length) continue;
       const km = distanceKm(here, recordPosition(record));
       if (!(km <= radiusKm)) continue;
@@ -1481,7 +1589,9 @@ export function alertsNear(
         key: recordKey(layer.id, record),
         icon: entityKind(layer.id).icon,
         title: recordTitle(record) || layerName(dataManager, layer.id),
-        text: warnings[0],
+        text: warnings[0].value,
+        // What the UI shows for it: words, or null to show `text` as given.
+        words: warnings[0].words,
         distanceKm: km,
         identity: {
           layerId: layer.id,

@@ -1,4 +1,4 @@
-import { distanceKm } from '../data/entityContext.js';
+import { codeWord, distanceKm } from '../data/entityContext.js';
 import { msg, t, tn } from '../i18n/index.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
@@ -46,7 +46,17 @@ const perimeters = () =>
   snapshot('perimeters', () => createWfigsPerimeterSource().getSnapshot());
 const fires = () => snapshot('fires', () => createFirmsSource().getSnapshot());
 
-const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+// English compass points, which the UI shows through t().
+const COMPASS = [
+  msg('N'),
+  msg('NE'),
+  msg('E'),
+  msg('SE'),
+  msg('S'),
+  msg('SW'),
+  msg('W'),
+  msg('NW'),
+];
 /** The compass point from one spot to another, like "NE". */
 export function compassPoint(from, to) {
   const rad = Math.PI / 180;
@@ -76,6 +86,16 @@ function perimeterMiddle(row) {
     lat += y;
   }
   return { lat: lat / ring.length, lon: lon / ring.length };
+}
+
+/** A storm as "Hurricane Melissa": its class in words when the code has them. */
+function stormTitle(storm) {
+  const word = codeWord('classification', storm.classification);
+  if (!word)
+    return [storm.classification, storm.name].filter(Boolean).join(' ');
+  return storm.name
+    ? t('{kind} {name}', { kind: t(word), name: storm.name })
+    : t(word);
 }
 
 /**
@@ -121,7 +141,7 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
     add({
       kind: 'storm',
       icon: 'cyclone',
-      title: [storm.classification, storm.name].filter(Boolean).join(' '),
+      title: stormTitle(storm),
       detail: storm.windKt ? t('{n} kt winds', { n: storm.windKt }) : '',
       time: Date.parse(storm.positionAt) || null,
       at,

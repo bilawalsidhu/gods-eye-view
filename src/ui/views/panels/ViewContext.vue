@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { contextNeedle, contextSearchText, matchesContextSearch } from '../../contextSearch.js';
-import { t, tn } from '../../../i18n/index.js';
+import { formatNumber, t, tn } from '../../../i18n/index.js';
 import { citiesAround, countryName, nearestCity } from '../../../data/wikidataCities.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
@@ -179,16 +179,16 @@ function breakdownOf(layerId, loaded) {
   if (!found) return null;
   const basis = globeView.value
     ? loaded !== null && loaded > found.total
-      ? t('Of {n} read, {total} loaded', { n: found.total.toLocaleString(), total: loaded.toLocaleString() })
-      : t('Of all {n}', { n: found.total.toLocaleString() })
-    : t('Of {n} in view', { n: found.total.toLocaleString() });
+      ? t('Of {n} read, {total} loaded', { n: formatNumber(found.total), total: formatNumber(loaded) })
+      : t('Of all {n}', { n: formatNumber(found.total) })
+    : t('Of {n} in view', { n: formatNumber(found.total) });
   return {
     basis,
     splits: found.splits.map((split) => ({
       title: t(split.title),
       parts: split.parts.map((part, index) => ({
         label: t(part.label),
-        count: part.count.toLocaleString(),
+        count: formatNumber(part.count),
         share: `${((part.count / found.total) * 100).toFixed(1)}%`,
         color: SPLIT_COLORS[index % SPLIT_COLORS.length],
       })),
@@ -268,7 +268,9 @@ function turnOn(layer) {
 }
 
 const distance = (km) =>
-  km < 1 ? t('{n} m', { n: Math.round(km * 1000) }) : t('{n} km', { n: km < 10 ? km.toFixed(1) : Math.round(km) });
+  km < 1
+    ? t('{n} m', { n: formatNumber(Math.round(km * 1000)) })
+    : t('{n} km', { n: formatNumber(km < 10 ? Number(km.toFixed(1)) : Math.round(km)) });
 </script>
 
 <template>
@@ -293,7 +295,7 @@ const distance = (km) =>
       <div class="view-context__world-grid">
         <component :is="tile.on ? 'div' : 'button'" v-for="tile in worldTiles" :key="tile.id" :type="tile.on ? undefined : 'button'" class="view-context__world-tile" :class="{ 'is-off': !tile.on }" :title="tile.on ? undefined : t('Turn on {name}', { name: tile.name })" @click="tile.on ? undefined : turnOn(tile)">
           <span class="material-symbols-outlined" aria-hidden="true">{{ tile.icon }}</span>
-          <strong>{{ tile.on ? (tile.count === null ? '…' : tile.count.toLocaleString()) : t('Off') }}</strong>
+          <strong>{{ tile.on ? (tile.count === null ? '…' : formatNumber(tile.count)) : t('Off') }}</strong>
           <span>{{ tile.name }}</span>
         </component>
       </div>
@@ -312,7 +314,7 @@ const distance = (km) =>
           <span class="view-context__live-main">
             <span class="view-context__live-name">{{ layer.name }}</span>
             <span class="view-context__live-meta">
-              <template v-if="layer.total !== null">{{ t('{n} loaded', { n: layer.total.toLocaleString() }) }} · </template>{{ t('{n} in view', { n: layer.inView }) }}<template v-if="layer.updated"> · {{ layer.updated }}</template>
+              <template v-if="layer.total !== null">{{ t('{n} loaded', { n: formatNumber(layer.total) }) }} · </template>{{ t('{n} in view', { n: layer.inView }) }}<template v-if="layer.updated"> · {{ layer.updated }}</template>
             </span>
           </span>
           <span class="view-context__live-state" :class="`view-context__live-state--${layer.state.tone}`">{{ layer.state.text }}</span>
@@ -352,7 +354,7 @@ const distance = (km) =>
         <div v-for="group in groups" :key="group.layerId" class="view-context__group">
           <h4>
             <span class="material-symbols-outlined" aria-hidden="true">{{ group.icon }}</span>
-            <span>{{ group.layerName }}</span>
+            <span>{{ shownLayerName(group.layerName, group.layerId) }}</span>
             <span class="view-context__count">{{ group.count }}</span>
           </h4>
           <ul>

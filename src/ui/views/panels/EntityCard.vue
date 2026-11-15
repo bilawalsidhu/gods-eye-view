@@ -1,13 +1,14 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { t } from '../../../i18n/index.js';
-import { useEntityCardStore } from '../../stores/entityCard.js';
+import { formatNumber, t } from '../../../i18n/index.js';
+import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import AltitudeGraph from './AltitudeGraph.vue';
 import { contextNeedle, contextSearchText, matchesContextSearch } from '../../contextSearch.js';
 import CctvPreview from './CctvPreview.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 import SpotConditions from './SpotConditions.vue';
+import { shownLayerName } from '../../layerNames.js';
 import { countryName, nearestCity } from '../../../data/wikidataCities.js';
 
 // The Context panel's card for one thing on the map: what it is, its facts,
@@ -19,6 +20,7 @@ const { card, lost, tick } = storeToRefs(store);
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
   const current = card.value;
+  if (current?.titleWords) return sayWords(current.titleWords, current.title);
   if (current?.layerId !== 'cctv') return current?.title;
   const f = cctvFrame.value;
   if (!f || f.cameraId !== current.identity?.id) return current.title;
@@ -64,7 +66,9 @@ const position = computed(() => {
 });
 
 const distance = (km) =>
-  km < 1 ? t('{n} m', { n: Math.round(km * 1000) }) : t('{n} km', { n: km < 10 ? km.toFixed(1) : Math.round(km) });
+  km < 1
+    ? t('{n} m', { n: formatNumber(Math.round(km * 1000)) })
+    : t('{n} km', { n: formatNumber(km < 10 ? Number(km.toFixed(1)) : Math.round(km)) });
 
 const source = computed(() => {
   void tick.value;
@@ -95,11 +99,6 @@ const restFacts = computed(() => {
   return (card.value?.facts || []).filter((fact) => !shown.has(fact.field));
 });
 
-// A figure split into its number and unit, so the number can lead.
-function splitValue(value) {
-  const match = String(value).match(/^([-−+]?[\d.,]+|M [\d.]+)\s*(.*)$/);
-  return match ? { number: match[1], unit: match[2] } : { number: String(value), unit: '' };
-}
 
 // The line under the name: who runs it and what it is. The layer is already
 // named on the line above the title.
@@ -107,14 +106,15 @@ const subtitle = computed(() => {
   const current = card.value;
   if (!current) return '';
   const cls = current.aircraftClass;
-  return [current.operator, cls && cls[0].toUpperCase() + cls.slice(1)].filter(Boolean).join(' · ');
+  const clsName = current.aircraftClassName ? t(current.aircraftClassName) : cls && cls[0].toUpperCase() + cls.slice(1);
+  return [current.operator, clsName].filter(Boolean).join(' · ');
 });
 // The details grid leaves out what the header already says.
 // The Context search narrows them to the ones whose name or value holds its
 // text, and looks through every fact, the headline ones included.
 const gridFacts = computed(() =>
   contextNeedle.value
-    ? (card.value?.facts || []).filter((fact) => matchesContextSearch(t(fact.label), fact.value))
+    ? (card.value?.facts || []).filter((fact) => matchesContextSearch(factLabel(fact), factValue(fact), fact.value))
     : restFacts.value.filter((fact) => !(card.value?.operator && fact.field === 'operator') && !(card.value?.aircraftClass && fact.field === 'aircraftClass')),
 );
 
@@ -140,7 +140,11 @@ const routeProgress = computed(() => {
   const speedKmh = Number.isFinite(current.speedMps) ? current.speedMps * 3.6 : null;
   const hours = speedKmh && speedKmh > 80 ? left / speedKmh : null;
   const eta =
-    hours === null ? null : hours >= 1 ? `${Math.floor(hours)} h ${Math.round((hours % 1) * 60)} min` : `${Math.max(1, Math.round(hours * 60))} min`;
+    hours === null
+      ? null
+      : hours >= 1
+        ? t('{h} h {m} min', { h: Math.floor(hours), m: Math.round((hours % 1) * 60) })
+        : t('{n} min', { n: Math.max(1, Math.round(hours * 60)) });
   return {
     share: Math.min(1, Math.max(0, share)),
     flown: distance(flown),
@@ -192,7 +196,8 @@ const kindLine = computed(() => {
   if (!current) return '';
   const layer = current.layerName || '';
   const plain = (words) => words.toLowerCase().replace(/s\b/g, '');
-  return plain(layer).includes(plain(current.kind)) ? layer : `${kindLabel.value} · ${layer}`;
+  const shown = shownLayerName(layer, current.layerId);
+  return plain(layer).includes(plain(current.kind)) ? shown : `${kindLabel.value} · ${shown}`;
 });
 
 // A new item starts at the top of the panel, not wherever the last one was
@@ -220,8 +225,8 @@ watch(
           <span class="material-symbols-outlined entity-hero__glyph" aria-hidden="true">{{ card.icon }}</span>
           <div v-if="tiles.length" class="entity-hero__figures">
             <div v-for="fact in tiles" :key="fact.field" class="entity-hero__figure">
-              <strong>{{ splitValue(fact.value).number }}<small v-if="splitValue(fact.value).unit">{{ splitValue(fact.value).unit }}</small></strong>
-              <span>{{ t(fact.label) }}</span>
+              <strong>{{ factFigure(fact).number }}<small v-if="factFigure(fact).unit">{{ factFigure(fact).unit }}</small></strong>
+              <span>{{ factLabel(fact) }}</span>
             </div>
           </div>
           <span v-else class="entity-hero__kind">{{ kindLabel }}</span>
@@ -247,7 +252,7 @@ watch(
 
       <div v-if="card.warnings?.length" class="entity-card__warning" role="alert">
         <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-        <span>{{ card.warnings.join(' · ') }}</span>
+        <span>{{ card.warnings.map((warning, index) => sayWords(card.warningWords?.[index], warning)).join(' · ') }}</span>
       </div>
 
       <div v-if="card.route" class="entity-card__route" :class="{ 'entity-card__route--unverified': !card.route.verified, 'entity-card__route--progress': routeProgress }">
@@ -276,8 +281,8 @@ watch(
 
       <div v-if="tiles.length && heroKind !== 'none' && !contextNeedle" class="entity-card__tiles" :style="{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }">
         <div v-for="fact in tiles" :key="fact.field" class="entity-card__tile">
-          <span>{{ t(fact.label) }}</span>
-          <strong>{{ splitValue(fact.value).number }}<small v-if="splitValue(fact.value).unit">{{ splitValue(fact.value).unit }}</small></strong>
+          <span>{{ factLabel(fact) }}</span>
+          <strong>{{ factFigure(fact).number }}<small v-if="factFigure(fact).unit">{{ factFigure(fact).unit }}</small></strong>
         </div>
       </div>
 
@@ -286,8 +291,8 @@ watch(
         <h4>{{ contextNeedle ? t('Matching details') : t('Details') }}</h4>
         <dl class="entity-card__facts">
           <div v-for="fact in gridFacts" :key="fact.field" class="entity-card__fact">
-            <dt>{{ t(fact.label) }}</dt>
-            <dd>{{ fact.value }}</dd>
+            <dt>{{ factLabel(fact) }}</dt>
+            <dd>{{ factValue(fact) }}</dd>
           </div>
         </dl>
       </section>
