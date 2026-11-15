@@ -49,6 +49,10 @@ export function createAbyssLayer({
 
   function handleFeatureSelected(record) {
     _selectedFeature = record;
+    // A new selection owns the track polyline and detail immediately, even
+    // when the replacement track is unavailable or slow to arrive.
+    _selectedTrack = null;
+    _renderer?.clearSelectedTrack();
     if (record.kind === 'dive' && record.cruiseDiveId) {
       // Lazy load ROV dive track
       source
@@ -61,9 +65,6 @@ export function createAbyssLayer({
           }
         })
         .catch(() => {});
-    } else {
-      _selectedTrack = null;
-      _renderer?.clearSelectedTrack();
     }
     notifyControlsChanged();
   }

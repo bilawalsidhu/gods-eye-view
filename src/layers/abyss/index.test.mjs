@@ -123,6 +123,53 @@ test('createAbyssLayer lifecycle: init, enable, update, disable, destroy', async
   layer.destroy();
 });
 
+test('selecting a different ROV dive clears the previous dive track', async () => {
+  const viewer = createMockViewer();
+  const source = createMockSource();
+  const firstDive = (await source.getExpeditionsSnapshot())[0];
+  const secondDive = {
+    ...firstDive,
+    id: 'dive-2',
+    cruiseDiveId: 'EX1605_D2',
+    name: 'Okeanos Dive 2',
+  };
+  const firstTrack = await source.getDiveTrack();
+  source.getDiveTrack = async ({ cruiseDiveId }) =>
+    cruiseDiveId === firstDive.cruiseDiveId ? firstTrack : null;
+
+  let pickedRecord = firstDive;
+  let onClick = null;
+  viewer.scene.pick = () => ({ id: { __gevAbyssRecord: pickedRecord } });
+  const layer = createAbyssLayer({
+    source,
+    screenSpaceEventHandlerFactory: () => ({
+      setInputAction(action) {
+        onClick = action;
+      },
+      destroy() {},
+    }),
+  });
+
+  layer.init(viewer);
+  layer.enable(viewer);
+  const trackEntities = viewer._mockDataSources[1].entities;
+
+  onClick({ position: { x: 10, y: 10 } });
+  await Promise.resolve();
+  assert.equal(trackEntities.values.length, 1);
+  assert.ok(layer.getRowControls().summary.detail.trackLength);
+
+  pickedRecord = secondDive;
+  onClick({ position: { x: 10, y: 10 } });
+  assert.equal(layer.getSelectedFeature().id, secondDive.id);
+  assert.equal(trackEntities.values.length, 0);
+  assert.equal(layer.getRowControls().summary.detail.trackLength, null);
+
+  await Promise.resolve();
+  assert.equal(trackEntities.values.length, 0);
+  layer.destroy();
+});
+
 test('createAbyssLayer allows changing params (bathymetry product & subsea filter)', () => {
   const viewer = createMockViewer();
   const source = createMockSource();
