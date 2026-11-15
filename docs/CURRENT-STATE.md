@@ -1020,7 +1020,9 @@ other map content draws over the shells, and shells are not pickable. A
 map-source change tears down one renderer and restages the shown observation on
 the other. A map without an imagery host pauses history while metadata refresh
 continues, then resumes when a host returns.
-Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
+Globe tiled products use 256 px tiles to maximum level 6, or to the level a
+feed that supplies its own tiles names for the product (`frameMaximumLevel`,
+0–12; any other answer keeps 6). The tile proxy accepts
 size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
 24-hour immutable response and eight upstream slots. The image proxy serves every
 product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
@@ -1062,7 +1064,11 @@ open latest.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
-avoiding request-dependent contrast seams.
+avoiding request-dependent contrast seams. On globe hosts, a feed that supplies
+tiles and names a level for global infrared instead has it drawn from its tiles
+to that level,
+each tile given the same display transfer as regional infrared tiles, and no
+mosaic is read.
 On globe hosts, regional infrared retains network tiles and processes each
 decoded tile once; shells process each whole frame once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
