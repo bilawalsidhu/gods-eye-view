@@ -419,6 +419,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Natural Earth countries, states and provinces** (260 admin-0/map units + 4,587 admin-1 polygons)             | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **Natural Earth disputed areas** (11 of the source's 99 features, hand-picked; [list](src/data/local_data/natural_earth/README.md#disputed-areas-disputed_areasjson)) | `natural_earth/` | **Public domain** | ✅ (no restrictions) | "Made with Natural Earth" (courtesy credit — not legally required) |
 | **Natural Earth populated places** (7,342 points: name, position, rank)     | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
+| **Wikidata cities** (31,827 settlements of 15,000 people or more: name, position, population, country) | `wikidata_cities/` | **CC0 1.0** (public domain dedication) | ✅ (no restrictions) | "City, town and village names from Wikidata (CC0)" (courtesy credit — not legally required) |
 | **US Census Bureau counties** (3,235 county polygons)                       | `us_census_counties/`             | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **US Census Bureau places** (32,629 city, town and CDP polygons)            | `us_census_places/`               | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **Who's On First neighborhoods** (61,441 polygons)                          | `wof_neighborhoods/`              | Per source: CC BY, ODC-By, Open Government licences, CC0, PDDL, public domain (folder `ATTRIBUTION.md`)   | ✅ (attribution)                                 | "Neighborhood boundaries: Who's On First and contributors"; per-source credits in the folder |
@@ -517,6 +518,20 @@ row per place: name, latitude and longitude rounded to 3 decimals, `scalerank` a
 its width ("Sichuan, China · near Chengdu"), offline, with the states and provinces pack giving
 the division. Public domain; credited "Made with Natural Earth" with the other packs. Rebuild:
 `node scripts/build-admin-packs.mjs --only places`; provenance in the folder README.
+
+### Wikidata cities (`wikidata_cities/`)
+
+Settlements of 15,000 people or more that Wikidata states a population and coordinates for,
+read once from the Wikidata Query Service by `scripts/build-wikidata-cities.mjs`: one row per
+place with its English label, latitude and longitude to 3 decimals, largest stated population,
+ISO 3166-1 country code and Wikidata id (31,827 places, 1.6 MB). The pack is read the
+first time a place name is looked up and gives the nearest city, the places in view and a city
+found by name (`findPlace`: "Paris, France", or the nearest namesake in view). Groupings of
+settlements (metropolitan areas, agglomerations) and places that no longer stand are left out
+unless they are also a living city. Names match without accents ("Sao Paulo" finds São Paulo).
+CC0; credited "City, town and village names from Wikidata (CC0)" as a courtesy once a name from
+the pack is shown. Rebuild: `node scripts/build-wikidata-cities.mjs`; provenance in the folder
+README. The app never calls Wikidata itself.
 
 ### Sky background (`sky/`)
 
