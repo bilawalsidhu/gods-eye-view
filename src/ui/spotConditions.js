@@ -101,15 +101,22 @@ function stormTitle(storm) {
 /**
  * Hazards within a radius of a spot, nearest first within each kind:
  * `[{kind, icon, title, detail, distanceKm, at}]`. Every kind uses the same
- * radius, the one Context's radius control sets.
+ * radius, the one Context's radius control sets. Satellite fire hits need a
+ * FIRMS key the browser cannot see, so they are read only with `fires`: while
+ * the FIRMS layer is on, which has found the key works.
  */
-export async function hazardsNear(lat, lon, radiusKm = 250) {
+export async function hazardsNear(
+  lat,
+  lon,
+  radiusKm = 250,
+  { fires: withFires = false } = {},
+) {
   const here = { lat, lon };
   const [quakeRows, stormSnap, perimeterRows, fireSnap] = await Promise.all([
     quakes(),
     storms(),
     perimeters(),
-    fires(),
+    withFires ? fires() : null,
   ]);
   const found = [];
   const add = (row) => {

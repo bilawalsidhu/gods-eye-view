@@ -48,6 +48,10 @@ const radiusText = computed(() => t('{n} km', { n: formatNumber(radiusKm.value) 
 const radiusIndex = computed(() => Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(radiusKm.value)));
 const pickRadius = (index) => setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
 
+// Satellite fire hits come only while the FIRMS layer is on (spotConditions.js).
+const firesOn = () =>
+  Boolean((omnibar.controls?.layers() || []).find((layer) => layer.id === HAZARD_LAYER.hotspots)?.enabled);
+
 async function read(lat, lon) {
   if (readAt && distanceKm(readAt, { lat, lon }) <= props.settleKm) return;
   readAt = { lat, lon };
@@ -56,7 +60,7 @@ async function read(lat, lon) {
   loading.value = true;
   const [nextBrief, nextHazards] = await Promise.all([
     regionalBrief(lat, lon),
-    hazardsNear(lat, lon, radiusKm.value).catch(() => []),
+    hazardsNear(lat, lon, radiusKm.value, { fires: firesOn() }).catch(() => []),
   ]);
   if (reading !== mine) return;
   brief.value = nextBrief;
@@ -76,7 +80,7 @@ watch(
 async function rereadHazards(km) {
   const at = readAt || { lat: props.lat, lon: props.lon };
   const mine = ++readingHazards;
-  const next = await hazardsNear(at.lat, at.lon, km).catch(() => []);
+  const next = await hazardsNear(at.lat, at.lon, km, { fires: firesOn() }).catch(() => []);
   if (readingHazards !== mine) return;
   hazards.value = next;
 }
