@@ -1,8 +1,9 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWeatherRendering, READY_WAKE_MS } from './rendering.js';
 import { createWeatherLayer } from './index.js';
 import { createWeatherClock } from './clock.js';
+import { worldClock } from '../../time/worldClock.js';
 import * as Cesium from 'cesium';
 import { Color, ImageryLayerCollection, GeographicTilingScheme } from 'cesium';
 import { NO_IMAGERY_HOST } from './imageryHost.js';
@@ -567,6 +568,14 @@ test('failed and timed-out stages retain the previous observation; a healthy rep
   h.rendering.clear();
 });
 
+// A layer built without a clock keeps its own on the page's world clock:
+// each test leaves that clock live, with no layer of its own on it.
+const harnessed = new Set();
+afterEach(() => {
+  for (const layer of harnessed) layer.destroy();
+  harnessed.clear();
+  worldClock.goLive();
+});
 function layerHarness({
   clock,
   reducedMotion = false,
@@ -648,6 +657,7 @@ function layerHarness({
   });
   layer.init(viewer);
   layer.enable();
+  harnessed.add(layer);
   return {
     layer,
     rendering,
@@ -661,72 +671,91 @@ function layerHarness({
   };
 }
 
-test('history has one owned timer, stops while hidden, and releases all work on disable/destroy', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('without a clock the layer keeps one of its own on the world clock and lets it go on destroy', async () => {
   const h = layerHarness();
   const update = h.layer.update();
   await flush();
   h.stages[0].finish();
   await update;
+  assert.equal(worldClock.follows('weather-radar'), true);
+  for (const time of times)
+    assert.ok(worldClock.coverage().marks.includes(Date.parse(time)));
   h.layer.setParams({ play: true });
-  assert.equal(h.layer.getDiagnostics().timerActive, true);
-  t.mock.timers.tick(2000);
-  assert.equal(h.stages.length, 2);
-  assert.equal(
-    h.layer.getDiagnostics().timerActive,
-    false,
-    'next timer waits for stage settlement',
-  );
-  h.stages[1].finish();
-  await flush();
-  assert.equal(h.layer.getDiagnostics().timerActive, true);
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getState().stepping, false);
+  assert.equal(h.layer.getDiagnostics().playing, true);
   h.documentRef.hidden = true;
   h.documentRef.emit('visibilitychange');
-  assert.equal(h.layer.getDiagnostics().playing, false);
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
-  t.mock.timers.tick(20_000);
-  assert.equal(h.stages.length, 2);
+  await flush();
+  assert.equal(worldClock.isPlaying(), true, 'hiding suspends the layer only');
   h.documentRef.hidden = false;
   h.documentRef.emit('visibilitychange');
   h.layer.setParams({ play: true });
+  assert.equal(worldClock.isPlaying(), false);
   h.layer.disable();
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
   assert.equal(h.layer.getDiagnostics().historyFrames, 0);
-  t.mock.timers.tick(20_000);
-  assert.equal(h.stages.length, 2);
   h.layer.destroy();
+  assert.equal(worldClock.follows('weather-radar'), false);
   assert.equal(h.documentRef.size, 0);
   assert.equal(h.motion.size, 0);
   assert.equal(h.moveEnd.size, 0);
   assert.ok(h.clears() >= 1);
 });
 
-test('reduced motion blocks autoplay but permits manual history and stops newly suspended playback', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('reduced motion offers no play; steps still move the world clock from mark to mark', async () => {
   const h = layerHarness({ reducedMotion: true });
   const update = h.layer.update();
   await flush();
   h.stages[0].finish();
   await update;
-  h.layer.setParams({ play: true });
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
   assert.equal(
     h.layer.getRowControls().chips.some((chip) => chip.id === 'play'),
     false,
   );
+  // As the timeline's arrow keys do, a step back from live goes to the
+  // newest frame, and the next one back to the frame before it.
   h.layer.setParams({ step: -1 });
-  assert.equal(h.stages[1].time, times[1]);
-  h.stages[1].finish();
   await flush();
-  h.motion.matches = false;
-  h.motion.emit('change');
+  assert.equal(worldClock.now(), Date.parse(times[2]));
+  h.layer.setParams({ step: -1 });
+  await flush();
+  assert.equal(worldClock.now(), Date.parse(times[1]));
+  assert.equal(h.stages.at(-1).time, times[1]);
+});
+
+test('a row steps forward and plays from a past time through the world clock', async () => {
+  const h = layerHarness();
+  const update = h.layer.update();
+  await flush();
+  h.stages[0].finish();
+  await update;
+  worldClock.seek(Date.parse(times[0]));
+  await flush();
+  h.layer.setParams({ step: 1 });
+  assert.equal(worldClock.now(), Date.parse(times[1]));
+  assert.equal(worldClock.isPlaying(), false);
+  await flush();
+  assert.equal(h.stages.at(-1).time, times[1]);
+  h.layer.setParams({ step: 1 });
+  assert.equal(worldClock.now(), Date.parse(times[2]));
+  h.layer.setParams({ step: 1 });
+  assert.equal(
+    worldClock.now(),
+    Date.parse(times[2]),
+    'no mark after the newest frame',
+  );
+  worldClock.seek(Date.parse(times[1]));
+  await flush();
   h.layer.setParams({ play: true });
-  assert.equal(h.layer.getDiagnostics().playing, true);
-  h.motion.matches = true;
-  h.motion.emit('change');
-  assert.equal(h.layer.getDiagnostics().playing, false);
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
-  h.layer.destroy();
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getState().stepping, false);
+  assert.ok(
+    worldClock.now() - Date.parse(times[1]) < 1_000,
+    'away from live, play goes on from the time shown',
+  );
+  h.layer.setParams({ step: 1 });
+  assert.equal(worldClock.isPlaying(), false, 'a step holds play');
+  assert.equal(worldClock.now(), Date.parse(times[2]));
 });
 
 test('disable invalidates an abort-insensitive source result and an already staged frame', async (t) => {
@@ -755,7 +784,6 @@ test('disable invalidates an abort-insensitive source result and an already stag
   await next;
   await flush();
   assert.equal(h.layer.getStats().count, 0);
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
   assert.equal(h.layer.getStats().loading, false);
   h.layer.destroy();
 });
@@ -814,7 +842,6 @@ test('update cancellation reaches imagery after source acquisition has completed
   assert.equal(h.stages[0].signal.aborted, true);
   assert.equal(h.layer.getStats().count, 0);
   assert.equal(h.layer.getStats().loading, false);
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
   h.layer.destroy();
 });
 
@@ -922,21 +949,22 @@ test('coverage navigation requires the shared shell handoff and detaches cleanly
   h.layer.destroy();
 });
 
-test('manifest refresh during a manual history stage does not strand loading controls', async () => {
+test('manifest refresh during a history stage restages the same time and does not strand loading controls', async () => {
   const h = layerHarness();
   const first = h.layer.update();
   await flush();
   h.stages[0].finish();
   await first;
-  h.layer.setParams({ step: -1 });
+  worldClock.seek(Date.parse(times[1]));
+  await flush();
   assert.equal(h.layer.getStats().loading, true);
-  await h.layer.update();
-  assert.equal(
-    h.stages.length,
-    2,
-    'metadata refresh preserves the staged manual selection',
-  );
-  h.stages[1].finish();
+  const refreshed = h.layer.update();
+  await flush();
+  assert.equal(h.stages.length, 3);
+  assert.equal(h.stages[1].signal.aborted, true);
+  assert.equal(h.stages[2].time, times[1], 'the refresh keeps the time');
+  h.stages[2].finish();
+  await refreshed;
   await flush();
   assert.equal(h.layer.getStats().loading, false);
   assert.equal(h.layer.getStats().observedAt, times[1]);
@@ -966,7 +994,8 @@ test('historical observations do not relabel a fresh lightning feed as stale', a
   await flush();
   h.stages[0].finish();
   await first;
-  h.layer.setParams({ step: -1 });
+  worldClock.seek(Date.parse(old));
+  await flush();
   h.stages[1].finish();
   await flush();
   assert.equal(h.layer.getStats().stale, false);
@@ -1323,8 +1352,7 @@ test('404 fails a frame without retry', async () => {
   h.rendering.clear();
 });
 
-test('no host pauses history, refreshes metadata, and restores retained time and playback', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('no host holds the shown history frame, refreshes metadata, and restores the retained time', async () => {
   let refreshes = 0;
   const h = layerHarness({
     feed: {
@@ -1340,28 +1368,23 @@ test('no host pauses history, refreshes metadata, and restores retained time and
   await flush();
   h.stages[0].finish();
   await update;
-  h.layer.setParams({ play: true });
-  t.mock.timers.tick(2000);
+  worldClock.seek(Date.parse(times[0]));
+  await flush();
   assert.equal(h.stages.length, 2);
+  h.stages[1].finish();
+  await flush();
   host = { collection: null, kind: 'none' };
   h.eventTarget.emit('gev:map-stack-changed');
   await flush();
-  assert.equal(h.layer.getDiagnostics().playing, false);
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
   assert.equal(h.layer.getRowControls().summary.status, NO_IMAGERY_HOST);
   assert.equal(h.layer.getRowControls().info, NO_IMAGERY_HOST);
   await h.layer.update();
   assert.equal(refreshes, 2);
-  t.mock.timers.tick(10_000);
-  assert.equal(h.stages.length, 2);
-  assert.equal(h.layer.getDiagnostics().time, times[2]);
+  assert.equal(h.stages.length, 2, 'nothing stages without a host');
   host = { collection: {}, kind: 'globe' };
   h.eventTarget.emit('gev:map-stack-changed');
-  assert.equal(h.layer.getDiagnostics().playing, true);
-  assert.equal(h.layer.getDiagnostics().timerActive, true);
-  t.mock.timers.tick(2000);
-  assert.equal(h.stages.length, 3);
-  assert.equal(h.stages[2].time, times[0]);
+  await flush();
+  assert.equal(h.stages.at(-1).time, times[0], 'the retained time restages');
   h.layer.destroy();
   assert.equal(h.eventTarget.size, 0);
 });
@@ -1475,25 +1498,21 @@ for (const [id, product] of [
     const [shell] = h.shells();
     assert.equal(shell.show, true);
 
-    layer.setParams({ play: true });
-    t.mock.timers.tick(2000);
+    worldClock.seek(Date.parse(times[0]));
     await flush();
     assert.equal(
       layer.getDiagnostics().time,
       times[0],
-      'history advances at street level',
+      'history moves at street level',
     );
     camera.positionCartographic.height = 59_999;
     camera.moveEnd.emit();
     assert.equal(shell.show, true, 'no height gate');
-    assert.equal(layer.getDiagnostics().playing, true);
-    assert.equal(layer.getDiagnostics().timerActive, true);
 
     host = { collection: null, kind: 'none' };
     events.emit('gev:map-stack-changed');
     assert.equal(shell.show, false);
     assert.equal(layer.getRowControls().summary.status, NO_IMAGERY_HOST);
-    assert.equal(layer.getDiagnostics().timerActive, false);
     host = { collection: h.viewer.imageryLayers, kind: 'globe' };
     events.emit('gev:map-stack-changed');
     assert.equal(shell.destroyed, true);
@@ -1685,10 +1704,12 @@ test('satellite mode chips restage history without changing time or latest-follo
   await flush();
   h.stages[0].finish();
   await update;
-  h.layer.setParams({ step: -1 });
+  worldClock.seek(Date.parse(times[1]));
+  await flush();
   h.stages[1].finish();
   await flush();
   h.layer.setParams({ infrared: 'full' });
+  await flush();
   assert.equal(h.stages[2].time, times[1]);
   assert.equal(h.stages[2].infrared, 0);
   assert.equal(h.layer.getParams().infrared, 0);
