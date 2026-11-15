@@ -2694,6 +2694,99 @@ test('a frame source supplies regional tiles in place of the tile route, through
   h.rendering.clear();
 });
 
+test('a frame source that names its tile detail draws global clouds from its tiles to that level', async () => {
+  let now = 0;
+  const requests = [];
+  const h = renderingHarness({
+    now: () => now,
+    fetchImpl: () => assert.fail('supplied clouds are not fetched'),
+    frameSource: {
+      getImage: () => assert.fail('no mosaic when the feed tiles clouds'),
+      getTile: async (request) => {
+        requests.push(request);
+        return suppliedTile();
+      },
+      maximumLevel: (product) => (product === 'clouds' ? 6 : 8),
+    },
+  });
+  h.viewer.scene.globe.tilesLoaded = false;
+  const loaded = h.rendering.setFrame(globalSnapshot, times[0]);
+  assert.equal(h.providers.length, 1);
+  const [provider] = h.providers;
+  assert.equal(provider.options, undefined, 'no URL template provider');
+  assert.equal(provider.maximumLevel, 6);
+  await provider.requestImage(5, 3, 4, {});
+  assert.deepEqual(
+    [requests[0].product, requests[0].z, requests[0].x, requests[0].y],
+    ['clouds', 4, 5, 3],
+  );
+  now = 500;
+  h.settle();
+  assert.equal(await loaded, true);
+  h.rendering.clear();
+
+  // Radar takes the level the feed names for it.
+  const radar = renderingHarness({
+    frameSource: {
+      getTile: async () => suppliedTile(),
+      maximumLevel: () => 8,
+    },
+  });
+  radar.rendering.setFrame(snapshot, times[0]);
+  assert.equal(radar.providers[0].maximumLevel, 8);
+  radar.rendering.clear();
+});
+
+test("a frame source naming no usable level keeps the layer's own detail", async () => {
+  for (const maximumLevel of [
+    () => null,
+    () => 13,
+    () => 2.5,
+    () => 'deep',
+    () => {
+      throw new Error('no level');
+    },
+  ]) {
+    const h = renderingHarness({
+      frameSource: { getTile: async () => suppliedTile(), maximumLevel },
+    });
+    h.rendering.setFrame(snapshot, times[0]);
+    assert.equal(h.providers[0].maximumLevel, 6);
+    h.rendering.clear();
+    // Global clouds stay on the one image, cut to level 3.
+    let mosaics = 0;
+    const clouds = renderingHarness({
+      frameSource: {
+        getImage: async () => {
+          mosaics++;
+          return { width: 2048, height: 1024, close() {} };
+        },
+        getTile: () => assert.fail('clouds are not tiled without a level'),
+        maximumLevel,
+      },
+    });
+    await showMosaic(clouds, times[0]);
+    assert.equal(mosaics, 1);
+    assert.equal(clouds.providers[0].maximumLevel, 3);
+    clouds.rendering.clear();
+  }
+  // A level without tiles leaves global clouds on the mosaic.
+  let images = 0;
+  const h = renderingHarness({
+    frameSource: {
+      getImage: async () => {
+        images++;
+        return suppliedTile();
+      },
+      maximumLevel: () => 6,
+    },
+  });
+  h.rendering.setFrame(globalSnapshot, times[0]);
+  await flush();
+  assert.equal(images, 1);
+  h.rendering.clear();
+});
+
 test('a failed supplied tile fails the staged frame through errorEvent', async () => {
   const h = renderingHarness({
     frameSource: {
@@ -2742,6 +2835,52 @@ test('supplied regional infrared tiles are canvases, so they get the transfer wi
     assert.equal(transparent.width, 256, 'a null tile is still a canvas');
     h.rendering.clear();
     empty.rendering.clear();
+  } finally {
+    if (hadBitmap) globalThis.ImageBitmap = previous;
+    else delete globalThis.ImageBitmap;
+  }
+});
+
+test('global clouds tiles get the infrared transfer, and prefetch asks for tiles, not the image', async () => {
+  const hadBitmap = Object.hasOwn(globalThis, 'ImageBitmap');
+  const previous = globalThis.ImageBitmap;
+  globalThis.ImageBitmap = class ImageBitmap {
+    width = 256;
+    height = 256;
+    close() {}
+  };
+  try {
+    const requests = [];
+    const h = renderingHarness({
+      frameSource: {
+        getImage: () => assert.fail('no image when the feed tiles clouds'),
+        getTile: async (request) => {
+          requests.push(request);
+          return new globalThis.ImageBitmap();
+        },
+        maximumLevel: () => 6,
+      },
+    });
+    void h.rendering.setFrame(globalSnapshot, times[0]);
+    const tile = await h.providers[0].requestImage(5, 3, 4, {});
+    assert.equal(tile.drawnWith, null, 'drawn upright, not flipped');
+    assert.ok(tile.pixels, 'the infrared transfer ran');
+    h.rendering.clear();
+    requests.length = 0;
+    const warm = renderingHarness({
+      frameSource: {
+        getImage: () => assert.fail('no image when the feed tiles clouds'),
+        getTile: async (request) => {
+          requests.push(request);
+          return new globalThis.ImageBitmap();
+        },
+        maximumLevel: () => 6,
+      },
+    });
+    assert.equal(await warm.rendering.prefetch(globalSnapshot, times[1]), true);
+    assert.ok(requests.length > 0, 'prefetch asked for tiles');
+    assert.ok(requests.every((request) => request.product === 'clouds'));
+    warm.rendering.clear();
   } finally {
     if (hadBitmap) globalThis.ImageBitmap = previous;
     else delete globalThis.ImageBitmap;
