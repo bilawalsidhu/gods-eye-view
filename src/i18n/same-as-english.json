@@ -251,7 +251,8 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "Status"
   ],
   "es": [
     "1 min/s",
@@ -1275,7 +1276,8 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "Status"
   ],
   "uk": [
     "1900–1945",

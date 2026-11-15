@@ -3727,6 +3727,10 @@ function findDataLayerRow(layerId) {
 }
 
 function focusDataLayerRow(row, layerId) {
+  // A row the Data Layers finder hides could not be seen: show every row
+  // again (LAYER_FINDER_CLEAR_EVENT in LayerFinder.vue).
+  if (row.classList.contains('is-filtered'))
+    document.dispatchEvent(new CustomEvent('gev:layer-finder-clear'));
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;

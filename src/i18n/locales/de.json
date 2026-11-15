@@ -3629,5 +3629,15 @@
   "Scope opacity": "Scope-Deckkraft",
   "How dark the scope shades the view outside the keyhole": "Wie stark der Scope die Ansicht außerhalb des Schlüssellochs abdunkelt",
   "Reset to default": "Auf Standard zurücksetzen",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Darstellung auf die Standardwerte zurücksetzen: normaler Look, HUD, Scope, Beschriftungen und Effekte"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Darstellung auf die Standardwerte zurücksetzen: normaler Look, HUD, Scope, Beschriftungen und Effekte",
+  "All layers": "Alle Ebenen",
+  "On": "An",
+  "Off": "Aus",
+  "Search layers": "Ebenen suchen",
+  "Filter layers": "Ebenen filtern",
+  "Status": "Status",
+  "Search layers…": "Ebenen suchen…",
+  "Layer groups": "Ebenengruppen",
+  "Jump to {name}": "Zu {name} springen",
+  "No layers match": "Keine passenden Ebenen"
 }
