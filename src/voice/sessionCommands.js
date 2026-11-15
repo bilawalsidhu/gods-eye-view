@@ -1,4 +1,6 @@
 import { nextTick } from 'vue';
+import { useOmnibarStore } from '../ui/stores/omnibar.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
 import { bindVoiceMiniPreview } from './voiceMiniPreview.js';
@@ -334,5 +336,13 @@ export function createVoiceCommands({
   if (session.disposed) cleanup();
   else adapter.bindControls?.();
   window.__gevVoiceCommands = controls;
+  // The omnibar runs the same actions directly, without a model.
+  const omnibar = useOmnibarStore(applicationPinia());
+  omnibar.connectRunner((name, args) => runner(name, args));
+  session.signal.addEventListener(
+    'abort',
+    () => omnibar.connectRunner(null),
+    { once: true },
+  );
   return controls;
 }
