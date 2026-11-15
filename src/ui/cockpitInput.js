@@ -41,6 +41,9 @@ function subjectWorldPosition(kind) {
   }
   if (kind === 'satellite')
     return this.services.satellitesLayer?.getCockpitPosition?.() ?? null;
+  // An application's subject has no position before its view is entered:
+  // the selected vessel's sprite must not stand in for it.
+  if (kind !== 'vessel') return null;
   const info = this.readVesselInfo();
   if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
     return null;
@@ -83,8 +86,10 @@ export function onScenePointerDown(nowMs = performance.now()) {
     return;
   }
   const at = subjectCanvasPosition.call(this);
-  const mmsi = this.readVesselInfo()?.mmsi ?? null;
-  this.doubleClickStart = at ? { x: at.x, y: at.y, atMs: nowMs, mmsi } : null;
+  const vesselId = this.readVesselInfo()?.id ?? null;
+  this.doubleClickStart = at
+    ? { x: at.x, y: at.y, atMs: nowMs, vesselId }
+    : null;
 }
 
 /**
@@ -111,7 +116,7 @@ export function onSceneDoubleClick(position, nowMs = performance.now()) {
       // The memory is the ship's it was taken for: one followed since (an
       // aircraft, another ship) is hit only where it is drawn.
       this.resolveEntryKind() === 'vessel' &&
-      start.mmsi === (this.readVesselInfo()?.mmsi ?? null) &&
+      start.vesselId === (this.readVesselInfo()?.id ?? null) &&
       doubleClickHitsSubject(position, start));
   if (!hit) return false;
   this.enter();
@@ -187,7 +192,7 @@ const LOOK_KEY_OWNERS = [
  * @returns {boolean} True when the key was taken.
  */
 function handleLookKey(event) {
-  if (!this.active || this.subjectKind !== 'vessel') return false;
+  if (!this.looksAround) return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   const step = lookKeyStep(event.key, event.shiftKey);
   const reset = !event.repeat && (event.key === 'Home' || event.key === '0');
@@ -243,6 +248,9 @@ export function onKeyDown(event) {
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
     // An open Display or Radio popover takes Escape itself.
     if (this.isUtilityDisclosureOpen?.()) return;
+    // So do the Data Layers search field and filter menu.
+    if (event.target?.closest?.('.layer-finder__field, .layer-finder__menu'))
+      return;
     if (this.context?.contains(event.target) && !this.contextCollapsed) {
       event.preventDefault();
       event.stopImmediatePropagation();

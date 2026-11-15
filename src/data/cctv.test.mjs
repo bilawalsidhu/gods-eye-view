@@ -35,6 +35,7 @@ import cctvLayer, {
   _pushAmbientCardEntriesForTest,
   _setCctvOverlayHostForTest,
   activationProbeClampRange,
+  flatGroundAxisDistance,
   bindCctvWorldClickGesture,
   clearProbeClampOnDeactivation,
   computeFrustumGeometry,
@@ -653,6 +654,17 @@ test('activation obstruction clamp uses the field-derived 12 m floor', () => {
   assert.equal(activationProbeClampRange(210, 150), 146);
   assert.equal(activationProbeClampRange(210, 210), null);
   assert.equal(activationProbeClampRange(210, 250), null);
+});
+
+test('on a globe map the axis ends on flat ground at the mount ground', () => {
+  // A 24 m mount pitched 30° down meets the ground 48 m along its axis.
+  assert.ok(Math.abs(flatGroundAxisDistance(24, -30) - 48) < 1e-9);
+  // The default 700 m range then clamps just short of that, not 700 m out.
+  const clamp = activationProbeClampRange(700, flatGroundAxisDistance(24, -30));
+  assert.ok(Math.abs(clamp - 44) < 1e-9);
+  assert.equal(flatGroundAxisDistance(24, 0), null);
+  assert.equal(flatGroundAxisDistance(24, 10), null);
+  assert.equal(flatGroundAxisDistance(0, -30), null);
 });
 
 test('deactivation clears the probe clamp and restores nominal frustum geometry', () => {

@@ -1,13 +1,15 @@
-/* Right-to-left languages (Arabic). The chrome mirrors through logical
-   properties in the component sheets (inset-inline-*, margin-inline-*); this
-   sheet holds only what logical properties cannot express. */
+/* Right-to-left languages (Arabic, Hebrew). The chrome mirrors through
+   logical properties in the component sheets (inset-inline-*,
+   margin-inline-*); this sheet holds only what logical properties cannot
+   express. */
 
 /* Arabic letters join: letter-spacing tears every word into separate glyphs.
+   Hebrew letters do not join, but tracking only spaces their words out.
    Latin marked translate="no" and the intel HUD's Latin telemetry keep their
    tracking; the HUD's translated lines are released below. Unlike cjk.css, a
    container that merely holds a translate="no" span is not spared: its own
-   Arabic text would come apart. */
-html:lang(ar)
+   text would come apart. */
+html:is(:lang(ar), :lang(he))
   body
   :not(#intel-hud, #intel-hud *, [translate='no'], [translate='no'] *) {
   letter-spacing: 0 !important;
@@ -30,8 +32,7 @@ html[dir='rtl'] #intel-hud :is(.hud-mode, .hud-summary-label, .hud-summary) {
    letter apart. Noto Sans Arabic (loaded with the other Google fonts; its
    files download only when the page shows Arabic) leads the mono stack, so
    the spaces between Arabic words come from it too and not from the
-   fixed-pitch Latin face. The intel and cockpit HUDs keep JetBrains Mono for
-   their Latin telemetry and column-aligned digits. */
+   fixed-pitch Latin face. */
 html:lang(ar) {
   --font-mono:
     'Noto Sans Arabic', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Geeza Pro',
@@ -40,9 +41,23 @@ html:lang(ar) {
     'Inter', 'Noto Sans Arabic', -apple-system, BlinkMacSystemFont, 'Geeza Pro',
     Tahoma, sans-serif;
 }
+
+/* Hebrew: JetBrains Mono and Inter also lack Hebrew glyphs. Noto Sans Hebrew
+   (loaded with the other Google fonts; its files download only when the page
+   shows Hebrew) leads the stack so the body text keeps one proportional
+   Hebrew face across platforms. */
+html:lang(he) {
+  --font-mono:
+    'Noto Sans Hebrew', 'JetBrains Mono', 'SF Mono', 'Fira Code', Tahoma,
+    monospace;
+  --font-sans:
+    'Inter', 'Noto Sans Hebrew', -apple-system, BlinkMacSystemFont, Tahoma,
+    sans-serif;
+}
 /* The Global Context lines and their buttons set ui-monospace through the
-   `font` shorthand; route them through the Arabic-aware stack too. */
-html:lang(ar)
+   `font` shorthand; in both RTL languages the words come from the page's
+   own font stack. */
+html:is(:lang(ar), :lang(he))
   :is(
     #military-awareness-panel,
     .military-awareness-controls button,
@@ -54,10 +69,17 @@ html:lang(ar)
   ) {
   font-family: var(--font-mono);
 }
+/* The intel and cockpit HUDs keep JetBrains Mono leading for their Latin
+   telemetry and column-aligned digits, with the language's face behind it. */
 html:lang(ar) :is(#intel-hud, #cockpit-hud) {
   --font-mono:
     'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Arabic', 'Geeza Pro',
     Tahoma, monospace;
+}
+html:lang(he) :is(#intel-hud, #cockpit-hud) {
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Hebrew', Tahoma,
+    monospace;
 }
 
 /* The Display/Context rail moves to the left edge. It keeps a physical
@@ -219,4 +241,48 @@ html[dir='rtl'] select.gev-field--compact {
    to high from left to right; the numbers keep that order. */
 html[dir='rtl'] .rail-card-scale {
   direction: ltr;
+}
+
+/* ── Side rails, mirrored ──────────────────────────────────────────────
+   The left stack sits on the right edge, so the left rail's name panel
+   opens to its left and the right rail's to its right, each toward the
+   middle of the screen, as they do in left-to-right. */
+html[dir='rtl'] .gev-panel-rail--left .ui-rail--expanded::after {
+  right: calc(100% + 6px);
+  left: auto;
+}
+html[dir='rtl'] .gev-panel-rail--left .ui-rail--expanded .ui-rail__label {
+  right: calc(100% + 24px);
+  left: auto;
+}
+html[dir='rtl'] .gev-panel-rail--right .ui-rail--expanded::after {
+  right: auto;
+  left: calc(100% + 6px);
+}
+html[dir='rtl'] .gev-panel-rail--right .ui-rail--expanded .ui-rail__label {
+  right: auto;
+  left: calc(100% + 24px);
+}
+
+/* Panels moved to the screen edge slide over their rail toward that edge. */
+html[dir='rtl']
+  body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail) {
+  transform: translateX(var(--panel-rail-clearance, 48px));
+}
+html[dir='rtl']
+  body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translate(var(--panel-rail-clearance, 48px), var(--edge-rail-row));
+}
+html[dir='rtl']
+  body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail
+  > :not(.gev-panel-rail) {
+  transform: translate(
+    calc(-1 * var(--panel-rail-clearance, 48px)),
+    var(--edge-rail-row)
+  );
 }

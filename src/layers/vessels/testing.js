@@ -32,6 +32,11 @@ export function createTesting({
   function _setVesselStateForTest(options = {}) {
     components.lifecycle.resetState();
     const records = Array.isArray(options.records) ? options.records : [];
+    // A test record that names no id is keyed by its MMSI, as an AIS feed's
+    // own rows are (see normalizeVessel).
+    for (const record of [...records, options.selectedRecord])
+      if (record && typeof record === 'object' && record.id === undefined)
+        record.id = String(record.mmsi || '').trim();
     state.viewer = options.viewer || null;
     state.feed.enabled = options.enabled !== false;
     state.feed.loaded = options.loaded === true;
@@ -42,15 +47,15 @@ export function createTesting({
     state.feed.lastUpdate = options.lastUpdate ?? null;
     state.records.all = records;
     state.feed.count = records.length;
-    state.records.byMmsi = new Map(
+    state.records.byId = new Map(
       records
-        .filter((record) => record?.mmsi)
-        .map((record) => [record.mmsi, record]),
+        .filter((record) => record?.id)
+        .map((record) => [record.id, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
     state.billboardCollection = options.billboardCollection || { remove() {} };
     state.trail = options.trail || null;
-    state.trailMmsi = options.trailMmsi || null;
+    state.trailId = options.trailId || null;
     state.trailPositions = Array.isArray(options.trailPositions)
       ? [...options.trailPositions]
       : [];
@@ -141,8 +146,8 @@ export function createTesting({
       lastMessageAt: state.feed.lastMessageAt,
       rawRowCount: state.feed.rawRowCount,
       acceptedRowCount: state.feed.acceptedRowCount,
-      selectedMmsi: state.selectedRecord?.mmsi || null,
-      trailMmsi: state.trailMmsi,
+      selectedId: state.selectedRecord?.id || null,
+      trailId: state.trailId,
       trailPositionCount: state.trailPositions.length,
       sessionId: state.feed.sessionId,
       firstConnectPhase: state.feed.firstConnectPhase,
@@ -157,6 +162,25 @@ export function createTesting({
     components.rendering.updateVisibility(force);
   }
 
+  /** Draw a record's visual where it stands now. Test-only seam. */
+
+  function _prepareVesselVisualForTest(record) {
+    return components.rendering.prepareRecordVisual(record);
+  }
+
+  /** Run one live placement pass (a host-supplied placement). Test-only seam. */
+
+  function _runPlacementPassForTest() {
+    components.rendering.followPlacements();
+  }
+
+  /** Run one world-clock pass at world time `atMs`. Test-only seam. */
+
+  function _runClockPassForTest(atMs) {
+    vesselState.worldNow = () => atMs;
+    components.rendering.followClockPositions();
+  }
+
   /** True while a trailing visibility frame is scheduled. Test-only seam. */
 
   function _hasTrailingVisibilityPassForTest() {
@@ -166,14 +190,14 @@ export function createTesting({
   /**
    * Read lifecycle ownership state without exposing the mutable state object.
    * Test-only seam.
-   * @returns {{trailMmsi: string|null, trailPositionCount: number, vesselCount: number}}
+   * @returns {{trailId: string|null, trailPositionCount: number, vesselCount: number}}
    */
 
   function _getVesselStateForTest() {
     return {
-      trailMmsi: state.trailMmsi,
+      trailId: state.trailId,
       trailPositionCount: state.trailPositions.length,
-      vesselCount: state.records.byMmsi.size,
+      vesselCount: state.records.byId.size,
     };
   }
   return {
@@ -189,6 +213,9 @@ export function createTesting({
     _getVesselFeedStateForTest,
     _getVesselStateForTest,
     _runVisibilityPassForTest,
+    _prepareVesselVisualForTest,
+    _runPlacementPassForTest,
+    _runClockPassForTest,
     _hasTrailingVisibilityPassForTest,
   };
 }

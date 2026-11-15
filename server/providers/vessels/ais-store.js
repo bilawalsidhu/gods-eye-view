@@ -1,4 +1,8 @@
 import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
+import {
+  aidToNavigationTypeName,
+  isAidToNavigation,
+} from '../../../src/data/vesselTypes.js';
 export const AISSTREAM_CACHE_MAX = 50000;
 export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
 // Per-MMSI recent-path ring buffers (PRD WS-F F3). Float32 lat/lon (~1m
@@ -57,8 +61,13 @@ export function ingestAisStreamEnvelope(envelope) {
               message.ReportB?.Valid === false
                 ? undefined
                 : message.ReportB?.ShipType,
+            Dimension:
+              message.ReportB?.Valid === false
+                ? undefined
+                : message.ReportB?.Dimension,
           }
         : message;
+    const dimensions = aisDimensions(fields.Dimension);
     // Static reports may be partial (including Class B's separate A/B parts).
     // Keep known values in the cache as well as in the current live row.
     const staticData = {
@@ -84,6 +93,8 @@ export function ingestAisStreamEnvelope(envelope) {
         staticCode(live?.imo) ||
         staticCode(previous.imo) ||
         '',
+      length: dimensions.length ?? live?.length ?? previous.length ?? null,
+      beam: dimensions.beam ?? live?.beam ?? previous.beam ?? null,
     };
     _aisStreamStatic.set(mmsi, staticData);
     mergeAisStaticIntoLiveVessel(mmsi, staticData);
@@ -105,14 +116,24 @@ export function ingestAisStreamEnvelope(envelope) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return true;
 
   const staticData = _aisStreamStatic.get(mmsi) || {};
+  const aidReport = messageType === 'AidsToNavigationReport';
   _aisStreamVessels.set(mmsi, {
     lat,
     lon,
-    name: vesselNameFromAis(metadata, message, staticData) || `MMSI ${mmsi}`,
+    name:
+      (aidReport && aidNameFromAis(message)) ||
+      vesselNameFromAis(metadata, message, staticData) ||
+      `MMSI ${mmsi}`,
     mmsi,
     imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
-    type: vesselTypeFromAis(message, staticData),
+    // An aid-to-navigation report's type is the kind of aid (0 to 31), not
+    // a ship type: it is carried as the aid's name ("Cardinal Mark N").
+    type: aidReport
+      ? aidToNavigationTypeName(message.Type)
+      : vesselTypeFromAis(message, staticData),
     destination: stringValue(message.Destination ?? staticData.destination),
+    length: staticData.length ?? null,
+    beam: staticData.beam ?? null,
     speed: normalizedSpeedOverGround(message.Sog ?? message.SOG),
     course: normalizedCourseOverGround(message.Cog ?? message.COG),
     heading: normalizedHeading(message.TrueHeading ?? message.Heading),
@@ -122,6 +143,9 @@ export function ingestAisStreamEnvelope(envelope) {
     // Use the AIS message's own report time, not server ingest wall-clock —
     // trail spacing and dead reckoning depend on true fix epochs.
     last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
+    // A virtual aid is broadcast where nothing physical stands. Only such a
+    // row carries the field, so ship rows stay their size.
+    ...(aidReport && message.VirtualAtoN === true && { virtual: true }),
     _updatedAt: Date.now(),
   });
 
@@ -236,6 +260,25 @@ function mergeAisStaticIntoLiveVessel(mmsi, staticData) {
   if (staticData.type) existing.type = staticData.type;
   if (staticData.destination) existing.destination = staticData.destination;
   if (staticData.imo) existing.imo = staticData.imo;
+  if (staticData.length) existing.length = staticData.length;
+  if (staticData.beam) existing.beam = staticData.beam;
+}
+
+/**
+ * A static report's hull size from its AIS dimensions: the antenna's
+ * distances to bow (A), stern (B), port (C) and starboard (D), in metres.
+ * Zero is AIS's "not available", so a side missing its two parts has none.
+ * @param {{A?: number, B?: number, C?: number, D?: number}|undefined} dimension
+ * @returns {{length: number|null, beam: number|null}}
+ */
+function aisDimensions(dimension) {
+  const part = (value) => {
+    const number = numberValue(value);
+    return number !== null && number > 0 ? number : 0;
+  };
+  const length = part(dimension?.A) + part(dimension?.B);
+  const beam = part(dimension?.C) + part(dimension?.D);
+  return { length: length > 0 ? length : null, beam: beam > 0 ? beam : null };
 }
 
 function vesselNameFromAis(metadata, message, staticData = {}) {
@@ -248,6 +291,15 @@ function vesselNameFromAis(metadata, message, staticData = {}) {
   );
 }
 
+/**
+ * An aid's whole name: an aid-to-navigation report carries the first 20
+ * characters in `Name` and the rest, up to 14 more, in `NameExtension`.
+ */
+function aidNameFromAis(message) {
+  const name = stringValue(message.Name);
+  return name ? stringValue(name + stringValue(message.NameExtension)) : '';
+}
+
 function vesselTypeFromAis(message, staticData = {}) {
   return stringValue(
     message.Type ??
@@ -257,14 +309,25 @@ function vesselTypeFromAis(message, staticData = {}) {
   );
 }
 
+/**
+ * The current rows, newest first, with every vessel ahead of every aid to
+ * navigation: a capped request never gives up a ship for a buoy.
+ */
 export function aisStreamRows(maxRows) {
   const cutoff = Date.now() - AISSTREAM_STALE_MS;
-  const rows = [];
+  const vessels = [];
+  const aids = [];
   for (const row of _aisStreamVessels.values()) {
-    if (row._updatedAt >= cutoff) rows.push(row);
+    if (row._updatedAt >= cutoff)
+      (isAidToNavigation(row) ? aids : vessels).push(row);
   }
-  rows.sort((a, b) => b._updatedAt - a._updatedAt);
-  return rows.slice(0, maxRows).map(({ _updatedAt, ...row }) => row);
+  const newestFirst = (a, b) => b._updatedAt - a._updatedAt;
+  vessels.sort(newestFirst);
+  if (vessels.length < maxRows) aids.sort(newestFirst);
+  return vessels
+    .concat(aids)
+    .slice(0, maxRows)
+    .map(({ _updatedAt, ...row }) => row);
 }
 
 function pruneAisStreamCache() {

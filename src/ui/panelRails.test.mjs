@@ -359,14 +359,23 @@ test('right rail aligns to the left rail buttons while the left stack is offset'
   assert.equal(f.stack.dataset.safeTop, '286.7');
 });
 
-test('left rail buttons hold still while a tall panel moves the stack', () => {
+test('left rail buttons hold still whether the open panel is short or tall', () => {
+  // Where the rail sits: the stack's top, the stack's rise, and the rail's
+  // own offset inside the stack.
+  const railTop = (stack) =>
+    (parseFloat(stack.style.getPropertyValue('--left-stack-safe-top')) * 900) /
+      100 +
+    parseFloat(stack.style.getPropertyValue('--panel-rail-lift')) +
+    parseFloat(stack.style.getPropertyValue('--panel-rail-offset'));
+  const short = fixture('left');
+  short.expand(short.first, 250);
+  short.run();
   const f = fixture('left');
   f.expand(f.first, 900);
   f.run();
   assert.equal(f.stack.dataset.layoutMode, 'focus');
-  assert.ok(
-    parseFloat(f.stack.style.getPropertyValue('--panel-rail-offset')) > 0,
-  );
+  assert.notEqual(short.stack.dataset.layoutMode, 'focus');
+  assert.ok(Math.abs(railTop(f.stack) - railTop(short.stack)) < 0.2);
 
   // A theme that pins the stack's top (Cyber) leaves nothing to offset.
   f.stack.computed.getPropertyValue = (name) =>
@@ -447,13 +456,17 @@ test('natural height includes visible content, margins and wrapper chrome, exclu
 // Outside measurement, CCTV is 391 px in focus and 629 px in normal mode;
 // Removing only the allocation leaves focus CSS active: its next reading is
 // 422 px, so the old decision exits focus and then re-enters on the 629 px read.
-function thrashingRightRail({ focused = false, weatherOpen = false } = {}) {
+function thrashingRightRail({
+  focused = false,
+  weatherOpen = false,
+  tallId = 'cctv-panel',
+} = {}) {
   const f = fixture('right');
   f.options.windowRef.innerHeight = 920;
   f.options.leftStack.rect.top = 439.6;
   f.stack.computed.rowGap = '8px';
   const display = element('pp-toggles', { collapsed: true });
-  const cctv = element('cctv-panel', { height: 629 });
+  const cctv = element(tallId, { height: 629 });
   const weather = element('weather-panel', {
     height: 444,
     collapsed: !weatherOpen,
@@ -524,8 +537,10 @@ for (const focused of [false, true]) {
   });
 }
 
+// The hysteresis applies to panels that size to their content; CCTV and
+// Context take the column's full height whenever they are open.
 test('right rail keeps focus through 30 px content growth inside the hysteresis band', () => {
-  const f = thrashingRightRail();
+  const f = thrashingRightRail({ tallId: 'news-panel' });
   f.run();
   // Header + gap contribute 52 px: need moves 420 -> 450 -> 420.
   for (const height of [368, 398, 368, 398, 368]) {
@@ -542,7 +557,7 @@ test('right rail keeps focus through 30 px content growth inside the hysteresis 
 });
 
 test('right rail enters focus only above available height and leaves below the full deadband', () => {
-  const f = thrashingRightRail();
+  const f = thrashingRightRail({ tallId: 'news-panel' });
   f.options.windowRef.innerHeight = 1000;
   f.options.leftStack.rect.top = 500;
   f.cctv.intrinsicHeight = 408; // Need equals available (460 px).
@@ -555,6 +570,16 @@ test('right rail enters focus only above available height and leaves below the f
   f.run();
   assert.equal(f.stack.classList.contains('layout-focus'), true);
   f.cctv.intrinsicHeight = 347;
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-focus'), false);
+});
+
+test('an open CCTV panel takes the full column however short its content', () => {
+  const f = thrashingRightRail();
+  f.cctv.intrinsicHeight = 200;
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-focus'), true);
+  f.cctv.classList.add('collapsed');
   f.run();
   assert.equal(f.stack.classList.contains('layout-focus'), false);
 });

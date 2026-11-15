@@ -136,6 +136,9 @@ socket/watchdog on server close and re-reads configuration after restart.
 The portable `gods-eye-view/sources/adsb-lol` export normalizes existing aircraft
 records without importing Node middleware or a renderer. Browser layer/controller
 separation is outside this server extraction.
+The portable `gods-eye-view/sources/planespotters` export reads a Planespotters
+photo answer (upstream or a server's cached shape) into one host-checked,
+credited thumbnail; it has no fetch, DOM or Node dependency.
 
 ## Place-search and routing providers
 
@@ -290,9 +293,9 @@ the user's later collapse choice, including body remounts. Mark the body
 `max-height` and puts the scroll offset back afterwards. Panel bodies only
 scroll on an open-card change, with one write, never on a refresh.
 
-Compose `createRailCards({ container, document, onParams, onOpen })` and
-`createRailTimeline({ container, document, onCommit, onPreview, onStep,
-onLatest, onPlay })`. Cards reconcile `{ id, title, badge, open, compact,
+Compose `createRailCards({ container, document, onParams, onOpen })`. Rails
+have no time controls of their own; the world timeline moves time. Cards
+reconcile `{ id, title, badge, open, compact,
 compactStatus, blocks }` in place. Their full-width native button headers expose
 `aria-expanded` and `aria-controls`; articles expose `data-open`. The feature
 adapter owns accordion state. Generic cards do not select data or enable layers.
@@ -327,10 +330,9 @@ consumers. They expose `summary.settings`, `summary.actions` and optional
 subscriptions still refresh the cards. Cards own configuration and readings.
 
 Weather orders cyclones, wind, then a bordered Observed history group containing
-the timeline and active radar, satellite and lightning cards. The group heading
-and scope name its active products. The timeline stays visible whenever any
-observed product is enabled; fewer than two ticks disables transport. Pass
-`heading: false` to the timeline when the containing group owns the heading.
+the frame time and active radar, satellite and lightning cards. The group
+heading and scope name its active products. The frame time shows whenever any
+observed product is enabled and has a frame; the world timeline moves time.
 Exactly one active card is open. Header clicks and newly enabled ids choose it
 (the last new entry wins a batch); refreshes and clock ticks retain it. First
 appearance uses cyclones with storms, otherwise the first card. Disabling the
@@ -338,7 +340,7 @@ open layer falls back to the first remaining card. A WeakMap per document keeps
 explicit choices through body remounts without adding share state. Card opening,
 storm selection and layer enabling remain independent.
 
-Optional card/badge/slider class names provide feature styling. Card titles use
+Optional card/badge class names provide feature styling. Card titles use
 `.data-name` typography; meta/time/badges use `.data-toggle-meta` typography;
 setting/result labels use `.panel-title`; chips retain `.data-toggle-chip`.
 Reserve one status line, even without a legend. Use app tokens. Wind's footer
@@ -631,8 +633,9 @@ source-time fallback and model-owned ground policy. The renderer supplies that
 ownership fact and handles stale-ground lifting, Cesium history and primitives;
 record reconciliation does not import the engine or application.
 
-`layers/vessels/records` owns plain AIS metadata, stable MMSI identity and bounded
-retention. `layers/vessels/ingestion` owns source requests and feed state through
+`layers/vessels/records` owns plain AIS metadata, identity by the stable id the
+source gives (an MMSI only for a feed that has nothing else; the MMSI itself is
+an attribute) and bounded retention. `layers/vessels/ingestion` owns source requests and feed state through
 explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.

@@ -343,7 +343,7 @@ export function createModel({
    * (on top) and never distance-faded by the overlay.
    * Exported for unit tests.
    * @param {Object} fire - Detection record.
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
@@ -384,9 +384,10 @@ export function createModel({
    * Card model for an ambient fire detection, e.g. title "▲ 47 MW", detail
    * "high · 14h · N20". Ages are computed against each detection's acquisition
    * time — with the live feed everything reads under 24 h (and a stale cache
-   * reads truthfully old). Exported for unit tests.
+   * reads truthfully old); `nowMs` is the time ages count back from, the end
+   * of the window shown (see {@link ageReferenceMs}). Exported for unit tests.
    * @param {{fire: Object, position: Cesium.Cartesian3}} candidate - Label candidate.
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
@@ -418,7 +419,7 @@ export function createModel({
    * "max 210 MW · new 3h". Accent comes from the candidate (renderHeat sets
    * it with {@link cellCardAccent}). Exported for unit tests.
    * @param {{cell: Object, position: Cesium.Cartesian3, accent: string}} candidate
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
@@ -535,14 +536,39 @@ export function createModel({
     return `${isolate(latPart)} ${isolate(lonPart)}`;
   }
 
+  /**
+   * Millisecond delta → `{ unit: '<1h' | 'h' | 'd', count }`, or null for
+   * invalid input. Both age formatters read it, so they pick the same unit.
+   */
+
+  function ageParts(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
+    const hours = deltaMs / 3600000;
+    if (hours < 1) return { unit: '<1h', count: 0 };
+    const wholeHours = Math.round(hours);
+    if (wholeHours < 48) return { unit: 'h', count: wholeHours };
+    return { unit: 'd', count: Math.round(hours / 24) };
+  }
+
+  /**
+   * The time a card's ages count back from: the end of the 24 hours shown
+   * when the snapshot ends at a set time, now while it runs to now. A window
+   * that ended months ago then reads its fires as hours old, as they were.
+   * @param {number} [nowMs] - Current epoch milliseconds.
+   * @returns {number}
+   */
+
+  function ageReferenceMs(nowMs = Date.now()) {
+    const at = layerState?._at;
+    return Number.isFinite(at) ? at : nowMs;
+  }
+
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
 
   function formatAge(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
-    const hours = deltaMs / 3600000;
-    if (hours < 1) return '<1h';
-    if (hours < 48) return `${Math.round(hours)}h`;
-    return `${Math.round(hours / 24)}d`;
+    const age = ageParts(deltaMs);
+    if (!age) return '';
+    return age.unit === '<1h' ? '<1h' : `${age.count}${age.unit}`;
   }
 
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
@@ -573,12 +599,12 @@ export function createModel({
   /** formatAge for a card: "<1h", "24h", "3d" in the UI language ("24 ч"). */
 
   function formatAgeLabel(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
-    const hours = deltaMs / 3600000;
-    if (hours < 1) return t('<1h', { context: 'age' });
-    if (hours < 48)
-      return t('{count}h', { context: 'age', count: Math.round(hours) });
-    return t('{count}d', { context: 'age', count: Math.round(hours / 24) });
+    const age = ageParts(deltaMs);
+    if (!age) return '';
+    if (age.unit === '<1h') return t('<1h', { context: 'age' });
+    return age.unit === 'h'
+      ? t('{count}h', { context: 'age', count: age.count })
+      : t('{count}d', { context: 'age', count: age.count });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
@@ -612,6 +638,7 @@ export function createModel({
     cellCardAccent,
     formatLatLon,
     formatFrp,
+    ageReferenceMs,
     formatAge,
     formatAgeLabel,
     formatAgoMinutes,

@@ -90,7 +90,9 @@ export function presentCctvPanel(state, enabled) {
 }
 
 function metaText(state, enabled, activeCamera, catalogCount) {
-  if (activeCamera) {
+  // The layer keeps its active camera while off: a disabled panel must not
+  // describe a feed it no longer shows.
+  if (enabled && activeCamera) {
     const provider = cctvSourceLabelText(
       activeCamera.sourceLabel || activeCamera.provider || 'Configured Source',
     );
@@ -188,6 +190,20 @@ export function _renderCctvState(state) {
     });
   }
   this._lastSeenCctvActiveId = effectiveActiveId;
+  // Switching the layer off closes the panel it opened: nothing is left to
+  // show. Only the on → off change collapses, so a panel the user opens
+  // while the layer is off stays open. Clear selected data layers and
+  // Context isolation keep the panel: the layer comes back with it. The
+  // panel chrome decides whether anything changes: a panel the desktop
+  // accordion only folded still has an open saved state to close.
+  if (
+    this._wasCctvEnabled &&
+    !enabled &&
+    !this.actions.preservePanelState?.()
+  ) {
+    this.actions.setPanelCollapsed('cctv-panel', true);
+  }
+  this._wasCctvEnabled = enabled;
 
   this._updateCctvSyncChip(state?.loading, enabled);
 

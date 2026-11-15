@@ -8,16 +8,9 @@ import {
 } from '../../data/contactPlayback.js';
 import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
+import { TRANSIT_MODE_COLORS } from './policy.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
-const MODE_COLOR = {
-  bus: '#5EF08A',
-  tram: '#FFC24A',
-  subway: '#FF4538',
-  rail: '#D9A6FF',
-  ferry: '#5FD6FF',
-  unknown: '#D8DDE5',
-};
 // Final Cesium batching uses 3,152 bytes per two-lane edge.
 // The 1,278-instance body plus 64 bytes/instance reserve stays below 2 MiB.
 export const TRAIL_VERTEX_LIMIT = 640;
@@ -41,7 +34,7 @@ export function createTrails({ state, services, parts, source }) {
     renderer?.setStyle(
       transitStyleProfile(state._stylePreset) === 'mono'
         ? '#FFFFFF'
-        : MODE_COLOR[selected?.mode] || MODE_COLOR.unknown,
+        : TRANSIT_MODE_COLORS[selected?.mode] || TRANSIT_MODE_COLORS.unknown,
     );
   }
   function releaseSelectionGeometry(entry) {
@@ -205,6 +198,24 @@ export function createTrails({ state, services, parts, source }) {
     nearGround = parts.height.nearGround(),
   ) {
     pruneMarkerPaths(entry, sample);
+    // Placed by a host-supplied placement, it is drawn at the placed point,
+    // at the height its own playback has reached; far above the ground, where
+    // no floor is asked for, on the ellipsoid as an unplaced vehicle is.
+    if (entry.placed === true) {
+      const heightM = Number.isFinite(sample.heightM)
+        ? sample.heightM
+        : nearGround
+          ? NaN
+          : 0;
+      if (!Number.isFinite(heightM)) return null;
+      return Cesium.Cartesian3.fromDegrees(
+        sample.lon,
+        sample.lat,
+        heightM,
+        undefined,
+        out,
+      );
+    }
     if (!nearGround) {
       const a = entry.fromCart,
         b = entry.toCart,
@@ -235,8 +246,11 @@ export function createTrails({ state, services, parts, source }) {
   }
   function update() {
     if (!selected || !renderer) return;
+    // A first-person view on the vehicle rides where its trail would start.
     renderer.setVisible(
-      state._enabled && state._vehicles.get(selected.key) === selected,
+      state._enabled &&
+        state._vehicles.get(selected.key) === selected &&
+        selected.key !== state._cockpitSubjectKey,
     );
     renderer.setDisplaySample(selected.sample, selected.marker?.position);
   }

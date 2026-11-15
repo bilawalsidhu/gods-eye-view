@@ -147,6 +147,15 @@ export class LayerBindings {
       fires.attachShellServices({ imageryHost: this.services.imageryHost });
       this._weatherShellModules.push(fires);
     }
+    // News flies to a chosen report or hotspot through the same release.
+    const news = this._dataManager?.layers?.get('news')?.module;
+    if (typeof news?.attachShellServices === 'function') {
+      news.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('news', navigate),
+      });
+      this._weatherShellModules.push(news);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {

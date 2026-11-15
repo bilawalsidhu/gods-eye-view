@@ -43,6 +43,7 @@ test('an unknown or missing type has no eye height of its own', () => {
 
 test('vessel info faces the true heading and moves along course over ground', () => {
   const info = vesselCockpitInfo({
+    id: '211000000',
     mmsi: '211000000',
     name: 'NORDIC STAR',
     type: '70',
@@ -58,6 +59,7 @@ test('vessel info faces the true heading and moves along course over ground', ()
   assert.equal(info.kind, 'vessel');
   assert.equal(info.layerId, VESSEL_COCKPIT_LAYER_ID);
   assert.equal(info.id, '211000000');
+  assert.equal(info.mmsi, '211000000');
   assert.equal(info.typeLabel, 'CARGO');
   assert.equal(info.track, 90);
   assert.equal(info.motionCourse, 95);
@@ -70,7 +72,7 @@ test('vessel info faces the true heading and moves along course over ground', ()
 });
 
 test('a missing heading or course falls back to the other', () => {
-  const base = { mmsi: '1', lat: 1, lon: 1, speed: 3 };
+  const base = { id: '1', mmsi: '1', lat: 1, lon: 1, speed: 3 };
   assert.equal(vesselCockpitInfo({ ...base, course: 40 }).track, 40);
   assert.equal(vesselCockpitInfo({ ...base, heading: 50 }).motionCourse, 50);
   const neither = vesselCockpitInfo(base);
@@ -79,7 +81,7 @@ test('a missing heading or course falls back to the other', () => {
 });
 
 test('the subject says whether its track is the heading or the course', () => {
-  const base = { mmsi: '1', lat: 1, lon: 1, speed: 3 };
+  const base = { id: '1', mmsi: '1', lat: 1, lon: 1, speed: 3 };
   assert.equal(
     vesselCockpitInfo({ ...base, heading: 50, course: 40 }).trackSource,
     'heading',
@@ -99,15 +101,33 @@ test('the subject says whether its track is the heading or the course', () => {
 test('a vessel without identity or position is not a subject', () => {
   assert.equal(vesselCockpitInfo(null), null);
   assert.equal(vesselCockpitInfo({ lat: 1, lon: 1 }), null);
-  assert.equal(vesselCockpitInfo({ mmsi: '1', lat: 'x', lon: 1 }), null);
+  assert.equal(vesselCockpitInfo({ id: '1', mmsi: '1', lat: 'x', lon: 1 }), null);
 });
 
 test('a vessel missing from recent refreshes reads as stale', () => {
   const info = vesselCockpitInfo({
+    id: '1',
     mmsi: '1',
     lat: 1,
     lon: 1,
     missedRefreshes: 2,
   });
   assert.equal(info.stale, true);
+});
+
+test('a vessel is the subject by its id; an MMSI is only shown when known', () => {
+  const info = vesselCockpitInfo({
+    id: 'b6a7c1e2-provider-id',
+    mmsi: '',
+    name: 'NORDIC STAR',
+    lat: 54.5,
+    lon: 10.2,
+  });
+  assert.equal(info.id, 'b6a7c1e2-provider-id');
+  assert.equal(info.mmsi, '');
+  assert.equal(
+    vesselCockpitInfo({ mmsi: '211000000', lat: 54.5, lon: 10.2 }),
+    null,
+    'a record with no id is unkeyed and cannot be ridden',
+  );
 });

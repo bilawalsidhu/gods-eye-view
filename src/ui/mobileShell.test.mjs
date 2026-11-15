@@ -623,7 +623,7 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   const openDock = rule('body.mobile-shell[data-mobile-sheet] #command-dock');
   const railSheet = rule(
-    "body.mobile-shell[data-mobile-sheet='more'] #right-context-rail",
+    "body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack",
   );
   assert.ok(z(sheetCredit) > z(openDock));
   assert.ok(z(sheetCredit) > z(railSheet));
@@ -976,4 +976,21 @@ test('a slow downward pull is claimed before Android native scroll takes ownersh
   touchEvent(document, 'touchend', panel, { y: 175 });
   assert.equal(shell.getSheet(), null);
   shell.destroy();
+});
+
+test('on phones the News panel shows in the Context sheet only, like Weather', () => {
+  const css = readFileSync(
+    new URL('./styles/mobile-shell.css', import.meta.url),
+    'utf8',
+  );
+  // Hidden by id: the rail's own `#news-panel:not(.collapsed)` rule outranks
+  // the generic `#right-context-rail > *` hiding rule.
+  assert.match(
+    css,
+    /body\.mobile-shell #right-context-rail > #news-panel,\n[^{}]*\{\s*display: none;/,
+  );
+  assert.match(
+    css,
+    /body\.mobile-shell\[data-mobile-sheet='context'\]\s+#right-context-rail\s+> #news-panel:not\(\[hidden\]\),/,
+  );
 });

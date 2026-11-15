@@ -448,3 +448,47 @@ test('a link made away from live carries its world time to the page that opens i
   assert.equal(liveOpener.parseInitialHash().worldTime, null);
   liveOpener.destroy();
 });
+
+test('a copied link carries the Data Library selection to a clean recipient', (t) => {
+  installTab(t, SHARE_A);
+  const sharer = new ShareLinkManager(fakeViewer());
+  sharer.setLibraryParamsEncoder((params) => params.set('lib', '03.0a'));
+  const code = new URL(sharer.buildLink()).pathname.split('/').at(-1);
+  sharer.destroy();
+  const opener = new ShareLinkManager(fakeViewer(), { initialShareCode: code });
+  assert.deepEqual(opener.parseInitialHash().library, ['03', '0a']);
+  assert.deepEqual(opener.initialLibraryTokens, ['03', '0a']);
+  opener.destroy();
+
+  // A link with every library entry off is a share that switches none on.
+  const none = new ShareLinkManager(fakeViewer());
+  const noneCode = new URL(none.buildLink()).pathname.split('/').at(-1);
+  none.destroy();
+  const noneOpener = new ShareLinkManager(fakeViewer(), {
+    initialShareCode: noneCode,
+  });
+  noneOpener.parseInitialHash();
+  assert.deepEqual(noneOpener.initialLibraryTokens, []);
+  noneOpener.destroy();
+
+  // A page opened without a share leaves the library its stored selection.
+  installTab(t, '');
+  const plain = new ShareLinkManager(fakeViewer());
+  plain.parseInitialHash();
+  assert.equal(plain.initialLibraryTokens, null);
+  plain.destroy();
+});
+
+test('a share navigated to in this tab hands its library tokens over', (t) => {
+  const tab = installTab(t, SHARE_A);
+  const manager = new ShareLinkManager(fakeViewer());
+  manager.parseInitialHash();
+  const received = [];
+  manager.setLibraryShareListener((tokens) => received.push(tokens));
+  manager.watchNavigation(() => {});
+  tab.navigate(`${SHARE_B}&lib=01`);
+  tab.navigate(SHARE_A);
+  tab.back();
+  assert.deepEqual(received, [['01'], [], ['01']]);
+  manager.destroy();
+});

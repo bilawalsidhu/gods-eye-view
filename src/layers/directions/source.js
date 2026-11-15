@@ -21,7 +21,13 @@ export function createDirectionsSource({
         signal,
         headers: { Accept: 'application/json' },
       });
-      const payload = await response.json();
+      // Proxy error pages may not be JSON.
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        if (response.ok) throw error;
+      }
       signal?.throwIfAborted();
       // Failures keep their English message and carry the HTTP status and the
       // server's refusal text, so the layer can show them in the language.
@@ -39,7 +45,8 @@ export function createDirectionsSource({
           { status: 429, refusal },
         );
       }
-      if (!response.ok && !payload?.error)
+      // A 5xx body may mislabel an outage as a route refusal.
+      if (response.status >= 500 || (!response.ok && !payload?.error))
         throw Object.assign(
           new Error(`Routing unavailable (HTTP ${response.status})`),
           { status: response.status },

@@ -11,12 +11,27 @@ import { useCockpitStore } from '../../stores/cockpit.js';
 const { route } = storeToRefs(useCockpitStore());
 const initial = createRouteState();
 const r = computed(() => route.value ?? initial);
+// A provider subject's card is titled by its provider, in the page's language.
+const kicker = computed(() =>
+  r.value.kind === 'subject'
+    ? r.value.title
+    : r.value.kind === 'vessel'
+      ? t('REPORTED VOYAGE')
+      : t('ESTIMATED FLIGHT PLAN'),
+);
+const label = computed(() =>
+  r.value.kind === 'subject'
+    ? r.value.title || undefined
+    : r.value.kind === 'vessel'
+      ? t('Reported voyage')
+      : t('Estimated flight plan'),
+);
 </script>
 
 <template>
-  <section id="cockpit-route" class="cockpit-route-card" :aria-label="r.kind === 'vessel' ? t('Reported voyage') : t('Estimated flight plan')" :hidden="!r.visible">
+  <section id="cockpit-route" class="cockpit-route-card" :aria-label="label" :hidden="!r.visible">
     <div class="cockpit-route-heading">
-      <span class="cockpit-route-kicker">{{ r.kind === 'vessel' ? t('REPORTED VOYAGE') : t('ESTIMATED FLIGHT PLAN') }}</span>
+      <span class="cockpit-route-kicker">{{ kicker }}</span>
       <small id="cockpit-route-status">{{ r.status }}</small>
     </div>
     <div class="cockpit-route-endpoints">

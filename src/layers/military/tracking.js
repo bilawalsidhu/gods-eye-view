@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
-import { julianAt } from '../../time/julian.js';
-import { t } from '../../i18n/index.js';
+import { formatNumber, t } from '../../i18n/index.js';
+import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
@@ -19,14 +19,34 @@ import {
   TRACKED_MODEL_MAX_LOAD_FAILS,
   TRACKED_MODEL_RETRY_BACKOFF_MS,
   TRAIL_MAX_POINTS,
-  RENDER_DELAY_SEC,
+  DR_CORRECTION_MS,
+  displayDelayMs,
+  followsClock,
   TRAIL_COLOR,
   BILLBOARD_SCALE,
   GROUND_SCALE,
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
+  STALE_ALPHA,
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import {
+  drawTrailSegments,
+  historyFixEpochMs,
+  insertTrailFix,
+  joinTrailBackfill,
+  recordTrailPoint,
+  trailBackfillFixes,
+  trailBodyCount,
+  trailBodyCountOutsideModel,
+  trailBodySegments,
+  trailHeadStartFix,
+  trailRecordingBlocked,
+  TRAIL_RECORD_STEP_M,
+  TRAIL_RECORD_STEP_MS,
+} from '../../data/trailContinuity.js';
+
+const STALE_TRACKED_COLOR = TRACKED_ICON_COLOR.withAlpha(STALE_ALPHA);
 
 export function createTracking({
   flightState,
@@ -207,23 +227,97 @@ export function createTracking({
   }
 
   /**
+   * The tracked plane's stale cue and whether it is drawn with the stale fade.
+   * - SIGNAL LOST · <time since its last report>, dimmed: its coast has ended
+   *   (or it holds at its last report after a missed update) and no newer
+   *   report has come.
+   * - STALE, dimmed: it has missed an update and still coasts, or the whole
+   *   feed is backing off.
+   * @param {string} icao24
+   * @returns {{text: string, dimmed: boolean}}
+   */
+
+  function _trackedStaleCue(icao24) {
+    const records = flightState.records;
+    const misses = records.missingPolls.get(icao24) || 0;
+    const repeated = records.fixRepeated?.has(icao24) === true;
+    const backoff = flightState.feed._backoff === true;
+    // Computed once per frame for the label, the icon colour and the model
+    // fade; a poll between frames changes the key.
+    const frame = flightState._viewer?.scene?.frameState?.frameNumber;
+    const key = Number.isFinite(frame)
+      ? `${frame}|${icao24}|${misses}|${repeated}|${backoff}`
+      : null;
+    const cached = flightState._trackedStaleCueCache;
+    if (key !== null && cached?.key === key) return cached.cue;
+    const cue = _computeTrackedStaleCue(
+      icao24,
+      misses > 0 || repeated,
+      backoff,
+    );
+    flightState._trackedStaleCueCache = key === null ? null : { key, cue };
+    return cue;
+  }
+
+  /** `_trackedStaleCue` without the per-frame cache. A repeated fix counts as missed. */
+
+  function _computeTrackedStaleCue(icao24, missed, backoff) {
+    const lost = parts.motion._signalLost(icao24);
+    if (lost && (missed || !lost.holds)) {
+      const sec = Math.max(
+        0,
+        Math.floor((flightState.now() - lost.reportEpochMs) / 1000),
+      );
+      const time =
+        sec < 60
+          ? `${formatNumber(sec, { useGrouping: false })} ${unitLabel('s')}`
+          : `${formatNumber(Math.floor(sec / 60), { useGrouping: false })} ${unitLabel('min')}`;
+      return { text: t('SIGNAL LOST · {time}', { time }), dimmed: true };
+    }
+    // A missed update or a stalled feed: no newer position is coming in.
+    if (missed || backoff) return { text: t('STALE'), dimmed: true };
+    return { text: '', dimmed: false };
+  }
+
+  /** The tracked billboard's colour: amber, faded while stale, clear while the 3D model is the visual. */
+
+  function _trackedIconColor() {
+    if (parts.rendering._modelOwnsVisual(flightState._trackedIcao))
+      return AMBER_TRANSPARENT;
+    return _trackedStaleCue(flightState._trackedIcao).dimmed
+      ? STALE_TRACKED_COLOR
+      : TRACKED_ICON_COLOR;
+  }
+
+  /**
+   * Re-word the tracked label when its stale cue changes (STALE, SIGNAL LOST,
+   * each new second or minute of it). Run from the layer's per-frame pass.
+   */
+
+  function _staleCueTick() {
+    const icao24 = flightState._trackedIcao;
+    if (!icao24 || !flightState._trackedEntity) return;
+    const text = _trackedStaleCue(icao24).text;
+    if (text === flightState._trackedStaleCueText) return;
+    flightState._trackedStaleCueText = text;
+    _updateTrackedLabelModel(icao24);
+  }
+
+  /**
    * Build the multi-line presentation text for the protected tracked host card.
    * Lines: callsign, type/registration, operator/altitude.
-   * While the plane is in its missed-poll grace (coasting on dead reckoning
-   * with sticky metadata) the first line carries a "· STALE" cue — the fleet's
-   * 45%-alpha billboard fade doesn't apply to the tracked plane (its entity
-   * owns the visual), so without this the readout would present last-known
-   * altitude/speed as live.
+   * The first line carries the stale cue (`_trackedStaleCue`): STALE while
+   * the plane coasts on dead reckoning after a missed update, SIGNAL LOST
+   * once the coast has ended, so last-known altitude/speed are never
+   * presented as live.
    * @param {Object|null} info - Flight metadata from _flightData
    * @param {string} icao24 - ICAO hex identifier (fallback display name)
    * @returns {string} Newline-separated label text
    */
 
   function _buildTrackedLabel(info, icao24) {
-    const stale =
-      flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
-        ? ` · ${t('STALE')}`
-        : '';
+    const cue = _trackedStaleCue(icao24).text;
+    const stale = cue ? ` · ${cue}` : '';
     const callsign =
       (parts.queries._toCleanText(info?.callsign) ||
         parts.queries._toCleanText(info?.registration) ||
@@ -456,33 +550,112 @@ export function createTracking({
   }
 
   /**
-   * Append one fix to the tracked aircraft's trail accumulation and refresh
-   * the rendered trail. Caller passes an owned (cloned) Cartesian3.
-   * @param {Cesium.Cartesian3} position - New fix position, appended at the head.
+   * Put one report into the tracked aircraft's trail, in time order, and
+   * refresh the rendered trail. Caller passes an owned (cloned) Cartesian3. A
+   * report that breaks from its neighbour starts a new segment (see
+   * trailContinuity).
+   * @param {Cesium.Cartesian3} position - The report's position.
+   * @param {number} [epochMs] - The report's time; defaults to the tracked
+   *   aircraft's newest position-history fix, which every caller has just pushed.
+   * @param {{nullAltitude?: boolean}} [options] - `nullAltitude`: the report
+   *   had no altitude, so its position is not kept and the line breaks there.
+   *   A report for a time the display has already passed replaces what was
+   *   drawn after it (see `insertTrailFix`).
    */
 
-  function _appendTrailFix(position) {
-    flightState._trailPositions.push(_trailFloorPosition(position));
-    if (flightState._trailPositions.length > TRAIL_MAX_POINTS)
-      flightState._trailPositions.shift();
+  function _appendTrailFix(position, epochMs, { nullAltitude = false } = {}) {
+    const history = flightState._positionHistory.get(flightState._trackedIcao);
+    const timeMs = Number.isFinite(epochMs)
+      ? epochMs
+      : historyFixEpochMs(history?.[history.length - 1]);
+    insertTrailFix(
+      flightState._trailFixes,
+      _trailFloorPosition(position),
+      timeMs,
+      TRAIL_MAX_POINTS,
+      {
+        nullAltitude,
+        displayMs: flightState.now() - displayDelayMs(flightState),
+        settleMs: DR_CORRECTION_MS,
+      },
+    );
     _refreshTrailDisplay();
   }
 
   /**
-   * Renders the trail BODY — the accumulated fixes EXCLUDING the newest raw one. That
-   * newest fix is at ~now, ~one poll interval AHEAD of the delayed icon (rendered at
-   * now − RENDER_DELAY_SEC), so drawing it would push the trail in FRONT of the plane.
-   * The cheap per-frame _trailHeadEntity segment bridges the last body point to the
-   * delayed dead-reckoned head, so this primitive only rebuilds on a real fix (poll
-   * cadence), never at motion cadence.
+   * Per-frame trail work, run from the layer's preRender pass whether or not
+   * the head is visible: record where the tracked icon is drawn (at most once
+   * a second or every 150 m, floored like the head) and move the body on as
+   * the display time passes reports. The head callback only reads the result.
+   */
+
+  function _trailTick() {
+    if (!flightState._trackedIcao || !flightState._trail) return;
+    const displayMs = flightState.now() - displayDelayMs(flightState);
+    let changed = false;
+    if (
+      flightState._trailFixes.length &&
+      !parts.motion._isTrackWarmingUp() &&
+      !trailRecordingBlocked(flightState._trailFixes, displayMs)
+    ) {
+      const drawn = parts.motion._trackedDisplayPosition(
+        flightState._trackedIcao,
+      );
+      const last = flightState._trailRecordPosition;
+      if (
+        drawn &&
+        (!last ||
+          displayMs - flightState._trailRecordMs >= TRAIL_RECORD_STEP_MS ||
+          Cesium.Cartesian3.distance(last, drawn) >= TRAIL_RECORD_STEP_M)
+      ) {
+        flightState._trailRecordMs = displayMs;
+        flightState._trailRecordPosition = Cesium.Cartesian3.clone(
+          drawn,
+          flightState._trailRecordPosition ?? undefined,
+        );
+        changed = recordTrailPoint(
+          flightState._trailFixes,
+          _trailFloorPosition(Cesium.Cartesian3.clone(drawn)),
+          displayMs,
+          TRAIL_MAX_POINTS,
+        );
+      }
+    }
+    if (changed || _trailBodyCountNow() !== flightState._trailBodyCount)
+      _refreshTrailDisplay();
+  }
+
+  /**
+   * Renders the trail BODY — the accumulated fixes at or before the delayed display
+   * time (now − RENDER_DELAY_SEC). Newer fixes are AHEAD of the icon, so drawing them
+   * would push the trail in FRONT of the plane. The cheap per-frame _trailHeadEntity
+   * segment bridges the last body point to the delayed dead-reckoned head, so the
+   * body rebuilds only on a real fix or when the display time passes one, never at
+   * motion cadence. A break lifts the pen: each segment is
+   * its own line, nothing between them.
    */
 
   function _refreshTrailDisplay() {
     if (!flightState._trail) return;
-    flightState._trail.setPositions(
-      flightState._trailPositions.length > 1
-        ? flightState._trailPositions.slice(0, -1)
-        : flightState._trailPositions,
+    flightState._trailBodyCount = _trailBodyCountNow();
+    drawTrailSegments(
+      flightState._trail,
+      trailBodySegments(flightState._trailFixes, flightState._trailBodyCount),
+    );
+  }
+
+  /** Fixes at or before the time the aircraft is drawn (now − RENDER_DELAY_SEC),
+   *  less the newest recorded points inside its 3D model. */
+
+  function _trailBodyCountNow() {
+    return trailBodyCountOutsideModel(
+      flightState._trailFixes,
+      trailBodyCount(
+        flightState._trailFixes,
+        flightState.now() - displayDelayMs(flightState),
+      ),
+      parts.motion._trackedModelCenterWorld(),
+      parts.motion._trackedModelEnvelopeM(),
     );
   }
 
@@ -495,25 +668,27 @@ export function createTracking({
 
   function _startTrail(icao24) {
     flightState._trailBackfillToken += 1;
-    flightState._trailPositions = [];
+    flightState._trailFixes = [];
+    flightState._trailRecordPosition = null;
+    flightState._trailRecordMs = -Infinity;
     const history = flightState._positionHistory.get(icao24) || [];
-    // Seed only fixes at/behind the DELAYED display time (now − RENDER_DELAY_SEC). The
-    // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
-    // would draw the trail in front of the plane. They join via _appendTrailFix as they age.
-    const seedRenderTime = Cesium.JulianDate.addSeconds(
-      julianAt(flightState.now()),
-      -RENDER_DELAY_SEC,
-      flightState._scratchWarmupTime,
-    );
+    // Seed every report. The body only draws those at or before the delayed
+    // display time (now − RENDER_DELAY_SEC); newer ones join it as the display
+    // passes them. A synthetic forward fix (it carries `reportEpochMs`) is a
+    // motion aid, never a report. A report drawn at an invented height keeps
+    // no position and breaks the line.
     for (const fix of history) {
-      if (Cesium.JulianDate.lessThanOrEquals(fix.time, seedRenderTime)) {
-        // Floor grounded-history seeds (round 2): a grounded contact's stored
-        // fixes carry the pre-datum default height — the trail copy sits on
-        // the surface instead (pure lift; airborne fixes pass through).
-        flightState._trailPositions.push(
-          _trailFloorPosition(Cesium.Cartesian3.clone(fix.position)),
-        );
-      }
+      if (Number.isFinite(fix.reportEpochMs)) continue;
+      // Floor grounded-history seeds (round 2): a grounded contact's stored
+      // fixes carry the pre-datum default height — the trail copy sits on
+      // the surface instead (pure lift; airborne fixes pass through).
+      insertTrailFix(
+        flightState._trailFixes,
+        _trailFloorPosition(Cesium.Cartesian3.clone(fix.position)),
+        historyFixEpochMs(fix),
+        TRAIL_MAX_POINTS,
+        { nullAltitude: fix.inventedHeight === true },
+      );
     }
     if (!flightState._trail && flightState._viewer) {
       flightState._trail = createTrail(flightState._viewer, {
@@ -534,14 +709,13 @@ export function createTracking({
         show: !flightState._cockpitContactMode,
         polyline: {
           positions: new Cesium.CallbackProperty(() => {
-            // Need ≥2 accumulated points: the body draws all-but-newest, so the head must
-            // start at the last DISPLAYED body point (index n−2). With a single fix that
-            // point would be the sole raw fix — ~now, AHEAD of the delayed icon — so the
-            // segment would draw IN FRONT of the plane. Likewise during warm-up the icon
-            // predates all real history, so there is no valid body point behind it.
+            // The head starts at the last DISPLAYED body point, the newest fix at or
+            // before the delayed display time; a fix ahead of the icon would draw the
+            // segment IN FRONT of the plane. During warm-up the icon predates all real
+            // history, so there is no valid body point behind it.
             if (
               !flightState._trackedIcao ||
-              flightState._trailPositions.length < 2 ||
+              !flightState._trailFixes.length ||
               parts.motion._isTrackWarmingUp()
             )
               return [];
@@ -549,12 +723,20 @@ export function createTracking({
               parts.motion._trackedTrailCached() ||
               parts.motion._trackedDisplayPosition(flightState._trackedIcao);
             if (!head) return [];
-            // body[n−2] (last displayed body point) → delayed head: runs FORWARD, never a
-            // backward/reversing segment.
-            const start =
-              flightState._trailPositions[
-                flightState._trailPositions.length - 2
-              ];
+            // The last body point (a report, or where the icon was drawn a
+            // moment ago) → the icon. The body is moved on by _trailTick, never
+            // here: a callback must not add or remove entities.
+            // No head across a break: a body point more than 150 km away, or
+            // too long ago or too far to be one path, stays detached; none while
+            // the aircraft holds at its last point.
+            const last = trailHeadStartFix(
+              flightState._trailFixes,
+              head,
+              flightState.now(),
+              flightState._trailBodyCount,
+            );
+            if (!last) return [];
+            const start = last.position;
             // Floor the head too (round 2): a grounded tracked contact's DR
             // display height is the pre-datum default — without this the last
             // segment dives underground while taxiing.
@@ -595,10 +777,10 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget optional source history backfill (PRD F2). Trace points are
-   * stride-thinned to the remaining vertex budget, then spliced strictly older
-   * than the oldest seeded fix AHEAD of the locally accumulated fine segment,
-   * capped at TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
+   * Fire-and-forget optional source history backfill (PRD F2). Every trace
+   * point strictly older than the oldest seeded fix is spliced AHEAD of the
+   * locally accumulated fine segment, each leg its own segment, capped at
+   * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
    * malformed) silently keeps the local-only trail.
    * @param {string} icao24 - ICAO hex identifier being tracked.
    * @param {number} token - Backfill token captured at request time.
@@ -608,15 +790,16 @@ export function createTracking({
 
   async function _backfillTrail(icao24, token, oldestFixEpochSec) {
     let trace = null;
+    // Following the world clock, the track ends at the world's time.
+    const atMs = followsClock(flightState) ? flightState.now() : undefined;
     try {
+      const signal = AbortSignal.any([
+        flightState.lifetime.signal,
+        AbortSignal.timeout(8000),
+      ]);
       const track = await flightState.feed._source.getTrack?.(
         flightState.records.data.get(icao24)?.sourceReference ?? icao24,
-        {
-          signal: AbortSignal.any([
-            flightState.lifetime.signal,
-            AbortSignal.timeout(8000),
-          ]),
-        },
+        atMs === undefined ? { signal } : { signal, atMs },
       );
       trace = track?.records ?? null;
     } catch {
@@ -644,7 +827,14 @@ export function createTracking({
         lon = point.longitude;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       if (!Number.isFinite(t) || t >= oldestFixEpochSec) continue;
-      parsed.push({ lat, lon, baroAltitudeM: point.baroAltitudeM });
+      if (atMs !== undefined && !(point.observedAtMs <= atMs)) continue;
+      parsed.push({
+        lat,
+        lon,
+        baroAltitudeM: point.baroAltitudeM,
+        onGround: point.onGround === true,
+        timeMs: point.observedAtMs,
+      });
     }
     if (!parsed.length) return;
 
@@ -667,39 +857,34 @@ export function createTracking({
     )
       return;
 
-    let older = [];
-    let lastAltM = null; // carry-forward for ground points whose cell isn't warm yet
-    for (const { lat, lon, baroAltitudeM } of parsed) {
-      const baroM =
-        baroAltitudeM == null ? null : baroAltitudeM + geoidHeight(lat, lon);
-      let altM = floorAltitudeM(baroM, cachedGroundFloor(lat, lon));
-      // Ground/no-alt point with an unresolved floor: hold the previous
-      // waypoint's altitude (continuity — never a dive to a made-up depth).
-      // Leading points with nothing to carry keep the old low breadcrumb
-      // sentinel (an arbitrary placeholder, never a reported altitude).
-      if (altM == null) altM = lastAltM != null ? lastAltM : 50;
-      lastAltM = altM;
-      older.push(Cesium.Cartesian3.fromDegrees(lon, lat, altM));
-    }
-
-    // Stride-thin the backfill so it plus the live fine segment fit the cap.
-    const budget = Math.max(
-      1,
-      TRAIL_MAX_POINTS - flightState._trailPositions.length,
+    // Every trace point is kept, each leg its own segment. A 'ground' point
+    // is at altitude 0, floored at the ground. A point with no altitude is a
+    // break on both sides: it sits on the ground where the floor is known and
+    // is skipped otherwise; a skipped point still breaks the line.
+    const backfill = trailBackfillFixes(
+      parsed.map(({ lat, lon, baroAltitudeM, onGround, timeMs }) => {
+        const known = Number.isFinite(baroAltitudeM)
+          ? baroAltitudeM
+          : onGround
+            ? 0
+            : null;
+        const altM = floorAltitudeM(
+          known == null ? null : known + geoidHeight(lat, lon),
+          cachedGroundFloor(lat, lon),
+        );
+        return {
+          position:
+            altM == null ? null : Cesium.Cartesian3.fromDegrees(lon, lat, altM),
+          timeMs,
+          nullAltitude: known == null,
+        };
+      }),
     );
-    if (older.length > budget) {
-      const stride = Math.ceil(older.length / budget);
-      const thinned = [];
-      for (let i = 0; i < older.length; i += stride) thinned.push(older[i]);
-      older = thinned;
-    }
-
-    flightState._trailPositions = older.concat(flightState._trailPositions);
-    if (flightState._trailPositions.length > TRAIL_MAX_POINTS) {
-      flightState._trailPositions = flightState._trailPositions.slice(
-        flightState._trailPositions.length - TRAIL_MAX_POINTS,
-      );
-    }
+    flightState._trailFixes = joinTrailBackfill(
+      backfill,
+      flightState._trailFixes,
+      TRAIL_MAX_POINTS,
+    );
     _refreshTrailDisplay();
   }
 
@@ -709,7 +894,9 @@ export function createTracking({
 
   function _clearTrail() {
     flightState._trailBackfillToken += 1;
-    flightState._trailPositions = [];
+    flightState._trailFixes = [];
+    flightState._trailRecordPosition = null;
+    flightState._trailRecordMs = -Infinity;
     if (flightState._trail) flightState._trail.clear();
     if (
       flightState._trailHeadEntity &&
@@ -926,15 +1113,9 @@ export function createTracking({
           (CLASS_SCALE_2D[
             flightState.records.data.get(flightState._trackedIcao)?.klass
           ] || 1),
-        // Solid amber when the billboard is the visual (zoomed out, 3D off, or model still loading);
-        // transparent once the STANDALONE tracked model is actually up (ready + shown).
-        color: new Cesium.CallbackProperty(
-          () =>
-            parts.rendering._modelOwnsVisual(flightState._trackedIcao)
-              ? AMBER_TRANSPARENT
-              : TRACKED_ICON_COLOR,
-          false,
-        ),
+        // Solid amber (faded while stale) when the billboard is the visual (zoomed out, 3D off,
+        // or model still loading); transparent once the STANDALONE tracked model is actually up.
+        color: new Cesium.CallbackProperty(_trackedIconColor, false),
         sizeInMeters: false,
         scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5),
         alignedAxis: Cesium.Cartesian3.ZERO,
@@ -1157,6 +1338,9 @@ export function createTracking({
     _setCockpitContactMode,
     _applyCockpitState,
     _buildTrackedLabel,
+    _trackedStaleCue,
+    _trackedIconColor,
+    _staleCueTick,
     _updateTrackedLabelModel,
     _syncTrackedBillboardImage,
     _refreshTr3bContact,
@@ -1168,6 +1352,7 @@ export function createTracking({
     _syncTracked2dRotation,
     _trailFloorPosition,
     _appendTrailFix,
+    _trailTick,
     _refreshTrailDisplay,
     _startTrail,
     _backfillTrail,

@@ -1217,6 +1217,9 @@ function buildPhase6DetectionWorkload(count) {
           : `FL${String(180 + (index % 220)).padStart(3, '0')}`,
       type: ['AIR', 'SAT', 'SEA', 'VEH'][index % 4],
       tier: index % 17 === 0 ? 'military' : undefined,
+      // Vessels name their ambient card, so each callout asks the host for it.
+      cardSourceId: index % 4 === 2 ? 'ais-live-vessels' : undefined,
+      cardEntryId: index % 4 === 2 ? `vessel:${index}` : undefined,
     });
   }
   return {

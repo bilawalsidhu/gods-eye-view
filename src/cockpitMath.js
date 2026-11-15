@@ -32,8 +32,15 @@ export function slewHeading(current, target, maxStepDeg) {
  * then uses this amount to converge on the layer's delayed display position.
  * Capping correction below forward speed prevents a late feed fix from
  * becoming a first-person surge or reversal while still removing drift.
+ * @param {number} [maxDtSec] The longest step corrected for: 0.1 s, or an
+ *   application subject's own (cockpitSubjectStepSec).
  */
-export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
+export function cockpitAnchorCorrectionStep(
+  distanceM,
+  speedMps,
+  dtSec,
+  maxDtSec = 0.1,
+) {
   if (
     !Number.isFinite(distanceM) ||
     distanceM <= 0 ||
@@ -41,11 +48,34 @@ export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
     dtSec <= 0
   )
     return 0;
-  const dt = Math.min(0.1, dtSec);
+  const dt = Math.min(
+    Number.isFinite(maxDtSec) && maxDtSec > 0 ? maxDtSec : 0.1,
+    dtSec,
+  );
   const speed = Number.isFinite(speedMps) ? Math.max(0, speedMps) : 0;
   const eased = distanceM * (1 - Math.exp(-1.25 * dt));
   const correctionRateMps = Math.max(0.75, speed * 0.22);
   return Math.min(distanceM, eased, correctionRateMps * dt);
+}
+
+/**
+ * The seconds an application subject's camera update advances its heading
+ * slew, ground lift and anchor by: the time since the last update, at most
+ * its update interval plus 0.1 s. A subject updated every 500 ms then turns
+ * and eases at its configured rates, while a long stall (a hidden tab) still
+ * moves it no further than one late update would.
+ * @param {number} elapsedMs Time since the last camera update.
+ * @param {number} intervalMs The subject's update interval (0: every frame).
+ * @returns {number}
+ */
+export function cockpitSubjectStepSec(elapsedMs, intervalMs) {
+  const elapsedSec = Number.isFinite(elapsedMs)
+    ? Math.max(0, elapsedMs) / 1000
+    : 0;
+  const intervalSec = Number.isFinite(intervalMs)
+    ? Math.max(0, intervalMs) / 1000
+    : 0;
+  return Math.min(intervalSec + 0.1, elapsedSec);
 }
 
 /** Return whether a throttled cockpit presentation update is due. */
@@ -66,6 +96,42 @@ export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
   if (![nowMs, startedMs, timeoutMs].every(Number.isFinite) || timeoutMs < 0)
     return true;
   return nowMs - startedMs >= timeoutMs;
+}
+
+/**
+ * How fast the clearance a ground clamp adds under an application subject's
+ * eye comes and goes (m/s).
+ */
+export const COCKPIT_SUBJECT_LIFT_MPS = 1.5;
+
+/**
+ * The lift the ground clamp gives an application subject's eye this update.
+ * The floor is read from coarse cells that refine as tiles load, so the lift
+ * it asks for jumps; a ridden eye takes the clearance part of it at
+ * `rateMps`, while what it needs to stay out of the floor itself (`hardM`)
+ * applies at once.
+ * @param {number|null} previousM The lift given last update; null on entry.
+ * @param {number} targetM The lift the floor and clearance ask for (m).
+ * @param {number} hardM The lift that keeps the eye out of the floor (m).
+ * @param {number} dtSec Seconds since the last update.
+ * @param {number} [rateMps]
+ * @returns {number} At least 0, at least `hardM`.
+ */
+export function easeCockpitLift(
+  previousM,
+  targetM,
+  hardM,
+  dtSec,
+  rateMps = COCKPIT_SUBJECT_LIFT_MPS,
+) {
+  const target = Number.isFinite(targetM) ? Math.max(0, targetM) : 0;
+  const hard = Number.isFinite(hardM) ? Math.max(0, hardM) : 0;
+  if (!Number.isFinite(previousM)) return Math.max(target, hard);
+  const step =
+    Math.max(0, Number.isFinite(rateMps) ? rateMps : 0) *
+    Math.max(0, Number.isFinite(dtSec) ? dtSec : 0);
+  const eased = previousM + Math.max(-step, Math.min(step, target - previousM));
+  return Math.max(0, hard, eased);
 }
 
 /**

@@ -97,6 +97,7 @@ export class PanelLayoutController {
     this._ppToggles = document.getElementById('pp-toggles');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._weatherPanel = document.getElementById('weather-panel');
+    this._newsPanel = document.getElementById('news-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
   }
@@ -188,17 +189,25 @@ export class PanelLayoutController {
     const stack = this._rightPanelStack;
     if (!stack || !this._ppToggles) return;
 
-    stack.prepend(this._ppToggles);
+    // Visual (presets and display settings) is the last panel of the left
+    // column, after the other tools, and opens from the left rail like them.
+    if (typeof this._leftPanelStack?.append === 'function')
+      this._leftPanelStack.append(this._ppToggles);
+    else stack.prepend(this._ppToggles);
     const globalContextPanel = document.getElementById('global-context-panel');
     for (const panel of [
       this._cctvPanel,
       this._weatherPanel,
+      this._newsPanel,
       this._recentImageryPanel,
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
       stack.insertBefore(panel, globalContextPanel);
     }
+    // Context leads the right column: it is the panel for whatever is picked,
+    // and the camera panels follow it.
+    if (globalContextPanel) stack.prepend(globalContextPanel);
     if (typeof ResizeObserver !== 'undefined') {
       this._rightStackResizeObserver = new ResizeObserver(() => {
         this._scheduleRightPanelLayout();
@@ -208,6 +217,7 @@ export class PanelLayoutController {
         this._ppToggles,
         this._cctvPanel,
         this._weatherPanel,
+        this._newsPanel,
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,
