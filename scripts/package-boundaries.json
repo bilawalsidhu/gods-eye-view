@@ -1354,7 +1354,8 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/time/frameWait.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -3839,7 +3840,8 @@
       "src/data/openVesselPhoto.js",
       "src/layers/vessels/photos.js",
       "src/layers/flights/placed.js",
-      "src/data/placementProvider.js"
+      "src/data/placementProvider.js",
+      "src/time/frameWait.js"
     ],
     "external": [
       "hls.js",
@@ -4565,7 +4567,8 @@
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js",
       "src/layers/flights/placed.js",
-      "src/data/placementProvider.js"
+      "src/data/placementProvider.js",
+      "src/time/frameWait.js"
     ],
     "external": [
       "hls.js",

@@ -1,5 +1,18 @@
 # God's Eye View Current State
 
+While anything moves (a layer in motion, the camera, a followed contact), the
+globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
+The idle render governor (`src/renderGovernor.js`) caps a parked scene at
+`IDLE_FRAME_RATE` (60) ticks a second, because Cesium still runs the clock,
+data sources and update listeners on every animation frame even when it skips
+the draw; the viewer starts at that cap until the governor is installed. The
+camera holds continuous render from `moveStart` to `moveEnd`, and samples its
+pose every 250 ms in between, so a camera drifting by rounding errors (no
+`moveEnd`) is released after half a second at rest and held again if it moves. Waits that used to count frames (a followed contact's first
+position, a shared follow view, a trail's temporary copy) count drawn time
+through `src/time/frameWait.js`, at most 100 ms a frame, so they last the same
+at any refresh rate and a background tab does not use them up.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
