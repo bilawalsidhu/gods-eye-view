@@ -112,11 +112,7 @@ test('radio option text and accessible name use the same localized parentheses',
       let shown = null;
       const host = {
         _radioPanel: element(),
-<<<<<<< HEAD
-        _radioFilter: element(),
-=======
         store: { publish: (view) => (shown = view), publishTuner() {} },
->>>>>>> upstream/main
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {
