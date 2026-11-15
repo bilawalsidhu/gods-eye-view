@@ -27,8 +27,7 @@ export const WORLD_TIME_SPEEDS = Object.freeze({
  * buffering, timeMs, supported, span}`, where `supported` says a layer that moves with the clock
  * has time to show and `span` is the stretch the timeline runs over: the
  * time those layers cover, reaching to now and to the world time, with their
- * marks (`marks`, their times; `markDetails`, each `{time, label?, id?,
- * kind?}`, as the world clock's coverage gives them). It follows the page's world clock, which tells it of every move, and
+ * marks. It follows the page's world clock, which tells it of every move, and
  * of the time a few times a second while it plays on its own. While a
  * timeline shows, it reads the clock each second itself, so live and the
  * track's end keep up with now.
@@ -43,7 +42,6 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       start: Math.min(coverage.start, now),
       end: Math.max(coverage.end, now),
       marks: coverage.marks,
-      markDetails: coverage.markDetails,
     };
   };
   const spanOf = (state) => {
@@ -54,7 +52,6 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       start: Math.min(covered.start, state.timeMs),
       end: Math.max(covered.end, state.timeMs),
       marks: covered.marks,
-      markDetails: covered.markDetails,
     });
   };
   const nearNow = (ms, length) =>
@@ -128,8 +125,8 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     /**
      * Play runs the track at the speed chosen, from the start when it is at
      * its end (at live, say), as a video plays again from the top. It runs
-     * the clock itself: weather follows the time frame by frame like every
-     * other layer the track covers.
+     * the clock itself, past weather's own replay: weather follows the time
+     * frame by frame like every other layer the track covers.
      */
     togglePlay() {
       const { playing, live, timeMs, span } = time.value;
@@ -141,9 +138,9 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     },
     speed,
     /**
-     * Choose how fast play runs; playing, it changes at once. A driver steps
-     * at its own pace, so a speed chosen while one plays takes playback over
-     * from where it is.
+     * Choose how fast play runs; playing, it changes at once. Weather's own
+     * replay steps at its own pace, so a speed chosen while it plays takes
+     * playback over from where it is.
      */
     setSpeed(next) {
       if (!Object.hasOwn(WORLD_TIME_SPEEDS, next)) return;

@@ -390,24 +390,20 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
 test('observed history labels wind as a forecast without changing its data or parameters', async () => {
   const { createWeatherClock } = await import('../weather/clock.js');
   const clock = createWeatherClock();
-  const { world } = clock;
   const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
   let changes = 0;
   layer.setRowControlsListener(() => changes++);
   const params = layer.getParams();
-  world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
-  await Promise.resolve();
+  await clock.setTarget('2026-09-14T12:00:00.000Z');
   assert.equal(layer.getRowControls().summary.status, null, 'history does not mask source status');
   assert.ok(changes > 0);
   assert.match(layer.getRowControls().info, /Forecast · does not follow history/);
   assert.deepEqual(layer.getParams(), params);
-  world.goLive();
-  await Promise.resolve();
+  await clock.latest();
   assert.equal(layer.getRowControls().summary.status, null);
   layer.destroy();
   const before = changes;
-  world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
-  await Promise.resolve();
+  await clock.setTarget('2026-09-14T12:00:00.000Z');
   assert.equal(changes, before);
   clock.destroy();
 });
@@ -466,8 +462,7 @@ test('wind whose source follows the timeline drops the note that it does not fol
   const clock = createWeatherClock({ world });
   const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
   world.follow('wind');
-  world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
-  await Promise.resolve();
+  await clock.setTarget('2026-09-14T12:00:00.000Z');
   assert.equal(clock.getState().mode, 'history');
   assert.doesNotMatch(layer.getRowControls().info, /does not follow history/);
   world.follow('wind', false);

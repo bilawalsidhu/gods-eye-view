@@ -55,6 +55,10 @@ function fixture() {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    setTarget: (tick) => calls.push(['target', tick]),
+    latest: () => calls.push(['latest']),
+    togglePlay: () => calls.push(['play']),
+    step: (n) => calls.push(['step', n]),
   };
   return {
     ...f,
@@ -71,36 +75,39 @@ function fixture() {
     },
   };
 }
-const frameTime = (f) => f.find((n) => n.className === 'weather-frame-time');
+const timelineHost = (f) =>
+  f.find((n) => n.className === 'weather-timeline-block');
 const card = (f, id) => f.find((n) => n.dataset.cardId === id);
 const line = (f, id, name) =>
   f.find((n) => n.dataset.lineId === name, card(f, id));
-test('the frame time shows with any observed product; the panel has no time controls of its own', (t) => {
-  t.mock.timers.enable({
-    apis: ['Date'],
-    now: Date.parse('2026-09-22T01:17:00Z'),
-  });
+test('timeline stays visible with any observed product; native preview and transport use the clock', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const f = fixture();
   const view = createWeatherPanel(f);
   view.update([wind]);
-  assert.equal(frameTime(f).hidden, true);
+  assert.equal(timelineHost(f).hidden, true);
   view.update([wind, radar]);
-  assert.equal(frameTime(f).hidden, false);
-  assert.equal(frameTime(f).textContent, '01:05 UTC · 12 min ago');
+  assert.equal(timelineHost(f).hidden, false);
   f.state({ timeline: [ticks[0]] });
-  assert.equal(frameTime(f).textContent, '01:00 UTC · 17 min ago');
+  assert.equal(timelineHost(f).hidden, false);
+  assert.equal(f.find((n) => n.tagName === 'INPUT').disabled, true);
   f.state({ timeline: [] });
-  assert.equal(frameTime(f).hidden, true);
-  f.state({ timeline: ticks, mode: 'history', target: ticks[0] });
-  assert.equal(frameTime(f).textContent, '01:00 UTC');
-  assert.equal(
-    f.find((n) => n.tagName === 'INPUT'),
-    null,
-  );
-  assert.equal(
-    f.find((n) => ['Play', 'Latest'].includes(n.textContent)),
-    null,
-  );
+  assert.equal(timelineHost(f).hidden, false);
+  f.state({ timeline: ticks });
+  assert.equal(timelineHost(f).hidden, false);
+  const slider = f.find((n) => n.tagName === 'INPUT');
+  slider.value = '0';
+  slider.dispatchEvent(new Event('input'));
+  assert.deepEqual(f.calls, []);
+  slider.dispatchEvent(new Event('change'));
+  assert.deepEqual(f.calls, [['target', ticks[0]]]);
+  f.find((n) => n.textContent === 'Latest' && n.tagName === 'BUTTON').click();
+  f.find((n) => n.textContent === 'Play').click();
+  assert.deepEqual(f.calls.slice(1), [['latest'], ['play']]);
+  slider.dispatchEvent(new Event('input'));
+  view.update([wind]);
+  t.mock.timers.tick(150);
+  assert.equal(f.calls.length, 3, 'hiding cancels pending drag');
   view.destroy();
   assert.equal(f.listeners.size, 0);
 });
@@ -173,7 +180,7 @@ test('cyclone readout retains advisory, position, intensity, geometry, coverage,
     ],
   };
   view.update([cyclone]);
-  assert.equal(frameTime(f).hidden, true);
+  assert.equal(timelineHost(f).hidden, true);
   assert.match(
     line(f, cyclone.id, 'time').textContent,
     /JULIO.*Hurricane.*Advisory 10.*UTC/,
@@ -404,7 +411,7 @@ test('cyclones lead, and observed history owns one bordered group with only acti
     group.children[1].textContent,
     'Rain radar · Satellite clouds · Lightning density',
   );
-  assertSameNode(group.children[2], frameTime(f));
+  assertSameNode(group.children[2], timelineHost(f));
   assert.deepEqual(
     [...group.children[3].children].map((n) => n.dataset.cardId),
     ['weather-radar', 'weather-satellite', 'weather-lightning'],
@@ -667,8 +674,13 @@ test('history time keeps the hour whatever the length of the localized date', ()
       const f = fixture();
       const view = createWeatherPanel(f);
       view.update([wind, radar]);
+      const ends = f.find((n) => n.className === 'rail-timeline-endpoints');
+      assert.deepEqual(
+        [...ends.children].map((n) => n.textContent),
+        ['01:00 UTC', '01:05 UTC'],
+        locale,
+      );
       f.state({ mode: 'history', target: ticks[1] });
-      assert.equal(frameTime(f).textContent, '01:05 UTC', locale);
       assert.match(
         line(f, radar.id, 'time').textContent,
         /(^|[^\d:])01:05 UTC/,
@@ -796,7 +808,7 @@ test('at a past time, frame ages and the timeline readout count from the timelin
   );
   const readout = f.find((n) => n.textContent === '01:20 UTC');
   assert.ok(readout, 'the readout names the timeline time');
-  assert.doesNotMatch(frameTime(f).textContent, /min ago/);
+  assert.doesNotMatch(timelineHost(f).textContent, /min ago/);
   view.destroy();
 });
 

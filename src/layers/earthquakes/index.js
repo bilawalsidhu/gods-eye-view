@@ -1,6 +1,5 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
-import { worldClock } from '../../time/worldClock.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -10,7 +9,6 @@ import {
   createEarthquakeOverlayEntry,
   selectEarthquakeOverlayCohort,
   mapAnalystRecord,
-  earthquakeCoverage,
 } from './model.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
@@ -47,18 +45,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
-  let _uncover = null;
-  // The marks last told to the clock, so a refresh with the same strong
-  // quakes does not tell it again.
-  let _marksKey = null;
-  const coverage = () => (_enabled ? earthquakeCoverage(_events) : null);
-  const coverageChanged = () => {
-    const covered = coverage();
-    const key = covered ? JSON.stringify(covered.marks) : null;
-    if (key === _marksKey) return;
-    _marksKey = key;
-    worldClock.coverageChanged();
-  };
 
   const layer = {
     id: 'earthquakes',
@@ -74,10 +60,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         show: false,
       });
       _viewer = viewer;
-      // While on, the strong quakes are marks on the world clock's timeline.
-      // Registered once; off, the layer has no time to show.
-      _marksKey = null;
-      _uncover = worldClock.register({ id: 'earthquakes', coverage });
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -92,7 +74,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       // layer has no per-frame animator to keep the render loop alive for.
       if (_discs) _discs.show = true;
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
-      coverageChanged();
     },
 
     disable(viewer) {
@@ -102,7 +83,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       if (_discs) _discs.show = false;
       overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
-      coverageChanged();
     },
 
     async update(viewer) {
@@ -166,7 +146,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
 
         _discs.set(nextDiscs);
         _events = nextEvents;
-        coverageChanged();
         if (_enabled) {
           overlayHost.setEntries(
             EARTHQUAKE_OVERLAY_SOURCE_ID,
@@ -205,9 +184,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _discs?.dispose();
       _discs = null;
       _events = [];
-      _uncover?.();
-      _uncover = null;
-      _marksKey = null;
       _count = 0;
       _lastUpdate = null;
       _lastError = null;

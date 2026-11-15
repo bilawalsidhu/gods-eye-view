@@ -6,11 +6,6 @@ import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
-import { worldClock } from '../time/worldClock.js';
-
-const flush = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve();
-};
 
 function fixtureSources(ids, calls) {
   const sources = createStandaloneLayerSources();
@@ -32,7 +27,6 @@ test('catalogs construct distinct layers and classification from their supplied 
   t.after(() => {
     a.abort();
     b.abort();
-    worldClock.goLive();
   });
   const callsA = [];
   const callsB = [];
@@ -59,10 +53,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     'the hardware-local layer is never serialized into links',
   );
   assert.notEqual(first.weatherClock, second.weatherClock);
-  // Time moves on the world clock, which the catalog's weather clock follows.
-  assert.equal(first.weatherClock.world, worldClock);
-  worldClock.seek(Date.parse('2026-09-21T12:00:00.000Z'));
-  await flush();
+  await first.weatherClock.setTarget('2026-09-21T12:00:00.000Z');
   assert.match(
     first.get('wind').getRowControls().info,
     /Forecast · does not follow history/,
@@ -120,16 +111,9 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.equal(first.militaryRegistry.isMilitaryIcao('def456'), false);
   assert.equal(second.militaryRegistry.isMilitaryIcao('def456'), true);
   a.abort();
-  worldClock.seek(Date.parse('2026-09-21T13:00:00.000Z'));
-  await flush();
   assert.equal(
-    first.weatherClock.getState().target,
-    '2026-09-21T12:00:00.000Z',
-    'an aborted catalog no longer follows the world clock',
-  );
-  assert.equal(
-    second.weatherClock.getState().target,
-    '2026-09-21T13:00:00.000Z',
+    await first.weatherClock.setTarget('2026-09-21T13:00:00.000Z'),
+    false,
   );
   assert.equal(callsA[0].aborted, true);
   assert.equal(first.militaryRegistry.isMilitaryIcao('abc123'), false);
