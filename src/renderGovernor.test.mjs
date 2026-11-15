@@ -197,3 +197,35 @@ test('a camera that drifts by rounding errors and never raises moveEnd still rel
   assert.equal(scene.requestRenderMode, true);
   assert.equal(timers.pending, 0);
 });
+
+test('sampling keeps running until moveEnd, so a move after a long drift still takes the hold', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  viewer.camera = {
+    moveStart: makeEvent(),
+    moveEnd: makeEvent(),
+    positionWC: { x: 1, y: 0, z: 0 },
+    directionWC: { x: -1, y: 0, z: 0 },
+  };
+  installRenderGovernor(viewer, timers);
+  viewer.camera.moveStart.raise();
+  // Ten minutes at rest (2,400 samples): released, still sampling.
+  for (let i = 0; i < 2_400; i++) timers.run();
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 1);
+  viewer.camera.positionWC = { x: 1_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+});
+
+test('installing again drops a camera hold the old listeners can no longer release', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  viewer.camera = { moveStart: makeEvent(), moveEnd: makeEvent() };
+  installRenderGovernor(viewer, timers);
+  viewer.camera.moveStart.raise();
+  assert.equal(scene.requestRenderMode, false);
+  installRenderGovernor(viewer, timers);
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 0);
+});

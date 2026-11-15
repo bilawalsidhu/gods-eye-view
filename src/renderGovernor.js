@@ -69,7 +69,6 @@ function applyMode() {
 const CAMERA_SAMPLE_MS = 250;
 const CAMERA_POSITION_TOLERANCE_M = 1e-3;
 const CAMERA_DIRECTION_TOLERANCE = 1e-9;
-const CAMERA_GIVE_UP_MS = 5 * 60_000;
 
 function near(a, b, tolerance) {
   return (
@@ -86,9 +85,9 @@ function near(a, b, tolerance) {
  * a rounding error every frame, so `moveEnd` never comes (see
  * `installGlobeInViewRecovery` in app/viewer.js). So from `moveStart` until
  * `moveEnd` the pose is also sampled every 250 ms with a tolerance for that
- * drift: half a second at rest releases the hold, a later move takes it
- * again (Cesium raises no new `moveStart` under that drift), and sampling
- * stops five minutes after the camera last moved.
+ * drift: half a second at rest releases the hold and a later move takes it
+ * again (Cesium raises no new `moveStart` under that drift). Sampling runs
+ * until `moveEnd`, however long that takes; it costs four checks a second.
  * @returns {(() => void)|null} Removes the listeners and the sampling.
  */
 function watchCameraMotion(camera, { schedule, unschedule }) {
@@ -96,7 +95,6 @@ function watchCameraMotion(camera, { schedule, unschedule }) {
   const last = { position: null, direction: null };
   let timer = null;
   let restingSamples = 0;
-  let restingMs = 0;
   const copy = (v) => (v ? { x: v.x, y: v.y, z: v.z } : null);
   const remember = () => {
     last.position = copy(camera.positionWC);
@@ -118,12 +116,9 @@ function watchCameraMotion(camera, { schedule, unschedule }) {
         near(direction, last.direction, CAMERA_DIRECTION_TOLERANCE));
     if (atRest) {
       restingSamples += 1;
-      restingMs += CAMERA_SAMPLE_MS;
       if (restingSamples >= 2) releaseContinuousRender('camera');
-      if (restingMs >= CAMERA_GIVE_UP_MS) return;
     } else {
       restingSamples = 0;
-      restingMs = 0;
       holdContinuousRender('camera');
     }
     remember();
@@ -133,7 +128,6 @@ function watchCameraMotion(camera, { schedule, unschedule }) {
     holdContinuousRender('camera');
     stopSampling();
     restingSamples = 0;
-    restingMs = 0;
     remember();
     timer = schedule(sample, CAMERA_SAMPLE_MS);
   });
@@ -175,6 +169,7 @@ export function installRenderGovernor(
   // explicit requests.
   viewer.scene.maximumRenderTimeChange = Infinity;
   _removeCameraListeners?.();
+  _holds.delete('camera');
   _removeCameraListeners = watchCameraMotion(
     viewer.camera ?? viewer.scene.camera,
     timers,
