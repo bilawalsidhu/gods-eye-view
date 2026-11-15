@@ -723,6 +723,20 @@ and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
 
+## Wikidata cities pack — November 15, 2026
+
+`src/data/local_data/wikidata_cities/cities.json` bundles 31,827 settlements of
+15,000 people or more from Wikidata (CC0, 1.6 MB): name, position, population,
+country and Wikidata id. `src/data/wikidataCities.js` reads it on the first
+lookup and answers `nearestCity` (the largest city within 12 km, else the
+nearest within 60 km), `citiesAround`, `findPlace` ("Paris, France", or the
+nearest namesake within 150 km of the view, else the largest) and
+`countryName`. Names match without case or accents ("lodz" finds Łódź). The
+app never calls Wikidata; `scripts/build-wikidata-cities.mjs` rebuilds the
+pack and fails if well-known cities are missing or a known grouping such as
+the New York metropolitan area gets in. Nothing shows names from it yet; the
+Context panel is its first reader. Sources and licence: `DATA_SOURCES.md`.
+
 ## Data Layers finder and section index — November 15, 2026
 
 The Data Layers header has a search button and a filter button
