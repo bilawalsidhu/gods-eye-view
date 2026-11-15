@@ -404,7 +404,7 @@ export function createScreenAnnotationRenderer(
   // takes as long at any refresh rate.
   const TRACKED_FADE_EASE = 0.22;
   const TRACKED_FADE_FRAME_MS = 1000 / 60;
-  let trackedFadeAtMs = NaN;
+  let trackedFadeAtMs = -Infinity;
   const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
   const _scratchTrackedWin = new Cesium.Cartesian2();
 
@@ -681,14 +681,12 @@ export function createScreenAnnotationRenderer(
   // footprints live in the world layer — so fully hiding an overlapped one is
   // safe and not jarring.
   function fadeTracked(trackedRect) {
-    if (!shown()) {
-      trackedFadeAtMs = NaN;
-      return;
-    }
+    if (!shown()) return;
     const nowMs = performance.now();
-    const stepMs = Number.isFinite(trackedFadeAtMs)
-      ? Math.min(Math.max(nowMs - trackedFadeAtMs, 0), 100)
-      : TRACKED_FADE_FRAME_MS;
+    // A gap longer than a slow frame means the fade was not running (nothing
+    // followed): it starts again as from one 60 Hz frame.
+    const gapMs = nowMs - trackedFadeAtMs;
+    const stepMs = gapMs >= 0 && gapMs <= 100 ? gapMs : TRACKED_FADE_FRAME_MS;
     trackedFadeAtMs = nowMs;
     const ease =
       1 - Math.pow(1 - TRACKED_FADE_EASE, stepMs / TRACKED_FADE_FRAME_MS);
