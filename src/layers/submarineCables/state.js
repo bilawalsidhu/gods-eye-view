@@ -51,6 +51,11 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._surfaceRecords = [];
 
+  /** Landing records the last sweep found visible but not shown yet; drained
+   * a few per frame (CABLE_LANDING_REVEALS_PER_FRAME). */
+
+  state._pendingLandingReveals = [];
+
   state._clickHandler = null;
 
   state._preRenderRemover = null;

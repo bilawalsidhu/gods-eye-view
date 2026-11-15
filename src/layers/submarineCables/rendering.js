@@ -3,6 +3,7 @@ import {
   probeTranslucentMarkerBlend,
   commitTranslucentMarkerBlend,
 } from './surface.js';
+import { CABLE_LANDING_REVEALS_PER_FRAME } from './policy.js';
 import {
   clampLabel,
   createCableOverlayEntry,
@@ -40,6 +41,7 @@ export function createRendering({ state }) {
     state._referenceDataSource = null;
     state._referenceRecords = [];
     state._surfaceRecords = [];
+    state._pendingLandingReveals.length = 0;
     state._pickByEntity = new WeakMap();
     state._referenceLabelCount = 0;
     state._publishScratch.length = 0;
@@ -201,6 +203,26 @@ export function createRendering({ state }) {
     state._referenceRecords.push(record);
   }
 
+  /**
+   * Show the next few landing markers the last sweep found visible, and ask
+   * for another frame while any are left. Called from the sweep and then once
+   * per rendered frame, so a parked camera costs nothing once the list is
+   * empty.
+   */
+
+  function revealLandingMarkers() {
+    const pending = state._pendingLandingReveals;
+    if (!pending.length) return;
+    let budget = CABLE_LANDING_REVEALS_PER_FRAME;
+    while (pending.length && budget > 0) {
+      const record = pending.pop();
+      if (!record.visible || record.entity.show) continue;
+      record.entity.show = true;
+      budget--;
+    }
+    if (pending.length) state._viewer?.scene?.requestRender?.();
+  }
+
   function updateReferenceVisibility() {
     if (!state._enabled || !state._viewer?.camera) return;
     const cameraPos = state._viewer.camera.positionWC;
@@ -224,12 +246,16 @@ export function createRendering({ state }) {
       if (visible)
         updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
     }
+    state._pendingLandingReveals.length = 0;
     for (const record of state._surfaceRecords) {
       const visible = occluder.isPointVisible(record.base);
-      if (record.entity.show !== visible) {
-        record.entity.show = visible;
-      }
+      record.visible = visible;
+      if (record.entity.show === visible) continue;
+      // Landing markers are shown a few per frame; hiding is immediate.
+      if (visible && record.staged) state._pendingLandingReveals.push(record);
+      else record.entity.show = visible;
     }
+    revealLandingMarkers();
     const winners = selectCableReferenceLabelWinners(state._referenceRecords);
     let changed = winners.length !== state._lastPublishedCount;
     for (let i = 0; i < winners.length; i++) {
@@ -269,6 +295,7 @@ export function createRendering({ state }) {
     applyCableClassification,
     styleLandingEntity,
     addReferenceStem,
+    revealLandingMarkers,
     updateReferenceVisibility,
   };
 }

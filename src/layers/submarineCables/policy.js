@@ -67,6 +67,16 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
 });
 
 /**
+ * Landing markers shown per rendered frame. Each one is a ground-clamped
+ * billboard, and Cesium reads the terrain height when it creates one.
+ * Showing all 1,917 in the frame after the layer was switched on did those
+ * reads in a single task (measured 1.2 s on a loaded globe); a few dozen per
+ * frame keeps each frame short and the markers still fill in within a second.
+ */
+
+export const CABLE_LANDING_REVEALS_PER_FRAME = 48;
+
+/**
  * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion
  * Bing stacks + OSM). Deliberately an explicit allowlist, not "anything that
  * is not photoreal": an id this module has never heard of is UNKNOWN, and
