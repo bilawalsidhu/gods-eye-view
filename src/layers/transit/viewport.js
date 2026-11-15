@@ -83,6 +83,7 @@ export function createViewport({ state, services, parts }) {
     if (!state._enabled || !state._viewer) return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
+    parts.coverage.sync(altitude);
     const wasGateOpen = state._altitudeGateOpen;
     state._altitudeGateOpen = altitudeGateOpen(altitude);
     let changed = state._altitudeGateOpen !== wasGateOpen;
@@ -136,6 +137,8 @@ export function createViewport({ state, services, parts }) {
     // A person dragging the globe should not wait a third of a second for the
     // vehicles under the cursor to start moving again.
     refreshViewBounds();
+    // The glow follows the zoom as it happens, not a third of a second later.
+    parts.coverage.sync(getCameraAltitude());
     clearTimeout(state._cameraDebounceTimer);
     state._cameraDebounceTimer = setTimeout(() => {
       state._cameraDebounceTimer = null;

@@ -42,6 +42,9 @@ export function createState({ services }) {
   state._cameraChangedAttached = false;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
+  /** Coverage glow: its draw batches and the last opacities drawn. */
+  state._coverageSpots = null;
+  state._coverageOpacity = null;
   /** Camera sensitivity as we found it, so disable() can hand it back. */
   state._priorPercentageChanged = null;
   /** The value this layer actually wrote, for an identity-guarded restore. */

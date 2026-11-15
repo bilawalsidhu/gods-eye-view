@@ -31,6 +31,62 @@ export const TRANSIT_POLL_MS = 15_000;
  */
 /** Camera altitude (m) above which the layer idles: a national fleet still reads at 3,000 km. */
 export const ACTIVATION_ALTITUDE_M = 3_000_000;
+/**
+ * How strongly the coverage glow shows at each camera height (m), as
+ * [height, opacity] stops joined by straight lines. There are two sets of
+ * spots and they cross-fade:
+ *
+ *  - `far`: wide spots, far larger than any network, so coverage reads from
+ *    orbit. Full above the altitude gate, gone by regional zoom.
+ *  - `near`: patches the size of each feed's own service area, drawn as a
+ *    backdrop under the vehicles at continental and regional zoom so a person
+ *    can see which neighbouring cities are covered. Off close in, where a
+ *    city's own vehicles are the picture.
+ *
+ * Between them there is no height from 250 km up with nothing drawn.
+ */
+export const COVERAGE_OPACITY_STOPS = Object.freeze({
+  far: Object.freeze([
+    Object.freeze([1_200_000, 0]),
+    Object.freeze([3_400_000, 1]),
+  ]),
+  near: Object.freeze([
+    Object.freeze([60_000, 0]),
+    Object.freeze([250_000, 0.8]),
+    Object.freeze([1_500_000, 0.9]),
+    Object.freeze([3_400_000, 0]),
+  ]),
+});
+/** Fine enough that a zoom reads as a continuous fade, not as steps. */
+const COVERAGE_FADE_STEPS = 100;
+/** Alpha at the centre of a lone spot at full strength. */
+export const COVERAGE_PEAK_ALPHA = 0.9;
+
+/**
+ * Opacity of one set of coverage spots at a camera height, quantized so a
+ * zoom does not restyle the glow on every camera event.
+ * @param {number} altitude Camera height above the ellipsoid, metres.
+ * @param {'far'|'near'} [set='far']
+ * @returns {number} 0..1
+ */
+export function coverageOpacityAt(altitude, set = 'far') {
+  const stops = COVERAGE_OPACITY_STOPS[set] || COVERAGE_OPACITY_STOPS.far;
+  const last = stops[stops.length - 1][1];
+  if (!Number.isFinite(altitude)) return altitude === Infinity ? last : 0;
+  let value = last;
+  if (altitude <= stops[0][0]) value = stops[0][1];
+  else {
+    for (let i = 1; i < stops.length; i++) {
+      if (altitude <= stops[i][0]) {
+        const [h0, v0] = stops[i - 1];
+        const [h1, v1] = stops[i];
+        value = v0 + ((v1 - v0) * (altitude - h0)) / (h1 - h0);
+        break;
+      }
+    }
+  }
+  return Math.round(value * COVERAGE_FADE_STEPS) / COVERAGE_FADE_STEPS;
+}
 export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
 export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 150_000;
 /** Debounce (ms) for camera-change proximity checks. */
