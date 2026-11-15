@@ -1464,5 +1464,6 @@
   "src/ui/styles/scope-off-shadows.css",
   "src/ui/styles/cockpit-panels.css",
   "src/ui/styles/layer-section-index.css",
-  "src/ui/styles/layer-finder.css"
+  "src/ui/styles/layer-finder.css",
+  "src/ui/layerFinder.test.mjs"
 ]
