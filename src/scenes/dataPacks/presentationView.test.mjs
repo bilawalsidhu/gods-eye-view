@@ -66,7 +66,11 @@ test('a loaded pack shows its attribution card in the viewer container', async (
     card.querySelector('div').textContent,
     'clip · Synthetic · CC0-1.0',
   );
-  assert.equal(card.querySelector('a'), null, 'no link without a source URL');
+  assert.equal(
+    card.querySelector('a') === null,
+    true,
+    'no link without a source URL',
+  );
   const video = card.querySelector('video');
   assert.equal(video.controls, true);
   assert.equal(video.preload, 'none');

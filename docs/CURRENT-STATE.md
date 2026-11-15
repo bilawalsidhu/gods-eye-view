@@ -1781,7 +1781,14 @@ Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
 its entities and request lifecycle; the application supplies the overlay host
 and snapshot source. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
-destroying the layer cancels pending work and ignores late results.
+destroying the layer cancels pending work and ignores late results. While on,
+the layer registers its quakes of magnitude 6 and up
+(`EARTHQUAKE_MARK_MAGNITUDE`) with the world clock as timeline marks, spanning
+only their own times, and none while off; the map still draws every M2.5+
+quake. Each mark is labelled with the magnitude as the map shows it and the
+feed's place, cut to 40 characters (`earthquakeMarkLabel` in
+`src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
+Islands`, or `M6.4` with no place).
 
 ## Rendered-mesh floor readings — November 9, 2026
 
@@ -8532,9 +8539,25 @@ Wind supports selectable GFS/IFS models with persisted model choice. Each fetch 
 Weather combines the GFS/ECMWF surface forecast with three observation layers:
 NOAA Rain radar (CONUS), Satellite clouds (regional GOES or slower global infrared),
 and 15-minute lightning density (Americas and Pacific). One transient observed
-clock drives all enabled observation rows. Earlier/Later use the sorted union of
-non-suspended products' advertised times; each product selects its nearest frame
-at or before the requested UTC time, never a future frame or an interpolation.
+clock moves all enabled observation rows with the world clock; the world
+timeline is the only time control. Each product's advertised times span time on
+that timeline but are not marks on it: the timeline marks only events (launches,
+and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
+step to those, or along the track where there are none. A mark may carry a
+label (a launch's mission name, cut to 27 characters in capitals as the mission
+index shows names; an earthquake's magnitude and place). Marks merge on their
+whole label; one longer than 60 characters (graphemes, so an emoji is never
+split) then shows cut, ending in `…`, and a label is never wider than the
+track. A zoom or
+a pan clears a hovered label. The pointer within
+6 px of a tick shows its label over the track, and a tap there goes to the
+mark's time exactly; a tap elsewhere goes to the time under it and a drag
+scrubs. With the handle on a mark, its label follows the time in the handle's
+`aria-valuetext` and shows over the track while the handle has focus. The
+coverage contract is in [APPLICATION.md](./APPLICATION.md). A weather row's `step`
+param goes to the previous or next weather frame. Each product selects its
+nearest frame at or before the world time, never a future frame or an
+interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
 3 hours for hourly global infrared, but never less than one and a half of the
 feed's median frame spacing over its latest frames, so a regional feed whose
@@ -8544,16 +8567,35 @@ lightning, 4 hours for global infrared). A missing eligible frame hides that pro
 and reports the gap; rows show actual displayed UTC time with synced/nearest labels.
 Manifest rollover preserves the requested history time, even when frames expire.
 
-Latest follows each product's own newest frame, so its timestamps can differ.
-Playback advances two seconds after all products settle, wraps, and stops with
-fewer than two union times or when all products are suspended. Hidden documents,
-reduced motion and unavailable imagery hosts suspend products. Re-enabling or
+Live follows each product's own newest frame, so its timestamps can differ.
+The timeline's Play runs the world clock at the chosen speed and stops at each
+product's next frame until that frame loads (for at most eight seconds), so
+every frame shows. Hidden documents, reduced motion and unavailable imagery
+hosts suspend products. Re-enabling or
 restoring a host joins the retained history target. The wind row explicitly says
 “Forecast · does not follow history” while the observed clock is in history mode.
-The catalog exposes `weatherClock` and destroys it with its lifetime signal.
+The Weather panel's frame time shows the newest frame and its age while live
+(each product's newest, suspended products included), and the timeline time
+alone at a past time.
+The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
+has no time controls of its own: `weatherClock.world` is the world clock it
+follows, where time moves. A weather row's `play`, `latest` and `step` params
+move that world clock as the timeline does: `play` runs at the speed chosen on
+the timeline (the world clock keeps its rate while paused and live, and the
+timeline's speed selector shows the clock's rate, or the nearest offered speed
+for a rate a host set), from the start of the covered time when live or at its
+end, and does nothing while every product the row shows is suspended or while
+there is no covered time. A weather layer built without a
+shared clock builds one of its own on the page's world clock when first
+enabled (`createWeatherClock({ shared: false })`) and keeps it for its
+lifetime; destroying it leaves the world's time where it is, and enabling it
+after that does nothing, and only the last
+shared weather clock destroyed sends the world live. Neither has a frame replay
+of its own.
 
-Source, opacity, coverage navigation and transport controls live in the WEATHER
-panel's cards and timeline, not in the rows. The viewer clock is untouched.
+Source, opacity and coverage navigation live in the WEATHER panel's cards, not
+in the rows; the panel shows the frame time and has no time controls. The
+viewer clock is untouched.
 Observation layers are off by default; share/persist includes appearance and product, while history
 is transient and shared links open latest. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.
